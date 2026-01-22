@@ -7,14 +7,15 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.posts import router as posts_router
 from app.config import get_settings
-from app.database import create_tables
+from app.database import create_tables, get_db
 
 settings = get_settings()
 
@@ -75,6 +76,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(posts_router)
 
 
 @app.exception_handler(Exception)
@@ -115,4 +117,72 @@ async def root() -> dict[str, str]:
         "name": settings.app_name,
         "version": "0.1.0",
         "status": "running",
+    }
+
+
+@app.get("/preview/{token}", tags=["Public"])
+async def preview_post(
+    token: str,
+    db: Any = Depends(get_db),
+) -> dict[str, Any]:
+    """Preview a draft post using a preview token.
+
+    This endpoint allows viewing draft posts without authentication
+    if the viewer has a valid preview token.
+
+    Args:
+        token: The preview token from the preview link
+        db: Database session
+
+    Returns:
+        Post data if token is valid
+
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from app.models.post import Post
+    from app.utils.formatters import format_content
+
+    result = await db.execute(select(Post).where(Post.preview_token == token))
+    post = result.scalar_one_or_none()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid preview token",
+        )
+
+    # Handle timezone-naive and timezone-aware datetime comparison
+    if post.preview_expires_at:
+        # Make comparison timezone-aware safe
+        expires_at = post.preview_expires_at
+        if expires_at.tzinfo is None:
+            # If naive, treat as UTC
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if expires_at < datetime.now(UTC):
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Preview link has expired",
+            )
+
+    return {
+        "id": post.id,
+        "title": post.title,
+        "slug": post.slug,
+        "content": post.content,
+        "content_html": format_content(post.content, post.formatter.value),
+        "excerpt": post.excerpt,
+        "formatter": post.formatter.value,
+        "status": post.status.value,
+        "is_featured": post.is_featured,
+        "published_at": post.published_at,
+        "created_at": post.created_at,
+        "updated_at": post.updated_at,
+        "thumbnail_path": post.thumbnail_path,
+        "meta_description": post.meta_description,
+        "preview_mode": True,
     }

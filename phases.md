@@ -202,71 +202,71 @@ curl http://localhost:8000/api/auth/me \
 
 **Goal**: Implement complete post CRUD with status management
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 
 **Depends on**: Phase 2
 
 ### Tasks
 
-- [ ] **3.1 Post Model**
-  - [ ] Create `app/models/post.py` (spec lines 154-171)
-  - [ ] Add indexes on slug, status, published_at
-  - [ ] Implement status enum (draft, published, hidden)
+- [x] **3.1 Post Model**
+  - [x] Create `app/models/post.py` (spec lines 154-171)
+  - [x] Add indexes on slug, status, published_at
+  - [x] Implement status enum (draft, published, hidden)
 
-- [ ] **3.2 Post Schemas**
-  - [ ] Create `app/schemas/post.py`
-  - [ ] `PostCreate` - Create post data
-  - [ ] `PostUpdate` - Update post data
-  - [ ] `PostResponse` - API response
-  - [ ] `PostList` - Paginated list response
+- [x] **3.2 Post Schemas**
+  - [x] Create `app/schemas/post.py`
+  - [x] `PostCreate` - Create post data
+  - [x] `PostUpdate` - Update post data
+  - [x] `PostResponse` - API response
+  - [x] `PostList` - Paginated list response
 
-- [ ] **3.3 Slug Utility**
-  - [ ] Create `app/utils/slugify.py`
-  - [ ] Implement slug generation from title
-  - [ ] Handle non-ASCII (transliteration)
-  - [ ] Ensure uniqueness (append numbers)
+- [x] **3.3 Slug Utility**
+  - [x] Create `app/utils/slugify.py`
+  - [x] Implement slug generation from title
+  - [x] Handle non-ASCII (transliteration)
+  - [x] Ensure uniqueness (append numbers)
 
-- [ ] **3.4 Text Formatters**
-  - [ ] Create `app/utils/formatters.py`
-  - [ ] Implement Markdown to HTML conversion
-  - [ ] Implement excerpt generation
-  - [ ] Sanitize HTML output
+- [x] **3.4 Text Formatters**
+  - [x] Create `app/utils/formatters.py`
+  - [x] Implement Markdown to HTML conversion
+  - [x] Implement excerpt generation
+  - [x] Sanitize HTML output
 
-- [ ] **3.5 Post Service**
-  - [ ] Create `app/services/post_service.py`
-  - [ ] `create_post()` - Create with auto-slug
-  - [ ] `update_post()` - Update existing post
-  - [ ] `delete_post()` - Soft or hard delete
-  - [ ] `get_post_by_id()` - Get by ID
-  - [ ] `get_post_by_slug()` - Get by slug
-  - [ ] `list_posts()` - Paginated list with filters
-  - [ ] `publish_post()` - Draft → Published
-  - [ ] `withdraw_post()` - Published → Draft
-  - [ ] `increment_view_count()` - Track views
+- [x] **3.5 Post Service**
+  - [x] Create `app/services/post_service.py`
+  - [x] `create_post()` - Create with auto-slug
+  - [x] `update_post()` - Update existing post
+  - [x] `delete_post()` - Soft or hard delete
+  - [x] `get_post_by_id()` - Get by ID
+  - [x] `get_post_by_slug()` - Get by slug
+  - [x] `list_posts()` - Paginated list with filters
+  - [x] `publish_post()` - Draft → Published
+  - [x] `withdraw_post()` - Published → Draft
+  - [x] `increment_view_count()` - Track views
 
-- [ ] **3.6 Post API Endpoints**
-  - [ ] Create `app/api/posts.py`
-  - [ ] `GET /api/posts` - List posts (with filters)
-  - [ ] `POST /api/posts` - Create post
-  - [ ] `GET /api/posts/{id}` - Get post
-  - [ ] `PUT /api/posts/{id}` - Update post
-  - [ ] `DELETE /api/posts/{id}` - Delete post
-  - [ ] `GET /api/posts/slug/{slug}` - Get by slug
-  - [ ] `POST /api/posts/{id}/publish` - Publish
-  - [ ] `POST /api/posts/{id}/withdraw` - Withdraw
+- [x] **3.6 Post API Endpoints**
+  - [x] Create `app/api/posts.py`
+  - [x] `GET /api/posts` - List posts (with filters)
+  - [x] `POST /api/posts` - Create post
+  - [x] `GET /api/posts/{id}` - Get post
+  - [x] `PUT /api/posts/{id}` - Update post
+  - [x] `DELETE /api/posts/{id}` - Delete post
+  - [x] `GET /api/posts/slug/{slug}` - Get by slug
+  - [x] `POST /api/posts/{id}/publish` - Publish
+  - [x] `POST /api/posts/{id}/withdraw` - Withdraw
 
-- [ ] **3.7 Preview Links**
-  - [ ] Implement preview token generation
-  - [ ] `GET /api/posts/{id}/preview` - Generate preview link
-  - [ ] `GET /preview/{token}` - Access draft via token
-  - [ ] Token expiry (7 days)
+- [x] **3.7 Preview Links**
+  - [x] Implement preview token generation
+  - [x] `POST /api/posts/{id}/preview` - Generate preview link
+  - [x] `GET /preview/{token}` - Access draft via token
+  - [x] Token expiry (7 days)
 
-- [ ] **3.8 Post Tests**
-  - [ ] Test CRUD operations
-  - [ ] Test slug generation/uniqueness
-  - [ ] Test status transitions
-  - [ ] Test filtering and pagination
-  - [ ] Test authorization (only author can edit)
+- [x] **3.8 Post Tests**
+  - [x] Test CRUD operations
+  - [x] Test slug generation/uniqueness
+  - [x] Test status transitions
+  - [x] Test filtering and pagination
+  - [x] Test authorization (only author can edit)
 
 ### Deliverables
 
