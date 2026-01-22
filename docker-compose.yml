@@ -1,0 +1,32 @@
+services:
+  blog:
+    build: .
+    image: photo-blog:latest
+    container_name: photo-blog
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - blog-data:/data
+    env_file:
+      - .env
+    environment:
+      - TZ=UTC
+      - DATABASE_URL=sqlite+aiosqlite:////data/blog.db
+      - STORAGE_PATH=/data
+    networks:
+      - blog-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  blog-data:
+    driver: local
+
+networks:
+  blog-network:
+    driver: bridge
