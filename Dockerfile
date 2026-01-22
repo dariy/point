@@ -24,9 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
+# Copy Python packages from builder to a shared location
+COPY --from=builder /root/.local /usr/local
+ENV PATH=/usr/local/bin:$PATH
 
 # Copy application
 COPY app/ /app/app/
