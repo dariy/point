@@ -2,7 +2,7 @@
 
 > **Purpose**: Track development progress through self-sufficient phases
 > **Last Updated**: 2026-01-22
-> **Status**: Phase 1 - Complete
+> **Status**: Phase 2 - Complete
 
 ---
 
@@ -21,7 +21,7 @@ Each phase is designed to be:
 | Phase | Name | Status | Dependencies |
 |-------|------|--------|--------------|
 | 1 | Project Foundation | ✅ Complete | None |
-| 2 | Authentication System | ⬜ Not Started | Phase 1 |
+| 2 | Authentication System | ✅ Complete | Phase 1 |
 | 3 | Post Management Core | ⬜ Not Started | Phase 2 |
 | 4 | Media Management | ⬜ Not Started | Phase 3 |
 | 5 | Tag System | ⬜ Not Started | Phase 3 |
@@ -122,55 +122,55 @@ mypy app/
 
 **Goal**: Implement secure user authentication and session management
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 
 **Depends on**: Phase 1
 
 ### Tasks
 
-- [ ] **2.1 User Model**
-  - [ ] Create `app/models/user.py` (spec lines 208-218)
-  - [ ] Implement password hashing with bcrypt
-  - [ ] Add user schema in `app/schemas/auth.py`
+- [x] **2.1 User Model**
+  - [x] Create `app/models/user.py` (spec lines 208-218)
+  - [x] Implement password hashing with bcrypt
+  - [x] Add user schema in `app/schemas/auth.py`
 
-- [ ] **2.2 Session Model**
-  - [ ] Create `app/models/session.py` (spec lines 220-231)
-  - [ ] Implement token generation
-  - [ ] Add session expiry logic
+- [x] **2.2 Session Model**
+  - [x] Create `app/models/session.py` (spec lines 220-231)
+  - [x] Implement token generation
+  - [x] Add session expiry logic
 
-- [ ] **2.3 Auth Service**
-  - [ ] Create `app/services/auth_service.py`
-  - [ ] Implement `authenticate_user()`
-  - [ ] Implement `create_session()`
-  - [ ] Implement `validate_session()`
-  - [ ] Implement `terminate_session()`
+- [x] **2.3 Auth Service**
+  - [x] Create `app/services/auth_service.py`
+  - [x] Implement `authenticate_user()`
+  - [x] Implement `create_session()`
+  - [x] Implement `validate_session()`
+  - [x] Implement `terminate_session()`
 
-- [ ] **2.4 Auth Dependencies**
-  - [ ] Create `app/dependencies.py`
-  - [ ] Implement `get_current_user` dependency
-  - [ ] Implement `require_auth` dependency
-  - [ ] Set up cookie handling (httpOnly, secure, sameSite)
+- [x] **2.4 Auth Dependencies**
+  - [x] Create `app/dependencies.py`
+  - [x] Implement `get_current_user` dependency
+  - [x] Implement `require_auth` dependency
+  - [x] Set up cookie handling (httpOnly, secure, sameSite)
 
-- [ ] **2.5 Auth API Endpoints**
-  - [ ] Create `app/api/auth.py`
-  - [ ] `POST /api/auth/login` - Login
-  - [ ] `POST /api/auth/logout` - Logout
-  - [ ] `GET /api/auth/me` - Get current user
-  - [ ] `POST /api/auth/change-password` - Change password
-  - [ ] `GET /api/auth/sessions` - List sessions
-  - [ ] `DELETE /api/auth/sessions/{id}` - Terminate session
+- [x] **2.5 Auth API Endpoints**
+  - [x] Create `app/api/auth.py`
+  - [x] `POST /api/auth/login` - Login
+  - [x] `POST /api/auth/logout` - Logout
+  - [x] `GET /api/auth/me` - Get current user
+  - [x] `POST /api/auth/change-password` - Change password
+  - [x] `GET /api/auth/sessions` - List sessions
+  - [x] `DELETE /api/auth/sessions/{id}` - Terminate session
 
-- [ ] **2.6 Initial User Setup**
-  - [ ] Create `scripts/init_db.py`
-  - [ ] Add admin user creation on first run
-  - [ ] Implement password requirements validation
+- [x] **2.6 Initial User Setup**
+  - [x] Create `scripts/init_db.py`
+  - [x] Add admin user creation on first run
+  - [x] Implement password requirements validation
 
-- [ ] **2.7 Auth Tests**
-  - [ ] Test login with valid/invalid credentials
-  - [ ] Test session creation and validation
-  - [ ] Test password change flow
-  - [ ] Test session termination
-  - [ ] Test auth middleware
+- [x] **2.7 Auth Tests**
+  - [x] Test login with valid/invalid credentials
+  - [x] Test session creation and validation
+  - [x] Test password change flow
+  - [x] Test session termination
+  - [x] Test auth middleware
 
 ### Deliverables
 
@@ -1202,6 +1202,7 @@ Track significant milestones here:
 |------|-------|-----------|-------|
 | 2026-01-22 | - | Project planning | Specification and phases defined |
 | 2026-01-22 | 1 | Phase 1 complete | Project structure, Docker, database, tests, linting |
+| 2026-01-22 | 2 | Phase 2 complete | User/Session models, auth service, API endpoints, 25 tests passing |
 
 ---
 
