@@ -3,6 +3,7 @@
 Configures the application with middleware, routes, and lifecycle events.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -11,9 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.auth import router as auth_router
 from app.config import get_settings
 from app.database import create_tables
-
 
 settings = get_settings()
 
@@ -40,7 +41,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan events.
 
     Handles startup and shutdown tasks.
@@ -72,9 +73,12 @@ app.add_middleware(
 # Security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Include routers
+app.include_router(auth_router)
+
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def global_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Handle uncaught exceptions.
 
     Returns a generic error response to avoid leaking internal details.
