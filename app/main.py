@@ -12,8 +12,10 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.media import router as media_router
 from app.api.posts import router as posts_router
@@ -22,6 +24,10 @@ from app.config import get_settings
 from app.database import create_tables, get_db
 
 settings = get_settings()
+
+# Set up Jinja2 templates
+templates_dir = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -91,6 +97,7 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Include routers
+app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(media_router)
 app.include_router(posts_router)
@@ -100,6 +107,10 @@ app.include_router(tags_router)
 media_path = Path(settings.storage_path) / "media"
 media_path.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=str(media_path)), name="media")
+
+# Mount static files for admin assets (CSS, JS)
+static_path = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 
 @app.exception_handler(Exception)
