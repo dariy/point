@@ -13,6 +13,21 @@ from app.schemas.auth import (
     UserCreate,
     UserResponse,
 )
+from app.schemas.media import (
+    ALLOWED_EXTENSIONS,
+    ALLOWED_MIMES,
+    BulkDeleteResponse,
+    FileType,
+    MediaDeleteResponse,
+    MediaListItem,
+    MediaListResponse,
+    MediaResponse,
+    MediaUpdate,
+    MediaUploadResponse,
+    MultipleMediaUploadResponse,
+    OrphanedMediaResponse,
+    StorageStatsResponse,
+)
 from app.schemas.post import (
     PostCreate,
     PostFormatter,
@@ -22,6 +37,16 @@ from app.schemas.post import (
     PostStatus,
     PostUpdate,
     PreviewLinkResponse,
+)
+from app.schemas.tag import (
+    TagCloudItem,
+    TagCloudResponse,
+    TagCreate,
+    TagListItem,
+    TagListResponse,
+    TagResponse,
+    TagUpdate,
+    TagWithPostsResponse,
 )
 
 __all__ = [
@@ -34,6 +59,20 @@ __all__ = [
     "SessionResponse",
     "UserCreate",
     "UserResponse",
+    # Media
+    "ALLOWED_EXTENSIONS",
+    "ALLOWED_MIMES",
+    "BulkDeleteResponse",
+    "FileType",
+    "MediaDeleteResponse",
+    "MediaListItem",
+    "MediaListResponse",
+    "MediaResponse",
+    "MediaUpdate",
+    "MediaUploadResponse",
+    "MultipleMediaUploadResponse",
+    "OrphanedMediaResponse",
+    "StorageStatsResponse",
     # Post
     "PostCreate",
     "PostFormatter",
@@ -43,4 +82,13 @@ __all__ = [
     "PostStatus",
     "PostUpdate",
     "PreviewLinkResponse",
+    # Tag
+    "TagCloudItem",
+    "TagCloudResponse",
+    "TagCreate",
+    "TagListItem",
+    "TagListResponse",
+    "TagResponse",
+    "TagUpdate",
+    "TagWithPostsResponse",
 ]

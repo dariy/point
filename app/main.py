@@ -5,15 +5,19 @@ Configures the application with middleware, routes, and lifecycle events.
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.media import router as media_router
 from app.api.posts import router as posts_router
+from app.api.tags import router as tags_router
 from app.config import get_settings
 from app.database import create_tables, get_db
 
@@ -41,6 +45,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def ensure_media_directories() -> None:
+    """Ensure media storage directories exist."""
+    storage_path = Path(settings.storage_path)
+    directories = [
+        storage_path / "media" / "originals",
+        storage_path / "media" / "thumbnails",
+    ]
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan events.
@@ -49,6 +64,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """
     # Startup
     await create_tables()
+    ensure_media_directories()
     yield
     # Shutdown (cleanup if needed)
 
@@ -76,7 +92,14 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(media_router)
 app.include_router(posts_router)
+app.include_router(tags_router)
+
+# Mount static files for media serving
+media_path = Path(settings.storage_path) / "media"
+media_path.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(media_path)), name="media")
 
 
 @app.exception_handler(Exception)
