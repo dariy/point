@@ -98,6 +98,12 @@ class Post(Base):
 
     # Relationships
     author: Mapped["User"] = relationship("User", lazy="selectin")
+    tags: Mapped[list["Tag"]] = relationship(
+        "Tag",
+        secondary="post_tags",
+        back_populates="posts",
+        lazy="selectin",
+    )
 
     def __repr__(self) -> str:
         return f"<Post(id={self.id}, title='{self.title}', status='{self.status}')>"
@@ -126,4 +132,5 @@ class Post(Base):
 
 
 # Import for relationship (avoid circular import)
+from app.models.tag import Tag  # noqa: E402, F401
 from app.models.user import User  # noqa: E402, F401

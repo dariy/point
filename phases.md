@@ -1,8 +1,8 @@
 # Photo Blog Engine - Development Phases
 
 > **Purpose**: Track development progress through self-sufficient phases
-> **Last Updated**: 2026-01-22
-> **Status**: Phase 2 - Complete
+> **Last Updated**: 2026-01-23
+> **Status**: Phase 5 - Complete
 
 ---
 
@@ -20,11 +20,11 @@ Each phase is designed to be:
 
 | Phase | Name | Status | Dependencies |
 |-------|------|--------|--------------|
-| 1 | Project Foundation | ✅ Complete | None |
-| 2 | Authentication System | ✅ Complete | Phase 1 |
-| 3 | Post Management Core | ⬜ Not Started | Phase 2 |
-| 4 | Media Management | ⬜ Not Started | Phase 3 |
-| 5 | Tag System | ⬜ Not Started | Phase 3 |
+| 1 | Project Foundation | ✅ Completed | None |
+| 2 | Authentication System | ✅ Completed | Phase 1 |
+| 3 | Post Management Core | ✅ Completed | Phase 2 |
+| 4 | Media Management | ✅ Completed | Phase 3 |
+| 5 | Tag System | ✅ Completed | Phase 3 |
 | 6 | Admin Interface | ⬜ Not Started | Phases 3, 4, 5 |
 | 7 | Public Frontend | ⬜ Not Started | Phases 3, 5 |
 | 8 | RSS & SEO | ⬜ Not Started | Phase 7 |
@@ -298,71 +298,71 @@ curl http://localhost:8000/api/posts/slug/my-first-post
 
 **Goal**: Implement file upload, image processing, and media library
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 
 **Depends on**: Phase 3
 
 ### Tasks
 
-- [ ] **4.1 Media Model**
-  - [ ] Create `app/models/media.py` (spec lines 193-206)
-  - [ ] Track file metadata (size, dimensions, type)
-  - [ ] Add checksum for deduplication
+- [x] **4.1 Media Model**
+  - [x] Create `app/models/media.py` (spec lines 193-206)
+  - [x] Track file metadata (size, dimensions, type)
+  - [x] Add checksum for deduplication
 
-- [ ] **4.2 Media Schemas**
-  - [ ] Create `app/schemas/media.py`
-  - [ ] `MediaUpload` - Upload metadata
-  - [ ] `MediaResponse` - API response
-  - [ ] `MediaList` - Paginated list
+- [x] **4.2 Media Schemas**
+  - [x] Create `app/schemas/media.py`
+  - [x] `MediaUpload` - Upload metadata
+  - [x] `MediaResponse` - API response
+  - [x] `MediaList` - Paginated list
 
-- [ ] **4.3 Image Processor**
-  - [ ] Create `app/utils/image_processor.py`
-  - [ ] Implement thumbnail generation (180x120)
-  - [ ] Implement image resizing (max 2560px)
-  - [ ] Support JPEG quality settings
-  - [ ] Generate progressive JPEGs
+- [x] **4.3 Image Processor**
+  - [x] Create `app/utils/image_processor.py`
+  - [x] Implement thumbnail generation (180x120)
+  - [x] Implement image resizing (max 2560px)
+  - [x] Support JPEG quality settings
+  - [x] Generate progressive JPEGs
 
-- [ ] **4.4 Validators**
-  - [ ] Create `app/utils/validators.py`
-  - [ ] Validate file types (whitelist)
-  - [ ] Validate MIME types
-  - [ ] Validate file sizes
-  - [ ] Check storage quota
+- [x] **4.4 Validators**
+  - [x] Create `app/utils/validators.py`
+  - [x] Validate file types (whitelist)
+  - [x] Validate MIME types
+  - [x] Validate file sizes
+  - [x] Check storage quota
 
-- [ ] **4.5 Media Service**
-  - [ ] Create `app/services/media_service.py`
-  - [ ] `upload_file()` - Full upload pipeline
-  - [ ] `generate_thumbnail()` - Create thumbnail
-  - [ ] `delete_file()` - Remove file and metadata
-  - [ ] `get_orphaned_files()` - Find unlinked files
-  - [ ] `cleanup_orphaned()` - Remove orphaned files
-  - [ ] `calculate_storage_usage()` - Get total usage
+- [x] **4.5 Media Service**
+  - [x] Create `app/services/media_service.py`
+  - [x] `upload_file()` - Full upload pipeline
+  - [x] `generate_thumbnail()` - Create thumbnail
+  - [x] `delete_file()` - Remove file and metadata
+  - [x] `get_orphaned_files()` - Find unlinked files
+  - [x] `cleanup_orphaned()` - Remove orphaned files
+  - [x] `calculate_storage_usage()` - Get total usage
 
-- [ ] **4.6 Storage Organization**
-  - [ ] Implement date-based paths (YYYY/MM/)
-  - [ ] Generate unique filenames
-  - [ ] Create directory structure on startup
+- [x] **4.6 Storage Organization**
+  - [x] Implement date-based paths (YYYY/MM/)
+  - [x] Generate unique filenames
+  - [x] Create directory structure on startup
 
-- [ ] **4.7 Media API Endpoints**
-  - [ ] Create `app/api/media.py`
-  - [ ] `GET /api/media` - List media files
-  - [ ] `POST /api/media/upload` - Upload file(s)
-  - [ ] `GET /api/media/{id}` - Get file metadata
-  - [ ] `DELETE /api/media/{id}` - Delete file
-  - [ ] `GET /api/media/orphaned` - List orphaned
-  - [ ] `DELETE /api/media/orphaned` - Cleanup orphaned
+- [x] **4.7 Media API Endpoints**
+  - [x] Create `app/api/media.py`
+  - [x] `GET /api/media` - List media files
+  - [x] `POST /api/media/upload` - Upload file(s)
+  - [x] `GET /api/media/{id}` - Get file metadata
+  - [x] `DELETE /api/media/{id}` - Delete file
+  - [x] `GET /api/media/orphaned` - List orphaned
+  - [x] `DELETE /api/media/orphaned` - Cleanup orphaned
 
-- [ ] **4.8 Static File Serving**
-  - [ ] Configure FastAPI static files
-  - [ ] Serve originals from `/media/`
-  - [ ] Serve thumbnails from `/thumbnails/`
+- [x] **4.8 Static File Serving**
+  - [x] Configure FastAPI static files
+  - [x] Serve originals from `/media/`
+  - [x] Serve thumbnails from `/media/thumbnails/`
 
-- [ ] **4.9 Media Tests**
-  - [ ] Test file upload (various types)
-  - [ ] Test thumbnail generation
-  - [ ] Test size/type validation
-  - [ ] Test quota enforcement
-  - [ ] Test orphan detection/cleanup
+- [x] **4.9 Media Tests**
+  - [x] Test file upload (various types)
+  - [x] Test thumbnail generation
+  - [x] Test size/type validation
+  - [x] Test quota enforcement
+  - [x] Test orphan detection/cleanup
 
 ### Deliverables
 
@@ -394,59 +394,59 @@ curl http://localhost:8000/api/media?include_stats=true
 
 **Goal**: Implement tag management and post-tag relationships
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 
 **Depends on**: Phase 3
 
 ### Tasks
 
-- [ ] **5.1 Tag Model**
-  - [ ] Create `app/models/tag.py` (spec lines 174-183)
-  - [ ] Add indexes on name, slug
-  - [ ] Track post_count (denormalized)
+- [x] **5.1 Tag Model**
+  - [x] Create `app/models/tag.py` (spec lines 174-183)
+  - [x] Add indexes on name, slug
+  - [x] Track post_count (denormalized)
 
-- [ ] **5.2 PostTag Association**
-  - [ ] Create association table (spec lines 185-190)
-  - [ ] Set up relationships in Post and Tag models
+- [x] **5.2 PostTag Association**
+  - [x] Create association table (spec lines 185-190)
+  - [x] Set up relationships in Post and Tag models
 
-- [ ] **5.3 Tag Schemas**
-  - [ ] Create `app/schemas/tag.py`
-  - [ ] `TagCreate` - Create tag data
-  - [ ] `TagUpdate` - Update tag data
-  - [ ] `TagResponse` - API response
-  - [ ] `TagWithPosts` - Tag with post list
+- [x] **5.3 Tag Schemas**
+  - [x] Create `app/schemas/tag.py`
+  - [x] `TagCreate` - Create tag data
+  - [x] `TagUpdate` - Update tag data
+  - [x] `TagResponse` - API response
+  - [x] `TagWithPosts` - Tag with post list
 
-- [ ] **5.4 Tag Service**
-  - [ ] Create `app/services/tag_service.py`
-  - [ ] `create_tag()` - Create with slug
-  - [ ] `update_tag()` - Update metadata
-  - [ ] `delete_tag()` - Remove (with options)
-  - [ ] `get_tag_by_slug()` - Lookup
-  - [ ] `list_tags()` - All tags
-  - [ ] `get_important_tags()` - Featured tags
-  - [ ] `update_post_count()` - Recalculate counts
+- [x] **5.4 Tag Service**
+  - [x] Create `app/services/tag_service.py`
+  - [x] `create_tag()` - Create with slug
+  - [x] `update_tag()` - Update metadata
+  - [x] `delete_tag()` - Remove (with options)
+  - [x] `get_tag_by_slug()` - Lookup
+  - [x] `list_tags()` - All tags
+  - [x] `get_important_tags()` - Featured tags
+  - [x] `update_post_count()` - Recalculate counts
 
-- [ ] **5.5 Post-Tag Integration**
-  - [ ] Update PostService to handle tags
-  - [ ] Create tags on-the-fly when tagging posts
-  - [ ] Auto-update tag counts
-  - [ ] Tag cloud generation
+- [x] **5.5 Post-Tag Integration**
+  - [x] Update PostService to handle tags
+  - [x] Create tags on-the-fly when tagging posts
+  - [x] Auto-update tag counts
+  - [x] Tag cloud generation
 
-- [ ] **5.6 Tag API Endpoints**
-  - [ ] Create `app/api/tags.py`
-  - [ ] `GET /api/tags` - List all tags
-  - [ ] `POST /api/tags` - Create tag
-  - [ ] `GET /api/tags/{id}` - Get tag
-  - [ ] `PUT /api/tags/{id}` - Update tag
-  - [ ] `DELETE /api/tags/{id}` - Delete tag
-  - [ ] `GET /api/tags/{slug}/posts` - Posts by tag
+- [x] **5.6 Tag API Endpoints**
+  - [x] Create `app/api/tags.py`
+  - [x] `GET /api/tags` - List all tags
+  - [x] `POST /api/tags` - Create tag
+  - [x] `GET /api/tags/{id}` - Get tag
+  - [x] `PUT /api/tags/{id}` - Update tag
+  - [x] `DELETE /api/tags/{id}` - Delete tag
+  - [x] `GET /api/tags/{slug}/posts` - Posts by tag
 
-- [ ] **5.7 Tag Tests**
-  - [ ] Test CRUD operations
-  - [ ] Test post-tag relationships
-  - [ ] Test count updates
-  - [ ] Test on-the-fly creation
-  - [ ] Test tag deletion behavior
+- [x] **5.7 Tag Tests**
+  - [x] Test CRUD operations
+  - [x] Test post-tag relationships
+  - [x] Test count updates
+  - [x] Test on-the-fly creation
+  - [x] Test tag deletion behavior
 
 ### Deliverables
 
@@ -1203,6 +1203,8 @@ Track significant milestones here:
 | 2026-01-22 | - | Project planning | Specification and phases defined |
 | 2026-01-22 | 1 | Phase 1 complete | Project structure, Docker, database, tests, linting |
 | 2026-01-22 | 2 | Phase 2 complete | User/Session models, auth service, API endpoints, 25 tests passing |
+| 2026-01-23 | 4 | Phase 4 complete | Media model/schemas, image processor, validators, media service, API endpoints, 61 new tests (116 total) |
+| 2026-01-23 | 5 | Phase 5 complete | Tag model, PostTag association, tag service, post-tag integration, API endpoints, 22 new tests (138 total) |
 
 ---
 

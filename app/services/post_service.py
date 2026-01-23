@@ -3,8 +3,11 @@
 Handles CRUD operations, slug generation, status transitions, and preview links.
 """
 
+from __future__ import annotations
+
 import secrets
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +16,9 @@ from app.models.post import Post, PostStatus
 from app.schemas.post import PostCreate, PostUpdate
 from app.utils.formatters import format_content, generate_excerpt
 from app.utils.slugify import make_unique_slug, slugify
+
+if TYPE_CHECKING:
+    from app.services.tag_service import TagService
 
 
 class PostService:
@@ -406,3 +412,82 @@ class PostService:
             HTML content
         """
         return format_content(post.content, post.formatter)
+
+    async def set_post_tags(
+        self, post: Post, tag_names: list[str], tag_service: TagService
+    ) -> list[str]:
+        """Set tags for a post.
+
+        Args:
+            post: Post to update
+            tag_names: List of tag names
+            tag_service: TagService instance
+
+        Returns:
+            List of tag names that were set
+        """
+        tags = await tag_service.set_post_tags(post, tag_names)
+        return [tag.name for tag in tags]
+
+    async def create_post_with_tags(
+        self,
+        post_data: PostCreate,
+        author_id: int,
+        tag_service: TagService,
+    ) -> Post:
+        """Create a new post with tags.
+
+        Args:
+            post_data: Post creation data
+            author_id: ID of the author
+            tag_service: TagService instance
+
+        Returns:
+            Created post with tags
+        """
+        post = await self.create_post(post_data, author_id)
+
+        if post_data.tags:
+            await tag_service.set_post_tags(post, post_data.tags)
+            await self.db.refresh(post)
+
+        return post
+
+    async def update_post_with_tags(
+        self,
+        post_id: int,
+        post_data: PostUpdate,
+        tag_service: TagService,
+        author_id: int | None = None,
+    ) -> Post | None:
+        """Update a post including tags.
+
+        Args:
+            post_id: Post ID
+            post_data: Update data
+            tag_service: TagService instance
+            author_id: Optional author ID for authorization check
+
+        Returns:
+            Updated post or None if not found
+        """
+        post = await self.update_post(post_id, post_data, author_id)
+        if not post:
+            return None
+
+        if post_data.tags is not None:
+            await tag_service.set_post_tags(post, post_data.tags)
+            await self.db.refresh(post)
+
+        return post
+
+    def get_post_tag_names(self, post: Post) -> list[str]:
+        """Get tag names for a post.
+
+        Args:
+            post: Post instance
+
+        Returns:
+            List of tag names
+        """
+        return [tag.name for tag in post.tags]
