@@ -106,7 +106,7 @@ curl http://localhost:8000/health  # Returns 200
 python -m venv venv
 
 # venv activated
-source venv/bin/activate
+    source venv/bin/activate
 
 # Tests pass
 pytest tests/
