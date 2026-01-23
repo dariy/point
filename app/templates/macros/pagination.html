@@ -1,0 +1,71 @@
+{# Pagination macro #}
+
+{% macro render_pagination(page, total_pages, base_url, extra_params='') %}
+{% if total_pages > 1 %}
+<nav class="pagination" aria-label="Pagination">
+    <ul class="pagination-list">
+        {# Previous page #}
+        {% if page > 1 %}
+        <li class="pagination-item">
+            <a href="{{ base_url }}?page={{ page - 1 }}{{ extra_params }}" class="pagination-link pagination-prev" aria-label="Previous page">
+                &laquo; Prev
+            </a>
+        </li>
+        {% else %}
+        <li class="pagination-item disabled">
+            <span class="pagination-link pagination-prev">&laquo; Prev</span>
+        </li>
+        {% endif %}
+
+        {# Page numbers #}
+        {% set start_page = [page - 2, 1] | max %}
+        {% set end_page = [page + 2, total_pages] | min %}
+
+        {% if start_page > 1 %}
+        <li class="pagination-item">
+            <a href="{{ base_url }}?page=1{{ extra_params }}" class="pagination-link">1</a>
+        </li>
+        {% if start_page > 2 %}
+        <li class="pagination-item disabled">
+            <span class="pagination-link">...</span>
+        </li>
+        {% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+        <li class="pagination-item {% if p == page %}active{% endif %}">
+            {% if p == page %}
+            <span class="pagination-link" aria-current="page">{{ p }}</span>
+            {% else %}
+            <a href="{{ base_url }}?page={{ p }}{{ extra_params }}" class="pagination-link">{{ p }}</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+        {% if end_page < total_pages - 1 %}
+        <li class="pagination-item disabled">
+            <span class="pagination-link">...</span>
+        </li>
+        {% endif %}
+        <li class="pagination-item">
+            <a href="{{ base_url }}?page={{ total_pages }}{{ extra_params }}" class="pagination-link">{{ total_pages }}</a>
+        </li>
+        {% endif %}
+
+        {# Next page #}
+        {% if page < total_pages %}
+        <li class="pagination-item">
+            <a href="{{ base_url }}?page={{ page + 1 }}{{ extra_params }}" class="pagination-link pagination-next" aria-label="Next page">
+                Next &raquo;
+            </a>
+        </li>
+        {% else %}
+        <li class="pagination-item disabled">
+            <span class="pagination-link pagination-next">Next &raquo;</span>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endmacro %}
