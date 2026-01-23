@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block body_class %}admin-layout{% endblock %}
+
+{% block body %}
+<div class="admin-container">
+    <nav class="admin-sidebar">
+        <div class="sidebar-header">
+            <a href="/admin/" class="logo">{{ app_name }}</a>
+        </div>
+        <ul class="sidebar-nav">
+            <li class="nav-item {% if request.url.path == '/admin/' %}active{% endif %}">
+                <a href="/admin/">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                    </svg>
+                    Dashboard
+                </a>
+            </li>
+            <li class="nav-item {% if '/admin/posts' in request.url.path %}active{% endif %}">
+                <a href="/admin/posts">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                    </svg>
+                    Posts
+                </a>
+            </li>
+            <li class="nav-item {% if request.url.path == '/admin/tags' %}active{% endif %}">
+                <a href="/admin/tags">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
+                    </svg>
+                    Tags
+                </a>
+            </li>
+            <li class="nav-item {% if request.url.path == '/admin/media' %}active{% endif %}">
+                <a href="/admin/media">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                    </svg>
+                    Media
+                </a>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <span class="user-name">{{ user.username if user else 'Guest' }}</span>
+            </div>
+            <a href="/admin/logout" class="logout-btn">Logout</a>
+        </div>
+    </nav>
+
+    <main class="admin-main">
+        <header class="admin-header">
+            <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+            <div class="header-actions">
+                {% block header_actions %}{% endblock %}
+            </div>
+        </header>
+
+        {% with messages = get_flashed_messages() if get_flashed_messages is defined else [] %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for message in messages %}
+            <div class="flash-message">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="admin-content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+</div>
+
+<script src="/static/js/admin.js"></script>
+{% block extra_js %}{% endblock %}
+{% endblock %}

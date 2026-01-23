@@ -1,8 +1,8 @@
 # CLAUDE.md - AI Assistant Guide for Photo Blog Engine
 
-> **Last Updated**: 2026-01-22
-> **Project Status**: Early Development (Pre-MVP)
-> **Current Phase**: Phase 1 - Foundation & Setup
+> **Last Updated**: 2026-01-23
+> **Project Status**: Active Development (MVP In Progress)
+> **Current Phase**: Phase 6 Complete - Admin Interface
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
@@ -48,6 +48,7 @@ Container:   Docker + docker-compose
 ### Key Documentation
 
 - `specification.md` - Complete technical specification (1,200+ lines)
+- `phases.md` - Development phases and progress tracking
 - `LICENSE` - MIT License
 - `CLAUDE.md` - This file (AI assistant guide)
 
@@ -55,50 +56,99 @@ Container:   Docker + docker-compose
 
 ## Current Repository State
 
-### Project Phase: Foundation (Pre-MVP)
+### Project Phase: Admin Interface Complete
 
-**Status**: Repository initialized with planning documents only
+**Status**: Phases 1-6 Complete, MVP backend and admin UI functional
 
-**Completed**:
-- ✅ Repository created with MIT License
-- ✅ Technical specification documented
-- ✅ AI assistant guidelines established
+**Completed Phases**:
+- ✅ Phase 1: Project Foundation - Docker, database, project structure
+- ✅ Phase 2: Authentication System - User/session models, auth API
+- ✅ Phase 3: Post Management Core - Post CRUD, slugs, status management
+- ✅ Phase 4: Media Management - File upload, image processing, thumbnails
+- ✅ Phase 5: Tag System - Tag CRUD, post-tag relationships
+- ✅ Phase 6: Admin Interface - Dashboard, post editor, media library, tags manager
 
-**Next Steps** (Phase 1 MVP):
-1. Project structure setup
-2. Docker configuration
-3. Database models
-4. Authentication system
-5. Basic API endpoints
-6. Admin interface foundation
-7. Public frontend templates
+**Next Steps** (Phase 7):
+1. Public frontend templates
+2. Homepage with post list
+3. Single post view
+4. Tag archive pages
+5. View counting
 
 ### Repository Structure (Current)
 
 ```
 point/
-├── LICENSE              # MIT License
-├── specification.md     # Complete technical spec
-├── CLAUDE.md           # This file
-└── .git/               # Git repository
+├── CLAUDE.md               # This file (AI assistant guide)
+├── LICENSE                 # MIT License
+├── Dockerfile             # Docker configuration
+├── docker-compose.yml     # Docker Compose setup
+├── pyproject.toml         # Python project config
+├── specification.md       # Complete technical spec
+├── phases.md              # Development phases tracker
+├── app/
+│   ├── __init__.py
+│   ├── main.py            # FastAPI application
+│   ├── config.py          # Pydantic settings
+│   ├── database.py        # SQLAlchemy async setup
+│   ├── dependencies.py    # Auth dependencies
+│   ├── api/               # FastAPI routes
+│   │   ├── admin.py       # Admin HTML routes
+│   │   ├── auth.py        # Authentication API
+│   │   ├── posts.py       # Posts API
+│   │   ├── media.py       # Media API
+│   │   └── tags.py        # Tags API
+│   ├── models/            # SQLAlchemy models
+│   │   ├── user.py
+│   │   ├── session.py
+│   │   ├── post.py
+│   │   ├── tag.py
+│   │   ├── post_tag.py
+│   │   └── media.py
+│   ├── schemas/           # Pydantic schemas
+│   │   ├── auth.py
+│   │   ├── post.py
+│   │   ├── tag.py
+│   │   └── media.py
+│   ├── services/          # Business logic
+│   │   ├── auth_service.py
+│   │   ├── post_service.py
+│   │   ├── tag_service.py
+│   │   └── media_service.py
+│   ├── templates/         # Jinja2 templates
+│   │   ├── base.html
+│   │   ├── admin/
+│   │   │   ├── base.html
+│   │   │   ├── login.html
+│   │   │   ├── dashboard.html
+│   │   │   ├── posts_list.html
+│   │   │   ├── post_edit.html
+│   │   │   ├── tags.html
+│   │   │   └── media.html
+│   │   └── macros/
+│   │       ├── forms.html
+│   │       └── pagination.html
+│   ├── static/            # CSS, JS assets
+│   │   ├── css/
+│   │   │   └── admin.css
+│   │   └── js/
+│   │       └── admin.js
+│   └── utils/             # Utility functions
+│       ├── slugify.py
+│       ├── formatters.py
+│       ├── image_processor.py
+│       └── validators.py
+├── tests/                 # Test suite
+│   ├── conftest.py
+│   └── test_api/
+│       ├── test_auth.py
+│       ├── test_posts.py
+│       ├── test_media.py
+│       ├── test_tags.py
+│       └── test_admin.py
+└── scripts/               # Utility scripts
+    └── init_db.py
 ```
-
-### Repository Structure (Target)
-
-See `specification.md` lines 35-122 for the complete planned directory structure.
-
-**Key directories to create**:
-- `app/` - Application code
-  - `models/` - SQLAlchemy models
-  - `schemas/` - Pydantic schemas
-  - `api/` - FastAPI routes
-  - `services/` - Business logic
-  - `templates/` - Jinja2 templates
-  - `static/` - CSS, JS, images
-  - `utils/` - Utilities
-- `tests/` - Test suite
-- `scripts/` - Utility scripts
-- `.github/workflows/` - CI/CD
 
 ---
 
@@ -1202,6 +1252,9 @@ git push -u origin <branch>           # Push
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-22 | Initial CLAUDE.md creation |
+| 1.1.0 | 2026-01-22 | Phase 1-2 complete: Foundation and Authentication |
+| 1.2.0 | 2026-01-23 | Phase 3-5 complete: Posts, Media, Tags |
+| 1.3.0 | 2026-01-23 | Phase 6 complete: Admin Interface with templates, CSS, JS |
 
 ---
 
