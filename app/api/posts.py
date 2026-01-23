@@ -25,6 +25,7 @@ from app.schemas.post import (
 )
 from app.schemas.post import PostStatus as PostStatusSchema
 from app.services.post_service import PostService
+from app.services.tag_service import TagService
 
 settings = get_settings()
 
@@ -62,7 +63,7 @@ def post_to_response(
             "avatar_path": post.author.avatar_path,
         },
         "thumbnail_path": post.thumbnail_path,
-        "tags": [],  # Tags will be added in Phase 5
+        "tags": [tag.name for tag in post.tags],
     }
 
     if include_content:
@@ -136,7 +137,9 @@ async def create_post(
     Requires authentication.
     """
     service = PostService(db)
-    post = await service.create_post(post_data, current_user.id)
+    tag_service = TagService(db)
+    post = await service.create_post_with_tags(post_data, current_user.id, tag_service)
+    await db.commit()
 
     return PostResponse(**post_to_response(post, service))
 
@@ -227,7 +230,10 @@ async def update_post(
     Requires authentication. Users can only update their own posts.
     """
     service = PostService(db)
-    post = await service.update_post(post_id, post_data, current_user.id)
+    tag_service = TagService(db)
+    post = await service.update_post_with_tags(
+        post_id, post_data, tag_service, current_user.id
+    )
 
     if not post:
         raise HTTPException(
@@ -235,6 +241,7 @@ async def update_post(
             detail="Post not found or access denied",
         )
 
+    await db.commit()
     return PostResponse(**post_to_response(post, service))
 
 
