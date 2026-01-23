@@ -246,8 +246,7 @@ async def new_post(
 
     # Get all tags for autocomplete
     tag_service = TagService(db)
-    tags, _ = await tag_service.list_tags()
-    # tags, _ = await tag_service.list_tags(page=1, per_page=100)
+    tags = await tag_service.list_tags()
 
     context = get_base_context(request, user)
     context.update(
@@ -294,8 +293,7 @@ async def edit_post(
 
     # Get all tags for autocomplete
     tag_service = TagService(db)
-    tags, _ = await tag_service.list_tags()
-    # tags, _ = await tag_service.list_tags(page=1, per_page=100)
+    tags = await tag_service.list_tags()
 
     # Get post's current tags
     post_tags = [t.name for t in post.tags]
@@ -336,14 +334,10 @@ async def tags_page(
             url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
-    # per_page = 50
     tag_service = TagService(db)
-    # tags, total = await tag_service.list_tags(page=page, per_page=per_page)
-    # tags, total = await tag_service.list_tags()
-    tags = 0
-    total = 0
-
-    total_pages = 1  # (total + per_page - 1) // per_page
+    tags = await tag_service.list_tags()
+    total = len(tags)
+    total_pages = 1
 
     context = get_base_context(request, user)
     context.update(
