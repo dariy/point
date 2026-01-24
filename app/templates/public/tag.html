@@ -1,0 +1,126 @@
+{% extends "public/base.html" %}
+
+{% block page_title %}{{ tag.name }}{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+<meta property="og:title" content="Posts tagged '{{ tag.name }}'">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ request.url }}">
+{% if tag.description %}
+<meta property="og:description" content="{{ tag.description }}">
+<meta name="description" content="{{ tag.description }}">
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="tag-archive">
+    <header class="tag-header">
+        <h1 class="tag-name">{{ tag.name }}</h1>
+        {% if tag.description %}
+        <p class="tag-description">{{ tag.description }}</p>
+        {% endif %}
+        <span class="tag-count">{{ total }} post{% if total != 1 %}s{% endif %}</span>
+    </header>
+
+    {% if posts %}
+    <div class="posts-grid">
+        {% for post in posts %}
+        <article class="post-card">
+            <a href="/posts/{{ post.slug }}" class="post-card-image">
+                {% if post.thumbnail_path %}
+                <img src="/media/thumbnails/{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                {% else %}
+                <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--color-gray-100);">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor" style="color: var(--color-gray-400);">
+                        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                    </svg>
+                </div>
+                {% endif %}
+            </a>
+            <div class="post-card-content">
+                <div class="post-card-meta">
+                    <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
+                        {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
+                    </time>
+                    {% if post.view_count %}
+                    <span>&bull;</span>
+                    <span>{{ post.view_count }} views</span>
+                    {% endif %}
+                </div>
+                <h2 class="post-card-title">
+                    <a href="/posts/{{ post.slug }}">{{ post.title }}</a>
+                </h2>
+                {% if post.excerpt %}
+                <p class="post-card-excerpt">{{ post.excerpt }}</p>
+                {% endif %}
+                {% if post.tags %}
+                <div class="post-card-tags">
+                    {% for t in post.tags[:3] %}
+                    <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{ t.name }}</a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination" aria-label="Tag archive pagination">
+        {% if page > 1 %}
+        <a href="/tag/{{ tag.slug }}?page={{ page - 1 }}" class="pagination-link" aria-label="Previous page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </a>
+        {% else %}
+        <span class="pagination-link disabled">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </span>
+        {% endif %}
+
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+                <span class="pagination-link active">{{ p }}</span>
+            {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
+                <a href="/tag/{{ tag.slug }}?page={{ p }}" class="pagination-link">{{ p }}</a>
+            {% elif p == page - 2 or p == page + 2 %}
+                <span class="pagination-ellipsis">&hellip;</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %}
+        <a href="/tag/{{ tag.slug }}?page={{ page + 1 }}" class="pagination-link" aria-label="Next page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        </a>
+        {% else %}
+        <span class="pagination-link disabled">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        </span>
+        {% endif %}
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                <path d="M21 15l-5-5L5 21"/>
+            </svg>
+        </div>
+        <h2 class="empty-state-title">No posts with this tag</h2>
+        <p class="empty-state-text">Check back later for new content.</p>
+        <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Home</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

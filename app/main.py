@@ -19,6 +19,7 @@ from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.media import router as media_router
 from app.api.posts import router as posts_router
+from app.api.public import router as public_router
 from app.api.tags import router as tags_router
 from app.config import get_settings
 from app.database import create_tables, get_db
@@ -101,6 +102,7 @@ app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(media_router)
 app.include_router(posts_router)
+app.include_router(public_router)
 app.include_router(tags_router)
 
 # Mount static files for media serving
@@ -138,20 +140,6 @@ async def health_check() -> dict[str, str]:
         Status indicating the application is running
     """
     return {"status": "healthy"}
-
-
-@app.get("/", tags=["Public"])
-async def root() -> dict[str, str]:
-    """Root endpoint.
-
-    Returns:
-        Welcome message and API information
-    """
-    return {
-        "name": settings.app_name,
-        "version": "0.1.0",
-        "status": "running",
-    }
 
 
 @app.get("/preview/{token}", tags=["Public"])
