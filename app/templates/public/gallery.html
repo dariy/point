@@ -1,0 +1,111 @@
+{% extends "public/base.html" %}
+
+{% block page_title %}Gallery{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+<meta property="og:title" content="Photo Gallery">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ request.url }}">
+<meta name="description" content="Browse our photo gallery">
+{% endblock %}
+
+{% block content %}
+<div class="gallery-page">
+    <header class="page-header">
+        <h1 class="page-title">Gallery</h1>
+        <p class="page-description">Browse all photos</p>
+    </header>
+
+    {% if tags %}
+    <div class="gallery-filters">
+        <a href="/gallery" class="filter-btn {% if not current_tag %}active{% endif %}">All</a>
+        {% for tag in tags %}
+        <a href="/gallery?tag={{ tag.slug }}" class="filter-btn {% if current_tag == tag.slug %}active{% endif %}">
+            {{ tag.name }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if posts %}
+    <div class="gallery-grid">
+        {% for post in posts %}
+        <a href="/posts/{{ post.slug }}" class="gallery-item">
+            {% if post.thumbnail_path %}
+            <img src="/media/thumbnails/{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+            {% else %}
+            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--color-gray-200);">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor" style="color: var(--color-gray-400);">
+                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                </svg>
+            </div>
+            {% endif %}
+            <div class="gallery-item-overlay">
+                <h3 class="gallery-item-title">{{ post.title }}</h3>
+                <time class="gallery-item-date" datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
+                    {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
+                </time>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination" aria-label="Gallery pagination">
+        {% if page > 1 %}
+        <a href="/gallery?page={{ page - 1 }}{% if current_tag %}&tag={{ current_tag }}{% endif %}" class="pagination-link" aria-label="Previous page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </a>
+        {% else %}
+        <span class="pagination-link disabled">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </span>
+        {% endif %}
+
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+                <span class="pagination-link active">{{ p }}</span>
+            {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
+                <a href="/gallery?page={{ p }}{% if current_tag %}&tag={{ current_tag }}{% endif %}" class="pagination-link">{{ p }}</a>
+            {% elif p == page - 2 or p == page + 2 %}
+                <span class="pagination-ellipsis">&hellip;</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %}
+        <a href="/gallery?page={{ page + 1 }}{% if current_tag %}&tag={{ current_tag }}{% endif %}" class="pagination-link" aria-label="Next page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        </a>
+        {% else %}
+        <span class="pagination-link disabled">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        </span>
+        {% endif %}
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="M21 15l-5-5L5 21"/>
+            </svg>
+        </div>
+        <h2 class="empty-state-title">No photos yet</h2>
+        <p class="empty-state-text">Check back soon for new images.</p>
+        <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Home</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
