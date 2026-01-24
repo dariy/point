@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}{% block page_title %}{{ blog_title }}{% endblock %} | {{ blog_title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/main.css">
+{% endblock %}
+
+{% block body_class %}public-layout{% endblock %}
+
+{% block body %}
+<div class="site-wrapper">
+    <header class="site-header">
+        <div class="header-container">
+            <div class="site-branding">
+                <a href="/" class="site-title">{{ blog_title }}</a>
+                {% if blog_subtitle %}
+                <p class="site-subtitle">{{ blog_subtitle }}</p>
+                {% endif %}
+            </div>
+            <nav class="site-nav">
+                <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Home</a>
+                <a href="/gallery" class="nav-link {% if request.url.path == '/gallery' %}active{% endif %}">Gallery</a>
+                {% if tags %}
+                <div class="nav-dropdown">
+                    <button class="nav-link dropdown-toggle">Tags</button>
+                    <div class="dropdown-menu">
+                        {% for tag in tags[:10] %}
+                        <a href="/tag/{{ tag.slug }}" class="dropdown-item">{{ tag.name }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </nav>
+            <button class="mobile-menu-toggle" aria-label="Toggle menu">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="site-main">
+        <div class="main-container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-container">
+            <div class="footer-content">
+                <p class="footer-copyright">&copy; {{ current_year }} {{ author_name }}</p>
+                <nav class="footer-nav">
+                    <a href="/feed.xml" class="footer-link">RSS Feed</a>
+                    <a href="/admin/" class="footer-link">Admin</a>
+                </nav>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<script src="/static/js/main.js"></script>
+{% block extra_js %}{% endblock %}
+{% endblock %}
