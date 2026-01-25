@@ -650,3 +650,131 @@ class TestCanonicalURLs:
         assert response.status_code == 200
         assert 'type="application/rss+xml"' in response.text
         assert 'href="/feed.xml"' in response.text
+
+
+class TestTheming:
+    """Tests for theming system."""
+
+    @pytest.mark.asyncio
+    async def test_homepage_has_color_scheme_meta(
+        self, client: AsyncClient
+    ) -> None:
+        """Test homepage has color-scheme meta tag."""
+        response = await client.get("/")
+        assert response.status_code == 200
+        assert 'name="color-scheme"' in response.text
+        assert 'content="light dark"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_homepage_has_theme_toggle(self, client: AsyncClient) -> None:
+        """Test homepage has theme toggle button."""
+        response = await client.get("/")
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+        assert 'Toggle theme' in response.text or 'Toggle dark mode' in response.text
+
+    @pytest.mark.asyncio
+    async def test_homepage_has_theme_icons(self, client: AsyncClient) -> None:
+        """Test homepage has sun and moon icons for theme toggle."""
+        response = await client.get("/")
+        assert response.status_code == 200
+        assert 'class="icon-sun"' in response.text
+        assert 'class="icon-moon"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_homepage_loads_theme_js(self, client: AsyncClient) -> None:
+        """Test homepage loads theme.js script."""
+        response = await client.get("/")
+        assert response.status_code == 200
+        assert 'src="/static/js/theme.js"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_theme_js_file_exists(self, client: AsyncClient) -> None:
+        """Test that theme.js file is accessible."""
+        response = await client.get("/static/js/theme.js")
+        assert response.status_code == 200
+        assert "ThemeManager" in response.text
+
+    @pytest.mark.asyncio
+    async def test_theme_js_has_toggle_function(
+        self, client: AsyncClient
+    ) -> None:
+        """Test theme.js has toggle functionality."""
+        response = await client.get("/static/js/theme.js")
+        assert response.status_code == 200
+        assert "toggleTheme" in response.text
+        assert "data-theme" in response.text
+
+    @pytest.mark.asyncio
+    async def test_theme_js_has_system_preference_detection(
+        self, client: AsyncClient
+    ) -> None:
+        """Test theme.js has system preference detection."""
+        response = await client.get("/static/js/theme.js")
+        assert response.status_code == 200
+        assert "prefers-color-scheme" in response.text
+        assert "matchMedia" in response.text
+
+    @pytest.mark.asyncio
+    async def test_theme_js_has_localStorage_persistence(
+        self, client: AsyncClient
+    ) -> None:
+        """Test theme.js uses localStorage for persistence."""
+        response = await client.get("/static/js/theme.js")
+        assert response.status_code == 200
+        assert "localStorage" in response.text
+        assert "theme-preference" in response.text
+
+    @pytest.mark.asyncio
+    async def test_post_page_has_theme_toggle(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test post page has theme toggle button."""
+        response = await client.get(f"/posts/{published_post.slug}")
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_gallery_has_theme_toggle(self, client: AsyncClient) -> None:
+        """Test gallery page has theme toggle button."""
+        response = await client.get("/gallery")
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_tag_page_has_theme_toggle(
+        self, client: AsyncClient, sample_tag: Tag, published_post: Post
+    ) -> None:
+        """Test tag page has theme toggle button."""
+        response = await client.get(f"/tag/{sample_tag.slug}")
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_main_css_has_dark_theme_variables(
+        self, client: AsyncClient
+    ) -> None:
+        """Test main.css has dark theme CSS variables."""
+        response = await client.get("/static/css/main.css")
+        assert response.status_code == 200
+        assert '[data-theme="dark"]' in response.text
+        assert "--bg-primary" in response.text
+        assert "--text-primary" in response.text
+
+    @pytest.mark.asyncio
+    async def test_main_css_has_light_theme_variables(
+        self, client: AsyncClient
+    ) -> None:
+        """Test main.css has light theme CSS variables."""
+        response = await client.get("/static/css/main.css")
+        assert response.status_code == 200
+        assert '[data-theme="light"]' in response.text or ":root" in response.text
+
+    @pytest.mark.asyncio
+    async def test_main_css_has_theme_transition(
+        self, client: AsyncClient
+    ) -> None:
+        """Test main.css has smooth theme transition."""
+        response = await client.get("/static/css/main.css")
+        assert response.status_code == 200
+        assert "--transition-theme" in response.text

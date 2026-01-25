@@ -2,7 +2,7 @@
 
 > **Purpose**: Track development progress through self-sufficient phases
 > **Last Updated**: 2026-01-24
-> **Status**: Phase 8 - Complete
+> **Status**: Phase 9 - Complete
 
 ---
 
@@ -28,7 +28,7 @@ Each phase is designed to be:
 | 6 | Admin Interface | ✅ Completed | Phases 3, 4, 5 |
 | 7 | Public Frontend | ✅ Completed | Phases 3, 5 |
 | 8 | RSS & SEO | ✅ Completed | Phase 7 |
-| 9 | Theming System | ⬜ Not Started | Phase 7 |
+| 9 | Theming System | ✅ Completed | Phase 7 |
 | 10 | Caching & Performance | ⬜ Not Started | Phase 7 |
 | 11 | Background Tasks & Backup | ⬜ Not Started | Phase 10 |
 | 12 | Settings & System Tools | ⬜ Not Started | Phase 6 |
@@ -752,52 +752,53 @@ curl http://localhost:8000/robots.txt
 
 **Goal**: Implement dark/light themes with system preference detection
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 
 **Depends on**: Phase 7
 
 ### Tasks
 
-- [ ] **9.1 CSS Variables**
-  - [ ] Define theme variables in `main.css`
-  - [ ] Colors, backgrounds, borders
-  - [ ] Typography colors
-  - [ ] Shadow styles
+- [x] **9.1 CSS Variables**
+  - [x] Define theme variables in `main.css`
+  - [x] Colors, backgrounds, borders
+  - [x] Typography colors
+  - [x] Shadow styles
 
-- [ ] **9.2 Dark Theme**
-  - [ ] Create `app/templates/themes/dark/styles.css`
-  - [ ] Dark color palette
-  - [ ] Adjusted contrasts
+- [x] **9.2 Dark Theme**
+  - [x] Dark theme styles in `main.css` and `admin.css`
+  - [x] Dark color palette
+  - [x] Adjusted contrasts
 
-- [ ] **9.3 Light Theme**
-  - [ ] Create `app/templates/themes/light/styles.css`
-  - [ ] Light color palette
-  - [ ] Clean aesthetics
+- [x] **9.3 Light Theme**
+  - [x] Light theme styles in `main.css` and `admin.css`
+  - [x] Light color palette
+  - [x] Clean aesthetics
 
-- [ ] **9.4 Theme JavaScript**
-  - [ ] Create `app/static/js/theme.js`
-  - [ ] Detect system preference
-  - [ ] Toggle theme
-  - [ ] Persist preference (localStorage)
-  - [ ] Apply on page load (no flash)
+- [x] **9.4 Theme JavaScript**
+  - [x] Create `app/static/js/theme.js`
+  - [x] Detect system preference
+  - [x] Toggle theme
+  - [x] Persist preference (localStorage)
+  - [x] Apply on page load (no flash)
 
-- [ ] **9.5 Theme Switcher UI**
-  - [ ] Add toggle in header
-  - [ ] Icon changes with theme
-  - [ ] Smooth transitions
+- [x] **9.5 Theme Switcher UI**
+  - [x] Add toggle in header
+  - [x] Icon changes with theme (sun/moon)
+  - [x] Smooth transitions
 
-- [ ] **9.6 Admin Theme Support**
-  - [ ] Apply theming to admin
-  - [ ] Consistent with public
+- [x] **9.6 Admin Theme Support**
+  - [x] Apply theming to admin
+  - [x] Consistent with public
 
-- [ ] **9.7 Color Scheme Meta**
-  - [ ] Update `<meta name="color-scheme">`
-  - [ ] Browser UI adaptation
+- [x] **9.7 Color Scheme Meta**
+  - [x] Update `<meta name="color-scheme">`
+  - [x] Browser UI adaptation
 
-- [ ] **9.8 Theme Tests**
-  - [ ] Test theme toggle
-  - [ ] Test persistence
-  - [ ] Test system preference
+- [x] **9.8 Theme Tests**
+  - [x] Test theme toggle presence
+  - [x] Test theme.js functionality
+  - [x] Test system preference detection
+  - [x] Test CSS variables presence
 
 ### Deliverables
 
@@ -1208,6 +1209,7 @@ Track significant milestones here:
 | 2026-01-23 | 6 | Phase 6 complete | Admin interface with dashboard, post editor, media library, tags manager |
 | 2026-01-24 | 7 | Phase 7 complete | Public frontend with homepage, single post, tag archive, gallery, 25 new tests (163 total) |
 | 2026-01-24 | 8 | Phase 8 complete | RSS feed, sitemap, robots.txt, Open Graph & Twitter Card meta tags, canonical URLs, 29 new tests (192 total) |
+| 2026-01-24 | 9 | Phase 9 complete | Dark/light theming with CSS variables, theme.js for toggle and system preference detection, theme switcher UI, admin theming, 24 new tests |
 
 ---
 

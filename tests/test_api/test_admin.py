@@ -336,3 +336,132 @@ class TestEditPost:
         )
 
         assert response.status_code == 404
+
+
+class TestAdminTheming:
+    """Test cases for admin interface theming."""
+
+    @pytest.mark.asyncio
+    async def test_admin_login_has_color_scheme_meta(
+        self, client: AsyncClient
+    ) -> None:
+        """Test admin login page has color-scheme meta tag."""
+        response = await client.get("/admin/login")
+
+        assert response.status_code == 200
+        assert 'name="color-scheme"' in response.text
+        assert 'content="light dark"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_dashboard_has_theme_toggle(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test admin dashboard has theme toggle button."""
+        response = await client.get(
+            "/admin/",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_dashboard_has_theme_icons(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test admin dashboard has sun and moon theme icons."""
+        response = await client.get(
+            "/admin/",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert 'class="icon-sun"' in response.text
+        assert 'class="icon-moon"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_loads_theme_js(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test admin pages load theme.js script."""
+        response = await client.get(
+            "/admin/",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert "/static/js/theme.js" in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_posts_has_theme_toggle(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test admin posts page has theme toggle."""
+        response = await client.get(
+            "/admin/posts",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_tags_has_theme_toggle(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test admin tags page has theme toggle."""
+        response = await client.get(
+            "/admin/tags",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_media_has_theme_toggle(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test admin media page has theme toggle."""
+        response = await client.get(
+            "/admin/media",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert 'class="theme-toggle"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_css_has_dark_theme_variables(
+        self, client: AsyncClient
+    ) -> None:
+        """Test admin CSS has dark theme variables."""
+        response = await client.get("/static/css/admin.css")
+
+        assert response.status_code == 200
+        assert '[data-theme="dark"]' in response.text
+        assert "--admin-bg" in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_css_has_light_theme_variables(
+        self, client: AsyncClient
+    ) -> None:
+        """Test admin CSS has light theme variables."""
+        response = await client.get("/static/css/admin.css")
+
+        assert response.status_code == 200
+        assert '[data-theme="light"]' in response.text
+        assert "--admin-text-primary" in response.text
+
+    @pytest.mark.asyncio
+    async def test_admin_has_theme_color_meta(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test admin pages have theme-color meta tag."""
+        response = await client.get(
+            "/admin/",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert 'name="theme-color"' in response.text
