@@ -4,12 +4,13 @@ Handles public-facing HTML pages for the blog.
 """
 
 from datetime import datetime
+from email.utils import format_datetime
 from math import ceil
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -352,3 +353,171 @@ async def gallery(
     })
 
     return templates.TemplateResponse("public/gallery.html", context)
+
+
+def get_base_url(request: Request) -> str:
+    """Get the base URL from the request.
+
+    Args:
+        request: The current request
+
+    Returns:
+        Base URL string (scheme://host)
+    """
+    return f"{request.url.scheme}://{request.url.netloc}"
+
+
+@router.get("/feed.xml", response_class=Response)
+async def rss_feed(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Generate RSS feed.
+
+    Args:
+        request: The current request
+        db: Database session
+
+    Returns:
+        RSS XML feed
+    """
+    # Get last 20 published posts
+    query = (
+        select(Post)
+        .options(selectinload(Post.tags))
+        .where(Post.status == PostStatus.PUBLISHED)
+        .order_by(Post.published_at.desc())
+        .limit(20)
+    )
+    result = await db.execute(query)
+    posts = list(result.scalars().all())
+
+    # Prepare post data with formatted content and dates
+    posts_data = []
+    for post in posts:
+        pub_date = post.published_at or post.created_at
+        posts_data.append({
+            "title": post.title,
+            "slug": post.slug,
+            "excerpt": post.excerpt,
+            "meta_description": post.meta_description,
+            "content_html": format_content(post.content, post.formatter.value),
+            "thumbnail_path": post.thumbnail_path,
+            "tags": post.tags,
+            "pub_date_rfc822": format_datetime(pub_date),
+        })
+
+    # Get build date
+    build_date = format_datetime(datetime.now())
+
+    base_url = get_base_url(request)
+
+    context = {
+        "request": request,
+        "blog_title": settings.app_name,
+        "blog_subtitle": getattr(settings, "blog_subtitle", ""),
+        "author_name": getattr(settings, "author_name", "Admin"),
+        "author_email": getattr(settings, "author_email", ""),
+        "language": getattr(settings, "default_language", "en"),
+        "base_url": base_url,
+        "build_date": build_date,
+        "posts": posts_data,
+        "include_full_content": True,
+    }
+
+    content = templates.get_template("public/rss.xml").render(context)
+    return Response(
+        content=content,
+        media_type="application/rss+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@router.get("/sitemap.xml", response_class=Response)
+async def sitemap(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Generate sitemap XML.
+
+    Args:
+        request: The current request
+        db: Database session
+
+    Returns:
+        Sitemap XML
+    """
+    # Get all published posts
+    posts_query = (
+        select(Post)
+        .where(Post.status == PostStatus.PUBLISHED)
+        .order_by(Post.published_at.desc())
+    )
+    posts_result = await db.execute(posts_query)
+    posts = list(posts_result.scalars().all())
+
+    # Format posts with lastmod
+    posts_data = []
+    for post in posts:
+        lastmod = post.updated_at or post.published_at or post.created_at
+        posts_data.append({
+            "slug": post.slug,
+            "lastmod": lastmod.strftime("%Y-%m-%d"),
+        })
+
+    # Get all tags with posts
+    tags_query = (
+        select(Tag)
+        .where(Tag.post_count > 0)
+        .order_by(Tag.name)
+    )
+    tags_result = await db.execute(tags_query)
+    tags = list(tags_result.scalars().all())
+
+    # Last updated date
+    last_updated = datetime.now().strftime("%Y-%m-%d")
+
+    base_url = get_base_url(request)
+
+    context = {
+        "request": request,
+        "base_url": base_url,
+        "posts": posts_data,
+        "tags": tags,
+        "last_updated": last_updated,
+    }
+
+    content = templates.get_template("public/sitemap.xml").render(context)
+    return Response(
+        content=content,
+        media_type="application/xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt(request: Request) -> PlainTextResponse:
+    """Generate robots.txt.
+
+    Args:
+        request: The current request
+
+    Returns:
+        robots.txt content
+    """
+    base_url = get_base_url(request)
+
+    content = f"""# robots.txt for {settings.app_name}
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /preview/
+
+# Sitemap
+Sitemap: {base_url}/sitemap.xml
+"""
+    return PlainTextResponse(
+        content=content,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
