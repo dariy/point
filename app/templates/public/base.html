@@ -2,6 +2,31 @@
 
 {% block title %}{% block page_title %}{{ blog_title }}{% endblock %} | {{ blog_title }}{% endblock %}
 
+{% block meta_tags %}
+<!-- Default meta tags -->
+<meta name="description" content="{% block meta_description %}{{ blog_subtitle }}{% endblock %}">
+<meta name="author" content="{{ author_name }}">
+<link rel="canonical" href="{% block canonical_url %}{{ request.url }}{% endblock %}">
+<link rel="alternate" type="application/rss+xml" title="{{ blog_title }} RSS Feed" href="/feed.xml">
+
+<!-- Open Graph defaults (can be overridden by child templates) -->
+{% block og_meta %}
+<meta property="og:site_name" content="{{ blog_title }}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ self.page_title() }} | {{ blog_title }}">
+<meta property="og:description" content="{{ self.meta_description() }}">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:locale" content="en_US">
+{% endblock %}
+
+<!-- Twitter Card defaults (can be overridden by child templates) -->
+{% block twitter_meta %}
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{ self.page_title() }} | {{ blog_title }}">
+<meta name="twitter:description" content="{{ self.meta_description() }}">
+{% endblock %}
+{% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/main.css">
 {% endblock %}

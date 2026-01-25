@@ -387,3 +387,266 @@ class TestNavigation:
         assert response.status_code == 200
         # Should have navigation links
         assert "Previous Post" in response.text or "Next Post" in response.text
+
+
+class TestRSSFeed:
+    """Tests for RSS feed."""
+
+    @pytest.mark.asyncio
+    async def test_rss_feed_loads(self, client: AsyncClient) -> None:
+        """Test that RSS feed loads successfully."""
+        response = await client.get("/feed.xml")
+        assert response.status_code == 200
+        assert "application/rss+xml" in response.headers["content-type"]
+
+    @pytest.mark.asyncio
+    async def test_rss_feed_is_valid_xml(self, client: AsyncClient) -> None:
+        """Test that RSS feed is valid XML."""
+        response = await client.get("/feed.xml")
+        assert response.status_code == 200
+        assert '<?xml version="1.0"' in response.text
+        assert "<rss version=" in response.text
+        assert "<channel>" in response.text
+        assert "</rss>" in response.text
+
+    @pytest.mark.asyncio
+    async def test_rss_feed_contains_posts(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test that RSS feed contains published posts."""
+        response = await client.get("/feed.xml")
+        assert response.status_code == 200
+        assert published_post.title in response.text
+        assert f"/posts/{published_post.slug}" in response.text
+
+    @pytest.mark.asyncio
+    async def test_rss_feed_excludes_drafts(
+        self, client: AsyncClient, draft_post: Post
+    ) -> None:
+        """Test that RSS feed excludes draft posts."""
+        response = await client.get("/feed.xml")
+        assert response.status_code == 200
+        assert draft_post.title not in response.text
+
+    @pytest.mark.asyncio
+    async def test_rss_feed_has_required_elements(
+        self, client: AsyncClient
+    ) -> None:
+        """Test that RSS feed has required channel elements."""
+        response = await client.get("/feed.xml")
+        assert response.status_code == 200
+        assert "<title>" in response.text
+        assert "<link>" in response.text
+        assert "<description>" in response.text
+        assert "<lastBuildDate>" in response.text
+
+    @pytest.mark.asyncio
+    async def test_rss_feed_has_cache_header(self, client: AsyncClient) -> None:
+        """Test that RSS feed has cache control header."""
+        response = await client.get("/feed.xml")
+        assert response.status_code == 200
+        assert "Cache-Control" in response.headers
+
+    @pytest.mark.asyncio
+    async def test_rss_feed_item_has_required_elements(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test that RSS feed items have required elements."""
+        response = await client.get("/feed.xml")
+        assert response.status_code == 200
+        assert "<item>" in response.text
+        assert "<guid" in response.text
+        assert "<pubDate>" in response.text
+
+
+class TestSitemap:
+    """Tests for sitemap."""
+
+    @pytest.mark.asyncio
+    async def test_sitemap_loads(self, client: AsyncClient) -> None:
+        """Test that sitemap loads successfully."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert "application/xml" in response.headers["content-type"]
+
+    @pytest.mark.asyncio
+    async def test_sitemap_is_valid_xml(self, client: AsyncClient) -> None:
+        """Test that sitemap is valid XML."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert '<?xml version="1.0"' in response.text
+        assert "<urlset" in response.text
+        assert "</urlset>" in response.text
+
+    @pytest.mark.asyncio
+    async def test_sitemap_contains_homepage(self, client: AsyncClient) -> None:
+        """Test that sitemap contains homepage."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert "<loc>http://test/</loc>" in response.text
+
+    @pytest.mark.asyncio
+    async def test_sitemap_contains_gallery(self, client: AsyncClient) -> None:
+        """Test that sitemap contains gallery page."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert "<loc>http://test/gallery</loc>" in response.text
+
+    @pytest.mark.asyncio
+    async def test_sitemap_contains_posts(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test that sitemap contains published posts."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert f"/posts/{published_post.slug}" in response.text
+
+    @pytest.mark.asyncio
+    async def test_sitemap_contains_tags(
+        self, client: AsyncClient, sample_tag: Tag, published_post: Post
+    ) -> None:
+        """Test that sitemap contains tags with posts."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert f"/tag/{sample_tag.slug}" in response.text
+
+    @pytest.mark.asyncio
+    async def test_sitemap_excludes_drafts(
+        self, client: AsyncClient, draft_post: Post
+    ) -> None:
+        """Test that sitemap excludes draft posts."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert draft_post.slug not in response.text
+
+    @pytest.mark.asyncio
+    async def test_sitemap_has_cache_header(self, client: AsyncClient) -> None:
+        """Test that sitemap has cache control header."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert "Cache-Control" in response.headers
+
+    @pytest.mark.asyncio
+    async def test_sitemap_has_lastmod(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test that sitemap entries have lastmod dates."""
+        response = await client.get("/sitemap.xml")
+        assert response.status_code == 200
+        assert "<lastmod>" in response.text
+
+
+class TestRobotsTxt:
+    """Tests for robots.txt."""
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_loads(self, client: AsyncClient) -> None:
+        """Test that robots.txt loads successfully."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "text/plain" in response.headers["content-type"]
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_has_user_agent(self, client: AsyncClient) -> None:
+        """Test that robots.txt has User-agent directive."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "User-agent:" in response.text
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_allows_public_pages(
+        self, client: AsyncClient
+    ) -> None:
+        """Test that robots.txt allows public pages."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "Allow: /" in response.text
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_disallows_admin(self, client: AsyncClient) -> None:
+        """Test that robots.txt disallows admin pages."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "Disallow: /admin/" in response.text
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_disallows_api(self, client: AsyncClient) -> None:
+        """Test that robots.txt disallows API endpoints."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "Disallow: /api/" in response.text
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_has_sitemap(self, client: AsyncClient) -> None:
+        """Test that robots.txt references sitemap."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "Sitemap:" in response.text
+        assert "/sitemap.xml" in response.text
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_has_cache_header(self, client: AsyncClient) -> None:
+        """Test that robots.txt has cache control header."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "Cache-Control" in response.headers
+
+
+class TestTwitterCards:
+    """Tests for Twitter Card meta tags."""
+
+    @pytest.mark.asyncio
+    async def test_post_has_twitter_card_tags(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test that post pages have Twitter Card meta tags."""
+        response = await client.get(f"/posts/{published_post.slug}")
+        assert response.status_code == 200
+        assert 'name="twitter:card"' in response.text
+        assert 'name="twitter:title"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_post_with_image_has_large_image_card(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test posts with images use summary_large_image card."""
+        response = await client.get(f"/posts/{published_post.slug}")
+        assert response.status_code == 200
+        assert 'content="summary_large_image"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_tag_page_has_twitter_card_tags(
+        self, client: AsyncClient, sample_tag: Tag, published_post: Post
+    ) -> None:
+        """Test that tag pages have Twitter Card meta tags."""
+        response = await client.get(f"/tag/{sample_tag.slug}")
+        assert response.status_code == 200
+        assert 'name="twitter:card"' in response.text
+
+
+class TestCanonicalURLs:
+    """Tests for canonical URLs."""
+
+    @pytest.mark.asyncio
+    async def test_homepage_has_canonical(self, client: AsyncClient) -> None:
+        """Test homepage has canonical URL."""
+        response = await client.get("/")
+        assert response.status_code == 200
+        assert 'rel="canonical"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_post_has_canonical(
+        self, client: AsyncClient, published_post: Post
+    ) -> None:
+        """Test post page has canonical URL."""
+        response = await client.get(f"/posts/{published_post.slug}")
+        assert response.status_code == 200
+        assert 'rel="canonical"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_homepage_has_rss_link(self, client: AsyncClient) -> None:
+        """Test homepage has RSS feed link."""
+        response = await client.get("/")
+        assert response.status_code == 200
+        assert 'type="application/rss+xml"' in response.text
+        assert 'href="/feed.xml"' in response.text

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <!-- Homepage -->
+    <url>
+        <loc>{{ base_url }}/</loc>
+        <lastmod>{{ last_updated }}</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>1.0</priority>
+    </url>
+
+    <!-- Gallery -->
+    <url>
+        <loc>{{ base_url }}/gallery</loc>
+        <lastmod>{{ last_updated }}</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.8</priority>
+    </url>
+
+    <!-- Posts -->
+    {% for post in posts %}
+    <url>
+        <loc>{{ base_url }}/posts/{{ post.slug }}</loc>
+        <lastmod>{{ post.lastmod }}</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    {% endfor %}
+
+    <!-- Tags -->
+    {% for tag in tags %}
+    <url>
+        <loc>{{ base_url }}/tag/{{ tag.slug }}</loc>
+        <lastmod>{{ last_updated }}</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    {% endfor %}
+</urlset>
