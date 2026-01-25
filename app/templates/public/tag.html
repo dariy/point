@@ -1,16 +1,22 @@
 {% extends "public/base.html" %}
 
-{% block page_title %}{{ tag.name }}{% endblock %}
+{% block page_title %}Posts tagged "{{ tag.name }}"{% endblock %}
 
-{% block extra_css %}
-{{ super() }}
-<meta property="og:title" content="Posts tagged '{{ tag.name }}'">
+{% block meta_description %}{% if tag.description %}{{ tag.description }}{% else %}Browse {{ total }} posts tagged with "{{ tag.name }}"{% endif %}{% endblock %}
+
+{% block og_meta %}
+<meta property="og:site_name" content="{{ blog_title }}">
 <meta property="og:type" content="website">
+<meta property="og:title" content="Posts tagged '{{ tag.name }}' | {{ blog_title }}">
+<meta property="og:description" content="{% if tag.description %}{{ tag.description }}{% else %}Browse {{ total }} posts tagged with '{{ tag.name }}'{% endif %}">
 <meta property="og:url" content="{{ request.url }}">
-{% if tag.description %}
-<meta property="og:description" content="{{ tag.description }}">
-<meta name="description" content="{{ tag.description }}">
-{% endif %}
+<meta property="og:locale" content="en_US">
+{% endblock %}
+
+{% block twitter_meta %}
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Posts tagged '{{ tag.name }}' | {{ blog_title }}">
+<meta name="twitter:description" content="{% if tag.description %}{{ tag.description }}{% else %}Browse {{ total }} posts tagged with '{{ tag.name }}'{% endif %}">
 {% endblock %}
 
 {% block content %}
