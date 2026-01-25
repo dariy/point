@@ -1,10 +1,10 @@
 /* Admin CSS - Photo Blog Engine */
 
 /* ===========================
-   CSS Variables
+   CSS Variables - Base
    =========================== */
 :root {
-    /* Colors */
+    /* Brand Colors */
     --color-primary: #2563eb;
     --color-primary-hover: #1d4ed8;
     --color-primary-light: #dbeafe;
@@ -15,18 +15,6 @@
     --color-warning-light: #fef3c7;
     --color-danger: #ef4444;
     --color-danger-light: #fee2e2;
-
-    /* Grays */
-    --color-gray-50: #f8fafc;
-    --color-gray-100: #f1f5f9;
-    --color-gray-200: #e2e8f0;
-    --color-gray-300: #cbd5e1;
-    --color-gray-400: #94a3b8;
-    --color-gray-500: #64748b;
-    --color-gray-600: #475569;
-    --color-gray-700: #334155;
-    --color-gray-800: #1e293b;
-    --color-gray-900: #0f172a;
 
     /* Layout */
     --sidebar-width: 240px;
@@ -56,15 +44,107 @@
     --border-radius: 0.375rem;
     --border-radius-lg: 0.5rem;
 
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition-normal: 200ms ease;
+    --transition-theme: 200ms ease;
+}
+
+/* ===========================
+   Light Theme (Default)
+   =========================== */
+:root,
+[data-theme="light"] {
+    /* Semantic Colors */
+    --admin-bg: #f1f5f9;
+    --admin-sidebar-bg: #0f172a;
+    --admin-sidebar-text: #94a3b8;
+    --admin-sidebar-text-hover: #ffffff;
+    --admin-sidebar-active-bg: #1e293b;
+    --admin-sidebar-border: #334155;
+    --admin-header-bg: #ffffff;
+    --admin-header-border: #e2e8f0;
+    --admin-content-bg: #ffffff;
+    --admin-text-primary: #0f172a;
+    --admin-text-secondary: #475569;
+    --admin-text-muted: #94a3b8;
+    --admin-border: #e2e8f0;
+    --admin-border-focus: #2563eb;
+    --admin-input-bg: #ffffff;
+    --admin-hover-bg: #f1f5f9;
+    --admin-card-bg: #ffffff;
+
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
-    /* Transitions */
-    --transition-fast: 150ms ease;
-    --transition-normal: 200ms ease;
+    /* Grays for compatibility */
+    --color-gray-50: #f8fafc;
+    --color-gray-100: #f1f5f9;
+    --color-gray-200: #e2e8f0;
+    --color-gray-300: #cbd5e1;
+    --color-gray-400: #94a3b8;
+    --color-gray-500: #64748b;
+    --color-gray-600: #475569;
+    --color-gray-700: #334155;
+    --color-gray-800: #1e293b;
+    --color-gray-900: #0f172a;
+
+    color-scheme: light;
+}
+
+/* ===========================
+   Dark Theme
+   =========================== */
+[data-theme="dark"] {
+    /* Semantic Colors */
+    --admin-bg: #0f172a;
+    --admin-sidebar-bg: #1e293b;
+    --admin-sidebar-text: #94a3b8;
+    --admin-sidebar-text-hover: #ffffff;
+    --admin-sidebar-active-bg: #334155;
+    --admin-sidebar-border: #475569;
+    --admin-header-bg: #1e293b;
+    --admin-header-border: #334155;
+    --admin-content-bg: #1e293b;
+    --admin-text-primary: #f1f5f9;
+    --admin-text-secondary: #cbd5e1;
+    --admin-text-muted: #64748b;
+    --admin-border: #334155;
+    --admin-border-focus: #3b82f6;
+    --admin-input-bg: #1e293b;
+    --admin-hover-bg: #334155;
+    --admin-card-bg: #1e293b;
+
+    /* Brand adjustments */
+    --color-primary: #3b82f6;
+    --color-primary-hover: #60a5fa;
+    --color-primary-light: rgba(59, 130, 246, 0.2);
+    --color-success-light: rgba(16, 185, 129, 0.2);
+    --color-warning-light: rgba(245, 158, 11, 0.2);
+    --color-danger-light: rgba(239, 68, 68, 0.2);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+
+    /* Grays inverted for dark theme */
+    --color-gray-50: #0f172a;
+    --color-gray-100: #1e293b;
+    --color-gray-200: #334155;
+    --color-gray-300: #475569;
+    --color-gray-400: #64748b;
+    --color-gray-500: #94a3b8;
+    --color-gray-600: #cbd5e1;
+    --color-gray-700: #e2e8f0;
+    --color-gray-800: #f1f5f9;
+    --color-gray-900: #f8fafc;
+
+    color-scheme: dark;
 }
 
 /* ===========================
@@ -86,8 +166,9 @@ body {
     font-family: var(--font-family);
     font-size: var(--font-size-base);
     line-height: 1.5;
-    color: var(--color-gray-800);
-    background-color: var(--color-gray-100);
+    color: var(--admin-text-primary);
+    background-color: var(--admin-bg);
+    transition: background-color var(--transition-theme), color var(--transition-theme);
 }
 
 a {
@@ -118,16 +199,17 @@ a:hover {
     top: 0;
     bottom: 0;
     width: var(--sidebar-width);
-    background-color: var(--color-gray-900);
+    background-color: var(--admin-sidebar-bg);
     color: white;
     display: flex;
     flex-direction: column;
     z-index: 100;
+    transition: background-color var(--transition-theme);
 }
 
 .sidebar-header {
     padding: var(--spacing-lg);
-    border-bottom: 1px solid var(--color-gray-700);
+    border-bottom: 1px solid var(--admin-sidebar-border);
 }
 
 .sidebar-header .logo {
@@ -149,14 +231,14 @@ a:hover {
     align-items: center;
     gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-lg);
-    color: var(--color-gray-400);
+    color: var(--admin-sidebar-text);
     transition: all var(--transition-fast);
 }
 
 .nav-item a:hover,
 .nav-item.active a {
-    color: white;
-    background-color: var(--color-gray-800);
+    color: var(--admin-sidebar-text-hover);
+    background-color: var(--admin-sidebar-active-bg);
 }
 
 .nav-item.active a {
@@ -170,7 +252,7 @@ a:hover {
 
 .sidebar-footer {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--color-gray-700);
+    border-top: 1px solid var(--admin-sidebar-border);
 }
 
 .user-info {
@@ -179,22 +261,22 @@ a:hover {
 
 .user-name {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-400);
+    color: var(--admin-sidebar-text);
 }
 
 .logout-btn {
     display: inline-block;
     padding: var(--spacing-xs) var(--spacing-sm);
-    color: var(--color-gray-400);
+    color: var(--admin-sidebar-text);
     font-size: var(--font-size-sm);
-    border: 1px solid var(--color-gray-600);
+    border: 1px solid var(--admin-sidebar-border);
     border-radius: var(--border-radius-sm);
     transition: all var(--transition-fast);
 }
 
 .logout-btn:hover {
-    color: white;
-    border-color: var(--color-gray-500);
+    color: var(--admin-sidebar-text-hover);
+    border-color: var(--admin-sidebar-text);
 }
 
 /* Main Content */
@@ -210,19 +292,21 @@ a:hover {
     position: sticky;
     top: 0;
     height: var(--header-height);
-    background-color: white;
-    border-bottom: 1px solid var(--color-gray-200);
+    background-color: var(--admin-header-bg);
+    border-bottom: 1px solid var(--admin-header-border);
     padding: 0 var(--spacing-xl);
     display: flex;
     align-items: center;
     justify-content: space-between;
     z-index: 50;
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
 .admin-header h1 {
     font-size: var(--font-size-xl);
     font-weight: 600;
-    color: var(--color-gray-900);
+    color: var(--admin-text-primary);
+    transition: color var(--transition-theme);
 }
 
 .header-actions {
@@ -297,7 +381,7 @@ a:hover {
     margin-bottom: var(--spacing-xs);
     font-size: var(--font-size-sm);
     font-weight: 500;
-    color: var(--color-gray-700);
+    color: var(--admin-text-secondary);
 }
 
 .form-label .required {
@@ -310,17 +394,18 @@ a:hover {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: var(--font-size-base);
-    border: 1px solid var(--color-gray-300);
+    border: 1px solid var(--admin-border);
     border-radius: var(--border-radius);
-    background-color: white;
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--admin-input-bg);
+    color: var(--admin-text-primary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-theme);
 }
 
 .form-input:focus,
 .form-textarea:focus,
 .form-select:focus {
     outline: none;
-    border-color: var(--color-primary);
+    border-color: var(--admin-border-focus);
     box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
@@ -333,7 +418,7 @@ a:hover {
     display: block;
     margin-top: var(--spacing-xs);
     font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
+    color: var(--admin-text-muted);
 }
 
 .form-error {
@@ -401,13 +486,13 @@ a:hover {
 }
 
 .btn-secondary {
-    background-color: var(--color-gray-200);
-    color: var(--color-gray-700);
+    background-color: var(--admin-hover-bg);
+    color: var(--admin-text-secondary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background-color: var(--color-gray-300);
-    color: var(--color-gray-800);
+    background-color: var(--admin-border);
+    color: var(--admin-text-primary);
 }
 
 .btn-success {
@@ -432,13 +517,13 @@ a:hover {
 
 .btn-outline {
     background-color: transparent;
-    border: 1px solid var(--color-gray-300);
-    color: var(--color-gray-700);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-text-secondary);
 }
 
 .btn-outline:hover:not(:disabled) {
-    background-color: var(--color-gray-100);
-    border-color: var(--color-gray-400);
+    background-color: var(--admin-hover-bg);
+    border-color: var(--admin-border);
 }
 
 .btn-sm {
@@ -460,23 +545,25 @@ a:hover {
    Cards
    =========================== */
 .card {
-    background: white;
+    background: var(--admin-card-bg);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow);
     overflow: hidden;
+    transition: background-color var(--transition-theme);
 }
 
 .card-header {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--color-gray-200);
-    background-color: var(--color-gray-50);
+    border-bottom: 1px solid var(--admin-border);
+    background-color: var(--admin-hover-bg);
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
 .card-header h2,
 .card-header h3 {
     font-size: var(--font-size-lg);
     font-weight: 600;
-    color: var(--color-gray-900);
+    color: var(--admin-text-primary);
 }
 
 .card-body {
@@ -485,8 +572,9 @@ a:hover {
 
 .card-footer {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--color-gray-200);
-    background-color: var(--color-gray-50);
+    border-top: 1px solid var(--admin-border);
+    background-color: var(--admin-hover-bg);
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
 /* ===========================
@@ -500,27 +588,28 @@ a:hover {
 }
 
 .stat-card {
-    background: white;
+    background: var(--admin-card-bg);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-lg);
     box-shadow: var(--shadow);
+    transition: background-color var(--transition-theme);
 }
 
 .stat-card .stat-label {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-500);
+    color: var(--admin-text-muted);
     margin-bottom: var(--spacing-xs);
 }
 
 .stat-card .stat-value {
     font-size: var(--font-size-3xl);
     font-weight: 700;
-    color: var(--color-gray-900);
+    color: var(--admin-text-primary);
 }
 
 .stat-card .stat-suffix {
     font-size: var(--font-size-lg);
-    color: var(--color-gray-500);
+    color: var(--admin-text-muted);
     font-weight: normal;
 }
 
@@ -538,7 +627,7 @@ a:hover {
 
 /* Storage bar */
 .storage-bar {
-    background-color: var(--color-gray-200);
+    background-color: var(--admin-border);
     border-radius: var(--border-radius);
     height: 8px;
     margin-top: var(--spacing-sm);
@@ -576,18 +665,18 @@ a:hover {
 .table td {
     padding: var(--spacing-sm) var(--spacing-md);
     text-align: left;
-    border-bottom: 1px solid var(--color-gray-200);
+    border-bottom: 1px solid var(--admin-border);
 }
 
 .table th {
     font-size: var(--font-size-sm);
     font-weight: 600;
-    color: var(--color-gray-600);
-    background-color: var(--color-gray-50);
+    color: var(--admin-text-secondary);
+    background-color: var(--admin-hover-bg);
 }
 
 .table tbody tr:hover {
-    background-color: var(--color-gray-50);
+    background-color: var(--admin-hover-bg);
 }
 
 .table .actions {
@@ -609,8 +698,8 @@ a:hover {
 }
 
 .badge-draft {
-    background-color: var(--color-gray-200);
-    color: var(--color-gray-700);
+    background-color: var(--admin-border);
+    color: var(--admin-text-secondary);
 }
 
 .badge-published {
@@ -646,16 +735,16 @@ a:hover {
     height: 36px;
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-sm);
-    color: var(--color-gray-700);
-    background-color: white;
-    border: 1px solid var(--color-gray-300);
+    color: var(--admin-text-secondary);
+    background-color: var(--admin-card-bg);
+    border: 1px solid var(--admin-border);
     border-radius: var(--border-radius);
     transition: all var(--transition-fast);
 }
 
 .pagination-link:hover {
-    background-color: var(--color-gray-100);
-    color: var(--color-gray-900);
+    background-color: var(--admin-hover-bg);
+    color: var(--admin-text-primary);
 }
 
 .pagination-item.active .pagination-link {
@@ -665,7 +754,7 @@ a:hover {
 }
 
 .pagination-item.disabled .pagination-link {
-    color: var(--color-gray-400);
+    color: var(--admin-text-muted);
     cursor: not-allowed;
 }
 
@@ -680,11 +769,11 @@ a:hover {
 
 .media-item {
     position: relative;
-    background: white;
+    background: var(--admin-card-bg);
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
-    transition: box-shadow var(--transition-fast);
+    transition: box-shadow var(--transition-fast), background-color var(--transition-theme);
 }
 
 .media-item:hover {
@@ -693,7 +782,7 @@ a:hover {
 
 .media-item-preview {
     aspect-ratio: 4/3;
-    background-color: var(--color-gray-100);
+    background-color: var(--admin-hover-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -708,7 +797,7 @@ a:hover {
 
 .media-item-preview .file-icon {
     font-size: 48px;
-    color: var(--color-gray-400);
+    color: var(--admin-text-muted);
 }
 
 .media-item-info {
@@ -717,7 +806,7 @@ a:hover {
 
 .media-item-name {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-700);
+    color: var(--admin-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -725,7 +814,7 @@ a:hover {
 
 .media-item-meta {
     font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
+    color: var(--admin-text-muted);
 }
 
 .media-item-actions {
@@ -751,8 +840,8 @@ a:hover {
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
-    background-color: var(--color-gray-100);
-    color: var(--color-gray-700);
+    background-color: var(--admin-hover-bg);
+    color: var(--admin-text-secondary);
     border-radius: var(--border-radius-sm);
 }
 
@@ -763,8 +852,8 @@ a:hover {
 
 .tag-count {
     font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
-    background-color: var(--color-gray-200);
+    color: var(--admin-text-muted);
+    background-color: var(--admin-border);
     padding: 2px 6px;
     border-radius: 9999px;
 }
@@ -774,14 +863,14 @@ a:hover {
     flex-wrap: wrap;
     gap: var(--spacing-xs);
     padding: var(--spacing-xs);
-    border: 1px solid var(--color-gray-300);
+    border: 1px solid var(--admin-border);
     border-radius: var(--border-radius);
-    background: white;
+    background: var(--admin-input-bg);
     min-height: 42px;
 }
 
 .tags-input:focus-within {
-    border-color: var(--color-primary);
+    border-color: var(--admin-border-focus);
     box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
@@ -834,11 +923,12 @@ a:hover {
 }
 
 .preview-panel {
-    border: 1px solid var(--color-gray-200);
+    border: 1px solid var(--admin-border);
     border-radius: var(--border-radius);
     padding: var(--spacing-md);
-    background: white;
+    background: var(--admin-card-bg);
     min-height: 300px;
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
 .preview-panel img {
@@ -855,9 +945,10 @@ a:hover {
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-lg);
     padding: var(--spacing-md);
-    background: white;
+    background: var(--admin-card-bg);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-theme);
 }
 
 .filter-group {
@@ -868,15 +959,16 @@ a:hover {
 
 .filter-label {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
+    color: var(--admin-text-secondary);
 }
 
 .filter-select {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-sm);
-    border: 1px solid var(--color-gray-300);
+    border: 1px solid var(--admin-border);
     border-radius: var(--border-radius-sm);
-    background: white;
+    background: var(--admin-input-bg);
+    color: var(--admin-text-primary);
 }
 
 /* ===========================
@@ -901,7 +993,7 @@ a:hover {
 }
 
 .modal {
-    background: white;
+    background: var(--admin-card-bg);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-lg);
     width: 100%;
@@ -909,7 +1001,7 @@ a:hover {
     max-height: 90vh;
     overflow-y: auto;
     transform: translateY(-20px);
-    transition: transform var(--transition-normal);
+    transition: transform var(--transition-normal), background-color var(--transition-theme);
 }
 
 .modal-overlay.active .modal {
@@ -921,7 +1013,7 @@ a:hover {
     align-items: center;
     justify-content: space-between;
     padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--color-gray-200);
+    border-bottom: 1px solid var(--admin-border);
 }
 
 .modal-header h3 {
@@ -933,13 +1025,13 @@ a:hover {
     background: none;
     border: none;
     font-size: 24px;
-    color: var(--color-gray-400);
+    color: var(--admin-text-muted);
     cursor: pointer;
     line-height: 1;
 }
 
 .modal-close:hover {
-    color: var(--color-gray-600);
+    color: var(--admin-text-secondary);
 }
 
 .modal-body {
@@ -951,18 +1043,18 @@ a:hover {
     justify-content: flex-end;
     gap: var(--spacing-sm);
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--color-gray-200);
+    border-top: 1px solid var(--admin-border);
 }
 
 /* ===========================
    Upload Area
    =========================== */
 .upload-area {
-    border: 2px dashed var(--color-gray-300);
+    border: 2px dashed var(--admin-border);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-xl);
     text-align: center;
-    background-color: var(--color-gray-50);
+    background-color: var(--admin-hover-bg);
     cursor: pointer;
     transition: all var(--transition-fast);
 }
@@ -975,12 +1067,12 @@ a:hover {
 
 .upload-area-icon {
     font-size: 48px;
-    color: var(--color-gray-400);
+    color: var(--admin-text-muted);
     margin-bottom: var(--spacing-md);
 }
 
 .upload-area-text {
-    color: var(--color-gray-600);
+    color: var(--admin-text-secondary);
 }
 
 .upload-area-text strong {
@@ -993,19 +1085,19 @@ a:hover {
 .empty-state {
     text-align: center;
     padding: var(--spacing-xl) * 2;
-    color: var(--color-gray-500);
+    color: var(--admin-text-muted);
 }
 
 .empty-state-icon {
     font-size: 64px;
-    color: var(--color-gray-300);
+    color: var(--admin-border);
     margin-bottom: var(--spacing-md);
 }
 
 .empty-state-title {
     font-size: var(--font-size-lg);
     font-weight: 600;
-    color: var(--color-gray-700);
+    color: var(--admin-text-secondary);
     margin-bottom: var(--spacing-sm);
 }
 
@@ -1029,7 +1121,7 @@ a:hover {
    Utilities
    =========================== */
 .text-muted {
-    color: var(--color-gray-500);
+    color: var(--admin-text-muted);
 }
 
 .text-small {
@@ -1062,6 +1154,55 @@ a:hover {
 
 .gap-1 { gap: var(--spacing-sm); }
 .gap-2 { gap: var(--spacing-md); }
+
+/* ===========================
+   Theme Toggle
+   =========================== */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--border-radius);
+    color: var(--admin-text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.theme-toggle:hover {
+    background-color: var(--admin-hover-bg);
+    color: var(--admin-text-primary);
+    border-color: var(--admin-text-muted);
+}
+
+.theme-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
+.theme-toggle .icon-sun,
+.theme-toggle .icon-moon {
+    display: none;
+}
+
+/* Show sun icon in dark mode (to switch to light) */
+[data-theme="dark"] .theme-toggle .icon-sun {
+    display: block;
+}
+
+/* Show moon icon in light mode (to switch to dark) */
+:root:not([data-theme="dark"]) .theme-toggle .icon-moon,
+[data-theme="light"] .theme-toggle .icon-moon {
+    display: block;
+}
+
+[data-theme="light"] .theme-toggle .icon-sun {
+    display: none;
+}
 
 /* ===========================
    Responsive
