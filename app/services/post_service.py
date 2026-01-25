@@ -5,6 +5,7 @@ Handles CRUD operations, slug generation, status transitions, and preview links.
 
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -14,11 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.post import Post, PostStatus
 from app.schemas.post import PostCreate, PostUpdate
+from app.services.cache_service import invalidate_cache_for_post
 from app.utils.formatters import format_content, generate_excerpt
 from app.utils.slugify import make_unique_slug, slugify
 
 if TYPE_CHECKING:
     from app.services.tag_service import TagService
+
+logger = logging.getLogger(__name__)
 
 
 class PostService:
@@ -103,6 +107,14 @@ class PostService:
         self.db.add(post)
         await self.db.flush()
         await self.db.refresh(post)
+
+        # Invalidate cache when a new post is created (affects homepage, feeds)
+        if post.status == PostStatus.PUBLISHED:
+            try:
+                await invalidate_cache_for_post()
+                logger.debug("Cache invalidated after post creation")
+            except Exception as e:
+                logger.warning("Failed to invalidate cache: %s", e)
 
         return post
 
@@ -257,6 +269,13 @@ class PostService:
         await self.db.flush()
         await self.db.refresh(post)
 
+        # Invalidate cache when a post is updated
+        try:
+            await invalidate_cache_for_post()
+            logger.debug("Cache invalidated after post update")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
+
         return post
 
     async def delete_post(
@@ -280,6 +299,14 @@ class PostService:
 
         await self.db.delete(post)
         await self.db.flush()
+
+        # Invalidate cache when a post is deleted
+        try:
+            await invalidate_cache_for_post()
+            logger.debug("Cache invalidated after post deletion")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
+
         return True
 
     async def publish_post(self, post_id: int) -> Post | None:
@@ -305,6 +332,13 @@ class PostService:
         await self.db.flush()
         await self.db.refresh(post)
 
+        # Invalidate cache when a post is published
+        try:
+            await invalidate_cache_for_post()
+            logger.debug("Cache invalidated after post publish")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
+
         return post
 
     async def withdraw_post(self, post_id: int) -> Post | None:
@@ -325,6 +359,13 @@ class PostService:
         await self.db.flush()
         await self.db.refresh(post)
 
+        # Invalidate cache when a post is withdrawn
+        try:
+            await invalidate_cache_for_post()
+            logger.debug("Cache invalidated after post withdrawal")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
+
         return post
 
     async def hide_post(self, post_id: int) -> Post | None:
@@ -344,6 +385,13 @@ class PostService:
 
         await self.db.flush()
         await self.db.refresh(post)
+
+        # Invalidate cache when a post is hidden
+        try:
+            await invalidate_cache_for_post()
+            logger.debug("Cache invalidated after post hidden")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
 
         return post
 

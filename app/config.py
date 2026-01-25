@@ -104,6 +104,24 @@ class Settings(BaseSettings):
         default=30, description="Backup retention in days"
     )
 
+    # Caching
+    cache_enabled: bool = Field(default=True, description="Enable page caching")
+    cache_ttl_homepage: int = Field(
+        default=300, ge=0, description="Homepage cache TTL in seconds (5 min)"
+    )
+    cache_ttl_post: int = Field(
+        default=3600, ge=0, description="Single post cache TTL in seconds (1 hour)"
+    )
+    cache_ttl_tag: int = Field(
+        default=600, ge=0, description="Tag page cache TTL in seconds (10 min)"
+    )
+    cache_ttl_feed: int = Field(
+        default=1800, ge=0, description="RSS feed cache TTL in seconds (30 min)"
+    )
+    cache_ttl_sitemap: int = Field(
+        default=3600, ge=0, description="Sitemap cache TTL in seconds (1 hour)"
+    )
+
     @property
     def thumbnail_size(self) -> tuple[int, int]:
         """Get thumbnail size as tuple."""
