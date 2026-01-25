@@ -10,10 +10,12 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+from starlette.types import Receive, Scope, Send
 
 from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
@@ -25,6 +27,43 @@ from app.config import get_settings
 from app.database import create_tables, get_db
 
 settings = get_settings()
+
+
+class CachedStaticFiles(StaticFiles):
+    """Static files handler with cache control headers."""
+
+    def __init__(
+        self, *args: Any, max_age: int = 86400, immutable: bool = False, **kwargs: Any
+    ):
+        """Initialize cached static files.
+
+        Args:
+            max_age: Cache max-age in seconds (default 1 day)
+            immutable: Whether files are immutable (enables long-term caching)
+        """
+        super().__init__(*args, **kwargs)
+        self.max_age = max_age
+        self.immutable = immutable
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Handle request with cache headers."""
+        # Create a custom send that adds cache headers
+        async def send_with_cache_headers(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+
+                # Add cache control header
+                if self.immutable:
+                    cache_value = f"public, max-age={self.max_age}, immutable"
+                else:
+                    cache_value = f"public, max-age={self.max_age}"
+
+                headers.append((b"cache-control", cache_value.encode()))
+                message["headers"] = headers
+
+            await send(message)
+
+        await super().__call__(scope, receive, send_with_cache_headers)
 
 # Set up Jinja2 templates
 templates_dir = Path(__file__).parent / "templates"
@@ -105,14 +144,22 @@ app.include_router(posts_router)
 app.include_router(public_router)
 app.include_router(tags_router)
 
-# Mount static files for media serving
+# Mount static files for media serving (images cached for 7 days)
 media_path = Path(settings.storage_path) / "media"
 media_path.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=str(media_path)), name="media")
+app.mount(
+    "/media",
+    CachedStaticFiles(directory=str(media_path), max_age=604800),  # 7 days
+    name="media",
+)
 
-# Mount static files for admin assets (CSS, JS)
+# Mount static files for admin assets (CSS, JS) - cached for 1 day
 static_path = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+app.mount(
+    "/static",
+    CachedStaticFiles(directory=str(static_path), max_age=86400),  # 1 day
+    name="static",
+)
 
 
 @app.exception_handler(Exception)
