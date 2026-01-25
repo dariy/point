@@ -245,6 +245,32 @@ class TestSinglePost:
         await db.refresh(published_post)
         assert published_post.view_count == initial_count + 1
 
+    @pytest.mark.asyncio
+    async def test_post_page_loads_with_none_published_at(
+        self, client: AsyncClient, db: AsyncSession, sample_tag: Tag
+    ) -> None:
+        """Test that post page loads even if published_at is None.
+
+        This prevents regression of the ArgumentError issue.
+        """
+        post = Post(
+            title="Test Post No Date",
+            slug="test-post-no-date",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            formatter=PostFormatter.MARKDOWN,
+            published_at=None,
+            author_id=1,
+        )
+        post.tags.append(sample_tag)
+        db.add(post)
+        await db.commit()
+        await db.refresh(post)
+
+        response = await client.get(f"/posts/{post.slug}")
+        assert response.status_code == 200
+        assert post.title in response.text
+
 
 class TestTagArchive:
     """Tests for tag archive pages."""

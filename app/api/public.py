@@ -214,27 +214,31 @@ async def single_post(
     # Format content
     content_html = format_content(post.content, post.formatter.value)
 
-    # Get previous post
-    prev_query = (
-        select(Post)
-        .where(Post.status == PostStatus.PUBLISHED)
-        .where(Post.published_at < post.published_at)
-        .order_by(Post.published_at.desc())
-        .limit(1)
-    )
-    prev_result = await db.execute(prev_query)
-    prev_post = prev_result.scalar_one_or_none()
+    prev_post = None
+    next_post = None
 
-    # Get next post
-    next_query = (
-        select(Post)
-        .where(Post.status == PostStatus.PUBLISHED)
-        .where(Post.published_at > post.published_at)
-        .order_by(Post.published_at.asc())
-        .limit(1)
-    )
-    next_result = await db.execute(next_query)
-    next_post = next_result.scalar_one_or_none()
+    if post.published_at:
+        # Get previous post
+        prev_query = (
+            select(Post)
+            .where(Post.status == PostStatus.PUBLISHED)
+            .where(Post.published_at < post.published_at)
+            .order_by(Post.published_at.desc())
+            .limit(1)
+        )
+        prev_result = await db.execute(prev_query)
+        prev_post = prev_result.scalar_one_or_none()
+
+        # Get next post
+        next_query = (
+            select(Post)
+            .where(Post.status == PostStatus.PUBLISHED)
+            .where(Post.published_at > post.published_at)
+            .order_by(Post.published_at.asc())
+            .limit(1)
+        )
+        next_result = await db.execute(next_query)
+        next_post = next_result.scalar_one_or_none()
 
     # Get tags for navigation
     tags_result = await db.execute(
