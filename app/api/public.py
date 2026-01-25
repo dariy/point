@@ -3,6 +3,7 @@
 Handles public-facing HTML pages for the blog.
 """
 
+import logging
 from datetime import datetime
 from email.utils import format_datetime
 from math import ceil
@@ -21,10 +22,12 @@ from app.database import get_db
 from app.models.post import Post, PostStatus
 from app.models.post_tag import post_tags
 from app.models.tag import Tag
+from app.services.cache_service import get_cache
 from app.services.tag_service import TagService
 from app.utils.formatters import format_content
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 # Set up templates
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -67,6 +70,18 @@ async def homepage(
     Returns:
         Rendered homepage HTML
     """
+    # Check cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        query_params = {"page": page} if page > 1 else None
+        cached = await cache.get_by_url("/", query_params)
+        if cached:
+            logger.debug("Cache hit for homepage page=%d", page)
+            return HTMLResponse(
+                content=cached.content,
+                headers={"X-Cache": "HIT"},
+            )
+
     per_page = 10
     offset = (page - 1) * per_page
 
@@ -126,7 +141,23 @@ async def homepage(
         "tags": tags,
     })
 
-    return templates.TemplateResponse("public/index.html", context)
+    response = templates.TemplateResponse("public/index.html", context)
+
+    # Store in cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        query_params = {"page": page} if page > 1 else None
+        # Get rendered content
+        content = response.body.decode("utf-8")
+        await cache.set_by_url(
+            "/",
+            content,
+            query_params,
+            ttl=settings.cache_ttl_homepage,
+        )
+        response.headers["X-Cache"] = "MISS"
+
+    return response
 
 
 @router.get("/posts/{slug}", response_class=HTMLResponse)
@@ -164,9 +195,21 @@ async def single_post(
             detail="Post not found",
         )
 
-    # Increment view count
+    # Always increment view count (even if we return cached content)
     post.view_count = (post.view_count or 0) + 1
     await db.commit()
+
+    # Check cache if enabled (after incrementing view count)
+    cache_key = f"/posts/{slug}"
+    if settings.cache_enabled:
+        cache = await get_cache()
+        cached = await cache.get_by_url(cache_key)
+        if cached:
+            logger.debug("Cache hit for post slug=%s", slug)
+            return HTMLResponse(
+                content=cached.content,
+                headers={"X-Cache": "HIT"},
+            )
 
     # Format content
     content_html = format_content(post.content, post.formatter.value)
@@ -211,7 +254,20 @@ async def single_post(
         "tags": tags,
     })
 
-    return templates.TemplateResponse("public/post.html", context)
+    response = templates.TemplateResponse("public/post.html", context)
+
+    # Store in cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        content = response.body.decode("utf-8")
+        await cache.set_by_url(
+            cache_key,
+            content,
+            ttl=settings.cache_ttl_post,
+        )
+        response.headers["X-Cache"] = "MISS"
+
+    return response
 
 
 @router.get("/tag/{slug}", response_class=HTMLResponse)
@@ -235,6 +291,19 @@ async def tag_archive(
     Raises:
         HTTPException: If tag not found
     """
+    # Check cache if enabled
+    cache_key = f"/tag/{slug}"
+    if settings.cache_enabled:
+        cache = await get_cache()
+        query_params = {"page": page} if page > 1 else None
+        cached = await cache.get_by_url(cache_key, query_params)
+        if cached:
+            logger.debug("Cache hit for tag slug=%s page=%d", slug, page)
+            return HTMLResponse(
+                content=cached.content,
+                headers={"X-Cache": "HIT"},
+            )
+
     # Get the tag
     tag_result = await db.execute(select(Tag).where(Tag.slug == slug))
     tag = tag_result.scalar_one_or_none()
@@ -282,7 +351,22 @@ async def tag_archive(
         "tags": tags,
     })
 
-    return templates.TemplateResponse("public/tag.html", context)
+    response = templates.TemplateResponse("public/tag.html", context)
+
+    # Store in cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        query_params = {"page": page} if page > 1 else None
+        content = response.body.decode("utf-8")
+        await cache.set_by_url(
+            cache_key,
+            content,
+            query_params,
+            ttl=settings.cache_ttl_tag,
+        )
+        response.headers["X-Cache"] = "MISS"
+
+    return response
 
 
 @router.get("/gallery", response_class=HTMLResponse)
@@ -381,6 +465,21 @@ async def rss_feed(
     Returns:
         RSS XML feed
     """
+    # Check cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        cached = await cache.get_by_url("/feed.xml", cache_type="feeds")
+        if cached:
+            logger.debug("Cache hit for RSS feed")
+            return Response(
+                content=cached.content,
+                media_type="application/rss+xml; charset=utf-8",
+                headers={
+                    "Cache-Control": f"public, max-age={settings.cache_ttl_feed}",
+                    "X-Cache": "HIT",
+                },
+            )
+
     # Get last 20 published posts
     query = (
         select(Post)
@@ -426,10 +525,25 @@ async def rss_feed(
     }
 
     content = templates.get_template("public/rss.xml").render(context)
+
+    # Store in cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        await cache.set_by_url(
+            "/feed.xml",
+            content,
+            ttl=settings.cache_ttl_feed,
+            content_type="application/rss+xml",
+            cache_type="feeds",
+        )
+
     return Response(
         content=content,
         media_type="application/rss+xml; charset=utf-8",
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={
+            "Cache-Control": f"public, max-age={settings.cache_ttl_feed}",
+            "X-Cache": "MISS",
+        },
     )
 
 
@@ -447,6 +561,21 @@ async def sitemap(
     Returns:
         Sitemap XML
     """
+    # Check cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        cached = await cache.get_by_url("/sitemap.xml", cache_type="feeds")
+        if cached:
+            logger.debug("Cache hit for sitemap")
+            return Response(
+                content=cached.content,
+                media_type="application/xml; charset=utf-8",
+                headers={
+                    "Cache-Control": f"public, max-age={settings.cache_ttl_sitemap}",
+                    "X-Cache": "HIT",
+                },
+            )
+
     # Get all published posts
     posts_query = (
         select(Post)
@@ -488,10 +617,25 @@ async def sitemap(
     }
 
     content = templates.get_template("public/sitemap.xml").render(context)
+
+    # Store in cache if enabled
+    if settings.cache_enabled:
+        cache = await get_cache()
+        await cache.set_by_url(
+            "/sitemap.xml",
+            content,
+            ttl=settings.cache_ttl_sitemap,
+            content_type="application/xml",
+            cache_type="feeds",
+        )
+
     return Response(
         content=content,
         media_type="application/xml; charset=utf-8",
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={
+            "Cache-Control": f"public, max-age={settings.cache_ttl_sitemap}",
+            "X-Cache": "MISS",
+        },
     )
 
 

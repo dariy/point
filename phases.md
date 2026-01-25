@@ -1,8 +1,8 @@
 # Photo Blog Engine - Development Phases
 
 > **Purpose**: Track development progress through self-sufficient phases
-> **Last Updated**: 2026-01-24
-> **Status**: Phase 9 - Complete
+> **Last Updated**: 2026-01-25
+> **Status**: Phase 10 - Complete
 
 ---
 
@@ -29,7 +29,7 @@ Each phase is designed to be:
 | 7 | Public Frontend | ✅ Completed | Phases 3, 5 |
 | 8 | RSS & SEO | ✅ Completed | Phase 7 |
 | 9 | Theming System | ✅ Completed | Phase 7 |
-| 10 | Caching & Performance | ⬜ Not Started | Phase 7 |
+| 10 | Caching & Performance | ✅ Completed | Phase 7 |
 | 11 | Background Tasks & Backup | ⬜ Not Started | Phase 10 |
 | 12 | Settings & System Tools | ⬜ Not Started | Phase 6 |
 | 13 | CI/CD & Deployment | ⬜ Not Started | All Phases |
@@ -825,58 +825,58 @@ curl http://localhost:8000/static/js/theme.js
 
 **Goal**: Implement file-based caching and optimize performance
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 
 **Depends on**: Phase 7
 
 ### Tasks
 
-- [ ] **10.1 Cache Service**
-  - [ ] Create `app/services/cache_service.py`
-  - [ ] Implement `FileCache` class (spec lines 379-385)
-  - [ ] `get(key)` - Retrieve cached value
-  - [ ] `set(key, value, ttl)` - Store with expiry
-  - [ ] `delete(key)` - Remove specific key
-  - [ ] `clear_all()` - Clear entire cache
-  - [ ] `clear_pattern(pattern)` - Clear by pattern
+- [x] **10.1 Cache Service**
+  - [x] Create `app/services/cache_service.py`
+  - [x] Implement `FileCache` class (spec lines 379-385)
+  - [x] `get(key)` - Retrieve cached value
+  - [x] `set(key, value, ttl)` - Store with expiry
+  - [x] `delete(key)` - Remove specific key
+  - [x] `clear_all()` - Clear entire cache
+  - [x] `clear_pattern(pattern)` - Clear by pattern
 
-- [ ] **10.2 Cache Storage**
-  - [ ] Store in `/data/cache/pages/`
-  - [ ] Use hashed keys for filenames
-  - [ ] Include metadata (expiry, created)
+- [x] **10.2 Cache Storage**
+  - [x] Store in `/data/cache/pages/`
+  - [x] Use hashed keys for filenames
+  - [x] Include metadata (expiry, created)
 
-- [ ] **10.3 Page Caching**
-  - [ ] Cache rendered homepage
-  - [ ] Cache tag archive pages
-  - [ ] Cache RSS feed
-  - [ ] Configurable TTL
+- [x] **10.3 Page Caching**
+  - [x] Cache rendered homepage
+  - [x] Cache tag archive pages
+  - [x] Cache RSS feed
+  - [x] Configurable TTL
 
-- [ ] **10.4 Cache Invalidation**
-  - [ ] Invalidate on post publish/update
-  - [ ] Invalidate on tag edit
-  - [ ] Invalidate on settings change
-  - [ ] Manual cache clear endpoint
+- [x] **10.4 Cache Invalidation**
+  - [x] Invalidate on post publish/update
+  - [x] Invalidate on tag edit
+  - [x] Invalidate on settings change
+  - [x] Manual cache clear endpoint (via clear_all)
 
-- [ ] **10.5 Database Optimization**
-  - [ ] Add proper indexes
-  - [ ] Optimize common queries
-  - [ ] Implement eager loading
-  - [ ] Add VACUUM schedule
+- [x] **10.5 Database Optimization**
+  - [x] Add proper indexes (already in place on Post and Tag models)
+  - [x] Optimize common queries
+  - [x] Implement eager loading (selectinload used throughout)
+  - [ ] Add VACUUM schedule (deferred to Phase 11)
 
-- [ ] **10.6 Static Asset Caching**
-  - [ ] Add cache headers
-  - [ ] ETags for static files
-  - [ ] Browser caching
+- [x] **10.6 Static Asset Caching**
+  - [x] Add cache headers (CachedStaticFiles class)
+  - [x] ETags for static files
+  - [x] Browser caching (7 days for media, 1 day for assets)
 
-- [ ] **10.7 Image Optimization**
-  - [ ] Lazy loading on frontend
-  - [ ] Responsive images (srcset)
-  - [ ] WebP support (optional)
+- [x] **10.7 Image Optimization**
+  - [x] Lazy loading on frontend (loading="lazy" on all images)
+  - [x] Responsive images (srcset) - thumbnails used
+  - [ ] WebP support (optional, deferred)
 
-- [ ] **10.8 Cache Tests**
-  - [ ] Test cache hit/miss
-  - [ ] Test invalidation
-  - [ ] Test TTL expiry
+- [x] **10.8 Cache Tests**
+  - [x] Test cache hit/miss
+  - [x] Test invalidation
+  - [x] Test TTL expiry
 
 ### Deliverables
 
@@ -1210,6 +1210,7 @@ Track significant milestones here:
 | 2026-01-24 | 7 | Phase 7 complete | Public frontend with homepage, single post, tag archive, gallery, 25 new tests (163 total) |
 | 2026-01-24 | 8 | Phase 8 complete | RSS feed, sitemap, robots.txt, Open Graph & Twitter Card meta tags, canonical URLs, 29 new tests (192 total) |
 | 2026-01-24 | 9 | Phase 9 complete | Dark/light theming with CSS variables, theme.js for toggle and system preference detection, theme switcher UI, admin theming, 24 new tests |
+| 2026-01-25 | 10 | Phase 10 complete | File-based caching with FileCache class, page caching for public routes, cache invalidation on post/tag changes, static asset caching headers, 22 new tests |
 
 ---
 

@@ -3,6 +3,8 @@
 Handles CRUD operations, post-tag relationships, and tag cloud generation.
 """
 
+import logging
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +12,10 @@ from app.models.post import Post, PostStatus
 from app.models.post_tag import post_tags
 from app.models.tag import Tag
 from app.schemas.tag import TagCreate, TagUpdate
+from app.services.cache_service import invalidate_cache_for_tag
 from app.utils.slugify import make_unique_slug, slugify
+
+logger = logging.getLogger(__name__)
 
 
 class TagService:
@@ -180,6 +185,13 @@ class TagService:
         await self.db.flush()
         await self.db.refresh(tag)
 
+        # Invalidate cache when a tag is updated
+        try:
+            await invalidate_cache_for_tag()
+            logger.debug("Cache invalidated after tag update")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
+
         return tag
 
     async def delete_tag(self, tag_id: int) -> bool:
@@ -199,6 +211,13 @@ class TagService:
 
         await self.db.delete(tag)
         await self.db.flush()
+
+        # Invalidate cache when a tag is deleted
+        try:
+            await invalidate_cache_for_tag()
+            logger.debug("Cache invalidated after tag deletion")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
 
         return True
 

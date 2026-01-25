@@ -3,17 +3,29 @@
 Provides common fixtures for testing the Photo Blog application.
 """
 
+import os
 from collections.abc import AsyncGenerator
 
-import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# Disable caching in tests BEFORE importing app
+os.environ["CACHE_ENABLED"] = "false"
 
-from app.database import Base, get_db
-from app.main import app
+import pytest  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from app.config import get_settings  # noqa: E402
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 # Test database URL (in-memory SQLite)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+# Clear cached settings and reload with test environment
+get_settings.cache_clear()
 
 
 @pytest.fixture
