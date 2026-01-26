@@ -41,7 +41,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to handle AJAX navigation
     async function loadGalleryContent(url) {
         try {
-            // Add loading state opacity
             galleryContent.style.opacity = '0.5';
             
             const response = await fetch(url, {
@@ -51,27 +50,116 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (response.ok) {
-                const html = await response.text();
-                galleryContent.innerHTML = html;
+                const data = await response.json();
+                renderGallery(data);
                 
-                // Update URL history
                 window.history.pushState({}, '', url);
-                
-                // Update active filter state
                 updateActiveFilter(url);
-                
-                // Re-attach listeners to new pagination links
                 attachListeners();
             } else {
-                console.error('Failed to load gallery content');
-                window.location.href = url; // Fallback to full reload
+                window.location.href = url;
             }
         } catch (error) {
             console.error('Error loading gallery:', error);
-            window.location.href = url; // Fallback
+            window.location.href = url;
         } finally {
             galleryContent.style.opacity = '1';
         }
+    }
+
+    function renderGallery(data) {
+        if (!data.posts || data.posts.length === 0) {
+            galleryContent.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                            <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                    </div>
+                    <h2 class="empty-state-title">No photos yet</h2>
+                    <p class="empty-state-text">Try selecting a different category or check back later.</p>
+                </div>`;
+            return;
+        }
+
+        let html = '<div class="gallery-grid">';
+        data.posts.forEach(post => {
+            const imageHtml = post.thumbnail_path 
+                ? `<img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`
+                : `<div class="no-image-placeholder">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                        <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                        <path d="M21 15l-5-5L5 21"/>
+                    </svg>
+                   </div>`;
+
+            html += `
+                <article class="gallery-item" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                    <div class="gallery-item-image">
+                        ${imageHtml}
+                        <div class="gallery-item-overlay">
+                            <h3 class="gallery-item-title">${post.title}</h3>
+                            <time class="gallery-item-date">${post.published_date}</time>
+                        </div>
+                    </div>
+                </article>`;
+        });
+        html += '</div>';
+
+        if (data.pagination && data.pagination.total_pages > 1) {
+            const pag = data.pagination;
+            const tagParam = data.current_tag ? `&tag=${data.current_tag}` : '';
+            
+            html += '<nav class="pagination gallery-pagination" aria-label="Gallery pagination">';
+            
+            // Previous
+            if (pag.has_prev) {
+                html += `<a href="/gallery?page=${pag.prev_page}${tagParam}" class="pagination-link ajax-link" aria-label="Previous page">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </a>`;
+            } else {
+                html += `<span class="pagination-link disabled">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </span>`;
+            }
+
+            // Pages
+            for (let p = 1; p <= pag.total_pages; p++) {
+                if (p === pag.page) {
+                    html += `<span class="pagination-link active">${p}</span>`;
+                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
+                    html += `<a href="/gallery?page=${p}${tagParam}" class="pagination-link ajax-link">${p}</a>`;
+                } else if (p === pag.page - 2 || p === pag.page + 2) {
+                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
+                }
+            }
+
+            // Next
+            if (pag.has_next) {
+                html += `<a href="/gallery?page=${pag.next_page}${tagParam}" class="pagination-link ajax-link" aria-label="Next page">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                </a>`;
+            } else {
+                html += `<span class="pagination-link disabled">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                </span>`;
+            }
+            
+            html += '</nav>';
+        }
+
+        galleryContent.innerHTML = html;
     }
 
     // Update active state on filter buttons
