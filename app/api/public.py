@@ -58,6 +58,34 @@ def get_common_context(request: Request) -> dict[str, Any]:
     }
 
 
+async def get_db_context(db: AsyncSession) -> dict[str, Any]:
+    """Get common database-dependent context variables.
+
+    Args:
+        db: Database session
+
+    Returns:
+        Dictionary with tag_cloud and tags (for navigation)
+    """
+    # Get tag cloud
+    tag_service = TagService(db)
+    tag_cloud = await tag_service.get_tag_cloud(limit=15)
+
+    # Get tags for navigation
+    tags_result = await db.execute(
+        select(Tag)
+        .where(Tag.post_count > 0)
+        .order_by(Tag.name)
+        .limit(10)
+    )
+    tags = list(tags_result.scalars().all())
+
+    return {
+        "tag_cloud": tag_cloud,
+        "tags": tags,
+    }
+
+
 @router.get("/", response_class=HTMLResponse)
 async def homepage(
     request: Request,
@@ -111,10 +139,6 @@ async def homepage(
     )
     posts = list(posts_result.scalars().all())
 
-    # Get tag cloud
-    tag_service = TagService(db)
-    tag_cloud = await tag_service.get_tag_cloud(limit=15)
-
     # Get recent posts for sidebar
     recent_query = (
         select(Post)
@@ -125,24 +149,16 @@ async def homepage(
     recent_result = await db.execute(recent_query)
     recent_posts = list(recent_result.scalars().all())
 
-    # Get tags for navigation
-    tags_result = await db.execute(
-        select(Tag)
-        .where(Tag.post_count > 0)
-        .order_by(Tag.name)
-        .limit(10)
-    )
-    tags = list(tags_result.scalars().all())
-
     context = get_common_context(request)
+    db_context = await get_db_context(db)
+    context.update(db_context)
+    
     context.update({
         "posts": posts,
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "tag_cloud": tag_cloud,
         "recent_posts": recent_posts,
-        "tags": tags,
     })
 
     response = templates.TemplateResponse("public/index.html", context)
@@ -244,22 +260,15 @@ async def single_post(
         next_result = await db.execute(next_query)
         next_post = next_result.scalar_one_or_none()
 
-    # Get tags for navigation
-    tags_result = await db.execute(
-        select(Tag)
-        .where(Tag.post_count > 0)
-        .order_by(Tag.name)
-        .limit(10)
-    )
-    tags = list(tags_result.scalars().all())
-
     context = get_common_context(request)
+    db_context = await get_db_context(db)
+    context.update(db_context)
+
     context.update({
         "post": post,
         "content_html": content_html,
         "prev_post": prev_post,
         "next_post": next_post,
-        "tags": tags,
     })
 
     response = templates.TemplateResponse("public/post.html", context)
@@ -340,23 +349,16 @@ async def tag_archive(
     for post in posts:
         await db.refresh(post, ["tags"])
 
-    # Get tags for navigation
-    tags_result = await db.execute(
-        select(Tag)
-        .where(Tag.post_count > 0)
-        .order_by(Tag.name)
-        .limit(10)
-    )
-    tags = list(tags_result.scalars().all())
-
     context = get_common_context(request)
+    db_context = await get_db_context(db)
+    context.update(db_context)
+
     context.update({
         "tag": tag,
         "posts": posts,
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "tags": tags,
     })
 
     response = templates.TemplateResponse("public/tag.html", context)
@@ -478,6 +480,9 @@ async def gallery(
         })
 
     context = get_common_context(request)
+    db_context = await get_db_context(db)
+    context.update(db_context)
+
     context.update({
         "posts": posts,
         "page": page,
