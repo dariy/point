@@ -87,6 +87,7 @@ class TagService:
             description=tag_data.description,
             custom_url=tag_data.custom_url,
             is_important=tag_data.is_important,
+            is_featured=tag_data.is_featured,
             post_count=0,
         )
 
@@ -181,6 +182,8 @@ class TagService:
             tag.custom_url = tag_data.custom_url
         if tag_data.is_important is not None:
             tag.is_important = tag_data.is_important
+        if tag_data.is_featured is not None:
+            tag.is_featured = tag_data.is_featured
 
         await self.db.flush()
         await self.db.refresh(tag)
@@ -266,20 +269,41 @@ class TagService:
         )
         return list(result.scalars().all())
 
-    async def get_tag_cloud(self, limit: int = 20) -> list[dict]:
-        """Get tags for tag cloud with weights.
+    async def get_featured_tags(self, limit: int = 10) -> list[Tag]:
+        """Get featured tags for display in footer.
 
         Args:
             limit: Maximum number of tags
 
         Returns:
+            List of featured tags sorted by name
+        """
+        result = await self.db.execute(
+            select(Tag)
+            .where(Tag.is_featured.is_(True))
+            .where(Tag.post_count > 0)
+            .order_by(Tag.name)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def get_tag_cloud(self, limit: int = 20, featured: bool = True) -> list[dict]:
+        """Get tags for tag cloud with weights.
+
+        Args:
+            limit: Maximum number of tags
+            featured: Only include featured tags
+
+        Returns:
             List of tag dicts with weight (0-1)
         """
+        query = select(Tag).where(Tag.post_count > 0)
+        
+        if featured:
+            query = query.where(Tag.is_featured.is_(True))
+
         tags = await self.db.execute(
-            select(Tag)
-            .where(Tag.post_count > 0)
-            .order_by(Tag.post_count.desc())
-            .limit(limit)
+            query.order_by(Tag.post_count.desc()).limit(limit)
         )
         tag_list = list(tags.scalars().all())
 
