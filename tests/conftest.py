@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.schemas.auth import UserCreate  # noqa: E402
+from app.services.auth_service import AuthService  # noqa: E402
 
 # Test database URL (in-memory SQLite)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -95,3 +97,45 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def test_user(db: AsyncSession) -> dict:
+    """Create a test user and return credentials.
+
+    Returns:
+        Dict with username, password, and user object
+    """
+    auth_service = AuthService(db)
+    user_data = UserCreate(
+        username="testuser_global",
+        email="test_global@example.com",
+        password="testpassword123",
+        display_name="Test User Global",
+    )
+    user = await auth_service.create_user(user_data)
+    await db.commit()
+
+    return {
+        "username": "testuser_global",
+        "password": "testpassword123",
+        "user": user,
+    }
+
+
+@pytest.fixture
+async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
+    """Login and return auth cookies.
+
+    Returns:
+        Dict of cookies from login response
+    """
+    response = await client.post(
+        "/api/auth/login",
+        json={
+            "username": test_user["username"],
+            "password": test_user["password"],
+        },
+    )
+    assert response.status_code == 200
+    return dict(response.cookies)

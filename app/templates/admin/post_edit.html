@@ -186,29 +186,6 @@
                 </div>
             </div>
 
-            <!-- Thumbnail -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>Thumbnail</h3>
-                </div>
-                <div class="card-body">
-                    {% if post and post.thumbnail_path %}
-                    <div class="thumbnail-preview mb-2">
-                        <img src="/media/{{ post.thumbnail_path }}" alt="Thumbnail" style="max-width: 100%; border-radius: 4px;">
-                    </div>
-                    {% endif %}
-                    <input
-                        type="text"
-                        id="thumbnail_path"
-                        name="thumbnail_path"
-                        value="{{ post.thumbnail_path if post and post.thumbnail_path else '' }}"
-                        class="form-input"
-                        placeholder="Path to thumbnail image"
-                    >
-                    <span class="form-help">Upload images in Media library first</span>
-                </div>
-            </div>
-
             {% if post %}
             <!-- Danger Zone -->
             <div class="card">
@@ -256,7 +233,6 @@ document.getElementById('post-form').addEventListener('submit', async function(e
         is_featured: formData.get('is_featured') === '1',
         custom_url: formData.get('custom_url') || null,
         meta_description: formData.get('meta_description') || null,
-        thumbnail_path: formData.get('thumbnail_path') || null,
         tags: formData.get('tags') ? formData.get('tags').split(',').filter(t => t.trim()) : []
     };
 
