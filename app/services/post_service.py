@@ -256,11 +256,10 @@ class PostService:
         update_data = post_data.model_dump(exclude_unset=True, exclude={"tags"})
 
         for field, value in update_data.items():
-            if value is not None:
-                # Convert enums to their values
-                if hasattr(value, "value"):
-                    value = value.value
-                setattr(post, field, value)
+            # Convert enums to their values
+            if hasattr(value, "value"):
+                value = value.value
+            setattr(post, field, value)
 
         # Regenerate excerpt if content changed and no custom excerpt
         if post_data.content and not post_data.excerpt:
