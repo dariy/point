@@ -94,6 +94,16 @@
         <div class="footer-container">
             <div class="footer-content">
                 <p class="footer-copyright">&copy; {{ current_year }} {{ author_name }}</p>
+                {% if tag_cloud %}
+                <div class="tag-cloud footer-tags">
+                    {% for tag in tag_cloud %}
+                    <a href="/tag/{{ tag.slug }}" class="tag-link" style="font-size: {{ 0.8 + tag.weight * 0.4 }}rem;">
+                        {{ tag.name }}
+                        <span class="count">({{ tag.post_count }})</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 <nav class="footer-nav">
                     <a href="/feed.xml" class="footer-link">RSS Feed</a>
                     <a href="/admin/" class="footer-link">Admin</a>
