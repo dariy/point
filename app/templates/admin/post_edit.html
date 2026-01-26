@@ -166,7 +166,7 @@
                             type="text"
                             id="custom_url"
                             name="custom_url"
-                            value="{{ post.custom_url if post else '' }}"
+                            value="{{ post.custom_url if post and post.custom_url else '' }}"
                             class="form-input"
                             placeholder="custom-slug"
                         >
@@ -201,7 +201,7 @@
                         type="text"
                         id="thumbnail_path"
                         name="thumbnail_path"
-                        value="{{ post.thumbnail_path if post else '' }}"
+                        value="{{ post.thumbnail_path if post and post.thumbnail_path else '' }}"
                         class="form-input"
                         placeholder="Path to thumbnail image"
                     >
