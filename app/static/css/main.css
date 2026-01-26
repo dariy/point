@@ -88,7 +88,7 @@
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
     /* Component-specific */
-    --header-bg: #ffffff;
+    --header-bg: rgba(255, 255, 255, 0.8);
     --footer-bg: #0f172a;
     --footer-text: #94a3b8;
     --code-bg: #1e293b;
@@ -147,7 +147,7 @@
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
 
     /* Component-specific */
-    --header-bg: #1e293b;
+    --header-bg: rgba(30, 41, 59, 0.8);
     --footer-bg: #0f172a;
     --footer-text: #94a3b8;
     --code-bg: #0f172a;
@@ -241,6 +241,8 @@ img {
 .site-header {
     background: var(--header-bg);
     border-bottom: 1px solid var(--border-primary);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     position: sticky;
     top: 0;
     z-index: 100;
