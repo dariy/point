@@ -551,10 +551,145 @@
     }
 
     // ===========================
+    // Content Editor Dropzone
+    // ===========================
+
+    class ContentEditorDropzone {
+        constructor(textarea) {
+            this.textarea = textarea;
+            this.form = textarea.closest('form');
+            // Use the parent card-body as drop zone if available, otherwise use textarea
+            this.dropZone = textarea.closest('.card-body') || textarea;
+            this.uploadUrl = '/api/media/upload';
+            this.dragCounter = 0;
+
+            this.init();
+        }
+
+        init() {
+            // Drag and drop events
+            this.dropZone.addEventListener('dragenter', this.handleDragEnter.bind(this));
+            this.dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
+            this.dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
+            this.dropZone.addEventListener('drop', this.handleDrop.bind(this));
+        }
+
+        handleDragEnter(e) {
+            e.preventDefault();
+            this.dragCounter++;
+            this.dropZone.classList.add('dragover');
+        }
+
+        handleDragOver(e) {
+            e.preventDefault();
+            // Ensure dragover class is present (sometimes needed if dragenter didn't fire correctly)
+            this.dropZone.classList.add('dragover');
+        }
+
+        handleDragLeave(e) {
+            e.preventDefault();
+            this.dragCounter--;
+            if (this.dragCounter <= 0) {
+                this.dropZone.classList.remove('dragover');
+                this.dragCounter = 0;
+            }
+        }
+
+        handleDrop(e) {
+            e.preventDefault();
+            this.dragCounter = 0;
+            this.dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length) {
+                this.uploadFiles(files);
+            }
+        }
+
+        async uploadFiles(files) {
+            // Get post ID if available
+            const postId = this.form ? this.form.dataset.postId : null;
+
+            for (const file of files) {
+                // Check if image
+                if (!file.type.startsWith('image/')) {
+                    showToast(`Skipped ${file.name}: Not an image`, 'warning');
+                    continue;
+                }
+
+                // Show uploading state
+                showToast(`Uploading ${file.name}...`, 'info');
+
+                await this.uploadFile(file, postId);
+            }
+        }
+
+        async uploadFile(file, postId) {
+            const formData = new FormData();
+            formData.append('file', file);
+            if (postId) {
+                formData.append('post_id', postId);
+            }
+
+            try {
+                const response = await fetch(this.uploadUrl, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+
+                const data = await response.json();
+
+                // Insert markdown
+                this.insertMarkdown(data.filename, data.url, data.alt_text || file.name);
+
+                showToast(`Uploaded: ${file.name}`);
+
+            } catch (error) {
+                showToast(`Failed to upload: ${file.name}`, 'error');
+                console.error('Upload error:', error);
+            }
+        }
+
+        insertMarkdown(filename, url, alt) {
+            const startPos = this.textarea.selectionStart;
+            const text = this.textarea.value;
+            
+            // Check if we need to prepend a newline (if not at start and previous char isn't a newline)
+            const needsNewline = startPos > 0 && text.substring(startPos - 1, startPos) !== '\n';
+            const markdown = (needsNewline ? '\n' : '') + `![${alt}](${url})\n`;
+            
+            const endPos = this.textarea.selectionEnd;
+
+            // Insert at cursor
+            this.textarea.value = text.substring(0, startPos) +
+                markdown +
+                text.substring(endPos, text.length);
+
+            // Move cursor after inserted text
+            const newPos = startPos + markdown.length;
+            this.textarea.selectionStart = newPos;
+            this.textarea.selectionEnd = newPos;
+
+            // Trigger input event for auto-save and preview
+            this.textarea.dispatchEvent(new Event('input'));
+        }
+    }
+
+    // ===========================
     // Initialize
     // ===========================
 
     function init() {
+        // Initialize content editor dropzone
+        const editorContent = document.querySelector('.editor-content');
+        if (editorContent) {
+            new ContentEditorDropzone(editorContent);
+        }
+
         // Initialize tags inputs
         document.querySelectorAll('.tags-input').forEach(el => {
             new TagsInput(el);
