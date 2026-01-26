@@ -12,7 +12,7 @@
                     
                     {% if loop.first and post.is_featured %}
                         <div class="featured-post">
-                            <a href="/posts/{{ post.slug }}" class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}">
+                            <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                                 {% if has_image %}
                                     <div class="post-card-background">
                                         <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
@@ -33,14 +33,14 @@
                                             <span>{{ post.view_count }} views</span>
                                             {% endif %}
                                         </div>
-                                        <h2 class="post-card-title">{{ post.title }}</h2>
+                                        <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
                                         <div class="post-card-excerpt">
                                             {{ post.excerpt or generate_excerpt(post.content, post.formatter.value, 200) }}
                                         </div>
                                         {% if post.tags %}
                                         <div class="post-card-tags">
                                             {% for tag in post.tags[:3] %}
-                                            <span class="tag-link">{{ tag.name }}</span>
+                                            <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
                                             {% endfor %}
                                         </div>
                                         {% endif %}
@@ -62,23 +62,23 @@
                                             <span>{{ post.view_count }} views</span>
                                             {% endif %}
                                         </div>
-                                        <h2 class="post-card-title">{{ post.title }}</h2>
+                                        <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
                                         <div class="post-card-text-preview">
                                             {{ truncate_paragraphs(format_content(post.content, post.formatter.value)) | safe }}
                                         </div>
                                         {% if post.tags %}
                                         <div class="post-card-tags">
                                             {% for tag in post.tags[:3] %}
-                                            <span class="tag-link">{{ tag.name }}</span>
+                                            <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
                                             {% endfor %}
                                         </div>
                                         {% endif %}
                                     </div>
                                 {% endif %}
-                            </a>
+                            </article>
                         </div>
                     {% else %}
-                        <a href="/posts/{{ post.slug }}" class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}">
+                        <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                             {% if has_image %}
                                 <div class="post-card-background">
                                     <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
@@ -93,14 +93,14 @@
                                         <span>{{ post.view_count }} views</span>
                                         {% endif %}
                                     </div>
-                                    <h2 class="post-card-title">{{ post.title }}</h2>
+                                    <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
                                     <div class="post-card-excerpt">
                                         {{ post.excerpt or generate_excerpt(post.content, post.formatter.value, 150) }}
                                     </div>
                                     {% if post.tags %}
                                     <div class="post-card-tags">
                                         {% for tag in post.tags[:3] %}
-                                        <span class="tag-link">{{ tag.name }}</span>
+                                        <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
                                         {% endfor %}
                                     </div>
                                     {% endif %}
@@ -116,20 +116,20 @@
                                         <span>{{ post.view_count }} views</span>
                                         {% endif %}
                                     </div>
-                                    <h2 class="post-card-title">{{ post.title }}</h2>
+                                    <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
                                     <div class="post-card-text-preview">
                                         {{ truncate_paragraphs(format_content(post.content, post.formatter.value)) | safe }}
                                     </div>
                                     {% if post.tags %}
                                     <div class="post-card-tags">
                                         {% for tag in post.tags[:3] %}
-                                        <span class="tag-link">{{ tag.name }}</span>
+                                        <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
                                         {% endfor %}
                                     </div>
                                     {% endif %}
                                 </div>
                             {% endif %}
-                        </a>
+                        </article>
                     {% endif %}
                 {% endfor %}
             </div>

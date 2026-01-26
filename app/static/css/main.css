@@ -461,6 +461,7 @@ img {
     height: 100%; /* Ensure uniform height in grid if possible, though grid-items stretch */
     display: flex;
     flex-direction: column;
+    cursor: pointer;
 }
 
 .post-card:hover {
