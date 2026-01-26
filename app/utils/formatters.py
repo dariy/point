@@ -260,3 +260,71 @@ def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
         truncated = truncated[:last_space]
 
     return truncated.rstrip() + suffix
+
+
+def extract_first_image(content: str) -> str | None:
+    """Extract the first image URL from content.
+
+    Supports Markdown image syntax and HTML img tags.
+
+    Args:
+        content: Raw content (markdown or html)
+
+    Returns:
+        URL of the first image found, or None if no image exists.
+    """
+    # Try Markdown image first: ![alt](url "title") or ![alt](url)
+    # This regex captures the URL in group 1
+    markdown_match = re.search(r'!\[.*?\]\((.*?)(?:\s+".*?")?\)', content)
+    if markdown_match:
+        return markdown_match.group(1).strip()
+
+    # Try HTML img tag: <img src="url" ...>
+    # This regex captures the src value in group 2 or 3 (depending on quotes)
+    html_match = re.search(r'<img[^>]+src=(["\'])(.*?)\1', content, re.IGNORECASE)
+    if html_match:
+        return html_match.group(2).strip()
+
+    return None
+
+
+def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
+    """Extract and truncate text from the first N paragraphs of HTML content.
+    
+    Args:
+        html_content: HTML string
+        num_paragraphs: Number of paragraphs to extract
+        
+    Returns:
+        Formatted HTML with only the first N paragraphs (text only, mostly).
+    """
+    if not html_content:
+        return ""
+
+    # Simple regex to find paragraphs. This is not a full HTML parser but efficient enough for this.
+    # We look for <p> tags.
+    paragraphs = re.findall(r'<p>(.*?)</p>', html_content, re.DOTALL | re.IGNORECASE)
+    
+    # Filter out paragraphs that only contained images or whitespace
+    clean_paragraphs = []
+    for p in paragraphs:
+        # Remove img tags
+        p_clean = re.sub(r'<img[^>]+>', '', p, flags=re.IGNORECASE)
+        # Strip other HTML tags for preview? Or keep basic ones?
+        # User said "Remove any markdown markup", and we are in HTML now.
+        # Let's strip all tags inside paragraphs to be safe and clean.
+        p_text = strip_html(p_clean)
+        if p_text.strip():
+            clean_paragraphs.append(f"<p>{p_text.strip()}</p>")
+            if len(clean_paragraphs) >= num_paragraphs:
+                break
+    
+    if not clean_paragraphs:
+        # If no p tags or all were empty, fallback to strip html and truncate
+        text = strip_html(html_content)
+        # Split by double newlines to simulate paragraphs
+        parts = text.split('\n\n')
+        selected = [p.strip() for p in parts if p.strip()][:num_paragraphs]
+        return "".join(f"<p>{p}</p>" for p in selected)
+
+    return "".join(clean_paragraphs)
