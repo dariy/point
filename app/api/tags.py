@@ -42,6 +42,7 @@ def tag_to_response(tag: TagModel) -> dict[str, Any]:
         "description": tag.description,
         "custom_url": tag.custom_url,
         "is_important": tag.is_important,
+        "is_featured": tag.is_featured,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "url": tag.url,
@@ -292,6 +293,7 @@ async def get_posts_by_tag(
         "description": tag.description,
         "custom_url": tag.custom_url,
         "is_important": tag.is_important,
+        "is_featured": tag.is_featured,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "posts": [
