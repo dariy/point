@@ -15,6 +15,7 @@ class TagBase(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     custom_url: str | None = Field(default=None, max_length=200)
     is_important: bool = Field(default=False)
+    is_featured: bool = Field(default=False)
 
 
 class TagCreate(TagBase):
@@ -26,6 +27,7 @@ class TagCreate(TagBase):
                 "name": "Travel",
                 "description": "Posts about travel and adventures",
                 "is_important": True,
+                "is_featured": False,
             }
         }
     )
@@ -38,6 +40,7 @@ class TagUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     custom_url: str | None = Field(default=None, max_length=200)
     is_important: bool | None = Field(default=None)
+    is_featured: bool | None = Field(default=None)
 
 
 class TagResponse(BaseModel):
@@ -49,6 +52,7 @@ class TagResponse(BaseModel):
     description: str | None
     custom_url: str | None
     is_important: bool
+    is_featured: bool
     post_count: int
     created_at: datetime
     url: str = Field(description="Computed URL for the tag")
@@ -113,6 +117,7 @@ class TagWithPostsResponse(BaseModel):
     description: str | None
     custom_url: str | None
     is_important: bool
+    is_featured: bool
     post_count: int
     created_at: datetime
     posts: list[PostInTag]
