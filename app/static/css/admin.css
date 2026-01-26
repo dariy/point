@@ -922,6 +922,18 @@ a:hover {
     min-height: 400px;
 }
 
+.editor-content.dragover {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+    background-color: var(--color-gray-50);
+}
+
+.card-body.dragover {
+    background-color: var(--color-primary-light);
+    border: 2px dashed var(--color-primary);
+    border-radius: var(--border-radius);
+}
+
 .preview-panel {
     border: 1px solid var(--admin-border);
     border-radius: var(--border-radius);
