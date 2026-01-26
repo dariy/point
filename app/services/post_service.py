@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.post import Post, PostStatus
 from app.schemas.post import PostCreate, PostUpdate
 from app.services.cache_service import invalidate_cache_for_post
-from app.utils.formatters import format_content, generate_excerpt
+from app.utils.formatters import extract_first_image, format_content, generate_excerpt
 from app.utils.slugify import make_unique_slug, slugify
 
 if TYPE_CHECKING:
@@ -90,6 +90,9 @@ class PostService:
                 post_data.content, post_data.formatter.value
             )
 
+        # Extract thumbnail from content
+        thumbnail_path = extract_first_image(post_data.content)
+
         post = Post(
             title=post_data.title,
             slug=slug,
@@ -98,7 +101,7 @@ class PostService:
             formatter=post_data.formatter.value,
             status=post_data.status.value,
             is_featured=post_data.is_featured,
-            thumbnail_path=post_data.thumbnail_path,
+            thumbnail_path=thumbnail_path,
             custom_url=post_data.custom_url,
             meta_description=post_data.meta_description,
             author_id=author_id,
@@ -262,8 +265,12 @@ class PostService:
             setattr(post, field, value)
 
         # Regenerate excerpt if content changed and no custom excerpt
-        if post_data.content and not post_data.excerpt:
-            post.excerpt = generate_excerpt(post.content, post.formatter)
+        if post_data.content:
+            if not post_data.excerpt:
+                post.excerpt = generate_excerpt(post.content, post.formatter)
+            
+            # Update thumbnail from new content
+            post.thumbnail_path = extract_first_image(post.content)
 
         await self.db.flush()
         await self.db.refresh(post)

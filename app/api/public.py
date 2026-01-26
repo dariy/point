@@ -24,10 +24,11 @@ from app.models.post_tag import post_tags
 from app.models.tag import Tag
 from app.services.cache_service import get_cache
 from app.services.tag_service import TagService
-from app.utils.formatters import format_content
+from app.utils.formatters import format_content, generate_excerpt, truncate_paragraphs
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
 
 # Set up templates
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -51,6 +52,9 @@ def get_common_context(request: Request) -> dict[str, Any]:
         "blog_subtitle": getattr(settings, "blog_subtitle", ""),
         "author_name": getattr(settings, "author_name", "Admin"),
         "current_year": datetime.now().year,
+        "format_content": format_content,
+        "truncate_paragraphs": truncate_paragraphs,
+        "generate_excerpt": generate_excerpt,
     }
 
 

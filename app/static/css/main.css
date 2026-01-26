@@ -455,6 +455,12 @@ img {
     overflow: hidden;
     box-shadow: var(--shadow);
     transition: all var(--transition-normal), background-color var(--transition-theme);
+    text-decoration: none; /* Make sure links inside look clean */
+    display: block; /* Ensure it behaves as a block element */
+    position: relative;
+    height: 100%; /* Ensure uniform height in grid if possible, though grid-items stretch */
+    display: flex;
+    flex-direction: column;
 }
 
 .post-card:hover {
@@ -462,24 +468,85 @@ img {
     transform: translateY(-2px);
 }
 
-.post-card-image {
-    aspect-ratio: 16/10;
-    background-color: var(--bg-tertiary);
-    overflow: hidden;
+/* --- HAS IMAGE STYLE --- */
+.post-card.has-image {
+    min-height: 320px; /* Minimum height for image cards */
+    color: var(--text-inverted); /* Default text color on image */
 }
 
-.post-card-image img {
+.post-card-background {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.post-card-background img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform var(--transition-slow);
 }
 
-.post-card:hover .post-card-image img {
+.post-card:hover .post-card-background img {
     transform: scale(1.05);
 }
 
+/* Overlay Content for Image Cards */
+.post-card-content.overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.1) 100%);
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    color: white; /* Ensure text is white */
+}
+
+.post-card:hover .post-card-content.overlay {
+    opacity: 1;
+}
+
+/* Override text colors for overlay */
+.post-card-content.overlay .post-card-title {
+    color: white;
+    font-size: var(--font-size-lg);
+}
+.post-card-content.overlay .post-card-meta {
+    color: rgba(255,255,255,0.8);
+}
+.post-card-content.overlay .post-card-excerpt {
+    color: rgba(255,255,255,0.9);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-md);
+}
+.post-card-content.overlay .tag-link {
+    background-color: rgba(255,255,255,0.2);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+.post-card-content.overlay .tag-link:hover {
+    background-color: white;
+    color: var(--text-primary); /* Dark text on white tag */
+}
+
+/* --- TEXT ONLY STYLE --- */
+.post-card.text-only {
+    background-color: var(--surface-card);
+}
+
+.post-card.text-only .post-card-content {
+    padding: var(--spacing-xl);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
 .post-card-content {
+    /* Base styles for non-overlay content */
     padding: var(--spacing-lg);
 }
 
@@ -519,12 +586,30 @@ img {
     overflow: hidden;
 }
 
+/* Text Preview for No Image Posts */
+.post-card-text-preview {
+    font-size: var(--font-size-base); /* Slightly larger for emphasis */
+    color: var(--text-secondary);
+    line-height: 1.6;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 8;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+    margin-bottom: var(--spacing-lg);
+}
+
+.post-card-text-preview p {
+    margin-bottom: var(--spacing-sm);
+}
+
 .post-card-tags {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xs);
-    margin-top: var(--spacing-md);
+    margin-top: auto; /* Push to bottom in flex container */
 }
+
 
 /* ===========================
    Featured Post
@@ -533,26 +618,24 @@ img {
     grid-column: 1 / -1;
 }
 
-.featured-post .post-card {
-    display: grid;
-    grid-template-columns: 1.5fr 1fr;
+/* Reset grid for featured post if using new card style */
+/* If featured post has image, it behaves like a big card now */
+.featured-post .post-card.has-image {
+    min-height: 500px;
+}
+.featured-post .post-card-content.overlay .post-card-title {
+    font-size: var(--font-size-3xl);
+}
+.featured-post .post-card-content.overlay .post-card-excerpt {
+    font-size: var(--font-size-base);
+    -webkit-line-clamp: 4;
 }
 
-.featured-post .post-card-image {
-    aspect-ratio: auto;
-    min-height: 300px;
+/* If text only, we can keep it as a flexible card */
+.featured-post .post-card.text-only {
+    padding: var(--spacing-md);
 }
 
-.featured-post .post-card-content {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: var(--spacing-xl);
-}
-
-.featured-post .post-card-title {
-    font-size: var(--font-size-2xl);
-}
 
 .featured-badge {
     display: inline-flex;
@@ -565,6 +648,11 @@ img {
     color: var(--color-primary);
     margin-bottom: var(--spacing-sm);
 }
+/* Override badge for overlay */
+.post-card-content.overlay .featured-badge {
+    color: var(--color-accent); /* Brighter blue for dark bg */
+}
+
 
 /* ===========================
    Sidebar
