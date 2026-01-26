@@ -1,0 +1,82 @@
+{% if posts %}
+<div class="gallery-grid">
+    {% for post in posts %}
+    <article class="gallery-item" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
+        <div class="gallery-item-image">
+            {% if post.thumbnail_path %}
+            <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+            {% else %}
+            <div class="no-image-placeholder">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                    <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                    <path d="M21 15l-5-5L5 21"/>
+                </svg>
+            </div>
+            {% endif %}
+            <div class="gallery-item-overlay">
+                <h3 class="gallery-item-title">{{ post.title }}</h3>
+                <time class="gallery-item-date">{{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}</time>
+            </div>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+
+{% if total_pages > 1 %}
+<nav class="pagination gallery-pagination" aria-label="Gallery pagination">
+    {% set current_tag_param = '&tag=' + current_tag if current_tag else '' %}
+    
+    {% if page > 1 %}
+    <a href="/gallery?page={{ page - 1 }}{{ current_tag_param }}" class="pagination-link ajax-link" aria-label="Previous page">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+        </svg>
+    </a>
+    {% else %}
+    <span class="pagination-link disabled">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+        </svg>
+    </span>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+            <span class="pagination-link active">{{ p }}</span>
+        {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
+            <a href="/gallery?page={{ p }}{{ current_tag_param }}" class="pagination-link ajax-link">{{ p }}</a>
+        {% elif p == page - 2 or p == page + 2 %}
+            <span class="pagination-ellipsis">&hellip;</span>
+        {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+    <a href="/gallery?page={{ page + 1 }}{{ current_tag_param }}" class="pagination-link ajax-link" aria-label="Next page">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+        </svg>
+    </a>
+    {% else %}
+    <span class="pagination-link disabled">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+        </svg>
+    </span>
+    {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+            <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+            <path d="M21 15l-5-5L5 21"/>
+        </svg>
+    </div>
+    <h2 class="empty-state-title">No photos yet</h2>
+    <p class="empty-state-text">Try selecting a different category or check back later.</p>
+</div>
+{% endif %}
