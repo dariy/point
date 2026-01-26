@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -433,6 +433,49 @@ async def gallery(
         .order_by(Tag.name)
     )
     all_tags = list(tags_result.scalars().all())
+
+    # Check for AJAX request
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        posts_data = []
+        for post in posts:
+            pub_date = post.published_at or post.created_at
+            
+            # Calculate preview data
+            has_image = post.thumbnail_path is not None
+            excerpt = None
+            preview_html = None
+            
+            if has_image:
+                excerpt = post.excerpt or generate_excerpt(post.content, post.formatter.value, 150)
+            else:
+                # Text-only preview
+                content_html = format_content(post.content, post.formatter.value)
+                preview_html = truncate_paragraphs(content_html)
+
+            posts_data.append({
+                "title": post.title,
+                "slug": post.slug,
+                "thumbnail_path": post.thumbnail_path,
+                "published_date": pub_date.strftime('%B %d, %Y'),
+                "view_count": post.view_count,
+                "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+                "excerpt": excerpt,
+                "preview_html": preview_html,
+                "has_image": has_image
+            })
+
+        return JSONResponse({
+            "posts": posts_data,
+            "pagination": {
+                "page": page,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_prev": page > 1,
+                "next_page": page + 1,
+                "prev_page": page - 1
+            },
+            "current_tag": tag
+        })
 
     context = get_common_context(request)
     context.update({
