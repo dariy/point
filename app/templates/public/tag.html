@@ -32,43 +32,59 @@
     {% if posts %}
     <div class="posts-grid">
         {% for post in posts %}
-        <article class="post-card">
-            <a href="/posts/{{ post.slug }}" class="post-card-image">
-                {% if post.thumbnail_path %}
-                <img src="/media/thumbnails/{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+            {% set has_image = post.thumbnail_path is not none %}
+            <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
+                {% if has_image %}
+                    <div class="post-card-background">
+                        <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                    </div>
+                    <div class="post-card-content overlay">
+                        <div class="post-card-meta">
+                            <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
+                                {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
+                            </time>
+                            {% if post.view_count %}
+                            <span>&bull;</span>
+                            <span>{{ post.view_count }} views</span>
+                            {% endif %}
+                        </div>
+                        <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
+                        <div class="post-card-excerpt">
+                            {{ post.excerpt or generate_excerpt(post.content, post.formatter.value, 150) }}
+                        </div>
+                        {% if post.tags %}
+                        <div class="post-card-tags">
+                            {% for t in post.tags[:3] %}
+                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{ t.name }}</a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
                 {% else %}
-                <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--color-gray-100);">
-                    <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor" style="color: var(--color-gray-400);">
-                        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
-                    </svg>
-                </div>
+                    <div class="post-card-content">
+                        <div class="post-card-meta">
+                            <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
+                                {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
+                            </time>
+                            {% if post.view_count %}
+                            <span>&bull;</span>
+                            <span>{{ post.view_count }} views</span>
+                            {% endif %}
+                        </div>
+                        <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
+                        <div class="post-card-text-preview">
+                            {{ truncate_paragraphs(format_content(post.content, post.formatter.value)) | safe }}
+                        </div>
+                        {% if post.tags %}
+                        <div class="post-card-tags">
+                            {% for t in post.tags[:3] %}
+                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{ t.name }}</a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
                 {% endif %}
-            </a>
-            <div class="post-card-content">
-                <div class="post-card-meta">
-                    <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
-                        {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
-                    </time>
-                    {% if post.view_count %}
-                    <span>&bull;</span>
-                    <span>{{ post.view_count }} views</span>
-                    {% endif %}
-                </div>
-                <h2 class="post-card-title">
-                    <a href="/posts/{{ post.slug }}">{{ post.title }}</a>
-                </h2>
-                {% if post.excerpt %}
-                <p class="post-card-excerpt">{{ post.excerpt }}</p>
-                {% endif %}
-                {% if post.tags %}
-                <div class="post-card-tags">
-                    {% for t in post.tags[:3] %}
-                    <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{ t.name }}</a>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-        </article>
+            </article>
         {% endfor %}
     </div>
 
