@@ -1,9 +1,11 @@
 """Tests for admin interface routes."""
 
 import pytest
+from datetime import datetime
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.post import Post, PostStatus, PostFormatter
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
 
@@ -162,6 +164,33 @@ class TestPostsList:
 
         assert response.status_code == 200
         assert "No posts" in response.text or "Create Post" in response.text
+
+    @pytest.mark.asyncio
+    async def test_posts_list_view_link_correct(
+        self, client: AsyncClient, auth_cookies: dict, db: AsyncSession, test_user: dict
+    ) -> None:
+        """Test posts list shows correct view link for published posts."""
+        # Create a published post
+        post = Post(
+            title="Test Post Link",
+            slug="test-post-link",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=test_user["user"].id,
+            published_at=datetime.utcnow(),
+            formatter=PostFormatter.MARKDOWN
+        )
+        db.add(post)
+        await db.commit()
+
+        response = await client.get(
+            "/admin/posts",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        # Check for the correct link
+        assert f'href="/posts/{post.slug}"' in response.text
 
 
 class TestNewPost:
