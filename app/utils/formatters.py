@@ -166,12 +166,16 @@ def sanitize_html(html_content: str) -> str:
         "span",
         "figure",
         "figcaption",
+        "video",
+        "source",
     }
 
     # Allowed attributes for specific tags
     allowed_attrs = {
         "a": {"href", "title", "target", "rel"},
         "img": {"src", "alt", "title", "width", "height"},
+        "video": {"src", "controls", "width", "height", "autoplay", "muted", "loop", "poster", "preload"},
+        "source": {"src", "type"},
         "td": {"colspan", "rowspan"},
         "th": {"colspan", "rowspan"},
     }
@@ -322,6 +326,67 @@ def extract_all_images(content: str) -> list[str]:
             seen.add(img)
 
     return unique_images
+
+
+def extract_all_media(content: str) -> list[dict[str, str]]:
+    """Extract all image and video URLs from content.
+
+    Supports Markdown images, HTML img tags, video tags, and source tags.
+
+    Args:
+        content: Raw content (markdown or html)
+
+    Returns:
+        List of dictionaries with 'url' and 'type' ('image' or 'video').
+    """
+    media = []
+
+    # Common video extensions
+    video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
+
+    def get_type(url_str: str, default_type: str = "image") -> str:
+        url_lower = url_str.lower().split("?")[0]  # Ignore query params for extension check
+        if any(url_lower.endswith(ext) for ext in video_extensions):
+            return "video"
+        return default_type
+
+    # 1. Markdown images: ![alt](url)
+    markdown_matches = re.findall(r"!\[.*?\]\((.*?)(?:\s+\".*?\")?\)", content)
+    for url in markdown_matches:
+        url = url.strip()
+        media.append({"url": url, "type": get_type(url)})
+
+    # 2. HTML img tags: <img src="url">
+    html_img_matches = re.findall(r"<img[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE)
+    for match in html_img_matches:
+        url = match[1].strip()
+        media.append({"url": url, "type": "image"})
+
+    # 3. HTML video tags: <video src="url">
+    html_video_matches = re.findall(
+        r"<video[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
+    )
+    for match in html_video_matches:
+        url = match[1].strip()
+        media.append({"url": url, "type": "video"})
+
+    # 4. HTML source tags: <source src="url">
+    html_source_matches = re.findall(
+        r"<source[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
+    )
+    for match in html_source_matches:
+        url = match[1].strip()
+        media.append({"url": url, "type": get_type(url, "video")})
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_media = []
+    for item in media:
+        if item["url"] not in seen:
+            unique_media.append(item)
+            seen.add(item["url"])
+
+    return unique_media
 
 
 def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:

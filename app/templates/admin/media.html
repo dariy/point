@@ -228,8 +228,10 @@ async function handleFiles(files) {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                window.AdminUtils.showToast(`Failed: ${files[i].name} - ${error.detail}`, 'error');
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Server error details:', errorData);
+                const errorMessage = errorData.detail?.message || errorData.detail || 'Upload failed';
+                window.AdminUtils.showToast(`Failed: ${files[i].name} - ${errorMessage}`, 'error');
             }
         } catch (error) {
             window.AdminUtils.showToast(`Failed: ${files[i].name}`, 'error');
