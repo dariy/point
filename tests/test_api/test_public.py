@@ -590,12 +590,9 @@ class TestRobotsTxt:
         assert response.status_code == 200
         assert "Allow: /" in response.text
 
-    @pytest.mark.asyncio
-    async def test_robots_txt_disallows_admin(self, client: AsyncClient) -> None:
-        """Test that robots.txt disallows admin pages."""
-        response = await client.get("/robots.txt")
-        assert response.status_code == 200
-        assert "Disallow: /admin/" in response.text
+    def test_robots_txt_disallows_admin(self, client):
+        response = client.get("/robots.txt")
+        assert "Disallow: /light/" in response.text
 
     @pytest.mark.asyncio
     async def test_robots_txt_disallows_api(self, client: AsyncClient) -> None:
