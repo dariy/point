@@ -5,38 +5,7 @@
 (function() {
     'use strict';
 
-    /**
-     * Mobile Menu Toggle
-     */
-    function initMobileMenu() {
-        const toggle = document.querySelector('.mobile-menu-toggle');
-        const nav = document.querySelector('.site-nav');
 
-        if (!toggle || !nav) return;
-
-        toggle.addEventListener('click', function() {
-            nav.classList.toggle('open');
-            const isOpen = nav.classList.contains('open');
-            toggle.setAttribute('aria-expanded', isOpen);
-        });
-
-        // Close menu when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!nav.contains(e.target) && !toggle.contains(e.target)) {
-                nav.classList.remove('open');
-                toggle.setAttribute('aria-expanded', 'false');
-            }
-        });
-
-        // Close menu on escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && nav.classList.contains('open')) {
-                nav.classList.remove('open');
-                toggle.setAttribute('aria-expanded', 'false');
-                toggle.focus();
-            }
-        });
-    }
 
     /**
      * Dropdown Menus (for mobile)
@@ -452,7 +421,7 @@
     function init() {
         initImmersiveMode();
         initCarousel();
-        initMobileMenu();
+
         initDropdowns();
         initLazyLoading();
         initSmoothScroll();
