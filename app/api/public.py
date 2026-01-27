@@ -501,19 +501,20 @@ async def tag_archive(
     return response
 
 
-@router.get("/gallery", response_class=HTMLResponse)
-async def gallery(
+@router.get("/tags", response_class=HTMLResponse)
+@router.get("/tags/{tag_slug}", response_class=HTMLResponse)
+async def tags_page(
     request: Request,
+    tag_slug: str | None = None,
     page: int = 1,
-    tag: str | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    """Render the gallery page.
+    """Render the tags page (formerly gallery).
 
     Args:
         request: The current request
+        tag_slug: Optional tag slug from path
         page: Page number for pagination
-        tag: Optional tag filter
         db: Database session
 
     Returns:
@@ -526,17 +527,16 @@ async def gallery(
     per_page = blog_settings.get("posts_per_page", 24)
     offset = (page - 1) * per_page
 
-    # Base query for published posts with thumbnails
+    # Base query for published posts
     query = (
         select(Post)
         .options(selectinload(Post.tags))
         .where(Post.status == PostStatus.PUBLISHED)
-        .where(Post.thumbnail_path.isnot(None))
     )
 
     # Filter by tag if provided
-    if tag:
-        tag_result = await db.execute(select(Tag).where(Tag.slug == tag))
+    if tag_slug:
+        tag_result = await db.execute(select(Tag).where(Tag.slug == tag_slug))
         tag_obj = tag_result.scalar_one_or_none()
 
         if tag_obj:
@@ -605,7 +605,7 @@ async def gallery(
                     "next_page": page + 1,
                     "prev_page": page - 1,
                 },
-                "current_tag": tag,
+                "current_tag": tag_slug,
             }
         )
 
@@ -620,11 +620,11 @@ async def gallery(
             "total_pages": total_pages,
             "total": total,
             "tags": all_tags,
-            "current_tag": tag,
+            "current_tag": tag_slug,
         }
     )
 
-    return templates.TemplateResponse("public/gallery.html", context)
+    return templates.TemplateResponse("public/tags.html", context)
 
 
 def get_base_url(request: Request) -> str:

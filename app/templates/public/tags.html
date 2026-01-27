@@ -1,47 +1,47 @@
 {% extends "public/base.html" %}
 
-{% block page_title %}Gallery{% endblock %}
+{% block page_title %}Tags{% endblock %}
 
 {% block extra_css %}
 {{ super() }}
-<meta property="og:title" content="Photo Gallery">
+<meta property="og:title" content="Tags">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ request.url }}">
-<meta name="description" content="Browse our photo gallery">
+<meta name="description" content="Browse posts by tags">
 {% endblock %}
 
 {% block content %}
-<div class="gallery-page">
+<div class="tags-page">
     <!--header class="page-header">
-        <h1 class="page-title">Gallery</h1>
+        <h1 class="page-title">Tags</h1>
         <p class="page-description">Browse all photos</p>
     </header-->
 
     {% if tags %}
-    <div class="gallery-filters" id="gallery-filters">
-        <a href="/gallery" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}">All</a>
+    <div class="tags-filters" id="tags-filters">
+        <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}">All</a>
         {% for tag in tags %}
-        <a href="/gallery?tag={{ tag.slug }}" class="filter-btn ajax-link {% if current_tag == tag.slug %}active{% endif %}">
+        <a href="/tags/{{ tag.slug }}" class="filter-btn ajax-link {% if current_tag == tag.slug %}active{% endif %}">
             {{ tag.name }}
         </a>
         {% endfor %}
     </div>
     {% endif %}
 
-    <div id="gallery-content">
-        {% include "public/partials/gallery_grid.html" %}
+    <div id="tags-content">
+        {% include "public/partials/tags_grid.html" %}
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const galleryContent = document.getElementById('gallery-content');
-    const filtersContainer = document.getElementById('gallery-filters');
+    const tagsContent = document.getElementById('tags-content');
+    const filtersContainer = document.getElementById('tags-filters');
 
     // Function to handle AJAX navigation
-    async function loadGalleryContent(url) {
+    async function loadTagsContent(url) {
         try {
-            galleryContent.style.opacity = '0.5';
+            tagsContent.style.opacity = '0.5';
             
             const response = await fetch(url, {
                 headers: {
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (response.ok) {
                 const data = await response.json();
-                renderGallery(data);
+                renderTags(data);
                 
                 window.history.pushState({}, '', url);
                 updateActiveFilter(url);
@@ -60,16 +60,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.location.href = url;
             }
         } catch (error) {
-            console.error('Error loading gallery:', error);
+            console.error('Error loading tags:', error);
             window.location.href = url;
         } finally {
-            galleryContent.style.opacity = '1';
+            tagsContent.style.opacity = '1';
         }
     }
 
-    function renderGallery(data) {
+    function renderTags(data) {
         if (!data.posts || data.posts.length === 0) {
-            galleryContent.innerHTML = `
+            tagsContent.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">
                         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -78,46 +78,62 @@ document.addEventListener('DOMContentLoaded', function() {
                             <path d="M21 15l-5-5L5 21"/>
                         </svg>
                     </div>
-                    <h2 class="empty-state-title">No photos yet</h2>
+                    <h2 class="empty-state-title">No posts yet</h2>
                     <p class="empty-state-text">Try selecting a different category or check back later.</p>
                 </div>`;
             return;
         }
 
-        let html = '<div class="gallery-grid">';
+        let html = '<div class="posts-grid">';
         data.posts.forEach(post => {
-            const imageHtml = post.thumbnail_path 
-                ? `<img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`
-                : `<div class="no-image-placeholder">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
-                        <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
-                        <path d="M21 15l-5-5L5 21"/>
-                    </svg>
-                   </div>`;
-
-            html += `
-                <article class="gallery-item" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                    <div class="gallery-item-image">
-                        ${imageHtml}
-                        <div class="gallery-item-overlay">
-                            <h3 class="gallery-item-title">${post.title}</h3>
-                            <time class="gallery-item-date">${post.published_date}</time>
-                        </div>
+            const hasImage = post.has_image;
+            
+            html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                ${hasImage ? `
+                    <div class="post-card-background">
+                        <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
                     </div>
-                </article>`;
+                    <div class="post-card-content overlay">
+                ` : `<div class="post-card-content">`}
+                        <div class="post-card-meta">
+                            <time datetime="${post.published_iso}">
+                                ${post.published_date}
+                            </time>
+                            ${post.view_count ? `
+                            <span>&bull;</span>
+                            <span>${post.view_count} views</span>
+                            ` : ''}
+                        </div>
+                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
+                        ${hasImage ? `
+                        <div class="post-card-excerpt">
+                            ${post.excerpt || ''}
+                        </div>
+                        ` : `
+                        <div class="post-card-text-preview">
+                            ${post.preview_html || ''}
+                        </div>
+                        `}
+                        ${post.tags && post.tags.length > 0 ? `
+                        <div class="post-card-tags">
+                            ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
+                        </div>
+                        ` : ''}
+                    </div>
+            </article>`;
         });
         html += '</div>';
 
         if (data.pagination && data.pagination.total_pages > 1) {
             const pag = data.pagination;
-            const tagParam = data.current_tag ? `&tag=${data.current_tag}` : '';
+            // Handle path parameter for tag
+            const tagPath = data.current_tag ? `/${data.current_tag}` : '';
             
-            html += '<nav class="pagination gallery-pagination" aria-label="Gallery pagination">';
+            html += '<nav class="pagination tags-pagination" aria-label="Tags pagination">';
             
             // Previous
             if (pag.has_prev) {
-                html += `<a href="/gallery?page=${pag.prev_page}${tagParam}" class="pagination-link ajax-link" aria-label="Previous page">
+                html += `<a href="/tags${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M15 18l-6-6 6-6"/>
                     </svg>
@@ -135,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (p === pag.page) {
                     html += `<span class="pagination-link active">${p}</span>`;
                 } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="/gallery?page=${p}${tagParam}" class="pagination-link ajax-link">${p}</a>`;
+                    html += `<a href="/tags${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
                 } else if (p === pag.page - 2 || p === pag.page + 2) {
                     html += `<span class="pagination-ellipsis">&hellip;</span>`;
                 }
@@ -143,7 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Next
             if (pag.has_next) {
-                html += `<a href="/gallery?page=${pag.next_page}${tagParam}" class="pagination-link ajax-link" aria-label="Next page">
+                html += `<a href="/tags${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 18l6-6-6-6"/>
                     </svg>
@@ -159,7 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
             html += '</nav>';
         }
 
-        galleryContent.innerHTML = html;
+        tagsContent.innerHTML = html;
     }
 
     // Update active state on filter buttons
@@ -167,12 +183,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!filtersContainer) return;
         
         const urlObj = new URL(url, window.location.origin);
-        const tag = urlObj.searchParams.get('tag');
+        // Extract tag from path: /tags/some-tag
+        const pathParts = urlObj.pathname.split('/').filter(p => p); // Remove empty strings
+        // pathParts[0] = 'tags'
+        // pathParts[1] = slug (optional)
+        
+        const tag = pathParts.length > 1 ? pathParts[1] : null;
         
         const buttons = filtersContainer.querySelectorAll('.filter-btn');
         buttons.forEach(btn => {
             const btnUrl = new URL(btn.href, window.location.origin);
-            const btnTag = btnUrl.searchParams.get('tag');
+            const btnPathParts = btnUrl.pathname.split('/').filter(p => p);
+            const btnTag = btnPathParts.length > 1 ? btnPathParts[1] : null;
             
             if (tag === btnTag) {
                 btn.classList.add('active');
@@ -195,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleLinkClick(e) {
         e.preventDefault();
         const url = this.getAttribute('href');
-        loadGalleryContent(url);
+        loadTagsContent(url);
     }
 
     // Initial attachment
@@ -203,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle back/forward browser buttons
     window.addEventListener('popstate', function() {
-        loadGalleryContent(window.location.href);
+        loadTagsContent(window.location.href);
     });
 });
 </script>
