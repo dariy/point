@@ -49,17 +49,7 @@
             </div>
             <nav class="site-nav">
                 <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Home</a>
-                <a href="/gallery" class="nav-link {% if request.url.path == '/gallery' %}active{% endif %}">Gallery</a>
-                {% if tags %}
-                <div class="nav-dropdown">
-                    <button class="nav-link dropdown-toggle">Tags</button>
-                    <div class="dropdown-menu">
-                        {% for tag in tags[:10] %}
-                        <a href="/tag/{{ tag.slug }}" class="dropdown-item">{{ tag.name }}</a>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
+                <a href="/tags" class="nav-link {% if request.url.path == '/tags' %}active{% endif %}">Tags</a>
                 <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
                     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>
