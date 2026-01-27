@@ -10,11 +10,10 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
 
 from app.api.admin import router as admin_router
@@ -22,9 +21,11 @@ from app.api.auth import router as auth_router
 from app.api.media import router as media_router
 from app.api.posts import router as posts_router
 from app.api.public import router as public_router
+from app.api.system import router as system_router
 from app.api.tags import router as tags_router
 from app.config import get_settings
 from app.database import create_tables, get_db
+from app.services.scheduler_service import SchedulerService
 
 settings = get_settings()
 
@@ -47,6 +48,7 @@ class CachedStaticFiles(StaticFiles):
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Handle request with cache headers."""
+
         # Create a custom send that adds cache headers
         async def send_with_cache_headers(message: dict[str, Any]) -> None:
             if message["type"] == "http.response.start":
@@ -64,6 +66,7 @@ class CachedStaticFiles(StaticFiles):
             await send(message)
 
         await super().__call__(scope, receive, send_with_cache_headers)
+
 
 # Set up Jinja2 templates
 templates_dir = Path(__file__).parent / "templates"
@@ -111,8 +114,15 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     await create_tables()
     ensure_media_directories()
+
+    # Initialize and start scheduler
+    scheduler = SchedulerService()
+    scheduler.start()
+
     yield
-    # Shutdown (cleanup if needed)
+
+    # Shutdown
+    scheduler.shutdown()
 
 
 app = FastAPI(
@@ -142,6 +152,7 @@ app.include_router(auth_router)
 app.include_router(media_router)
 app.include_router(posts_router)
 app.include_router(public_router)
+app.include_router(system_router)
 app.include_router(tags_router)
 
 # Mount static files for media serving (images cached for 7 days)

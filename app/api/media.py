@@ -103,7 +103,9 @@ def media_to_list_item(media: MediaModel, service: MediaService) -> dict[str, An
 async def list_media(
     page: int = Query(default=1, ge=1, description="Page number"),
     per_page: int = Query(default=20, ge=1, le=100, description="Items per page"),
-    file_type: str | None = Query(default=None, description="Filter by type (image, video, audio)"),
+    file_type: str | None = Query(
+        default=None, description="Filter by type (image, video, audio)"
+    ),
     orphaned_only: bool = Query(default=False, description="Only show orphaned files"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
@@ -202,7 +204,9 @@ async def upload_file(
 )
 async def upload_multiple_files(
     files: list[UploadFile] = File(..., description="Files to upload"),
-    post_id: int | None = Form(default=None, description="Post ID to link all files to"),
+    post_id: int | None = Form(
+        default=None, description="Post ID to link all files to"
+    ),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
 ):
@@ -223,33 +227,41 @@ async def upload_multiple_files(
                 mime_type=mime_type,
                 post_id=post_id,
             )
-            uploaded.append({
-                "id": media.id,
-                "filename": media.filename,
-                "url": service.get_media_url(media),
-                "thumbnail_url": service.get_thumbnail_url(media),
-                "file_type": media.file_type,
-                "file_size": media.file_size,
-                "width": media.width,
-                "height": media.height,
-                "checksum": media.checksum,
-                "message": "File uploaded successfully",
-            })
+            uploaded.append(
+                {
+                    "id": media.id,
+                    "filename": media.filename,
+                    "url": service.get_media_url(media),
+                    "thumbnail_url": service.get_thumbnail_url(media),
+                    "file_type": media.file_type,
+                    "file_size": media.file_size,
+                    "width": media.width,
+                    "height": media.height,
+                    "checksum": media.checksum,
+                    "message": "File uploaded successfully",
+                }
+            )
         except HTTPException as e:
-            failed.append({
-                "filename": file.filename,
-                "error": e.detail,
-            })
+            failed.append(
+                {
+                    "filename": file.filename,
+                    "error": e.detail,
+                }
+            )
         except FileValidationError as e:
-            failed.append({
-                "filename": file.filename,
-                "error": e.message,
-            })
+            failed.append(
+                {
+                    "filename": file.filename,
+                    "error": e.message,
+                }
+            )
         except Exception as e:
-            failed.append({
-                "filename": file.filename,
-                "error": str(e),
-            })
+            failed.append(
+                {
+                    "filename": file.filename,
+                    "error": str(e),
+                }
+            )
 
     await db.commit()
 

@@ -34,15 +34,13 @@ class TestRootEndpoint:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_root_returns_app_info(self, client: AsyncClient) -> None:
-        """Test that root endpoint returns application info."""
+    async def test_root_returns_html(self, client: AsyncClient) -> None:
+        """Test that root endpoint returns HTML content."""
         response = await client.get("/")
 
-        data = response.json()
-        assert "name" in data
-        assert "version" in data
-        assert "status" in data
-        assert data["status"] == "running"
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "<!DOCTYPE html>" in response.text
 
 
 class TestSecurityHeaders:
