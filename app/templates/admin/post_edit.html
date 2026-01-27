@@ -6,7 +6,7 @@
 {% block page_title %}{% if post %}Edit Post{% else %}New Post{% endif %}{% endblock %}
 
 {% block header_actions %}
-<a href="/admin/posts" class="btn btn-outline">Cancel</a>
+<a href="/light/posts" class="btn btn-outline">Cancel</a>
 {% endblock %}
 
 {% block content %}
@@ -255,7 +255,7 @@ document.getElementById('post-form').addEventListener('submit', async function(e
             localStorage.removeItem(postId ? `draft_${postId}` : 'draft_new');
             // Redirect to posts list or edit page
             if (!postId) {
-                window.location.href = `/admin/posts/${result.id}`;
+                window.location.href = `/light/posts/${result.id}`;
             } else {
                 window.AdminUtils.showToast('Post saved successfully');
             }

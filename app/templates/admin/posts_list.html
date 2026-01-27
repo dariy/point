@@ -6,7 +6,7 @@
 {% block page_title %}Posts{% endblock %}
 
 {% block header_actions %}
-<a href="/admin/posts/new" class="btn btn-primary">
+<a href="/light/posts/new" class="btn btn-primary">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
     </svg>
@@ -52,7 +52,7 @@
                 {% for post in posts %}
                 <tr>
                     <td>
-                        <a href="/admin/posts/{{ post.id }}" class="post-title">
+                        <a href="/light/posts/{{ post.id }}" class="post-title">
                             {{ post.title }}
                         </a>
                         <div class="text-muted text-small">/{{ post.slug }}</div>
@@ -70,7 +70,7 @@
                         {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}
                     </td>
                     <td class="actions">
-                        <a href="/admin/posts/{{ post.id }}" class="btn btn-sm btn-outline" title="Edit">
+                        <a href="/light/posts/{{ post.id }}" class="btn btn-sm btn-outline" title="Edit">
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                             </svg>
@@ -106,10 +106,10 @@
             </div>
             <div class="empty-state-title">No posts found</div>
             {% if status_filter %}
-            <p>No {{ status_filter }} posts. <a href="/admin/posts">View all posts</a></p>
+            <p>No {{ status_filter }} posts. <a href="/light/posts">View all posts</a></p>
             {% else %}
             <p>Create your first post to get started.</p>
-            <a href="/admin/posts/new" class="btn btn-primary mt-2">Create Post</a>
+            <a href="/light/posts/new" class="btn btn-primary mt-2">Create Post</a>
             {% endif %}
         </div>
         {% endif %}
@@ -118,7 +118,7 @@
 
 <!-- Pagination -->
 {% set extra_params = '&status_filter=' + status_filter if status_filter else '' %}
-{{ render_pagination(page, total_pages, '/admin/posts', extra_params) }}
+{{ render_pagination(page, total_pages, '/light/posts', extra_params) }}
 
 <script>
 function filterByStatus(status) {

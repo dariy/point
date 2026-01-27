@@ -106,7 +106,7 @@
     </div>
     <div class="empty-state-title">No media files</div>
     {% if file_type %}
-    <p>No {{ file_type }} files found. <a href="/admin/media">View all files</a></p>
+    <p>No {{ file_type }} files found. <a href="/light/media">View all files</a></p>
     {% else %}
     <p>Upload your first file to get started.</p>
     <button type="button" class="btn btn-primary mt-2" onclick="openUploadModal()">
@@ -117,7 +117,7 @@
 {% endif %}
 
 {% set extra_params = '&file_type=' + file_type if file_type else '' %}
-{{ render_pagination(page, total_pages, '/admin/media', extra_params) }}
+{{ render_pagination(page, total_pages, '/light/media', extra_params) }}
 
 <!-- Upload Modal -->
 <div id="upload-modal" class="modal-overlay">

@@ -281,7 +281,7 @@
                 }
 
                 // Refresh page to show new upload
-                if (window.location.pathname === '/admin/media') {
+                if (window.location.pathname === '/light/media') {
                     window.location.reload();
                 }
             } catch (error) {
