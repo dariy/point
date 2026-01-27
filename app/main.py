@@ -26,7 +26,11 @@ from app.api.system import router as system_router
 from app.api.tags import router as tags_router
 from app.config import get_settings
 from app.database import create_tables, get_db
+from app.logging import setup_logging
 from app.services.scheduler_service import SchedulerService
+
+# Initialize logging
+setup_logging()
 
 settings = get_settings()
 
