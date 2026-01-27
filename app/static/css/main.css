@@ -239,12 +239,13 @@ img {
 
 .site-main {
     /*flex: 1;*/
-    padding: var(--spacing-md);
+    padding: var(--spacing-md) 0;
 }
 
 .main-container {
     max-width: var(--content-max-width);
     margin: 0 auto;
+    padding: 0 var(--spacing-md);
 }
 
 /* ===========================
@@ -371,15 +372,6 @@ img {
 .dropdown-item:hover {
     background-color: var(--surface-hover);
     color: var(--text-primary);
-}
-
-.mobile-menu-toggle {
-    display: none;
-    padding: var(--spacing-sm);
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
 }
 
 /* ===========================
@@ -1347,16 +1339,7 @@ img {
     }
 
     .site-nav {
-        display: none;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: var(--bg-elevated);
-        border-bottom: 1px solid var(--border-primary);
-        padding: var(--spacing-md);
         flex-direction: column;
-        box-shadow: var(--shadow-lg);
     }
 
     .site-nav.open {
@@ -1379,10 +1362,6 @@ img {
     }
 
     .nav-dropdown.open .dropdown-menu {
-        display: block;
-    }
-
-    .mobile-menu-toggle {
         display: block;
     }
 
@@ -1478,6 +1457,7 @@ img {
     max-width: none;
     margin: 0;
     height: 100%;
+    padding: 0;
 }
 
 .immersive-layout .site-footer {

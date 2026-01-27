@@ -3,6 +3,13 @@
 {% block page_title %}Home{% endblock %}
 
 {% block content %}
+<div class="tags-filters">
+    <a href="/" class="filter-btn active">All</a>
+    {% for t in tags %}
+    <a href="/tag/{{ t.slug }}" class="filter-btn">{{ t.name }}</a>
+    {% endfor %}
+</div>
+
 <div class="posts-main">
     {% if posts %}
         <div class="posts-grid">
@@ -198,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadPosts(url) {
         try {
             postsMain.style.opacity = '0.5';
-            
+
             const response = await fetch(url, {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
@@ -208,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok) {
                 const data = await response.json();
                 renderPosts(data);
-                
+
                 window.history.pushState({}, '', url);
                 attachListeners();
                 window.scrollTo(0, 0);
@@ -241,13 +248,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         let html = '<div class="posts-grid">';
-        
+
         data.posts.forEach((post, index) => {
             const isFirst = index === 0;
             const isPageOne = data.pagination.page === 1;
             const showFeatured = isFirst && isPageOne && post.is_featured;
             const hasImage = post.has_image;
-            
+
             if (showFeatured) {
                 html += `<div class="featured-post">
                         <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
@@ -326,14 +333,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     </article>`;
             }
         });
-        
+
         html += '</div>';
 
         if (data.pagination && data.pagination.total_pages > 1) {
             const pag = data.pagination;
-            
+
             html += '<nav class="pagination" aria-label="Posts pagination">';
-            
+
             // Previous
             if (pag.has_prev) {
                 html += `<a href="/?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
@@ -374,7 +381,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </svg>
                 </span>`;
             }
-            
+
             html += '</nav>';
         }
 
