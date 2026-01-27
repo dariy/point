@@ -415,6 +415,11 @@ a:hover {
     box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
+.form-select option {
+    background-color: var(--admin-input-bg);
+    color: var(--admin-text-primary);
+}
+
 .form-textarea {
     resize: vertical;
     min-height: 120px;
@@ -986,6 +991,11 @@ a:hover {
     border: 1px solid var(--admin-border);
     border-radius: var(--border-radius-sm);
     background: var(--admin-input-bg);
+    color: var(--admin-text-primary);
+}
+
+.filter-select option {
+    background-color: var(--admin-input-bg);
     color: var(--admin-text-primary);
 }
 
