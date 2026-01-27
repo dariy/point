@@ -238,8 +238,8 @@ img {
 }
 
 .site-main {
-    flex: 1;
-    padding: var(--spacing-2xl) var(--spacing-md);
+    /*flex: 1;*/
+    padding: var(--spacing-md);
 }
 
 .main-container {
@@ -983,16 +983,23 @@ img {
     margin-top: var(--spacing-md);
 }
 
+.tag-filters {
+    /*display: flex;
+    justify-content: center;*/
+    margin-bottom: var(--spacing-md);
+}
+
 /* ===========================
-   Gallery
+   Tags (Legacy/Unused)
    =========================== */
-.gallery-grid {
+/*
+.tags-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: var(--spacing-md);
 }
 
-.gallery-item {
+.tags-item {
     position: relative;
     aspect-ratio: 1;
     background-color: var(--bg-tertiary);
@@ -1001,18 +1008,18 @@ img {
     cursor: pointer;
 }
 
-.gallery-item img {
+.tags-item img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform var(--transition-slow);
 }
 
-.gallery-item:hover img {
+.tags-item:hover img {
     transform: scale(1.05);
 }
 
-.gallery-item-overlay {
+.tags-item-overlay {
     position: absolute;
     inset: 0;
     background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, transparent 50%);
@@ -1024,28 +1031,29 @@ img {
     transition: opacity var(--transition-normal);
 }
 
-.gallery-item:hover .gallery-item-overlay {
+.tags-item:hover .tags-item-overlay {
     opacity: 1;
 }
 
-.gallery-item-title {
+.tags-item-title {
     font-size: var(--font-size-base);
     font-weight: 600;
     color: white;
     margin-bottom: var(--spacing-xs);
 }
 
-.gallery-item-date {
+.tags-item-date {
     font-size: var(--font-size-sm);
     color: rgba(255, 255, 255, 0.8);
 }
+*/
 
-/* Gallery Filters */
-.gallery-filters {
+/* Tags Filters */
+.tags-filters {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-md);
     justify-content: center;
 }
 
@@ -1076,7 +1084,7 @@ img {
     justify-content: center;
     align-items: center;
     gap: var(--spacing-sm);
-    margin-top: var(--spacing-2xl);
+    margin-top: var(--spacing-xl);
 }
 
 .pagination-link {
@@ -1396,13 +1404,13 @@ img {
         text-align: center;
     }
 
-    .gallery-grid {
+    .tags-grid {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 
 @media (max-width: 480px) {
-    .gallery-grid {
+    .tags-grid {
         grid-template-columns: 1fr;
     }
 }
