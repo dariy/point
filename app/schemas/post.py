@@ -90,9 +90,7 @@ class PostResponse(BaseModel):
     title: str
     slug: str
     content: str
-    content_html: str | None = Field(
-        default=None, description="Rendered HTML content"
-    )
+    content_html: str | None = Field(default=None, description="Rendered HTML content")
     excerpt: str | None
     formatter: PostFormatter
     status: PostStatus

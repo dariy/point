@@ -10,7 +10,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiofiles
 import aiofiles.os
@@ -92,7 +92,7 @@ class FileCache:
         await aiofiles.os.makedirs(self.pages_dir, exist_ok=True)
         await aiofiles.os.makedirs(self.feeds_dir, exist_ok=True)
 
-    def _generate_key(self, url: str, query_params: Optional[dict] = None) -> str:
+    def _generate_key(self, url: str, query_params: dict | None = None) -> str:
         """Generate cache key from URL and query parameters.
 
         Args:
@@ -122,9 +122,7 @@ class FileCache:
         base_dir = self.pages_dir if cache_type == "pages" else self.feeds_dir
         return base_dir / f"{key}.json"
 
-    async def get(
-        self, key: str, cache_type: str = "pages"
-    ) -> Optional[CacheEntry]:
+    async def get(self, key: str, cache_type: str = "pages") -> CacheEntry | None:
         """Retrieve cached value.
 
         Args:
@@ -141,7 +139,7 @@ class FileCache:
                 self._stats["misses"] += 1
                 return None
 
-            async with aiofiles.open(cache_path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(cache_path, encoding="utf-8") as f:
                 data = json.loads(await f.read())
 
             entry = CacheEntry.from_dict(data)
@@ -161,9 +159,9 @@ class FileCache:
     async def get_by_url(
         self,
         url: str,
-        query_params: Optional[dict] = None,
+        query_params: dict | None = None,
         cache_type: str = "pages",
-    ) -> Optional[CacheEntry]:
+    ) -> CacheEntry | None:
         """Retrieve cached value by URL.
 
         Args:
@@ -214,7 +212,7 @@ class FileCache:
         self,
         url: str,
         content: str,
-        query_params: Optional[dict] = None,
+        query_params: dict | None = None,
         ttl: int = 3600,
         content_type: str = "text/html",
         cache_type: str = "pages",
@@ -260,7 +258,7 @@ class FileCache:
     async def delete_by_url(
         self,
         url: str,
-        query_params: Optional[dict] = None,
+        query_params: dict | None = None,
         cache_type: str = "pages",
     ) -> bool:
         """Remove cached value by URL.
@@ -380,7 +378,7 @@ class FileCache:
 
                 cache_path = cache_dir / filename
                 try:
-                    async with aiofiles.open(cache_path, "r", encoding="utf-8") as f:
+                    async with aiofiles.open(cache_path, encoding="utf-8") as f:
                         data = json.loads(await f.read())
 
                     if data.get("expires_at", 0) < now:
@@ -453,7 +451,7 @@ class FileCache:
 
 
 # Global cache instance
-_cache: Optional[FileCache] = None
+_cache: FileCache | None = None
 
 
 async def get_cache() -> FileCache:

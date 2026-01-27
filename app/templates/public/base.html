@@ -96,7 +96,7 @@
         <div class="footer-container">
             <div class="footer-content">
                 <p class="footer-copyright">&copy; {{ current_year }} {{ author_name }}</p>
-                {% if tag_cloud and false %}
+                {% if tag_cloud %}
                 <div class="tag-cloud footer-tags">
                     {% for tag in tag_cloud %}
                     <a href="/tag/{{ tag.slug }}" class="tag-link" style="font-size: {{ 0.8 + tag.weight * 0.4 }}rem;">
