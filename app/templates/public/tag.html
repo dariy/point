@@ -43,7 +43,7 @@
                             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
                             </time>
-                            {% if post.view_count %}
+                            {% if blog_settings.show_view_counts and post.view_count %}
                             <span>&bull;</span>
                             <span>{{ post.view_count }} views</span>
                             {% endif %}
@@ -66,7 +66,7 @@
                             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
                             </time>
-                            {% if post.view_count %}
+                            {% if blog_settings.show_view_counts and post.view_count %}
                             <span>&bull;</span>
                             <span>{{ post.view_count }} views</span>
                             {% endif %}

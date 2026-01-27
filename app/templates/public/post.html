@@ -55,7 +55,7 @@
             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
             </time>
-            {% if post.view_count %}
+            {% if blog_settings.show_view_counts and post.view_count %}
             <span class="post-meta-divider">·</span>
             <span>{{ post.view_count }} views</span>
             {% endif %}
@@ -139,7 +139,7 @@
                  <h2 class="post-title" style="font-size: 1.5rem; margin-bottom: 0.5rem;">{{ post.title }}</h2>
                  <div class="post-meta">
                     <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">{{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}</time>
-                    {% if post.view_count %}
+                    {% if blog_settings.show_view_counts and post.view_count %}
                     <span class="post-meta-divider">·</span>
                     <span>{{ post.view_count }} views</span>
                     {% endif %}
@@ -199,7 +199,7 @@
             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
             </time>
-            {% if post.view_count %}
+            {% if blog_settings.show_view_counts and post.view_count %}
             <span class="post-meta-divider">·</span>
             <span>{{ post.view_count }} views</span>
             {% endif %}
