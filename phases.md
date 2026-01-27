@@ -30,7 +30,7 @@ Each phase is designed to be:
 | 8 | RSS & SEO | ✅ Completed | Phase 7 |
 | 9 | Theming System | ✅ Completed | Phase 7 |
 | 10 | Caching & Performance | ✅ Completed | Phase 7 |
-| 11 | Background Tasks & Backup | ⬜ Not Started | Phase 10 |
+| 11 | Background Tasks & Backup | ✅ Completed | Phase 10 |
 | 12 | Settings & System Tools | ⬜ Not Started | Phase 6 |
 | 13 | CI/CD & Deployment | ⬜ Not Started | All Phases |
 
@@ -914,48 +914,48 @@ ls /data/cache/pages/  # Should be cleared
 
 ### Tasks
 
-- [ ] **11.1 APScheduler Setup**
-  - [ ] Configure scheduler in `app/main.py`
-  - [ ] Use async scheduler
-  - [ ] Handle graceful shutdown
+- [x] **11.1 APScheduler Setup**
+  - [x] Configure scheduler in `app/main.py`
+  - [x] Use async scheduler
+  - [x] Handle graceful shutdown
 
-- [ ] **11.2 Session Cleanup Task**
-  - [ ] Schedule hourly
-  - [ ] Delete expired sessions
-  - [ ] Log cleanup results
+- [x] **11.2 Session Cleanup Task**
+  - [x] Schedule hourly
+  - [x] Delete expired sessions
+  - [x] Log cleanup results
 
-- [ ] **11.3 View Count Flush**
-  - [ ] Schedule every 30 minutes
-  - [ ] Flush in-memory counts to DB
-  - [ ] Handle concurrent access
+- [x] **11.3 View Count Flush**
+  - [x] Schedule every 30 minutes
+  - [x] Flush in-memory counts to DB
+  - [x] Handle concurrent access
 
-- [ ] **11.4 Backup Service**
-  - [ ] Create `app/services/backup_service.py`
-  - [ ] SQLite `.backup` command
-  - [ ] Media file backup
-  - [ ] Compress archive
-  - [ ] Configurable retention
+- [x] **11.4 Backup Service**
+  - [x] Create `app/services/backup_service.py`
+  - [x] SQLite `.backup` command (Implemented as file copy)
+  - [x] Media file backup
+  - [x] Compress archive
+  - [x] Configurable retention
 
-- [ ] **11.5 Daily Backup Task**
-  - [ ] Schedule daily (configurable time)
-  - [ ] Execute backup service
-  - [ ] Rotate old backups
-  - [ ] Optional S3 upload
+- [x] **11.5 Daily Backup Task**
+  - [x] Schedule daily (configurable time)
+  - [x] Execute backup service
+  - [x] Rotate old backups
+  - [x] Optional S3 upload (Skipped - optional)
 
-- [ ] **11.6 Backup Scripts**
-  - [ ] Create `scripts/backup.sh` (spec lines 1021-1052)
-  - [ ] Create `scripts/restore.sh` (spec lines 1055-1086)
-  - [ ] Document usage
+- [x] **11.6 Backup Scripts**
+  - [x] Create `scripts/backup.sh` (spec lines 1021-1052)
+  - [x] Create `scripts/restore.sh` (spec lines 1055-1086)
+  - [x] Document usage
 
-- [ ] **11.7 Manual Backup Endpoint**
-  - [ ] `POST /api/system/backup` - Trigger backup
-  - [ ] Return backup file path
-  - [ ] Admin only
+- [x] **11.7 Manual Backup Endpoint**
+  - [x] `POST /api/system/backup` - Trigger backup
+  - [x] Return backup file path
+  - [x] Admin only
 
-- [ ] **11.8 Task Tests**
-  - [ ] Test scheduler startup
-  - [ ] Test backup creation
-  - [ ] Test restore procedure
+- [x] **11.8 Task Tests**
+  - [x] Test scheduler startup
+  - [x] Test backup creation
+  - [x] Test restore procedure
 
 ### Deliverables
 
@@ -1211,6 +1211,7 @@ Track significant milestones here:
 | 2026-01-24 | 8 | Phase 8 complete | RSS feed, sitemap, robots.txt, Open Graph & Twitter Card meta tags, canonical URLs, 29 new tests (192 total) |
 | 2026-01-24 | 9 | Phase 9 complete | Dark/light theming with CSS variables, theme.js for toggle and system preference detection, theme switcher UI, admin theming, 24 new tests |
 | 2026-01-25 | 10 | Phase 10 complete | File-based caching with FileCache class, page caching for public routes, cache invalidation on post/tag changes, static asset caching headers, 22 new tests |
+| 2026-01-27 | 11 | Phase 11 complete | Scheduler service with APScheduler, background tasks for session cleanup and view count flushing, backup service with scripts and API endpoint, 13 new tests |
 
 ---
 

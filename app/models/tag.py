@@ -28,8 +28,12 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(
+        String(100), unique=True, index=True, nullable=False
+    )
+    slug: Mapped[str] = mapped_column(
+        String(100), unique=True, index=True, nullable=False
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     custom_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_important: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

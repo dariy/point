@@ -100,9 +100,7 @@ class MediaService:
         Returns:
             Existing media if duplicate, None otherwise
         """
-        result = await self.db.execute(
-            select(Media).where(Media.checksum == checksum)
-        )
+        result = await self.db.execute(select(Media).where(Media.checksum == checksum))
         return result.scalars().first()
 
     async def calculate_storage_usage(self) -> int:
@@ -111,9 +109,7 @@ class MediaService:
         Returns:
             Total storage used in bytes
         """
-        result = await self.db.execute(
-            select(func.sum(Media.file_size))
-        )
+        result = await self.db.execute(select(func.sum(Media.file_size)))
         total = result.scalar() or 0
         return total
 
@@ -187,7 +183,9 @@ class MediaService:
             thumbnail_content, _, _ = self.image_processor.generate_thumbnail(content)
             thumbnail_jpg_name = Path(unique_filename).stem + ".jpg"
             thumbnail_path = thumbnail_path.parent / thumbnail_jpg_name
-            thumbnail_rel_final = f"thumbnails/{now.year}/{now.month:02d}/{thumbnail_jpg_name}"
+            thumbnail_rel_final = (
+                f"thumbnails/{now.year}/{now.month:02d}/{thumbnail_jpg_name}"
+            )
 
             async with aiofiles.open(thumbnail_path, "wb") as f:
                 await f.write(thumbnail_content)
@@ -227,9 +225,7 @@ class MediaService:
         Returns:
             Media if found, None otherwise
         """
-        result = await self.db.execute(
-            select(Media).where(Media.id == media_id)
-        )
+        result = await self.db.execute(select(Media).where(Media.id == media_id))
         return result.scalars().first()
 
     async def get_media_by_checksum(self, checksum: str) -> Media | None:
@@ -354,9 +350,7 @@ class MediaService:
         Returns:
             Tuple of (orphaned_list, count, total_size)
         """
-        result = await self.db.execute(
-            select(Media).where(Media.post_id.is_(None))
-        )
+        result = await self.db.execute(select(Media).where(Media.post_id.is_(None)))
         orphaned = list(result.scalars().all())
         total_size = sum(m.file_size for m in orphaned)
 
@@ -396,8 +390,9 @@ class MediaService:
 
         # Orphaned files
         orphaned_result = await self.db.execute(
-            select(func.count(), func.sum(Media.file_size))
-            .where(Media.post_id.is_(None))
+            select(func.count(), func.sum(Media.file_size)).where(
+                Media.post_id.is_(None)
+            )
         )
         orphaned_row = orphaned_result.one()
         orphaned_files = orphaned_row[0] or 0
@@ -407,8 +402,9 @@ class MediaService:
         by_type = {}
         for ft in FileType:
             type_result = await self.db.execute(
-                select(func.count(), func.sum(Media.file_size))
-                .where(Media.file_type == ft)
+                select(func.count(), func.sum(Media.file_size)).where(
+                    Media.file_type == ft
+                )
             )
             type_row = type_result.one()
             by_type[ft.value] = {
