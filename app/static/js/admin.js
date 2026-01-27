@@ -270,7 +270,10 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Upload failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Server error details:', errorData);
+                    const errorMessage = errorData.detail?.message || errorData.detail || 'Upload failed';
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
@@ -610,9 +613,12 @@
             const postId = this.form ? this.form.dataset.postId : null;
 
             for (const file of files) {
-                // Check if image
-                if (!file.type.startsWith('image/')) {
-                    showToast(`Skipped ${file.name}: Not an image`, 'warning');
+                // Check if image or video
+                const isImage = file.type.startsWith('image/');
+                const isVideo = file.type.startsWith('video/');
+
+                if (!isImage && !isVideo) {
+                    showToast(`Skipped ${file.name}: Not an image or video`, 'warning');
                     continue;
                 }
 
@@ -638,13 +644,16 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Upload failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Server error details:', errorData);
+                    const errorMessage = errorData.detail?.message || errorData.detail || 'Upload failed';
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
 
-                // Insert markdown
-                this.insertMarkdown(data.filename, data.url, data.alt_text || file.name);
+                // Insert markdown or HTML tag
+                this.insertMediaTag(data);
 
                 showToast(`Uploaded: ${file.name}`);
 
@@ -654,23 +663,30 @@
             }
         }
 
-        insertMarkdown(filename, url, alt) {
+        insertMediaTag(data) {
             const startPos = this.textarea.selectionStart;
             const text = this.textarea.value;
             
-            // Check if we need to prepend a newline (if not at start and previous char isn't a newline)
+            // Check if we need to prepend a newline
             const needsNewline = startPos > 0 && text.substring(startPos - 1, startPos) !== '\n';
-            const markdown = (needsNewline ? '\n' : '') + `![${alt}](${url})\n`;
             
+            let tag = '';
+            if (data.file_type === 'video') {
+                tag = `<video src="${data.url}" controls muted loop playsinline style="max-width: 100%;"></video>\n`;
+            } else {
+                tag = `![${data.filename}](${data.url})\n`;
+            }
+
+            const content = (needsNewline ? '\n' : '') + tag;
             const endPos = this.textarea.selectionEnd;
 
             // Insert at cursor
             this.textarea.value = text.substring(0, startPos) +
-                markdown +
+                content +
                 text.substring(endPos, text.length);
 
             // Move cursor after inserted text
-            const newPos = startPos + markdown.length;
+            const newPos = startPos + content.length;
             this.textarea.selectionStart = newPos;
             this.textarea.selectionEnd = newPos;
 

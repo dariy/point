@@ -44,7 +44,9 @@ class Settings(BaseSettings):
 
     # Storage
     storage_path: str = Field(default="./data", description="Base storage path")
-    max_upload_size_mb: int = Field(default=10, description="Maximum upload size in MB")
+    max_upload_size_mb: int = Field(
+        default=500, description="Maximum upload size in MB"
+    )
     storage_quota_mb: int = Field(default=5000, description="Total storage quota in MB")
     max_image_width: int = Field(
         default=2560, description="Maximum image width in pixels"

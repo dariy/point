@@ -192,7 +192,7 @@ async def upload_file(
     except FileValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=e.message,
+            detail={"message": e.message, "field": e.field},
         )
 
 

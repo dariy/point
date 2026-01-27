@@ -373,11 +373,25 @@
             if (index < 0) index = slides.length - 1;
             if (index >= slides.length) index = 0;
 
+            // Pause current video if any
+            const currentSlide = slides[currentIndex];
+            const currentVideo = currentSlide.querySelector('video');
+            if (currentVideo) {
+                currentVideo.pause();
+            }
+
             slides.forEach(slide => slide.classList.remove('active'));
             dots.forEach(dot => dot.classList.remove('active'));
 
-            slides[index].classList.add('active');
+            const nextSlide = slides[index];
+            nextSlide.classList.add('active');
             dots[index].classList.add('active');
+            
+            // Play next video if any
+            const nextVideo = nextSlide.querySelector('video');
+            if (nextVideo) {
+                nextVideo.play().catch(e => console.log('Autoplay blocked:', e));
+            }
             
             currentIndex = index;
         }
@@ -416,11 +430,34 @@
     }
 
     /**
+     * Post Card Video Previews
+     */
+    function initPostCardVideos() {
+        const postCards = document.querySelectorAll('.post-card');
+        
+        postCards.forEach(card => {
+            const video = card.querySelector('.post-card-background video');
+            if (!video) return;
+            
+            card.addEventListener('mouseenter', () => {
+                video.play().catch(e => {});
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                video.pause();
+                // Optionally reset to beginning
+                // video.currentTime = 0;
+            });
+        });
+    }
+
+    /**
      * Initialize all components
      */
     function init() {
         initImmersiveMode();
         initCarousel();
+        initPostCardVideos();
 
         initDropdowns();
         initLazyLoading();

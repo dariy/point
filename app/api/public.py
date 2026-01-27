@@ -27,6 +27,7 @@ from app.services.settings_service import SettingsService
 from app.services.tag_service import TagService
 from app.utils.formatters import (
     extract_all_images,
+    extract_all_media,
     format_content,
     generate_excerpt,
     strip_html,
@@ -112,30 +113,63 @@ async def get_db_context(
 def serialize_post(post: Post) -> dict[str, Any]:
     """Serialize post for JSON response."""
     pub_date = post.published_at or post.created_at
-    has_image = post.thumbnail_path is not None
+    
+    # Check for media
+    media_list = extract_all_media(post.content)
+    has_image = post.thumbnail_path is not None or any(m["type"] == "image" for m in media_list)
+    has_video = any(m["type"] == "video" for m in media_list)
+    has_media = has_image or has_video
     
     excerpt = post.excerpt
     preview_html = None
     
     if not excerpt:
         # Generate generic excerpt
-        if has_image:
+        if has_media:
              excerpt = generate_excerpt(post.content, post.formatter.value, 200)
         else:
              content_html = format_content(post.content, post.formatter.value)
              preview_html = truncate_paragraphs(content_html)
     
+    # Selection logic for thumbnail:
+    # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
+    # 2. Or use the first image from content
+    # 3. Or use the first video as fallback
+    
+    def is_video_url(url: str) -> bool:
+        video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
+        return any(url.lower().split("?")[0].endswith(ext) for ext in video_extensions)
+
+    thumb_path = post.thumbnail_path
+    is_video_thumb = False
+    
+    if thumb_path:
+        is_video_thumb = is_video_url(thumb_path)
+    
+    # If we have no thumb or it's a video, try to find an image in content
+    if not thumb_path or is_video_thumb:
+        first_image = next((m["url"] for m in media_list if m["type"] == "image"), None)
+        if first_image:
+            thumb_path = first_image
+            is_video_thumb = False
+        elif not thumb_path and media_list:
+            # Fallback to first video if no image at all
+            thumb_path = media_list[0]["url"]
+            is_video_thumb = media_list[0]["type"] == "video"
+
     return {
         "title": post.title,
         "slug": post.slug,
-        "thumbnail_path": post.thumbnail_path,
+        "thumbnail_path": thumb_path,
         "published_date": pub_date.strftime('%B %d, %Y'),
         "published_iso": pub_date.isoformat(),
         "view_count": post.view_count,
         "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
         "excerpt": excerpt,
         "preview_html": preview_html,
-        "has_image": has_image,
+        "has_image": has_media, # Keep key name for frontend layout compatibility
+        "is_video": is_video_thumb, # This specific thumbnail is a video
+        "has_video": has_video, # The post contains at least one video
         "is_featured": post.is_featured,
     }
 
@@ -313,19 +347,20 @@ async def single_post(
     text_content = strip_html(content_html)
     has_text_content = bool(text_content and text_content.strip())
 
-    # Extract images for carousel
-    post_images = extract_all_images(post.content)
-    # If thumbnail exists and is not in content images, add it to the start
+    # Extract all media for carousel
+    post_media = extract_all_media(post.content)
+    
+    # If thumbnail exists and is not in content media, add it to the start
     if post.thumbnail_path:
-        # Normalize thumbnail path for comparison (assuming standard media path)
-        thumb_path_full = f"/media/originals/{post.thumbnail_path}"
-        if (
-            post.thumbnail_path not in post_images
-            and thumb_path_full not in post_images
-        ):
-            post_images.insert(0, post.thumbnail_path)
-    elif not post_images and post.thumbnail_path:
-        post_images = [post.thumbnail_path]
+        thumb_url = post.thumbnail_path
+        # Check if already present
+        if not any(m["url"] == thumb_url for m in post_media):
+            # Also check with full path
+            thumb_path_full = f"/media/originals/{thumb_url}"
+            if not any(m["url"] == thumb_path_full for m in post_media):
+                post_media.insert(0, {"url": thumb_url, "type": "image"})
+    elif not post_media and post.thumbnail_path:
+        post_media = [{"url": post.thumbnail_path, "type": "image"}]
 
     prev_post = None
     next_post = None
@@ -362,7 +397,7 @@ async def single_post(
             "post": post,
             "content_html": content_html,
             "has_text_content": has_text_content,
-            "post_images": post_images,
+            "post_media": post_media,
             "prev_post": prev_post,
             "next_post": next_post,
         }

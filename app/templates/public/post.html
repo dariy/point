@@ -90,39 +90,62 @@
 <div class="immersive-wrapper">
     <!-- Main Visual Layer -->
     <div class="immersive-visuals">
-        {% if post_images and post_images|length > 1 %}
+        {% if post_media and post_media|length > 1 %}
             <div class="carousel-container">
-                {% for image in post_images %}
-                <div class="carousel-slide {% if loop.first %}active{% endif %}">
-                    <img
-                        src="{{ image if image.startswith('http') or image.startswith('/') else '/media/originals/' + image }}"
-                        alt="{{ post.title }} - Image {{ loop.index }}"
-                        class="immersive-bg-image"
-                    />
+                {% for item in post_media %}
+                <div class="carousel-slide {% if loop.first %}active{% endif %}" data-type="{{ item.type }}">
+                    {% if item.type == 'video' %}
+                        <video
+                            src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
+                            class="immersive-bg-image"
+                            {% if loop.first %}autoplay{% endif %}
+                            muted
+                            loop
+                            playsinline
+                        ></video>
+                    {% else %}
+                        <img
+                            src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
+                            alt="{{ post.title }} - Media {{ loop.index }}"
+                            class="immersive-bg-image"
+                        />
+                    {% endif %}
                 </div>
                 {% endfor %}
-                <button class="carousel-prev" aria-label="Previous image">
+                <button class="carousel-prev" aria-label="Previous media">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
-                <button class="carousel-next" aria-label="Next image">
+                <button class="carousel-next" aria-label="Next media">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </button>
                 <div class="carousel-indicators">
-                    {% for image in post_images %}
-                    <button class="carousel-dot {% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}" aria-label="Go to image {{ loop.index }}"></button>
+                    {% for item in post_media %}
+                    <button class="carousel-dot {% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}" aria-label="Go to media {{ loop.index }}"></button>
                     {% endfor %}
                 </div>
             </div>
-        {% elif post_images %}
-            <img
-                src="{{ post_images[0] if post_images[0].startswith('http') or post_images[0].startswith('/') else '/media/originals/' + post_images[0] }}"
-                alt="{{ post.title }}"
-                class="immersive-bg-image"
-            />
+        {% elif post_media %}
+            {% if post_media[0].type == 'video' %}
+                <video
+                    src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
+                    class="immersive-bg-image"
+                    autoplay
+                    muted
+                    loop
+                    playsinline
+                    controls
+                ></video>
+            {% else %}
+                <img
+                    src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
+                    alt="{{ post.title }}"
+                    class="immersive-bg-image"
+                />
+            {% endif %}
         {% elif post.thumbnail_path %}
             <img
                 src="{{ post.thumbnail_path if post.thumbnail_path.startswith('http') or post.thumbnail_path.startswith('/') else '/media/originals/' + post.thumbnail_path }}"
