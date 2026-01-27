@@ -121,6 +121,7 @@ class MediaService:
         alt_text: str | None = None,
         caption: str | None = None,
         post_id: int | None = None,
+        created_at: datetime | None = None,
     ) -> Media:
         """Upload and process a file.
 
@@ -131,6 +132,7 @@ class MediaService:
             alt_text: Alt text for accessibility
             caption: Optional caption
             post_id: Optional post to link to
+            created_at: Optional creation timestamp (defaults to now)
 
         Returns:
             Created media record
@@ -160,7 +162,7 @@ class MediaService:
 
         # Generate unique filename and paths
         unique_filename = self._generate_unique_filename(filename)
-        now = datetime.utcnow()
+        now = created_at or datetime.utcnow()
         original_path, thumbnail_path, original_rel, thumbnail_rel = (
             self._get_storage_paths(unique_filename, now.year, now.month)
         )
@@ -208,6 +210,7 @@ class MediaService:
             checksum=checksum,
             alt_text=alt_text,
             caption=caption,
+            uploaded_at=now,
         )
 
         self.db.add(media)
