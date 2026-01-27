@@ -91,6 +91,17 @@ class AuthService:
         result = await self.db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
+    async def get_first_user(self) -> User | None:
+        """Get the first user from the database.
+
+        Useful for single-user blog systems.
+
+        Returns:
+            The first User found, or None if no users exist.
+        """
+        result = await self.db.execute(select(User).order_by(User.id))
+        return result.scalars().first()
+
     async def get_user_by_id(self, user_id: int) -> User | None:
         """Get user by ID.
 

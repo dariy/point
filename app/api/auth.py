@@ -50,15 +50,28 @@ async def login(
     """
     auth_service = AuthService(db)
 
-    # Authenticate user
-    user = await auth_service.authenticate_user(
-        login_data.username, login_data.password
-    )
+    # Determine user to authenticate
+    if login_data.username:
+        user = await auth_service.authenticate_user(
+            login_data.username, login_data.password
+        )
+    else:
+        # For single-user blog, fetch the first user
+        target_user = await auth_service.get_first_user()
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No user found in system",
+            )
+        
+        user = await auth_service.authenticate_user(
+            target_user.username, login_data.password
+        )
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
+            detail="Invalid username or password" if login_data.username else "Invalid password",
         )
 
     # Create session
