@@ -15,13 +15,29 @@
         <div class="posts-grid">
             {% for post in posts %}
                 {% set has_image = post.thumbnail_path is not none %}
+                {% set is_video = false %}
+                {% if has_image %}
+                    {% set thumb_lower = post.thumbnail_path.lower().split('?')[0] %}
+                    {% if thumb_lower.endswith('.mp4') or thumb_lower.endswith('.webm') or thumb_lower.endswith('.ogg') or thumb_lower.endswith('.mov') or thumb_lower.endswith('.m4v') %}
+                        {% set is_video = true %}
+                    {% endif %}
+                {% endif %}
 
                 {% if loop.first and post.is_featured %}
                     <div class="featured-post">
                         <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                             {% if has_image %}
                                 <div class="post-card-background">
-                                    <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                                    {% if is_video %}
+                                        <video src="{{ post.thumbnail_path }}" muted loop playsinline poster=""></video>
+                                        <div class="video-play-indicator">
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                                <path d="M8 5v14l11-7z"/>
+                                            </svg>
+                                        </div>
+                                    {% else %}
+                                        <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                                    {% endif %}
                                 </div>
                                 <div class="post-card-content overlay">
                                     <span class="featured-badge">
@@ -87,7 +103,16 @@
                     <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                         {% if has_image %}
                             <div class="post-card-background">
-                                <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                                {% if is_video %}
+                                    <video src="{{ post.thumbnail_path }}" muted loop playsinline></video>
+                                    <div class="video-play-indicator">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                    </div>
+                                {% else %}
+                                    <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                                {% endif %}
                             </div>
                             <div class="post-card-content overlay">
                                 <div class="post-card-meta">
@@ -218,6 +243,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 window.history.pushState({}, '', url);
                 attachListeners();
+                if (typeof initPostCardVideos === 'function') {
+                    initPostCardVideos();
+                }
                 window.scrollTo(0, 0);
             } else {
                 window.location.href = url;
@@ -254,13 +282,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const isPageOne = data.pagination.page === 1;
             const showFeatured = isFirst && isPageOne && post.is_featured;
             const hasImage = post.has_image;
+            const isVideo = post.is_video;
 
             if (showFeatured) {
                 html += `<div class="featured-post">
                         <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
                             ${hasImage ? `
                                 <div class="post-card-background">
-                                    <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
+                                    ${isVideo ? `
+                                        <video src="${post.thumbnail_path}" muted loop playsinline></video>
+                                        <div class="video-play-indicator">
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                                <path d="M8 5v14l11-7z"/>
+                                            </svg>
+                                        </div>
+                                    ` : `
+                                        <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
+                                    `}
                                 </div>
                                 <div class="post-card-content overlay">
                             ` : `<div class="post-card-content">`}
@@ -301,7 +339,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
                         ${hasImage ? `
                             <div class="post-card-background">
-                                <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
+                                ${isVideo ? `
+                                    <video src="${post.thumbnail_path}" muted loop playsinline></video>
+                                    <div class="video-play-indicator">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                    </div>
+                                ` : `
+                                    <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
+                                `}
                             </div>
                             <div class="post-card-content overlay">
                         ` : `<div class="post-card-content">`}
