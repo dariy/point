@@ -5,7 +5,7 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block header_actions %}
-<a href="/admin/posts/new" class="btn btn-primary">
+<a href="/light/posts/new" class="btn btn-primary">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
     </svg>
@@ -52,7 +52,7 @@
     <div class="card">
         <div class="card-header flex-between">
             <h3>Recent Posts</h3>
-            <a href="/admin/posts" class="btn btn-sm btn-outline">View All</a>
+            <a href="/light/posts" class="btn btn-sm btn-outline">View All</a>
         </div>
         <div class="card-body">
             {% if recent_posts %}
@@ -69,7 +69,7 @@
                     {% for post in recent_posts %}
                     <tr>
                         <td>
-                            <a href="/admin/posts/{{ post.id }}">{{ post.title }}</a>
+                            <a href="/light/posts/{{ post.id }}">{{ post.title }}</a>
                         </td>
                         <td>
                             <span class="badge badge-{{ post.status.value }}">{{ post.status.value }}</span>
@@ -91,7 +91,7 @@
                 </div>
                 <div class="empty-state-title">No posts yet</div>
                 <p>Create your first post to get started.</p>
-                <a href="/admin/posts/new" class="btn btn-primary mt-2">Create Post</a>
+                <a href="/light/posts/new" class="btn btn-primary mt-2">Create Post</a>
             </div>
             {% endif %}
         </div>
@@ -125,9 +125,9 @@
                 <h3>Quick Actions</h3>
             </div>
             <div class="card-body" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                <a href="/admin/posts/new" class="btn btn-primary btn-block">New Post</a>
-                <a href="/admin/media" class="btn btn-outline btn-block">Upload Media</a>
-                <a href="/admin/tags" class="btn btn-outline btn-block">Manage Tags</a>
+                <a href="/light/posts/new" class="btn btn-primary btn-block">New Post</a>
+                <a href="/light/media" class="btn btn-outline btn-block">Upload Media</a>
+                <a href="/light/tags" class="btn btn-outline btn-block">Manage Tags</a>
             </div>
         </div>
 
@@ -139,9 +139,6 @@
             <div class="card-body">
                 <p class="text-small">
                     <strong>Active Sessions:</strong> {{ active_sessions }}
-                </p>
-                <p class="text-small text-muted">
-                    Logged in as {{ user.username }}
                 </p>
             </div>
         </div>

@@ -26,7 +26,7 @@ from app.services.settings_service import SettingsService
 from app.services.system_service import SystemService
 from app.services.tag_service import TagService
 
-router = APIRouter(prefix="/admin", tags=["Admin"])
+router = APIRouter(prefix="/light", tags=["Admin"])
 
 # Set up templates
 templates_dir = Path(__file__).parent.parent / "templates"
