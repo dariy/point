@@ -88,11 +88,21 @@ async def get_db_context(db: AsyncSession) -> dict[str, Any]:
     settings_service = SettingsService(db)
     blog_settings = await settings_service.get_all_settings()
 
-    return {
+    context = {
         "tag_cloud": tag_cloud,
         "tags": tags,
         "blog_settings": blog_settings,
     }
+
+    # Override common context with DB settings if available
+    if "blog_title" in blog_settings:
+        context["blog_title"] = blog_settings["blog_title"]
+    if "blog_subtitle" in blog_settings:
+        context["blog_subtitle"] = blog_settings["blog_subtitle"]
+    if "author_name" in blog_settings:
+        context["author_name"] = blog_settings["author_name"]
+
+    return context
 
 
 @router.get("/", response_class=HTMLResponse)
