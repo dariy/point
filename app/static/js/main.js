@@ -345,7 +345,14 @@
             immersiveBody.classList.add('ui-hidden');
         }
 
-        function resetIdleTimer() {
+        function resetIdleTimer(e) {
+            // Ignore arrow keys for immersive mode toggle
+            if (e && e.type === 'keydown') {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    return;
+                }
+            }
+
             clearTimeout(idleTimer);
             if (immersiveBody.classList.contains('ui-hidden')) {
                 immersiveBody.classList.remove('ui-hidden');
@@ -378,10 +385,73 @@
     }
 
     /**
+     * Carousel Logic
+     */
+    function initCarousel() {
+        const container = document.querySelector('.carousel-container');
+        if (!container) return;
+
+        const slides = container.querySelectorAll('.carousel-slide');
+        const dots = container.querySelectorAll('.carousel-dot');
+        const prevBtn = container.querySelector('.carousel-prev');
+        const nextBtn = container.querySelector('.carousel-next');
+        
+        if (slides.length < 2) return;
+
+        let currentIndex = 0;
+
+        function goToSlide(index) {
+            if (index < 0) index = slides.length - 1;
+            if (index >= slides.length) index = 0;
+
+            slides.forEach(slide => slide.classList.remove('active'));
+            dots.forEach(dot => dot.classList.remove('active'));
+
+            slides[index].classList.add('active');
+            dots[index].classList.add('active');
+            
+            currentIndex = index;
+        }
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent immersive toggle
+                goToSlide(currentIndex - 1);
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent immersive toggle
+                goToSlide(currentIndex + 1);
+            });
+        }
+
+        dots.forEach((dot, index) => {
+            dot.addEventListener('click', (e) => {
+                e.stopPropagation();
+                goToSlide(index);
+            });
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            if (e.key === 'ArrowLeft') {
+                goToSlide(currentIndex - 1);
+            } else if (e.key === 'ArrowRight') {
+                goToSlide(currentIndex + 1);
+            }
+        });
+    }
+
+    /**
      * Initialize all components
      */
     function init() {
         initImmersiveMode();
+        initCarousel();
         initMobileMenu();
         initDropdowns();
         initLazyLoading();

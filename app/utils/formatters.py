@@ -288,6 +288,42 @@ def extract_first_image(content: str) -> str | None:
     return None
 
 
+def extract_all_images(content: str) -> list[str]:
+    """Extract all image URLs from content.
+
+    Supports Markdown image syntax and HTML img tags.
+
+    Args:
+        content: Raw content (markdown or html)
+
+    Returns:
+        List of image URLs found.
+    """
+    images = []
+
+    # Try Markdown image first: ![alt](url "title") or ![alt](url)
+    # This regex captures the URL in group 1
+    markdown_matches = re.findall(r'!\[.*?\]\((.*?)(?:\s+".*?")?\)', content)
+    if markdown_matches:
+        images.extend([url.strip() for url in markdown_matches])
+
+    # Try HTML img tag: <img src="url" ...>
+    # This regex captures the src value in group 2 or 3 (depending on quotes)
+    html_matches = re.findall(r'<img[^>]+src=(["\'])(.*?)\1', content, re.IGNORECASE)
+    if html_matches:
+        images.extend([match[1].strip() for match in html_matches])
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_images = []
+    for img in images:
+        if img not in seen:
+            unique_images.append(img)
+            seen.add(img)
+
+    return unique_images
+
+
 def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
     """Extract and truncate text from the first N paragraphs of HTML content.
     
