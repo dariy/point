@@ -327,9 +327,61 @@
     }
 
     /**
+     * Immersive Mode (Full Screen Post)
+     */
+    function initImmersiveMode() {
+        const immersiveBody = document.querySelector('.immersive-layout');
+        if (!immersiveBody) return;
+
+        let idleTimer;
+        const idleTime = 4000; // 4 seconds
+
+        function showUI() {
+            immersiveBody.classList.remove('ui-hidden');
+            resetIdleTimer();
+        }
+
+        function hideUI() {
+            immersiveBody.classList.add('ui-hidden');
+        }
+
+        function resetIdleTimer() {
+            clearTimeout(idleTimer);
+            if (immersiveBody.classList.contains('ui-hidden')) {
+                immersiveBody.classList.remove('ui-hidden');
+            }
+            idleTimer = setTimeout(hideUI, idleTime);
+        }
+
+        // Activity listeners
+        ['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach(evt => {
+            document.addEventListener(evt, resetIdleTimer, { passive: true });
+        });
+
+        // Toggle on background click
+        document.addEventListener('click', function(e) {
+            // Ignore clicks on interactive elements or the info card
+            if (e.target.closest('a, button, input, textarea, .post-info-card, .site-header, .site-footer')) {
+                return;
+            }
+            
+            if (immersiveBody.classList.contains('ui-hidden')) {
+                showUI();
+            } else {
+                hideUI();
+                clearTimeout(idleTimer);
+            }
+        });
+
+        // Start timer
+        resetIdleTimer();
+    }
+
+    /**
      * Initialize all components
      */
     function init() {
+        initImmersiveMode();
         initMobileMenu();
         initDropdowns();
         initLazyLoading();
