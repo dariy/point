@@ -65,11 +65,14 @@ def get_common_context(request: Request) -> dict[str, Any]:
     }
 
 
-async def get_db_context(db: AsyncSession) -> dict[str, Any]:
+async def get_db_context(
+    db: AsyncSession, blog_settings: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Get common database-dependent context variables.
 
     Args:
         db: Database session
+        blog_settings: Optional pre-fetched blog settings
 
     Returns:
         Dictionary with tag_cloud, tags, and blog_settings
@@ -84,9 +87,10 @@ async def get_db_context(db: AsyncSession) -> dict[str, Any]:
     )
     tags = list(tags_result.scalars().all())
 
-    # Get blog settings
-    settings_service = SettingsService(db)
-    blog_settings = await settings_service.get_all_settings()
+    # Get blog settings if not provided
+    if blog_settings is None:
+        settings_service = SettingsService(db)
+        blog_settings = await settings_service.get_all_settings()
 
     context = {
         "tag_cloud": tag_cloud,
@@ -103,6 +107,37 @@ async def get_db_context(db: AsyncSession) -> dict[str, Any]:
         context["author_name"] = blog_settings["author_name"]
 
     return context
+
+
+def serialize_post(post: Post) -> dict[str, Any]:
+    """Serialize post for JSON response."""
+    pub_date = post.published_at or post.created_at
+    has_image = post.thumbnail_path is not None
+    
+    excerpt = post.excerpt
+    preview_html = None
+    
+    if not excerpt:
+        # Generate generic excerpt
+        if has_image:
+             excerpt = generate_excerpt(post.content, post.formatter.value, 200)
+        else:
+             content_html = format_content(post.content, post.formatter.value)
+             preview_html = truncate_paragraphs(content_html)
+    
+    return {
+        "title": post.title,
+        "slug": post.slug,
+        "thumbnail_path": post.thumbnail_path,
+        "published_date": pub_date.strftime('%B %d, %Y'),
+        "published_iso": pub_date.isoformat(),
+        "view_count": post.view_count,
+        "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+        "excerpt": excerpt,
+        "preview_html": preview_html,
+        "has_image": has_image,
+        "is_featured": post.is_featured,
+    }
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -126,14 +161,19 @@ async def homepage(
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         cached = await cache.get_by_url("/", query_params)
-        if cached:
+        # Skip cache for AJAX requests as they need JSON
+        if cached and request.headers.get("X-Requested-With") != "XMLHttpRequest":
             logger.debug("Cache hit for homepage page=%d", page)
             return HTMLResponse(
                 content=cached.content,
                 headers={"X-Cache": "HIT"},
             )
 
-    per_page = 10
+    # Get blog settings early for pagination
+    settings_service = SettingsService(db)
+    blog_settings = await settings_service.get_all_settings()
+    
+    per_page = blog_settings.get("posts_per_page", 10)
     offset = (page - 1) * per_page
 
     # Get published posts with tags
@@ -154,6 +194,23 @@ async def homepage(
     posts_result = await db.execute(query.offset(offset).limit(per_page))
     posts = list(posts_result.scalars().all())
 
+    # Check for AJAX request
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        posts_data = [serialize_post(p) for p in posts]
+        return JSONResponse(
+            {
+                "posts": posts_data,
+                "pagination": {
+                    "page": page,
+                    "total_pages": total_pages,
+                    "has_next": page < total_pages,
+                    "has_prev": page > 1,
+                    "next_page": page + 1,
+                    "prev_page": page - 1,
+                },
+            }
+        )
+
     # Get recent posts for sidebar
     recent_query = (
         select(Post)
@@ -165,7 +222,7 @@ async def homepage(
     recent_posts = list(recent_result.scalars().all())
 
     context = get_common_context(request)
-    db_context = await get_db_context(db)
+    db_context = await get_db_context(db, blog_settings)
     context.update(db_context)
 
     context.update(
@@ -181,7 +238,7 @@ async def homepage(
     response = templates.TemplateResponse("public/index.html", context)
 
     # Store in cache if enabled
-    if settings.cache_enabled:
+    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest":
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         # Get rendered content
@@ -354,7 +411,8 @@ async def tag_archive(
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         cached = await cache.get_by_url(cache_key, query_params)
-        if cached:
+        # Skip cache for AJAX requests
+        if cached and request.headers.get("X-Requested-With") != "XMLHttpRequest":
             logger.debug("Cache hit for tag slug=%s page=%d", slug, page)
             return HTMLResponse(
                 content=cached.content,
@@ -371,7 +429,11 @@ async def tag_archive(
             detail="Tag not found",
         )
 
-    per_page = 12
+    # Get blog settings early for pagination
+    settings_service = SettingsService(db)
+    blog_settings = await settings_service.get_all_settings()
+    
+    per_page = blog_settings.get("posts_per_page", 12)
     offset = (page - 1) * per_page
 
     # Get posts with this tag
@@ -389,8 +451,26 @@ async def tag_archive(
     for post in posts:
         await db.refresh(post, ["tags"])
 
+    # Check for AJAX request
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        posts_data = [serialize_post(p) for p in posts]
+        return JSONResponse(
+            {
+                "posts": posts_data,
+                "pagination": {
+                    "page": page,
+                    "total_pages": total_pages,
+                    "has_next": page < total_pages,
+                    "has_prev": page > 1,
+                    "next_page": page + 1,
+                    "prev_page": page - 1,
+                },
+                "tag": {"name": tag.name, "slug": tag.slug},
+            }
+        )
+
     context = get_common_context(request)
-    db_context = await get_db_context(db)
+    db_context = await get_db_context(db, blog_settings)
     context.update(db_context)
 
     context.update(
@@ -406,7 +486,7 @@ async def tag_archive(
     response = templates.TemplateResponse("public/tag.html", context)
 
     # Store in cache if enabled
-    if settings.cache_enabled:
+    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest":
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         content = response.body.decode("utf-8")
@@ -439,7 +519,11 @@ async def gallery(
     Returns:
         Rendered gallery HTML
     """
-    per_page = 24
+    # Get blog settings early for pagination
+    settings_service = SettingsService(db)
+    blog_settings = await settings_service.get_all_settings()
+    
+    per_page = blog_settings.get("posts_per_page", 24)
     offset = (page - 1) * per_page
 
     # Base query for published posts with thumbnails
@@ -526,7 +610,7 @@ async def gallery(
         )
 
     context = get_common_context(request)
-    db_context = await get_db_context(db)
+    db_context = await get_db_context(db, blog_settings)
     context.update(db_context)
 
     context.update(
