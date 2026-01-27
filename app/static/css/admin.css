@@ -328,20 +328,30 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, var(--color-gray-900) 0%, var(--color-gray-800) 100%);
+    background-color: var(--admin-bg);
 }
 
 .login-container {
     width: 100%;
-    max-width: 400px;
+    max-width: 360px;
     padding: var(--spacing-xl);
 }
 
 .login-card {
-    background: white;
+    background: var(--admin-card-bg);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-xl);
     box-shadow: var(--shadow-lg);
+    border: 1px solid var(--admin-border);
+}
+
+.login-card .form-input {
+    padding: var(--spacing-md);
+    font-size: var(--font-size-base);
+}
+
+.login-card .btn-lg {
+    padding: var(--spacing-md);
 }
 
 .login-header {
@@ -350,14 +360,10 @@ a:hover {
 }
 
 .login-header h1 {
-    font-size: var(--font-size-2xl);
-    font-weight: 700;
-    color: var(--color-gray-900);
-    margin-bottom: var(--spacing-xs);
-}
-
-.login-header p {
-    color: var(--color-gray-500);
+    font-size: var(--font-size-3xl);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--admin-text-primary);
 }
 
 .login-error {
