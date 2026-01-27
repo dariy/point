@@ -187,8 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
     margin-bottom: 24px;
 }
 .system-card {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
+    background: var(--admin-card-bg);
+    border: 1px solid var(--admin-border);
     border-radius: 8px;
     padding: 24px;
 }
@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     margin-top: 0;
     margin-bottom: 20px;
     padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--admin-border);
     font-size: 1.2em;
 }
 .stats-list {
@@ -209,11 +209,11 @@ document.addEventListener('DOMContentLoaded', () => {
     justify-content: space-between;
 }
 .stat-label {
-    color: var(--text-secondary);
+    color: var(--admin-text-secondary);
     font-weight: 500;
 }
 .stat-value {
-    color: var(--text-primary);
+    color: var(--admin-text-primary);
     font-family: monospace;
 }
 .ops-list {
@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
 .op-info p {
     margin: 0;
     font-size: 0.85em;
-    color: var(--text-secondary);
+    color: var(--admin-text-secondary);
 }
 .logs-card {
     padding: 0;
@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--admin-border);
 }
 .logs-card .card-title {
     margin: 0;
@@ -266,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
     margin-bottom: 2px;
 }
 .log-line.empty, .log-line.error {
-    color: var(--text-secondary);
+    color: var(--admin-text-secondary);
     font-style: italic;
 }
 .log-line.error {
@@ -279,9 +279,14 @@ document.addEventListener('DOMContentLoaded', () => {
 .header-actions select {
     padding: 4px 8px;
     border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
+    background: var(--admin-input-bg);
+    color: var(--admin-text-primary);
+    border: 1px solid var(--admin-border);
+}
+
+.header-actions select option {
+    background-color: var(--admin-input-bg);
+    color: var(--admin-text-primary);
 }
 </style>
 {% endblock %}
