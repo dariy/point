@@ -60,6 +60,7 @@
 [data-theme="light"] {
     /* Semantic Colors - Background */
     --bg-primary: #ffffff;
+    --bg-carouselle: white;
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
     --bg-elevated: #ffffff;
@@ -121,6 +122,7 @@
 [data-theme="dark"] {
     /* Semantic Colors - Background */
     --bg-primary: #0f172a;
+    --bg-carouselle: black;
     --bg-secondary: #1e293b;
     --bg-tertiary: #334155;
     --bg-elevated: #1e293b;
@@ -610,6 +612,7 @@ img {
     line-height: 1.6;
     display: -webkit-box;
     -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -622,6 +625,7 @@ img {
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 8;
+    line-clamp: 8;
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
     margin-bottom: var(--spacing-lg);
@@ -656,6 +660,7 @@ img {
 .featured-post .post-card-content.overlay .post-card-excerpt {
     font-size: var(--font-size-base);
     -webkit-line-clamp: 4;
+    line-clamp: 4;
 }
 
 /* If text only, we can keep it as a flexible card */
@@ -1526,7 +1531,7 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-carouselle);
 }
 
 .immersive-bg-image {

@@ -53,7 +53,9 @@ class MediaResponse(BaseModel):
 
     # Computed fields
     url: str = Field(description="Public URL to the file")
-    thumbnail_url: str | None = Field(default=None, description="Public URL to thumbnail")
+    thumbnail_url: str | None = Field(
+        default=None, description="Public URL to thumbnail"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -106,7 +108,9 @@ class MultipleMediaUploadResponse(BaseModel):
     """Schema for multiple file upload response."""
 
     uploaded: list[MediaUploadResponse]
-    failed: list[dict] = Field(default_factory=list, description="Files that failed to upload")
+    failed: list[dict] = Field(
+        default_factory=list, description="Files that failed to upload"
+    )
     total_uploaded: int
     total_failed: int
 
@@ -178,5 +182,7 @@ ALLOWED_AUDIO_MIMES = {
     "audio/x-m4a",
 }
 
-ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_VIDEO_EXTENSIONS | ALLOWED_AUDIO_EXTENSIONS
+ALLOWED_EXTENSIONS = (
+    ALLOWED_IMAGE_EXTENSIONS | ALLOWED_VIDEO_EXTENSIONS | ALLOWED_AUDIO_EXTENSIONS
+)
 ALLOWED_MIMES = ALLOWED_IMAGE_MIMES | ALLOWED_VIDEO_MIMES | ALLOWED_AUDIO_MIMES

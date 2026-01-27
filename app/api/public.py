@@ -79,10 +79,7 @@ async def get_db_context(db: AsyncSession) -> dict[str, Any]:
 
     # Get tags for navigation
     tags_result = await db.execute(
-        select(Tag)
-        .where(Tag.post_count > 0)
-        .order_by(Tag.name)
-        .limit(10)
+        select(Tag).where(Tag.post_count > 0).order_by(Tag.name).limit(10)
     )
     tags = list(tags_result.scalars().all())
 
@@ -132,17 +129,13 @@ async def homepage(
     )
 
     # Get total count
-    count_query = select(func.count()).select_from(
-        query.subquery()
-    )
+    count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
     total_pages = ceil(total / per_page)
 
     # Get paginated posts
-    posts_result = await db.execute(
-        query.offset(offset).limit(per_page)
-    )
+    posts_result = await db.execute(query.offset(offset).limit(per_page))
     posts = list(posts_result.scalars().all())
 
     # Get recent posts for sidebar
@@ -158,14 +151,16 @@ async def homepage(
     context = get_common_context(request)
     db_context = await get_db_context(db)
     context.update(db_context)
-    
-    context.update({
-        "posts": posts,
-        "page": page,
-        "total_pages": total_pages,
-        "total": total,
-        "recent_posts": recent_posts,
-    })
+
+    context.update(
+        {
+            "posts": posts,
+            "page": page,
+            "total_pages": total_pages,
+            "total": total,
+            "recent_posts": recent_posts,
+        }
+    )
 
     response = templates.TemplateResponse("public/index.html", context)
 
@@ -239,19 +234,22 @@ async def single_post(
 
     # Format content
     content_html = format_content(post.content, post.formatter.value)
-    
+
     # Check if post has text content (ignoring images and whitespace)
     # strip_html removes all tags including <img>, so we just check if any text remains
     text_content = strip_html(content_html)
     has_text_content = bool(text_content and text_content.strip())
-    
+
     # Extract images for carousel
     post_images = extract_all_images(post.content)
     # If thumbnail exists and is not in content images, add it to the start
     if post.thumbnail_path:
         # Normalize thumbnail path for comparison (assuming standard media path)
         thumb_path_full = f"/media/originals/{post.thumbnail_path}"
-        if post.thumbnail_path not in post_images and thumb_path_full not in post_images:
+        if (
+            post.thumbnail_path not in post_images
+            and thumb_path_full not in post_images
+        ):
             post_images.insert(0, post.thumbnail_path)
     elif not post_images and post.thumbnail_path:
         post_images = [post.thumbnail_path]
@@ -286,14 +284,16 @@ async def single_post(
     db_context = await get_db_context(db)
     context.update(db_context)
 
-    context.update({
-        "post": post,
-        "content_html": content_html,
-        "has_text_content": has_text_content,
-        "post_images": post_images,
-        "prev_post": prev_post,
-        "next_post": next_post,
-    })
+    context.update(
+        {
+            "post": post,
+            "content_html": content_html,
+            "has_text_content": has_text_content,
+            "post_images": post_images,
+            "prev_post": prev_post,
+            "next_post": next_post,
+        }
+    )
 
     response = templates.TemplateResponse("public/post.html", context)
 
@@ -377,13 +377,15 @@ async def tag_archive(
     db_context = await get_db_context(db)
     context.update(db_context)
 
-    context.update({
-        "tag": tag,
-        "posts": posts,
-        "page": page,
-        "total_pages": total_pages,
-        "total": total,
-    })
+    context.update(
+        {
+            "tag": tag,
+            "posts": posts,
+            "page": page,
+            "total_pages": total_pages,
+            "total": total,
+        }
+    )
 
     response = templates.TemplateResponse("public/tag.html", context)
 
@@ -454,9 +456,7 @@ async def gallery(
 
     # Get all tags with posts for filter
     tags_result = await db.execute(
-        select(Tag)
-        .where(Tag.post_count > 0)
-        .order_by(Tag.name)
+        select(Tag).where(Tag.post_count > 0).order_by(Tag.name)
     )
     all_tags = list(tags_result.scalars().all())
 
@@ -465,56 +465,64 @@ async def gallery(
         posts_data = []
         for post in posts:
             pub_date = post.published_at or post.created_at
-            
+
             # Calculate preview data
             has_image = post.thumbnail_path is not None
             excerpt = None
             preview_html = None
-            
+
             if has_image:
-                excerpt = post.excerpt or generate_excerpt(post.content, post.formatter.value, 150)
+                excerpt = post.excerpt or generate_excerpt(
+                    post.content, post.formatter.value, 150
+                )
             else:
                 # Text-only preview
                 content_html = format_content(post.content, post.formatter.value)
                 preview_html = truncate_paragraphs(content_html)
 
-            posts_data.append({
-                "title": post.title,
-                "slug": post.slug,
-                "thumbnail_path": post.thumbnail_path,
-                "published_date": pub_date.strftime('%B %d, %Y'),
-                "view_count": post.view_count,
-                "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
-                "excerpt": excerpt,
-                "preview_html": preview_html,
-                "has_image": has_image
-            })
+            posts_data.append(
+                {
+                    "title": post.title,
+                    "slug": post.slug,
+                    "thumbnail_path": post.thumbnail_path,
+                    "published_date": pub_date.strftime("%B %d, %Y"),
+                    "view_count": post.view_count,
+                    "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+                    "excerpt": excerpt,
+                    "preview_html": preview_html,
+                    "has_image": has_image,
+                }
+            )
 
-        return JSONResponse({
-            "posts": posts_data,
-            "pagination": {
-                "page": page,
-                "total_pages": total_pages,
-                "has_next": page < total_pages,
-                "has_prev": page > 1,
-                "next_page": page + 1,
-                "prev_page": page - 1
-            },
-            "current_tag": tag
-        })
+        return JSONResponse(
+            {
+                "posts": posts_data,
+                "pagination": {
+                    "page": page,
+                    "total_pages": total_pages,
+                    "has_next": page < total_pages,
+                    "has_prev": page > 1,
+                    "next_page": page + 1,
+                    "prev_page": page - 1,
+                },
+                "current_tag": tag,
+            }
+        )
 
     context = get_common_context(request)
     db_context = await get_db_context(db)
     context.update(db_context)
 
-    context.update({
-        "posts": posts,
-        "page": page,
-        "total_pages": total_pages,
-        "total": total,
-        "tags": all_tags,
-        "current_tag": tag,
-    })
+    context.update(
+        {
+            "posts": posts,
+            "page": page,
+            "total_pages": total_pages,
+            "total": total,
+            "tags": all_tags,
+            "current_tag": tag,
+        }
+    )
 
     return templates.TemplateResponse("public/gallery.html", context)
 
@@ -575,16 +583,18 @@ async def rss_feed(
     posts_data = []
     for post in posts:
         pub_date = post.published_at or post.created_at
-        posts_data.append({
-            "title": post.title,
-            "slug": post.slug,
-            "excerpt": post.excerpt,
-            "meta_description": post.meta_description,
-            "content_html": format_content(post.content, post.formatter.value),
-            "thumbnail_path": post.thumbnail_path,
-            "tags": post.tags,
-            "pub_date_rfc822": format_datetime(pub_date),
-        })
+        posts_data.append(
+            {
+                "title": post.title,
+                "slug": post.slug,
+                "excerpt": post.excerpt,
+                "meta_description": post.meta_description,
+                "content_html": format_content(post.content, post.formatter.value),
+                "thumbnail_path": post.thumbnail_path,
+                "tags": post.tags,
+                "pub_date_rfc822": format_datetime(pub_date),
+            }
+        )
 
     # Get build date
     build_date = format_datetime(datetime.now())
@@ -669,17 +679,15 @@ async def sitemap(
     posts_data = []
     for post in posts:
         lastmod = post.updated_at or post.published_at or post.created_at
-        posts_data.append({
-            "slug": post.slug,
-            "lastmod": lastmod.strftime("%Y-%m-%d"),
-        })
+        posts_data.append(
+            {
+                "slug": post.slug,
+                "lastmod": lastmod.strftime("%Y-%m-%d"),
+            }
+        )
 
     # Get all tags with posts
-    tags_query = (
-        select(Tag)
-        .where(Tag.post_count > 0)
-        .order_by(Tag.name)
-    )
+    tags_query = select(Tag).where(Tag.post_count > 0).order_by(Tag.name)
     tags_result = await db.execute(tags_query)
     tags = list(tags_result.scalars().all())
 

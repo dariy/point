@@ -44,12 +44,8 @@ class Settings(BaseSettings):
 
     # Storage
     storage_path: str = Field(default="./data", description="Base storage path")
-    max_upload_size_mb: int = Field(
-        default=10, description="Maximum upload size in MB"
-    )
-    storage_quota_mb: int = Field(
-        default=5000, description="Total storage quota in MB"
-    )
+    max_upload_size_mb: int = Field(default=10, description="Maximum upload size in MB")
+    storage_quota_mb: int = Field(default=5000, description="Total storage quota in MB")
     max_image_width: int = Field(
         default=2560, description="Maximum image width in pixels"
     )
@@ -66,12 +62,8 @@ class Settings(BaseSettings):
         default="A personal photography journal", description="Blog subtitle"
     )
     author_name: str = Field(default="Photographer", description="Author name")
-    author_email: str = Field(
-        default="author@example.com", description="Author email"
-    )
-    posts_per_page: int = Field(
-        default=10, ge=1, le=100, description="Posts per page"
-    )
+    author_email: str = Field(default="author@example.com", description="Author email")
+    posts_per_page: int = Field(default=10, ge=1, le=100, description="Posts per page")
     default_language: str = Field(default="en", description="Default language")
     default_theme: Literal["auto", "dark", "light"] = Field(
         default="auto", description="Default theme"
@@ -90,9 +82,7 @@ class Settings(BaseSettings):
 
     # Features
     enable_analytics: bool = Field(default=False, description="Enable analytics")
-    google_analytics_id: str = Field(
-        default="", description="Google Analytics ID"
-    )
+    google_analytics_id: str = Field(default="", description="Google Analytics ID")
     force_https: bool = Field(default=True, description="Force HTTPS redirects")
     show_view_counts: bool = Field(
         default=True, description="Show view counts on posts"

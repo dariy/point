@@ -25,6 +25,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Global buffer for view counts
+_view_counts_buffer: dict[int, int] = {}
+
+
 class PostService:
     """Service for managing blog posts."""
 
@@ -35,6 +39,46 @@ class PostService:
             db: Async database session
         """
         self.db = db
+
+    @classmethod
+    async def flush_view_counts(cls, db: AsyncSession) -> int:
+        """Flush buffered view counts to database.
+
+        Args:
+            db: Async database session
+
+        Returns:
+            Number of posts updated
+        """
+        if not _view_counts_buffer:
+            return 0
+
+        # Create a copy to minimize locking time (though GIL handles dict atomic ops)
+        # We process the current buffer and clear it
+        current_counts = _view_counts_buffer.copy()
+        _view_counts_buffer.clear()
+
+        count = 0
+        try:
+            for post_id, views in current_counts.items():
+                await db.execute(
+                    update(Post)
+                    .where(Post.id == post_id)
+                    .values(view_count=Post.view_count + views)
+                )
+                count += 1
+
+            await db.commit()
+            logger.info(f"Flushed view counts for {count} posts")
+        except Exception as e:
+            logger.error(f"Failed to flush view counts: {e}")
+            # Restore counts to buffer if failed
+            for post_id, views in current_counts.items():
+                _view_counts_buffer[post_id] = (
+                    _view_counts_buffer.get(post_id, 0) + views
+                )
+
+        return count
 
     async def _get_existing_slugs(self, exclude_id: int | None = None) -> set[str]:
         """Get all existing slugs.
@@ -68,9 +112,7 @@ class PostService:
         existing_slugs = await self._get_existing_slugs(exclude_id)
         return make_unique_slug(base_slug, existing_slugs)
 
-    async def create_post(
-        self, post_data: PostCreate, author_id: int
-    ) -> Post:
+    async def create_post(self, post_data: PostCreate, author_id: int) -> Post:
         """Create a new post.
 
         Args:
@@ -86,9 +128,7 @@ class PostService:
         # Generate excerpt if not provided
         excerpt = post_data.excerpt
         if not excerpt:
-            excerpt = generate_excerpt(
-                post_data.content, post_data.formatter.value
-            )
+            excerpt = generate_excerpt(post_data.content, post_data.formatter.value)
 
         # Extract thumbnail from content
         thumbnail_path = extract_first_image(post_data.content)
@@ -153,9 +193,7 @@ class PostService:
         Returns:
             Post if found, None otherwise
         """
-        query = select(Post).where(
-            or_(Post.slug == slug, Post.custom_url == slug)
-        )
+        query = select(Post).where(or_(Post.slug == slug, Post.custom_url == slug))
 
         if not include_drafts:
             query = query.where(Post.status == PostStatus.PUBLISHED)
@@ -172,9 +210,7 @@ class PostService:
         Returns:
             Post if valid token, None otherwise
         """
-        result = await self.db.execute(
-            select(Post).where(Post.preview_token == token)
-        )
+        result = await self.db.execute(select(Post).where(Post.preview_token == token))
         post = result.scalar_one_or_none()
 
         if post and post.preview_is_valid:
@@ -225,7 +261,9 @@ class PostService:
 
         # Apply pagination and ordering
         query = (
-            query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
+            query.order_by(
+                Post.published_at.desc().nulls_last(), Post.created_at.desc()
+            )
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
@@ -268,7 +306,7 @@ class PostService:
         if post_data.content:
             if not post_data.excerpt:
                 post.excerpt = generate_excerpt(post.content, post.formatter)
-            
+
             # Update thumbnail from new content
             post.thumbnail_path = extract_first_image(post.content)
 
@@ -284,9 +322,7 @@ class PostService:
 
         return post
 
-    async def delete_post(
-        self, post_id: int, author_id: int | None = None
-    ) -> bool:
+    async def delete_post(self, post_id: int, author_id: int | None = None) -> bool:
         """Delete a post.
 
         Args:
@@ -450,11 +486,7 @@ class PostService:
         Args:
             post_id: Post ID
         """
-        await self.db.execute(
-            update(Post)
-            .where(Post.id == post_id)
-            .values(view_count=Post.view_count + 1)
-        )
+        _view_counts_buffer[post_id] = _view_counts_buffer.get(post_id, 0) + 1
 
     def render_content(self, post: Post) -> str:
         """Render post content to HTML.

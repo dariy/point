@@ -298,13 +298,11 @@ class TagService:
             List of tag dicts with weight (0-1)
         """
         query = select(Tag).where(Tag.post_count > 0)
-        
+
         if featured:
             query = query.where(Tag.is_featured.is_(True))
 
-        tags = await self.db.execute(
-            query.order_by(Tag.post_count.desc()).limit(limit)
-        )
+        tags = await self.db.execute(query.order_by(Tag.post_count.desc()).limit(limit))
         tag_list = list(tags.scalars().all())
 
         if not tag_list:
@@ -389,12 +387,7 @@ class TagService:
 
         # Get paginated results
         offset = (page - 1) * per_page
-        query = (
-            query
-            .order_by(Post.published_at.desc())
-            .offset(offset)
-            .limit(per_page)
-        )
+        query = query.order_by(Post.published_at.desc()).offset(offset).limit(per_page)
 
         result = await self.db.execute(query)
         posts = list(result.scalars().all())

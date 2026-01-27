@@ -88,9 +88,7 @@ class AuthService:
         Returns:
             User if found, None otherwise
         """
-        result = await self.db.execute(
-            select(User).where(User.username == username)
-        )
+        result = await self.db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
     async def get_user_by_id(self, user_id: int) -> User | None:
@@ -134,9 +132,7 @@ class AuthService:
 
         return user
 
-    async def authenticate_user(
-        self, username: str, password: str
-    ) -> User | None:
+    async def authenticate_user(self, username: str, password: str) -> User | None:
         """Authenticate user with username and password.
 
         Args:
@@ -155,9 +151,7 @@ class AuthService:
 
         # Update last login
         await self.db.execute(
-            update(User)
-            .where(User.id == user.id)
-            .values(last_login=datetime.utcnow())
+            update(User).where(User.id == user.id).values(last_login=datetime.utcnow())
         )
 
         return user
@@ -228,9 +222,7 @@ class AuthService:
 
         if session.is_expired:
             # Clean up expired session
-            await self.db.execute(
-                delete(Session).where(Session.id == session.id)
-            )
+            await self.db.execute(delete(Session).where(Session.id == session.id))
             return None
 
         # Update last activity
@@ -253,9 +245,7 @@ class AuthService:
             True if session was terminated, False if not found
         """
         result = await self.db.execute(
-            delete(Session).where(
-                Session.id == session_id, Session.user_id == user_id
-            )
+            delete(Session).where(Session.id == session_id, Session.user_id == user_id)
         )
         # CursorResult has rowcount but type hints don't reflect this
         return int(result.rowcount) > 0  # type: ignore[attr-defined]

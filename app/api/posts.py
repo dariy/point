@@ -84,7 +84,9 @@ def post_to_response(
 async def list_posts(
     page: int = Query(default=1, ge=1, description="Page number"),
     per_page: int = Query(default=10, ge=1, le=100, description="Items per page"),
-    status: PostStatusSchema | None = Query(default=None, description="Filter by status"),
+    status: PostStatusSchema | None = Query(
+        default=None, description="Filter by status"
+    ),
     featured: bool = Query(default=False, description="Only featured posts"),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
@@ -197,9 +199,7 @@ async def get_post_by_slug(
     Public users can only see published posts.
     """
     service = PostService(db)
-    post = await service.get_post_by_slug(
-        slug, include_drafts=current_user is not None
-    )
+    post = await service.get_post_by_slug(slug, include_drafts=current_user is not None)
 
     if not post:
         raise HTTPException(

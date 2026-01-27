@@ -74,7 +74,9 @@ def tag_to_list_item(tag: TagModel) -> dict[str, Any]:
 )
 async def list_tags(
     include_empty: bool = Query(default=True, description="Include tags with no posts"),
-    important_only: bool = Query(default=False, description="Only return important tags"),
+    important_only: bool = Query(
+        default=False, description="Only return important tags"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """List all tags.
