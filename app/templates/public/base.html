@@ -48,8 +48,6 @@
                 {% endif %}
             </div>
             <nav class="site-nav">
-                <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Home</a>
-                <a href="/tags" class="nav-link {% if request.url.path == '/tags' %}active{% endif %}">Tags</a>
                 <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
                     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>
@@ -67,11 +65,6 @@
                     </svg>
                 </button>
             </nav>
-            <button class="mobile-menu-toggle" aria-label="Toggle menu">
-                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                </svg>
-            </button>
             {% endblock %}
         </div>
     </header>
@@ -86,7 +79,7 @@
         <div class="footer-container">
             <div class="footer-content">
                 <p class="footer-copyright">&copy; {{ current_year }} {{ author_name }}</p>
-                {% if tag_cloud %}
+                {% if false and tag_cloud %}
                 <div class="tag-cloud footer-tags">
                     {% for tag in tag_cloud %}
                     <a href="/tag/{{ tag.slug }}" class="tag-link" style="font-size: {{ 0.8 + tag.weight * 0.4 }}rem;">
