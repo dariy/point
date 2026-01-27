@@ -24,7 +24,13 @@ from app.models.post_tag import post_tags
 from app.models.tag import Tag
 from app.services.cache_service import get_cache
 from app.services.tag_service import TagService
-from app.utils.formatters import format_content, generate_excerpt, truncate_paragraphs
+from app.utils.formatters import (
+    extract_all_images,
+    format_content,
+    generate_excerpt,
+    strip_html,
+    truncate_paragraphs,
+)
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -233,6 +239,22 @@ async def single_post(
 
     # Format content
     content_html = format_content(post.content, post.formatter.value)
+    
+    # Check if post has text content (ignoring images and whitespace)
+    # strip_html removes all tags including <img>, so we just check if any text remains
+    text_content = strip_html(content_html)
+    has_text_content = bool(text_content and text_content.strip())
+    
+    # Extract images for carousel
+    post_images = extract_all_images(post.content)
+    # If thumbnail exists and is not in content images, add it to the start
+    if post.thumbnail_path:
+        # Normalize thumbnail path for comparison (assuming standard media path)
+        thumb_path_full = f"/media/originals/{post.thumbnail_path}"
+        if post.thumbnail_path not in post_images and thumb_path_full not in post_images:
+            post_images.insert(0, post.thumbnail_path)
+    elif not post_images and post.thumbnail_path:
+        post_images = [post.thumbnail_path]
 
     prev_post = None
     next_post = None
@@ -267,6 +289,8 @@ async def single_post(
     context.update({
         "post": post,
         "content_html": content_html,
+        "has_text_content": has_text_content,
+        "post_images": post_images,
         "prev_post": prev_post,
         "next_post": next_post,
     })

@@ -26,9 +26,11 @@
     --spacing-3xl: 4rem;
 
     /* Typography */
-    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-serif: 'Georgia', 'Times New Roman', serif;
-    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    --font-family:
+        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        sans-serif;
+    --font-serif: "Georgia", "Times New Roman", serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     --font-size-xs: 0.75rem;
     --font-size-sm: 0.875rem;
     --font-size-base: 1rem;
@@ -84,8 +86,10 @@
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-md:
+        0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg:
+        0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
     /* Component-specific */
     --header-bg: rgba(255, 255, 255, 0.8);
@@ -125,7 +129,7 @@
     /* Semantic Colors - Text */
     --text-primary: #f1f5f9;
     --text-secondary: #cbd5e1;
-    --text-tertiary: #94a3b8;
+    --text-tertiary: #cbd5e1; /* #94a3b8; */
     --text-muted: #64748b;
     --text-inverted: #0f172a;
 
@@ -143,8 +147,10 @@
     /* Shadows (darker for dark theme) */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
     --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+    --shadow-md:
+        0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg:
+        0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
 
     /* Component-specific */
     --header-bg: rgba(30, 41, 59, 0.8);
@@ -178,7 +184,9 @@
 /* ===========================
    Reset & Base
    =========================== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -197,7 +205,9 @@ body {
     line-height: 1.6;
     color: var(--text-primary);
     background-color: var(--bg-secondary);
-    transition: background-color var(--transition-theme), color var(--transition-theme);
+    transition:
+        background-color var(--transition-theme),
+        color var(--transition-theme);
 }
 
 a {
@@ -246,7 +256,9 @@ img {
     position: sticky;
     top: 0;
     z-index: 100;
-    transition: background-color var(--transition-theme), border-color var(--transition-theme);
+    transition:
+        background-color var(--transition-theme),
+        border-color var(--transition-theme);
 }
 
 .header-container {
@@ -314,7 +326,7 @@ img {
 }
 
 .dropdown-toggle::after {
-    content: '';
+    content: "";
     display: inline-block;
     width: 0;
     height: 0;
@@ -462,7 +474,9 @@ img {
     border-radius: var(--border-radius-xl);
     overflow: hidden;
     box-shadow: var(--shadow);
-    transition: all var(--transition-normal), background-color var(--transition-theme);
+    transition:
+        all var(--transition-normal),
+        background-color var(--transition-theme);
     text-decoration: none; /* Make sure links inside look clean */
     display: block; /* Ensure it behaves as a block element */
     position: relative;
@@ -505,7 +519,12 @@ img {
     position: absolute;
     inset: 0;
     z-index: 1;
-    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.1) 100%);
+    background: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.9) 0%,
+        rgba(0, 0, 0, 0.4) 60%,
+        rgba(0, 0, 0, 0.1) 100%
+    );
     padding: var(--spacing-lg);
     display: flex;
     flex-direction: column;
@@ -525,17 +544,17 @@ img {
     font-size: var(--font-size-lg);
 }
 .post-card-content.overlay .post-card-meta {
-    color: rgba(255,255,255,0.8);
+    color: rgba(255, 255, 255, 0.8);
 }
 .post-card-content.overlay .post-card-excerpt {
-    color: rgba(255,255,255,0.9);
+    color: rgba(255, 255, 255, 0.9);
     font-size: var(--font-size-sm);
     margin-bottom: var(--spacing-md);
 }
 .post-card-content.overlay .tag-link {
-    background-color: rgba(255,255,255,0.2);
+    background-color: rgba(255, 255, 255, 0.2);
     color: white;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 .post-card-content.overlay .tag-link:hover {
     background-color: white;
@@ -619,7 +638,6 @@ img {
     margin-top: auto; /* Push to bottom in flex container */
 }
 
-
 /* ===========================
    Featured Post
    =========================== */
@@ -645,7 +663,6 @@ img {
     padding: var(--spacing-md);
 }
 
-
 .featured-badge {
     display: inline-flex;
     align-items: center;
@@ -661,7 +678,6 @@ img {
 .post-card-content.overlay .featured-badge {
     color: var(--color-accent); /* Brighter blue for dark bg */
 }
-
 
 /* ===========================
    Sidebar
@@ -687,7 +703,9 @@ img {
     margin-bottom: var(--spacing-md);
     padding-bottom: var(--spacing-sm);
     border-bottom: 2px solid var(--border-primary);
-    transition: color var(--transition-theme), border-color var(--transition-theme);
+    transition:
+        color var(--transition-theme),
+        border-color var(--transition-theme);
 }
 
 /* Tag Cloud */
@@ -833,7 +851,9 @@ img {
     color: var(--inline-code-text);
     padding: 2px 6px;
     border-radius: var(--border-radius-sm);
-    transition: background-color var(--transition-theme), color var(--transition-theme);
+    transition:
+        background-color var(--transition-theme),
+        color var(--transition-theme);
 }
 
 .post-content pre code {
@@ -990,7 +1010,7 @@ img {
 .gallery-item-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, transparent 50%);
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -1012,7 +1032,7 @@ img {
 
 .gallery-item-date {
     font-size: var(--font-size-sm);
-    color: rgba(255,255,255,0.8);
+    color: rgba(255, 255, 255, 0.8);
 }
 
 /* Gallery Filters */
@@ -1228,7 +1248,9 @@ img {
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
-    transition: opacity var(--transition-normal), visibility var(--transition-normal);
+    transition:
+        opacity var(--transition-normal),
+        visibility var(--transition-normal);
 }
 
 .lightbox-overlay.active {
@@ -1397,7 +1419,9 @@ img {
     backdrop-filter: blur(4px);
     border-bottom: none;
     color: white;
-    transition: opacity 0.4s ease, transform 0.4s ease;
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease;
 }
 
 [data-theme="light"].immersive-layout .site-header {
@@ -1453,7 +1477,9 @@ img {
     color: rgba(255, 255, 255, 0.8);
     border-top: none;
     padding-bottom: var(--spacing-lg);
-    transition: opacity 0.4s ease, transform 0.4s ease;
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease;
 }
 
 [data-theme="light"].immersive-layout .site-footer {
@@ -1464,6 +1490,20 @@ img {
 .immersive-layout .site-footer .footer-link,
 .immersive-layout .site-footer .footer-copyright {
     color: rgba(255, 255, 255, 0.8);
+}
+
+.immersive-layout .footer-content {
+    justify-content: flex-start;
+    text-align: left;
+    align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+    .immersive-layout .footer-content {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
 }
 
 [data-theme="light"].immersive-layout .site-footer .footer-link,
@@ -1506,8 +1546,10 @@ img {
     justify-content: center; /* Center the info card */
     align-items: center;
     padding: 80px 40px; /* Clear header/footer areas */
-    transition: opacity 0.4s ease, transform 0.4s ease;
-    background: rgba(0,0,0,0.3); /* Slight dim to make text readable */
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease;
+    background: rgba(0, 0, 0, 0.3); /* Slight dim to make text readable */
 }
 
 .post-info-card {
@@ -1522,7 +1564,7 @@ img {
     max-height: 80vh; /* Leave some space */
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
     transition: opacity 0.3s ease;
     overflow: hidden; /* For inner scroll */
 }
@@ -1607,4 +1649,115 @@ img {
 
 .immersive-layout.ui-hidden .immersive-visuals {
     cursor: none; /* Hide cursor for better immersion */
+}
+
+/* ===========================
+   Carousel
+   =========================== */
+.carousel-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.carousel-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.carousel-slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 10;
+}
+
+.carousel-prev,
+.carousel-next {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    border: none;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background-color 0.2s ease,
+        transform 0.2s ease;
+    backdrop-filter: blur(4px);
+}
+
+.carousel-prev:hover,
+.carousel-next:hover {
+    background: rgba(0, 0, 0, 0.6);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-prev {
+    left: 20px;
+}
+
+.carousel-next {
+    right: 20px;
+}
+
+.carousel-indicators {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 20;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 12px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+}
+
+.carousel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    border: none;
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        transform 0.2s ease;
+    padding: 0;
+}
+
+.carousel-dot:hover {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.carousel-dot.active {
+    background: white;
+    transform: scale(1.2);
+}
+
+/* Hide carousel controls in UI hidden mode */
+.immersive-layout.ui-hidden .carousel-prev,
+.immersive-layout.ui-hidden .carousel-next,
+.immersive-layout.ui-hidden .carousel-indicators {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
 }
