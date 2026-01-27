@@ -23,6 +23,7 @@ from app.models.post import Post, PostStatus
 from app.models.post_tag import post_tags
 from app.models.tag import Tag
 from app.services.cache_service import get_cache
+from app.services.settings_service import SettingsService
 from app.services.tag_service import TagService
 from app.utils.formatters import (
     extract_all_images,
@@ -71,7 +72,7 @@ async def get_db_context(db: AsyncSession) -> dict[str, Any]:
         db: Database session
 
     Returns:
-        Dictionary with tag_cloud and tags (for navigation)
+        Dictionary with tag_cloud, tags, and blog_settings
     """
     # Get tag cloud
     tag_service = TagService(db)
@@ -83,9 +84,14 @@ async def get_db_context(db: AsyncSession) -> dict[str, Any]:
     )
     tags = list(tags_result.scalars().all())
 
+    # Get blog settings
+    settings_service = SettingsService(db)
+    blog_settings = await settings_service.get_all_settings()
+
     return {
         "tag_cloud": tag_cloud,
         "tags": tags,
+        "blog_settings": blog_settings,
     }
 
 
