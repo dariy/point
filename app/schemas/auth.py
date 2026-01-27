@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class LoginRequest(BaseModel):
     """Schema for login request."""
 
-    username: str = Field(..., min_length=1, max_length=50)
+    username: str | None = Field(default=None, max_length=50)
     password: str = Field(..., min_length=1)
     remember_me: bool = Field(default=False, description="Extended session expiry")
 

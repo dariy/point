@@ -9,7 +9,6 @@
     <div class="login-card">
         <div class="login-header">
             <h1>{{ app_name }}</h1>
-            <p>Sign in to your account</p>
         </div>
 
         {% if error %}
@@ -20,27 +19,15 @@
 
         <form id="login-form" method="POST" action="/api/auth/login">
             <div class="form-group">
-                <label for="username" class="form-label">Username</label>
-                <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    class="form-input"
-                    required
-                    autocomplete="username"
-                    autofocus
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="password" class="form-label">Password</label>
                 <input
                     type="password"
                     id="password"
                     name="password"
                     class="form-input"
+                    placeholder="Password"
                     required
                     autocomplete="current-password"
+                    autofocus
                 >
             </div>
 
@@ -53,7 +40,7 @@
                         value="1"
                         class="form-checkbox-input"
                     >
-                    <span class="checkbox-text">Remember me on this device</span>
+                    <span class="checkbox-text">Remember me</span>
                 </label>
             </div>
 
@@ -71,7 +58,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
     const form = e.target;
     const formData = new FormData(form);
     const data = {
-        username: formData.get('username'),
         password: formData.get('password'),
         remember_me: formData.get('remember') === '1'
     };
