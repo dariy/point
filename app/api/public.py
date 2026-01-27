@@ -839,15 +839,10 @@ async def robots_txt(request: Request) -> PlainTextResponse:
     """
     base_url = get_base_url(request)
 
-    content = f"""# robots.txt for {settings.app_name}
-User-agent: *
-Allow: /
-Disallow: /admin/
+    content = f"""User-agent: *
+Disallow: /light/
 Disallow: /api/
-Disallow: /preview/
-
-# Sitemap
-Sitemap: {base_url}/sitemap.xml
+Sitemap: {request.base_url}sitemap.xml
 """
     return PlainTextResponse(
         content=content,

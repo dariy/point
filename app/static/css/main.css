@@ -388,6 +388,7 @@ img {
 .footer-container {
     max-width: var(--content-max-width);
     margin: 0 auto;
+    padding: 0 var(--spacing-md);
 }
 
 .footer-content {
@@ -398,6 +399,16 @@ img {
 
 .footer-copyright {
     font-size: var(--font-size-sm);
+}
+
+.admin-link {
+    font-weight: 700;
+    text-decoration: none;
+    color: inherit;
+}
+
+.admin-link:hover {
+    color: var(--color-primary);
 }
 
 .footer-nav {

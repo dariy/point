@@ -73,7 +73,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
         });
 
         if (response.ok) {
-            window.location.href = '/admin/';
+            window.location.href = '/light/';
         } else {
             const error = await response.json();
             const errorDiv = document.querySelector('.login-error');
