@@ -387,7 +387,11 @@ class TagService:
 
         # Get paginated results
         offset = (page - 1) * per_page
-        query = query.order_by(Post.published_at.desc()).offset(offset).limit(per_page)
+        query = (
+            query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
 
         result = await self.db.execute(query)
         posts = list(result.scalars().all())
