@@ -71,7 +71,7 @@ async def test_tag_cloud_on_gallery(
     await db.commit()
 
     # Fetch gallery page
-    response = await client.get("/gallery")
+    response = await client.get("/tags")
     assert response.status_code == 200
     
     # Check if tag cloud container is present

@@ -326,9 +326,9 @@ class TestGallery:
     @pytest.mark.asyncio
     async def test_gallery_page_loads(self, client: AsyncClient) -> None:
         """Test that gallery page loads successfully."""
-        response = await client.get("/gallery")
+        response = await client.get("/tags")
         assert response.status_code == 200
-        assert "Gallery" in response.text
+        assert "Tags" in response.text
         assert "text/html" in response.headers["content-type"]
 
     @pytest.mark.asyncio
@@ -336,7 +336,7 @@ class TestGallery:
         self, client: AsyncClient, published_post: Post
     ) -> None:
         """Test gallery shows posts that have thumbnails."""
-        response = await client.get("/gallery")
+        response = await client.get("/tags")
         assert response.status_code == 200
         assert published_post.title in response.text
 
@@ -345,14 +345,14 @@ class TestGallery:
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
     ) -> None:
         """Test gallery can filter by tag."""
-        response = await client.get(f"/gallery?tag={sample_tag.slug}")
+        response = await client.get(f"/tags/{sample_tag.slug}")
         assert response.status_code == 200
         assert published_post.title in response.text
 
     @pytest.mark.asyncio
     async def test_gallery_empty_state(self, client: AsyncClient) -> None:
         """Test gallery shows empty state when no images."""
-        response = await client.get("/gallery")
+        response = await client.get("/tags")
         assert response.status_code == 200
         assert "No photos yet" in response.text
 
@@ -361,10 +361,10 @@ class TestGallery:
         self, client: AsyncClient, multiple_posts: list[Post]
     ) -> None:
         """Test gallery pagination works."""
-        response = await client.get("/gallery")
+        response = await client.get("/tags")
         assert response.status_code == 200
 
-        response = await client.get("/gallery?page=2")
+        response = await client.get("/tags?page=2")
         assert response.status_code == 200
 
 
@@ -401,7 +401,7 @@ class TestNavigation:
         response = await client.get("/")
         assert response.status_code == 200
         assert 'href="/"' in response.text
-        assert 'href="/gallery"' in response.text
+        assert 'href="/tags"' in response.text
 
     @pytest.mark.asyncio
     async def test_post_has_prev_next_navigation(
@@ -518,7 +518,7 @@ class TestSitemap:
         """Test that sitemap contains gallery page."""
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
-        assert "<loc>http://test/gallery</loc>" in response.text
+        assert "<loc>http://test/tags</loc>" in response.text
 
     @pytest.mark.asyncio
     async def test_sitemap_contains_posts(
@@ -765,7 +765,7 @@ class TestTheming:
     @pytest.mark.asyncio
     async def test_gallery_has_theme_toggle(self, client: AsyncClient) -> None:
         """Test gallery page has theme toggle button."""
-        response = await client.get("/gallery")
+        response = await client.get("/tags")
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
 

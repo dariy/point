@@ -10,8 +10,7 @@
 
     <!-- Gallery -->
     <url>
-        <loc>{{ base_url }}/gallery</loc>
-        <lastmod>{{ last_updated }}</lastmod>
+        <loc>{{ base_url }}/tags</loc>
         <changefreq>daily</changefreq>
         <priority>0.8</priority>
     </url>
