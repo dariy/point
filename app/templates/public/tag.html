@@ -13,6 +13,178 @@
 <meta property="og:locale" content="en_US">
 {% endblock %}
 
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const postsContainer = document.getElementById('tag-posts-container');
+
+    async function loadPosts(url) {
+        try {
+            postsContainer.style.opacity = '0.5';
+            
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                renderPosts(data);
+                
+                window.history.pushState({}, '', url);
+                attachListeners();
+                window.scrollTo(0, 0);
+            } else {
+                window.location.href = url;
+            }
+        } catch (error) {
+            console.error('Error loading posts:', error);
+            window.location.href = url;
+        } finally {
+            postsContainer.style.opacity = '1';
+        }
+    }
+
+    function renderPosts(data) {
+        if (!data.posts || data.posts.length === 0) {
+            postsContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                            <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                    </div>
+                    <h2 class="empty-state-title">No posts with this tag</h2>
+                    <p class="empty-state-text">Check back later for new content.</p>
+                    <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Home</a>
+                </div>`;
+            return;
+        }
+
+        let html = '<div class="posts-grid">';
+        
+        data.posts.forEach(post => {
+            const hasImage = post.has_image;
+            
+            html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                ${hasImage ? `
+                    <div class="post-card-background">
+                        <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
+                    </div>
+                    <div class="post-card-content overlay">
+                ` : `<div class="post-card-content">`}
+                        <div class="post-card-meta">
+                            <time datetime="${post.published_iso}">
+                                ${post.published_date}
+                            </time>
+                            ${post.view_count ? `
+                            <span>&bull;</span>
+                            <span>${post.view_count} views</span>
+                            ` : ''}
+                        </div>
+                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
+                        ${hasImage ? `
+                        <div class="post-card-excerpt">
+                            ${post.excerpt || ''}
+                        </div>
+                        ` : `
+                        <div class="post-card-text-preview">
+                            ${post.preview_html || ''}
+                        </div>
+                        `}
+                        ${post.tags && post.tags.length > 0 ? `
+                        <div class="post-card-tags">
+                            ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}">${tag.name}</a>`).join('')}
+                        </div>
+                        ` : ''}
+                    </div>
+            </article>`;
+        });
+        
+        html += '</div>';
+
+        if (data.pagination && data.pagination.total_pages > 1) {
+            const pag = data.pagination;
+            const tagSlug = data.tag ? data.tag.slug : '';
+            
+            html += '<nav class="pagination" aria-label="Tag archive pagination">';
+            
+            // Previous
+            if (pag.has_prev) {
+                html += `<a href="/tag/${tagSlug}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </a>`;
+            } else {
+                html += `<span class="pagination-link disabled">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </span>`;
+            }
+
+            // Pages
+            for (let p = 1; p <= pag.total_pages; p++) {
+                if (p === pag.page) {
+                    html += `<span class="pagination-link active">${p}</span>`;
+                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
+                    html += `<a href="/tag/${tagSlug}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+                } else if (p === pag.page - 2 || p === pag.page + 2) {
+                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
+                }
+            }
+
+            // Next
+            if (pag.has_next) {
+                html += `<a href="/tag/${tagSlug}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                </a>`;
+            } else {
+                html += `<span class="pagination-link disabled">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                </span>`;
+            }
+            
+            html += '</nav>';
+        }
+
+        postsContainer.innerHTML = html;
+    }
+
+    function attachListeners() {
+        const links = document.querySelectorAll('.ajax-link');
+        links.forEach(link => {
+            link.removeEventListener('click', handleLinkClick);
+            link.addEventListener('click', handleLinkClick);
+        });
+    }
+
+    function handleLinkClick(e) {
+        e.preventDefault();
+        const url = this.getAttribute('href');
+        loadPosts(url);
+    }
+
+    // Initial attachment
+    attachListeners();
+
+    // Handle back/forward browser buttons
+    window.addEventListener('popstate', function() {
+        loadPosts(window.location.href);
+    });
+});
+</script>
+{% endblock %}
+
+
 {% block twitter_meta %}
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Posts tagged '{{ tag.name }}' | {{ blog_title }}">
@@ -29,6 +201,7 @@
         <span class="tag-count">{{ total }} post{% if total != 1 %}s{% endif %}</span>
     </header>
 
+    <div id="tag-posts-container">
     {% if posts %}
     <div class="posts-grid">
         {% for post in posts %}
@@ -91,7 +264,7 @@
     {% if total_pages > 1 %}
     <nav class="pagination" aria-label="Tag archive pagination">
         {% if page > 1 %}
-        <a href="/tag/{{ tag.slug }}?page={{ page - 1 }}" class="pagination-link" aria-label="Previous page">
+        <a href="/tag/{{ tag.slug }}?page={{ page - 1 }}" class="pagination-link ajax-link" aria-label="Previous page">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M15 18l-6-6 6-6"/>
             </svg>
@@ -108,14 +281,14 @@
             {% if p == page %}
                 <span class="pagination-link active">{{ p }}</span>
             {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
-                <a href="/tag/{{ tag.slug }}?page={{ p }}" class="pagination-link">{{ p }}</a>
+                <a href="/tag/{{ tag.slug }}?page={{ p }}" class="pagination-link ajax-link">{{ p }}</a>
             {% elif p == page - 2 or p == page + 2 %}
                 <span class="pagination-ellipsis">&hellip;</span>
             {% endif %}
         {% endfor %}
 
         {% if page < total_pages %}
-        <a href="/tag/{{ tag.slug }}?page={{ page + 1 }}" class="pagination-link" aria-label="Next page">
+        <a href="/tag/{{ tag.slug }}?page={{ page + 1 }}" class="pagination-link ajax-link" aria-label="Next page">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 18l6-6-6-6"/>
             </svg>
@@ -141,8 +314,10 @@
         </div>
         <h2 class="empty-state-title">No posts with this tag</h2>
         <p class="empty-state-text">Check back later for new content.</p>
-        <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Home</a>
-    </div>
-    {% endif %}
-</div>
-{% endblock %}
+                <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Home</a>
+            </div>
+            {% endif %}
+            </div>
+        </div>
+        {% endblock %}
+        
