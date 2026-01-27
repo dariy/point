@@ -40,6 +40,7 @@
 <div class="site-wrapper">
     <header class="site-header">
         <div class="header-container">
+            {% block header_content %}
             <div class="site-branding">
                 <a href="/" class="site-title">{{ blog_title }}</a>
                 {% if blog_subtitle %}
@@ -81,6 +82,7 @@
                     <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
                 </svg>
             </button>
+            {% endblock %}
         </div>
     </header>
 
@@ -104,10 +106,6 @@
                     {% endfor %}
                 </div>
                 {% endif %}
-                <nav class="footer-nav">
-                    <a href="/feed.xml" class="footer-link">RSS Feed</a>
-                    <a href="/admin/" class="footer-link">Admin</a>
-                </nav>
             </div>
         </div>
     </footer>
