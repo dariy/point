@@ -265,7 +265,7 @@ def sanitize_filename(filename: str) -> str:
 
     # Remove any characters that could be dangerous
     allowed_chars = set(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~"
     )
     name = "".join(c for c in name if c in allowed_chars)
 
