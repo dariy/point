@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.history.pushState({}, '', url);
                 updateActiveFilter(url);
                 attachListeners();
+                if (typeof initPostCardVideos === 'function') {
+                    initPostCardVideos();
+                }
             } else {
                 window.location.href = url;
             }
@@ -87,11 +90,21 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '<div class="posts-grid">';
         data.posts.forEach(post => {
             const hasImage = post.has_image;
+            const isVideo = post.is_video;
             
             html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
                 ${hasImage ? `
                     <div class="post-card-background">
-                        <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
+                        ${isVideo ? `
+                            <video src="${post.thumbnail_path}" muted loop playsinline></video>
+                            <div class="video-play-indicator">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                            </div>
+                        ` : `
+                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
+                        `}
                     </div>
                     <div class="post-card-content overlay">
                 ` : `<div class="post-card-content">`}
