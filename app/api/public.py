@@ -181,7 +181,7 @@ async def homepage(
         select(Post)
         .options(selectinload(Post.tags))
         .where(Post.status == PostStatus.PUBLISHED)
-        .order_by(Post.published_at.desc())
+        .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
     )
 
     # Get total count
@@ -215,7 +215,7 @@ async def homepage(
     recent_query = (
         select(Post)
         .where(Post.status == PostStatus.PUBLISHED)
-        .order_by(Post.published_at.desc())
+        .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
         .limit(5)
     )
     recent_result = await db.execute(recent_query)
@@ -336,7 +336,7 @@ async def single_post(
             select(Post)
             .where(Post.status == PostStatus.PUBLISHED)
             .where(Post.published_at < post.published_at)
-            .order_by(Post.published_at.desc())
+            .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
             .limit(1)
         )
         prev_result = await db.execute(prev_query)
@@ -347,7 +347,7 @@ async def single_post(
             select(Post)
             .where(Post.status == PostStatus.PUBLISHED)
             .where(Post.published_at > post.published_at)
-            .order_by(Post.published_at.asc())
+            .order_by(Post.published_at.asc().nulls_last(), Post.created_at.asc())
             .limit(1)
         )
         next_result = await db.execute(next_query)
@@ -542,7 +542,7 @@ async def tags_page(
         if tag_obj:
             query = query.join(post_tags).where(post_tags.c.tag_id == tag_obj.id)
 
-    query = query.order_by(Post.published_at.desc())
+    query = query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -673,7 +673,7 @@ async def rss_feed(
         select(Post)
         .options(selectinload(Post.tags))
         .where(Post.status == PostStatus.PUBLISHED)
-        .order_by(Post.published_at.desc())
+        .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
         .limit(20)
     )
     result = await db.execute(query)
@@ -770,7 +770,7 @@ async def sitemap(
     posts_query = (
         select(Post)
         .where(Post.status == PostStatus.PUBLISHED)
-        .order_by(Post.published_at.desc())
+        .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
     )
     posts_result = await db.execute(posts_query)
     posts = list(posts_result.scalars().all())
