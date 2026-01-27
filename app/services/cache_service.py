@@ -489,3 +489,13 @@ async def invalidate_cache_for_tag() -> int:
     """
     cache = await get_cache()
     return await cache.clear_for_tag_change()
+
+
+async def clear_page_cache() -> int:
+    """Clear all page and feed caches.
+
+    Returns:
+        Number of cache entries cleared
+    """
+    cache = await get_cache()
+    return await cache.clear_all()
