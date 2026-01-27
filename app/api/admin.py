@@ -22,6 +22,8 @@ from app.models.tag import Tag
 from app.models.user import User
 from app.services.media_service import MediaService
 from app.services.post_service import PostService
+from app.services.settings_service import SettingsService
+from app.services.system_service import SystemService
 from app.services.tag_service import TagService
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -402,6 +404,74 @@ async def media_page(
         }
     )
     return templates.TemplateResponse("admin/media.html", context)
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
+) -> HTMLResponse:
+    """Render blog settings page.
+
+    Args:
+        request: FastAPI request
+        db: Database session
+        user: Current user
+
+    Returns:
+        Settings page HTML
+    """
+    if not user:
+        return RedirectResponse(
+            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    settings_service = SettingsService(db)
+    blog_settings = await settings_service.get_all_settings()
+
+    context = get_base_context(request, user)
+    context.update(
+        {
+            "blog_settings": blog_settings,
+        }
+    )
+    return templates.TemplateResponse("admin/settings.html", context)
+
+
+@router.get("/system", response_class=HTMLResponse)
+async def system_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
+) -> HTMLResponse:
+    """Render system tools page.
+
+    Args:
+        request: FastAPI request
+        db: Database session
+        user: Current user
+
+    Returns:
+        System tools page HTML
+    """
+    if not user:
+        return RedirectResponse(
+            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    system_service = SystemService(db)
+    stats = await system_service.get_system_stats()
+    logs = system_service.get_logs(log_type="app", lines=50)
+
+    context = get_base_context(request, user)
+    context.update(
+        {
+            "stats": stats,
+            "logs": logs,
+        }
+    )
+    return templates.TemplateResponse("admin/system.html", context)
 
 
 @router.get("/logout")
