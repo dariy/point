@@ -742,6 +742,18 @@
                      if(indicators) indicators.style.display = 'none';
                  }
              }
+
+             // Render Tags for Immersive
+             const tagsContainer = clone.querySelector('.immersive-tags');
+             if (tagsContainer && post.tags) {
+                 post.tags.forEach(tag => {
+                     const a = document.createElement('a');
+                     a.href = '/tag/' + tag.slug;
+                     a.className = 'post-tag';
+                     a.textContent = tag.name;
+                     tagsContainer.appendChild(a);
+                 });
+             }
         }
 
         // 3. Tags (Standard only)

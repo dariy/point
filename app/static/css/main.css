@@ -1574,6 +1574,58 @@ img {
     transition: opacity 0.3s ease;
 }
 
+.immersive-tags-wrapper {
+    position: fixed;
+    bottom: var(--spacing-lg);
+    left: 0;
+    right: 0;
+    z-index: 60;
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.immersive-tags {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.immersive-layout.ui-hidden .immersive-tags-wrapper {
+    opacity: 0;
+    transform: translateY(20px);
+    pointer-events: none;
+}
+
+.immersive-tags .post-tag {
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.immersive-tags .post-tag:hover {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .post-tag {
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--text-primary);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .post-tag:hover {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
 video.immersive-bg-image {
     margin-bottom: 6em;
 }
