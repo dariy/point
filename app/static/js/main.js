@@ -495,6 +495,25 @@
                     if (prevLink) prevLink.click();
                 }
             }
+
+            // Single Post Navigation (Up/Down)
+            // User requested: ArrowDown -> Earlier (Previous Post), ArrowUp -> Later (Next Post)
+            const postNavData = document.getElementById('post-nav-data');
+            if (postNavData) {
+                if (e.key === "ArrowDown") {
+                    const prevUrl = postNavData.dataset.prevUrl;
+                    if (prevUrl) {
+                        e.preventDefault();
+                        window.location.href = prevUrl;
+                    }
+                } else if (e.key === "ArrowUp") {
+                    const nextUrl = postNavData.dataset.nextUrl;
+                    if (nextUrl) {
+                        e.preventDefault();
+                        window.location.href = nextUrl;
+                    }
+                }
+            }
         });
     }
 
