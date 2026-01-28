@@ -91,7 +91,7 @@
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <a
                                 href="javascript:void(0)"
-                                onclick="editTag({{ tag.id }}, {{ tag.name|tojson|safe }}, {{ tag.slug|tojson|safe }}, {{ (tag.description or '')|tojson|safe }}, {{ 'true' if tag.is_important else 'false' }}, {{ 'true' if tag.is_featured else 'false' }})"
+                                onclick='editTag({{ tag.id }}, {{ tag.name|tojson|safe }}, {{ tag.slug|tojson|safe }}, {{ (tag.description or "")|tojson|safe }}, {{ "true" if tag.is_important else "false" }}, {{ "true" if tag.is_featured else "false" }})'
                                 class="tag {% if tag.is_important %}tag-important{% endif %}"
                                 style="width: fit-content;"
                                 title="Edit tag"
@@ -116,7 +116,7 @@
                             id="toggle-important-{{ tag.id }}"
                             type="button"
                             class="btn btn-sm btn-ghost"
-                            onclick="toggleTagProperty({{ tag.id }}, 'is_important', {{ 'true' if tag.is_important else 'false' }})"
+                            onclick='toggleTagProperty({{ tag.id }}, "is_important", {{ "true" if tag.is_important else "false" }})'
                             title="{{ 'Remove important mark' if tag.is_important else 'Mark as important' }}"
                         >
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="{{ 'var(--color-warning)' if tag.is_important else 'var(--admin-text-muted)' }}" style="{{ 'opacity: 1;' if tag.is_important else 'opacity: 0.3;' }}">
@@ -129,7 +129,7 @@
                             id="toggle-featured-{{ tag.id }}"
                             type="button"
                             class="btn btn-sm btn-ghost"
-                            onclick="toggleTagProperty({{ tag.id }}, 'is_featured', {{ 'true' if tag.is_featured else 'false' }})"
+                            onclick='toggleTagProperty({{ tag.id }}, "is_featured", {{ "true" if tag.is_featured else "false" }})'
                             title="{{ 'Remove featured mark' if tag.is_featured else 'Mark as featured' }}"
                         >
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="{{ 'var(--color-primary)' if tag.is_featured else 'var(--admin-text-muted)' }}" style="{{ 'opacity: 1;' if tag.is_featured else 'opacity: 0.3;' }}">
@@ -146,7 +146,7 @@
                         <button
                             type="button"
                             class="btn btn-sm btn-outline"
-                            onclick="editTag({{ tag.id }}, {{ tag.name|tojson|safe }}, {{ tag.slug|tojson|safe }}, {{ (tag.description or '')|tojson|safe }}, {{ 'true' if tag.is_important else 'false' }}, {{ 'true' if tag.is_featured else 'false' }})"
+                            onclick='editTag({{ tag.id }}, {{ tag.name|tojson|safe }}, {{ tag.slug|tojson|safe }}, {{ (tag.description or "")|tojson|safe }}, {{ "true" if tag.is_important else "false" }}, {{ "true" if tag.is_featured else "false" }})'
                             title="Edit"
                         >
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
