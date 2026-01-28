@@ -1,4 +1,4 @@
-/* Admin CSS - Photo Blog Engine */
+/* Light CSS - Photo Blog Engine */
 
 /* ===========================
    CSS Variables - Base
@@ -56,23 +56,23 @@
 :root,
 [data-theme="light"] {
     /* Semantic Colors */
-    --admin-bg: #f1f5f9;
-    --admin-sidebar-bg: #0f172a;
-    --admin-sidebar-text: #94a3b8;
-    --admin-sidebar-text-hover: #ffffff;
-    --admin-sidebar-active-bg: #1e293b;
-    --admin-sidebar-border: #334155;
-    --admin-header-bg: #ffffff;
-    --admin-header-border: #e2e8f0;
-    --admin-content-bg: #ffffff;
-    --admin-text-primary: #0f172a;
-    --admin-text-secondary: #475569;
-    --admin-text-muted: #94a3b8;
-    --admin-border: #e2e8f0;
-    --admin-border-focus: #2563eb;
-    --admin-input-bg: #ffffff;
-    --admin-hover-bg: #f1f5f9;
-    --admin-card-bg: #ffffff;
+    --light-bg: #f1f5f9;
+    --light-sidebar-bg: #0f172a;
+    --light-sidebar-text: #94a3b8;
+    --light-sidebar-text-hover: #ffffff;
+    --light-sidebar-active-bg: #1e293b;
+    --light-sidebar-border: #334155;
+    --light-header-bg: #ffffff;
+    --light-header-border: #e2e8f0;
+    --light-content-bg: #ffffff;
+    --light-text-primary: #0f172a;
+    --light-text-secondary: #475569;
+    --light-text-muted: #94a3b8;
+    --light-border: #e2e8f0;
+    --light-border-focus: #2563eb;
+    --light-input-bg: #ffffff;
+    --light-hover-bg: #f1f5f9;
+    --light-card-bg: #ffffff;
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -100,23 +100,23 @@
    =========================== */
 [data-theme="dark"] {
     /* Semantic Colors */
-    --admin-bg: #0f172a;
-    --admin-sidebar-bg: #1e293b;
-    --admin-sidebar-text: #94a3b8;
-    --admin-sidebar-text-hover: #ffffff;
-    --admin-sidebar-active-bg: #334155;
-    --admin-sidebar-border: #475569;
-    --admin-header-bg: #1e293b;
-    --admin-header-border: #334155;
-    --admin-content-bg: #1e293b;
-    --admin-text-primary: #f1f5f9;
-    --admin-text-secondary: #cbd5e1;
-    --admin-text-muted: #64748b;
-    --admin-border: #334155;
-    --admin-border-focus: #3b82f6;
-    --admin-input-bg: #1e293b;
-    --admin-hover-bg: #334155;
-    --admin-card-bg: #1e293b;
+    --light-bg: #0f172a;
+    --light-sidebar-bg: #1e293b;
+    --light-sidebar-text: #94a3b8;
+    --light-sidebar-text-hover: #ffffff;
+    --light-sidebar-active-bg: #334155;
+    --light-sidebar-border: #475569;
+    --light-header-bg: #1e293b;
+    --light-header-border: #334155;
+    --light-content-bg: #1e293b;
+    --light-text-primary: #f1f5f9;
+    --light-text-secondary: #cbd5e1;
+    --light-text-muted: #64748b;
+    --light-border: #334155;
+    --light-border-focus: #3b82f6;
+    --light-input-bg: #1e293b;
+    --light-hover-bg: #334155;
+    --light-card-bg: #1e293b;
 
     /* Brand adjustments */
     --color-primary: #3b82f6;
@@ -166,8 +166,8 @@ body {
     font-family: var(--font-family);
     font-size: var(--font-size-base);
     line-height: 1.5;
-    color: var(--admin-text-primary);
-    background-color: var(--admin-bg);
+    color: var(--light-text-primary);
+    background-color: var(--light-bg);
     transition: background-color var(--transition-theme), color var(--transition-theme);
 }
 
@@ -181,25 +181,25 @@ a:hover {
 }
 
 /* ===========================
-   Admin Layout
+   Light Layout
    =========================== */
-.admin-layout {
+.light-layout {
     min-height: 100vh;
 }
 
-.admin-container {
+.light-container {
     display: flex;
     min-height: 100vh;
 }
 
 /* Sidebar */
-.admin-sidebar {
+.light-sidebar {
     position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
     width: var(--sidebar-width);
-    background-color: var(--admin-sidebar-bg);
+    background-color: var(--light-sidebar-bg);
     color: white;
     display: flex;
     flex-direction: column;
@@ -209,7 +209,7 @@ a:hover {
 
 .sidebar-header {
     padding: var(--spacing-lg);
-    border-bottom: 1px solid var(--admin-sidebar-border);
+    border-bottom: 1px solid var(--light-sidebar-border);
 }
 
 .sidebar-header .logo {
@@ -231,14 +231,14 @@ a:hover {
     align-items: center;
     gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-lg);
-    color: var(--admin-sidebar-text);
+    color: var(--light-sidebar-text);
     transition: all var(--transition-fast);
 }
 
 .nav-item a:hover,
 .nav-item.active a {
-    color: var(--admin-sidebar-text-hover);
-    background-color: var(--admin-sidebar-active-bg);
+    color: var(--light-sidebar-text-hover);
+    background-color: var(--light-sidebar-active-bg);
 }
 
 .nav-item.active a {
@@ -252,7 +252,7 @@ a:hover {
 
 .sidebar-footer {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--admin-sidebar-border);
+    border-top: 1px solid var(--light-sidebar-border);
 }
 
 .user-info {
@@ -261,26 +261,26 @@ a:hover {
 
 .user-name {
     font-size: var(--font-size-sm);
-    color: var(--admin-sidebar-text);
+    color: var(--light-sidebar-text);
 }
 
 .logout-btn {
     display: inline-block;
     padding: var(--spacing-xs) var(--spacing-sm);
-    color: var(--admin-sidebar-text);
+    color: var(--light-sidebar-text);
     font-size: var(--font-size-sm);
-    border: 1px solid var(--admin-sidebar-border);
+    border: 1px solid var(--light-sidebar-border);
     border-radius: var(--border-radius-sm);
     transition: all var(--transition-fast);
 }
 
 .logout-btn:hover {
-    color: var(--admin-sidebar-text-hover);
-    border-color: var(--admin-sidebar-text);
+    color: var(--light-sidebar-text-hover);
+    border-color: var(--light-sidebar-text);
 }
 
 /* Main Content */
-.admin-main {
+.light-main {
     flex: 1;
     margin-left: var(--sidebar-width);
     min-height: 100vh;
@@ -288,12 +288,12 @@ a:hover {
     flex-direction: column;
 }
 
-.admin-header {
+.light-header {
     position: sticky;
     top: 0;
     height: var(--header-height);
-    background-color: var(--admin-header-bg);
-    border-bottom: 1px solid var(--admin-header-border);
+    background-color: var(--light-header-bg);
+    border-bottom: 1px solid var(--light-header-border);
     padding: 0 var(--spacing-xl);
     display: flex;
     align-items: center;
@@ -302,10 +302,10 @@ a:hover {
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
-.admin-header h1 {
+.light-header h1 {
     font-size: var(--font-size-xl);
     font-weight: 600;
-    color: var(--admin-text-primary);
+    color: var(--light-text-primary);
     transition: color var(--transition-theme);
 }
 
@@ -314,7 +314,7 @@ a:hover {
     gap: var(--spacing-sm);
 }
 
-.admin-content {
+.light-content {
     flex: 1;
     padding: var(--spacing-xl);
     max-width: var(--content-max-width);
@@ -328,7 +328,7 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--admin-bg);
+    background-color: var(--light-bg);
 }
 
 .login-container {
@@ -338,11 +338,11 @@ a:hover {
 }
 
 .login-card {
-    background: var(--admin-card-bg);
+    background: var(--light-card-bg);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-xl);
     box-shadow: var(--shadow-lg);
-    border: 1px solid var(--admin-border);
+    border: 1px solid var(--light-border);
 }
 
 .login-card .form-input {
@@ -363,7 +363,7 @@ a:hover {
     font-size: var(--font-size-3xl);
     font-weight: 800;
     letter-spacing: -0.025em;
-    color: var(--admin-text-primary);
+    color: var(--light-text-primary);
 }
 
 .login-error {
@@ -387,7 +387,7 @@ a:hover {
     margin-bottom: var(--spacing-xs);
     font-size: var(--font-size-sm);
     font-weight: 500;
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
 }
 
 .form-label .required {
@@ -400,10 +400,10 @@ a:hover {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: var(--font-size-base);
-    border: 1px solid var(--admin-border);
+    border: 1px solid var(--light-border);
     border-radius: var(--border-radius);
-    background-color: var(--admin-input-bg);
-    color: var(--admin-text-primary);
+    background-color: var(--light-input-bg);
+    color: var(--light-text-primary);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-theme);
 }
 
@@ -411,13 +411,13 @@ a:hover {
 .form-textarea:focus,
 .form-select:focus {
     outline: none;
-    border-color: var(--admin-border-focus);
+    border-color: var(--light-border-focus);
     box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .form-select option {
-    background-color: var(--admin-input-bg);
-    color: var(--admin-text-primary);
+    background-color: var(--light-input-bg);
+    color: var(--light-text-primary);
 }
 
 .form-textarea {
@@ -429,7 +429,7 @@ a:hover {
     display: block;
     margin-top: var(--spacing-xs);
     font-size: var(--font-size-xs);
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
 }
 
 .form-error {
@@ -497,13 +497,13 @@ a:hover {
 }
 
 .btn-secondary {
-    background-color: var(--admin-hover-bg);
-    color: var(--admin-text-secondary);
+    background-color: var(--light-hover-bg);
+    color: var(--light-text-secondary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background-color: var(--admin-border);
-    color: var(--admin-text-primary);
+    background-color: var(--light-border);
+    color: var(--light-text-primary);
 }
 
 .btn-success {
@@ -528,24 +528,24 @@ a:hover {
 
 .btn-outline {
     background-color: transparent;
-    border: 1px solid var(--admin-border);
-    color: var(--admin-text-secondary);
+    border: 1px solid var(--light-border);
+    color: var(--light-text-secondary);
 }
 
 .btn-outline:hover:not(:disabled) {
-    background-color: var(--admin-hover-bg);
-    border-color: var(--admin-border);
+    background-color: var(--light-hover-bg);
+    border-color: var(--light-border);
 }
 
 .btn-ghost {
     background-color: transparent;
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
     padding: var(--spacing-xs);
 }
 
 .btn-ghost:hover:not(:disabled) {
-    background-color: var(--admin-hover-bg);
-    color: var(--admin-text-primary);
+    background-color: var(--light-hover-bg);
+    color: var(--light-text-primary);
 }
 
 .btn-sm {
@@ -567,7 +567,7 @@ a:hover {
    Cards
    =========================== */
 .card {
-    background: var(--admin-card-bg);
+    background: var(--light-card-bg);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow);
     overflow: hidden;
@@ -576,8 +576,8 @@ a:hover {
 
 .card-header {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--admin-border);
-    background-color: var(--admin-hover-bg);
+    border-bottom: 1px solid var(--light-border);
+    background-color: var(--light-hover-bg);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
@@ -585,7 +585,7 @@ a:hover {
 .card-header h3 {
     font-size: var(--font-size-lg);
     font-weight: 600;
-    color: var(--admin-text-primary);
+    color: var(--light-text-primary);
 }
 
 .card-body {
@@ -594,8 +594,8 @@ a:hover {
 
 .card-footer {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--admin-border);
-    background-color: var(--admin-hover-bg);
+    border-top: 1px solid var(--light-border);
+    background-color: var(--light-hover-bg);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
@@ -610,7 +610,7 @@ a:hover {
 }
 
 .stat-card {
-    background: var(--admin-card-bg);
+    background: var(--light-card-bg);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-lg);
     box-shadow: var(--shadow);
@@ -619,19 +619,19 @@ a:hover {
 
 .stat-card .stat-label {
     font-size: var(--font-size-sm);
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
     margin-bottom: var(--spacing-xs);
 }
 
 .stat-card .stat-value {
     font-size: var(--font-size-3xl);
     font-weight: 700;
-    color: var(--admin-text-primary);
+    color: var(--light-text-primary);
 }
 
 .stat-card .stat-suffix {
     font-size: var(--font-size-lg);
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
     font-weight: normal;
 }
 
@@ -649,7 +649,7 @@ a:hover {
 
 /* Storage bar */
 .storage-bar {
-    background-color: var(--admin-border);
+    background-color: var(--light-border);
     border-radius: var(--border-radius);
     height: 8px;
     margin-top: var(--spacing-sm);
@@ -687,18 +687,18 @@ a:hover {
 .table td {
     padding: var(--spacing-sm) var(--spacing-md);
     text-align: left;
-    border-bottom: 1px solid var(--admin-border);
+    border-bottom: 1px solid var(--light-border);
 }
 
 .table th {
     font-size: var(--font-size-sm);
     font-weight: 600;
-    color: var(--admin-text-secondary);
-    background-color: var(--admin-hover-bg);
+    color: var(--light-text-secondary);
+    background-color: var(--light-hover-bg);
 }
 
 .table tbody tr:hover {
-    background-color: var(--admin-hover-bg);
+    background-color: var(--light-hover-bg);
 }
 
 .table .actions {
@@ -720,8 +720,8 @@ a:hover {
 }
 
 .badge-draft {
-    background-color: var(--admin-border);
-    color: var(--admin-text-secondary);
+    background-color: var(--light-border);
+    color: var(--light-text-secondary);
 }
 
 .badge-published {
@@ -757,16 +757,16 @@ a:hover {
     height: 36px;
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-sm);
-    color: var(--admin-text-secondary);
-    background-color: var(--admin-card-bg);
-    border: 1px solid var(--admin-border);
+    color: var(--light-text-secondary);
+    background-color: var(--light-card-bg);
+    border: 1px solid var(--light-border);
     border-radius: var(--border-radius);
     transition: all var(--transition-fast);
 }
 
 .pagination-link:hover {
-    background-color: var(--admin-hover-bg);
-    color: var(--admin-text-primary);
+    background-color: var(--light-hover-bg);
+    color: var(--light-text-primary);
 }
 
 .pagination-item.active .pagination-link {
@@ -776,7 +776,7 @@ a:hover {
 }
 
 .pagination-item.disabled .pagination-link {
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
     cursor: not-allowed;
 }
 
@@ -791,7 +791,7 @@ a:hover {
 
 .media-item {
     position: relative;
-    background: var(--admin-card-bg);
+    background: var(--light-card-bg);
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
@@ -804,7 +804,7 @@ a:hover {
 
 .media-item-preview {
     aspect-ratio: 4/3;
-    background-color: var(--admin-hover-bg);
+    background-color: var(--light-hover-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -819,7 +819,7 @@ a:hover {
 
 .media-item-preview .file-icon {
     font-size: 48px;
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
 }
 
 .media-item-info {
@@ -828,7 +828,7 @@ a:hover {
 
 .media-item-name {
     font-size: var(--font-size-sm);
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -836,7 +836,7 @@ a:hover {
 
 .media-item-meta {
     font-size: var(--font-size-xs);
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
 }
 
 .media-item-actions {
@@ -862,8 +862,8 @@ a:hover {
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
-    background-color: var(--admin-hover-bg);
-    color: var(--admin-text-secondary);
+    background-color: var(--light-hover-bg);
+    color: var(--light-text-secondary);
     border-radius: var(--border-radius-sm);
 }
 
@@ -874,8 +874,8 @@ a:hover {
 
 .tag-count {
     font-size: var(--font-size-xs);
-    color: var(--admin-text-muted);
-    background-color: var(--admin-border);
+    color: var(--light-text-muted);
+    background-color: var(--light-border);
     padding: 2px 6px;
     border-radius: 9999px;
 }
@@ -883,7 +883,7 @@ a:hover {
 .slug-link {
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
     transition: color var(--transition-fast);
 }
 
@@ -913,14 +913,14 @@ a:hover {
     flex-wrap: wrap;
     gap: var(--spacing-xs);
     padding: var(--spacing-xs);
-    border: 1px solid var(--admin-border);
+    border: 1px solid var(--light-border);
     border-radius: var(--border-radius);
-    background: var(--admin-input-bg);
+    background: var(--light-input-bg);
     min-height: 42px;
 }
 
 .tags-input:focus-within {
-    border-color: var(--admin-border-focus);
+    border-color: var(--light-border-focus);
     box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
@@ -985,10 +985,10 @@ a:hover {
 }
 
 .preview-panel {
-    border: 1px solid var(--admin-border);
+    border: 1px solid var(--light-border);
     border-radius: var(--border-radius);
     padding: var(--spacing-md);
-    background: var(--admin-card-bg);
+    background: var(--light-card-bg);
     min-height: 300px;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
@@ -1007,7 +1007,7 @@ a:hover {
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-lg);
     padding: var(--spacing-md);
-    background: var(--admin-card-bg);
+    background: var(--light-card-bg);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
     transition: background-color var(--transition-theme);
@@ -1021,21 +1021,21 @@ a:hover {
 
 .filter-label {
     font-size: var(--font-size-sm);
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
 }
 
 .filter-select {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-sm);
-    border: 1px solid var(--admin-border);
+    border: 1px solid var(--light-border);
     border-radius: var(--border-radius-sm);
-    background: var(--admin-input-bg);
-    color: var(--admin-text-primary);
+    background: var(--light-input-bg);
+    color: var(--light-text-primary);
 }
 
 .filter-select option {
-    background-color: var(--admin-input-bg);
-    color: var(--admin-text-primary);
+    background-color: var(--light-input-bg);
+    color: var(--light-text-primary);
 }
 
 /* ===========================
@@ -1060,7 +1060,7 @@ a:hover {
 }
 
 .modal {
-    background: var(--admin-card-bg);
+    background: var(--light-card-bg);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-lg);
     width: 100%;
@@ -1080,7 +1080,7 @@ a:hover {
     align-items: center;
     justify-content: space-between;
     padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--admin-border);
+    border-bottom: 1px solid var(--light-border);
 }
 
 .modal-header h3 {
@@ -1092,13 +1092,13 @@ a:hover {
     background: none;
     border: none;
     font-size: 24px;
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
     cursor: pointer;
     line-height: 1;
 }
 
 .modal-close:hover {
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
 }
 
 .modal-body {
@@ -1110,18 +1110,18 @@ a:hover {
     justify-content: flex-end;
     gap: var(--spacing-sm);
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--admin-border);
+    border-top: 1px solid var(--light-border);
 }
 
 /* ===========================
    Upload Area
    =========================== */
 .upload-area {
-    border: 2px dashed var(--admin-border);
+    border: 2px dashed var(--light-border);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-xl);
     text-align: center;
-    background-color: var(--admin-hover-bg);
+    background-color: var(--light-hover-bg);
     cursor: pointer;
     transition: all var(--transition-fast);
 }
@@ -1134,12 +1134,12 @@ a:hover {
 
 .upload-area-icon {
     font-size: 48px;
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
     margin-bottom: var(--spacing-md);
 }
 
 .upload-area-text {
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
 }
 
 .upload-area-text strong {
@@ -1152,19 +1152,19 @@ a:hover {
 .empty-state {
     text-align: center;
     padding: var(--spacing-xl) * 2;
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
 }
 
 .empty-state-icon {
     font-size: 64px;
-    color: var(--admin-border);
+    color: var(--light-border);
     margin-bottom: var(--spacing-md);
 }
 
 .empty-state-title {
     font-size: var(--font-size-lg);
     font-weight: 600;
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
     margin-bottom: var(--spacing-sm);
 }
 
@@ -1188,7 +1188,7 @@ a:hover {
    Utilities
    =========================== */
 .text-muted {
-    color: var(--admin-text-muted);
+    color: var(--light-text-muted);
 }
 
 .text-xs {
@@ -1237,17 +1237,17 @@ a:hover {
     height: 36px;
     padding: 0;
     background: transparent;
-    border: 1px solid var(--admin-border);
+    border: 1px solid var(--light-border);
     border-radius: var(--border-radius);
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
     cursor: pointer;
     transition: all var(--transition-fast);
 }
 
 .theme-toggle:hover {
-    background-color: var(--admin-hover-bg);
-    color: var(--admin-text-primary);
-    border-color: var(--admin-text-muted);
+    background-color: var(--light-hover-bg);
+    color: var(--light-text-primary);
+    border-color: var(--light-text-muted);
 }
 
 .theme-toggle svg {
@@ -1293,21 +1293,21 @@ a:hover {
         --sidebar-width: 0px;
     }
 
-    .admin-sidebar {
+    .light-sidebar {
         transform: translateX(-100%);
         width: 240px;
         transition: transform var(--transition-normal);
     }
 
-    .admin-sidebar.open {
+    .light-sidebar.open {
         transform: translateX(0);
     }
 
-    .admin-main {
+    .light-main {
         margin-left: 0;
     }
 
-    .admin-content {
+    .light-content {
         padding: var(--spacing-md);
     }
 

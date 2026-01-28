@@ -1,5 +1,5 @@
 /**
- * Admin JavaScript - Photo Blog Engine
+ * Light JavaScript - Photo Blog Engine
  */
 
 (function() {
@@ -47,7 +47,7 @@
         if (!container) {
             container = document.createElement('div');
             container.className = 'flash-messages';
-            const content = document.querySelector('.admin-content');
+            const content = document.querySelector('.light-content');
             if (content) {
                 content.parentNode.insertBefore(container, content);
             }
@@ -436,7 +436,7 @@
     // ===========================
 
     function initMobileSidebar() {
-        const sidebar = document.querySelector('.admin-sidebar');
+        const sidebar = document.querySelector('.light-sidebar');
         const toggle = document.querySelector('.sidebar-toggle');
 
         if (toggle && sidebar) {
@@ -666,10 +666,10 @@
         insertMediaTag(data) {
             const startPos = this.textarea.selectionStart;
             const text = this.textarea.value;
-            
+
             // Check if we need to prepend a newline
             const needsNewline = startPos > 0 && text.substring(startPos - 1, startPos) !== '\n';
-            
+
             let tag = '';
             if (data.file_type === 'video') {
                 tag = `<video src="${data.url}" controls muted loop playsinline style="max-width: 100%;"></video>\n`;
@@ -748,7 +748,7 @@
     }
 
     // Export utilities
-    window.AdminUtils = {
+    window.LightUtils = {
         showToast,
         formatBytes,
         confirm,

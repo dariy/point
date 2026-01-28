@@ -59,7 +59,7 @@ photo-blog/
 │   │   ├── tags.py            # Tag management
 │   │   ├── media.py           # Media upload/management
 │   │   ├── auth.py            # Authentication
-│   │   └── admin.py           # Admin endpoints
+│   │   └── light.py           # Light endpoints
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── post_service.py    # Business logic for posts
@@ -69,7 +69,7 @@ photo-blog/
 │   │   └── backup_service.py  # Backup utilities
 │   ├── templates/
 │   │   ├── base.html          # Base template
-│   │   ├── admin/
+│   │   ├── light/
 │   │   │   ├── login.html
 │   │   │   ├── dashboard.html
 │   │   │   ├── post_edit.html
@@ -92,7 +92,7 @@ photo-blog/
 │   │   ├── css/
 │   │   │   └── main.css       # Common styles, theme switching
 │   │   ├── js/
-│   │   │   ├── admin.js       # Admin UI interactions
+│   │   │   ├── light.js       # Light UI interactions
 │   │   │   └── theme.js       # Theme detection/switching
 │   │   └── images/
 │   └── utils/
@@ -253,7 +253,7 @@ photo-blog/
 - Timezone-aware timestamps
 
 #### Post Visibility
-- **Draft**: Only visible to admin
+- **Draft**: Only visible to light
 - **Published**: Public, appears in feeds
 - **Hidden**: Not in lists/feeds but accessible via direct URL
 
@@ -291,7 +291,7 @@ async def process_image(file):
 
 #### Storage Management
 - Track total storage usage
-- Display quota usage in admin
+- Display quota usage in light
 - Cleanup orphaned files (files not linked to any post)
 - Bulk delete unused media
 
@@ -322,7 +322,7 @@ async def process_image(file):
 
 #### Session Management
 - Track active sessions (device, browser, IP, location)
-- Display session list in admin
+- Display session list in light
 - Terminate individual sessions
 - Terminate all other sessions
 
@@ -403,7 +403,7 @@ async def update_view_counts():
     # Flush in-memory view counts to database
 ```
 
-### 9. Admin Interface
+### 9. Light Interface
 
 #### Dashboard
 - Quick stats: total posts, drafts, published, view counts
@@ -546,7 +546,7 @@ S3_SECRET_KEY=
 ```
 
 ### Runtime Settings (Database)
-Stored in `BlogSettings` model for admin-editable configuration.
+Stored in `BlogSettings` model for light-editable configuration.
 
 ## Docker Setup
 
@@ -922,7 +922,7 @@ Content-Security-Policy: default-src 'self'; img-src 'self' data:; script-src 's
 ### E2E Tests (Optional)
 - Playwright or Selenium
 - Test critical user journeys
-- Admin workflows
+- Light workflows
 
 ### Test Coverage Goal
 - Aim for 80%+ code coverage
@@ -936,14 +936,14 @@ Content-Security-Policy: default-src 'self'; img-src 'self' data:; script-src 's
 3. Create external volume/mount point
 4. Run `docker-compose up -d`
 5. Initialize database: `docker-compose exec blog python scripts/init_db.py`
-6. Create admin user
+6. Create light user
 7. Configure reverse proxy (Nginx/Caddy) for HTTPS
 8. Set up SSL certificate (Let's Encrypt)
 9. Configure DNS
 10. Test health endpoint
 
 ### Production Hardening
-- [ ] Change default admin password
+- [ ] Change default light password
 - [ ] Configure firewall (UFW/iptables)
 - [ ] Set up automated backups
 - [ ] Configure log rotation
@@ -1152,7 +1152,7 @@ echo "Restore completed from $BACKUP_FILE"
 - Regular security updates
 
 ### Usability
-- Intuitive admin interface
+- Intuitive light interface
 - Mobile-responsive
 - Accessible (WCAG 2.1 Level AA)
 - Fast content creation workflow
@@ -1196,7 +1196,7 @@ echo "Restore completed from $BACKUP_FILE"
 3. Authentication system
 4. Post CRUD operations
 5. Media upload and processing
-6. Basic admin interface
+6. Basic light interface
 7. Public frontend (list, single post)
 8. RSS feed
 9. Theming system
@@ -1216,7 +1216,7 @@ echo "Restore completed from $BACKUP_FILE"
 1. Performance optimization
 2. Advanced image editing
 3. Import/export tools
-4. Enhanced admin dashboard
+4. Enhanced light dashboard
 5. Monitoring and alerts
 6. Additional themes
 7. Plugin system (if needed)
@@ -1225,7 +1225,7 @@ echo "Restore completed from $BACKUP_FILE"
 
 ## Questions & Decisions Needed
 
-1. **Admin UI Framework**: Plain HTML/CSS + minimal JS vs lightweight framework (Alpine.js, HTMX)?
+1. **Light UI Framework**: Plain HTML/CSS + minimal JS vs lightweight framework (Alpine.js, HTMX)?
 2. **Text Formatter**: Markdown library preference (markdown-it, CommonMark)?
 3. **Image Library**: Stick with Pillow or add imagemagick for advanced features?
 4. **Deployment Target**: DigitalOcean Droplet or Hostinger VPS specifics?

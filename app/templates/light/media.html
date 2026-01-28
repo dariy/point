@@ -1,4 +1,4 @@
-{% extends "admin/base.html" %}
+{% extends "light/base.html" %}
 {% from "macros/pagination.html" import render_pagination %}
 
 {% block title %}Media Library - {{ app_name }}{% endblock %}
@@ -231,10 +231,10 @@ async function handleFiles(files) {
                 const errorData = await response.json().catch(() => ({}));
                 console.error('Server error details:', errorData);
                 const errorMessage = errorData.detail?.message || errorData.detail || 'Upload failed';
-                window.AdminUtils.showToast(`Failed: ${files[i].name} - ${errorMessage}`, 'error');
+                window.LightUtils.showToast(`Failed: ${files[i].name} - ${errorMessage}`, 'error');
             }
         } catch (error) {
-            window.AdminUtils.showToast(`Failed: ${files[i].name}`, 'error');
+            window.LightUtils.showToast(`Failed: ${files[i].name}`, 'error');
         }
     }
 
