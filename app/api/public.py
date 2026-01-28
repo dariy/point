@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -299,7 +299,9 @@ async def single_post(
         select(Post)
         .options(selectinload(Post.tags))
         .where(Post.slug == slug)
-        .where(Post.status == PostStatus.PUBLISHED)
+        .where(
+            or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
+        )
     )
     result = await db.execute(query)
     post = result.scalar_one_or_none()
@@ -352,7 +354,7 @@ async def single_post(
     prev_post = None
     next_post = None
 
-    if post.published_at:
+    if post.status == PostStatus.PUBLISHED and post.published_at:
         # Get previous post
         prev_query = (
             select(Post)
