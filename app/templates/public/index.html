@@ -21,14 +21,10 @@
     {% if posts %}
         <div class="posts-grid">
             {% for post in posts %}
-                {% set has_image = post.thumbnail_path is not none %}
-                {% set is_video = false %}
-                {% if has_image %}
-                    {% set thumb_lower = post.thumbnail_path.lower().split('?')[0] %}
-                    {% if thumb_lower.endswith('.mp4') or thumb_lower.endswith('.webm') or thumb_lower.endswith('.ogg') or thumb_lower.endswith('.mov') or thumb_lower.endswith('.m4v') %}
-                        {% set is_video = true %}
-                    {% endif %}
-                {% endif %}
+                {% set thumb_info = determine_thumbnail(post.content, post.thumbnail_path) %}
+                {% set display_thumb = thumb_info[0] %}
+                {% set is_video = thumb_info[1] %}
+                {% set has_image = display_thumb is not none %}
 
                 {% if loop.first and post.is_featured %}
                     <div class="featured-post">
@@ -36,14 +32,14 @@
                             {% if has_image %}
                                 <div class="post-card-background">
                                     {% if is_video %}
-                                        <video src="{{ post.thumbnail_path }}" muted loop playsinline poster=""></video>
+                                        <video src="{{ display_thumb }}" muted loop playsinline poster=""></video>
                                         <div class="video-play-indicator">
                                             <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
                                                 <path d="M8 5v14l11-7z"/>
                                             </svg>
                                         </div>
                                     {% else %}
-                                        <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                                        <img src="{{ display_thumb }}" alt="{{ post.title }}" loading="lazy">
                                     {% endif %}
                                 </div>
                                 <div class="post-card-content overlay">
@@ -111,14 +107,14 @@
                         {% if has_image %}
                             <div class="post-card-background">
                                 {% if is_video %}
-                                    <video src="{{ post.thumbnail_path }}" muted loop playsinline></video>
+                                    <video src="{{ display_thumb }}" muted loop playsinline></video>
                                     <div class="video-play-indicator">
                                         <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
                                             <path d="M8 5v14l11-7z"/>
                                         </svg>
                                     </div>
                                 {% else %}
-                                    <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                                    <img src="{{ display_thumb }}" alt="{{ post.title }}" loading="lazy">
                                 {% endif %}
                             </div>
                             <div class="post-card-content overlay">
