@@ -1569,6 +1569,10 @@ img {
     transition: opacity 0.3s ease;
 }
 
+video.immersive-bg-image {
+    margin-bottom: 6em;
+}
+
 .immersive-overlay-container {
     position: absolute;
     inset: 0;
