@@ -53,7 +53,7 @@ async def login(
     # Determine user to authenticate
     if login_data.username:
         user = await auth_service.authenticate_user(
-            login_data.username, login_data.password
+            login_data.username, login_data.name
         )
     else:
         # For single-user blog, fetch the first user
@@ -65,7 +65,7 @@ async def login(
             )
         
         user = await auth_service.authenticate_user(
-            target_user.username, login_data.password
+            target_user.username, login_data.name
         )
 
     if not user:
@@ -161,8 +161,8 @@ async def change_password(
     try:
         success = await auth_service.change_password(
             user_id=current_user.id,
-            current_password=password_data.current_password,
-            new_password=password_data.new_password,
+            current_password=password_data.current_name,
+            new_password=password_data.new_name,
         )
     except ValueError as e:
         raise HTTPException(

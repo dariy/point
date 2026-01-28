@@ -450,6 +450,29 @@ async def settings_page(
     return templates.TemplateResponse("light/settings.html", context)
 
 
+@router.get("/security", response_class=HTMLResponse)
+async def security_page(
+    request: Request,
+    user: User | None = Depends(get_current_user),
+) -> HTMLResponse:
+    """Render security settings page.
+
+    Args:
+        request: FastAPI request
+        user: Current user
+
+    Returns:
+        Security page HTML
+    """
+    if not user:
+        return RedirectResponse(
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    context = get_base_context(request, user)
+    return templates.TemplateResponse("light/security.html", context)
+
+
 @router.get("/system", response_class=HTMLResponse)
 async def system_page(
     request: Request,
