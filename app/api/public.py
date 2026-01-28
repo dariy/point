@@ -32,6 +32,7 @@ from app.utils.formatters import (
     generate_excerpt,
     strip_html,
     truncate_paragraphs,
+    determine_thumbnail,
 )
 
 settings = get_settings()
@@ -63,6 +64,7 @@ def get_common_context(request: Request) -> dict[str, Any]:
         "format_content": format_content,
         "truncate_paragraphs": truncate_paragraphs,
         "generate_excerpt": generate_excerpt,
+        "determine_thumbnail": determine_thumbnail,
     }
 
 
@@ -139,27 +141,8 @@ def serialize_post(post: Post) -> dict[str, Any]:
     # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
     # 2. Or use the first image from content
     # 3. Or use the first video as fallback
-
-    def is_video_url(url: str) -> bool:
-        video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
-        return any(url.lower().split("?")[0].endswith(ext) for ext in video_extensions)
-
-    thumb_path = post.thumbnail_path
-    is_video_thumb = False
-
-    if thumb_path:
-        is_video_thumb = is_video_url(thumb_path)
-
-    # If we have no thumb or it's a video, try to find an image in content
-    if not thumb_path or is_video_thumb:
-        first_image = next((m["url"] for m in media_list if m["type"] == "image"), None)
-        if first_image:
-            thumb_path = first_image
-            is_video_thumb = False
-        elif not thumb_path and media_list:
-            # Fallback to first video if no image at all
-            thumb_path = media_list[0]["url"]
-            is_video_thumb = media_list[0]["type"] == "video"
+    
+    thumb_path, is_video_thumb = determine_thumbnail(post.content, post.thumbnail_path)
 
     return {
         "title": post.title,

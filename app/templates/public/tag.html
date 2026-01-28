@@ -282,14 +282,26 @@ document.addEventListener('DOMContentLoaded', function() {
     {% if posts %}
     <div class="posts-grid">
         {% for post in posts %}
-            {% set has_image = post.thumbnail_path is not none %}
+            {% set thumb_info = determine_thumbnail(post.content, post.thumbnail_path) %}
+            {% set display_thumb = thumb_info[0] %}
+            {% set is_video = thumb_info[1] %}
+            {% set has_image = display_thumb is not none %}
 
             {% if loop.first and post.is_featured %}
                 <div class="featured-post">
                     <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                         {% if has_image %}
                             <div class="post-card-background">
-                                <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                                {% if is_video %}
+                                    <video src="{{ display_thumb }}" muted loop playsinline></video>
+                                    <div class="video-play-indicator">
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                    </div>
+                                {% else %}
+                                    <img src="{{ display_thumb }}" alt="{{ post.title }}" loading="lazy">
+                                {% endif %}
                             </div>
                             <div class="post-card-content overlay">
                                 <span class="featured-badge">
@@ -355,7 +367,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                     {% if has_image %}
                         <div class="post-card-background">
-                            <img src="{{ post.thumbnail_path }}" alt="{{ post.title }}" loading="lazy">
+                            {% if is_video %}
+                                <video src="{{ display_thumb }}" muted loop playsinline></video>
+                                <div class="video-play-indicator">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                </div>
+                            {% else %}
+                                <img src="{{ display_thumb }}" alt="{{ post.title }}" loading="lazy">
+                            {% endif %}
                         </div>
                         <div class="post-card-content overlay">
                             <div class="post-card-meta">
