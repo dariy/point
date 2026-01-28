@@ -28,6 +28,7 @@ async def sample_tag(db: AsyncSession) -> Tag:
         slug="test-tag",
         description="A test tag for testing",
         is_important=True,
+        is_featured=True,
         post_count=0,
     )
     db.add(tag)
@@ -590,8 +591,9 @@ class TestRobotsTxt:
         assert response.status_code == 200
         assert "Allow: /" in response.text
 
-    def test_robots_txt_disallows_admin(self, client):
-        response = client.get("/robots.txt")
+    @pytest.mark.asyncio
+    async def test_robots_txt_disallows_admin(self, client: AsyncClient) -> None:
+        response = await client.get("/robots.txt")
         assert "Disallow: /light/" in response.text
 
     @pytest.mark.asyncio
