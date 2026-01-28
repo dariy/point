@@ -58,7 +58,7 @@ def get_common_context(request: Request) -> dict[str, Any]:
         "request": request,
         "blog_title": settings.app_name,
         "blog_subtitle": getattr(settings, "blog_subtitle", ""),
-        "author_name": getattr(settings, "author_name", "Admin"),
+        "author_name": getattr(settings, "author_name", "Light"),
         "current_year": datetime.now().year,
         "format_content": format_content,
         "truncate_paragraphs": truncate_paragraphs,
@@ -117,16 +117,16 @@ async def get_db_context(
 def serialize_post(post: Post) -> dict[str, Any]:
     """Serialize post for JSON response."""
     pub_date = post.published_at or post.created_at
-    
+
     # Check for media
     media_list = extract_all_media(post.content)
     has_image = post.thumbnail_path is not None or any(m["type"] == "image" for m in media_list)
     has_video = any(m["type"] == "video" for m in media_list)
     has_media = has_image or has_video
-    
+
     excerpt = post.excerpt
     preview_html = None
-    
+
     if not excerpt:
         # Generate generic excerpt
         if has_media:
@@ -134,22 +134,22 @@ def serialize_post(post: Post) -> dict[str, Any]:
         else:
              content_html = format_content(post.content, post.formatter.value)
              preview_html = truncate_paragraphs(content_html)
-    
+
     # Selection logic for thumbnail:
     # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
     # 2. Or use the first image from content
     # 3. Or use the first video as fallback
-    
+
     def is_video_url(url: str) -> bool:
         video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
         return any(url.lower().split("?")[0].endswith(ext) for ext in video_extensions)
 
     thumb_path = post.thumbnail_path
     is_video_thumb = False
-    
+
     if thumb_path:
         is_video_thumb = is_video_url(thumb_path)
-    
+
     # If we have no thumb or it's a video, try to find an image in content
     if not thumb_path or is_video_thumb:
         first_image = next((m["url"] for m in media_list if m["type"] == "image"), None)
@@ -210,7 +210,7 @@ async def homepage(
     # Get blog settings early for pagination
     settings_service = SettingsService(db)
     blog_settings = await settings_service.get_all_settings()
-    
+
     per_page = blog_settings.get("posts_per_page", 10)
     offset = (page - 1) * per_page
 
@@ -353,7 +353,7 @@ async def single_post(
 
     # Extract all media for carousel
     post_media = extract_all_media(post.content)
-    
+
     # If thumbnail exists and is not in content media, add it to the start
     if post.thumbnail_path:
         thumb_url = post.thumbnail_path
@@ -471,7 +471,7 @@ async def tag_archive(
     # Get blog settings early for pagination
     settings_service = SettingsService(db)
     blog_settings = await settings_service.get_all_settings()
-    
+
     per_page = blog_settings.get("posts_per_page", 12)
     offset = (page - 1) * per_page
 
@@ -510,13 +510,13 @@ async def tag_archive(
 
     context = get_common_context(request)
     db_context = await get_db_context(db, blog_settings)
-    
+
     # Ensure current tag is in the tags list for navigation bar
     if tag not in db_context["tags"]:
         db_context["tags"].append(tag)
         # Sort again by name
         db_context["tags"].sort(key=lambda x: x.name)
-        
+
     context.update(db_context)
 
     context.update(
@@ -569,7 +569,7 @@ async def tags_page(
     # Get blog settings early for pagination
     settings_service = SettingsService(db)
     blog_settings = await settings_service.get_all_settings()
-    
+
     per_page = blog_settings.get("posts_per_page", 24)
     offset = (page - 1) * per_page
 
@@ -751,7 +751,7 @@ async def rss_feed(
         "request": request,
         "blog_title": settings.app_name,
         "blog_subtitle": getattr(settings, "blog_subtitle", ""),
-        "author_name": getattr(settings, "author_name", "Admin"),
+        "author_name": getattr(settings, "author_name", "Light"),
         "author_email": getattr(settings, "author_email", ""),
         "language": getattr(settings, "default_language", "en"),
         "base_url": base_url,

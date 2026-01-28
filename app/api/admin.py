@@ -1,6 +1,6 @@
-"""Admin interface routes.
+"""Light interface routes.
 
-Renders HTML pages for the admin dashboard and management interface.
+Renders HTML pages for the light dashboard and management interface.
 """
 
 from pathlib import Path
@@ -26,7 +26,7 @@ from app.services.settings_service import SettingsService
 from app.services.system_service import SystemService
 from app.services.tag_service import TagService
 
-router = APIRouter(prefix="/light", tags=["Admin"])
+router = APIRouter(prefix="/light", tags=["Light"])
 
 # Set up templates
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -36,7 +36,7 @@ settings = get_settings()
 
 
 def get_base_context(request: Request, user: User | None = None) -> dict[str, Any]:
-    """Get base context for all admin templates.
+    """Get base context for all light templates.
 
     Args:
         request: FastAPI request
@@ -57,7 +57,7 @@ async def require_auth(
     request: Request,
     user: User | None = Depends(get_current_user),
 ) -> User:
-    """Require authentication for admin routes.
+    """Require authentication for light routes.
 
     Args:
         request: FastAPI request
@@ -72,7 +72,7 @@ async def require_auth(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": "/admin/login"},
+            headers={"Location": "/light/login"},
         )
     return user
 
@@ -92,11 +92,11 @@ async def login_page(
         Login page HTML or redirect to dashboard
     """
     if user:
-        return RedirectResponse(url="/admin/", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/light/", status_code=status.HTTP_303_SEE_OTHER)
 
     context = get_base_context(request)
     context["error"] = request.query_params.get("error")
-    return templates.TemplateResponse("admin/login.html", context)
+    return templates.TemplateResponse("light/login.html", context)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -105,7 +105,7 @@ async def dashboard(
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
 ) -> HTMLResponse:
-    """Render admin dashboard.
+    """Render light dashboard.
 
     Args:
         request: FastAPI request
@@ -117,7 +117,7 @@ async def dashboard(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     # Get statistics
@@ -165,7 +165,7 @@ async def dashboard(
             "active_sessions": active_sessions or 0,
         }
     )
-    return templates.TemplateResponse("admin/dashboard.html", context)
+    return templates.TemplateResponse("light/dashboard.html", context)
 
 
 @router.get("/posts", response_class=HTMLResponse)
@@ -190,7 +190,7 @@ async def posts_list(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     per_page = 20
@@ -222,7 +222,7 @@ async def posts_list(
             "statuses": [s.value for s in PostStatus],
         }
     )
-    return templates.TemplateResponse("admin/posts_list.html", context)
+    return templates.TemplateResponse("light/posts_list.html", context)
 
 
 @router.get("/posts/new", response_class=HTMLResponse)
@@ -243,7 +243,7 @@ async def new_post(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     # Get all tags for autocomplete
@@ -259,7 +259,7 @@ async def new_post(
             "statuses": [s.value for s in PostStatus],
         }
     )
-    return templates.TemplateResponse("admin/post_edit.html", context)
+    return templates.TemplateResponse("light/post_edit.html", context)
 
 
 @router.get("/posts/{post_id}", response_class=HTMLResponse)
@@ -282,7 +282,7 @@ async def edit_post(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     post_service = PostService(db)
@@ -310,7 +310,7 @@ async def edit_post(
             "statuses": [s.value for s in PostStatus],
         }
     )
-    return templates.TemplateResponse("admin/post_edit.html", context)
+    return templates.TemplateResponse("light/post_edit.html", context)
 
 
 @router.get("/tags", response_class=HTMLResponse)
@@ -339,7 +339,7 @@ async def tags_page(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     tag_service = TagService(db)
@@ -361,7 +361,7 @@ async def tags_page(
             "sort_order": sort_order,
         }
     )
-    return templates.TemplateResponse("admin/tags.html", context)
+    return templates.TemplateResponse("light/tags.html", context)
 
 
 @router.get("/media", response_class=HTMLResponse)
@@ -386,7 +386,7 @@ async def media_page(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     per_page = 24
@@ -414,7 +414,7 @@ async def media_page(
             "file_types": file_types,
         }
     )
-    return templates.TemplateResponse("admin/media.html", context)
+    return templates.TemplateResponse("light/media.html", context)
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -435,7 +435,7 @@ async def settings_page(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     settings_service = SettingsService(db)
@@ -447,7 +447,7 @@ async def settings_page(
             "blog_settings": blog_settings,
         }
     )
-    return templates.TemplateResponse("admin/settings.html", context)
+    return templates.TemplateResponse("light/settings.html", context)
 
 
 @router.get("/system", response_class=HTMLResponse)
@@ -468,7 +468,7 @@ async def system_page(
     """
     if not user:
         return RedirectResponse(
-            url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+            url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
     system_service = SystemService(db)
@@ -482,7 +482,7 @@ async def system_page(
             "logs": logs,
         }
     )
-    return templates.TemplateResponse("admin/system.html", context)
+    return templates.TemplateResponse("light/system.html", context)
 
 
 @router.get("/logout")
@@ -496,7 +496,7 @@ async def logout(request: Request) -> RedirectResponse:
         Redirect to login page
     """
     response = RedirectResponse(
-        url="/admin/login", status_code=status.HTTP_303_SEE_OTHER
+        url="/light/login", status_code=status.HTTP_303_SEE_OTHER
     )
     response.delete_cookie("session_token")
     return response

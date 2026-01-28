@@ -1,4 +1,4 @@
-{% extends "admin/base.html" %}
+{% extends "light/base.html" %}
 
 {% block page_title %}System Tools{% endblock %}
 
@@ -100,7 +100,7 @@
 <script>
 async function clearCache(pattern) {
     if (!confirm('Are you sure you want to clear the cache? This may temporarily slow down page loads.')) return;
-    
+
     try {
         const response = await fetch('/api/system/cache/clear?pattern=' + pattern, { method: 'POST' });
         const data = await response.json();
@@ -119,7 +119,7 @@ async function triggerBackup() {
     const btn = event.target;
     btn.disabled = true;
     btn.textContent = 'Backing up...';
-    
+
     try {
         const response = await fetch('/api/system/backup', { method: 'POST' });
         const data = await response.json();
@@ -139,7 +139,7 @@ async function triggerBackup() {
 
 async function cleanupOrphaned() {
     if (!confirm('Are you sure you want to delete orphaned media files? This action cannot be undone.')) return;
-    
+
     try {
         const response = await fetch('/api/media/orphaned', { method: 'DELETE' });
         const data = await response.json();
@@ -158,7 +158,7 @@ async function refreshLogs() {
     const logType = document.getElementById('log-type').value;
     const logContent = document.getElementById('log-content');
     logContent.innerHTML = '<div class="log-line">Loading logs...</div>';
-    
+
     try {
         const response = await fetch('/api/system/logs?log_type=' + logType);
         if (response.ok) {
@@ -187,8 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
     margin-bottom: 24px;
 }
 .system-card {
-    background: var(--admin-card-bg);
-    border: 1px solid var(--admin-border);
+    background: var(--light-card-bg);
+    border: 1px solid var(--light-border);
     border-radius: 8px;
     padding: 24px;
 }
@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     margin-top: 0;
     margin-bottom: 20px;
     padding-bottom: 10px;
-    border-bottom: 1px solid var(--admin-border);
+    border-bottom: 1px solid var(--light-border);
     font-size: 1.2em;
 }
 .stats-list {
@@ -209,11 +209,11 @@ document.addEventListener('DOMContentLoaded', () => {
     justify-content: space-between;
 }
 .stat-label {
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
     font-weight: 500;
 }
 .stat-value {
-    color: var(--admin-text-primary);
+    color: var(--light-text-primary);
     font-family: monospace;
 }
 .ops-list {
@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
 .op-info p {
     margin: 0;
     font-size: 0.85em;
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
 }
 .logs-card {
     padding: 0;
@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--admin-border);
+    border-bottom: 1px solid var(--light-border);
 }
 .logs-card .card-title {
     margin: 0;
@@ -266,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
     margin-bottom: 2px;
 }
 .log-line.empty, .log-line.error {
-    color: var(--admin-text-secondary);
+    color: var(--light-text-secondary);
     font-style: italic;
 }
 .log-line.error {
@@ -279,14 +279,14 @@ document.addEventListener('DOMContentLoaded', () => {
 .header-actions select {
     padding: 4px 8px;
     border-radius: 4px;
-    background: var(--admin-input-bg);
-    color: var(--admin-text-primary);
-    border: 1px solid var(--admin-border);
+    background: var(--light-input-bg);
+    color: var(--light-text-primary);
+    border: 1px solid var(--light-border);
 }
 
 .header-actions select option {
-    background-color: var(--admin-input-bg);
-    color: var(--admin-text-primary);
+    background-color: var(--light-input-bg);
+    color: var(--light-text-primary);
 }
 </style>
 {% endblock %}

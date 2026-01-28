@@ -14,10 +14,10 @@ async def test_user(db: AsyncSession) -> dict:
     """Create a test user and return credentials."""
     auth_service = AuthService(db)
     user_data = UserCreate(
-        username="admin",
-        email="admin@example.com",
+        username="light",
+        email="light@example.com",
         password="testpassword123",
-        display_name="Admin User",
+        display_name="Light User",
     )
     user = await auth_service.create_user(user_data)
     await db.commit()
@@ -43,7 +43,7 @@ async def test_login_no_username_success(
     assert response.status_code == 200
     data = response.json()
     assert data["message"] == "Login successful"
-    assert data["user"]["username"] == "admin"
+    assert data["user"]["username"] == "light"
     assert SESSION_COOKIE_NAME in response.cookies
 
 
@@ -70,7 +70,7 @@ async def test_login_no_username_no_user(
     """Test login without username when no users exist in DB."""
     # Note: We don't use the test_user fixture here, so DB should be empty
     # unless other tests ran and didn't clean up (conftest should handle this)
-    
+
     response = await client.post(
         "/api/auth/login",
         json={

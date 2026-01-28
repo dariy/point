@@ -2,7 +2,7 @@
 
 > **Last Updated**: 2026-01-23
 > **Project Status**: Active Development (MVP In Progress)
-> **Current Phase**: Phase 6 Complete - Admin Interface
+> **Current Phase**: Phase 6 Complete - Light Interface
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
@@ -56,9 +56,9 @@ Container:   Docker + docker-compose
 
 ## Current Repository State
 
-### Project Phase: Admin Interface Complete
+### Project Phase: Light Interface Complete
 
-**Status**: Phases 1-6 Complete, MVP backend and admin UI functional
+**Status**: Phases 1-6 Complete, MVP backend and light UI functional
 
 **Completed Phases**:
 - ✅ Phase 1: Project Foundation - Docker, database, project structure
@@ -66,7 +66,7 @@ Container:   Docker + docker-compose
 - ✅ Phase 3: Post Management Core - Post CRUD, slugs, status management
 - ✅ Phase 4: Media Management - File upload, image processing, thumbnails
 - ✅ Phase 5: Tag System - Tag CRUD, post-tag relationships
-- ✅ Phase 6: Admin Interface - Dashboard, post editor, media library, tags manager
+- ✅ Phase 6: Light Interface - Dashboard, post editor, media library, tags manager
 
 **Next Steps** (Phase 7):
 1. Public frontend templates
@@ -93,7 +93,7 @@ point/
 │   ├── database.py        # SQLAlchemy async setup
 │   ├── dependencies.py    # Auth dependencies
 │   ├── api/               # FastAPI routes
-│   │   ├── admin.py       # Admin HTML routes
+│   │   ├── light.py       # Light HTML routes
 │   │   ├── auth.py        # Authentication API
 │   │   ├── posts.py       # Posts API
 │   │   ├── media.py       # Media API
@@ -117,7 +117,7 @@ point/
 │   │   └── media_service.py
 │   ├── templates/         # Jinja2 templates
 │   │   ├── base.html
-│   │   ├── admin/
+│   │   ├── light/
 │   │   │   ├── base.html
 │   │   │   ├── login.html
 │   │   │   ├── dashboard.html
@@ -130,9 +130,9 @@ point/
 │   │       └── pagination.html
 │   ├── static/            # CSS, JS assets
 │   │   ├── css/
-│   │   │   └── admin.css
+│   │   │   └── light.css
 │   │   └── js/
-│   │       └── admin.js
+│   │       └── light.js
 │   └── utils/             # Utility functions
 │       ├── slugify.py
 │       ├── formatters.py
@@ -145,7 +145,7 @@ point/
 │       ├── test_posts.py
 │       ├── test_media.py
 │       ├── test_tags.py
-│       └── test_admin.py
+│       └── test_light.py
 └── scripts/               # Utility scripts
     └── init_db.py
 ```
@@ -1254,7 +1254,7 @@ git push -u origin <branch>           # Push
 | 1.0.0 | 2026-01-22 | Initial CLAUDE.md creation |
 | 1.1.0 | 2026-01-22 | Phase 1-2 complete: Foundation and Authentication |
 | 1.2.0 | 2026-01-23 | Phase 3-5 complete: Posts, Media, Tags |
-| 1.3.0 | 2026-01-23 | Phase 6 complete: Admin Interface with templates, CSS, JS |
+| 1.3.0 | 2026-01-23 | Phase 6 complete: Light Interface with templates, CSS, JS |
 
 ---
 

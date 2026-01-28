@@ -25,7 +25,7 @@ Each phase is designed to be:
 | 3 | Post Management Core | ✅ Completed | Phase 2 |
 | 4 | Media Management | ✅ Completed | Phase 3 |
 | 5 | Tag System | ✅ Completed | Phase 3 |
-| 6 | Admin Interface | ✅ Completed | Phases 3, 4, 5 |
+| 6 | Light Interface | ✅ Completed | Phases 3, 4, 5 |
 | 7 | Public Frontend | ✅ Completed | Phases 3, 5 |
 | 8 | RSS & SEO | ✅ Completed | Phase 7 |
 | 9 | Theming System | ✅ Completed | Phase 7 |
@@ -162,7 +162,7 @@ mypy app/
 
 - [x] **2.6 Initial User Setup**
   - [x] Create `scripts/init_db.py`
-  - [x] Add admin user creation on first run
+  - [x] Add light user creation on first run
   - [x] Implement password requirements validation
 
 - [x] **2.7 Auth Tests**
@@ -186,7 +186,7 @@ mypy app/
 ```bash
 # Login works
 curl -X POST http://localhost:8000/api/auth/login \
-  -d '{"username":"admin","password":"secret"}'
+  -d '{"username":"light","password":"secret"}'
 
 # Protected endpoint requires auth
 curl http://localhost:8000/api/auth/me  # Returns 401
@@ -475,9 +475,9 @@ curl http://localhost:8000/api/tags/travel/posts
 
 ---
 
-## Phase 6: Admin Interface
+## Phase 6: Light Interface
 
-**Goal**: Build admin dashboard and management UI
+**Goal**: Build light dashboard and management UI
 
 **Status**: ✅ Complete
 
@@ -487,31 +487,31 @@ curl http://localhost:8000/api/tags/travel/posts
 
 - [x] **6.1 Base Templates**
   - [x] Create `app/templates/base.html`
-  - [x] Create `app/templates/admin/base.html`
+  - [x] Create `app/templates/light/base.html`
   - [x] Set up Jinja2 environment
   - [x] Add common macros (forms, pagination)
 
-- [x] **6.2 Admin Static Assets**
-  - [x] Create `app/static/css/admin.css`
-  - [x] Create `app/static/js/admin.js`
+- [x] **6.2 Light Static Assets**
+  - [x] Create `app/static/css/light.css`
+  - [x] Create `app/static/js/light.js`
   - [x] Add minimal JS for interactions
   - [x] Style forms, tables, buttons
 
 - [x] **6.3 Login Page**
-  - [x] Create `app/templates/admin/login.html`
+  - [x] Create `app/templates/light/login.html`
   - [x] Implement login form
   - [x] Handle errors/validation
   - [x] Redirect after login
 
 - [x] **6.4 Dashboard**
-  - [x] Create `app/templates/admin/dashboard.html`
+  - [x] Create `app/templates/light/dashboard.html`
   - [x] Display stats (posts, drafts, views)
   - [x] Recent posts list
   - [x] Storage usage display
   - [x] Active sessions
 
 - [x] **6.5 Post Editor**
-  - [x] Create `app/templates/admin/post_edit.html`
+  - [x] Create `app/templates/light/post_edit.html`
   - [x] Form fields (title, content, tags, status)
   - [x] Image upload widget
   - [x] Insert image into content
@@ -520,21 +520,21 @@ curl http://localhost:8000/api/tags/travel/posts
   - [x] Publish/Delete actions
 
 - [x] **6.6 Posts List**
-  - [x] Create `app/templates/admin/posts_list.html`
+  - [x] Create `app/templates/light/posts_list.html`
   - [x] Table with all posts
   - [x] Filter by status
   - [x] Search posts
   - [x] Bulk actions (optional)
 
 - [x] **6.7 Tag Manager**
-  - [x] Create `app/templates/admin/tags.html`
+  - [x] Create `app/templates/light/tags.html`
   - [x] List all tags with counts
   - [x] Edit tag details
   - [x] Delete with confirmation
   - [x] Mark as important
 
 - [x] **6.8 Media Library**
-  - [x] Create `app/templates/admin/media.html`
+  - [x] Create `app/templates/light/media.html`
   - [x] Grid view of uploads
   - [x] Filter by type
   - [x] Search by filename
@@ -542,17 +542,17 @@ curl http://localhost:8000/api/tags/travel/posts
   - [x] Copy URL button
   - [x] Upload modal
 
-- [x] **6.9 Admin Routes**
-  - [x] Create `app/api/admin.py` (HTML routes)
-  - [x] `GET /admin/` - Dashboard
-  - [x] `GET /admin/login` - Login page
-  - [x] `GET /admin/posts` - Posts list
-  - [x] `GET /admin/posts/new` - New post
-  - [x] `GET /admin/posts/{id}` - Edit post
-  - [x] `GET /admin/tags` - Tag manager
-  - [x] `GET /admin/media` - Media library
+- [x] **6.9 Light Routes**
+  - [x] Create `app/api/light.py` (HTML routes)
+  - [x] `GET /light/` - Dashboard
+  - [x] `GET /light/login` - Login page
+  - [x] `GET /light/posts` - Posts list
+  - [x] `GET /light/posts/new` - New post
+  - [x] `GET /light/posts/{id}` - Edit post
+  - [x] `GET /light/tags` - Tag manager
+  - [x] `GET /light/media` - Media library
 
-- [x] **6.10 Admin Tests**
+- [x] **6.10 Light Tests**
   - [x] Test page loads with auth
   - [x] Test redirect without auth
   - [x] Test form submissions
@@ -566,19 +566,19 @@ curl http://localhost:8000/api/tags/travel/posts
 4. Posts list with filters
 5. Tag management interface
 6. Media library with upload
-7. Responsive admin layout
+7. Responsive light layout
 
 ### Validation Criteria
 
 ```bash
 # Access login page
-curl http://localhost:8000/admin/login  # Returns HTML
+curl http://localhost:8000/light/login  # Returns HTML
 
 # Dashboard requires auth
-curl http://localhost:8000/admin/  # Redirects to login
+curl http://localhost:8000/light/  # Redirects to login
 
 # With auth, dashboard loads
-curl http://localhost:8000/admin/ -H "Cookie: session=<token>"
+curl http://localhost:8000/light/ -H "Cookie: session=<token>"
 ```
 
 ---
@@ -643,7 +643,7 @@ curl http://localhost:8000/admin/ -H "Cookie: session=<token>"
 
 - [x] **7.8 View Counting**
   - [x] Increment on page load
-  - [x] Avoid counting admin views
+  - [x] Avoid counting light views
   - [x] Batch updates (optional)
 
 - [x] **7.9 Public Tests**
@@ -765,12 +765,12 @@ curl http://localhost:8000/robots.txt
   - [x] Shadow styles
 
 - [x] **9.2 Dark Theme**
-  - [x] Dark theme styles in `main.css` and `admin.css`
+  - [x] Dark theme styles in `main.css` and `light.css`
   - [x] Dark color palette
   - [x] Adjusted contrasts
 
 - [x] **9.3 Light Theme**
-  - [x] Light theme styles in `main.css` and `admin.css`
+  - [x] Light theme styles in `main.css` and `light.css`
   - [x] Light color palette
   - [x] Clean aesthetics
 
@@ -786,8 +786,8 @@ curl http://localhost:8000/robots.txt
   - [x] Icon changes with theme (sun/moon)
   - [x] Smooth transitions
 
-- [x] **9.6 Admin Theme Support**
-  - [x] Apply theming to admin
+- [x] **9.6 Light Theme Support**
+  - [x] Apply theming to light
   - [x] Consistent with public
 
 - [x] **9.7 Color Scheme Meta**
@@ -950,7 +950,7 @@ ls /data/cache/pages/  # Should be cleared
 - [x] **11.7 Manual Backup Endpoint**
   - [x] `POST /api/system/backup` - Trigger backup
   - [x] Return backup file path
-  - [x] Admin only
+  - [x] Light only
 
 - [x] **11.8 Task Tests**
   - [x] Test scheduler startup
@@ -988,7 +988,7 @@ ls /data/backups/
 
 ## Phase 12: Settings & System Tools
 
-**Goal**: Implement blog settings and admin system tools
+**Goal**: Implement blog settings and light system tools
 
 **Status**: ✅ Complete
 
@@ -1015,7 +1015,7 @@ ls /data/backups/
   - [x] `GET /api/settings/{key}` - Get one
 
 - [x] **12.4 Settings Page**
-  - [x] Create `app/templates/admin/settings.html`
+  - [x] Create `app/templates/light/settings.html`
   - [x] All settings per spec (lines 438-453)
   - [x] Form validation
   - [x] Save feedback
@@ -1034,7 +1034,7 @@ ls /data/backups/
   - [x] Stream new logs (optional)
 
 - [x] **12.7 System Tools Page**
-  - [x] Create `app/templates/admin/system.html`
+  - [x] Create `app/templates/light/system.html`
   - [x] View logs
   - [x] Cache statistics
   - [x] Clear cache button
@@ -1054,7 +1054,7 @@ ls /data/backups/
 ### Deliverables
 
 1. Blog settings management
-2. Settings admin page
+2. Settings light page
 3. System statistics dashboard
 4. Log viewer
 5. Cache management
@@ -1206,10 +1206,10 @@ Track significant milestones here:
 | 2026-01-22 | 2 | Phase 2 complete | User/Session models, auth service, API endpoints, 25 tests passing |
 | 2026-01-23 | 4 | Phase 4 complete | Media model/schemas, image processor, validators, media service, API endpoints, 61 new tests (116 total) |
 | 2026-01-23 | 5 | Phase 5 complete | Tag model, PostTag association, tag service, post-tag integration, API endpoints, 22 new tests (138 total) |
-| 2026-01-23 | 6 | Phase 6 complete | Admin interface with dashboard, post editor, media library, tags manager |
+| 2026-01-23 | 6 | Phase 6 complete | Light interface with dashboard, post editor, media library, tags manager |
 | 2026-01-24 | 7 | Phase 7 complete | Public frontend with homepage, single post, tag archive, gallery, 25 new tests (163 total) |
 | 2026-01-24 | 8 | Phase 8 complete | RSS feed, sitemap, robots.txt, Open Graph & Twitter Card meta tags, canonical URLs, 29 new tests (192 total) |
-| 2026-01-24 | 9 | Phase 9 complete | Dark/light theming with CSS variables, theme.js for toggle and system preference detection, theme switcher UI, admin theming, 24 new tests |
+| 2026-01-24 | 9 | Phase 9 complete | Dark/light theming with CSS variables, theme.js for toggle and system preference detection, theme switcher UI, light theming, 24 new tests |
 | 2026-01-25 | 10 | Phase 10 complete | File-based caching with FileCache class, page caching for public routes, cache invalidation on post/tag changes, static asset caching headers, 22 new tests |
 | 2026-01-27 | 11 | Phase 11 complete | Scheduler service with APScheduler, background tasks for session cleanup and view count flushing, backup service with scripts and API endpoint, 13 new tests |
 
@@ -1234,7 +1234,7 @@ Phase 4 (Media)    Phase 5 (Tags) │
     └────────┬───────────┘         │
              │                     │
              ▼                     │
-    Phase 6 (Admin) ◄──────────────┘
+    Phase 6 (Light) ◄──────────────┘
              │
              ▼
     Phase 7 (Public)
