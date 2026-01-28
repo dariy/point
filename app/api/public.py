@@ -82,9 +82,13 @@ async def get_db_context(
     tag_service = TagService(db)
     tag_cloud = await tag_service.get_tag_cloud(limit=15)
 
-    # Get tags for navigation
+    # Get tags for navigation (only featured tags)
     tags_result = await db.execute(
-        select(Tag).where(Tag.post_count > 0).order_by(Tag.name).limit(10)
+        select(Tag)
+        .where(Tag.is_featured == True)
+        .where(Tag.post_count > 0)
+        .order_by(Tag.name)
+        .limit(20)
     )
     tags = list(tags_result.scalars().all())
 
@@ -506,6 +510,13 @@ async def tag_archive(
 
     context = get_common_context(request)
     db_context = await get_db_context(db, blog_settings)
+    
+    # Ensure current tag is in the tags list for navigation bar
+    if tag not in db_context["tags"]:
+        db_context["tags"].append(tag)
+        # Sort again by name
+        db_context["tags"].sort(key=lambda x: x.name)
+        
     context.update(db_context)
 
     context.update(
@@ -875,6 +886,7 @@ async def robots_txt(request: Request) -> PlainTextResponse:
     base_url = get_base_url(request)
 
     content = f"""User-agent: *
+Allow: /
 Disallow: /light/
 Disallow: /api/
 Sitemap: {request.base_url}sitemap.xml
