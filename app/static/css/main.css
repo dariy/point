@@ -401,13 +401,13 @@ img {
     font-size: var(--font-size-sm);
 }
 
-.admin-link {
+.light-link {
     font-weight: 700;
     text-decoration: none;
     color: inherit;
 }
 
-.admin-link:hover {
+.light-link:hover {
     color: var(--color-primary);
 }
 

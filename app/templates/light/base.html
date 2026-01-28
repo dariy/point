@@ -9,11 +9,11 @@
 <script src="/static/js/theme.js"></script>
 {% endblock %}
 
-{% block body_class %}admin-layout{% endblock %}
+{% block body_class %}light-layout{% endblock %}
 
 {% block body %}
-<div class="admin-container">
-    <nav class="admin-sidebar">
+<div class="light-container">
+    <nav class="light-sidebar">
         <div class="sidebar-header">
             <a href="/light/" class="logo">{{ app_name }}</a>
         </div>
@@ -72,8 +72,8 @@
         </div>
     </nav>
 
-    <main class="admin-main">
-        <header class="admin-header">
+    <main class="light-main">
+        <header class="light-header">
             <h1>{% block page_title %}Dashboard{% endblock %}</h1>
             <div class="header-actions">
                 {% block header_actions %}{% endblock %}
@@ -106,12 +106,12 @@
         {% endif %}
         {% endwith %}
 
-        <div class="admin-content">
+        <div class="light-content">
             {% block content %}{% endblock %}
         </div>
     </main>
 </div>
 
-<script src="/static/js/admin.js"></script>
+<script src="/static/js/light.js"></script>
 {% block extra_js %}{% endblock %}
 {% endblock %}

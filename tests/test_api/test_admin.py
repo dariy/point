@@ -1,4 +1,4 @@
-"""Tests for admin interface routes."""
+"""Tests for light interface routes."""
 
 import pytest
 from datetime import datetime
@@ -19,17 +19,17 @@ async def test_user(db: AsyncSession) -> dict:
     """
     auth_service = AuthService(db)
     user_data = UserCreate(
-        username="admin",
-        email="admin@example.com",
-        password="adminpassword123",
-        display_name="Admin User",
+        username="light",
+        email="light@example.com",
+        password="lightpassword123",
+        display_name="Light User",
     )
     user = await auth_service.create_user(user_data)
     await db.commit()
 
     return {
-        "username": "admin",
-        "password": "adminpassword123",
+        "username": "light",
+        "password": "lightpassword123",
         "user": user,
     }
 
@@ -53,7 +53,7 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
 
 
 class TestLoginPage:
-    """Test cases for admin login page."""
+    """Test cases for light login page."""
 
     @pytest.mark.asyncio
     async def test_login_page_renders(self, client: AsyncClient) -> None:
@@ -80,7 +80,7 @@ class TestLoginPage:
 
 
 class TestDashboard:
-    """Test cases for admin dashboard."""
+    """Test cases for light dashboard."""
 
     @pytest.mark.asyncio
     async def test_dashboard_requires_auth(self, client: AsyncClient) -> None:
@@ -308,8 +308,8 @@ class TestMediaPage:
         assert "No media" in response.text or "Upload" in response.text
 
 
-class TestAdminLogout:
-    """Test cases for admin logout."""
+class TestLightLogout:
+    """Test cases for light logout."""
 
     @pytest.mark.asyncio
     async def test_logout_redirects_to_login(
@@ -367,14 +367,14 @@ class TestEditPost:
         assert response.status_code == 404
 
 
-class TestAdminTheming:
-    """Test cases for admin interface theming."""
+class TestLightTheming:
+    """Test cases for light interface theming."""
 
     @pytest.mark.asyncio
-    async def test_admin_login_has_color_scheme_meta(
+    async def test_light_login_has_color_scheme_meta(
         self, client: AsyncClient
     ) -> None:
-        """Test admin login page has color-scheme meta tag."""
+        """Test light login page has color-scheme meta tag."""
         response = await client.get("/light/login")
 
         assert response.status_code == 200
@@ -382,10 +382,10 @@ class TestAdminTheming:
         assert 'content="light dark"' in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_dashboard_has_theme_toggle(
+    async def test_light_dashboard_has_theme_toggle(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
-        """Test admin dashboard has theme toggle button."""
+        """Test light dashboard has theme toggle button."""
         response = await client.get(
             "/light/",
             cookies=auth_cookies,
@@ -395,10 +395,10 @@ class TestAdminTheming:
         assert 'class="theme-toggle"' in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_dashboard_has_theme_icons(
+    async def test_light_dashboard_has_theme_icons(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
-        """Test admin dashboard has sun and moon theme icons."""
+        """Test light dashboard has sun and moon theme icons."""
         response = await client.get(
             "/light/",
             cookies=auth_cookies,
@@ -409,10 +409,10 @@ class TestAdminTheming:
         assert 'class="icon-moon"' in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_loads_theme_js(
+    async def test_light_loads_theme_js(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
-        """Test admin pages load theme.js script."""
+        """Test light pages load theme.js script."""
         response = await client.get(
             "/light/",
             cookies=auth_cookies,
@@ -422,10 +422,10 @@ class TestAdminTheming:
         assert "/static/js/theme.js" in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_posts_has_theme_toggle(
+    async def test_light_posts_has_theme_toggle(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
-        """Test admin posts page has theme toggle."""
+        """Test light posts page has theme toggle."""
         response = await client.get(
             "/light/posts",
             cookies=auth_cookies,
@@ -435,10 +435,10 @@ class TestAdminTheming:
         assert 'class="theme-toggle"' in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_tags_has_theme_toggle(
+    async def test_light_tags_has_theme_toggle(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
-        """Test admin tags page has theme toggle."""
+        """Test light tags page has theme toggle."""
         response = await client.get(
             "/light/tags",
             cookies=auth_cookies,
@@ -448,10 +448,10 @@ class TestAdminTheming:
         assert 'class="theme-toggle"' in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_media_has_theme_toggle(
+    async def test_light_media_has_theme_toggle(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
-        """Test admin media page has theme toggle."""
+        """Test light media page has theme toggle."""
         response = await client.get(
             "/light/media",
             cookies=auth_cookies,
@@ -461,32 +461,32 @@ class TestAdminTheming:
         assert 'class="theme-toggle"' in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_css_has_dark_theme_variables(
+    async def test_light_css_has_dark_theme_variables(
         self, client: AsyncClient
     ) -> None:
-        """Test admin CSS has dark theme variables."""
-        response = await client.get("/static/css/admin.css")
+        """Test light CSS has dark theme variables."""
+        response = await client.get("/static/css/light.css")
 
         assert response.status_code == 200
         assert '[data-theme="dark"]' in response.text
-        assert "--admin-bg" in response.text
+        assert "--light-bg" in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_css_has_light_theme_variables(
+    async def test_light_css_has_light_theme_variables(
         self, client: AsyncClient
     ) -> None:
-        """Test admin CSS has light theme variables."""
-        response = await client.get("/static/css/admin.css")
+        """Test light CSS has light theme variables."""
+        response = await client.get("/static/css/light.css")
 
         assert response.status_code == 200
         assert '[data-theme="light"]' in response.text
-        assert "--admin-text-primary" in response.text
+        assert "--light-text-primary" in response.text
 
     @pytest.mark.asyncio
-    async def test_admin_has_theme_color_meta(
+    async def test_light_has_theme_color_meta(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
-        """Test admin pages have theme-color meta tag."""
+        """Test light pages have theme-color meta tag."""
         response = await client.get(
             "/light/",
             cookies=auth_cookies,

@@ -1,4 +1,4 @@
-{% extends "admin/base.html" %}
+{% extends "light/base.html" %}
 {% from "macros/forms.html" import text_input, textarea, select, checkbox, submit_button %}
 
 {% block title %}{% if post %}Edit: {{ post.title }}{% else %}New Post{% endif %} - {{ app_name }}{% endblock %}
@@ -257,15 +257,15 @@ document.getElementById('post-form').addEventListener('submit', async function(e
             if (!postId) {
                 window.location.href = `/light/posts/${result.id}`;
             } else {
-                window.AdminUtils.showToast('Post saved successfully');
+                window.LightUtils.showToast('Post saved successfully');
             }
         } else {
             const error = await response.json();
-            window.AdminUtils.showToast(error.detail || 'Failed to save post', 'error');
+            window.LightUtils.showToast(error.detail || 'Failed to save post', 'error');
         }
     } catch (error) {
         console.error('Save error:', error);
-        window.AdminUtils.showToast('An error occurred while saving', 'error');
+        window.LightUtils.showToast('An error occurred while saving', 'error');
     }
 });
 

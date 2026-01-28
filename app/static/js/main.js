@@ -445,6 +445,60 @@
     }
 
     /**
+     * Keyboard Navigation for pagination
+     */
+    function initKeyboardNavigation() {
+        document.addEventListener("keydown", function (e) {
+            // Ignore if typing in an input
+            if (
+                e.target.tagName === "INPUT" ||
+                e.target.tagName === "TEXTAREA" ||
+                e.target.isContentEditable
+            ) {
+                return;
+            }
+
+            // Home or Tags list page (Left/Right)
+            // User requested: ArrowLeft -> Next, ArrowRight -> Previous
+            const listPagination = document.querySelector(
+                'nav.pagination[aria-label="Posts pagination"], nav.pagination[aria-label="Tags pagination"]',
+            );
+            if (listPagination) {
+                if (e.key === "ArrowLeft") {
+                    const nextLink = listPagination.querySelector(
+                        'a.pagination-link[aria-label="Next page"]',
+                    );
+                    if (nextLink) nextLink.click();
+                } else if (e.key === "ArrowRight") {
+                    const prevLink = listPagination.querySelector(
+                        'a.pagination-link[aria-label="Previous page"]',
+                    );
+                    if (prevLink) prevLink.click();
+                }
+            }
+
+            // Specific Tag page (Up/Down)
+            // User requested: ArrowDown -> Next, ArrowUp -> Previous
+            const tagPagination = document.querySelector(
+                'nav.pagination[aria-label="Tag archive pagination"]',
+            );
+            if (tagPagination) {
+                if (e.key === "ArrowDown") {
+                    const nextLink = tagPagination.querySelector(
+                        'a.pagination-link[aria-label="Next page"]',
+                    );
+                    if (nextLink) nextLink.click();
+                } else if (e.key === "ArrowUp") {
+                    const prevLink = tagPagination.querySelector(
+                        'a.pagination-link[aria-label="Previous page"]',
+                    );
+                    if (prevLink) prevLink.click();
+                }
+            }
+        });
+    }
+
+    /**
      * Post Card Video Previews
      */
     function initPostCardVideos() {
@@ -480,6 +534,7 @@
         initBackToTop();
         initReadingProgress();
         initCodeCopy();
+        initKeyboardNavigation();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {

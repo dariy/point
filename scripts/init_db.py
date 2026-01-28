@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Initialize the database.
 
-Creates all tables and optionally creates an initial admin user.
+Creates all tables and optionally creates an initial light user.
 """
 
 import asyncio
@@ -17,8 +17,8 @@ from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
 
 
-async def create_admin_user() -> bool:
-    """Create initial admin user interactively.
+async def create_light_user() -> bool:
+    """Create initial light user interactively.
 
     Returns:
         True if user created, False if skipped or already exists
@@ -27,18 +27,18 @@ async def create_admin_user() -> bool:
         auth_service = AuthService(db)
 
         # Check if any user exists
-        existing = await auth_service.get_user_by_username("admin")
+        existing = await auth_service.get_user_by_username("light")
         if existing:
-            print("Admin user already exists, skipping creation.")
+            print("Light user already exists, skipping creation.")
             return False
 
-        print("\n--- Create Admin User ---")
+        print("\n--- Create Light User ---")
         print("(Press Ctrl+C to skip)\n")
 
         try:
-            username = input("Username [admin]: ").strip() or "admin"
+            username = input("Username [light]: ").strip() or "light"
             email = input("Email: ").strip()
-            display_name = input("Display name [Administrator]: ").strip() or "Administrator"
+            display_name = input("Display name [Lightistrator]: ").strip() or "Lightistrator"
 
             while True:
                 password = getpass.getpass("Password (min 8 chars): ")
@@ -63,11 +63,11 @@ async def create_admin_user() -> bool:
             user = await auth_service.create_user(user_data)
             await db.commit()
 
-            print(f"\nAdmin user '{user.username}' created successfully!")
+            print(f"\nLight user '{user.username}' created successfully!")
             return True
 
         except KeyboardInterrupt:
-            print("\nSkipped admin user creation.")
+            print("\nSkipped light user creation.")
             return False
         except ValueError as e:
             print(f"\nError: {e}")
@@ -75,14 +75,14 @@ async def create_admin_user() -> bool:
 
 
 async def main() -> None:
-    """Initialize database tables and optionally create admin user."""
+    """Initialize database tables and optionally create light user."""
     print("Creating database tables...")
     await create_tables()
     print("Database tables created successfully!")
 
-    # Check for --create-admin flag
-    if "--create-admin" in sys.argv:
-        await create_admin_user()
+    # Check for --create-light flag
+    if "--create-light" in sys.argv:
+        await create_light_user()
 
     # Close engine
     await engine.dispose()
