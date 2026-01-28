@@ -5,6 +5,17 @@
 (function () {
     "use strict";
 
+    let cleanupFunctions = [];
+
+    function registerCleanup(fn) {
+        cleanupFunctions.push(fn);
+    }
+
+    function cleanupPage() {
+        cleanupFunctions.forEach(fn => fn());
+        cleanupFunctions = [];
+    }
+
     /**
      * Dropdown Menus (for mobile)
      */
@@ -66,7 +77,7 @@
      */
     function initSmoothScroll() {
         document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
-            anchor.addEventListener("click", function (e) {
+            function handleClick(e) {
                 const targetId = this.getAttribute("href");
 
                 if (targetId === "#") return;
@@ -85,7 +96,10 @@
                         history.pushState(null, null, targetId);
                     }
                 }
-            });
+            }
+
+            anchor.addEventListener("click", handleClick);
+            // No cleanup needed for element-specific listeners that are removed with the element
         });
     }
 
@@ -114,6 +128,7 @@
                 behavior: "smooth",
             });
         });
+        // This is global, no cleanup needed as the button persists or logic is safe
     }
 
     /**
@@ -125,19 +140,22 @@
         if (galleryItems.length === 0) return;
 
         // Create lightbox elements
-        const overlay = document.createElement("div");
-        overlay.className = "lightbox-overlay";
-        overlay.innerHTML = `
-            <button class="lightbox-close" aria-label="Close lightbox">&times;</button>
-            <button class="lightbox-prev" aria-label="Previous image">&lsaquo;</button>
-            <button class="lightbox-next" aria-label="Next image">&rsaquo;</button>
-            <div class="lightbox-content">
-                <img src="" alt="">
-                <div class="lightbox-caption"></div>
-            </div>
-        `;
-
-        document.body.appendChild(overlay);
+        let overlay = document.querySelector(".lightbox-overlay");
+        
+        if (!overlay) {
+            overlay = document.createElement("div");
+            overlay.className = "lightbox-overlay";
+            overlay.innerHTML = `
+                <button class="lightbox-close" aria-label="Close lightbox">&times;</button>
+                <button class="lightbox-prev" aria-label="Previous image">&lsaquo;</button>
+                <button class="lightbox-next" aria-label="Next image">&rsaquo;</button>
+                <div class="lightbox-content">
+                    <img src="" alt="">
+                    <div class="lightbox-caption"></div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
 
         const lightboxImg = overlay.querySelector("img");
         const lightboxCaption = overlay.querySelector(".lightbox-caption");
@@ -208,17 +226,11 @@
             });
         });
 
-        closeBtn.addEventListener("click", closeLightbox);
-        prevBtn.addEventListener("click", showPrev);
-        nextBtn.addEventListener("click", showNext);
-
-        overlay.addEventListener("click", function (e) {
-            if (e.target === overlay) {
-                closeLightbox();
-            }
-        });
-
-        document.addEventListener("keydown", function (e) {
+        // Use event delegation or named functions to avoid duplication/issues
+        // For simplicity, we assume these are safe to re-bind or check if bound
+        // But better to clean up document listeners
+        
+        function handleKeydown(e) {
             if (!overlay.classList.contains("active")) return;
 
             switch (e.key) {
@@ -231,6 +243,28 @@
                 case "ArrowRight":
                     showNext();
                     break;
+            }
+        }
+
+        function handleOverlayClick(e) {
+             if (e.target === overlay) {
+                closeLightbox();
+            }
+        }
+
+        closeBtn.onclick = closeLightbox;
+        prevBtn.onclick = showPrev;
+        nextBtn.onclick = showNext;
+        overlay.onclick = handleOverlayClick;
+        
+        document.addEventListener("keydown", handleKeydown);
+
+        registerCleanup(() => {
+            document.removeEventListener("keydown", handleKeydown);
+            // Remove overlay if we want full cleanup, but it's okay to keep hidden
+            // Removing it ensures fresh state on navigation
+             if (overlay && overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
             }
         });
     }
@@ -265,6 +299,10 @@
 
         window.addEventListener("scroll", updateProgress, { passive: true });
         updateProgress();
+
+        registerCleanup(() => {
+            window.removeEventListener("scroll", updateProgress);
+        });
     }
 
     /**
@@ -275,6 +313,9 @@
 
         codeBlocks.forEach(function (code) {
             const pre = code.parentElement;
+            // Check if already initialized to avoid duplication on soft re-inits
+            if (pre.previousElementSibling && pre.previousElementSibling.classList.contains("code-block-wrapper")) return;
+            
             const wrapper = document.createElement("div");
             wrapper.className = "code-block-wrapper";
 
@@ -337,13 +378,7 @@
             idleTimer = setTimeout(hideUI, idleTime);
         }
 
-        // Activity listeners
-        ["mousemove", "mousedown", "touchstart", "keydown"].forEach((evt) => {
-            document.addEventListener(evt, resetIdleTimer, { passive: true });
-        });
-
-        // Toggle on background click
-        document.addEventListener("click", function (e) {
+        function handleClick(e) {
             // Ignore clicks on interactive elements or the info card
             if (
                 e.target.closest(
@@ -359,10 +394,27 @@
                 hideUI();
                 clearTimeout(idleTimer);
             }
+        }
+
+        // Activity listeners
+        const events = ["mousemove", "mousedown", "touchstart", "keydown"];
+        events.forEach((evt) => {
+            document.addEventListener(evt, resetIdleTimer, { passive: true });
         });
+
+        // Toggle on background click
+        document.addEventListener("click", handleClick);
 
         // Start timer
         resetIdleTimer();
+
+        registerCleanup(() => {
+            clearTimeout(idleTimer);
+            events.forEach((evt) => {
+                document.removeEventListener(evt, resetIdleTimer);
+            });
+            document.removeEventListener("click", handleClick);
+        });
     }
 
     /**
@@ -411,29 +463,28 @@
         }
 
         if (prevBtn) {
-            prevBtn.addEventListener("click", (e) => {
+            prevBtn.onclick = (e) => {
                 e.stopPropagation(); // Prevent immersive toggle
                 goToSlide(currentIndex - 1);
-            });
+            };
         }
 
         if (nextBtn) {
-            nextBtn.addEventListener("click", (e) => {
+            nextBtn.onclick = (e) => {
                 e.stopPropagation(); // Prevent immersive toggle
                 goToSlide(currentIndex + 1);
-            });
+            };
         }
 
         dots.forEach((dot, index) => {
-            dot.addEventListener("click", (e) => {
+            dot.onclick = (e) => {
                 e.stopPropagation();
                 goToSlide(index);
-            });
+            };
         });
 
-        // Keyboard navigation
-        document.addEventListener("keydown", (e) => {
-            if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+        function handleKeydown(e) {
+             if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
                 return;
 
             if (e.key === "ArrowLeft") {
@@ -441,7 +492,140 @@
             } else if (e.key === "ArrowRight") {
                 goToSlide(currentIndex + 1);
             }
+        }
+
+        // Keyboard navigation
+        document.addEventListener("keydown", handleKeydown);
+
+        registerCleanup(() => {
+            document.removeEventListener("keydown", handleKeydown);
         });
+    }
+
+    /**
+     * Post Card Video Previews
+     */
+    function initPostCardVideos() {
+        const postCards = document.querySelectorAll(".post-card");
+
+        postCards.forEach((card) => {
+            const video = card.querySelector(".post-card-background video");
+            if (!video) return;
+
+            card.onmouseenter = () => {
+                video.play().catch((e) => {});
+            };
+
+            card.onmouseleave = () => {
+                video.pause();
+            };
+        });
+    }
+
+    /**
+     * AJAX Navigation
+     */
+    let isNavigating = false;
+
+    async function loadPost(url, pushState = true) {
+        if (isNavigating) return;
+        
+        console.log("[Navigation] Starting navigation to:", url);
+        isNavigating = true;
+        document.body.style.cursor = 'wait';
+
+        try {
+            const response = await fetch(url);
+            console.log("[Navigation] Fetch status:", response.status);
+            
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.status);
+            }
+
+            const html = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const newMain = doc.querySelector('main.site-main');
+            if (!newMain) {
+                console.error("[Navigation] Invalid page structure: missing main.site-main");
+                throw new Error('Invalid page structure');
+            }
+
+            // Cleanup existing page listeners
+            console.log("[Navigation] Cleaning up previous page...");
+            cleanupPage();
+
+            // Replace content
+            const currentMain = document.querySelector('main.site-main');
+            if (currentMain) {
+                currentMain.replaceWith(newMain);
+            } else {
+                 console.error("[Navigation] Current page missing main.site-main");
+                 throw new Error('Current page missing main.site-main');
+            }
+
+            // Update Header (Title, Date, Navigation)
+            const newHeader = doc.querySelector('header.site-header');
+            const currentHeader = document.querySelector('header.site-header');
+            if (newHeader && currentHeader) {
+                console.log("[Navigation] Updating site-header...");
+                currentHeader.replaceWith(newHeader);
+                
+                // Re-bind theme toggle for the new header
+                const toggleBtns = newHeader.querySelectorAll('.theme-toggle');
+                toggleBtns.forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        if (window.ThemeManager) {
+                            window.ThemeManager.toggle();
+                        }
+                    });
+                });
+                
+                // Re-initialize dropdowns for the new header (mobile menu)
+                const dropdowns = newHeader.querySelectorAll(".nav-dropdown");
+                dropdowns.forEach(function (dropdown) {
+                    const toggle = dropdown.querySelector(".dropdown-toggle");
+                    if (!toggle) return;
+                    toggle.addEventListener("click", function (e) {
+                        if (window.innerWidth <= 768) {
+                            e.preventDefault();
+                            dropdown.classList.toggle("open");
+                        }
+                    });
+                });
+            }
+
+            // Update document title
+            if (doc.title) document.title = doc.title;
+
+            // Update body classes (essential for immersive layout vs standard)
+            if (doc.body) {
+                document.body.className = doc.body.className;
+            }
+
+            // Update URL
+            if (pushState) {
+                history.pushState({}, '', url);
+            }
+
+            // Scroll to top
+            window.scrollTo(0, 0);
+
+            // Re-initialize page scripts
+            console.log("[Navigation] Re-initializing page...");
+            initPage();
+            console.log("[Navigation] Navigation complete");
+
+        } catch (error) {
+            console.error('[Navigation] Failed:', error);
+            // Fallback to standard navigation
+            window.location.href = url;
+        } finally {
+            isNavigating = false;
+            document.body.style.cursor = '';
+        }
     }
 
     /**
@@ -459,7 +643,6 @@
             }
 
             // Home or Tags list page (Left/Right)
-            // User requested: ArrowLeft -> Next, ArrowRight -> Previous
             const listPagination = document.querySelector(
                 'nav.pagination[aria-label="Posts pagination"], nav.pagination[aria-label="Tags pagination"]',
             );
@@ -478,7 +661,6 @@
             }
 
             // Specific Tag page (Up/Down)
-            // User requested: ArrowDown -> Next, ArrowUp -> Previous
             const tagPagination = document.querySelector(
                 'nav.pagination[aria-label="Tag archive pagination"]',
             );
@@ -497,69 +679,66 @@
             }
 
             // Single Post Navigation (Up/Down)
-            // User requested: ArrowDown -> Earlier (Previous Post), ArrowUp -> Later (Next Post)
             const postNavData = document.getElementById('post-nav-data');
             if (postNavData) {
                 if (e.key === "ArrowDown") {
                     const prevUrl = postNavData.dataset.prevUrl;
                     if (prevUrl) {
                         e.preventDefault();
-                        window.location.href = prevUrl;
+                        e.stopPropagation();
+                        console.log("[Navigation] Triggering loadPost for prevUrl:", prevUrl);
+                        loadPost(prevUrl);
                     }
                 } else if (e.key === "ArrowUp") {
                     const nextUrl = postNavData.dataset.nextUrl;
                     if (nextUrl) {
                         e.preventDefault();
-                        window.location.href = nextUrl;
+                        e.stopPropagation();
+                        console.log("[Navigation] Triggering loadPost for nextUrl:", nextUrl);
+                        loadPost(nextUrl);
                     }
                 }
             }
         });
     }
 
-    /**
-     * Post Card Video Previews
-     */
-    function initPostCardVideos() {
-        const postCards = document.querySelectorAll(".post-card");
-
-        postCards.forEach((card) => {
-            const video = card.querySelector(".post-card-background video");
-            if (!video) return;
-
-            card.addEventListener("mouseenter", () => {
-                video.play().catch((e) => {});
-            });
-
-            card.addEventListener("mouseleave", () => {
-                video.pause();
-                // Optionally reset to beginning
-                // video.currentTime = 0;
-            });
+    function initPopstate() {
+        window.addEventListener('popstate', (e) => {
+            console.log("[Navigation] Popstate event");
+            loadPost(window.location.href, false);
         });
+    }
+
+    /**
+     * Initialize Page specific components
+     */
+    function initPage() {
+        initImmersiveMode();
+        initCarousel();
+        initPostCardVideos();
+        initLazyLoading();
+        initSmoothScroll();
+        initReadingProgress();
+        initCodeCopy();
+        
+        // Only init lightbox on gallery page
+        if (document.querySelector(".gallery-grid")) {
+             initLightbox();
+        }
     }
 
     /**
      * Initialize all components
      */
     function init() {
-        initImmersiveMode();
-        initCarousel();
-        initPostCardVideos();
-
+        // Global initializations
         initDropdowns();
-        initLazyLoading();
-        initSmoothScroll();
         initBackToTop();
-        initReadingProgress();
-        initCodeCopy();
         initKeyboardNavigation();
-
-        // Only init lightbox on gallery page
-        if (document.querySelector(".gallery-grid")) {
-            // Lightbox is optional - uncomment if needed
-            // initLightbox();
-        }
+        initPopstate();
+        
+        // Page specific initializations
+        initPage();
     }
 
     // Run on DOM ready
