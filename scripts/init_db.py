@@ -7,6 +7,7 @@ Creates all tables and optionally creates an initial light user.
 import asyncio
 import getpass
 import sys
+import hashlib
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -53,10 +54,13 @@ async def create_light_user() -> bool:
 
                 break
 
+            # Hash the password with SHA-256 to match client-side obfuscation
+            hashed_name = hashlib.sha256(password.encode()).hexdigest()
+
             user_data = UserCreate(
                 username=username,
                 email=email or f"{username}@localhost",
-                password=password,
+                password=hashed_name,
                 display_name=display_name,
             )
 

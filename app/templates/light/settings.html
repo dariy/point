@@ -94,6 +94,7 @@
 
 {% block extra_js %}
 <script>
+// Blog Settings Form
 document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -178,6 +179,7 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
 }
 .form-group input[type="text"],
 .form-group input[type="email"],
+.form-group input[type="password"],
 .form-group input[type="number"],
 .form-group select {
     width: 100%;
