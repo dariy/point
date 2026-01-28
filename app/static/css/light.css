@@ -933,7 +933,7 @@ input[type="password"] {
 
 .tags-input .tag {
     background-color: var(--color-primary-light);
-    color: var(--color-primary);
+    color: var(--btn-text-contrast);
 }
 
 .tags-input .tag-remove {
