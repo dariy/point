@@ -642,6 +642,19 @@
                 return;
             }
 
+            // Number keys (1-9) to open posts
+            if (e.key >= "1" && e.key <= "9" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                const posts = document.querySelectorAll(".post-card");
+                const index = parseInt(e.key) - 1;
+                if (posts[index]) {
+                    const link = posts[index].querySelector("h2.post-card-title a");
+                    if (link) {
+                        e.preventDefault();
+                        link.click();
+                    }
+                }
+            }
+
             // Home or Tags list page (Left/Right)
             const listPagination = document.querySelector(
                 'nav.pagination[aria-label="Posts pagination"], nav.pagination[aria-label="Tags pagination"]',
