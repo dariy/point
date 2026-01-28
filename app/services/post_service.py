@@ -197,7 +197,9 @@ class PostService:
         query = select(Post).where(or_(Post.slug == slug, Post.custom_url == slug))
 
         if not include_drafts:
-            query = query.where(Post.status == PostStatus.PUBLISHED)
+            query = query.where(
+                or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
+            )
 
         result = await self.db.execute(query)
         return result.scalar_one_or_none()

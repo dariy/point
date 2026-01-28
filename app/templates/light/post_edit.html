@@ -113,12 +113,9 @@
                     </div>
                     {% endif %}
                 </div>
-                <div class="card-footer" style="display: flex; gap: 0.5rem;">
-                    <button type="submit" name="action" value="save" class="btn btn-secondary">
-                        Save Draft
-                    </button>
-                    <button type="submit" name="action" value="publish" class="btn btn-primary">
-                        {% if post and post.status.value == 'published' %}Update{% else %}Publish{% endif %}
+                <div class="card-footer">
+                    <button type="submit" id="btn-save" class="btn btn-primary btn-block">
+                        Save
                     </button>
                 </div>
             </div>
@@ -222,14 +219,13 @@ document.getElementById('post-form').addEventListener('submit', async function(e
     const form = e.target;
     const formData = new FormData(form);
     const postId = form.dataset.postId;
-    const action = e.submitter?.value || 'save';
 
     // Build request body
     const data = {
         title: formData.get('title'),
         content: formData.get('content'),
         excerpt: formData.get('excerpt') || null,
-        status: action === 'publish' ? 'published' : formData.get('status'),
+        status: formData.get('status'),
         is_featured: formData.get('is_featured') === '1',
         custom_url: formData.get('custom_url') || null,
         meta_description: formData.get('meta_description') || null,
@@ -273,7 +269,7 @@ document.getElementById('post-form').addEventListener('submit', async function(e
 document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        document.querySelector('[value="save"]').click();
+        document.getElementById('btn-save').click();
     }
 });
 </script>
