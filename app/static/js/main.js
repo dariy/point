@@ -681,7 +681,12 @@
             // Single Post Navigation (Up/Down)
             const postNavData = document.getElementById('post-nav-data');
             if (postNavData) {
-                if (e.key === "ArrowDown") {
+                if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log("[Navigation] Escape pressed, returning to home");
+                    loadPost('/');
+                } else if (e.key === "ArrowDown") {
                     const prevUrl = postNavData.dataset.prevUrl;
                     if (prevUrl) {
                         e.preventDefault();
