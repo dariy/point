@@ -392,6 +392,35 @@ async def single_post(
         next_result = await db.execute(next_query)
         next_post = next_result.scalar_one_or_none()
 
+    # Check for AJAX request
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        settings_service = SettingsService(db)
+        blog_settings_dict = await settings_service.get_all_settings()
+        
+        return JSONResponse(
+            {
+                "post": {
+                    "title": post.title,
+                    "slug": post.slug,
+                    "published_date": (post.published_at or post.created_at).strftime('%B %d, %Y'),
+                    "published_iso": (post.published_at or post.created_at).isoformat(),
+                    "view_count": post.view_count,
+                    "content_html": content_html,
+                    "thumbnail_path": post.thumbnail_path,
+                    "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+                },
+                "has_text_content": has_text_content,
+                "post_media": post_media,
+                "prev_post": {"title": prev_post.title, "slug": prev_post.slug} if prev_post else None,
+                "next_post": {"title": next_post.title, "slug": next_post.slug} if next_post else None,
+                "blog_settings": {
+                    "show_view_counts": blog_settings_dict.get("show_view_counts", True)
+                },
+                "blog_title": settings.app_name,
+                "blog_subtitle": getattr(settings, "blog_subtitle", ""),
+            }
+        )
+
     context = get_common_context(request)
     db_context = await get_db_context(db)
     context.update(db_context)
