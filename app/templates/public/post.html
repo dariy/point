@@ -271,31 +271,9 @@
     </footer>
 </article>
 {% endif %}
-{% endblock %}
 
-{% block extra_js %}
-<script>
-    document.addEventListener('keydown', function(e) {
-        // Ignore if focus is in an input, textarea, or contenteditable
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-            return;
-        }
-
-        // ArrowDown -> Earlier Post (Previous)
-        {% if prev_post %}
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            window.location.href = "/posts/{{ prev_post.slug }}";
-        }
-        {% endif %}
-
-        // ArrowUp -> Later Post (Next)
-        {% if next_post %}
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            window.location.href = "/posts/{{ next_post.slug }}";
-        }
-        {% endif %}
-    });
-</script>
+<div id="post-nav-data" style="display: none;"
+     data-prev-url="{% if prev_post %}/posts/{{ prev_post.slug }}{% endif %}"
+     data-next-url="{% if next_post %}/posts/{{ next_post.slug }}{% endif %}">
+</div>
 {% endblock %}
