@@ -535,74 +535,92 @@
         document.body.style.cursor = 'wait';
 
         try {
-            const response = await fetch(url);
+            // Determine if we should request JSON (only for single posts for now)
+            const isPostUrl = url.includes('/posts/');
+            const headers = {};
+            if (isPostUrl) {
+                headers['X-Requested-With'] = 'XMLHttpRequest';
+            }
+
+            const response = await fetch(url, { headers });
             console.log("[Navigation] Fetch status:", response.status);
             
             if (!response.ok) {
                 throw new Error('Network response was not ok: ' + response.status);
             }
 
-            const html = await response.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-
-            const newMain = doc.querySelector('main.site-main');
-            if (!newMain) {
-                console.error("[Navigation] Invalid page structure: missing main.site-main");
-                throw new Error('Invalid page structure');
-            }
-
-            // Cleanup existing page listeners
-            console.log("[Navigation] Cleaning up previous page...");
-            cleanupPage();
-
-            // Replace content
-            const currentMain = document.querySelector('main.site-main');
-            if (currentMain) {
-                currentMain.replaceWith(newMain);
+            const contentType = response.headers.get("content-type");
+            if (isPostUrl && contentType && contentType.includes("application/json")) {
+                const data = await response.json();
+                renderPost(data);
             } else {
-                 console.error("[Navigation] Current page missing main.site-main");
-                 throw new Error('Current page missing main.site-main');
-            }
+                // HTML Handling (Fallback or for non-post pages)
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
 
-            // Update Header (Title, Date, Navigation)
-            const newHeader = doc.querySelector('header.site-header');
-            const currentHeader = document.querySelector('header.site-header');
-            if (newHeader && currentHeader) {
-                console.log("[Navigation] Updating site-header...");
-                currentHeader.replaceWith(newHeader);
-                
-                // Re-bind theme toggle for the new header
-                const toggleBtns = newHeader.querySelectorAll('.theme-toggle');
-                toggleBtns.forEach(btn => {
-                    btn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        if (window.ThemeManager) {
-                            window.ThemeManager.toggle();
-                        }
-                    });
-                });
-                
-                // Re-initialize dropdowns for the new header (mobile menu)
-                const dropdowns = newHeader.querySelectorAll(".nav-dropdown");
-                dropdowns.forEach(function (dropdown) {
-                    const toggle = dropdown.querySelector(".dropdown-toggle");
-                    if (!toggle) return;
-                    toggle.addEventListener("click", function (e) {
-                        if (window.innerWidth <= 768) {
+                const newMain = doc.querySelector('main.site-main');
+                if (!newMain) {
+                    console.error("[Navigation] Invalid page structure: missing main.site-main");
+                    throw new Error('Invalid page structure');
+                }
+
+                // Cleanup existing page listeners
+                console.log("[Navigation] Cleaning up previous page...");
+                cleanupPage();
+
+                // Replace content
+                const currentMain = document.querySelector('main.site-main');
+                if (currentMain) {
+                    currentMain.replaceWith(newMain);
+                } else {
+                     console.error("[Navigation] Current page missing main.site-main");
+                     throw new Error('Current page missing main.site-main');
+                }
+
+                // Update Header (Title, Date, Navigation)
+                const newHeader = doc.querySelector('header.site-header');
+                const currentHeader = document.querySelector('header.site-header');
+                if (newHeader && currentHeader) {
+                    console.log("[Navigation] Updating site-header...");
+                    currentHeader.replaceWith(newHeader);
+                    
+                    // Re-bind theme toggle for the new header
+                    const toggleBtns = newHeader.querySelectorAll('.theme-toggle');
+                    toggleBtns.forEach(btn => {
+                        btn.addEventListener('click', function(e) {
                             e.preventDefault();
-                            dropdown.classList.toggle("open");
-                        }
+                            if (window.ThemeManager) {
+                                window.ThemeManager.toggle();
+                            }
+                        });
                     });
-                });
-            }
+                    
+                    // Re-initialize dropdowns for the new header (mobile menu)
+                    const dropdowns = newHeader.querySelectorAll(".nav-dropdown");
+                    dropdowns.forEach(function (dropdown) {
+                        const toggle = dropdown.querySelector(".dropdown-toggle");
+                        if (!toggle) return;
+                        toggle.addEventListener("click", function (e) {
+                            if (window.innerWidth <= 768) {
+                                e.preventDefault();
+                                dropdown.classList.toggle("open");
+                            }
+                        });
+                    });
+                }
 
-            // Update document title
-            if (doc.title) document.title = doc.title;
+                // Update document title
+                if (doc.title) document.title = doc.title;
 
-            // Update body classes (essential for immersive layout vs standard)
-            if (doc.body) {
-                document.body.className = doc.body.className;
+                // Update body classes (essential for immersive layout vs standard)
+                if (doc.body) {
+                    document.body.className = doc.body.className;
+                }
+                
+                // Re-initialize page scripts
+                console.log("[Navigation] Re-initializing page...");
+                initPage();
             }
 
             // Update URL
@@ -612,10 +630,6 @@
 
             // Scroll to top
             window.scrollTo(0, 0);
-
-            // Re-initialize page scripts
-            console.log("[Navigation] Re-initializing page...");
-            initPage();
             console.log("[Navigation] Navigation complete");
 
         } catch (error) {
@@ -626,6 +640,228 @@
             isNavigating = false;
             document.body.style.cursor = '';
         }
+    }
+
+    function renderPost(data) {
+        console.log("[Navigation] Rendering post from JSON data");
+        cleanupPage();
+
+        const hasText = data.has_text_content;
+        const templateId = hasText ? 'tmpl-post-standard' : 'tmpl-post-immersive';
+        const template = document.getElementById(templateId);
+        
+        if (!template) {
+            console.error("Template not found:", templateId);
+            window.location.reload(); 
+            return;
+        }
+
+        const clone = template.content.cloneNode(true);
+        const post = data.post;
+        
+        // 1. Update Title and Metadata
+        const titleEl = clone.querySelector('.post-title') || clone.querySelector('.site-title');
+        if (titleEl) titleEl.textContent = post.title;
+
+        const dateEl = clone.querySelector('.post-date');
+        if (dateEl) {
+             dateEl.setAttribute('datetime', post.published_iso);
+             dateEl.textContent = post.published_date;
+        }
+
+        const viewsEl = clone.querySelector('.post-views');
+        if (viewsEl) {
+            if (data.blog_settings.show_view_counts && post.view_count) {
+                viewsEl.textContent = post.view_count + " views";
+                viewsEl.style.display = 'inline';
+                const divider = clone.querySelector('.post-meta-divider');
+                if(divider) divider.style.display = 'inline';
+            } else {
+                viewsEl.style.display = 'none';
+                const divider = clone.querySelector('.post-meta-divider');
+                if(divider) divider.style.display = 'none';
+            }
+        }
+
+        // 2. Content / Media
+        if (hasText) {
+             const contentEl = clone.querySelector('.post-content');
+             if(contentEl) contentEl.innerHTML = post.content_html;
+        } else {
+             // Render Carousel
+             const container = clone.querySelector('.carousel-container');
+             const indicators = clone.querySelector('.carousel-indicators');
+             
+             if (container && data.post_media && data.post_media.length > 0) {
+                 const prevBtn = container.querySelector('.carousel-prev');
+                 
+                 data.post_media.forEach((item, index) => {
+                     // Slide
+                     const slide = document.createElement('div');
+                     slide.className = 'carousel-slide' + (index === 0 ? ' active' : '');
+                     slide.dataset.type = item.type;
+                     
+                     let mediaEl;
+                     const url = item.url.startsWith('http') || item.url.startsWith('/') ? item.url : '/media/originals/' + item.url;
+                     
+                     if (item.type === 'video') {
+                         mediaEl = document.createElement('video');
+                         mediaEl.src = url;
+                         mediaEl.className = 'immersive-bg-image';
+                         if (index === 0) mediaEl.autoplay = true;
+                         mediaEl.muted = true;
+                         mediaEl.loop = true;
+                         mediaEl.playsInline = true;
+                     } else {
+                         mediaEl = document.createElement('img');
+                         mediaEl.src = url;
+                         mediaEl.alt = post.title + " - Media " + (index + 1);
+                         mediaEl.className = 'immersive-bg-image';
+                     }
+                     
+                     slide.appendChild(mediaEl);
+                     // Insert before buttons
+                     container.insertBefore(slide, prevBtn);
+                     
+                     // Dot
+                     if (indicators) {
+                         const dot = document.createElement('button');
+                         dot.className = 'carousel-dot' + (index === 0 ? ' active' : '');
+                         dot.dataset.index = index;
+                         dot.ariaLabel = "Go to media " + (index + 1);
+                         indicators.appendChild(dot);
+                     }
+                 });
+                 
+                 // Hide controls if single item
+                 if (data.post_media.length <= 1) {
+                     const prev = container.querySelector('.carousel-prev');
+                     const next = container.querySelector('.carousel-next');
+                     if(prev) prev.style.display = 'none';
+                     if(next) next.style.display = 'none';
+                     if(indicators) indicators.style.display = 'none';
+                 }
+             }
+        }
+
+        // 3. Tags (Standard only)
+        if (hasText) {
+            const tagsContainer = clone.querySelector('.post-tags');
+            if (tagsContainer && post.tags) {
+                post.tags.forEach(tag => {
+                    const a = document.createElement('a');
+                    a.href = '/tag/' + tag.slug;
+                    a.className = 'post-tag';
+                    a.textContent = tag.name;
+                    tagsContainer.appendChild(a);
+                });
+            }
+        }
+
+        // 4. Navigation
+        const navContainer = clone.querySelector('.post-navigation');
+        
+        if (navContainer && (data.prev_post || data.next_post)) {
+             if (data.prev_post) {
+                 const a = document.createElement('a');
+                 a.href = '/posts/' + data.prev_post.slug;
+                 a.className = 'post-nav-link prev';
+                 a.innerHTML = '<span class="post-nav-label">Previous Post</span><span class="post-nav-title">' + data.prev_post.title + '</span>';
+                 navContainer.appendChild(a);
+             } else {
+                 navContainer.appendChild(document.createElement('div'));
+             }
+             
+             if (data.next_post) {
+                 const a = document.createElement('a');
+                 a.href = '/posts/' + data.next_post.slug;
+                 a.className = 'post-nav-link next';
+                 a.innerHTML = '<span class="post-nav-label">Next Post</span><span class="post-nav-title">' + data.next_post.title + '</span>';
+                 navContainer.appendChild(a);
+             }
+        }
+        
+        // Inject hidden navigation data for keyboard shortcuts
+        const navData = document.createElement('div');
+        navData.id = 'post-nav-data';
+        navData.style.display = 'none';
+        if (data.prev_post) navData.dataset.prevUrl = '/posts/' + data.prev_post.slug;
+        if (data.next_post) navData.dataset.nextUrl = '/posts/' + data.next_post.slug;
+        
+        // 5. Header
+        const headerTemplateId = hasText ? 'tmpl-header-default' : 'tmpl-header-immersive';
+        const headerTemplate = document.getElementById(headerTemplateId);
+        const headerClone = headerTemplate.content.cloneNode(true);
+        
+        if (hasText) {
+             const titleLink = headerClone.querySelector('.site-title');
+             if(titleLink) {
+                 titleLink.textContent = data.blog_title;
+                 titleLink.href = '/';
+             }
+             const subtitle = headerClone.querySelector('.site-subtitle');
+             if(subtitle) subtitle.textContent = data.blog_subtitle;
+        } else {
+             const title = headerClone.querySelector('.site-title');
+             if(title) title.textContent = post.title;
+             
+             const date = headerClone.querySelector('.post-date');
+             if(date) {
+                 date.setAttribute('datetime', post.published_iso);
+                 date.textContent = post.published_date;
+             }
+             
+             const hViewsEl = headerClone.querySelector('.post-views');
+             if (hViewsEl) {
+                 if (data.blog_settings.show_view_counts && post.view_count) {
+                    hViewsEl.textContent = post.view_count + " views";
+                 } else {
+                     hViewsEl.style.display = 'none';
+                     const divider = headerClone.querySelector('.post-meta-divider');
+                     if(divider) divider.style.display = 'none';
+                 }
+             }
+        }
+
+        // 6. DOM Injection
+        const main = document.querySelector('main.site-main');
+        const container = main.querySelector('.main-container');
+        if(container) {
+             container.innerHTML = '';
+             container.appendChild(clone);
+             container.appendChild(navData);
+        } else {
+             console.error("Main container not found, recreating");
+             main.innerHTML = '<div class="main-container"></div>';
+             main.querySelector('.main-container').appendChild(clone);
+             main.querySelector('.main-container').appendChild(navData);
+        }
+
+        // Replace Header Content
+        const header = document.querySelector('header.site-header');
+        const headerContainer = header.querySelector('.header-container');
+        headerContainer.innerHTML = '';
+        headerContainer.appendChild(headerClone);
+
+        // Update Body Class
+        document.body.className = hasText ? 'public-layout post-single-page' : 'immersive-layout';
+        
+        // Update Title
+        document.title = post.title;
+
+        // Re-init
+        initPage();
+        
+        // Re-bind header events
+        const toggleBtns = header.querySelectorAll('.theme-toggle');
+        toggleBtns.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (window.ThemeManager) {
+                    window.ThemeManager.toggle();
+                }
+            });
+        });
     }
 
     /**
