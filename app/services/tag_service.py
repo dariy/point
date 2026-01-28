@@ -174,7 +174,16 @@ class TagService:
             if existing and existing.id != tag_id:
                 raise ValueError(f"Tag with name '{tag_data.name}' already exists")
             tag.name = tag_data.name
-            tag.slug = await self._generate_unique_slug(tag_data.name, tag_id)
+            # Only auto-update slug if slug is not explicitly provided
+            if tag_data.slug is None:
+                tag.slug = await self._generate_unique_slug(tag_data.name, tag_id)
+
+        # Handle explicit slug update
+        if tag_data.slug is not None and tag_data.slug != tag.slug:
+            existing = await self.get_tag_by_slug(tag_data.slug)
+            if existing and existing.id != tag_id:
+                raise ValueError(f"Tag with slug '{tag_data.slug}' already exists")
+            tag.slug = tag_data.slug
 
         if tag_data.description is not None:
             tag.description = tag_data.description
@@ -228,12 +237,18 @@ class TagService:
         self,
         include_empty: bool = True,
         important_only: bool = False,
+        search: str | None = None,
+        sort_by: str = "name",
+        sort_order: str = "asc",
     ) -> list[Tag]:
         """List all tags.
 
         Args:
             include_empty: Include tags with no posts
             important_only: Only return important tags
+            search: Optional search term
+            sort_by: Column to sort by
+            sort_order: Sort order (asc/desc)
 
         Returns:
             List of tags
@@ -246,7 +261,19 @@ class TagService:
         if important_only:
             query = query.where(Tag.is_important.is_(True))
 
-        query = query.order_by(Tag.name)
+        if search:
+            query = query.where(Tag.name.ilike(f"%{search}%"))
+
+        # Apply sorting
+        column = getattr(Tag, sort_by, Tag.name)
+        if sort_order.lower() == "desc":
+            query = query.order_by(column.desc())
+        else:
+            query = query.order_by(column.asc())
+
+        # Add secondary sort by name for stability (if not already sorting by name)
+        if sort_by != "name":
+            query = query.order_by(Tag.name.asc())
 
         result = await self.db.execute(query)
         return list(result.scalars().all())

@@ -319,6 +319,9 @@ async def tags_page(
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
     page: int = 1,
+    search: str | None = None,
+    sort_by: str = "name",
+    sort_order: str = "asc",
 ) -> HTMLResponse:
     """Render tags management page.
 
@@ -327,6 +330,9 @@ async def tags_page(
         db: Database session
         user: Current user
         page: Page number
+        search: Optional search term
+        sort_by: Column to sort by
+        sort_order: Sort order (asc/desc)
 
     Returns:
         Tags page HTML
@@ -337,7 +343,9 @@ async def tags_page(
         )
 
     tag_service = TagService(db)
-    tags = await tag_service.list_tags()
+    tags = await tag_service.list_tags(
+        search=search, sort_by=sort_by, sort_order=sort_order
+    )
     total = len(tags)
     total_pages = 1
 
@@ -348,6 +356,9 @@ async def tags_page(
             "page": page,
             "total_pages": total_pages,
             "total": total,
+            "search": search,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
         }
     )
     return templates.TemplateResponse("admin/tags.html", context)
