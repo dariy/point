@@ -96,7 +96,7 @@ def generate_excerpt(
         Plain text excerpt
 
     Examples:
-        >>> generate_excerpt("# Title\\n\\nThis is a long paragraph...", max_length=20)
+        >>> generate_excerpt("# Title\n\nThis is a long paragraph...", max_length=20)
         'Title This is a...'
     """
     # Convert to HTML first
@@ -213,7 +213,7 @@ def sanitize_html(html_content: str) -> str:
 
         # Simple attribute parsing
         safe_attrs = []
-        for attr_match in re.finditer(r'(\w+)=["\']([^"\']*)["\']', attrs_str):
+        for attr_match in re.finditer(r'(\w+)=["\']([^"\\]*)["\']', attrs_str):
             attr_name = attr_match.group(1).lower()
             attr_value = attr_match.group(2)
 
@@ -429,3 +429,38 @@ def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
         return "".join(f"<p>{p}</p>" for p in selected)
 
     return "".join(clean_paragraphs)
+
+def determine_thumbnail(content: str, thumbnail_path: str | None) -> tuple[str | None, bool]:
+    """Determine the thumbnail path and type for a post content.
+
+    Args:
+        content: Post content (markdown or html)
+        thumbnail_path: Explicit thumbnail path (or None)
+
+    Returns:
+        Tuple of (thumbnail_path, is_video)
+    """
+    media_list = extract_all_media(content)
+
+    video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
+    def is_video_url(url: str) -> bool:
+        return any(url.lower().split("?")[0].endswith(ext) for ext in video_extensions)
+
+    thumb_path = thumbnail_path
+    is_video_thumb = False
+
+    if thumb_path:
+        is_video_thumb = is_video_url(thumb_path)
+
+    # If we have no thumb or it's a video, try to find an image in content
+    if not thumb_path or is_video_thumb:
+        first_image = next((m["url"] for m in media_list if m["type"] == "image"), None)
+        if first_image:
+            thumb_path = first_image
+            is_video_thumb = False
+        elif not thumb_path and media_list:
+            # Fallback to first video if no image at all
+            thumb_path = media_list[0]["url"]
+            is_video_thumb = media_list[0]["type"] == "video"
+
+    return thumb_path, is_video_thumb
