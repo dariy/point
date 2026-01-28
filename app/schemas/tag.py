@@ -37,6 +37,7 @@ class TagUpdate(BaseModel):
     """Schema for updating a tag (all fields optional)."""
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
+    slug: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=1000)
     custom_url: str | None = Field(default=None, max_length=200)
     is_important: bool | None = Field(default=None)
