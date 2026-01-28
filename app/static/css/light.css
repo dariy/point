@@ -48,6 +48,9 @@
     --transition-fast: 150ms ease;
     --transition-normal: 200ms ease;
     --transition-theme: 200ms ease;
+
+    /* Component specific */
+    --btn-text-contrast: #ffffff;
 }
 
 /* ===========================
@@ -127,7 +130,8 @@
     --color-warning-light: rgba(245, 158, 11, 0.8);
     --color-danger-light: rgba(239, 68, 68, 0.8);
 
-    --color-success: rgba(255,255,255,0.8)
+    --color-success: rgba(255,255,255,0.8);
+    --btn-text-contrast: #0f172a;
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
@@ -492,12 +496,12 @@ input[type="password"] {
 
 .btn-primary {
     background-color: var(--color-primary);
-    color: white;
+    color: var(--btn-text-contrast);
 }
 
 .btn-primary:hover:not(:disabled) {
     background-color: var(--color-primary-hover);
-    color: white;
+    color: var(--btn-text-contrast);
 }
 
 .btn-secondary {
@@ -512,7 +516,7 @@ input[type="password"] {
 
 .btn-success {
     background-color: var(--color-success);
-    color: white;
+    color: var(--btn-text-contrast);
 }
 
 .btn-success:hover:not(:disabled) {
