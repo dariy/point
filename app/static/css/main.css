@@ -401,6 +401,10 @@ img {
     font-size: var(--font-size-sm);
 }
 
+.footer-copyright a {
+    color: var(--footer-text);
+}
+
 .light-link {
     font-weight: 700;
     text-decoration: none;
@@ -581,15 +585,16 @@ img {
     font-size: var(--font-size-sm);
     margin-bottom: var(--spacing-md);
 }
-.post-card-content.overlay .tag-link {
+
+/*.post-card-content.overlay .tag-link {
     background-color: rgba(255, 255, 255, 0.2);
     color: white;
     border: 1px solid rgba(255, 255, 255, 0.3);
-}
-.post-card-content.overlay .tag-link:hover {
+}*/
+/*.post-card-content.overlay .tag-link:hover {
     background-color: white;
-    color: var(--text-primary); /* Dark text on white tag */
-}
+    color: var(--text-primary);
+}*/
 
 /* --- TEXT ONLY STYLE --- */
 .post-card.text-only {
