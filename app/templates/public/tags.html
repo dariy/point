@@ -233,6 +233,30 @@ document.addEventListener('DOMContentLoaded', function() {
         loadTagsContent(url);
     }
 
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        // Ignore if focus is in an input, textarea, or contenteditable
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            // Next page (older posts)
+            const nextLink = document.querySelector('.pagination-link[aria-label="Next page"]');
+            if (nextLink && !nextLink.parentElement.classList.contains('disabled')) {
+                e.preventDefault();
+                nextLink.click();
+            }
+        } else if (e.key === 'ArrowUp') {
+            // Previous page (newer posts)
+            const prevLink = document.querySelector('.pagination-link[aria-label="Previous page"]');
+            if (prevLink && !prevLink.parentElement.classList.contains('disabled')) {
+                e.preventDefault();
+                prevLink.click();
+            }
+        }
+    });
+
     // Initial attachment
     attachListeners();
 
