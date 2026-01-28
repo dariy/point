@@ -119,8 +119,9 @@
     --light-card-bg: #1e293b;
 
     /* Brand adjustments */
-    --color-primary: #3b82f6;
+    /*--color-primary: #3b82f6;*/
     --color-primary-hover: #60a5fa;
+    --color-primary: #f1f5f9;
     --color-primary-light: rgba(59, 130, 246, 0.8);
     --color-success-light: rgba(16, 185, 129, 0.8);
     --color-warning-light: rgba(245, 158, 11, 0.8);
