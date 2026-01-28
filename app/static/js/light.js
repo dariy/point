@@ -43,21 +43,22 @@
         toast.className = `flash-message flash-${type}`;
         toast.textContent = message;
 
-        let container = document.querySelector('.flash-messages');
+        let container = document.body.querySelector('.flash-messages-container');
         if (!container) {
             container = document.createElement('div');
-            container.className = 'flash-messages';
-            const content = document.querySelector('.light-content');
-            if (content) {
-                content.parentNode.insertBefore(container, content);
-            }
+            container.className = 'flash-messages flash-messages-container';
+            document.body.appendChild(container);
         }
 
         container.appendChild(toast);
 
+        // Auto-remove after delay
         setTimeout(() => {
             toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 300);
+            toast.style.transform = 'translateX(20px)';
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
         }, 3000);
     }
 
@@ -700,6 +701,15 @@
     // ===========================
 
     function init() {
+        // Handle existing flash messages (server-rendered or client-rendered)
+        document.querySelectorAll('.flash-messages .flash-message, .flash-messages-container .flash-message').forEach(toast => {
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(20px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        });
+
         // Initialize content editor dropzone
         const editorContent = document.querySelector('.editor-content');
         if (editorContent) {
