@@ -421,6 +421,31 @@
 
     function initKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
+            // Ignore if typing in an input
+            if (
+                e.target.tagName === 'INPUT' ||
+                e.target.tagName === 'TEXTAREA' ||
+                e.target.isContentEditable
+            ) {
+                return;
+            }
+
+            // Number keys (1-9) to open posts in list view
+            if (e.key >= "1" && e.key <= "9" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                const rows = document.querySelectorAll('table.table tbody tr');
+                if (rows.length > 0) {
+                    const index = parseInt(e.key) - 1;
+                    if (rows[index]) {
+                        // Look for a link in the first cell or any link in the row
+                        const link = rows[index].querySelector('td:first-child a') || rows[index].querySelector('a');
+                        if (link) {
+                            e.preventDefault();
+                            link.click();
+                        }
+                    }
+                }
+            }
+
             // Ctrl/Cmd + S to save
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 const form = document.querySelector('form.post-form, form.editor-form');
