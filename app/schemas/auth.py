@@ -12,7 +12,7 @@ class LoginRequest(BaseModel):
     """Schema for login request."""
 
     username: str | None = Field(default=None, max_length=50)
-    password: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
     remember_me: bool = Field(default=False, description="Extended session expiry")
 
 
@@ -49,8 +49,8 @@ class UserCreate(BaseModel):
 class PasswordChangeRequest(BaseModel):
     """Schema for password change request."""
 
-    current_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8)
+    current_name: str = Field(..., min_length=1)
+    new_name: str = Field(..., min_length=1)
 
 
 class SessionResponse(BaseModel):
