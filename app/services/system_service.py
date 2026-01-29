@@ -5,7 +5,6 @@ like cache clearing.
 """
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -54,7 +53,7 @@ class SystemService:
         # Media stats
         media_count_result = await self.db.execute(select(func.count(Media.id)))
         media_count = media_count_result.scalar() or 0
-        
+
         media_size_result = await self.db.execute(select(func.sum(Media.file_size)))
         total_media_size_bytes = media_size_result.scalar() or 0
         total_media_size_mb = round(total_media_size_bytes / (1024 * 1024), 2)
@@ -120,7 +119,7 @@ class SystemService:
             return [f"Log file {log_file} not found."]
 
         try:
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 # Efficiently read last N lines
                 # For small files, this is fine
                 content = f.readlines()

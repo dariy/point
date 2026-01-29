@@ -4,9 +4,10 @@ Handles password hashing, session creation, and authentication logic.
 """
 
 import secrets
-import bcrypt
 from datetime import datetime, timedelta
 from hashlib import sha256
+
+import bcrypt
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 

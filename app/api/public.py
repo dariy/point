@@ -13,28 +13,27 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.post import Post, PostStatus
 from app.models.post_tag import post_tags
 from app.models.tag import Tag
 from app.models.user import User
-from app.dependencies import get_current_user
 from app.services.cache_service import get_cache
 from app.services.settings_service import SettingsService
 from app.services.tag_service import TagService
 from app.utils.formatters import (
-    extract_all_images,
+    determine_thumbnail,
     extract_all_media,
     format_content,
     generate_excerpt,
     strip_html,
     truncate_paragraphs,
-    determine_thumbnail,
 )
 
 settings = get_settings()
@@ -89,7 +88,7 @@ async def get_db_context(
     # Get tags for navigation (only featured tags)
     tags_result = await db.execute(
         select(Tag)
-        .where(Tag.is_featured == True)
+        .where(Tag.is_featured)
         .where(Tag.post_count > 0)
         .order_by(Tag.name)
         .limit(20)
@@ -143,7 +142,7 @@ def serialize_post(post: Post) -> dict[str, Any]:
     # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
     # 2. Or use the first image from content
     # 3. Or use the first video as fallback
-    
+
     thumb_path, is_video_thumb = determine_thumbnail(post.content, post.thumbnail_path)
 
     return {
@@ -392,7 +391,7 @@ async def single_post(
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         settings_service = SettingsService(db)
         blog_settings_dict = await settings_service.get_all_settings()
-        
+
         return JSONResponse(
             {
                 "post": {
@@ -503,7 +502,6 @@ async def tag_archive(
     blog_settings = await settings_service.get_all_settings()
 
     per_page = blog_settings.get("posts_per_page", 12)
-    offset = (page - 1) * per_page
 
     # Get posts with this tag
     tag_service = TagService(db)
@@ -920,8 +918,6 @@ async def robots_txt(request: Request) -> PlainTextResponse:
     Returns:
         robots.txt content
     """
-    base_url = get_base_url(request)
-
     content = f"""User-agent: *
 Allow: /
 Disallow: /light/
