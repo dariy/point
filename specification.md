@@ -464,6 +464,7 @@ async def update_view_counts():
 #### Homepage
 - List recent posts (paginated)
 - Each post shows: thumbnail, title, excerpt, tags, date, view count
+- **Video Previews**: Automatic video playback on hover for post cards containing video content.
 - Sidebar: tag cloud, recent posts, search (optional)
 
 #### Single Post View
@@ -474,11 +475,26 @@ async def update_view_counts():
 - Previous/Next post navigation
 - View counter (increments on page load)
 - Share buttons (optional)
+- **Reading Progress**: Visual indicator showing how much of the article has been read.
+- **Code Utilities**: "Copy to clipboard" functionality for all code blocks.
 
-#### Tag Archive
-- Shows all posts with specific tag
-- Tag description at top
-- Pagination
+#### Immersive Mode
+- **Automatic Activation**: Triggered for posts without substantial text content (photo-centric).
+- **Full-Screen Layout**: Content fills the entire viewport, minimizing distractions.
+- **Interactive UI**: Interface elements (header, footer, tags) automatically hide during inactivity and reappear on mouse movement or touch.
+- **Media Focus**: High-resolution display of images and videos with responsive scaling.
+
+#### AJAX Navigation
+- **SPA Experience**: Seamless transitions between posts and pages without full page reloads.
+- **JSON API**: Efficient data fetching for post content.
+- **Browser History**: Proper `pushState` integration to maintain shareable URLs and back-button functionality.
+- **Fallback Support**: Robust graceful degradation to standard HTML navigation if AJAX fails.
+
+#### Gesture Navigation
+- **Touch Support**: Swipe left/right to navigate between posts on mobile and tablet devices.
+- **Carousel Gestures**: Swipe support for image carousels within posts.
+- **Vertical Swipe**: Intelligent vertical swipe detection to allow natural scrolling while maintaining navigation functionality.
+- **Visual Consistency**: Optimized background colors (`var(--bg-primary)`) to ensure seamless visual transitions during overscroll and gesture interactions.
 
 #### Gallery View
 - Grid of post thumbnails
