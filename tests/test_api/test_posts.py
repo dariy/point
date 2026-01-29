@@ -38,7 +38,7 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
         "/api/auth/login",
         json={
             "username": test_user["username"],
-            "password": test_user["password"],
+            "name": test_user["password"],  # API expects 'name' field for password
         },
     )
     assert response.status_code == 200
