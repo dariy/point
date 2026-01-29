@@ -22,6 +22,8 @@ from app.database import get_db
 from app.models.post import Post, PostStatus
 from app.models.post_tag import post_tags
 from app.models.tag import Tag
+from app.models.user import User
+from app.dependencies import get_current_user
 from app.services.cache_service import get_cache
 from app.services.settings_service import SettingsService
 from app.services.tag_service import TagService
@@ -145,6 +147,7 @@ def serialize_post(post: Post) -> dict[str, Any]:
     thumb_path, is_video_thumb = determine_thumbnail(post.content, post.thumbnail_path)
 
     return {
+        "id": post.id,
         "title": post.title,
         "slug": post.slug,
         "thumbnail_path": thumb_path,
@@ -166,6 +169,7 @@ async def homepage(
     request: Request,
     page: int = 1,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
 ) -> HTMLResponse:
     """Render the homepage with paginated posts.
 
@@ -173,6 +177,7 @@ async def homepage(
         request: The current request
         page: Page number for pagination
         db: Database session
+        user: Current user (optional)
 
     Returns:
         Rendered homepage HTML
@@ -183,7 +188,8 @@ async def homepage(
         query_params = {"page": page} if page > 1 else None
         cached = await cache.get_by_url("/", query_params)
         # Skip cache for AJAX requests as they need JSON
-        if cached and request.headers.get("X-Requested-With") != "XMLHttpRequest":
+        # Also skip cache if user is logged in to show edit buttons
+        if cached and request.headers.get("X-Requested-With") != "XMLHttpRequest" and not user:
             logger.debug("Cache hit for homepage page=%d", page)
             return HTMLResponse(
                 content=cached.content,
@@ -229,6 +235,7 @@ async def homepage(
                     "next_page": page + 1,
                     "prev_page": page - 1,
                 },
+                "is_logged_in": user is not None,
             }
         )
 
@@ -253,13 +260,14 @@ async def homepage(
             "total_pages": total_pages,
             "total": total,
             "recent_posts": recent_posts,
+            "user": user,
         }
     )
 
     response = templates.TemplateResponse("public/index.html", context)
 
     # Store in cache if enabled
-    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest":
+    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest" and not user:
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         # Get rendered content
@@ -280,6 +288,7 @@ async def single_post(
     request: Request,
     slug: str,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
 ) -> HTMLResponse:
     """Render a single post page.
 
@@ -287,6 +296,7 @@ async def single_post(
         request: The current request
         slug: Post slug
         db: Database session
+        user: Current user (optional)
 
     Returns:
         Rendered post HTML
@@ -317,8 +327,9 @@ async def single_post(
     await db.commit()
 
     # Check cache if enabled (after incrementing view count)
+    # Skip cache if user is logged in
     cache_key = f"/posts/{slug}"
-    if settings.cache_enabled:
+    if settings.cache_enabled and not user:
         cache = await get_cache()
         cached = await cache.get_by_url(cache_key)
         if cached:
@@ -385,6 +396,7 @@ async def single_post(
         return JSONResponse(
             {
                 "post": {
+                    "id": post.id,
                     "title": post.title,
                     "slug": post.slug,
                     "published_date": (post.published_at or post.created_at).strftime('%B %d, %Y'),
@@ -403,6 +415,7 @@ async def single_post(
                 },
                 "blog_title": settings.app_name,
                 "blog_subtitle": getattr(settings, "blog_subtitle", ""),
+                "is_logged_in": user is not None,
             }
         )
 
@@ -418,13 +431,14 @@ async def single_post(
             "post_media": post_media,
             "prev_post": prev_post,
             "next_post": next_post,
+            "user": user,
         }
     )
 
     response = templates.TemplateResponse("public/post.html", context)
 
-    # Store in cache if enabled
-    if settings.cache_enabled:
+    # Store in cache if enabled and not logged in
+    if settings.cache_enabled and not user:
         cache = await get_cache()
         content = response.body.decode("utf-8")
         await cache.set_by_url(
@@ -443,6 +457,7 @@ async def tag_archive(
     slug: str,
     page: int = 1,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
 ) -> HTMLResponse:
     """Render a tag archive page.
 
@@ -451,6 +466,7 @@ async def tag_archive(
         slug: Tag slug
         page: Page number for pagination
         db: Database session
+        user: Current user (optional)
 
     Returns:
         Rendered tag archive HTML
@@ -460,7 +476,7 @@ async def tag_archive(
     """
     # Check cache if enabled
     cache_key = f"/tag/{slug}"
-    if settings.cache_enabled:
+    if settings.cache_enabled and not user:
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         cached = await cache.get_by_url(cache_key, query_params)
@@ -519,6 +535,7 @@ async def tag_archive(
                     "prev_page": page - 1,
                 },
                 "tag": {"name": tag.name, "slug": tag.slug},
+                "is_logged_in": user is not None,
             }
         )
 
@@ -540,13 +557,14 @@ async def tag_archive(
             "page": page,
             "total_pages": total_pages,
             "total": total,
+            "user": user,
         }
     )
 
     response = templates.TemplateResponse("public/tag.html", context)
 
     # Store in cache if enabled
-    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest":
+    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest" and not user:
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         content = response.body.decode("utf-8")
@@ -568,6 +586,7 @@ async def tags_page(
     tag_slug: str | None = None,
     page: int = 1,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
 ) -> HTMLResponse:
     """Render the tags page (formerly gallery).
 
@@ -576,6 +595,7 @@ async def tags_page(
         tag_slug: Optional tag slug from path
         page: Page number for pagination
         db: Database session
+        user: Current user (optional)
 
     Returns:
         Rendered gallery HTML
@@ -642,6 +662,7 @@ async def tags_page(
 
             posts_data.append(
                 {
+                    "id": post.id,
                     "title": post.title,
                     "slug": post.slug,
                     "thumbnail_path": post.thumbnail_path,
@@ -666,6 +687,7 @@ async def tags_page(
                     "prev_page": page - 1,
                 },
                 "current_tag": tag_slug,
+                "is_logged_in": user is not None,
             }
         )
 
@@ -681,6 +703,7 @@ async def tags_page(
             "total": total,
             "tags": all_tags,
             "current_tag": tag_slug,
+            "user": user,
         }
     )
 
