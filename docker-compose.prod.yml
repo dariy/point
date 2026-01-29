@@ -1,0 +1,122 @@
+# Production Docker Compose Configuration
+# This file provides production-specific settings and optional nginx reverse proxy
+
+services:
+  blog:
+    image: ghcr.io/${GITHUB_REPOSITORY:-username/photo-blog}:latest
+    container_name: photo-blog-prod
+    restart: unless-stopped
+
+    environment:
+      # Production environment
+      - ENVIRONMENT=production
+
+      # Security settings
+      - SECRET_KEY=${SECRET_KEY}
+      - SESSION_SECRET=${SESSION_SECRET}
+
+      # Database
+      - DATABASE_URL=sqlite+aiosqlite:////data/blog.db
+
+      # Blog settings
+      - BLOG_TITLE=${BLOG_TITLE:-My Photo Blog}
+      - BLOG_DESCRIPTION=${BLOG_DESCRIPTION:-A personal photography journal}
+      - BLOG_AUTHOR=${BLOG_AUTHOR:-Photographer}
+      - BLOG_URL=${BLOG_URL:-https://yourdomain.com}
+
+      # Media settings
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-52428800}
+      - STORAGE_QUOTA=${STORAGE_QUOTA:-10737418240}
+
+      # Performance
+      - CACHE_ENABLED=true
+      - CACHE_TTL=${CACHE_TTL:-3600}
+
+      # Backup settings
+      - BACKUP_ENABLED=true
+      - BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    volumes:
+      # Use named volume for data persistence
+      - blog-data:/data
+
+    networks:
+      - blog-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Read-only root filesystem (except /data and /tmp)
+    # Uncomment for additional security
+    # read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+
+  # Optional: Nginx reverse proxy for HTTPS
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: photo-blog-nginx
+    restart: unless-stopped
+
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - blog-data:/data:ro  # Serve static files
+
+    depends_on:
+      blog:
+        condition: service_healthy
+
+    networks:
+      - blog-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  blog-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}
+
+networks:
+  blog-network:
+    driver: bridge

@@ -119,3 +119,12 @@ Desktop.ini
 *.key
 secrets/
 credentials.json
+
+# Production environment files
+.env.production
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Deployment artifacts
+deployment-*.log
