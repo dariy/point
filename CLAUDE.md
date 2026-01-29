@@ -1,8 +1,6 @@
-# CLAUDE.md - AI Assistant Guide for Photo Blog Engine
-
-> **Last Updated**: 2026-01-23
-> **Project Status**: Active Development (MVP In Progress)
-> **Current Phase**: Phase 6 Complete - Light Interface
+> **Last Updated**: 2026-01-29
+> **Project Status**: Active Development (Feature Rich)
+> **Current Phase**: Phase 14 Complete - Enhanced UI/UX
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
@@ -25,7 +23,8 @@
 **Photo Blog Engine** is a lightweight, professional-grade personal photo blog platform designed for photographers and visual content creators. The project emphasizes:
 
 - **Simplicity**: Single Docker container deployment
-- **Performance**: SQLite database, file-based caching
+- **Performance**: SQLite database, file-based caching, and AJAX navigation
+- **Modern Experience**: Immersive full-screen modes and touch gesture support
 - **Self-hosted**: Complete control over data and infrastructure
 - **Minimal dependencies**: No Redis, PostgreSQL, or complex microservices
 
@@ -43,11 +42,13 @@ Testing:     pytest, pytest-asyncio
 Linting:     ruff
 Type Check:  mypy
 Container:   Docker + docker-compose
+Frontend:    Vanilla JS with AJAX navigation & touch support
 ```
 
 ### Key Documentation
 
-- `specification.md` - Complete technical specification (1,200+ lines)
+- `README.md` - Main project overview and setup guide
+- `specification.md` - Complete technical specification
 - `phases.md` - Development phases and progress tracking
 - `LICENSE` - MIT License
 - `CLAUDE.md` - This file (AI assistant guide)
@@ -56,9 +57,9 @@ Container:   Docker + docker-compose
 
 ## Current Repository State
 
-### Project Phase: Light Interface Complete
+### Project Phase: Enhanced UI/UX Complete
 
-**Status**: Phases 1-6 Complete, MVP backend and light UI functional
+**Status**: Phases 1-12 and Phase 14 Complete. Core blog, admin interface, and advanced UX features are fully functional.
 
 **Completed Phases**:
 - ✅ Phase 1: Project Foundation - Docker, database, project structure
@@ -67,18 +68,24 @@ Container:   Docker + docker-compose
 - ✅ Phase 4: Media Management - File upload, image processing, thumbnails
 - ✅ Phase 5: Tag System - Tag CRUD, post-tag relationships
 - ✅ Phase 6: Light Interface - Dashboard, post editor, media library, tags manager
+- ✅ Phase 7: Public Frontend - Homepage, single post view, gallery
+- ✅ Phase 8: RSS & SEO - RSS feed, sitemap, robots.txt, meta tags
+- ✅ Phase 9: Theming System - Dark/light modes, system detection
+- ✅ Phase 10: Caching & Performance - File-based caching, asset optimization
+- ✅ Phase 11: Background Tasks & Backup - Automated backups, session cleanup
+- ✅ Phase 12: Settings & System Tools - Blog configuration, log viewer, stats
+- ✅ Phase 14: Enhanced UI/UX - Immersive mode, AJAX navigation, gesture support
 
-**Next Steps** (Phase 7):
-1. Public frontend templates
-2. Homepage with post list
-3. Single post view
-4. Tag archive pages
-5. View counting
+**Next Steps** (Phase 13):
+1. CI/CD Pipeline (GitHub Actions)
+2. Production Deployment Hardening
+3. Final Quality Assurance
 
 ### Repository Structure (Current)
 
 ```
 point/
+├── README.md               # Main project guide
 ├── CLAUDE.md               # This file (AI assistant guide)
 ├── LICENSE                 # MIT License
 ├── Dockerfile             # Docker configuration
@@ -87,67 +94,15 @@ point/
 ├── specification.md       # Complete technical spec
 ├── phases.md              # Development phases tracker
 ├── app/
-│   ├── __init__.py
-│   ├── main.py            # FastAPI application
-│   ├── config.py          # Pydantic settings
-│   ├── database.py        # SQLAlchemy async setup
-│   ├── dependencies.py    # Auth dependencies
-│   ├── api/               # FastAPI routes
-│   │   ├── light.py       # Light HTML routes
-│   │   ├── auth.py        # Authentication API
-│   │   ├── posts.py       # Posts API
-│   │   ├── media.py       # Media API
-│   │   └── tags.py        # Tags API
+│   ├── api/               # FastAPI routers (admin, auth, media, posts, public, etc.)
 │   ├── models/            # SQLAlchemy models
-│   │   ├── user.py
-│   │   ├── session.py
-│   │   ├── post.py
-│   │   ├── tag.py
-│   │   ├── post_tag.py
-│   │   └── media.py
 │   ├── schemas/           # Pydantic schemas
-│   │   ├── auth.py
-│   │   ├── post.py
-│   │   ├── tag.py
-│   │   └── media.py
-│   ├── services/          # Business logic
-│   │   ├── auth_service.py
-│   │   ├── post_service.py
-│   │   ├── tag_service.py
-│   │   └── media_service.py
-│   ├── templates/         # Jinja2 templates
-│   │   ├── base.html
-│   │   ├── light/
-│   │   │   ├── base.html
-│   │   │   ├── login.html
-│   │   │   ├── dashboard.html
-│   │   │   ├── posts_list.html
-│   │   │   ├── post_edit.html
-│   │   │   ├── tags.html
-│   │   │   └── media.html
-│   │   └── macros/
-│   │       ├── forms.html
-│   │       └── pagination.html
-│   ├── static/            # CSS, JS assets
-│   │   ├── css/
-│   │   │   └── light.css
-│   │   └── js/
-│   │       └── light.js
+│   ├── services/          # Business logic (auth, backup, cache, post, scheduler, etc.)
+│   ├── static/            # CSS, JS assets (main.css, main.js, theme.js, light.css, light.js)
+│   ├── templates/         # Jinja2 templates (public, light, macros)
 │   └── utils/             # Utility functions
-│       ├── slugify.py
-│       ├── formatters.py
-│       ├── image_processor.py
-│       └── validators.py
-├── tests/                 # Test suite
-│   ├── conftest.py
-│   └── test_api/
-│       ├── test_auth.py
-│       ├── test_posts.py
-│       ├── test_media.py
-│       ├── test_tags.py
-│       └── test_light.py
-└── scripts/               # Utility scripts
-    └── init_db.py
+├── tests/                 # Comprehensive test suite
+└── scripts/               # Utility scripts (init_db.py, backup.sh, restore.sh)
 ```
 
 ---
