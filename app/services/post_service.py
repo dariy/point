@@ -303,11 +303,11 @@ class PostService:
             # Convert enums to their values
             if hasattr(value, "value"):
                 value = value.value
-            
+
             # Set published_at if status changed to published and not already set
             if field == "status" and value == PostStatus.PUBLISHED and not post.published_at:
                 post.published_at = datetime.utcnow()
-                
+
             setattr(post, field, value)
 
         # Regenerate excerpt if content changed and no custom excerpt

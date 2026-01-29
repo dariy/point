@@ -202,9 +202,8 @@ class FileCache:
             content_type=content_type,
         )
 
-        async with self._lock:
-            async with aiofiles.open(cache_path, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(entry.to_dict()))
+        async with self._lock, aiofiles.open(cache_path, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(entry.to_dict()))
 
         self._stats["sets"] += 1
 
