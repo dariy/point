@@ -36,7 +36,7 @@ async def test_login_no_username_success(
     response = await client.post(
         "/api/auth/login",
         json={
-            "password": test_user["password"],
+            "name": test_user["password"],  # API expects 'name' field for password
         },
     )
 
@@ -55,7 +55,7 @@ async def test_login_no_username_invalid_password(
     response = await client.post(
         "/api/auth/login",
         json={
-            "password": "wrongpassword",
+            "name": "wrongpassword",  # API expects 'name' field for password
         },
     )
 
@@ -74,7 +74,7 @@ async def test_login_no_username_no_user(
     response = await client.post(
         "/api/auth/login",
         json={
-            "password": "anypassword",
+            "name": "anypassword",  # API expects 'name' field for password
         },
     )
 
