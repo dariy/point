@@ -45,7 +45,7 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
         "/api/auth/login",
         json={
             "username": test_user["username"],
-            "password": test_user["password"],
+            "name": test_user["password"],  # API expects 'name' field for password
         },
     )
     assert response.status_code == 200
@@ -62,7 +62,7 @@ class TestLoginPage:
 
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
-        assert "Sign in" in response.text
+        assert "Sign In" in response.text
 
     @pytest.mark.asyncio
     async def test_login_page_redirects_if_authenticated(
