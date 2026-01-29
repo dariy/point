@@ -912,6 +912,140 @@
     }
 
     /**
+     * Common navigation logic for Keyboard and Touch
+     * Returns true if a navigation action was triggered
+     */
+    function performNavigation(direction) {
+        let handled = false;
+
+        // Home or Tags list page (Left/Right)
+        const listPagination = document.querySelector(
+            'nav.pagination[aria-label="Posts pagination"], nav.pagination[aria-label="Tags pagination"]',
+        );
+        if (listPagination) {
+            if (direction === "left") {
+                const nextLink = listPagination.querySelector(
+                    'a.pagination-link[aria-label="Next page"]',
+                );
+                if (nextLink) {
+                    nextLink.click();
+                    handled = true;
+                }
+            } else if (direction === "right") {
+                const prevLink = listPagination.querySelector(
+                    'a.pagination-link[aria-label="Previous page"]',
+                );
+                if (prevLink) {
+                    prevLink.click();
+                    handled = true;
+                }
+            }
+        }
+
+        // Specific Tag page (Up/Down)
+        const tagPagination = document.querySelector(
+            'nav.pagination[aria-label="Tag archive pagination"]',
+        );
+        if (tagPagination) {
+            if (direction === "down") {
+                const nextLink = tagPagination.querySelector(
+                    'a.pagination-link[aria-label="Next page"]',
+                );
+                if (nextLink) {
+                    nextLink.click();
+                    handled = true;
+                }
+            } else if (direction === "up") {
+                const prevLink = tagPagination.querySelector(
+                    'a.pagination-link[aria-label="Previous page"]',
+                );
+                if (prevLink) {
+                    prevLink.click();
+                    handled = true;
+                }
+            }
+        }
+
+        // Single Post Navigation (Up/Down)
+        const postNavData = document.getElementById('post-nav-data');
+        if (postNavData) {
+            if (direction === "escape") {
+                console.log("[Navigation] Escape pressed, returning to home");
+                loadPost('/');
+                handled = true;
+            } else if (direction === "down") {
+                const prevUrl = postNavData.dataset.prevUrl;
+                if (prevUrl) {
+                    console.log("[Navigation] Triggering loadPost for prevUrl:", prevUrl);
+                    loadPost(prevUrl);
+                    handled = true;
+                }
+            } else if (direction === "up") {
+                const nextUrl = postNavData.dataset.nextUrl;
+                if (nextUrl) {
+                    console.log("[Navigation] Triggering loadPost for nextUrl:", nextUrl);
+                    loadPost(nextUrl);
+                    handled = true;
+                }
+            }
+        }
+
+        return handled;
+    }
+
+    /**
+     * Touch Gestures for Navigation
+     */
+    function initTouchNavigation() {
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].clientX;
+            touchStartY = e.changedTouches[0].clientY;
+        }, {passive: true});
+
+        document.addEventListener('touchend', function(e) {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
+        }, {passive: true});
+        
+        function handleSwipe(startX, startY, endX, endY) {
+            const diffX = endX - startX;
+            const diffY = endY - startY;
+            const threshold = 50; // min distance
+            
+            // Determine if horizontal or vertical swipe
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                // Horizontal
+                if (Math.abs(diffX) > threshold) {
+                    if (diffX < 0) {
+                        performNavigation("left"); // Swipe Left -> ArrowLeft (Next)
+                    } else {
+                        performNavigation("right"); // Swipe Right -> ArrowRight (Prev)
+                    }
+                }
+            } else {
+                // Vertical
+                if (Math.abs(diffY) > threshold) {
+                    // Only trigger vertical nav if at boundaries to avoid scroll conflict
+                    // Use a slightly larger buffer for robust detection across browsers
+                    const isAtTop = window.scrollY <= 5; 
+                    const isAtBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50;
+                    
+                    if (diffY < 0 && isAtBottom) {
+                        performNavigation("down"); // Swipe Up -> ArrowDown
+                    } else if (diffY > 0 && isAtTop) {
+                        performNavigation("up"); // Swipe Down -> ArrowUp
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Keyboard Navigation for pagination
      */
     function initKeyboardNavigation() {
@@ -938,65 +1072,25 @@
                 }
             }
 
-            // Home or Tags list page (Left/Right)
-            const listPagination = document.querySelector(
-                'nav.pagination[aria-label="Posts pagination"], nav.pagination[aria-label="Tags pagination"]',
-            );
-            if (listPagination) {
-                if (e.key === "ArrowLeft") {
-                    const nextLink = listPagination.querySelector(
-                        'a.pagination-link[aria-label="Next page"]',
-                    );
-                    if (nextLink) nextLink.click();
-                } else if (e.key === "ArrowRight") {
-                    const prevLink = listPagination.querySelector(
-                        'a.pagination-link[aria-label="Previous page"]',
-                    );
-                    if (prevLink) prevLink.click();
-                }
-            }
+            // Navigation Keys
+            let direction = null;
+            if (e.key === "ArrowLeft") direction = "left";
+            else if (e.key === "ArrowRight") direction = "right";
+            else if (e.key === "ArrowDown") direction = "down";
+            else if (e.key === "ArrowUp") direction = "up";
+            else if (e.key === "Escape") direction = "escape";
 
-            // Specific Tag page (Up/Down)
-            const tagPagination = document.querySelector(
-                'nav.pagination[aria-label="Tag archive pagination"]',
-            );
-            if (tagPagination) {
-                if (e.key === "ArrowDown") {
-                    const nextLink = tagPagination.querySelector(
-                        'a.pagination-link[aria-label="Next page"]',
-                    );
-                    if (nextLink) nextLink.click();
-                } else if (e.key === "ArrowUp") {
-                    const prevLink = tagPagination.querySelector(
-                        'a.pagination-link[aria-label="Previous page"]',
-                    );
-                    if (prevLink) prevLink.click();
-                }
-            }
-
-            // Single Post Navigation (Up/Down)
-            const postNavData = document.getElementById('post-nav-data');
-            if (postNavData) {
-                if (e.key === "Escape") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log("[Navigation] Escape pressed, returning to home");
-                    loadPost('/');
-                } else if (e.key === "ArrowDown") {
-                    const prevUrl = postNavData.dataset.prevUrl;
-                    if (prevUrl) {
+            if (direction) {
+                if (performNavigation(direction)) {
+                    // Only prevent default if we actually navigated
+                    // For lists, we might not want to prevent default unless it's strictly required
+                    // But existing code did preventing for Post navigation (ArrowDown/Up/Escape)
+                    // Lists (ArrowLeft/Right) didn't have preventDefault in original code, but clicking a link is a navigation anyway.
+                    // To match original exactly:
+                    const isPostNav = document.getElementById('post-nav-data');
+                    if (isPostNav || direction === 'escape') {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log("[Navigation] Triggering loadPost for prevUrl:", prevUrl);
-                        loadPost(prevUrl);
-                    }
-                } else if (e.key === "ArrowUp") {
-                    const nextUrl = postNavData.dataset.nextUrl;
-                    if (nextUrl) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log("[Navigation] Triggering loadPost for nextUrl:", nextUrl);
-                        loadPost(nextUrl);
                     }
                 }
             }
@@ -1036,6 +1130,7 @@
         initDropdowns();
         initBackToTop();
         initKeyboardNavigation();
+        initTouchNavigation();
         initPopstate();
         
         // Page specific initializations
