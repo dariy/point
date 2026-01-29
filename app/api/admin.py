@@ -3,6 +3,7 @@
 Renders HTML pages for the light dashboard and management interface.
 """
 
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -54,13 +55,11 @@ def get_base_context(request: Request, user: User | None = None) -> dict[str, An
 
 
 async def require_auth(
-    request: Request,
     user: User | None = Depends(get_current_user),
 ) -> User:
     """Require authentication for light routes.
 
     Args:
-        request: FastAPI request
         user: Current user or None
 
     Returns:
@@ -196,10 +195,8 @@ async def posts_list(
     per_page = 20
     status_enum = None
     if status_filter:
-        try:
+        with contextlib.suppress(ValueError):
             status_enum = PostStatus(status_filter)
-        except ValueError:
-            pass
 
     post_service = PostService(db)
     posts, total = await post_service.list_posts(
@@ -509,11 +506,8 @@ async def system_page(
 
 
 @router.get("/logout")
-async def logout(request: Request) -> RedirectResponse:
+async def logout() -> RedirectResponse:
     """Logout and redirect to login page.
-
-    Args:
-        request: FastAPI request
 
     Returns:
         Redirect to login page

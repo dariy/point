@@ -69,7 +69,7 @@ class SettingsService:
             return "true" if value else "false", "bool"
         if isinstance(value, int):
             return str(value), "int"
-        if isinstance(value, (dict, list)):
+        if isinstance(value, dict | list):
             return json.dumps(value), "json"
         # Default to string
         return str(value), "string"

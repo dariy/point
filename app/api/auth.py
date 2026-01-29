@@ -63,7 +63,7 @@ async def login(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="No user found in system",
             )
-        
+
         user = await auth_service.authenticate_user(
             target_user.username, login_data.name
         )
