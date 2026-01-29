@@ -497,6 +497,32 @@
         // Keyboard navigation
         document.addEventListener("keydown", handleKeydown);
 
+        // Touch navigation
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        container.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].clientX;
+            touchStartY = e.changedTouches[0].clientY;
+        }, { passive: true });
+
+        container.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            const threshold = 50;
+
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > threshold) {
+                if (diffX < 0) {
+                    goToSlide(currentIndex + 1); // Swipe Left -> Next
+                } else {
+                    goToSlide(currentIndex - 1); // Swipe Right -> Prev
+                }
+            }
+        }, { passive: true });
+
         registerCleanup(() => {
             document.removeEventListener("keydown", handleKeydown);
         });

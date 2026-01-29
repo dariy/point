@@ -122,7 +122,7 @@
 [data-theme="dark"] {
     /* Semantic Colors - Background */
     --bg-primary: #0f172a;
-    --bg-carouselle: black;
+    --bg-carouselle: #0f172a;
     --bg-secondary: #1e293b;
     --bg-tertiary: #334155;
     --bg-elevated: #1e293b;
@@ -198,7 +198,7 @@ html {
     font-size: 16px;
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg-primary);
 }
 
 body {
@@ -206,7 +206,7 @@ body {
     font-size: var(--font-size-base);
     line-height: 1.6;
     color: var(--text-primary);
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-primary);
     transition:
         background-color var(--transition-theme),
         color var(--transition-theme);
@@ -1794,6 +1794,7 @@ video.immersive-bg-image {
     display: flex;
     align-items: center;
     justify-content: center;
+    background-color: var(--bg-carouselle);
 }
 
 .carousel-slide {
