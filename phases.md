@@ -31,8 +31,9 @@ Each phase is designed to be:
 | 9 | Theming System | ✅ Completed | Phase 7 |
 | 10 | Caching & Performance | ✅ Completed | Phase 7 |
 | 11 | Background Tasks & Backup | ✅ Completed | Phase 10 |
-| 12 | Settings & System Tools | ✅ Complete | Phase 6 |
+| 12 | Settings & System Tools | ✅ Completed | Phase 6 |
 | 13 | CI/CD & Deployment | ⬜ Not Started | All Phases |
+| 14 | Enhanced UI/UX | ✅ Completed | Phase 7 |
 
 **Legend**: ⬜ Not Started | 🔄 In Progress | ✅ Complete | ⏸️ Blocked
 
@@ -908,7 +909,7 @@ ls /data/cache/pages/  # Should be cleared
 
 **Goal**: Implement scheduled tasks and backup automation
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Completed
 
 **Depends on**: Phase 10
 
@@ -1079,6 +1080,55 @@ curl http://localhost:8000/api/system/stats \
 
 ---
 
+## Phase 14: Enhanced UI/UX
+
+**Goal**: Implement advanced frontend features for a modern, seamless user experience
+
+**Status**: ✅ Completed
+
+**Depends on**: Phase 7
+
+### Tasks
+
+- [x] **14.1 Immersive Mode**
+  - [x] Detect image-only posts
+  - [x] Implement full-screen immersive layout
+  - [x] Add auto-hiding UI elements (header/footer)
+  - [x] Responsive image/video scaling
+
+- [x] **14.2 AJAX Navigation**
+  - [x] Implement JSON API for post content
+  - [x] Add client-side navigation logic (`loadPost`)
+  - [x] Handle history `pushState` and `popstate`
+  - [x] Implement smooth content transitions
+  - [x] Add graceful fallback to HTML navigation
+
+- [x] **14.3 Gesture Navigation**
+  - [x] Implement touch swipe for post navigation
+  - [x] Add carousel swipe support
+  - [x] Intelligent vertical scroll detection
+  - [x] Coordinate-based swipe thresholding
+
+- [x] **14.4 Reading Tools**
+  - [x] Add reading progress indicator
+  - [x] Implement "Copy to Clipboard" for code blocks
+  - [x] Video preview on hover for post cards
+
+- [x] **14.5 Design Polishing**
+  - [x] Fix theme background inconsistencies
+  - [x] Optimize overscroll behavior and visual transitions
+  - [x] Smooth scrolling and back-to-top button
+
+### Deliverables
+
+1. Full-screen immersive mode for photo posts
+2. Seamless AJAX-based site navigation
+3. Comprehensive touch gesture support
+4. Reading tools (progress bar, code copy)
+5. Refined visual transitions and theme consistency
+
+---
+
 ## Phase 13: CI/CD & Deployment
 
 **Goal**: Set up automated testing, building, and deployment
@@ -1212,6 +1262,8 @@ Track significant milestones here:
 | 2026-01-24 | 9 | Phase 9 complete | Dark/light theming with CSS variables, theme.js for toggle and system preference detection, theme switcher UI, light theming, 24 new tests |
 | 2026-01-25 | 10 | Phase 10 complete | File-based caching with FileCache class, page caching for public routes, cache invalidation on post/tag changes, static asset caching headers, 22 new tests |
 | 2026-01-27 | 11 | Phase 11 complete | Scheduler service with APScheduler, background tasks for session cleanup and view count flushing, backup service with scripts and API endpoint, 13 new tests |
+| 2026-01-28 | 12 | Phase 12 complete | Blog settings management, system stats, and log viewer |
+| 2026-01-29 | 14 | Enhanced UI/UX | Gesture navigation, Immersive mode, AJAX navigation, and theme fixes |
 
 ---
 
