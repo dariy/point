@@ -835,6 +835,41 @@
              }
         }
 
+        // Inject Edit Button if logged in
+        if (data.is_logged_in) {
+            const headerRight = headerClone.querySelector('.header-right');
+            if (headerRight) {
+                // Adjust styles to match server-side rendering
+                headerRight.style.width = 'auto'; 
+                headerRight.style.display = 'flex';
+                headerRight.style.justifyContent = 'flex-end';
+                headerRight.style.gap = '0.5rem';
+                
+                const editBtn = document.createElement('a');
+                editBtn.href = '/light/posts/' + post.id;
+                editBtn.className = 'theme-toggle';
+                editBtn.style.display = 'flex';
+                editBtn.style.alignItems = 'center';
+                editBtn.style.justifyContent = 'center';
+                editBtn.style.textDecoration = 'none';
+                editBtn.title = 'Edit Post';
+                editBtn.innerHTML = `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                `;
+                
+                // Insert before theme toggle
+                const themeToggle = headerRight.querySelector('.theme-toggle');
+                if (themeToggle) {
+                    headerRight.insertBefore(editBtn, themeToggle);
+                } else {
+                    headerRight.appendChild(editBtn);
+                }
+            }
+        }
+
         // 6. DOM Injection
         const main = document.querySelector('main.site-main');
         const container = main.querySelector('.main-container');
