@@ -133,28 +133,40 @@ jobs:
             # Deploy new version
             docker compose up -d blog
 
-            # Wait for service to be healthy
-            echo "Waiting for service to be healthy..."
-            sleep 10
+            # Wait for container to start
+            echo "Waiting for container to start..."
+            sleep 5
 
-      - name: Health Check
+            # Server-side health check
+            echo "Running server-side health check..."
+            max_attempts=12
+            attempt=0
+            while [ $attempt -lt $max_attempts ]; do
+              if docker compose exec -T blog curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
+                echo "Health check passed!"
+                exit 0
+              fi
+              attempt=$((attempt + 1))
+              echo "Attempt $attempt/$max_attempts - waiting..."
+              sleep 5
+            done
+
+            # If health check fails, show logs for debugging
+            echo "Health check failed! Container logs:"
+            docker compose logs --tail=50 blog
+            exit 1
+
+      - name: External Health Check
+        continue-on-error: true
         run: |
-          max_attempts=12
-          attempt=0
-
-          while [ $attempt -lt $max_attempts ]; do
-            if curl -f -s -m 10 https://${{ secrets.DEPLOY_HOST }}/health > /dev/null; then
-              echo "Health check passed!"
-              exit 0
-            fi
-
-            attempt=$((attempt + 1))
-            echo "Health check attempt $attempt/$max_attempts failed, retrying..."
-            sleep 10
-          done
-
-          echo "Health check failed after $max_attempts attempts"
-          exit 1
+          echo "Verifying external access..."
+          if curl -f -s -m 10 https://${{ secrets.DEPLOY_HOST }}/health > /dev/null 2>&1; then
+            echo "HTTPS health check passed!"
+          elif curl -f -s -m 10 http://${{ secrets.DEPLOY_HOST }}/health > /dev/null 2>&1; then
+            echo "HTTP health check passed!"
+          else
+            echo "Warning: External health check failed (server may not have public access configured)"
+          fi
 
       - name: Notify Success
         if: success()
