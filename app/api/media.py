@@ -109,7 +109,7 @@ async def list_media(
     orphaned_only: bool = Query(default=False, description="Only show orphaned files"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """List all media files with pagination.
 
     Requires authentication.
@@ -146,7 +146,7 @@ async def upload_file(
     post_id: int | None = Form(default=None, description="Post ID to link to"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """Upload a single media file.
 
     Supports images (JPG, PNG, GIF, WebP, SVG), videos (MP4, MOV, WebM),
@@ -209,7 +209,7 @@ async def upload_multiple_files(
     ),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """Upload multiple media files at once.
 
     Requires authentication.
@@ -281,7 +281,7 @@ async def upload_multiple_files(
 async def get_storage_stats(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """Get storage usage statistics.
 
     Requires authentication.
@@ -298,7 +298,7 @@ async def get_storage_stats(
 async def list_orphaned_media(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """List all orphaned media files (not linked to any post).
 
     Requires authentication.
@@ -321,7 +321,7 @@ async def list_orphaned_media(
 async def delete_orphaned_media(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """Delete all orphaned media files.
 
     This action cannot be undone.
@@ -348,7 +348,7 @@ async def get_media(
     media_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """Get a media file by ID.
 
     Requires authentication.
@@ -375,7 +375,7 @@ async def update_media(
     update_data: MediaUpdate,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """Update media metadata (alt_text, caption, post_id).
 
     Requires authentication.
@@ -407,7 +407,7 @@ async def delete_media(
     media_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_auth),
-):
+) -> Any:
     """Delete a media file.
 
     This removes both the database record and the physical file.
