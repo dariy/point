@@ -8,7 +8,7 @@
     {% block meta_tags %}{% endblock %}
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}" {% block body_attrs %}{% endblock %}>
     {% block body %}{% endblock %}
     {% block extra_js %}{% endblock %}
 </body>

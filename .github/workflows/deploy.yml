@@ -135,10 +135,10 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
           envs: BUILD_VERSION
           script: |
-            cd ${{ secrets.DEPLOY_PATH || '/opt/photo-blog' }}
+            cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
 
             # Pull latest code (optional - if using git deployment)
             if [ -d .git ]; then
@@ -153,11 +153,18 @@ jobs:
               echo "APP_VERSION=${BUILD_VERSION}" > .env
             fi
 
-            # Pull latest Docker image
-            docker-compose pull blog
+            # Login to GitHub Container Registry (requires GHCR_TOKEN secret with read:packages scope)
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
+
+            # Pull latest Docker image explicitly by name
+            docker pull ghcr.io/dariy/point:latest
+
+            # Update docker-compose.yml to use correct image (in case it's outdated)
+            sed -i 's|image:.*photo-blog.*|image: ghcr.io/dariy/point:latest|g' docker-compose.yml 2>/dev/null || true
+            sed -i 's|image:.*photo-blog.*|image: ghcr.io/dariy/point:latest|g' docker-compose.prod.yml 2>/dev/null || true
 
             # Backup database before deployment
-            docker-compose exec -T blog python -c "
+            docker compose exec -T blog python -c "
             from app.services.backup_service import BackupService
             service = BackupService()
             backup_path = service.create_backup()
@@ -165,30 +172,42 @@ jobs:
             " || echo "Backup failed, continuing deployment..."
 
             # Deploy new version
-            docker-compose up -d blog
+            docker compose up -d blog
 
-            # Wait for service to be healthy
-            echo "Waiting for service to be healthy..."
-            sleep 10
+            # Wait for container to start
+            echo "Waiting for container to start..."
+            sleep 5
 
-      - name: Health Check
+            # Server-side health check
+            echo "Running server-side health check..."
+            max_attempts=12
+            attempt=0
+            while [ $attempt -lt $max_attempts ]; do
+              if docker compose exec -T blog curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
+                echo "Health check passed!"
+                exit 0
+              fi
+              attempt=$((attempt + 1))
+              echo "Attempt $attempt/$max_attempts - waiting..."
+              sleep 5
+            done
+
+            # If health check fails, show logs for debugging
+            echo "Health check failed! Container logs:"
+            docker compose logs --tail=50 blog
+            exit 1
+
+      - name: External Health Check
+        continue-on-error: true
         run: |
-          max_attempts=12
-          attempt=0
-
-          while [ $attempt -lt $max_attempts ]; do
-            if curl -f -s -m 10 https://${{ secrets.DEPLOY_HOST }}/health > /dev/null; then
-              echo "Health check passed!"
-              exit 0
-            fi
-
-            attempt=$((attempt + 1))
-            echo "Health check attempt $attempt/$max_attempts failed, retrying..."
-            sleep 10
-          done
-
-          echo "Health check failed after $max_attempts attempts"
-          exit 1
+          echo "Verifying external access..."
+          if curl -f -s -m 10 https://${{ secrets.DEPLOY_HOST }}/health > /dev/null 2>&1; then
+            echo "HTTPS health check passed!"
+          elif curl -f -s -m 10 http://${{ secrets.DEPLOY_HOST }}/health > /dev/null 2>&1; then
+            echo "HTTP health check passed!"
+          else
+            echo "Warning: External health check failed (server may not have public access configured)"
+          fi
 
       - name: Notify Success
         if: success()
