@@ -28,6 +28,7 @@ class SettingUpdate(BaseModel):
 class SystemStats(BaseModel):
     """Schema for system statistics."""
 
+    app_version: str
     database_size_kb: int
     media_count: int
     total_media_size_mb: float
