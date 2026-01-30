@@ -103,9 +103,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
           script: |
-            cd ${{ secrets.DEPLOY_PATH || '/opt/photo-blog' }}
+            cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
 
             # Pull latest code (optional - if using git deployment)
             if [ -d .git ]; then
@@ -113,10 +113,10 @@ jobs:
             fi
 
             # Pull latest Docker image
-            docker-compose pull blog
+            docker compose pull blog
 
             # Backup database before deployment
-            docker-compose exec -T blog python -c "
+            docker compose exec -T blog python -c "
             from app.services.backup_service import BackupService
             service = BackupService()
             backup_path = service.create_backup()
@@ -124,7 +124,7 @@ jobs:
             " || echo "Backup failed, continuing deployment..."
 
             # Deploy new version
-            docker-compose up -d blog
+            docker compose up -d blog
 
             # Wait for service to be healthy
             echo "Waiting for service to be healthy..."
