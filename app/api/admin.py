@@ -257,8 +257,9 @@ async def new_post(
     initial_thumbnail = None
     if media_id and media_path:
         # Create markdown image reference
-        initial_content = f"![](/media/originals/{media_path})"
-        initial_thumbnail = f"/media/originals/{media_path}"
+        # Note: media_path already includes 'originals/' prefix
+        initial_content = f"![](/media/{media_path})"
+        initial_thumbnail = f"/media/{media_path}"
 
     context = get_base_context(request, user)
     context.update(
