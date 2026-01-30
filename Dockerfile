@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Copy requirements and build wheels
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 # Runtime stage
 FROM python:3.12-slim
@@ -24,9 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder to a shared location
-COPY --from=builder /root/.local /usr/local
-ENV PATH=/usr/local/bin:$PATH
+# Copy and install Python packages from wheels
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir --no-deps /wheels/* && rm -rf /wheels
 
 # Copy application
 COPY app/ /app/app/
