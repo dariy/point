@@ -80,6 +80,19 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Generate build version
+        id: version
+        run: |
+          # Use git tag if available, otherwise use short SHA with timestamp
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="${{ github.sha }}"
+            VERSION="${VERSION:0:7}-$(date +%Y%m%d-%H%M%S)"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Build version: ${VERSION}"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -90,6 +103,8 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILD_VERSION=${{ steps.version.outputs.version }}
 
   deploy:
     needs: build
@@ -97,19 +112,45 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: prod
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate build version
+        id: version
+        run: |
+          # Use git tag if available, otherwise use short SHA with timestamp
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="${{ github.sha }}"
+            VERSION="${VERSION:0:7}-$(date +%Y%m%d-%H%M%S)"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Deployment version: ${VERSION}"
+
       - name: Deploy to Production
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          BUILD_VERSION: ${{ steps.version.outputs.version }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          envs: BUILD_VERSION
           script: |
             cd ${{ secrets.DEPLOY_PATH || '/opt/photo-blog' }}
 
             # Pull latest code (optional - if using git deployment)
             if [ -d .git ]; then
               git pull origin main
+            fi
+
+            # Set version in .env file
+            if [ -f .env ]; then
+              sed -i '/^APP_VERSION=/d' .env
+              echo "APP_VERSION=${BUILD_VERSION}" >> .env
+            else
+              echo "APP_VERSION=${BUILD_VERSION}" > .env
             fi
 
             # Pull latest Docker image
@@ -167,6 +208,7 @@ jobs:
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: prod" >> $GITHUB_STEP_SUMMARY
           echo "- **Host**: ${{ secrets.DEPLOY_HOST }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
