@@ -1,0 +1,276 @@
+{% extends "light/base.html" %}
+{% from "macros/forms.html" import text_input, textarea, select, checkbox, submit_button %}
+
+{% block title %}{% if post %}Edit: {{ post.title }}{% else %}New Post{% endif %} - {{ app_name }}{% endblock %}
+
+{% block page_title %}{% if post %}Edit Post{% else %}New Post{% endif %}{% endblock %}
+
+{% block header_actions %}
+<a href="/light/posts" class="btn btn-outline">Cancel</a>
+{% endblock %}
+
+{% block content %}
+<form
+    id="post-form"
+    class="post-form editor-form"
+    method="POST"
+    action="/api/posts{% if post %}/{{ post.id }}{% endif %}"
+    data-post-id="{{ post.id if post else '' }}"
+>
+    <div class="editor-container">
+        <!-- Main Editor -->
+        <div class="editor-main">
+            <!-- Title -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="title" class="form-label">Title <span class="required">*</span></label>
+                        <input
+                            type="text"
+                            id="title"
+                            name="title"
+                            value="{{ post.title if post else '' }}"
+                            class="form-input"
+                            required
+                            placeholder="Enter post title..."
+                            style="font-size: 1.25rem; font-weight: 600;"
+                        >
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="card">
+                <div class="card-header flex-between">
+                    <h3>Content</h3>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline preview-toggle">
+                            Preview
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <textarea
+                        id="content"
+                        name="content"
+                        class="form-textarea editor-content"
+                        rows="20"
+                        placeholder="Write your post content in Markdown..."
+                    >{{ post.content if post else '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- Preview Panel (hidden by default) -->
+            <div class="card" id="preview-card" style="display: none;">
+                <div class="card-header">
+                    <h3>Preview</h3>
+                </div>
+                <div class="card-body">
+                    <div class="preview-panel"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="editor-sidebar">
+            <!-- Publish Box -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Publish</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="status" class="form-label">Status</label>
+                        <select id="status" name="status" class="form-select">
+                            {% for s in statuses %}
+                            <option value="{{ s }}" {% if post and post.status.value == s %}selected{% endif %}>
+                                {{ s|capitalize }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group form-checkbox">
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                id="is_featured"
+                                name="is_featured"
+                                value="1"
+                                class="form-checkbox-input"
+                                {% if post and post.is_featured %}checked{% endif %}
+                            >
+                            <span class="checkbox-text">Featured post</span>
+                        </label>
+                    </div>
+
+                    {% if post %}
+                    <div class="text-small text-muted mb-2">
+                        <p>Created: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        {% if post.published_at %}
+                        <p>Published: {{ post.published_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <button type="submit" id="btn-save" class="btn btn-primary btn-block">
+                        Save
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tags -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Tags</h3>
+                </div>
+                <div class="card-body">
+                    <div class="tags-input" data-tags='{{ all_tags | tojson }}'>
+                        <input type="hidden" name="tags" value="{{ post_tags | join(',') if post_tags else '' }}">
+                        <input type="text" placeholder="Add tags...">
+                        <div class="tags-suggestions" style="display: none;"></div>
+                    </div>
+                    <span class="form-help">Press Enter or comma to add tags</span>
+                </div>
+            </div>
+
+            <!-- Excerpt -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Excerpt</h3>
+                </div>
+                <div class="card-body">
+                    <textarea
+                        id="excerpt"
+                        name="excerpt"
+                        class="form-textarea"
+                        rows="3"
+                        placeholder="Brief summary (auto-generated if empty)..."
+                    >{{ post.excerpt if post else '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- SEO -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>SEO</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="custom_url" class="form-label">Custom URL</label>
+                        <input
+                            type="text"
+                            id="custom_url"
+                            name="custom_url"
+                            value="{{ post.custom_url if post and post.custom_url else '' }}"
+                            class="form-input"
+                            placeholder="custom-slug"
+                        >
+                        <span class="form-help">Leave empty to use auto-generated slug</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="meta_description" class="form-label">Meta Description</label>
+                        <textarea
+                            id="meta_description"
+                            name="meta_description"
+                            class="form-textarea"
+                            rows="2"
+                            placeholder="Description for search engines..."
+                        >{{ post.meta_description if post else '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            {% if post %}
+            <!-- Danger Zone -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Danger Zone</h3>
+                </div>
+                <div class="card-body">
+                    <button
+                        type="button"
+                        class="btn btn-danger btn-block"
+                        data-delete-url="/api/posts/{{ post.id }}"
+                        data-delete-name="{{ post.title }}"
+                    >
+                        Delete Post
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</form>
+
+<script>
+// Toggle preview
+document.querySelector('.preview-toggle').addEventListener('click', function() {
+    const previewCard = document.getElementById('preview-card');
+    previewCard.style.display = previewCard.style.display === 'none' ? 'block' : 'none';
+});
+
+// Form submission
+document.getElementById('post-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const formData = new FormData(form);
+    const postId = form.dataset.postId;
+
+    // Build request body
+    const data = {
+        title: formData.get('title'),
+        content: formData.get('content'),
+        excerpt: formData.get('excerpt') || null,
+        status: formData.get('status'),
+        is_featured: formData.get('is_featured') === '1',
+        custom_url: formData.get('custom_url') || null,
+        meta_description: formData.get('meta_description') || null,
+        tags: formData.get('tags') ? formData.get('tags').split(',').filter(t => t.trim()) : []
+    };
+
+    const url = postId ? `/api/posts/${postId}` : '/api/posts';
+    const method = postId ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data),
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            // Clear local storage draft
+            localStorage.removeItem(postId ? `draft_${postId}` : 'draft_new');
+            // Redirect to posts list or edit page
+            if (!postId) {
+                window.location.href = `/light/posts/${result.id}`;
+            } else {
+                window.LightUtils.showToast('Post saved successfully');
+            }
+        } else {
+            const error = await response.json();
+            window.LightUtils.showToast(error.detail || 'Failed to save post', 'error');
+        }
+    } catch (error) {
+        console.error('Save error:', error);
+        window.LightUtils.showToast('An error occurred while saving', 'error');
+    }
+});
+
+// Keyboard shortcut for save
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('btn-save').click();
+    }
+});
+</script>
+{% endblock %}

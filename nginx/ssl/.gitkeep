@@ -1,0 +1,6 @@
+# SSL certificates should be placed here
+# These files should NOT be committed to git
+
+# Files to add:
+# - fullchain.pem (SSL certificate)
+# - privkey.pem (SSL private key)
