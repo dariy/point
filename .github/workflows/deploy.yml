@@ -118,16 +118,10 @@ jobs:
             # Backup database before deployment
             docker-compose exec -T blog python -c "
             from app.services.backup_service import BackupService
-            from app.database import SessionLocal
-            import asyncio
-
-            async def backup():
-                async with SessionLocal() as db:
-                    service = BackupService(db)
-                    await service.create_backup('pre-deployment')
-
-            asyncio.run(backup())
-            " || echo "Backup service not available, skipping..."
+            service = BackupService()
+            backup_path = service.create_backup()
+            print(f'Backup created: {backup_path}')
+            " || echo "Backup failed, continuing deployment..."
 
             # Deploy new version
             docker-compose up -d blog
