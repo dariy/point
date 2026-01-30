@@ -55,8 +55,10 @@ class BackupService:
                 shutil.copytree(self.media_dir, temp_dir / "media", dirs_exist_ok=True)
 
             # Create archive
+            # Add contents of temp_dir directly (not the temp_dir itself)
             with tarfile.open(backup_path, "w:gz") as tar:
-                tar.add(temp_dir, arcname=backup_name)
+                for item in temp_dir.iterdir():
+                    tar.add(item, arcname=item.name)
 
             logger.info(f"Backup created successfully: {backup_path}")
             return str(backup_path)
