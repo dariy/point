@@ -99,6 +99,7 @@ cache/
 
 # Backups
 backups/
+scripts/backup-config.sh
 
 # macOS
 .DS_Store
