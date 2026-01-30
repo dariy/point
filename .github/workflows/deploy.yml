@@ -115,8 +115,12 @@ jobs:
             # Login to GitHub Container Registry (requires GHCR_TOKEN secret with read:packages scope)
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
 
-            # Pull latest Docker image
-            docker compose pull blog
+            # Pull latest Docker image explicitly by name
+            docker pull ghcr.io/dariy/point:latest
+
+            # Update docker-compose.yml to use correct image (in case it's outdated)
+            sed -i 's|image:.*photo-blog.*|image: ghcr.io/dariy/point:latest|g' docker-compose.yml 2>/dev/null || true
+            sed -i 's|image:.*photo-blog.*|image: ghcr.io/dariy/point:latest|g' docker-compose.prod.yml 2>/dev/null || true
 
             # Backup database before deployment
             docker compose exec -T blog python -c "
