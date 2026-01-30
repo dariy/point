@@ -1,0 +1,105 @@
+{# Form field macros #}
+
+{% macro text_input(name, label, value='', type='text', required=false, placeholder='', help_text='', error='') %}
+<div class="form-group {% if error %}has-error{% endif %}">
+    <label for="{{ name }}" class="form-label">
+        {{ label }}
+        {% if required %}<span class="required">*</span>{% endif %}
+    </label>
+    <input
+        type="{{ type }}"
+        id="{{ name }}"
+        name="{{ name }}"
+        value="{{ value }}"
+        {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+        {% if required %}required{% endif %}
+        class="form-input"
+    >
+    {% if help_text %}
+    <span class="form-help">{{ help_text }}</span>
+    {% endif %}
+    {% if error %}
+    <span class="form-error">{{ error }}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro textarea(name, label, value='', rows=5, required=false, placeholder='', help_text='', error='') %}
+<div class="form-group {% if error %}has-error{% endif %}">
+    <label for="{{ name }}" class="form-label">
+        {{ label }}
+        {% if required %}<span class="required">*</span>{% endif %}
+    </label>
+    <textarea
+        id="{{ name }}"
+        name="{{ name }}"
+        rows="{{ rows }}"
+        {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+        {% if required %}required{% endif %}
+        class="form-textarea"
+    >{{ value }}</textarea>
+    {% if help_text %}
+    <span class="form-help">{{ help_text }}</span>
+    {% endif %}
+    {% if error %}
+    <span class="form-error">{{ error }}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro select(name, label, options, value='', required=false, help_text='', error='') %}
+<div class="form-group {% if error %}has-error{% endif %}">
+    <label for="{{ name }}" class="form-label">
+        {{ label }}
+        {% if required %}<span class="required">*</span>{% endif %}
+    </label>
+    <select
+        id="{{ name }}"
+        name="{{ name }}"
+        {% if required %}required{% endif %}
+        class="form-select"
+    >
+        {% for opt_value, opt_label in options %}
+        <option value="{{ opt_value }}" {% if opt_value == value %}selected{% endif %}>
+            {{ opt_label }}
+        </option>
+        {% endfor %}
+    </select>
+    {% if help_text %}
+    <span class="form-help">{{ help_text }}</span>
+    {% endif %}
+    {% if error %}
+    <span class="form-error">{{ error }}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro checkbox(name, label, checked=false, help_text='') %}
+<div class="form-group form-checkbox">
+    <label class="checkbox-label">
+        <input
+            type="checkbox"
+            id="{{ name }}"
+            name="{{ name }}"
+            value="1"
+            {% if checked %}checked{% endif %}
+            class="form-checkbox-input"
+        >
+        <span class="checkbox-text">{{ label }}</span>
+    </label>
+    {% if help_text %}
+    <span class="form-help">{{ help_text }}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro submit_button(text='Save', type='primary', name='', value='') %}
+<button
+    type="submit"
+    class="btn btn-{{ type }}"
+    {% if name %}name="{{ name }}"{% endif %}
+    {% if value %}value="{{ value }}"{% endif %}
+>
+    {{ text }}
+</button>
+{% endmacro %}
