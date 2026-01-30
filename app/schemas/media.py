@@ -95,6 +95,7 @@ class MediaUploadResponse(BaseModel):
 
     id: int
     filename: str
+    original_path: str
     url: str
     thumbnail_url: str | None
     file_type: FileType
