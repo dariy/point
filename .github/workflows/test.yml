@@ -38,7 +38,7 @@ jobs:
       - name: Run type checking
         run: |
           echo "Running mypy type checking..."
-          mypy app/ --no-error-summary || true
+          mypy app/ --no-error-summary
 
       - name: Run tests with coverage
         run: |
