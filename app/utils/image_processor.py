@@ -6,6 +6,7 @@ Handles thumbnail generation, image resizing, and optimization.
 import hashlib
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -49,7 +50,7 @@ class ImageProcessor:
         Returns:
             Tuple of (processed_bytes, width, height, format)
         """
-        img = Image.open(BytesIO(image_data))
+        img: Image.Image = Image.open(BytesIO(image_data))
         original_format = img.format or "JPEG"
         output_format = original_format
 
@@ -90,7 +91,7 @@ class ImageProcessor:
             Tuple of (thumbnail_bytes, width, height)
         """
         size = size or self.thumbnail_size
-        img = Image.open(BytesIO(image_data))
+        img: Image.Image = Image.open(BytesIO(image_data))
 
         # Convert mode if needed
         if img.mode == "RGBA":
@@ -128,7 +129,7 @@ class ImageProcessor:
         img = Image.open(BytesIO(image_data))
         return img.width, img.height
 
-    def _get_save_kwargs(self, format: str, progressive: bool) -> dict:
+    def _get_save_kwargs(self, format: str, progressive: bool) -> dict[str, Any]:
         """Get format-specific save kwargs.
 
         Args:
@@ -139,7 +140,7 @@ class ImageProcessor:
             Dictionary of save kwargs
         """
         format_upper = format.upper()
-        kwargs = {"optimize": True}
+        kwargs: dict[str, Any] = {"optimize": True}
 
         if format_upper in ("JPEG", "JPG"):
             kwargs["quality"] = self.jpeg_quality

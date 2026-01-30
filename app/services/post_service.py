@@ -145,7 +145,7 @@ class PostService:
             custom_url=post_data.custom_url,
             meta_description=post_data.meta_description,
             author_id=author_id,
-            published_at=datetime.utcnow() if post_data.status == PostStatus.PUBLISHED else None,
+            published_at=datetime.utcnow() if post_data.status.value == PostStatus.PUBLISHED.value else None,
         )
 
         self.db.add(post)

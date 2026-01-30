@@ -133,9 +133,9 @@ def serialize_post(post: Post) -> dict[str, Any]:
     if not excerpt:
         # Generate generic excerpt
         if has_media:
-             excerpt = generate_excerpt(post.content, post.formatter.value, 200)
+             excerpt = generate_excerpt(post.content, post.formatter, 200)
         else:
-             content_html = format_content(post.content, post.formatter.value)
+             content_html = format_content(post.content, post.formatter)
              preview_html = truncate_paragraphs(content_html)
 
     # Selection logic for thumbnail:
@@ -169,7 +169,7 @@ async def homepage(
     page: int = 1,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render the homepage with paginated posts.
 
     Args:
@@ -270,7 +270,7 @@ async def homepage(
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         # Get rendered content
-        content = response.body.decode("utf-8")
+        content = bytes(response.body).decode("utf-8")
         await cache.set_by_url(
             "/",
             content,
@@ -288,7 +288,7 @@ async def single_post(
     slug: str,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render a single post page.
 
     Args:
@@ -339,7 +339,7 @@ async def single_post(
             )
 
     # Format content
-    content_html = format_content(post.content, post.formatter.value)
+    content_html = format_content(post.content, post.formatter)
 
     # Check if post has text content (ignoring images and whitespace)
     # strip_html removes all tags including <img>, so we just check if any text remains
@@ -439,7 +439,7 @@ async def single_post(
     # Store in cache if enabled and not logged in
     if settings.cache_enabled and not user:
         cache = await get_cache()
-        content = response.body.decode("utf-8")
+        content = bytes(response.body).decode("utf-8")
         await cache.set_by_url(
             cache_key,
             content,
@@ -457,7 +457,7 @@ async def tag_archive(
     page: int = 1,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render a tag archive page.
 
     Args:
@@ -565,7 +565,7 @@ async def tag_archive(
     if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest" and not user:
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
-        content = response.body.decode("utf-8")
+        content = bytes(response.body).decode("utf-8")
         await cache.set_by_url(
             cache_key,
             content,
@@ -585,7 +585,7 @@ async def tags_page(
     page: int = 1,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render the tags page (formerly gallery).
 
     Args:
@@ -651,11 +651,11 @@ async def tags_page(
 
             if has_image:
                 excerpt = post.excerpt or generate_excerpt(
-                    post.content, post.formatter.value, 150
+                    post.content, post.formatter, 150
                 )
             else:
                 # Text-only preview
-                content_html = format_content(post.content, post.formatter.value)
+                content_html = format_content(post.content, post.formatter)
                 preview_html = truncate_paragraphs(content_html)
 
             posts_data.append(
@@ -770,7 +770,7 @@ async def rss_feed(
                 "slug": post.slug,
                 "excerpt": post.excerpt,
                 "meta_description": post.meta_description,
-                "content_html": format_content(post.content, post.formatter.value),
+                "content_html": format_content(post.content, post.formatter),
                 "thumbnail_path": post.thumbnail_path,
                 "tags": post.tags,
                 "pub_date_rfc822": format_datetime(pub_date),
