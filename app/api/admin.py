@@ -51,6 +51,7 @@ def get_base_context(request: Request, user: User | None = None) -> dict[str, An
         "user": user,
         "settings": settings,
         "app_name": settings.app_name,
+        "app_version": settings.app_version,
     }
 
 
