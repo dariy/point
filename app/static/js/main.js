@@ -1149,6 +1149,120 @@
     }
 
     /**
+     * Drag-and-Drop Post Creation
+     * Allows logged-in users to drop an image on any public page to create a new post
+     */
+    function initDragDropPostCreation() {
+        // Only enable for logged-in users
+        if (!document.body.hasAttribute('data-logged-in')) {
+            return;
+        }
+
+        const overlay = document.getElementById('drop-zone-overlay');
+        if (!overlay) return;
+
+        const titleEl = overlay.querySelector('.drop-zone-title');
+        const hintEl = overlay.querySelector('.drop-zone-hint');
+
+        let dragCounter = 0;
+
+        // Prevent default drag behaviors globally
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        // Handle drag enter
+        document.addEventListener('dragenter', (e) => {
+            dragCounter++;
+
+            // Check if dragging files (images)
+            if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+                overlay.classList.add('active');
+                document.body.classList.add('drag-over');
+            }
+        }, false);
+
+        // Handle drag leave
+        document.addEventListener('dragleave', (e) => {
+            dragCounter--;
+
+            if (dragCounter === 0) {
+                overlay.classList.remove('active');
+                document.body.classList.remove('drag-over');
+            }
+        }, false);
+
+        // Handle drag over (needed to allow drop)
+        document.addEventListener('dragover', (e) => {
+            e.dataTransfer.dropEffect = 'copy';
+        }, false);
+
+        // Handle drop
+        document.addEventListener('drop', async (e) => {
+            dragCounter = 0;
+            document.body.classList.remove('drag-over');
+
+            const files = e.dataTransfer.files;
+            if (!files || files.length === 0) {
+                overlay.classList.remove('active');
+                return;
+            }
+
+            // Get the first file
+            const file = files[0];
+
+            // Check if it's an image
+            if (!file.type.startsWith('image/')) {
+                overlay.classList.remove('active');
+                alert('Please drop an image file (JPG, PNG, GIF, WebP)');
+                return;
+            }
+
+            // Show uploading state
+            overlay.classList.add('uploading');
+            titleEl.textContent = 'Uploading...';
+            hintEl.textContent = file.name;
+
+            try {
+                // Upload the image
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/media/upload', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
+                }
+
+                const media = await response.json();
+
+                // Redirect to post creation with media info
+                const params = new URLSearchParams({
+                    media_id: media.id,
+                    media_path: media.original_path
+                });
+
+                window.location.href = `/light/posts/new?${params.toString()}`;
+
+            } catch (error) {
+                console.error('Upload error:', error);
+                overlay.classList.remove('active', 'uploading');
+                titleEl.textContent = 'Drop image to create new post';
+                hintEl.textContent = 'Release to upload and start editing';
+                alert('Upload failed: ' + error.message);
+            }
+        }, false);
+    }
+
+    /**
      * Initialize all components
      */
     function init() {
@@ -1158,7 +1272,8 @@
         initKeyboardNavigation();
         initTouchNavigation();
         initPopstate();
-        
+        initDragDropPostCreation();
+
         // Page specific initializations
         initPage();
     }
