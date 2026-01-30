@@ -37,24 +37,28 @@ async def test_create_post_validation(client: AsyncClient, auth_headers):
 @pytest.mark.asyncio
 async def test_create_post_slug_collision(client: AsyncClient, auth_headers, db: AsyncSession):
     """Test slug collision is handled."""
+    from sqlalchemy import select
+    # Get the user from the auth_headers fixture
+    user = await db.scalar(select(User).where(User.username == "poster"))
+    
     # Pre-create post with specific slug
-    p = Post(title="My Slug", slug="my-slug", content="C", status=PostStatus.DRAFT, author_id=1)
+    p = Post(title="My Slug", slug="my-slug", content="C", status=PostStatus.DRAFT, author_id=user.id)
     db.add(p)
     await db.commit()
     
     # Try creating another with same title -> should get unique slug
     data = {"title": "My Slug", "content": "New content", "status": "draft"}
     resp = await client.post("/api/posts", json=data, headers=auth_headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     assert resp.json()["slug"] != "my-slug"
     assert resp.json()["slug"].startswith("my-slug-")
 
 @pytest.mark.asyncio
 async def test_update_post_full(client: AsyncClient, auth_headers, db: AsyncSession):
     """Test updating a post."""
-    # Create via DB first to know ID
-    # Get user id from headers fixture is tricky, let's query user
-    user = await db.scalar(pytest.importorskip("sqlalchemy").select(User).where(User.username == "poster"))
+    from sqlalchemy import select
+    # Get user id from headers fixture
+    user = await db.scalar(select(User).where(User.username == "poster"))
     p = Post(title="Old", slug="old", content="Old", status=PostStatus.DRAFT, author_id=user.id)
     db.add(p)
     await db.commit()
@@ -68,13 +72,14 @@ async def test_update_post_full(client: AsyncClient, auth_headers, db: AsyncSess
 @pytest.mark.asyncio
 async def test_delete_post(client: AsyncClient, auth_headers, db: AsyncSession):
     """Test deleting a post."""
-    user = await db.scalar(pytest.importorskip("sqlalchemy").select(User).where(User.username == "poster"))
+    from sqlalchemy import select
+    user = await db.scalar(select(User).where(User.username == "poster"))
     p = Post(title="Del", slug="del", content="Del", status=PostStatus.DRAFT, author_id=user.id)
     db.add(p)
     await db.commit()
     
     resp = await client.delete(f"/api/posts/{p.id}", headers=auth_headers)
-    assert resp.status_code == 200 # or 204
+    assert resp.status_code == 204
     
     # Verify gone
     resp = await client.get(f"/api/posts/{p.id}", headers=auth_headers)
