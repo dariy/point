@@ -120,16 +120,5 @@
 {% set extra_params = '&status_filter=' + status_filter if status_filter else '' %}
 {{ render_pagination(page, total_pages, '/light/posts', extra_params) }}
 
-<script>
-function filterByStatus(status) {
-    const url = new URL(window.location);
-    if (status) {
-        url.searchParams.set('status_filter', status);
-    } else {
-        url.searchParams.delete('status_filter');
-    }
-    url.searchParams.delete('page');
-    window.location = url;
-}
-</script>
+<script src="/static/js/light-posts.js"></script>
 {% endblock %}
