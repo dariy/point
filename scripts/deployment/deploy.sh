@@ -89,7 +89,7 @@ create_backup() {
 pull_image() {
     log_info "Pulling latest Docker image..."
 
-    docker-compose -f "$COMPOSE_FILE" pull blog
+    docker compose -f "$COMPOSE_FILE" pull blog
 
     log_success "Docker image pulled successfully"
 }
@@ -99,7 +99,7 @@ run_migrations() {
     log_info "Running database migrations..."
 
     # For now, just initialize the database if it doesn't exist
-    docker-compose -f "$COMPOSE_FILE" exec -T blog \
+    docker compose -f "$COMPOSE_FILE" exec -T blog \
         python scripts/init_db.py || true
 
     log_success "Database migrations completed"
@@ -110,7 +110,7 @@ deploy() {
     log_info "Deploying new version..."
 
     # Start services
-    docker-compose -f "$COMPOSE_FILE" up -d blog
+    docker compose -f "$COMPOSE_FILE" up -d blog
 
     log_success "Services started"
 }
@@ -123,7 +123,7 @@ wait_for_health() {
     ATTEMPT=0
 
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-        if docker-compose -f "$COMPOSE_FILE" exec -T blog \
+        if docker compose -f "$COMPOSE_FILE" exec -T blog \
             curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
             log_success "Service is healthy!"
             return 0
@@ -149,7 +149,7 @@ health_check() {
     fi
 
     # Check database connection
-    if docker-compose -f "$COMPOSE_FILE" exec -T blog \
+    if docker compose -f "$COMPOSE_FILE" exec -T blog \
         python -c "from app.database import engine; import asyncio; asyncio.run(engine.connect())" 2>/dev/null; then
         log_success "Database connection OK"
     else
@@ -173,7 +173,7 @@ rollback() {
     log_error "Deployment failed! Rolling back..."
 
     # Stop current version
-    docker-compose -f "$COMPOSE_FILE" down
+    docker compose -f "$COMPOSE_FILE" down
 
     # Restore backup (if exists)
     LATEST_BACKUP=$(ls -t "${PROJECT_DIR}/data/backups"/pre-deploy-*.tar.gz 2>/dev/null | head -1)
@@ -185,7 +185,7 @@ rollback() {
     fi
 
     # Start previous version
-    docker-compose -f "$COMPOSE_FILE" up -d blog
+    docker compose -f "$COMPOSE_FILE" up -d blog
 
     log_warning "Rollback completed. Please investigate the issue."
 }
@@ -216,7 +216,7 @@ main() {
         log_success "========================================="
 
         # Show service status
-        docker-compose -f "$COMPOSE_FILE" ps
+        docker compose -f "$COMPOSE_FILE" ps
     else
         rollback
         exit 1
