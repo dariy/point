@@ -4,6 +4,7 @@ Handles CRUD operations, post-tag relationships, and tag cloud generation.
 """
 
 import logging
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -314,7 +315,7 @@ class TagService:
         )
         return list(result.scalars().all())
 
-    async def get_tag_cloud(self, limit: int = 20, featured: bool = True) -> list[dict]:
+    async def get_tag_cloud(self, limit: int = 20, featured: bool = True) -> list[dict[str, Any]]:
         """Get tags for tag cloud with weights.
 
         Args:

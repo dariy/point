@@ -70,7 +70,7 @@ async def clear_cache(
 
 
 @router.post("/backup")
-async def create_manual_backup(_: User = Depends(require_auth)) -> dict:
+async def create_manual_backup(_: User = Depends(require_auth)) -> dict[str, Any]:
     """Trigger a manual backup.
 
     Returns:

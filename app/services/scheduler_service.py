@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 class SchedulerService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.scheduler = AsyncIOScheduler()
         self._setup_jobs()
 
-    def _setup_jobs(self):
+    def _setup_jobs(self) -> None:
         # Session Cleanup - Hourly
         self.scheduler.add_job(
             self.cleanup_sessions,
@@ -45,21 +45,21 @@ class SchedulerService:
             replace_existing=True,
         )
 
-    def start(self):
+    def start(self) -> None:
         try:
             self.scheduler.start()
             logger.info("Scheduler started")
         except Exception as e:
             logger.error(f"Failed to start scheduler: {e}")
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         try:
             self.scheduler.shutdown()
             logger.info("Scheduler shutdown")
         except Exception as e:
             logger.error(f"Failed to shutdown scheduler: {e}")
 
-    async def cleanup_sessions(self):
+    async def cleanup_sessions(self) -> None:
         logger.info("Running scheduled task: cleanup_sessions")
         try:
             async with async_session_maker() as session:
@@ -70,7 +70,7 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Error in cleanup_sessions task: {e}")
 
-    async def flush_view_counts(self):
+    async def flush_view_counts(self) -> None:
         logger.info("Running scheduled task: flush_view_counts")
         try:
             async with async_session_maker() as session:
@@ -80,7 +80,7 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Error in flush_view_counts task: {e}")
 
-    async def daily_backup(self):
+    async def daily_backup(self) -> None:
         logger.info("Running scheduled task: daily_backup")
         loop = asyncio.get_running_loop()
         try:
@@ -90,7 +90,7 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Daily backup failed: {e}")
 
-    def _run_backup(self, backup_service: BackupService):
+    def _run_backup(self, backup_service: BackupService) -> None:
         path = backup_service.create_backup()
         backup_service.cleanup_old_backups(retention_days=30)
         logger.info(f"Daily backup completed: {path}")
