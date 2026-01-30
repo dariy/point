@@ -286,14 +286,6 @@ a:hover {
     border-color: var(--light-sidebar-text);
 }
 
-.version-info {
-    margin-top: var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    color: var(--light-sidebar-text);
-    opacity: 0.6;
-    text-align: center;
-}
-
 /* Main Content */
 .light-main {
     flex: 1;
