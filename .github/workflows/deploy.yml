@@ -95,9 +95,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment:
-      name: production
-      url: https://${{ secrets.DEPLOY_HOST }}
+    environment: production
     steps:
       - name: Deploy to Production
         uses: appleboy/ssh-action@v1.0.3
