@@ -1131,6 +1131,417 @@
     }
 
     /**
+     * AJAX Navigation for Post Lists (Homepage and Tag Archives)
+     */
+    function initAjaxPostsNavigation() {
+        const postsContainer = document.querySelector('.posts-main') || document.getElementById('tag-posts-container');
+        if (!postsContainer) return;
+
+        async function loadPosts(url) {
+            try {
+                postsContainer.style.opacity = '0.5';
+
+                const response = await fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    renderPosts(data, postsContainer);
+
+                    window.history.pushState({}, '', url);
+                    attachAjaxListeners();
+                    if (typeof initPostCardVideos === 'function') {
+                        initPostCardVideos();
+                    }
+                    window.scrollTo(0, 0);
+                } else {
+                    window.location.href = url;
+                }
+            } catch (error) {
+                console.error('Error loading posts:', error);
+                window.location.href = url;
+            } finally {
+                postsContainer.style.opacity = '1';
+            }
+        }
+
+        function renderPosts(data, container) {
+            if (!data.posts || data.posts.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                                <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                            </svg>
+                        </div>
+                        <h2 class="empty-state-title">No posts yet</h2>
+                        <p class="empty-state-text">Check back soon for new content.</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '<div class="posts-grid">';
+
+            data.posts.forEach((post, index) => {
+                const isFirst = index === 0;
+                const isPageOne = data.pagination.page === 1;
+                const showFeatured = isFirst && isPageOne && post.is_featured;
+                const hasImage = post.has_image;
+                const isVideo = post.is_video;
+
+                const editBtn = data.is_logged_in ? `
+                    <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </a>` : '';
+
+                const featuredBadge = showFeatured ? `
+                    <span class="featured-badge">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                        Featured
+                    </span>` : '';
+
+                const postMeta = `
+                    <div class="post-card-meta">
+                        <time datetime="${post.published_iso}">${post.published_date}</time>
+                        ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
+                    </div>`;
+
+                const postTags = post.tags && post.tags.length > 0 ? `
+                    <div class="post-card-tags">
+                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug || tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
+                    </div>` : '';
+
+                const contentHtml = hasImage ? `
+                    <div class="post-card-background">
+                        ${isVideo ? `
+                            <video src="${post.thumbnail_path}" muted loop playsinline></video>
+                            <div class="video-play-indicator">
+                                <svg width="${showFeatured ? '48' : '32'}" height="${showFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                            </div>` : `
+                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`}
+                    </div>
+                    <div class="post-card-content overlay">
+                        ${featuredBadge}${postMeta}
+                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
+                        <div class="post-card-excerpt">${post.excerpt || ''}</div>
+                        ${postTags}
+                    </div>` : `
+                    <div class="post-card-content">
+                        ${featuredBadge}${postMeta}
+                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
+                        <div class="post-card-text-preview">${post.preview_html || ''}</div>
+                        ${postTags}
+                    </div>`;
+
+                if (showFeatured) {
+                    html += `<div class="featured-post">
+                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                            ${editBtn}${contentHtml}
+                        </article>
+                    </div>`;
+                } else {
+                    html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        ${editBtn}${contentHtml}
+                    </article>`;
+                }
+            });
+
+            html += '</div>';
+
+            // Add pagination if needed
+            if (data.pagination && data.pagination.total_pages > 1) {
+                html += renderPagination(data.pagination, data.tag?.slug || data.current_tag);
+            }
+
+            container.innerHTML = html;
+        }
+
+        function renderPagination(pag, tagSlug) {
+            const basePath = tagSlug ? `/tag/${tagSlug}` : '/';
+            const ariaLabel = tagSlug ? 'Tag archive pagination' : 'Posts pagination';
+
+            let html = `<nav class="pagination" aria-label="${ariaLabel}">`;
+
+            // Previous
+            if (pag.has_prev) {
+                html += `<a href="${basePath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </a>`;
+            } else {
+                html += `<span class="pagination-link disabled">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </span>`;
+            }
+
+            // Pages
+            for (let p = 1; p <= pag.total_pages; p++) {
+                if (p === pag.page) {
+                    html += `<span class="pagination-link active">${p}</span>`;
+                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
+                    html += `<a href="${basePath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+                } else if (p === pag.page - 2 || p === pag.page + 2) {
+                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
+                }
+            }
+
+            // Next
+            if (pag.has_next) {
+                html += `<a href="${basePath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                </a>`;
+            } else {
+                html += `<span class="pagination-link disabled">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                </span>`;
+            }
+
+            html += '</nav>';
+            return html;
+        }
+
+        function attachAjaxListeners() {
+            const links = document.querySelectorAll('.ajax-link');
+            links.forEach(link => {
+                link.removeEventListener('click', handleAjaxClick);
+                link.addEventListener('click', handleAjaxClick);
+            });
+        }
+
+        function handleAjaxClick(e) {
+            e.preventDefault();
+            const url = this.getAttribute('href');
+            loadPosts(url);
+        }
+
+        // Initial setup
+        attachAjaxListeners();
+
+        // Handle back/forward buttons
+        window.addEventListener('popstate', function() {
+            loadPosts(window.location.href);
+        });
+    }
+
+    /**
+     * AJAX Navigation for Tags Page
+     */
+    function initAjaxTagsNavigation() {
+        const tagsContent = document.getElementById('tags-content');
+        const filtersContainer = document.getElementById('tags-filters');
+        if (!tagsContent) return;
+
+        async function loadTagsContent(url) {
+            try {
+                tagsContent.style.opacity = '0.5';
+
+                const response = await fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    renderTags(data);
+
+                    window.history.pushState({}, '', url);
+                    updateActiveFilter(url);
+                    attachTagsListeners();
+                    if (typeof initPostCardVideos === 'function') {
+                        initPostCardVideos();
+                    }
+                } else {
+                    window.location.href = url;
+                }
+            } catch (error) {
+                console.error('Error loading tags:', error);
+                window.location.href = url;
+            } finally {
+                tagsContent.style.opacity = '1';
+            }
+        }
+
+        function renderTags(data) {
+            if (!data.posts || data.posts.length === 0) {
+                tagsContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                                <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                            </svg>
+                        </div>
+                        <h2 class="empty-state-title">No posts yet</h2>
+                        <p class="empty-state-text">Try selecting a different category or check back later.</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '<div class="posts-grid">';
+            data.posts.forEach(post => {
+                const hasImage = post.has_image;
+                const isVideo = post.is_video;
+
+                const editBtn = data.is_logged_in ? `
+                    <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </a>` : '';
+
+                const contentHtml = hasImage ? `
+                    <div class="post-card-background">
+                        ${isVideo ? `
+                            <video src="${post.thumbnail_path}" muted loop playsinline></video>
+                            <div class="video-play-indicator">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                            </div>` : `
+                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`}
+                    </div>
+                    <div class="post-card-content overlay">` : `
+                    <div class="post-card-content">`;
+
+                const postTags = post.tags && post.tags.length > 0 ? `
+                    <div class="post-card-tags">
+                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
+                    </div>` : '';
+
+                html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                    ${editBtn}${contentHtml}
+                        <div class="post-card-meta">
+                            <time datetime="${post.published_iso}">${post.published_date}</time>
+                            ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
+                        </div>
+                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
+                        ${hasImage ? `<div class="post-card-excerpt">${post.excerpt || ''}</div>` : `<div class="post-card-text-preview">${post.preview_html || ''}</div>`}
+                        ${postTags}
+                    </div>
+                </article>`;
+            });
+            html += '</div>';
+
+            if (data.pagination && data.pagination.total_pages > 1) {
+                const pag = data.pagination;
+                const tagPath = data.current_tag ? `/${data.current_tag}` : '';
+
+                html += '<nav class="pagination tags-pagination" aria-label="Tags pagination">';
+
+                // Previous
+                if (pag.has_prev) {
+                    html += `<a href="/tags${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M15 18l-6-6 6-6"/>
+                        </svg>
+                    </a>`;
+                } else {
+                    html += `<span class="pagination-link disabled">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M15 18l-6-6 6-6"/>
+                        </svg>
+                    </span>`;
+                }
+
+                // Pages
+                for (let p = 1; p <= pag.total_pages; p++) {
+                    if (p === pag.page) {
+                        html += `<span class="pagination-link active">${p}</span>`;
+                    } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
+                        html += `<a href="/tags${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+                    } else if (p === pag.page - 2 || p === pag.page + 2) {
+                        html += `<span class="pagination-ellipsis">&hellip;</span>`;
+                    }
+                }
+
+                // Next
+                if (pag.has_next) {
+                    html += `<a href="/tags${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18l6-6-6-6"/>
+                        </svg>
+                    </a>`;
+                } else {
+                    html += `<span class="pagination-link disabled">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18l6-6-6-6"/>
+                        </svg>
+                    </span>`;
+                }
+
+                html += '</nav>';
+            }
+
+            tagsContent.innerHTML = html;
+        }
+
+        function updateActiveFilter(url) {
+            if (!filtersContainer) return;
+
+            const urlObj = new URL(url, window.location.origin);
+            const pathParts = urlObj.pathname.split('/').filter(p => p);
+            const tag = pathParts.length > 1 ? pathParts[1] : null;
+
+            const buttons = filtersContainer.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => {
+                const btnUrl = new URL(btn.href, window.location.origin);
+                const btnPathParts = btnUrl.pathname.split('/').filter(p => p);
+                const btnTag = btnPathParts.length > 1 ? btnPathParts[1] : null;
+
+                if (tag === btnTag) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        function attachTagsListeners() {
+            const links = document.querySelectorAll('.ajax-link');
+            links.forEach(link => {
+                link.removeEventListener('click', handleTagsClick);
+                link.addEventListener('click', handleTagsClick);
+            });
+        }
+
+        function handleTagsClick(e) {
+            e.preventDefault();
+            const url = this.getAttribute('href');
+            loadTagsContent(url);
+        }
+
+        // Initial setup
+        attachTagsListeners();
+
+        // Handle back/forward buttons
+        window.addEventListener('popstate', function() {
+            loadTagsContent(window.location.href);
+        });
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -1141,7 +1552,9 @@
         initSmoothScroll();
         initReadingProgress();
         initCodeCopy();
-        
+        initAjaxPostsNavigation();
+        initAjaxTagsNavigation();
+
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {
              initLightbox();

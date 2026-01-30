@@ -91,3 +91,89 @@ async def create_manual_backup(_: User = Depends(require_auth)) -> dict[str, Any
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Backup failed: {str(e)}",
         )
+
+
+@router.get("/backups")
+async def list_backups(_: User = Depends(require_auth)) -> list[dict[str, Any]]:
+    """List available backup archives.
+
+    Returns:
+        List of backup files with metadata
+    """
+    try:
+        backup_service = BackupService()
+        return backup_service.list_backups()
+    except Exception as e:
+        logger.error(f"Failed to list backups: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list backups: {str(e)}",
+        )
+
+
+@router.post("/backups/{filename}/restore")
+async def restore_backup(
+    filename: str, _: User = Depends(require_auth)
+) -> dict[str, Any]:
+    """Restore from a backup archive.
+
+    WARNING: This will overwrite all current data!
+
+    Args:
+        filename: Name of the backup file to restore
+
+    Returns:
+        Success message
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        backup_service = BackupService()
+        await loop.run_in_executor(None, backup_service.restore_backup, filename)
+        return {"status": "success", "message": "Backup restored successfully"}
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Restore failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Restore failed: {str(e)}",
+        )
+
+
+@router.delete("/backups/{filename}")
+async def delete_backup(
+    filename: str, _: User = Depends(require_auth)
+) -> dict[str, Any]:
+    """Delete a backup archive.
+
+    Args:
+        filename: Name of the backup file to delete
+
+    Returns:
+        Success message
+    """
+    try:
+        backup_service = BackupService()
+        success = backup_service.delete_backup(filename)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Backup file not found",
+            )
+        return {"status": "success", "message": "Backup deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete backup: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete backup: {str(e)}",
+        )
