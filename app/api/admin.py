@@ -399,7 +399,7 @@ async def media_page(
 
     # Get unique file types for filter
     result = await db.execute(select(Media.file_type).distinct())
-    file_types = [row[0] for row in result.all()]
+    file_types = [row[0].value for row in result.all()]
 
     context = get_base_context(request, user)
     context.update(
