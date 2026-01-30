@@ -3,6 +3,7 @@ import shutil
 import tarfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from app.config import get_settings
 
@@ -11,7 +12,7 @@ settings = get_settings()
 
 
 class BackupService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.backup_dir = Path(settings.storage_path) / "backups"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -70,7 +71,7 @@ class BackupService:
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
 
-    def list_backups(self) -> list[dict]:
+    def list_backups(self) -> list[dict[str, Any]]:
         """List available backups.
 
         Returns:
@@ -105,7 +106,7 @@ class BackupService:
             return True
         return False
 
-    def cleanup_old_backups(self, retention_days: int = 30):
+    def cleanup_old_backups(self, retention_days: int = 30) -> None:
         """Delete backups older than retention_days.
 
         Args:
