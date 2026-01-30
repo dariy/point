@@ -112,6 +112,9 @@ jobs:
               git pull origin main
             fi
 
+            # Login to GitHub Container Registry (requires GHCR_TOKEN secret with read:packages scope)
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
+
             # Pull latest Docker image
             docker compose pull blog
 
