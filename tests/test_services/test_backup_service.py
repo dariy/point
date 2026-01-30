@@ -1,4 +1,5 @@
 import shutil
+import tarfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from app.services.backup_service import BackupService
@@ -93,6 +94,79 @@ def test_cleanup_old_backups(tmp_path):
         new_backup.touch()
         
         service.cleanup_old_backups(retention_days=30)
-        
+
         assert not old_backup.exists()
         assert new_backup.exists()
+
+def test_restore_backup(tmp_path):
+    """Test restoring a backup."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    with patch("app.services.backup_service.settings") as mock_settings:
+        mock_settings.storage_path = str(data_dir)
+        mock_settings.database_url = f"sqlite+aiosqlite:///{data_dir}/blog.db"
+
+        service = BackupService()
+
+        # Create a backup archive manually
+        backup_name = "backup_2026-01-01_10-00-00.tar.gz"
+        backup_path = service.backup_dir / backup_name
+
+        # Create temporary content for the backup
+        temp_content = tmp_path / "backup_content"
+        temp_content.mkdir()
+        (temp_content / "blog.db").write_text("restored database")
+        media_dir = temp_content / "media"
+        media_dir.mkdir()
+        (media_dir / "restored.jpg").write_text("restored image")
+
+        # Create the tar.gz archive
+        with tarfile.open(backup_path, "w:gz") as tar:
+            tar.add(temp_content / "blog.db", arcname="blog.db")
+            tar.add(temp_content / "media", arcname="media")
+
+        # Create dummy current data
+        (data_dir / "blog.db").write_text("current database")
+        current_media = data_dir / "media"
+        current_media.mkdir()
+        (current_media / "current.jpg").write_text("current image")
+
+        # Restore the backup
+        service.restore_backup(backup_name)
+
+        # Verify restoration
+        assert (data_dir / "blog.db").read_text() == "restored database"
+        assert (data_dir / "media" / "restored.jpg").read_text() == "restored image"
+        assert not (data_dir / "media" / "current.jpg").exists()  # Old media removed
+
+        # Verify cleanup of temp restore directory
+        assert len(list(service.backup_dir.glob("restore_*"))) == 0
+
+def test_restore_backup_invalid_filename(tmp_path):
+    """Test that restore rejects invalid filenames."""
+    with patch("app.services.backup_service.settings") as mock_settings:
+        mock_settings.storage_path = str(tmp_path / "data")
+        mock_settings.database_url = "sqlite+aiosqlite:///./data/blog.db"
+
+        service = BackupService()
+
+        # Test path traversal attempts
+        import pytest
+        with pytest.raises(ValueError, match="Invalid backup filename"):
+            service.restore_backup("../etc/passwd")
+
+        with pytest.raises(ValueError, match="Invalid backup filename"):
+            service.restore_backup("backup/../../file.tar.gz")
+
+def test_restore_backup_nonexistent(tmp_path):
+    """Test that restore raises error for nonexistent backup."""
+    with patch("app.services.backup_service.settings") as mock_settings:
+        mock_settings.storage_path = str(tmp_path / "data")
+        mock_settings.database_url = "sqlite+aiosqlite:///./data/blog.db"
+
+        service = BackupService()
+
+        import pytest
+        with pytest.raises(FileNotFoundError):
+            service.restore_backup("nonexistent.tar.gz")
