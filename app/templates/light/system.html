@@ -77,6 +77,17 @@
         </div>
     </div>
 
+    <!-- Backup Management Section -->
+    <div class="system-card backups-card">
+        <div class="card-header">
+            <h3 class="card-title">Backup Archives</h3>
+            <button class="btn btn-sm btn-primary" onclick="refreshBackups()">Refresh</button>
+        </div>
+        <div id="backups-list" class="backups-list">
+            <div class="loading">Loading backups...</div>
+        </div>
+    </div>
+
     <!-- Logs Section -->
     <div class="system-card logs-card">
         <div class="card-header">
@@ -101,196 +112,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-async function clearCache(pattern) {
-    if (!confirm('Are you sure you want to clear the cache? This may temporarily slow down page loads.')) return;
-
-    try {
-        const response = await fetch('/api/system/cache/clear?pattern=' + pattern, { method: 'POST' });
-        const data = await response.json();
-        if (response.ok) {
-            alert('Cache cleared! ' + data.cleared_count + ' entries removed.');
-            location.reload();
-        } else {
-            alert('Error: ' + data.detail);
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-async function triggerBackup() {
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = 'Backing up...';
-
-    try {
-        const response = await fetch('/api/system/backup', { method: 'POST' });
-        const data = await response.json();
-        if (response.ok) {
-            alert('Backup created successfully!\nPath: ' + data.path);
-            location.reload();
-        } else {
-            alert('Error: ' + data.detail);
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Backup Now';
-    }
-}
-
-async function cleanupOrphaned() {
-    if (!confirm('Are you sure you want to delete orphaned media files? This action cannot be undone.')) return;
-
-    try {
-        const response = await fetch('/api/media/orphaned', { method: 'DELETE' });
-        const data = await response.json();
-        if (response.ok) {
-            alert('Cleanup successful! ' + data.count + ' files removed.');
-            location.reload();
-        } else {
-            alert('Error: ' + data.detail);
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-async function refreshLogs() {
-    const logType = document.getElementById('log-type').value;
-    const logContent = document.getElementById('log-content');
-    logContent.innerHTML = '<div class="log-line">Loading logs...</div>';
-
-    try {
-        const response = await fetch('/api/system/logs?log_type=' + logType);
-        if (response.ok) {
-            const lines = await response.json();
-            logContent.innerHTML = lines.map(line => `<div class="log-line">${line}</div>`).join('') || '<div class="log-line empty">No logs found.</div>';
-            logContent.scrollTop = logContent.scrollHeight;
-        } else {
-            logContent.innerHTML = '<div class="log-line error">Failed to load logs.</div>';
-        }
-    } catch (error) {
-        logContent.innerHTML = '<div class="log-line error">Error: ' + error.message + '</div>';
-    }
-}
-
-// Scroll logs to bottom on load
-document.addEventListener('DOMContentLoaded', () => {
-    const logContent = document.getElementById('log-content');
-    logContent.scrollTop = logContent.scrollHeight;
-});
-</script>
-<style>
-.system-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-bottom: 24px;
-}
-.system-card {
-    background: var(--light-card-bg);
-    border: 1px solid var(--light-border);
-    border-radius: 8px;
-    padding: 24px;
-}
-.card-title {
-    margin-top: 0;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--light-border);
-    font-size: 1.2em;
-}
-.stats-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-.stat-item {
-    display: flex;
-    justify-content: space-between;
-}
-.stat-label {
-    color: var(--light-text-secondary);
-    font-weight: 500;
-}
-.stat-value {
-    color: var(--light-text-primary);
-    font-family: monospace;
-}
-.ops-list {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-.op-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-}
-.op-info h4 {
-    margin: 0 0 5px 0;
-}
-.op-info p {
-    margin: 0;
-    font-size: 0.85em;
-    color: var(--light-text-secondary);
-}
-.logs-card {
-    padding: 0;
-}
-.logs-card .card-header {
-    padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--light-border);
-}
-.logs-card .card-title {
-    margin: 0;
-    border: none;
-    padding: 0;
-}
-.log-viewer {
-    background: #000;
-    color: #0f0;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 13px;
-    padding: 15px;
-    height: 400px;
-    overflow-y: scroll;
-    border-radius: 0 0 8px 8px;
-    white-space: pre-wrap;
-    word-break: break-all;
-}
-.log-line {
-    margin-bottom: 2px;
-}
-.log-line.empty, .log-line.error {
-    color: var(--light-text-secondary);
-    font-style: italic;
-}
-.log-line.error {
-    color: #ef4444;
-}
-.header-actions {
-    display: flex;
-    gap: 10px;
-}
-.header-actions select {
-    padding: 4px 8px;
-    border-radius: 4px;
-    background: var(--light-input-bg);
-    color: var(--light-text-primary);
-    border: 1px solid var(--light-border);
-}
-
-.header-actions select option {
-    background-color: var(--light-input-bg);
-    color: var(--light-text-primary);
-}
-</style>
+<script src="/static/js/system.js"></script>
 {% endblock %}
