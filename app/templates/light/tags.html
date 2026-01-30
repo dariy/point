@@ -1,0 +1,409 @@
+{% extends "light/base.html" %}
+{% from "macros/pagination.html" import render_pagination %}
+
+{% block title %}Tags - {{ app_name }}{% endblock %}
+
+{% block page_title %}Tags{% endblock %}
+
+{% block header_actions %}
+<button type="button" class="btn btn-primary" onclick="openNewTagModal()">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+    </svg>
+    New Tag
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="filters">
+    <form action="/light/tags" method="GET" class="flex gap-2 w-full">
+        <input type="hidden" name="sort_by" value="{{ sort_by }}">
+        <input type="hidden" name="sort_order" value="{{ sort_order }}">
+        <div class="filter-group flex-1">
+            <input
+                type="text"
+                name="search"
+                class="form-input"
+                placeholder="Search tags by name..."
+                value="{{ search or '' }}"
+            >
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+        {% if search %}
+        <a href="/light/tags" class="btn btn-outline">Clear</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if tags %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        <a href="?sort_by=name&sort_order={{ 'desc' if sort_by == 'name' and sort_order == 'asc' else 'asc' }}{% if search %}&search={{ search }}{% endif %}" class="sort-link {% if sort_by == 'name' %}active{% endif %}">
+                            Name
+                            {% if sort_by == 'name' %}
+                                {{ '↓' if sort_order == 'desc' else '↑' }}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort_by=slug&sort_order={{ 'desc' if sort_by == 'slug' and sort_order == 'asc' else 'asc' }}{% if search %}&search={{ search }}{% endif %}" class="sort-link {% if sort_by == 'slug' %}active{% endif %}">
+                            Slug
+                            {% if sort_by == 'slug' %}
+                                {{ '↓' if sort_order == 'desc' else '↑' }}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort_by=post_count&sort_order={{ 'desc' if sort_by == 'post_count' and sort_order == 'asc' else 'asc' }}{% if search %}&search={{ search }}{% endif %}" class="sort-link {% if sort_by == 'post_count' %}active{% endif %}">
+                            Posts
+                            {% if sort_by == 'post_count' %}
+                                {{ '↓' if sort_order == 'desc' else '↑' }}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort_by=is_important&sort_order={{ 'desc' if sort_by == 'is_important' and sort_order == 'asc' else 'asc' }}{% if search %}&search={{ search }}{% endif %}" class="sort-link {% if sort_by == 'is_important' %}active{% endif %}">
+                            Important
+                            {% if sort_by == 'is_important' %}
+                                {{ '↓' if sort_order == 'desc' else '↑' }}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort_by=is_featured&sort_order={{ 'desc' if sort_by == 'is_featured' and sort_order == 'asc' else 'asc' }}{% if search %}&search={{ search }}{% endif %}" class="sort-link {% if sort_by == 'is_featured' %}active{% endif %}">
+                            Featured
+                            {% if sort_by == 'is_featured' %}
+                                {{ '↓' if sort_order == 'desc' else '↑' }}
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tag in tags %}
+                <tr id="tag-{{ tag.id }}">
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <a
+                                href="javascript:void(0)"
+                                onclick='editTag({{ tag.id }}, {{ tag.name|tojson|safe }}, {{ tag.slug|tojson|safe }}, {{ (tag.description or "")|tojson|safe }}, {{ "true" if tag.is_important else "false" }}, {{ "true" if tag.is_featured else "false" }})'
+                                class="tag {% if tag.is_important %}tag-important{% endif %}"
+                                style="width: fit-content;"
+                                title="Edit tag"
+                            >
+                                {{ tag.name }}
+                            </a>
+                            {% if tag.description %}
+                            <span class="text-xs text-muted">{{ tag.description }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="text-muted">
+                        <a href="/tags/{{ tag.slug }}" target="_blank" title="View public tag page" class="slug-link">
+                            /tags/{{ tag.slug }}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="tag-count">{{ tag.post_count }}</span>
+                    </td>
+                    <td>
+                        <button
+                            id="toggle-important-{{ tag.id }}"
+                            type="button"
+                            class="btn btn-sm btn-ghost"
+                            onclick='toggleTagProperty({{ tag.id }}, "is_important", {{ "true" if tag.is_important else "false" }})'
+                            title="{{ 'Remove important mark' if tag.is_important else 'Mark as important' }}"
+                        >
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="{{ 'var(--color-warning)' if tag.is_important else 'var(--light-text-muted)' }}" style="{{ 'opacity: 1;' if tag.is_important else 'opacity: 0.3;' }}">
+                                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                            </svg>
+                        </button>
+                    </td>
+                    <td>
+                        <button
+                            id="toggle-featured-{{ tag.id }}"
+                            type="button"
+                            class="btn btn-sm btn-ghost"
+                            onclick='toggleTagProperty({{ tag.id }}, "is_featured", {{ "true" if tag.is_featured else "false" }})'
+                            title="{{ 'Remove featured mark' if tag.is_featured else 'Mark as featured' }}"
+                        >
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="{{ 'var(--color-primary)' if tag.is_featured else 'var(--light-text-muted)' }}" style="{{ 'opacity: 1;' if tag.is_featured else 'opacity: 0.3;' }}">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                        </button>
+                    </td>
+                    <td class="actions">
+                        <a href="/tags/{{ tag.slug }}" target="_blank" class="btn btn-sm btn-outline" title="View public page">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                            </svg>
+                        </a>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline"
+                            onclick='editTag({{ tag.id }}, {{ tag.name|tojson|safe }}, {{ tag.slug|tojson|safe }}, {{ (tag.description or "")|tojson|safe }}, {{ "true" if tag.is_important else "false" }}, {{ "true" if tag.is_featured else "false" }})'
+                            title="Edit"
+                        >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-danger"
+                            data-delete-url="/api/tags/{{ tag.id }}"
+                            data-delete-name="{{ tag.name }}"
+                            title="Delete"
+                        >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                    <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
+                </svg>
+            </div>
+            {% if search %}
+            <div class="empty-state-title">No tags found</div>
+            <p>No tags match your search "{{ search }}".</p>
+            <a href="/light/tags" class="btn btn-secondary mt-2">Clear search</a>
+            {% else %}
+            <div class="empty-state-title">No tags yet</div>
+            <p>Create tags to organize your posts.</p>
+            <button type="button" class="btn btn-primary mt-2" onclick="openNewTagModal()">
+                Create Tag
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{{ render_pagination(page, total_pages, '/light/tags', '') }}
+
+<!-- Tag Modal -->
+<div id="tag-modal" class="modal-overlay">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modal-title">New Tag</h3>
+            <button type="button" class="modal-close">&times;</button>
+        </div>
+        <form id="tag-form">
+            <div class="modal-body">
+                <input type="hidden" id="tag-id" name="id">
+
+                <div class="form-group">
+                    <label for="tag-name" class="form-label">Name <span class="required">*</span></label>
+                    <input type="text" id="tag-name" name="name" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="tag-slug" class="form-label">Slug</label>
+                    <input type="text" id="tag-slug" name="slug" class="form-input" placeholder="Leave empty to auto-generate">
+                </div>
+
+                <div class="form-group">
+                    <label for="tag-description" class="form-label">Description</label>
+                    <textarea id="tag-description" name="description" class="form-textarea" rows="2"></textarea>
+                </div>
+
+                <div class="form-group form-checkbox">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="tag-important" name="is_important" class="form-checkbox-input">
+                        <span class="checkbox-text">Mark as important</span>
+                    </label>
+                </div>
+
+                <div class="form-group form-checkbox">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="tag-featured" name="is_featured" class="form-checkbox-input">
+                        <span class="checkbox-text">Mark as featured (Show in footer)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeTagModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const modal = document.getElementById('tag-modal');
+const form = document.getElementById('tag-form');
+
+function openNewTagModal() {
+    document.getElementById('modal-title').textContent = 'New Tag';
+    document.getElementById('tag-id').value = '';
+    document.getElementById('tag-name').value = '';
+    document.getElementById('tag-slug').value = '';
+    document.getElementById('tag-description').value = '';
+    document.getElementById('tag-important').checked = false;
+    document.getElementById('tag-featured').checked = false;
+    modal.classList.add('active');
+}
+
+async function editTag(id, name, slug, description, isImportant, isFeatured) {
+    document.getElementById('modal-title').textContent = 'Edit Tag';
+    document.getElementById('tag-id').value = id;
+    document.getElementById('tag-name').value = name;
+    document.getElementById('tag-slug').value = slug;
+    document.getElementById('tag-description').value = description;
+    document.getElementById('tag-important').checked = isImportant;
+    document.getElementById('tag-featured').checked = isFeatured;
+    modal.classList.add('active');
+
+    // Try to fetch fresh data
+    try {
+        const response = await fetch(`/api/tags/${id}`, { credentials: 'include' });
+        if (response.ok) {
+            const tag = await response.json();
+            document.getElementById('tag-name').value = tag.name;
+            document.getElementById('tag-slug').value = tag.slug;
+            document.getElementById('tag-description').value = tag.description || '';
+            document.getElementById('tag-important').checked = tag.is_important;
+            document.getElementById('tag-featured').checked = tag.is_featured;
+        }
+    } catch (error) {
+        console.warn('Failed to fetch fresh tag data:', error);
+    }
+}
+
+function closeTagModal() {
+    modal.classList.remove('active');
+}
+
+// Close modal on overlay click
+modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+        closeTagModal();
+    }
+});
+
+// Close modal on escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeTagModal();
+    }
+});
+
+async function toggleTagProperty(id, property, currentValue) {
+    const newValue = !currentValue;
+    const data = {};
+    data[property] = newValue;
+
+    const btnId = property === 'is_important' ? `toggle-important-${id}` : `toggle-featured-${id}`;
+    const btn = document.getElementById(btnId);
+    const originalHtml = btn.innerHTML;
+
+    // Optimistic UI update or loading state
+    btn.style.opacity = '0.5';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/tags/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data),
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const tag = await response.json();
+
+            // Update button state and onclick handler
+            btn.disabled = false;
+            btn.style.opacity = '1';
+
+            // Update the onclick attribute for the next toggle
+            btn.onclick = () => toggleTagProperty(id, property, newValue);
+
+            // Update SVG and titles
+            const svg = btn.querySelector('svg');
+            if (property === 'is_important') {
+                svg.setAttribute('fill', newValue ? 'var(--color-warning)' : 'var(--light-text-muted)');
+                svg.style.opacity = newValue ? '1' : '0.3';
+                btn.title = newValue ? 'Remove important mark' : 'Mark as important';
+
+                // Update the tag name link class if it exists in this row
+                const nameLink = btn.closest('tr').querySelector('td a.tag');
+                if (nameLink) {
+                    if (newValue) nameLink.classList.add('tag-important');
+                    else nameLink.classList.remove('tag-important');
+                }
+            } else {
+                svg.setAttribute('fill', newValue ? 'var(--color-primary)' : 'var(--light-text-muted)');
+                svg.style.opacity = newValue ? '1' : '0.3';
+                btn.title = newValue ? 'Remove featured mark' : 'Mark as featured';
+            }
+
+            window.LightUtils.showToast('Updated successfully');
+        } else {
+            const error = await response.json();
+            window.LightUtils.showToast(error.detail || 'Failed to update tag', 'error');
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+    } catch (error) {
+        console.error('Toggle error:', error);
+        window.LightUtils.showToast('An error occurred', 'error');
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    }
+}
+
+// Form submission
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('tag-id').value;
+    const data = {
+        name: document.getElementById('tag-name').value,
+        slug: document.getElementById('tag-slug').value || null,
+        description: document.getElementById('tag-description').value || null,
+        is_important: document.getElementById('tag-important').checked,
+        is_featured: document.getElementById('tag-featured').checked
+    };
+
+    const url = id ? `/api/tags/${id}` : '/api/tags';
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data),
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            window.LightUtils.showToast(error.detail || 'Failed to save tag', 'error');
+        }
+    } catch (error) {
+        console.error('Save error:', error);
+        window.LightUtils.showToast('An error occurred', 'error');
+    }
+});
+</script>
+{% endblock %}

@@ -1,8 +1,6 @@
-# CLAUDE.md - AI Assistant Guide for Photo Blog Engine
-
-> **Last Updated**: 2026-01-22
-> **Project Status**: Early Development (Pre-MVP)
-> **Current Phase**: Phase 1 - Foundation & Setup
+> **Last Updated**: 2026-01-29
+> **Project Status**: Active Development (Feature Rich)
+> **Current Phase**: Phase 14 Complete - Enhanced UI/UX
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
@@ -25,7 +23,8 @@
 **Photo Blog Engine** is a lightweight, professional-grade personal photo blog platform designed for photographers and visual content creators. The project emphasizes:
 
 - **Simplicity**: Single Docker container deployment
-- **Performance**: SQLite database, file-based caching
+- **Performance**: SQLite database, file-based caching, and AJAX navigation
+- **Modern Experience**: Immersive full-screen modes and touch gesture support
 - **Self-hosted**: Complete control over data and infrastructure
 - **Minimal dependencies**: No Redis, PostgreSQL, or complex microservices
 
@@ -43,11 +42,14 @@ Testing:     pytest, pytest-asyncio
 Linting:     ruff
 Type Check:  mypy
 Container:   Docker + docker-compose
+Frontend:    Vanilla JS with AJAX navigation & touch support
 ```
 
 ### Key Documentation
 
-- `specification.md` - Complete technical specification (1,200+ lines)
+- `README.md` - Main project overview and setup guide
+- `specification.md` - Complete technical specification
+- `phases.md` - Development phases and progress tracking
 - `LICENSE` - MIT License
 - `CLAUDE.md` - This file (AI assistant guide)
 
@@ -55,50 +57,53 @@ Container:   Docker + docker-compose
 
 ## Current Repository State
 
-### Project Phase: Foundation (Pre-MVP)
+### Project Phase: Enhanced UI/UX Complete
 
-**Status**: Repository initialized with planning documents only
+**Status**: Phases 1-12 and Phase 14 Complete. Core blog, admin interface, and advanced UX features are fully functional.
 
-**Completed**:
-- ✅ Repository created with MIT License
-- ✅ Technical specification documented
-- ✅ AI assistant guidelines established
+**Completed Phases**:
+- ✅ Phase 1: Project Foundation - Docker, database, project structure
+- ✅ Phase 2: Authentication System - User/session models, auth API
+- ✅ Phase 3: Post Management Core - Post CRUD, slugs, status management
+- ✅ Phase 4: Media Management - File upload, image processing, thumbnails
+- ✅ Phase 5: Tag System - Tag CRUD, post-tag relationships
+- ✅ Phase 6: Light Interface - Dashboard, post editor, media library, tags manager
+- ✅ Phase 7: Public Frontend - Homepage, single post view, gallery
+- ✅ Phase 8: RSS & SEO - RSS feed, sitemap, robots.txt, meta tags
+- ✅ Phase 9: Theming System - Dark/light modes, system detection
+- ✅ Phase 10: Caching & Performance - File-based caching, asset optimization
+- ✅ Phase 11: Background Tasks & Backup - Automated backups, session cleanup
+- ✅ Phase 12: Settings & System Tools - Blog configuration, log viewer, stats
+- ✅ Phase 14: Enhanced UI/UX - Immersive mode, AJAX navigation, gesture support
 
-**Next Steps** (Phase 1 MVP):
-1. Project structure setup
-2. Docker configuration
-3. Database models
-4. Authentication system
-5. Basic API endpoints
-6. Admin interface foundation
-7. Public frontend templates
+**Next Steps** (Phase 13):
+1. CI/CD Pipeline (GitHub Actions)
+2. Production Deployment Hardening
+3. Final Quality Assurance
 
 ### Repository Structure (Current)
 
 ```
 point/
-├── LICENSE              # MIT License
-├── specification.md     # Complete technical spec
-├── CLAUDE.md           # This file
-└── .git/               # Git repository
+├── README.md               # Main project guide
+├── CLAUDE.md               # This file (AI assistant guide)
+├── LICENSE                 # MIT License
+├── Dockerfile             # Docker configuration
+├── docker-compose.yml     # Docker Compose setup
+├── pyproject.toml         # Python project config
+├── specification.md       # Complete technical spec
+├── phases.md              # Development phases tracker
+├── app/
+│   ├── api/               # FastAPI routers (admin, auth, media, posts, public, etc.)
+│   ├── models/            # SQLAlchemy models
+│   ├── schemas/           # Pydantic schemas
+│   ├── services/          # Business logic (auth, backup, cache, post, scheduler, etc.)
+│   ├── static/            # CSS, JS assets (main.css, main.js, theme.js, light.css, light.js)
+│   ├── templates/         # Jinja2 templates (public, light, macros)
+│   └── utils/             # Utility functions
+├── tests/                 # Comprehensive test suite
+└── scripts/               # Utility scripts (init_db.py, backup.sh, restore.sh)
 ```
-
-### Repository Structure (Target)
-
-See `specification.md` lines 35-122 for the complete planned directory structure.
-
-**Key directories to create**:
-- `app/` - Application code
-  - `models/` - SQLAlchemy models
-  - `schemas/` - Pydantic schemas
-  - `api/` - FastAPI routes
-  - `services/` - Business logic
-  - `templates/` - Jinja2 templates
-  - `static/` - CSS, JS, images
-  - `utils/` - Utilities
-- `tests/` - Test suite
-- `scripts/` - Utility scripts
-- `.github/workflows/` - CI/CD
 
 ---
 
@@ -1202,6 +1207,9 @@ git push -u origin <branch>           # Push
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-22 | Initial CLAUDE.md creation |
+| 1.1.0 | 2026-01-22 | Phase 1-2 complete: Foundation and Authentication |
+| 1.2.0 | 2026-01-23 | Phase 3-5 complete: Posts, Media, Tags |
+| 1.3.0 | 2026-01-23 | Phase 6 complete: Light Interface with templates, CSS, JS |
 
 ---
 

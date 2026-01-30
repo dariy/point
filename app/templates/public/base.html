@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}{% block page_title %}{{ blog_title }}{% endblock %} | {{ blog_title }}{% endblock %}
+
+{% block meta_tags %}
+<!-- Default meta tags -->
+<meta name="description" content="{% block meta_description %}{{ blog_subtitle }}{% endblock %}">
+<meta name="author" content="{{ author_name }}">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="{% block canonical_url %}{{ request.url }}{% endblock %}">
+<link rel="alternate" type="application/rss+xml" title="{{ blog_title }} RSS Feed" href="/feed.xml">
+
+<!-- Open Graph defaults (can be overridden by child templates) -->
+{% block og_meta %}
+<meta property="og:site_name" content="{{ blog_title }}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ self.page_title() }} | {{ blog_title }}">
+<meta property="og:description" content="{{ self.meta_description() }}">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:locale" content="en_US">
+{% endblock %}
+
+<!-- Twitter Card defaults (can be overridden by child templates) -->
+{% block twitter_meta %}
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{ self.page_title() }} | {{ blog_title }}">
+<meta name="twitter:description" content="{{ self.meta_description() }}">
+{% endblock %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/main.css">
+<script src="/static/js/theme.js"></script>
+{% endblock %}
+
+{% block body_class %}public-layout{% endblock %}
+
+{% block body %}
+<div class="site-wrapper">
+    <header class="site-header">
+        <div class="header-container">
+            {% block header_content %}
+            <div class="site-branding">
+                <a href="/" class="site-title">{{ blog_title }}</a>
+                {% if blog_subtitle %}
+                <p class="site-subtitle">{{ blog_subtitle }}</p>
+                {% endif %}
+            </div>
+            <nav class="site-nav">
+                <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+            </nav>
+            {% endblock %}
+        </div>
+    </header>
+
+    <main class="site-main">
+        <div class="main-container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-container">
+            <div class="footer-content">
+                <p class="footer-copyright"><a href="/light" class="admin-link">&copy;</a> {{ current_year }} {{ author_name }}</p>
+                {% if false and tag_cloud %}
+                <div class="tag-cloud footer-tags">
+                    {% for tag in tag_cloud %}
+                    <a href="/tag/{{ tag.slug }}" class="tag-link" style="font-size: {{ 0.8 + tag.weight * 0.4 }}rem;">
+                        {{ tag.name }}
+                        <span class="count">({{ tag.post_count }})</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </footer>
+</div>
+
+<script src="/static/js/main.js"></script>
+
+<!-- Client-side Templates for AJAX Navigation -->
+<template id="tmpl-header-default">
+    <div class="site-branding">
+        <a href="/" class="site-title"></a>
+        <p class="site-subtitle"></p>
+    </div>
+    <nav class="site-nav">
+        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+        </button>
+    </nav>
+</template>
+
+<template id="tmpl-header-immersive">
+    <div class="post-header-bar" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <div class="header-left">
+            <a href="/" class="nav-link" style="padding: 0.5rem;" title="Back to Home">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+            </a>
+        </div>
+        <div class="header-center" style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+            <h1 class="site-title" style="margin: 0; font-size: 1.25rem;"></h1>
+            <div class="post-meta" style="font-size: 0.875rem; opacity: 0.9; margin-bottom: 0;">
+                <time class="post-date"></time>
+                <span class="post-meta-divider">·</span>
+                <span class="post-views"></span>
+            </div>
+        </div>
+        <div class="header-right" style="width: 40px; display: flex; justify-content: flex-end;">
+            <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+</template>
+
+<template id="tmpl-post-standard">
+    <article class="post-single">
+        <header class="post-header">
+            <div class="post-meta">
+                <time class="post-date"></time>
+                <span class="post-meta-divider">·</span>
+                <span class="post-views"></span>
+            </div>
+            <h1 class="post-title"></h1>
+        </header>
+
+        <div class="post-content">
+            <!-- Content injected here -->
+        </div>
+
+        <footer class="post-footer">
+            <div class="post-tags"></div>
+            <div class="post-navigation">
+                <!-- Nav injected here -->
+            </div>
+        </footer>
+    </article>
+</template>
+
+<template id="tmpl-post-immersive">
+    <div class="immersive-wrapper">
+        <div class="immersive-visuals">
+            <div class="carousel-container">
+                <!-- Slides injected here -->
+                <button class="carousel-prev" aria-label="Previous media">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <button class="carousel-next" aria-label="Next media">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+                <div class="carousel-indicators">
+                    <!-- Dots injected here -->
+                </div>
+            </div>
+        </div>
+        <div class="immersive-tags-wrapper">
+            <div class="immersive-tags"></div>
+        </div>
+    </div>
+</template>
+
+{% block extra_js %}{% endblock %}
+{% endblock %}
