@@ -3,7 +3,7 @@
 
 services:
   blog:
-    image: ghcr.io/${GITHUB_REPOSITORY:-username/photo-blog}:latest
+    image: ghcr.io/dariy/point:${IMAGE_TAG:-latest}
     container_name: photo-blog-prod
     restart: unless-stopped
 

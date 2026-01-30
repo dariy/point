@@ -228,6 +228,8 @@ async def new_post(
     request: Request,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
+    media_id: int | None = None,
+    media_path: str | None = None,
 ) -> Response:
     """Render new post editor.
 
@@ -235,6 +237,8 @@ async def new_post(
         request: FastAPI request
         db: Database session
         user: Current user
+        media_id: Optional pre-uploaded media ID (from drag-drop)
+        media_path: Optional pre-uploaded media path (from drag-drop)
 
     Returns:
         Post editor page HTML
@@ -248,6 +252,14 @@ async def new_post(
     tag_service = TagService(db)
     tags = await tag_service.list_tags()
 
+    # If media was pre-uploaded via drag-drop, prepare initial content
+    initial_content = ""
+    initial_thumbnail = None
+    if media_id and media_path:
+        # Create markdown image reference
+        initial_content = f"![](/media/originals/{media_path})"
+        initial_thumbnail = f"/media/originals/{media_path}"
+
     context = get_base_context(request, user)
     context.update(
         {
@@ -255,6 +267,9 @@ async def new_post(
             "tags": tags,
             "all_tags": [t.name for t in tags],
             "statuses": [s.value for s in PostStatus],
+            "initial_content": initial_content,
+            "initial_thumbnail": initial_thumbnail,
+            "dropped_media_id": media_id,
         }
     )
     return templates.TemplateResponse("light/post_edit.html", context)
