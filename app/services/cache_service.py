@@ -92,7 +92,7 @@ class FileCache:
         await aiofiles.os.makedirs(self.pages_dir, exist_ok=True)
         await aiofiles.os.makedirs(self.feeds_dir, exist_ok=True)
 
-    def _generate_key(self, url: str, query_params: dict | None = None) -> str:
+    def _generate_key(self, url: str, query_params: dict[str, Any] | None = None) -> str:
         """Generate cache key from URL and query parameters.
 
         Args:
@@ -159,7 +159,7 @@ class FileCache:
     async def get_by_url(
         self,
         url: str,
-        query_params: dict | None = None,
+        query_params: dict[str, Any] | None = None,
         cache_type: str = "pages",
     ) -> CacheEntry | None:
         """Retrieve cached value by URL.
@@ -211,7 +211,7 @@ class FileCache:
         self,
         url: str,
         content: str,
-        query_params: dict | None = None,
+        query_params: dict[str, Any] | None = None,
         ttl: int = 3600,
         content_type: str = "text/html",
         cache_type: str = "pages",
@@ -257,7 +257,7 @@ class FileCache:
     async def delete_by_url(
         self,
         url: str,
-        query_params: dict | None = None,
+        query_params: dict[str, Any] | None = None,
         cache_type: str = "pages",
     ) -> bool:
         """Remove cached value by URL.

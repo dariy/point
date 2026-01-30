@@ -6,6 +6,7 @@ Handles file upload, processing, storage, and cleanup operations.
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import aiofiles
 import aiofiles.os
@@ -377,7 +378,7 @@ class MediaService:
 
         return deleted_count, freed_bytes
 
-    async def get_storage_stats(self) -> dict:
+    async def get_storage_stats(self) -> dict[str, Any]:
         """Get storage statistics.
 
         Returns:
