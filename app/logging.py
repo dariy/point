@@ -10,7 +10,7 @@ from pathlib import Path
 from app.config import get_settings
 
 
-def setup_logging():
+def setup_logging() -> None:
     """Configure application logging."""
     settings = get_settings()
 
