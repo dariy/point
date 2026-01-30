@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = Field(default="PhotoBlog", description="Application name")
+    app_version: str = Field(
+        default="dev", description="Application version (set by build pipeline)"
+    )
     app_env: Literal["development", "production", "testing"] = Field(
         default="development", description="Application environment"
     )
