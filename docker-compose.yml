@@ -1,7 +1,6 @@
 services:
   blog:
-    build: .
-    image: photo-blog:latest
+    image: ghcr.io/dariy/point:main
     container_name: photo-blog
     restart: unless-stopped
     ports:
