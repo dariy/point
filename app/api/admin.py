@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,7 +80,7 @@ async def require_auth(
 async def login_page(
     request: Request,
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render login page.
 
     Args:
@@ -103,7 +103,7 @@ async def dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render light dashboard.
 
     Args:
@@ -174,7 +174,7 @@ async def posts_list(
     user: User | None = Depends(get_current_user),
     page: int = 1,
     status_filter: str | None = None,
-) -> HTMLResponse:
+) -> Response:
     """Render posts list page.
 
     Args:
@@ -227,7 +227,7 @@ async def new_post(
     request: Request,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render new post editor.
 
     Args:
@@ -265,7 +265,7 @@ async def edit_post(
     post_id: int,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render post editor for existing post.
 
     Args:
@@ -319,7 +319,7 @@ async def tags_page(
     search: str | None = None,
     sort_by: str = "name",
     sort_order: str = "asc",
-) -> HTMLResponse:
+) -> Response:
     """Render tags management page.
 
     Args:
@@ -368,7 +368,7 @@ async def media_page(
     user: User | None = Depends(get_current_user),
     page: int = 1,
     file_type: str | None = None,
-) -> HTMLResponse:
+) -> Response:
     """Render media library page.
 
     Args:
@@ -419,7 +419,7 @@ async def settings_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render blog settings page.
 
     Args:
@@ -451,7 +451,7 @@ async def settings_page(
 async def security_page(
     request: Request,
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render security settings page.
 
     Args:
@@ -475,7 +475,7 @@ async def system_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
-) -> HTMLResponse:
+) -> Response:
     """Render system tools page.
 
     Args:

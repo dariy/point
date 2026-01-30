@@ -5,6 +5,7 @@ Defines Pydantic models for media upload and management operations.
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -108,7 +109,7 @@ class MultipleMediaUploadResponse(BaseModel):
     """Schema for multiple file upload response."""
 
     uploaded: list[MediaUploadResponse]
-    failed: list[dict] = Field(
+    failed: list[dict[str, Any]] = Field(
         default_factory=list, description="Files that failed to upload"
     )
     total_uploaded: int
@@ -126,7 +127,7 @@ class StorageStatsResponse(BaseModel):
     usage_percent: float
     orphaned_files: int
     orphaned_size_bytes: int
-    by_type: dict[str, dict] = Field(
+    by_type: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         description="Breakdown by file type (image, video, audio)",
     )

@@ -3,7 +3,7 @@
 Configures the application with middleware, routes, and lifecycle events.
 """
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, MutableMapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -55,7 +55,7 @@ class CachedStaticFiles(StaticFiles):
         """Handle request with cache headers."""
 
         # Create a custom send that adds cache headers
-        async def send_with_cache_headers(message: dict[str, Any]) -> None:
+        async def send_with_cache_headers(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
 
