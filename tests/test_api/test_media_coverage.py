@@ -68,16 +68,16 @@ async def test_list_media_pagination(client: AsyncClient, admin_auth_headers, db
     db.add_all(media_items)
     await db.commit()
     
-    resp = await client.get("/api/media/?page=1&per_page=10", headers=admin_auth_headers)
+    resp = await client.get("/api/media?page=1&per_page=10", headers=admin_auth_headers)
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data["items"]) == 10
+    assert len(data["media"]) == 10
     assert data["total"] >= 15
     
-    resp = await client.get("/api/media/?page=2&per_page=10", headers=admin_auth_headers)
+    resp = await client.get("/api/media?page=2&per_page=10", headers=admin_auth_headers)
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data["items"]) >= 5
+    assert len(data["media"]) >= 5
 
 @pytest.mark.asyncio
 async def test_media_stats(client: AsyncClient, admin_auth_headers):
