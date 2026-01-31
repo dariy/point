@@ -67,7 +67,7 @@ class Media(Base):
     post: Mapped["Post | None"] = relationship("Post", lazy="selectin")
 
     def __repr__(self) -> str:
-        return f"<Media(id={self.id}, filename='{self.filename}', type='{self.file_type}')>"
+        return f"<Media(id={self.id}, filename='{self.filename}', type='{self.file_type.value}')>"
 
     @property
     def is_image(self) -> bool:
