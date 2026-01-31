@@ -139,6 +139,80 @@ async def test_list_media_filters(media_service: MediaService, db: AsyncSession)
     assert len(media) == 1
     assert media[0].post_id is None
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
-from unittest.mock import AsyncMock
+
+def test_storage_paths_format_for_quick_post(media_service: MediaService):
+    """Test that storage paths are formatted correctly for quick post creation."""
+    with pytest.MonkeyPatch().context() as m:
+        m.setattr("app.services.media_service.ensure_directory", MagicMock())
+        orig, thumb, orig_rel, thumb_rel = media_service._get_storage_paths(
+            "quick_post_test.jpg", 2026, 1
+        )
+
+        # Test original path format
+        assert orig_rel.startswith("originals/")
+        assert orig_rel == "originals/2026/01/quick_post_test.jpg"
+
+        # Ensure no duplicate "originals" in path
+        assert "originals/originals" not in orig_rel
+
+        # Test thumbnail path format
+        assert thumb_rel.startswith("thumbnails/")
+        assert thumb_rel == "thumbnails/2026/01/quick_post_test.jpg"
+
+
+def test_storage_paths_with_different_months(media_service: MediaService):
+    """Test storage paths for different months."""
+    with pytest.MonkeyPatch().context() as m:
+        m.setattr("app.services.media_service.ensure_directory", MagicMock())
+
+        # January
+        _, _, orig_jan, _ = media_service._get_storage_paths("test.jpg", 2026, 1)
+        assert orig_jan == "originals/2026/01/test.jpg"
+
+        # December
+        _, _, orig_dec, _ = media_service._get_storage_paths("test.jpg", 2026, 12)
+        assert orig_dec == "originals/2026/12/test.jpg"
+
+        # Different year
+        _, _, orig_2027, _ = media_service._get_storage_paths("test.jpg", 2027, 6)
+        assert orig_2027 == "originals/2027/06/test.jpg"
+
+
+def test_storage_paths_preserve_extension(media_service: MediaService):
+    """Test that storage paths preserve file extensions."""
+    with pytest.MonkeyPatch().context() as m:
+        m.setattr("app.services.media_service.ensure_directory", MagicMock())
+
+        extensions = [".jpg", ".png", ".gif", ".webp"]
+
+        for ext in extensions:
+            filename = f"test{ext}"
+            _, _, orig_rel, _ = media_service._get_storage_paths(filename, 2026, 1)
+            assert orig_rel.endswith(ext)
+            assert filename in orig_rel
+
+
+def test_storage_paths_no_duplicate_originals(media_service: MediaService):
+    """Test that original_path never creates duplicate 'originals' directories.
+
+    This is critical for the Quick Post Creation feature to work correctly.
+    """
+    with pytest.MonkeyPatch().context() as m:
+        m.setattr("app.services.media_service.ensure_directory", MagicMock())
+
+        # Test various filenames
+        test_cases = [
+            ("simple.jpg", "originals/2026/01/simple.jpg"),
+            ("with-dash.png", "originals/2026/01/with-dash.png"),
+            ("with_underscore.gif", "originals/2026/01/with_underscore.gif"),
+            ("multi.word.file.jpg", "originals/2026/01/multi.word.file.jpg"),
+        ]
+
+        for filename, expected_path in test_cases:
+            _, _, orig_rel, _ = media_service._get_storage_paths(filename, 2026, 1)
+            assert orig_rel == expected_path
+            # Critical: ensure no duplicate directories
+            assert "originals/originals" not in orig_rel
+            assert orig_rel.count("originals/") == 1
