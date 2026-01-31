@@ -237,6 +237,125 @@ class TestNewPost:
         assert 'name="status"' in response.text
 
 
+class TestQuickPostCreation:
+    """Test cases for Quick Post Creation (drag-and-drop) feature."""
+
+    @pytest.mark.asyncio
+    async def test_new_post_with_media_prepopulates_content(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test new post page prepopulates content with media."""
+        media_id = 123
+        media_path = "originals/2026/01/test_image.jpg"
+
+        response = await client.get(
+            f"/light/posts/new?media_id={media_id}&media_path={media_path}",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        # Check that markdown image reference is in the content
+        assert f"![](/media/{media_path})" in response.text
+        # Check that the path doesn't have duplicate "originals"
+        assert "originals/originals" not in response.text
+
+    @pytest.mark.asyncio
+    async def test_new_post_with_media_sets_thumbnail(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test new post page sets initial thumbnail with media."""
+        media_id = 456
+        media_path = "originals/2026/01/test_photo.png"
+
+        response = await client.get(
+            f"/light/posts/new?media_id={media_id}&media_path={media_path}",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        # Check that thumbnail URL is set
+        assert f"/media/{media_path}" in response.text
+
+    @pytest.mark.asyncio
+    async def test_new_post_without_media_params_works(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test new post page works normally without media parameters."""
+        response = await client.get(
+            "/light/posts/new",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        assert "New Post" in response.text
+        # Should have empty content area
+        assert 'name="content"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_new_post_with_only_media_id(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test new post with only media_id (no media_path)."""
+        response = await client.get(
+            "/light/posts/new?media_id=789",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        # Should render normally without prepopulation
+        assert "New Post" in response.text
+
+    @pytest.mark.asyncio
+    async def test_new_post_with_only_media_path(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test new post with only media_path (no media_id)."""
+        response = await client.get(
+            "/light/posts/new?media_path=originals/2026/01/test.jpg",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        # Should render normally without prepopulation
+        assert "New Post" in response.text
+
+    @pytest.mark.asyncio
+    async def test_new_post_with_special_chars_in_filename(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test new post with special characters in media filename."""
+        media_id = 999
+        media_path = "originals/2026/01/test_image_with-dashes_123.jpg"
+
+        response = await client.get(
+            f"/light/posts/new?media_id={media_id}&media_path={media_path}",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        # Check that path is properly handled
+        assert f"![](/media/{media_path})" in response.text
+
+    @pytest.mark.asyncio
+    async def test_new_post_media_path_no_duplicate_originals(
+        self, client: AsyncClient, auth_cookies: dict
+    ) -> None:
+        """Test that media path doesn't create duplicate 'originals' in URL."""
+        media_id = 111
+        media_path = "originals/2026/01/image.jpg"
+
+        response = await client.get(
+            f"/light/posts/new?media_id={media_id}&media_path={media_path}",
+            cookies=auth_cookies,
+        )
+
+        assert response.status_code == 200
+        # Verify no duplicate "originals" directory
+        assert "/media/originals/originals/" not in response.text
+        # Verify correct single "originals" path
+        assert "/media/originals/2026/01/image.jpg" in response.text
+
+
 class TestTagsPage:
     """Test cases for tags management page."""
 
