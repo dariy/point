@@ -27,37 +27,50 @@ async def test_upload_file_validation_error(client: AsyncClient, auth_cookies: d
 @pytest.mark.asyncio
 async def test_upload_multiple_files_partial_failure(client: AsyncClient, auth_cookies: dict):
     """Test multiple file upload with some failures."""
-    
+
     # We need to mock validate_upload_file to succeed for one and fail for another
     # But files are iterated.
-    
+
     # Let's mock at the service level instead to simulate a deeper error
     # Or mock validate_upload_file side_effect with an iterable
-    
+
     with patch("app.api.media.validate_upload_file") as mock_validate:
         # First call succeeds, second raises
         mock_validate.side_effect = [
             (b"content1", "valid.jpg", "image/jpeg", 100),
             FileValidationError("Invalid file", "file")
         ]
-        
-        with patch("app.services.media_service.MediaService.upload_file") as mock_upload:
-            mock_upload.return_value = MagicMock(
-                id=1, filename="valid.jpg", file_type="image", 
-                file_size=100, width=100, height=100, checksum="abc"
-            )
-            
+
+        with patch("app.services.media_service.MediaService.upload_file") as mock_upload, \
+             patch("app.services.media_service.MediaService.get_media_url") as mock_get_url, \
+             patch("app.services.media_service.MediaService.get_thumbnail_url") as mock_get_thumb:
+
+            # Create a proper mock with all required attributes
+            mock_media = MagicMock()
+            mock_media.id = 1
+            mock_media.filename = "valid.jpg"
+            mock_media.original_path = "/data/media/originals/2026/01/valid.jpg"
+            mock_media.file_type = "image"
+            mock_media.file_size = 100
+            mock_media.width = 100
+            mock_media.height = 100
+            mock_media.checksum = "abc123"
+
+            mock_upload.return_value = mock_media
+            mock_get_url.return_value = "/media/originals/2026/01/valid.jpg"
+            mock_get_thumb.return_value = "/media/thumbnails/2026/01/valid.jpg"
+
             files = [
                 ("files", ("valid.jpg", b"content1", "image/jpeg")),
                 ("files", ("invalid.txt", b"content2", "text/plain"))
             ]
-            
+
             response = await client.post(
                 "/api/media/upload/multiple",
                 files=files,
                 cookies=auth_cookies
             )
-            
+
             assert response.status_code == 201
             data = response.json()
             assert data["total_uploaded"] == 1
