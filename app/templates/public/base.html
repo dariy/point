@@ -47,6 +47,7 @@
                 <p class="site-subtitle">{{ blog_subtitle }}</p>
                 {% endif %}
             </div>
+            {% block header_filters %}{% endblock %}
             <nav class="site-nav">
                 <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
                     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -78,6 +79,7 @@
     <footer class="site-footer">
         <div class="footer-container">
             <div class="footer-content">
+                {% block footer_pagination %}{% endblock %}
                 <p class="footer-copyright"><a href="/light" class="admin-link">&copy;</a> {{ current_year }} {{ author_name }}</p>
                 {% if false and tag_cloud %}
                 <div class="tag-cloud footer-tags">
