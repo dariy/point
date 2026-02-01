@@ -59,10 +59,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
+          cpus: '0.95'
           memory: 2G
         reservations:
-          cpus: '0.5'
+          cpus: '0.25'
           memory: 512M
 
     # Security options
