@@ -10,6 +10,15 @@ The deployment pipeline was deploying outdated Docker images, causing old files 
 
 ## Root Causes
 
+### 0. Environment Variable Precedence (Discovered during deployment)
+**Location**: `.github/workflows/deploy.yml` line 141
+**Issue**: The SSH action exports `IMAGE_TAG` as an environment variable with the full commit SHA. When `docker-compose` runs, environment variables take precedence over `.env` file values. So even though we wrote the truncated SHA to `.env`, docker-compose used the full SHA from the environment, causing a "manifest unknown" error because that tag doesn't exist.
+
+**Fix**: Export the truncated IMAGE_TAG to override the environment variable before running docker-compose:
+```bash
+export IMAGE_TAG=${IMAGE_TAG:0:7}
+```
+
 ### 1. Missing Job Output Declaration
 **Location**: `.github/workflows/deploy.yml` line 49-106
 **Issue**: The `build` job generated a `version` output in the `steps.version.outputs.version` variable, but this was never declared as a job-level output. When the `deploy` job tried to reference it, the variable was empty.
@@ -76,8 +85,9 @@ fi
 - ✅ Set `IMAGE_TAG` in `.env` file (lines 153, 155, 158)
 - ✅ Changed to pull specific SHA tag instead of `latest` (line 166)
 - ✅ Added local tagging of pulled image as `latest` (line 169)
-- ✅ Specified production compose file explicitly (line 180)
-- ✅ Added deployment verification (lines 182-193)
+- ✅ **Export truncated IMAGE_TAG to override environment** (lines 172-173) - Critical fix!
+- ✅ Specified production compose file explicitly (line 183)
+- ✅ Added deployment verification (lines 185-196)
 - ✅ Updated deployment summary to include image tag (lines 231-232)
 
 ### 2. `scripts/verify-deployment.sh` (New File)
@@ -96,6 +106,7 @@ fi
    - Sets both `APP_VERSION` and `IMAGE_TAG` in `.env` file
    - Pulls specific image by SHA tag: `ghcr.io/dariy/point:${IMAGE_TAG:0:7}`
    - Tags pulled image as `latest` locally
+   - **Exports truncated IMAGE_TAG to override environment variable** (critical!)
    - Uses `docker-compose.prod.yml` which respects `IMAGE_TAG` variable
    - Verifies the deployed container is running the correct image
    - Fails deployment if image mismatch detected
@@ -172,6 +183,16 @@ The pipeline now creates multiple tags for each build:
 - `latest` - Latest build on main branch
 
 For deployment, we use the SHA tag for determinism, then locally tag it as `latest` for convenience.
+
+### Docker Compose Environment Variable Precedence
+**Important**: Docker Compose prioritizes environment variables over `.env` file values. In our deployment:
+1. SSH action exports `IMAGE_TAG` with full SHA (e.g., `2325b3a56437c1afd927b74016776b56a8cce7cf`)
+2. We write truncated SHA to `.env` file (e.g., `IMAGE_TAG=2325b3a`)
+3. Without the `export`, docker-compose would use the full SHA from environment
+4. Full SHA tag doesn't exist in registry → "manifest unknown" error
+5. **Solution**: `export IMAGE_TAG=${IMAGE_TAG:0:7}` to override the environment variable
+
+This is why the explicit export after pulling the image is critical for the deployment to work.
 
 ### Rollback Procedure
 If you need to rollback to a previous version:
