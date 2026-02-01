@@ -839,6 +839,22 @@
              }
              const subtitle = headerClone.querySelector('.site-subtitle');
              if(subtitle) subtitle.textContent = data.blog_subtitle;
+
+             // Show create-post and admin-link buttons if logged in
+             if (data.is_logged_in) {
+                 const createPostBtn = headerClone.querySelector('.create-post');
+                 if (createPostBtn) {
+                     createPostBtn.style.display = 'flex';
+                 }
+                 const adminLink = headerClone.querySelector('.admin-link');
+                 if (adminLink) {
+                     adminLink.style.display = 'flex';
+                 }
+                 const titleLink = headerClone.querySelector('.site-title');
+                 if (titleLink) {
+                     titleLink.classList.add('authenticated');
+                 }
+             }
         } else {
              const title = headerClone.querySelector('.site-title');
              if(title) title.textContent = post.title;
@@ -861,16 +877,16 @@
              }
         }
 
-        // Inject Edit Button if logged in
+        // Inject Edit Button and show Create Post button if logged in
         if (data.is_logged_in) {
             const headerRight = headerClone.querySelector('.header-right');
             if (headerRight) {
                 // Adjust styles to match server-side rendering
-                headerRight.style.width = 'auto'; 
+                headerRight.style.width = 'auto';
                 headerRight.style.display = 'flex';
                 headerRight.style.justifyContent = 'flex-end';
                 headerRight.style.gap = '0.5rem';
-                
+
                 const editBtn = document.createElement('a');
                 editBtn.href = '/light/posts/' + post.id;
                 editBtn.className = 'theme-toggle';
@@ -885,13 +901,27 @@
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                 `;
-                
-                // Insert before theme toggle
-                const themeToggle = headerRight.querySelector('.theme-toggle');
-                if (themeToggle) {
-                    headerRight.insertBefore(editBtn, themeToggle);
+
+                // Show create-post and admin-link buttons
+                const createPostBtn = headerRight.querySelector('.create-post');
+                if (createPostBtn) {
+                    createPostBtn.style.display = 'flex';
+                }
+                const adminLink = headerRight.querySelector('.admin-link');
+                if (adminLink) {
+                    adminLink.style.display = 'flex';
+                }
+
+                // Insert edit button before create-post button
+                if (createPostBtn) {
+                    headerRight.insertBefore(editBtn, createPostBtn);
                 } else {
-                    headerRight.appendChild(editBtn);
+                    const themeToggle = headerRight.querySelector('.theme-toggle');
+                    if (themeToggle) {
+                        headerRight.insertBefore(editBtn, themeToggle);
+                    } else {
+                        headerRight.appendChild(editBtn);
+                    }
                 }
             }
         }
