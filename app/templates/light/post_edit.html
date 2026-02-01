@@ -39,6 +39,25 @@
                 </div>
             </div>
 
+            {% if initial_thumbnail %}
+            <!-- Dropped Image Preview -->
+            <div class="card dropped-media-card">
+                <div class="card-header flex-between">
+                    <h3>Dropped Image</h3>
+                    <span class="badge badge-success">Ready to use</span>
+                </div>
+                <div class="card-body">
+                    <div class="dropped-media-preview">
+                        <img src="{{ initial_thumbnail }}" alt="Dropped image preview">
+                    </div>
+                    <p class="text-small text-muted mt-2">
+                        This image has been uploaded and added to your post content.
+                        Give your post a title and save to publish.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Content -->
             <div class="card">
                 <div class="card-header flex-between">
@@ -56,7 +75,7 @@
                         class="form-textarea editor-content"
                         rows="20"
                         placeholder="Write your post content in Markdown..."
-                    >{{ post.content if post else '' }}</textarea>
+                    >{{ post.content if post else (initial_content if initial_content else '') }}</textarea>
                 </div>
             </div>
 
@@ -272,5 +291,10 @@ document.addEventListener('keydown', function(e) {
         document.getElementById('btn-save').click();
     }
 });
+
+{% if initial_thumbnail %}
+// Auto-focus title field when image was dropped
+document.getElementById('title').focus();
+{% endif %}
 </script>
 {% endblock %}
