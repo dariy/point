@@ -1114,7 +1114,17 @@ curl http://localhost:8000/api/system/stats \
   - [x] Implement "Copy to Clipboard" for code blocks
   - [x] Video preview on hover for post cards
 
-- [x] **14.5 Design Polishing**
+- [x] **14.5 Quick Post Creation**
+  - [x] Implement drag-and-drop overlay for logged-in users
+  - [x] Upload image directly from public pages
+  - [x] Auto-redirect to post editor with pre-populated media
+  - [x] Visual feedback during upload process
+  - [x] Comprehensive test coverage (20 tests)
+    - [x] Unit tests for endpoint and path generation
+    - [x] Integration tests for complete workflow
+    - [x] Edge case and security tests
+
+- [x] **14.6 Design Polishing**
   - [x] Fix theme background inconsistencies
   - [x] Optimize overscroll behavior and visual transitions
   - [x] Smooth scrolling and back-to-top button
@@ -1125,7 +1135,8 @@ curl http://localhost:8000/api/system/stats \
 2. Seamless AJAX-based site navigation
 3. Comprehensive touch gesture support
 4. Reading tools (progress bar, code copy)
-5. Refined visual transitions and theme consistency
+5. Drag-and-drop quick post creation from public pages
+6. Refined visual transitions and theme consistency
 
 ---
 

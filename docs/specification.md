@@ -496,6 +496,22 @@ async def update_view_counts():
 - **Vertical Swipe**: Intelligent vertical swipe detection to allow natural scrolling while maintaining navigation functionality.
 - **Visual Consistency**: Optimized background colors (`var(--bg-primary)`) to ensure seamless visual transitions during overscroll and gesture interactions.
 
+#### Quick Post Creation (Drag-and-Drop)
+- **Logged-in User Feature**: Available only when authenticated, seamlessly integrates content creation into browsing.
+- **Global Drop Zone**: Drag any image file onto any public page to instantly create a new post.
+- **Visual Feedback**: Full-screen overlay appears during drag operation with upload status indicators.
+- **Automatic Upload**: Image is uploaded via `/api/media/upload` endpoint without leaving the current page.
+- **Seamless Transition**: Automatically redirects to `/light/posts/new` with:
+  - Pre-populated markdown image reference in content
+  - Media preview displayed
+  - Ready-to-publish post editor
+- **Error Handling**: Graceful error messages for invalid file types or upload failures.
+- **Implementation**:
+  - `initDragDropPostCreation()` in `app/static/js/main.js`
+  - Drop zone overlay in `app/templates/public/base.html`
+  - Styles in `app/static/css/main.css`
+  - Post editor integration in `app/api/admin.py` (new_post endpoint)
+
 #### Gallery View
 - Grid of post thumbnails
 - Filter by tag
