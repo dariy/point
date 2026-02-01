@@ -1931,3 +1931,111 @@ video.immersive-bg-image {
     pointer-events: none;
     transition: opacity 0.4s ease;
 }
+
+/* ===========================
+   Drop Zone Overlay (Quick Post Creation)
+   =========================== */
+.drop-zone-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(37, 99, 235, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.drop-zone-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.drop-zone-overlay.uploading {
+    background: rgba(37, 99, 235, 0.98);
+}
+
+.drop-zone-content {
+    text-align: center;
+    color: white;
+    padding: var(--spacing-2xl);
+    max-width: 400px;
+}
+
+.drop-zone-icon {
+    width: 80px;
+    height: 80px;
+    margin-bottom: var(--spacing-lg);
+    animation: dropZoneBounce 1s ease infinite;
+}
+
+.drop-zone-overlay.uploading .drop-zone-icon {
+    animation: dropZoneSpin 1s linear infinite;
+}
+
+@keyframes dropZoneBounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes dropZoneSpin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.drop-zone-title {
+    font-size: var(--font-size-2xl);
+    font-weight: 600;
+    margin-bottom: var(--spacing-sm);
+}
+
+.drop-zone-hint {
+    font-size: var(--font-size-base);
+    opacity: 0.9;
+}
+
+.drop-zone-overlay.uploading .drop-zone-title {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .drop-zone-overlay {
+    background: rgba(59, 130, 246, 0.95);
+}
+
+[data-theme="dark"] .drop-zone-overlay.uploading {
+    background: rgba(59, 130, 246, 0.98);
+}
+
+/* Drag-over body state indicator */
+body.drag-over::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    border: 4px dashed var(--color-primary);
+    pointer-events: none;
+    z-index: 9998;
+}
