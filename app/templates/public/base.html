@@ -48,6 +48,13 @@
                 {% endif %}
             </div>
             <nav class="site-nav">
+                {% if user %}
+                <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14M5 12h14"></path>
+                    </svg>
+                </a>
+                {% endif %}
                 <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
                     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>
@@ -103,6 +110,11 @@
         <p class="site-subtitle"></p>
     </div>
     <nav class="site-nav">
+        <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M5 12h14"></path>
+            </svg>
+        </a>
         <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="5"></circle>
@@ -139,7 +151,12 @@
                 <span class="post-views"></span>
             </div>
         </div>
-        <div class="header-right" style="width: 40px; display: flex; justify-content: flex-end;">
+        <div class="header-right" style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12h14"></path>
+                </svg>
+            </a>
             <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
                 <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5"></circle>
