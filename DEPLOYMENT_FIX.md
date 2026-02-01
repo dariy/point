@@ -10,7 +10,22 @@ The deployment pipeline was deploying outdated Docker images, causing old files 
 
 ## Root Causes
 
-### 0. Environment Variable Precedence (Discovered during deployment)
+### 0. CPU Resource Limits Too High (Discovered during deployment)
+**Location**: `docker-compose.prod.yml` lines 59-66
+**Issue**: The production compose file had CPU limits set to `2` CPUs, but the production server only has 1 CPU available. This caused docker-compose to fail with "range of CPUs is from 0.01 to 1.00, as there are only 1 CPUs available". Since the container failed to recreate, the old container kept running.
+
+**Fix**: Adjusted CPU limits to work with single-core servers:
+```yaml
+resources:
+  limits:
+    cpus: '0.95'  # Changed from '2'
+    memory: 2G
+  reservations:
+    cpus: '0.25'  # Changed from '0.5'
+    memory: 512M
+```
+
+### 1. Environment Variable Precedence (Discovered during deployment)
 **Location**: `.github/workflows/deploy.yml` line 141
 **Issue**: The SSH action exports `IMAGE_TAG` as an environment variable with the full commit SHA. When `docker-compose` runs, environment variables take precedence over `.env` file values. So even though we wrote the truncated SHA to `.env`, docker-compose used the full SHA from the environment, causing a "manifest unknown" error because that tag doesn't exist.
 
@@ -19,7 +34,7 @@ The deployment pipeline was deploying outdated Docker images, causing old files 
 export IMAGE_TAG=${IMAGE_TAG:0:7}
 ```
 
-### 1. Missing Job Output Declaration
+### 2. Missing Job Output Declaration
 **Location**: `.github/workflows/deploy.yml` line 49-106
 **Issue**: The `build` job generated a `version` output in the `steps.version.outputs.version` variable, but this was never declared as a job-level output. When the `deploy` job tried to reference it, the variable was empty.
 
@@ -30,7 +45,7 @@ outputs:
   image_sha_tag: ${{ steps.meta.outputs.tags }}
 ```
 
-### 2. Hard-coded Image Tag
+### 3. Hard-coded Image Tag
 **Location**: `.github/workflows/deploy.yml` line 158
 **Issue**: The deployment script always pulled `ghcr.io/dariy/point:latest` regardless of what was actually built. This meant:
 - If the `:latest` tag wasn't updated in the registry, old images would be pulled
@@ -42,7 +57,7 @@ outputs:
 docker pull ghcr.io/dariy/point:${IMAGE_TAG:0:7}
 ```
 
-### 3. Missing IMAGE_TAG Environment Variable
+### 4. Missing IMAGE_TAG Environment Variable
 **Location**: `.github/workflows/deploy.yml` line 131-141
 **Issue**: The `docker-compose.prod.yml` file expects an `IMAGE_TAG` environment variable (line 6), but this was never set during deployment, causing it to fall back to `:latest`.
 
@@ -53,7 +68,7 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 ```
 
-### 4. Ineffective sed Commands
+### 5. Ineffective sed Commands
 **Location**: `.github/workflows/deploy.yml` lines 161-162
 **Issue**: The sed commands tried to replace image names containing "photo-blog", but the actual image name is "point", so they never matched anything.
 
@@ -62,7 +77,7 @@ env:
 - Use `docker-compose.prod.yml` which already has proper variable substitution
 - Explicitly specify the compose file: `docker compose -f docker-compose.prod.yml up -d blog`
 
-### 5. No Deployment Verification
+### 6. No Deployment Verification
 **Issue**: There was no verification that the correct image was actually deployed and running.
 
 **Fix**: Added verification step:
@@ -94,6 +109,10 @@ fi
 - ✅ Created verification script for manual deployment checking
 - Shows container name, image, version, and health status
 - Can be run on the server to verify which version is deployed
+
+### 3. `docker-compose.prod.yml`
+- ✅ Reduced CPU limit from '2' to '0.95' for single-core servers (line 62)
+- ✅ Reduced CPU reservation from '0.5' to '0.25' (line 65)
 
 ## How It Works Now
 
