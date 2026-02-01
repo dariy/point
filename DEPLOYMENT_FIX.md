@@ -10,7 +10,19 @@ The deployment pipeline was deploying outdated Docker images, causing old files 
 
 ## Root Causes
 
-### 0. CPU Resource Limits Too High (Discovered during deployment)
+### 0. Missing Port Mapping in Production Compose (Discovered during deployment)
+**Location**: `docker-compose.prod.yml` lines 5-48
+**Issue**: The production compose file had no `ports` section for the blog service. The deployment command `docker compose -f docker-compose.prod.yml up -d blog` only starts the blog container without nginx. Without port mapping, the application runs inside the container but is completely inaccessible from the host.
+
+**Fix**: Added port mapping to the blog service:
+```yaml
+ports:
+  - "${APP_PORT:-8000}:8000"
+```
+
+This allows the blog service to work standalone (without nginx) and makes it accessible on the configured port (default 8000).
+
+### 1. CPU Resource Limits Too High (Discovered during deployment)
 **Location**: `docker-compose.prod.yml` lines 59-66
 **Issue**: The production compose file had CPU limits set to `2` CPUs, but the production server only has 1 CPU available. This caused docker-compose to fail with "range of CPUs is from 0.01 to 1.00, as there are only 1 CPUs available". Since the container failed to recreate, the old container kept running.
 
@@ -25,7 +37,7 @@ resources:
     memory: 512M
 ```
 
-### 1. Environment Variable Precedence (Discovered during deployment)
+### 2. Environment Variable Precedence (Discovered during deployment)
 **Location**: `.github/workflows/deploy.yml` line 141
 **Issue**: The SSH action exports `IMAGE_TAG` as an environment variable with the full commit SHA. When `docker-compose` runs, environment variables take precedence over `.env` file values. So even though we wrote the truncated SHA to `.env`, docker-compose used the full SHA from the environment, causing a "manifest unknown" error because that tag doesn't exist.
 
@@ -34,7 +46,7 @@ resources:
 export IMAGE_TAG=${IMAGE_TAG:0:7}
 ```
 
-### 2. Missing Job Output Declaration
+### 3. Missing Job Output Declaration
 **Location**: `.github/workflows/deploy.yml` line 49-106
 **Issue**: The `build` job generated a `version` output in the `steps.version.outputs.version` variable, but this was never declared as a job-level output. When the `deploy` job tried to reference it, the variable was empty.
 
@@ -45,7 +57,7 @@ outputs:
   image_sha_tag: ${{ steps.meta.outputs.tags }}
 ```
 
-### 3. Hard-coded Image Tag
+### 4. Hard-coded Image Tag
 **Location**: `.github/workflows/deploy.yml` line 158
 **Issue**: The deployment script always pulled `ghcr.io/dariy/point:latest` regardless of what was actually built. This meant:
 - If the `:latest` tag wasn't updated in the registry, old images would be pulled
@@ -57,7 +69,7 @@ outputs:
 docker pull ghcr.io/dariy/point:${IMAGE_TAG:0:7}
 ```
 
-### 4. Missing IMAGE_TAG Environment Variable
+### 5. Missing IMAGE_TAG Environment Variable
 **Location**: `.github/workflows/deploy.yml` line 131-141
 **Issue**: The `docker-compose.prod.yml` file expects an `IMAGE_TAG` environment variable (line 6), but this was never set during deployment, causing it to fall back to `:latest`.
 
@@ -68,7 +80,7 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 ```
 
-### 5. Ineffective sed Commands
+### 6. Ineffective sed Commands
 **Location**: `.github/workflows/deploy.yml` lines 161-162
 **Issue**: The sed commands tried to replace image names containing "photo-blog", but the actual image name is "point", so they never matched anything.
 
@@ -77,7 +89,7 @@ env:
 - Use `docker-compose.prod.yml` which already has proper variable substitution
 - Explicitly specify the compose file: `docker compose -f docker-compose.prod.yml up -d blog`
 
-### 6. No Deployment Verification
+### 7. No Deployment Verification
 **Issue**: There was no verification that the correct image was actually deployed and running.
 
 **Fix**: Added verification step:
@@ -111,6 +123,7 @@ fi
 - Can be run on the server to verify which version is deployed
 
 ### 3. `docker-compose.prod.yml`
+- ✅ Added missing port mapping for blog service (line 10-11)
 - ✅ Reduced CPU limit from '2' to '0.95' for single-core servers (line 62)
 - ✅ Reduced CPU reservation from '0.5' to '0.25' (line 65)
 
