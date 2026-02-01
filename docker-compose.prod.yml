@@ -10,9 +10,13 @@ services:
     ports:
       - "${APP_PORT:-8000}:8000"
 
+    env_file:
+      - .env
+
     environment:
       # Production environment
-      - ENVIRONMENT=production
+      - APP_ENV=production
+      - TZ=UTC
 
       # Security settings
       - SECRET_KEY=${SECRET_KEY}
@@ -20,6 +24,7 @@ services:
 
       # Database
       - DATABASE_URL=sqlite+aiosqlite:////data/blog.db
+      - STORAGE_PATH=/data
 
       # Blog settings
       - BLOG_TITLE=${BLOG_TITLE:-My Photo Blog}
