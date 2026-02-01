@@ -7,6 +7,9 @@ services:
     container_name: photo-blog-prod
     restart: unless-stopped
 
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
     environment:
       # Production environment
       - ENVIRONMENT=production
@@ -59,10 +62,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
+          cpus: '0.95'
           memory: 2G
         reservations:
-          cpus: '0.5'
+          cpus: '0.25'
           memory: 512M
 
     # Security options
