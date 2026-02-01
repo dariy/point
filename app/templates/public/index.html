@@ -2,7 +2,7 @@
 
 {% block page_title %}Home{% endblock %}
 
-{% block content %}
+{% block header_filters %}
 <div class="tags-filters">
     <a href="/" class="filter-btn active">All</a>
     {% for t in tags %}
@@ -16,7 +16,9 @@
         </svg>
     </a>
 </div>
+{% endblock %}
 
+{% block content %}
 <div class="posts-main">
     {% if posts %}
         <div class="posts-grid">
@@ -183,48 +185,6 @@
                 {% endif %}
             {% endfor %}
         </div>
-
-        {% if total_pages > 1 %}
-        <nav class="pagination" aria-label="Posts pagination">
-            {% if page > 1 %}
-            <a href="/?page={{ page - 1 }}" class="pagination-link ajax-link" aria-label="Previous page">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 18l-6-6 6-6"/>
-                </svg>
-            </a>
-            {% else %}
-            <span class="pagination-link disabled">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 18l-6-6 6-6"/>
-                </svg>
-            </span>
-            {% endif %}
-
-            {% for p in range(1, total_pages + 1) %}
-                {% if p == page %}
-                    <span class="pagination-link active">{{ p }}</span>
-                {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
-                    <a href="/?page={{ p }}" class="pagination-link ajax-link">{{ p }}</a>
-                {% elif p == page - 2 or p == page + 2 %}
-                    <span class="pagination-ellipsis">&hellip;</span>
-                {% endif %}
-            {% endfor %}
-
-            {% if page < total_pages %}
-            <a href="/?page={{ page + 1 }}" class="pagination-link ajax-link" aria-label="Next page">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6"/>
-                </svg>
-            </a>
-            {% else %}
-            <span class="pagination-link disabled">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6"/>
-                </svg>
-            </span>
-            {% endif %}
-        </nav>
-        {% endif %}
     {% else %}
         <div class="empty-state">
             <div class="empty-state-icon">
@@ -238,6 +198,50 @@
             <p class="empty-state-text">Check back soon for new content.</p>
         </div>
     {% endif %}
+{% endblock %}
+
+{% block footer_pagination %}
+{% if total_pages > 1 %}
+<nav class="pagination" aria-label="Posts pagination">
+    {% if page > 1 %}
+    <a href="/?page={{ page - 1 }}" class="pagination-link ajax-link" aria-label="Previous page">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+        </svg>
+    </a>
+    {% else %}
+    <span class="pagination-link disabled">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+        </svg>
+    </span>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+            <span class="pagination-link active">{{ p }}</span>
+        {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
+            <a href="/?page={{ p }}" class="pagination-link ajax-link">{{ p }}</a>
+        {% elif p == page - 2 or p == page + 2 %}
+            <span class="pagination-ellipsis">&hellip;</span>
+        {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+    <a href="/?page={{ page + 1 }}" class="pagination-link ajax-link" aria-label="Next page">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+        </svg>
+    </a>
+    {% else %}
+    <span class="pagination-link disabled">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+        </svg>
+    </span>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -291,6 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <h2 class="empty-state-title">No posts yet</h2>
                     <p class="empty-state-text">Check back soon for new content.</p>
                 </div>`;
+            renderPagination(null);
             return;
         }
 
@@ -412,56 +417,68 @@ document.addEventListener('DOMContentLoaded', function() {
 
         html += '</div>';
 
-        if (data.pagination && data.pagination.total_pages > 1) {
-            const pag = data.pagination;
+        postsMain.innerHTML = html;
+        renderPagination(data.pagination);
+    }
 
-            html += '<nav class="pagination" aria-label="Posts pagination">';
+    function renderPagination(pag) {
+        const paginationContainer = document.querySelector('.footer-content .pagination');
 
-            // Previous
-            if (pag.has_prev) {
-                html += `<a href="/?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            // Pages
-            for (let p = 1; p <= pag.total_pages; p++) {
-                if (p === pag.page) {
-                    html += `<span class="pagination-link active">${p}</span>`;
-                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="/?page=${p}" class="pagination-link ajax-link">${p}</a>`;
-                } else if (p === pag.page - 2 || p === pag.page + 2) {
-                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
-                }
-            }
-
-            // Next
-            if (pag.has_next) {
-                html += `<a href="/?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            html += '</nav>';
+        if (!paginationContainer) {
+            return;
         }
 
-        postsMain.innerHTML = html;
+        if (!pag || pag.total_pages <= 1) {
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        paginationContainer.style.display = 'flex';
+
+        let html = '';
+
+        // Previous
+        if (pag.has_prev) {
+            html += `<a href="/?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </a>`;
+        } else {
+            html += `<span class="pagination-link disabled">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </span>`;
+        }
+
+        // Pages
+        for (let p = 1; p <= pag.total_pages; p++) {
+            if (p === pag.page) {
+                html += `<span class="pagination-link active">${p}</span>`;
+            } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
+                html += `<a href="/?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+            } else if (p === pag.page - 2 || p === pag.page + 2) {
+                html += `<span class="pagination-ellipsis">&hellip;</span>`;
+            }
+        }
+
+        // Next
+        if (pag.has_next) {
+            html += `<a href="/?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </a>`;
+        } else {
+            html += `<span class="pagination-link disabled">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </span>`;
+        }
+
+        paginationContainer.innerHTML = html;
     }
 
     function attachListeners() {

@@ -63,6 +63,7 @@
                 <p class="site-subtitle">{{ blog_subtitle }}</p>
                 {% endif %}
             </div>
+            {% block header_filters %}{% endblock %}
             <nav class="site-nav">
                 {% if user %}
                 <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
@@ -108,6 +109,7 @@
     <footer class="site-footer">
         <div class="footer-container">
             <div class="footer-content">
+                {% block footer_pagination %}{% endblock %}
                 <p class="footer-copyright"><a href="/light" class="admin-link">&copy;</a> {{ current_year }} {{ author_name }}</p>
                 {% if false and tag_cloud %}
                 <div class="tag-cloud footer-tags">
