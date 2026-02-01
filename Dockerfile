@@ -16,6 +16,10 @@ RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 # Runtime stage
 FROM python:3.12-slim
 
+# Accept build version as argument
+ARG BUILD_VERSION=dev
+ENV APP_VERSION=${BUILD_VERSION}
+
 WORKDIR /app
 
 # Install runtime dependencies

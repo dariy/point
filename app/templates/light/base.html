@@ -6,6 +6,7 @@
 {% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="/static/css/light.css">
 <script src="/static/js/theme.js"></script>
 {% endblock %}
 
@@ -75,7 +76,7 @@
                 </a>
             </li>
         </ul>
-        <div class="sidebar-footer">
+        <div class="sidebar-footer" title="Version {{ app_version }}">
             <a href="/light/logout" class="logout-btn">Logout</a>
         </div>
     </nav>
