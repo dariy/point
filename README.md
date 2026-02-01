@@ -13,6 +13,7 @@ A lightweight, professional-grade personal photo blog engine built with FastAPI,
 - **🌓 Dual Themes**: Beautiful dark and light modes with system preference detection.
 - **🛠️ Professional Tools**:
     - Full post management with Markdown support.
+    - **Quick Post Creation**: Drag-and-drop images from any page to instantly create new posts.
     - Tagging system with automatic post counts.
     - Integrated backup/restore system.
     - System health and log monitoring.
@@ -65,6 +66,41 @@ The application is configured via environment variables in the `.env` file. Key 
 - `STORAGE_PATH`: Directory for database and media storage (default: `/data`).
 - `MAX_IMAGE_WIDTH`: Maximum width for uploaded images (auto-resized).
 - `JPEG_QUALITY`: Quality setting for generated images (1-100).
+
+## 📖 Usage Guide
+
+### Quick Post Creation (Drag-and-Drop)
+
+One of the standout features is the ability to create posts instantly by dragging images onto the page:
+
+1. **Log in** to your blog at `/light/login`
+2. **Browse** to any public page (homepage, single post, gallery, tags, etc.)
+3. **Drag an image file** from your desktop onto the page
+   - A full-screen drop zone overlay will appear
+4. **Drop the image** to upload it
+   - The image is automatically uploaded
+   - You'll see an "Uploading..." indicator with the filename
+5. **Automatic redirect** to the post editor
+   - The image is pre-populated in the post content as a markdown reference
+   - A preview of the uploaded image is displayed
+   - You can immediately add a title, tags, and publish
+
+**Supported formats**: JPG, PNG, GIF, WebP, SVG
+
+**Benefits**:
+- Skip the traditional "New Post → Upload Media → Insert" workflow
+- Perfect for quick photo sharing while browsing your blog
+- Seamlessly integrates content creation into your browsing experience
+
+### Traditional Workflow
+
+For a more traditional approach:
+
+1. Go to `/light/posts/new`
+2. Fill in post title and content
+3. Upload media via the media library or drag-and-drop in the editor
+4. Add tags
+5. Save as draft or publish immediately
 
 ## 🛠️ Development
 

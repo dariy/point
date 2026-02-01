@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = Field(default="PhotoBlog", description="Application name")
+    app_version: str = Field(
+        default="dev", description="Application version (set by build pipeline)"
+    )
     app_env: Literal["development", "production", "testing"] = Field(
         default="development", description="Application environment"
     )
@@ -54,9 +57,9 @@ class Settings(BaseSettings):
     jpeg_quality: int = Field(
         default=85, ge=1, le=100, description="JPEG compression quality"
     )
-    thumbnail_width: int = Field(default=180, description="Thumbnail width")
-    thumbnail_height: int = Field(default=120, description="Thumbnail height")
-    avatar_size: int = Field(default=80, description="Avatar size (square)")
+    thumbnail_width: int = Field(default=400, description="Thumbnail width")
+    thumbnail_height: int = Field(default=300, description="Thumbnail height")
+    avatar_size: int = Field(default=256, description="Avatar size (square)")
 
     # Blog Settings (defaults, can be overridden in DB)
     blog_title: str = Field(default="My Photo Blog", description="Blog title")
