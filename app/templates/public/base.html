@@ -58,7 +58,7 @@
         <div class="header-container">
             {% block header_content %}
             <div class="site-branding">
-                <a href="/" class="site-title">{{ blog_title }}</a>
+                <a href="/" class="site-title{% if user %} authenticated{% endif %}">{{ blog_title }}</a>
                 {% if blog_subtitle %}
                 <p class="site-subtitle">{{ blog_subtitle }}</p>
                 {% endif %}
@@ -68,6 +68,13 @@
                 <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 5v14M5 12h14"></path>
+                    </svg>
+                </a>
+                <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                        <path d="M2 17l10 5 10-5"></path>
+                        <path d="M2 12l10 5 10-5"></path>
                     </svg>
                 </a>
                 {% endif %}
@@ -131,6 +138,13 @@
                 <path d="M12 5v14M5 12h14"></path>
             </svg>
         </a>
+        <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+            </svg>
+        </a>
         <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="5"></circle>
@@ -171,6 +185,13 @@
             <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 5v14M5 12h14"></path>
+                </svg>
+            </a>
+            <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                    <path d="M2 17l10 5 10-5"></path>
+                    <path d="M2 12l10 5 10-5"></path>
                 </svg>
             </a>
             <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
