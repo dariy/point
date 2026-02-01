@@ -74,7 +74,7 @@ Frontend:    Vanilla JS with AJAX navigation & touch support
 - ✅ Phase 10: Caching & Performance - File-based caching, asset optimization
 - ✅ Phase 11: Background Tasks & Backup - Automated backups, session cleanup
 - ✅ Phase 12: Settings & System Tools - Blog configuration, log viewer, stats
-- ✅ Phase 14: Enhanced UI/UX - Immersive mode, AJAX navigation, gesture support
+- ✅ Phase 14: Enhanced UI/UX - Immersive mode, AJAX navigation, gesture support, quick post creation
 
 **Next Steps** (Phase 13):
 1. CI/CD Pipeline (GitHub Actions)
@@ -661,7 +661,11 @@ def auth_headers(test_user):
 ### Running Tests
 
 ```bash
-# Run all tests
+# Use the test runner script (not direct pytest)
+./tests.sh [path]              # Run tests with coverage (e.g., ./tests.sh tests/posts)
+./tests.sh                      # Run all tests in tests/ directory
+
+# Direct pytest commands (if needed)
 pytest
 
 # Run with coverage
@@ -865,6 +869,8 @@ Before committing, verify:
 - Over-engineer simple solutions
 - Skip documentation
 - Commit broken code
+- Forget 'self' parameter in class-based test methods
+- Mix import ordering (always: stdlib → third-party → local)
 
 ✅ **Do**:
 - Write tests first (TDD when appropriate)
@@ -877,6 +883,8 @@ Before committing, verify:
 - Keep it simple (KISS principle)
 - Document as you code
 - Ensure tests pass before committing
+- Use 'self' as first param in test class methods
+- Organize imports with comments: # Standard library, # Third-party, # Local
 
 ### File Creation Guidelines
 

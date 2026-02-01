@@ -180,6 +180,7 @@ async def upload_file(
         return {
             "id": media.id,
             "filename": media.filename,
+            "original_path": media.original_path,
             "url": service.get_media_url(media),
             "thumbnail_url": service.get_thumbnail_url(media),
             "file_type": media.file_type,
@@ -231,6 +232,7 @@ async def upload_multiple_files(
                 {
                     "id": media.id,
                     "filename": media.filename,
+                    "original_path": media.original_path,
                     "url": service.get_media_url(media),
                     "thumbnail_url": service.get_thumbnail_url(media),
                     "file_type": media.file_type,

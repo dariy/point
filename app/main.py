@@ -16,8 +16,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import Receive, Scope, Send
 
-from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
+from app.api.light import router as light_router
 from app.api.media import router as media_router
 from app.api.posts import router as posts_router
 from app.api.public import router as public_router
@@ -153,7 +153,7 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Include routers
-app.include_router(admin_router)
+app.include_router(light_router)
 app.include_router(auth_router)
 app.include_router(media_router)
 app.include_router(posts_router)

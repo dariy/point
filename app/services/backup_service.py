@@ -55,8 +55,10 @@ class BackupService:
                 shutil.copytree(self.media_dir, temp_dir / "media", dirs_exist_ok=True)
 
             # Create archive
+            # Add contents of temp_dir directly (not the temp_dir itself)
             with tarfile.open(backup_path, "w:gz") as tar:
-                tar.add(temp_dir, arcname=backup_name)
+                for item in temp_dir.iterdir():
+                    tar.add(item, arcname=item.name)
 
             logger.info(f"Backup created successfully: {backup_path}")
             return str(backup_path)
@@ -105,6 +107,63 @@ class BackupService:
             file_path.unlink()
             return True
         return False
+
+    def restore_backup(self, filename: str) -> None:
+        """Restore a backup file.
+
+        Args:
+            filename: Name of the backup file to restore
+
+        Raises:
+            FileNotFoundError: If backup file doesn't exist
+            ValueError: If filename is invalid
+        """
+        # Security: ensure filename is just a name, not a path
+        if "/" in filename or "\\" in filename or ".." in filename:
+            raise ValueError("Invalid backup filename")
+
+        backup_path = self.backup_dir / filename
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {filename}")
+
+        # Validate it's in the backup directory
+        if backup_path.parent != self.backup_dir:
+            raise ValueError("Backup file must be in backups directory")
+
+        temp_dir = self.backup_dir / f"restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        try:
+            temp_dir.mkdir()
+
+            # Extract backup
+            with tarfile.open(backup_path, "r:gz") as tar:
+                tar.extractall(temp_dir)
+
+            # Restore database
+            db_backup = temp_dir / "blog.db"
+            if db_backup.exists():
+                shutil.copy2(db_backup, self.db_path)
+                logger.info("Database restored")
+
+            # Restore media
+            media_backup = temp_dir / "media"
+            if media_backup.exists():
+                # Remove existing media
+                if self.media_dir.exists():
+                    shutil.rmtree(self.media_dir)
+                # Copy backup media
+                shutil.copytree(media_backup, self.media_dir)
+                logger.info("Media files restored")
+
+            logger.info(f"Backup restored successfully from: {backup_path}")
+
+        except Exception as e:
+            logger.error(f"Restore failed: {e}")
+            raise
+        finally:
+            # Cleanup temp directory
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
 
     def cleanup_old_backups(self, retention_days: int = 30) -> None:
         """Delete backups older than retention_days.

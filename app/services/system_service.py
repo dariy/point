@@ -90,6 +90,7 @@ class SystemService:
         last_backup_at = backups[0]["created_at"] if backups else None
 
         return {
+            "app_version": self.settings.app_version,
             "database_size_kb": db_size_kb,
             "media_count": media_count,
             "total_media_size_mb": total_media_size_mb,

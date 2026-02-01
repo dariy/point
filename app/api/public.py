@@ -62,6 +62,7 @@ def get_common_context(request: Request) -> dict[str, Any]:
         "blog_subtitle": getattr(settings, "blog_subtitle", ""),
         "author_name": getattr(settings, "author_name", "Light"),
         "current_year": datetime.now().year,
+        "app_version": settings.app_version,
         "format_content": format_content,
         "truncate_paragraphs": truncate_paragraphs,
         "generate_excerpt": generate_excerpt,
