@@ -3,14 +3,13 @@
 Stores metadata for uploaded images, videos, and audio files.
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum as PyEnum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-
 
 class FileType(str, PyEnum):
     """Supported file types."""
@@ -46,7 +45,7 @@ class Media(Base):
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
     original_path: Mapped[str] = mapped_column(String(1000), nullable=False)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    file_type: Mapped[str] = mapped_column(Enum(FileType), nullable=False)
+    file_type: Mapped[FileType] = mapped_column(Enum(FileType), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -55,7 +54,7 @@ class Media(Base):
         Integer, ForeignKey("posts.id", ondelete="SET NULL"), nullable=True, index=True
     )
     uploaded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True
+        DateTime(timezone=True), default=datetime.now(UTC), nullable=False, index=True
     )
     checksum: Mapped[str] = mapped_column(
         String(64), nullable=False, index=True, unique=True
