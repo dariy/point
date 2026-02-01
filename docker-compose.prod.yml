@@ -7,6 +7,9 @@ services:
     container_name: photo-blog-prod
     restart: unless-stopped
 
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
     environment:
       # Production environment
       - ENVIRONMENT=production
