@@ -5,8 +5,6 @@ on:
     branches: [main]
     tags:
       - 'v*'
-  pull_request:
-    branches: [main]
 
 env:
   REGISTRY: ghcr.io
@@ -112,20 +110,20 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: prod
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Generate build version
-        id: version
-        run: |
-          # Use git tag if available, otherwise use short SHA with timestamp
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="${{ github.sha }}"
-            VERSION="${VERSION:0:7}-$(date +%Y%m%d-%H%M%S)"
-          fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Deployment version: ${VERSION}"
+      - name: Copy docker-compose files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
+          source: "docker-compose*.yml"
+          target: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
+          overwrite: true
+          strip_components: 0
 
       - name: Deploy to Production
         uses: appleboy/ssh-action@v1.0.3

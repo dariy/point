@@ -58,12 +58,27 @@
         <div class="header-container">
             {% block header_content %}
             <div class="site-branding">
-                <a href="/" class="site-title">{{ blog_title }}</a>
+                <a href="/" class="site-title{% if user %} authenticated{% endif %}">{{ blog_title }}</a>
                 {% if blog_subtitle %}
                 <p class="site-subtitle">{{ blog_subtitle }}</p>
                 {% endif %}
             </div>
+            {% block header_filters %}{% endblock %}
             <nav class="site-nav">
+                {% if user %}
+                <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14M5 12h14"></path>
+                    </svg>
+                </a>
+                <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                        <path d="M2 17l10 5 10-5"></path>
+                        <path d="M2 12l10 5 10-5"></path>
+                    </svg>
+                </a>
+                {% endif %}
                 <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
                     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="5"></circle>
@@ -94,7 +109,8 @@
     <footer class="site-footer">
         <div class="footer-container">
             <div class="footer-content">
-                <p class="footer-copyright" title="Version {{ app_version }}"><a href="/light" class="admin-link">&copy;</a> {{ current_year }} {{ author_name }}</p>
+                {% block footer_pagination %}{% endblock %}
+                <p class="footer-copyright"><a href="/light" class="admin-link">&copy;</a> {{ current_year }} {{ author_name }}</p>
                 {% if false and tag_cloud %}
                 <div class="tag-cloud footer-tags">
                     {% for tag in tag_cloud %}
@@ -119,6 +135,18 @@
         <p class="site-subtitle"></p>
     </div>
     <nav class="site-nav">
+        <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M5 12h14"></path>
+            </svg>
+        </a>
+        <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+            </svg>
+        </a>
         <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="5"></circle>
@@ -155,7 +183,19 @@
                 <span class="post-views"></span>
             </div>
         </div>
-        <div class="header-right" style="width: 40px; display: flex; justify-content: flex-end;">
+        <div class="header-right" style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12h14"></path>
+                </svg>
+            </a>
+            <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                    <path d="M2 17l10 5 10-5"></path>
+                    <path d="M2 12l10 5 10-5"></path>
+                </svg>
+            </a>
             <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
                 <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5"></circle>
