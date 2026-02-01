@@ -52,6 +52,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      image_sha_tag: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@v4
 
@@ -128,13 +131,14 @@ jobs:
       - name: Deploy to Production
         uses: appleboy/ssh-action@v1.0.3
         env:
-          BUILD_VERSION: ${{ steps.version.outputs.version }}
+          BUILD_VERSION: ${{ needs.build.outputs.version }}
+          IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: BUILD_VERSION
+          envs: BUILD_VERSION,IMAGE_TAG
           script: |
             cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
 
@@ -143,23 +147,26 @@ jobs:
               git pull origin main
             fi
 
-            # Set version in .env file
+            # Set version and image tag in .env file
             if [ -f .env ]; then
               sed -i '/^APP_VERSION=/d' .env
+              sed -i '/^IMAGE_TAG=/d' .env
               echo "APP_VERSION=${BUILD_VERSION}" >> .env
+              echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> .env
             else
               echo "APP_VERSION=${BUILD_VERSION}" > .env
+              echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> .env
             fi
 
             # Login to GitHub Container Registry (requires GHCR_TOKEN secret with read:packages scope)
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
 
-            # Pull latest Docker image explicitly by name
-            docker pull ghcr.io/dariy/point:latest
+            # Pull specific Docker image by SHA tag (first 7 chars of commit SHA)
+            echo "Pulling image with tag: ${IMAGE_TAG:0:7}"
+            docker pull ghcr.io/dariy/point:${IMAGE_TAG:0:7}
 
-            # Update docker-compose.yml to use correct image (in case it's outdated)
-            sed -i 's|image:.*photo-blog.*|image: ghcr.io/dariy/point:latest|g' docker-compose.yml 2>/dev/null || true
-            sed -i 's|image:.*photo-blog.*|image: ghcr.io/dariy/point:latest|g' docker-compose.prod.yml 2>/dev/null || true
+            # Also tag as latest for convenience
+            docker tag ghcr.io/dariy/point:${IMAGE_TAG:0:7} ghcr.io/dariy/point:latest
 
             # Backup database before deployment
             docker compose exec -T blog python -c "
@@ -170,7 +177,20 @@ jobs:
             " || echo "Backup failed, continuing deployment..."
 
             # Deploy new version
-            docker compose up -d blog
+            docker compose -f docker-compose.prod.yml up -d blog
+
+            # Verify correct image is running
+            echo "Verifying deployed image..."
+            DEPLOYED_IMAGE=$(docker inspect photo-blog-prod --format='{{.Config.Image}}' 2>/dev/null || docker inspect photo-blog --format='{{.Config.Image}}')
+            echo "Deployed image: ${DEPLOYED_IMAGE}"
+            echo "Expected tag: ${IMAGE_TAG:0:7}"
+
+            if [[ ! "${DEPLOYED_IMAGE}" =~ ${IMAGE_TAG:0:7} ]]; then
+              echo "ERROR: Deployed image tag does not match expected tag!"
+              echo "Expected: ghcr.io/dariy/point:${IMAGE_TAG:0:7}"
+              echo "Got: ${DEPLOYED_IMAGE}"
+              exit 1
+            fi
 
             # Wait for container to start
             echo "Waiting for container to start..."
@@ -225,7 +245,9 @@ jobs:
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tag**: ${GITHUB_SHA:0:7}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Full Image**: ghcr.io/dariy/point:${GITHUB_SHA:0:7}" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: prod" >> $GITHUB_STEP_SUMMARY
           echo "- **Host**: ${{ secrets.DEPLOY_HOST }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
