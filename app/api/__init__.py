@@ -3,8 +3,8 @@
 Exports all API routers for the application.
 """
 
-from app.api.light import router as light_router
 from app.api.auth import router as auth_router
+from app.api.light import router as light_router
 from app.api.media import router as media_router
 from app.api.posts import router as posts_router
 from app.api.public import router as public_router
