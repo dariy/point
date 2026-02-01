@@ -3,14 +3,17 @@
 Tests the complete workflow from image upload to post editor prepopulation.
 """
 
+# Standard library
 import io
 
-from PIL import Image
+# Third-party
+import pytest
 from httpx import AsyncClient
+from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
 
+# Local
 from app.models.media import Media
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
@@ -18,9 +21,11 @@ from app.services.auth_service import AuthService
 
 def create_test_image(width: int = 100, height: int = 100) -> bytes:
     """Create a test image in memory.
+
     Args:
         width: Image width in pixels
         height: Image height in pixels
+
     Returns:
         JPEG image as bytes
     """
@@ -28,9 +33,12 @@ def create_test_image(width: int = 100, height: int = 100) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG")
     return buffer.getvalue()
+
+
 @pytest.fixture
 async def test_user(db: AsyncSession) -> dict:
     """Create a test user and return credentials.
+
     Returns:
         Dict with username, password, and user object
     """
@@ -48,9 +56,12 @@ async def test_user(db: AsyncSession) -> dict:
         "password": "quickpostpass123",
         "user": user,
     }
+
+
 @pytest.fixture
 async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
     """Login and return auth cookies.
+
     Returns:
         Dict of cookies from login response
     """
@@ -63,8 +74,11 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
     )
     assert response.status_code == 200
     return dict(response.cookies)
+
+
 class TestQuickPostIntegration:
     """Integration tests for the complete quick post creation workflow."""
+
     @pytest.mark.asyncio
     async def test_upload_and_redirect_to_editor(
         self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
