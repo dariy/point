@@ -168,6 +168,10 @@ jobs:
             # Also tag as latest for convenience
             docker tag ghcr.io/dariy/point:${IMAGE_TAG:0:7} ghcr.io/dariy/point:latest
 
+            # Export truncated IMAGE_TAG to environment (overrides full SHA from SSH action)
+            export IMAGE_TAG=${IMAGE_TAG:0:7}
+            echo "Using IMAGE_TAG=${IMAGE_TAG} for docker-compose"
+
             # Backup database before deployment
             docker compose exec -T blog python -c "
             from app.services.backup_service import BackupService
