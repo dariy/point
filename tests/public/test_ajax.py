@@ -17,30 +17,30 @@ async def test_single_post_ajax(client, db, test_user):
     )
     db.add(post)
     await db.commit()
-    
+
     # Request with AJAX header
     response = await client.get(
         f"/posts/{post.slug}",
         headers={"X-Requested-With": "XMLHttpRequest"}
     )
-    
+
     assert response.status_code == 200
     assert "application/json" in response.headers["content-type"]
-    
+
     data = response.json()
-    
+
     # Verify structure
     assert "post" in data
     assert data["post"]["title"] == "AJAX Test Post"
     assert data["post"]["slug"] == "ajax-test-post"
     assert "content_html" in data["post"]
-    
+
     assert "has_text_content" in data
     assert data["has_text_content"] is True
-    
+
     assert "post_media" in data
     assert isinstance(data["post_media"], list)
-    
+
     assert "blog_settings" in data
     assert "blog_title" in data
 
@@ -59,31 +59,31 @@ async def test_single_post_immersive_ajax(client, db, test_user):
     )
     db.add(post)
     await db.commit()
-    
+
     # Request with AJAX header
     response = await client.get(
         f"/posts/{post.slug}",
         headers={"X-Requested-With": "XMLHttpRequest"}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
-    
-    # has_text_content should be False (or True if my formatter logic considers the image tag as content, 
+
+    # has_text_content should be False (or True if my formatter logic considers the image tag as content,
     # but the logic uses strip_html to check for text)
     # The format_content utility converts markdown to HTML.
     # strip_html removes tags.
     # "![Image](test.jpg)" -> <img src...> -> strip_html -> "" -> False.
-    
+
     # Wait, format_content might wrap it in <p>?
     # If it is just an image, markdown might wrap in <p>.
     # <p><img ...></p> -> strip_html -> "" (empty).
-    
+
     # Let's verify expectations based on implementation.
     # If implementation is correct, has_text_content should be False.
-    
+
     assert data["post"]["title"] == "Immersive Post"
-    # Note: Depending on implementation details of strip_html and formatters, 
+    # Note: Depending on implementation details of strip_html and formatters,
     # this might be tricky, but let's assume standard behavior.
     assert data["has_text_content"] is False
     assert len(data["post_media"]) > 0
@@ -123,7 +123,7 @@ async def sample_tag_with_posts(db: AsyncSession) -> Tag:
     db.add(tag)
     await db.commit()
     await db.refresh(tag)
-    
+
     for i in range(15):
         post = Post(
             title=f"Tagged Post {i}",
@@ -136,7 +136,7 @@ async def sample_tag_with_posts(db: AsyncSession) -> Tag:
         )
         post.tags.append(tag)
         db.add(post)
-    
+
     tag.post_count = 15
     await db.commit()
     return tag
@@ -147,13 +147,13 @@ async def test_homepage_ajax_pagination(client: AsyncClient, sample_posts: list[
     response = await client.get("/", headers={"X-Requested-With": "XMLHttpRequest"})
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    
+
     data = response.json()
     assert "posts" in data
     assert "pagination" in data
     assert len(data["posts"]) > 0
     assert data["pagination"]["page"] == 1
-    
+
     # Check post structure
     post = data["posts"][0]
     assert "title" in post
@@ -166,7 +166,7 @@ async def test_tag_archive_ajax_pagination(client: AsyncClient, sample_tag_with_
     response = await client.get(f"/tag/{sample_tag_with_posts.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    
+
     data = response.json()
     assert "posts" in data
     assert "pagination" in data

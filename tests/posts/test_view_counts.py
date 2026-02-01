@@ -1,9 +1,15 @@
-import pytest
+# Standard library
 from unittest.mock import patch
+
+# Third-party
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Local
 from app.models.post import Post, PostStatus, PostFormatter
 from app.services.post_service import PostService, _view_counts_buffer
+
 
 @pytest.fixture
 async def sample_post(db: AsyncSession, test_user: dict) -> Post:
@@ -21,6 +27,7 @@ async def sample_post(db: AsyncSession, test_user: dict) -> Post:
     await db.commit()
     await db.refresh(post)
     return post
+
 
 @pytest.mark.asyncio
 async def test_view_count_buffering(db, sample_post):
@@ -43,6 +50,7 @@ async def test_view_count_buffering(db, sample_post):
     await db.refresh(sample_post)
     assert sample_post.view_count == 0
 
+
 @pytest.mark.asyncio
 async def test_flush_view_counts(db, sample_post):
     service = PostService(db)
@@ -62,6 +70,7 @@ async def test_flush_view_counts(db, sample_post):
     
     # Verify buffer cleared
     assert len(_view_counts_buffer) == 0
+
 
 @pytest.mark.asyncio
 async def test_flush_empty_buffer(db):

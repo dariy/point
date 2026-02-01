@@ -1,12 +1,12 @@
+"""Tests for automatic thumbnail extraction from post content."""
+
+# Third-party
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.post import Post, PostStatus
 
 
-class TestPostThumbnail:
-    """Test cases for post thumbnail auto-extraction."""
+class TestThumbnailExtraction:
+    """Test cases for post thumbnail auto-extraction from content."""
 
     @pytest.mark.asyncio
     async def test_create_post_extracts_markdown_thumbnail(
@@ -102,7 +102,7 @@ class TestPostThumbnail:
             json=update_data,
             cookies=auth_cookies,
         )
-        
+
         assert response.status_code == 200
         assert response.json()["thumbnail_path"] == "/media/second.jpg"
 
@@ -134,7 +134,7 @@ class TestPostThumbnail:
             json=update_data,
             cookies=auth_cookies,
         )
-        
+
         assert response.status_code == 200
         assert response.json()["thumbnail_path"] is None
 
@@ -166,7 +166,7 @@ class TestPostThumbnail:
             json=update_data,
             cookies=auth_cookies,
         )
-        
+
         assert response.status_code == 200
         assert response.json()["title"] == "New Title"
         # Content didn't change, so extraction didn't run, old value persisted
