@@ -1347,6 +1347,36 @@ input[type="password"] {
 }
 
 /* ===========================
+   Homepage Link
+   =========================== */
+.homepage-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--light-border);
+    border-radius: var(--border-radius);
+    color: var(--light-text-secondary);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.homepage-link:hover {
+    background-color: var(--light-hover-bg);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.homepage-link svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* ===========================
    Responsive
    =========================== */
 @media (max-width: 1024px) {
