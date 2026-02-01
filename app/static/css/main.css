@@ -291,6 +291,15 @@ img {
     color: var(--color-primary);
 }
 
+/* Authenticated indicator - site title color change */
+.site-title.authenticated {
+    color: var(--color-primary);
+}
+
+.site-title.authenticated:hover {
+    color: var(--color-primary-hover);
+}
+
 .site-subtitle {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
@@ -1240,6 +1249,68 @@ img {
     height: 20px;
 }
 
+/* Create Post Button */
+.create-post {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.create-post:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+}
+
+.create-post svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Admin Link Button */
+.admin-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.admin-link:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+}
+
+.admin-link svg {
+    width: 20px;
+    height: 20px;
+}
+
+.site-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .theme-toggle .icon-sun,
 .theme-toggle .icon-moon {
     display: none;
@@ -1443,7 +1514,9 @@ img {
 .immersive-layout .site-header .nav-link,
 .immersive-layout .site-header .site-subtitle,
 .immersive-layout .site-header svg,
-.immersive-layout .site-header .theme-toggle {
+.immersive-layout .site-header .theme-toggle,
+.immersive-layout .site-header .create-post,
+.immersive-layout .site-header .admin-link {
     color: white;
     border-color: rgba(255, 255, 255, 0.3);
 }
@@ -1452,7 +1525,9 @@ img {
 [data-theme="light"].immersive-layout .site-header .nav-link,
 [data-theme="light"].immersive-layout .site-header .site-subtitle,
 [data-theme="light"].immersive-layout .site-header svg,
-[data-theme="light"].immersive-layout .site-header .theme-toggle {
+[data-theme="light"].immersive-layout .site-header .theme-toggle,
+[data-theme="light"].immersive-layout .site-header .create-post,
+[data-theme="light"].immersive-layout .site-header .admin-link {
     color: var(--text-primary);
     border-color: var(--border-primary);
 }
