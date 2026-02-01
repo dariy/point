@@ -840,11 +840,19 @@
              const subtitle = headerClone.querySelector('.site-subtitle');
              if(subtitle) subtitle.textContent = data.blog_subtitle;
 
-             // Show create-post button if logged in
+             // Show create-post and admin-link buttons if logged in
              if (data.is_logged_in) {
                  const createPostBtn = headerClone.querySelector('.create-post');
                  if (createPostBtn) {
                      createPostBtn.style.display = 'flex';
+                 }
+                 const adminLink = headerClone.querySelector('.admin-link');
+                 if (adminLink) {
+                     adminLink.style.display = 'flex';
+                 }
+                 const titleLink = headerClone.querySelector('.site-title');
+                 if (titleLink) {
+                     titleLink.classList.add('authenticated');
                  }
              }
         } else {
@@ -894,10 +902,14 @@
                     </svg>
                 `;
 
-                // Show create-post button
+                // Show create-post and admin-link buttons
                 const createPostBtn = headerRight.querySelector('.create-post');
                 if (createPostBtn) {
                     createPostBtn.style.display = 'flex';
+                }
+                const adminLink = headerRight.querySelector('.admin-link');
+                if (adminLink) {
+                    adminLink.style.display = 'flex';
                 }
 
                 // Insert edit button before create-post button
