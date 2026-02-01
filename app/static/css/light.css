@@ -742,6 +742,35 @@ input[type="password"] {
     color: var(--color-warning);
 }
 
+.badge-success {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+}
+
+/* ===========================
+   Dropped Media Preview (from drag-drop)
+   =========================== */
+.dropped-media-card {
+    border-color: var(--color-success);
+    background: linear-gradient(135deg, var(--color-success-light) 0%, var(--light-surface) 100%);
+}
+
+.dropped-media-preview {
+    max-width: 100%;
+    max-height: 300px;
+    overflow: hidden;
+    border-radius: var(--border-radius);
+    background: var(--light-bg);
+}
+
+.dropped-media-preview img {
+    max-width: 100%;
+    max-height: 300px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+
 /* ===========================
    Pagination
    =========================== */
