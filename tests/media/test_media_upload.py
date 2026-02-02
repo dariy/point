@@ -73,9 +73,9 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
 
 
 @pytest.fixture
-async def admin_auth_headers(client: AsyncClient, db: AsyncSession):
-    """Create admin user and return auth headers."""
-    user = User(username="media_admin", email="ma@test.com", password_hash="hash", display_name="MediaAdmin")
+async def light_auth_headers(client: AsyncClient, db: AsyncSession):
+    """Create light user and return auth headers."""
+    user = User(username="media_light", email="ma@test.com", password_hash="hash", display_name="Medialight")
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -197,11 +197,11 @@ class TestMediaUploadValidation:
         assert "not allowed" in response.json()["detail"]["message"]
 
     @pytest.mark.asyncio
-    async def test_upload_media_validation(self, client: AsyncClient, admin_auth_headers):
+    async def test_upload_media_validation(self, client: AsyncClient, light_auth_headers):
         """Test upload validation errors."""
         # Invalid extension
         files = {'file': ('test.xyz', io.BytesIO(b"test"), 'application/octet-stream')}
-        resp = await client.post("/api/media/upload", files=files, headers=admin_auth_headers)
+        resp = await client.post("/api/media/upload", files=files, headers=light_auth_headers)
         assert resp.status_code == 400
 
     @pytest.mark.asyncio

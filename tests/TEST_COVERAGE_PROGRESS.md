@@ -80,7 +80,7 @@
 ### Important (70-89%)
 | File | Coverage | Missing Lines | Priority |
 |------|----------|---------------|----------|
-| app/api/admin.py | 71% | 44 | Medium |
+| app/api/light.py | 71% | 44 | Medium |
 | app/main.py | 73% | 22 | Medium |
 | app/services/tag_service.py | 74% | 35 | Medium |
 | app/api/tags.py | 76% | 16 | Medium |
@@ -108,7 +108,7 @@ Target the files with the most missing lines to get maximum coverage increase:
    - Empty state handling
    - Invalid input handling
 
-2. **app/api/admin.py** (44 lines) - Add tests for:
+2. **app/api/light.py** (44 lines) - Add tests for:
    - Dashboard stats edge cases
    - Media operations error paths
    - Settings validation errors
