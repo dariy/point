@@ -59,7 +59,7 @@ Frontend:    Vanilla JS with AJAX navigation & touch support
 
 ### Project Phase: Enhanced UI/UX Complete
 
-**Status**: Phases 1-12 and Phase 14 Complete. Core blog, admin interface, and advanced UX features are fully functional.
+**Status**: Phases 1-12 and Phase 14 Complete. Core blog, light interface, and advanced UX features are fully functional.
 
 **Completed Phases**:
 - ✅ Phase 1: Project Foundation - Docker, database, project structure
@@ -94,7 +94,7 @@ point/
 ├── specification.md       # Complete technical spec
 ├── phases.md              # Development phases tracker
 ├── app/
-│   ├── api/               # FastAPI routers (admin, auth, media, posts, public, etc.)
+│   ├── api/               # FastAPI routers (light, auth, media, posts, public, etc.)
 │   ├── models/            # SQLAlchemy models
 │   ├── schemas/           # Pydantic schemas
 │   ├── services/          # Business logic (auth, backup, cache, post, scheduler, etc.)
