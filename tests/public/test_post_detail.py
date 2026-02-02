@@ -1,13 +1,14 @@
 """Tests for single post detail view."""
 
-import pytest
 from datetime import datetime
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
-from app.models.post import Post, PostStatus, PostFormatter
+from app.models.post import Post, PostFormatter, PostStatus
 from app.models.tag import Tag
+from app.models.user import User
 
 
 @pytest.mark.asyncio

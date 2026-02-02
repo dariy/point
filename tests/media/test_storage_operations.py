@@ -1,12 +1,12 @@
 """Tests for storage operations (stats, orphaned cleanup, paths, duplicates)."""
 
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import AsyncMock, MagicMock
-import pytest
 
 from app.models.media import FileType, Media
 from app.models.session import Session

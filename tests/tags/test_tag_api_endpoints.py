@@ -1,11 +1,11 @@
 """Tests for tag API endpoints."""
 
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import patch
-import pytest
 
 from app.models.post import Post, PostFormatter, PostStatus
 from app.models.session import Session

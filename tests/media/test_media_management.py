@@ -1,11 +1,10 @@
 """Tests for media management operations (list, get, update, delete)."""
 
 from datetime import datetime, timedelta
-import io
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
 
 from app.models.media import FileType, Media
 from app.models.session import Session
