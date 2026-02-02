@@ -1572,6 +1572,85 @@
     }
 
     /**
+     * Responsive Tag Filters in Header
+     * shows (all), (...), and all tags that fit in the rest of the space.
+     * Preserves the active tag and ensures All/More are always visible.
+     */
+    function initResponsiveTagFilters() {
+        const container = document.querySelector('.site-header .tags-filters');
+        if (!container) return;
+
+        function updateFilters() {
+            // Get computed gap
+            const style = window.getComputedStyle(container);
+            const gap = parseFloat(style.gap) || 0;
+            const containerWidth = container.clientWidth;
+
+            if (containerWidth === 0) return;
+
+            const buttons = Array.from(container.querySelectorAll('.filter-btn'));
+            
+            // Identify key buttons
+            const allBtn = buttons.find(b => b.getAttribute('href') === '/');
+            const moreBtn = buttons.find(b => b.getAttribute('href') === '/tags' || b.title === 'All Tags');
+            const activeBtn = buttons.find(b => b.classList.contains('active'));
+
+            if (!allBtn || !moreBtn) return;
+
+            // Step 1: Show all buttons temporarily to measure natural widths
+            buttons.forEach(btn => {
+                btn.style.display = 'inline-flex';
+                btn.style.flexShrink = '0';
+            });
+
+            // Step 2: Priority layout (Essential width)
+            let currentWidth = allBtn.offsetWidth + gap + moreBtn.offsetWidth;
+            if (activeBtn && activeBtn !== allBtn && activeBtn !== moreBtn) {
+                currentWidth += activeBtn.offsetWidth + gap;
+            }
+
+            // Step 3: Fill available space with other tags
+            const tagBtns = buttons.filter(b => b !== allBtn && b !== moreBtn && b !== activeBtn);
+            
+            tagBtns.forEach(btn => {
+                const btnWidth = btn.offsetWidth;
+                const cost = btnWidth + gap;
+                
+                if (currentWidth + cost <= containerWidth) {
+                    btn.style.display = 'inline-flex';
+                    currentWidth += cost;
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
+
+            // Step 4: Ensure active button is always visible
+            if (activeBtn) {
+                activeBtn.style.display = 'inline-flex';
+            }
+
+            // Mark as ready to show
+            requestAnimationFrame(() => {
+                container.classList.add('is-ready');
+            });
+        }
+
+        // Use ResizeObserver for more accurate container-based measurement
+        const observer = new ResizeObserver(() => {
+            requestAnimationFrame(updateFilters);
+        });
+        
+        observer.observe(container);
+        
+        // Initial run
+        updateFilters();
+
+        registerCleanup(() => {
+            observer.disconnect();
+        });
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -1584,6 +1663,7 @@
         initCodeCopy();
         initAjaxPostsNavigation();
         initAjaxTagsNavigation();
+        initResponsiveTagFilters();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {
