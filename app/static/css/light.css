@@ -224,6 +224,7 @@ a:hover {
     font-size: var(--font-size-xl);
     font-weight: 700;
     display: block;
+    padding-left: calc(var(--spacing-xl) + 3px);
 }
 
 .sidebar-nav {
@@ -710,7 +711,6 @@ input[type="password"] {
 }
 
 .table .actions {
-    display: flex;
     gap: var(--spacing-xs);
 }
 
