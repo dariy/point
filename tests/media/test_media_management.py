@@ -14,9 +14,9 @@ from app.services.media_service import MediaService
 
 
 @pytest.fixture
-async def admin_auth_headers(client: AsyncClient, db: AsyncSession):
-    """Create admin user and return auth headers."""
-    user = User(username="media_admin", email="ma@test.com", password_hash="hash", display_name="MediaAdmin")
+async def light_auth_headers(client: AsyncClient, db: AsyncSession):
+    """Create light user and return auth headers."""
+    user = User(username="media_light", email="ma@test.com", password_hash="hash", display_name="Medialight")
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -44,12 +44,12 @@ class TestMediaList:
 
     @pytest.mark.asyncio
     async def test_list_empty(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test listing media when none exists."""
         response = await client.get(
             "/api/media",
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 200
@@ -60,13 +60,13 @@ class TestMediaList:
 
     @pytest.mark.asyncio
     async def test_list_with_pagination(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test list pagination parameters."""
         response = await client.get(
             "/api/media",
             params={"page": 2, "per_page": 5},
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 200
@@ -75,7 +75,7 @@ class TestMediaList:
         assert data["per_page"] == 5
 
     @pytest.mark.asyncio
-    async def test_list_media_pagination(self, client: AsyncClient, admin_auth_headers, db: AsyncSession):
+    async def test_list_media_pagination(self, client: AsyncClient, light_auth_headers, db: AsyncSession):
         """Test media list pagination."""
         # Create enough items
         media_items = [
@@ -85,13 +85,13 @@ class TestMediaList:
         db.add_all(media_items)
         await db.commit()
 
-        resp = await client.get("/api/media?page=1&per_page=10", headers=admin_auth_headers)
+        resp = await client.get("/api/media?page=1&per_page=10", headers=light_auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["media"]) == 10
         assert data["total"] >= 15
 
-        resp = await client.get("/api/media?page=2&per_page=10", headers=admin_auth_headers)
+        resp = await client.get("/api/media?page=2&per_page=10", headers=light_auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["media"]) >= 5
@@ -137,12 +137,12 @@ class TestMediaGet:
 
     @pytest.mark.asyncio
     async def test_get_not_found(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test getting non-existent media."""
         response = await client.get(
             "/api/media/99999",
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 404
@@ -162,26 +162,26 @@ class TestMediaUpdate:
 
     @pytest.mark.asyncio
     async def test_update_not_found(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test updating non-existent media."""
         response = await client.patch(
             "/api/media/99999",
             json={"alt_text": "New alt text"},
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_update_media_metadata(self, client: AsyncClient, admin_auth_headers, db: AsyncSession):
+    async def test_update_media_metadata(self, client: AsyncClient, light_auth_headers, db: AsyncSession):
         """Test updating media metadata via API."""
         m = Media(filename="u.jpg", original_path="u.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c")
         db.add(m)
         await db.commit()
 
         data = {"alt_text": "Updated Alt", "caption": "Updated Caption"}
-        resp = await client.patch(f"/api/media/{m.id}", json=data, headers=admin_auth_headers)
+        resp = await client.patch(f"/api/media/{m.id}", json=data, headers=light_auth_headers)
         assert resp.status_code == 200
         assert resp.json()["alt_text"] == "Updated Alt"
 
@@ -201,6 +201,7 @@ class TestMediaUpdate:
         await db.commit()
 
         updated = await service.update_media(m.id, alt_text="Alt", caption="Cap", post_id=1)
+        assert updated is not None
         assert updated.alt_text == "Alt"
         assert updated.caption == "Cap"
         assert updated.post_id == 1
@@ -220,20 +221,20 @@ class TestMediaDelete:
 
     @pytest.mark.asyncio
     async def test_delete_not_found(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test deleting non-existent media via API."""
         response = await client.delete(
             "/api/media/99999",
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_media_not_found(self, client: AsyncClient, admin_auth_headers):
+    async def test_delete_media_not_found(self, client: AsyncClient, light_auth_headers):
         """Test deleting non-existent media."""
-        resp = await client.delete("/api/media/99999", headers=admin_auth_headers)
+        resp = await client.delete("/api/media/99999", headers=light_auth_headers)
         assert resp.status_code == 404
 
     @pytest.mark.asyncio

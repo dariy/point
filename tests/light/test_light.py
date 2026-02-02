@@ -1,6 +1,6 @@
 """Comprehensive tests for light interface routes.
 
-This test suite provides extensive coverage for all light (admin) interface routes,
+This test suite provides extensive coverage for all light (light) interface routes,
 including authentication, dashboard, posts, tags, media, settings, security, and system pages.
 """
 
@@ -67,6 +67,7 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
 @pytest.fixture
 def override_auth(test_user):
     """Override auth dependency for specific tests."""
+    assert test_user is not None
     app.dependency_overrides[get_current_user] = lambda: test_user["user"]
     yield
     app.dependency_overrides.pop(get_current_user, None)
@@ -123,6 +124,7 @@ class TestRequireAuth:
             pytest.fail("Should have raised HTTPException")
         except HTTPException as e:
             assert e.status_code == 303
+            assert e.headers is not None
             assert e.headers["Location"] == "/light/login"
 
     @pytest.mark.asyncio
@@ -132,6 +134,7 @@ class TestRequireAuth:
         """Test require_auth returns user when authenticated."""
         from app.api.light import require_auth
 
+        assert test_user is not None
         user = await require_auth(user=test_user["user"])
         assert user == test_user["user"]
 
@@ -161,6 +164,7 @@ class TestGetBaseContext:
 
         from app.api.light import get_base_context
 
+        assert test_user is not None
         request = Mock()
         context = get_base_context(request, test_user["user"])
 
@@ -216,6 +220,7 @@ class TestDashboard:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
     ) -> None:
         """Test dashboard displays actual data and statistics."""
+        assert test_user is not None
         user = test_user["user"]
 
         # Create published post
@@ -349,6 +354,7 @@ class TestPostsList:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
     ) -> None:
         """Test posts list with status filter."""
+        assert test_user is not None
         user = test_user["user"]
 
         p1 = Post(
@@ -400,6 +406,7 @@ class TestPostsList:
         self, client: AsyncClient, auth_cookies: dict, db: AsyncSession, test_user: dict
     ) -> None:
         """Test posts list shows correct view link for published posts."""
+        assert test_user is not None
         post = Post(
             title="Test Post Link",
             slug="test-post-link",
@@ -432,6 +439,7 @@ class TestPostsList:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
     ) -> None:
         """Test posts list pagination calculation."""
+        assert test_user is not None
         # Create multiple posts to test pagination
         posts = [
             Post(
@@ -619,6 +627,7 @@ class TestEditPost:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
     ) -> None:
         """Test edit post page renders with existing post data."""
+        assert test_user is not None
         # Create a post with tags
         tag1 = Tag(name="Tag1", slug="tag1")
         tag2 = Tag(name="Tag2", slug="tag2")
