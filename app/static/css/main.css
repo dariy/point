@@ -436,10 +436,6 @@ img {
     margin-top: 0;
 }
 
-.footer-copyright a {
-    color: var(--footer-text);
-}
-
 .light-link {
     font-weight: 700;
     text-decoration: none;
@@ -1251,63 +1247,57 @@ img {
 }
 
 /* ===========================
-   Theme Toggle
+   Post Header Bar (Immersive Mode)
    =========================== */
-.theme-toggle {
+.post-header-bar {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--border-primary);
-    border-radius: var(--border-radius);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all var(--transition-fast);
+    justify-content: space-between;
+    width: 100%;
 }
 
-.theme-toggle:hover {
-    background-color: var(--surface-hover);
-    color: var(--text-primary);
-    border-color: var(--border-secondary);
-}
-
-.theme-toggle svg {
-    width: 20px;
-    height: 20px;
-}
-
-/* Create Post Button */
-.create-post {
+.post-header-bar .header-left {
+    flex: 1;
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--border-primary);
-    border-radius: var(--border-radius);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    text-decoration: none;
 }
 
-.create-post:hover {
-    background-color: var(--surface-hover);
-    color: var(--text-primary);
-    border-color: var(--border-secondary);
+.post-header-bar .header-center {
+    flex: 2;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-.create-post svg {
-    width: 20px;
-    height: 20px;
+.post-header-bar .header-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
 }
 
-/* light Link Button */
+.post-header-bar .site-title {
+    margin: 0;
+    font-size: var(--font-size-xl);
+}
+
+.post-header-bar .post-meta {
+    font-size: var(--font-size-sm);
+    opacity: 0.9;
+    margin-bottom: 0;
+    color: inherit;
+}
+
+.post-header-bar .nav-link {
+    padding: var(--spacing-sm);
+}
+
+/* =   Header Action Buttons   = */
+.header-action-btn,
+.theme-toggle,
+.create-post,
 .light-link {
     display: flex;
     align-items: center;
@@ -1324,16 +1314,29 @@ img {
     text-decoration: none;
 }
 
+.header-action-btn:hover,
+.theme-toggle:hover,
+.create-post:hover,
 .light-link:hover {
     background-color: var(--surface-hover);
     color: var(--text-primary);
     border-color: var(--border-secondary);
 }
 
+.header-action-btn svg,
+.theme-toggle svg,
+.create-post svg,
 .light-link svg {
     width: 20px;
     height: 20px;
 }
+
+/* Edit Button Specific */
+
+
+/* ===========================
+   Theme Toggle
+   =========================== */
 
 .site-nav {
     display: flex;
@@ -1606,6 +1609,11 @@ img {
     transition:
         opacity 0.4s ease,
         transform 0.4s ease;
+    pointer-events: none;
+}
+
+.immersive-layout .site-footer .footer-content {
+    pointer-events: auto;
 }
 
 [data-theme="light"].immersive-layout .site-footer {
@@ -1694,6 +1702,7 @@ img {
     border: 1px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    pointer-events: auto;
 }
 
 .immersive-tags .post-tag:hover {
