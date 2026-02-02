@@ -1,6 +1,6 @@
 """Tests for single post detail view."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -20,7 +20,7 @@ async def test_single_post_ajax(client: AsyncClient, db: AsyncSession, test_user
         slug="ajax-test-post",
         content="<p>Test Content</p>",
         status=PostStatus.PUBLISHED,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
         author_id=test_user["user"].id
     )
@@ -63,7 +63,7 @@ async def test_single_post_immersive_ajax(client: AsyncClient, db: AsyncSession,
         slug="immersive-post",
         content="![Image](test.jpg)",
         status=PostStatus.PUBLISHED,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
         author_id=test_user["user"].id
     )
@@ -98,7 +98,7 @@ async def test_single_post_with_thumbnail_not_in_content(client: AsyncClient, db
         content="Just text content without images",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         thumbnail_path="/media/thumb.jpg"
     )
     db.add(post)
@@ -133,7 +133,7 @@ async def test_single_post_ajax_response_complete(client: AsyncClient, db: Async
         content="# Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         formatter="markdown"
     )
     db.add(post)
@@ -190,7 +190,7 @@ async def test_single_post_thumbnail_duplication_logic(client: AsyncClient, db: 
         content="![Image](/media/image.jpg)",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         thumbnail_path="/media/image.jpg"
     )
     db.add(post1)
@@ -202,7 +202,7 @@ async def test_single_post_thumbnail_duplication_logic(client: AsyncClient, db: 
         content="![Image](/media/originals/image2.jpg)",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         thumbnail_path="image2.jpg"
     )
     db.add(post2)
