@@ -34,9 +34,9 @@ Remember: "coverage" is not a feature. Organize by actual features like:
 
 ### For Different Directories
 
-**Admin Tests**:
+**light Tests**:
 ```
-Review all test files in tests/admin/. Reorganize them by feature (not by abstract concepts like "coverage" or "gaps"). Fix module-level import issues. Create feature-based test files with clear names (e.g., test_dashboard.py, test_post_editor.py, test_media_library.py). Remove inappropriately named files.
+Review all test files in tests/light/. Reorganize them by feature (not by abstract concepts like "coverage" or "gaps"). Fix module-level import issues. Create feature-based test files with clear names (e.g., test_dashboard.py, test_post_editor.py, test_media_library.py). Remove inappropriately named files.
 ```
 
 **API Tests**:
@@ -51,7 +51,7 @@ Review all test files in tests/services/. Reorganize them by feature (not by abs
 
 ## Variables to Replace
 
-- `[DIRECTORY_PATH]`: Path to test directory (e.g., `tests/admin/`, `tests/api/`)
+- `[DIRECTORY_PATH]`: Path to test directory (e.g., `tests/light/`, `tests/api/`)
 - Add feature examples relevant to that directory
 
 ## Expected Outcomes

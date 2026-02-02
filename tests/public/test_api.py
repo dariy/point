@@ -289,6 +289,7 @@ class TestTagArchive:
         """Test that tag page shows tag description."""
         response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
+        assert sample_tag.description is not None
         assert sample_tag.description in response.text
     @pytest.mark.asyncio
     async def test_tag_not_found(self, client: AsyncClient) -> None:
@@ -534,7 +535,7 @@ class TestRobotsTxt:
         assert response.status_code == 200
         assert "Allow: /" in response.text
     @pytest.mark.asyncio
-    async def test_robots_txt_disallows_admin(self, client: AsyncClient) -> None:
+    async def test_robots_txt_disallows_light(self, client: AsyncClient) -> None:
         response = await client.get("/robots.txt")
         assert "Disallow: /light/" in response.text
     @pytest.mark.asyncio

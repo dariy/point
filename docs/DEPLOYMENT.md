@@ -427,7 +427,7 @@ tail -f /var/lib/photo-blog/data/logs/app.log
 
 ### System Statistics
 
-Access admin dashboard: `https://yourdomain.com/light/`
+Access light dashboard: `https://yourdomain.com/light/`
 
 View:
 - Storage usage
@@ -615,7 +615,7 @@ CACHE_TTL=7200  # Increase for better performance
 
 4. **Use strong passwords**:
    - Generate: `openssl rand -base64 32`
-   - Change admin password after first login
+   - Change light password after first login
 
 5. **Enable two-factor authentication** (future enhancement)
 

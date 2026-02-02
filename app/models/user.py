@@ -12,7 +12,7 @@ from app.database import Base
 
 
 class User(Base):
-    """User model for blog administrators.
+    """User model for blog lightistrators.
 
     Attributes:
         id: Primary key

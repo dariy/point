@@ -171,7 +171,7 @@ app.mount(
     name="media",
 )
 
-# Mount static files for admin assets (CSS, JS) - cached for 1 day
+# Mount static files for light assets (CSS, JS) - cached for 1 day
 static_path = Path(__file__).parent / "static"
 app.mount(
     "/static",

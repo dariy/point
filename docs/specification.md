@@ -510,7 +510,7 @@ async def update_view_counts():
   - `initDragDropPostCreation()` in `app/static/js/main.js`
   - Drop zone overlay in `app/templates/public/base.html`
   - Styles in `app/static/css/main.css`
-  - Post editor integration in `app/api/admin.py` (new_post endpoint)
+  - Post editor integration in `app/api/light.py` (new_post endpoint)
 
 #### Gallery View
 - Grid of post thumbnails

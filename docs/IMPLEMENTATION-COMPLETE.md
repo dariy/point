@@ -204,7 +204,7 @@ git pull origin main
 - [ ] Push to main branch (triggers auto-deploy)
 - [ ] Verify health check passes
 - [ ] Test SSL certificate
-- [ ] Create first admin user
+- [ ] Create first light user
 - [ ] Test backup/restore
 
 ### Post-Deployment

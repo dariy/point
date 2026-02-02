@@ -63,7 +63,7 @@
 3. Session cleanup scenarios
 4. Password change validation
 
-### Priority 5: app/api/admin.py (71% → 90%)
+### Priority 5: app/api/light.py (71% → 90%)
 **Missing**: 44 lines (72-77, 140, 142-145, 153-168, 210-223, 256-276, 305-327, 363-378, 414, 418-431, 451, 458-464, 507)
 
 **Tests to add**:
@@ -118,7 +118,7 @@ To reach 90% overall coverage:
 | tags.py (API) | 76% | 90% | ❌ Needs work |
 | tag_service.py | 74% | 90% | ❌ Needs work |
 | main.py | 73% | 90% | ❌ Needs work |
-| admin.py | 71% | 90% | ❌ Needs work |
+| light.py | 71% | 90% | ❌ Needs work |
 | auth.py | 67% | 90% | ❌ Needs work |
 | posts.py | 64% | 90% | ❌ Needs work |
 | system.py | 54% | 90% | ❌ Needs work |
