@@ -3,10 +3,8 @@
 This module contains unit tests for authentication utility functions.
 """
 
-import pytest
 
 from app.services.auth_service import verify_password
-
 
 # =============================================================================
 # Utility Function Tests

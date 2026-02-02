@@ -1,8 +1,8 @@
 """Tests for tag cloud functionality."""
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
 
 from app.schemas.tag import TagCreate
 from app.services.tag_service import TagService
