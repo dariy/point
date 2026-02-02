@@ -71,7 +71,7 @@
                         <path d="M12 5v14M5 12h14"></path>
                     </svg>
                 </a>
-                <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel">
+                <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                         <path d="M2 17l10 5 10-5"></path>
@@ -109,18 +109,8 @@
     <footer class="site-footer">
         <div class="footer-container">
             <div class="footer-content">
+                <p class="footer-copyright"><a href="/light">&copy;</a> {{ current_year }} {{ author_name }}</p>
                 {% block footer_pagination %}{% endblock %}
-                <p class="footer-copyright"><a href="/light" class="admin-link">&copy;</a> {{ current_year }} {{ author_name }}</p>
-                {% if false and tag_cloud %}
-                <div class="tag-cloud footer-tags">
-                    {% for tag in tag_cloud %}
-                    <a href="/tag/{{ tag.slug }}" class="tag-link" style="font-size: {{ 0.8 + tag.weight * 0.4 }}rem;">
-                        {{ tag.name }}
-                        <span class="count">({{ tag.post_count }})</span>
-                    </a>
-                    {% endfor %}
-                </div>
-                {% endif %}
             </div>
         </div>
     </footer>
@@ -140,7 +130,7 @@
                 <path d="M12 5v14M5 12h14"></path>
             </svg>
         </a>
-        <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel" style="display: none;">
+        <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel" style="display: none;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                 <path d="M2 17l10 5 10-5"></path>
@@ -189,7 +179,7 @@
                     <path d="M12 5v14M5 12h14"></path>
                 </svg>
             </a>
-            <a href="/light" class="admin-link" title="Go to admin panel" aria-label="Admin panel" style="display: none;">
+            <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel" style="display: none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                     <path d="M2 17l10 5 10-5"></path>

@@ -141,7 +141,7 @@
 
         // Create lightbox elements
         let overlay = document.querySelector(".lightbox-overlay");
-        
+
         if (!overlay) {
             overlay = document.createElement("div");
             overlay.className = "lightbox-overlay";
@@ -229,7 +229,7 @@
         // Use event delegation or named functions to avoid duplication/issues
         // For simplicity, we assume these are safe to re-bind or check if bound
         // But better to clean up document listeners
-        
+
         function handleKeydown(e) {
             if (!overlay.classList.contains("active")) return;
 
@@ -256,7 +256,7 @@
         prevBtn.onclick = showPrev;
         nextBtn.onclick = showNext;
         overlay.onclick = handleOverlayClick;
-        
+
         document.addEventListener("keydown", handleKeydown);
 
         registerCleanup(() => {
@@ -315,7 +315,7 @@
             const pre = code.parentElement;
             // Check if already initialized to avoid duplication on soft re-inits
             if (pre.previousElementSibling && pre.previousElementSibling.classList.contains("code-block-wrapper")) return;
-            
+
             const wrapper = document.createElement("div");
             wrapper.className = "code-block-wrapper";
 
@@ -509,7 +509,7 @@
         container.addEventListener('touchend', (e) => {
             const touchEndX = e.changedTouches[0].clientX;
             const touchEndY = e.changedTouches[0].clientY;
-            
+
             const diffX = touchEndX - touchStartX;
             const diffY = touchEndY - touchStartY;
             const threshold = 50;
@@ -555,7 +555,7 @@
 
     async function loadPost(url, pushState = true) {
         if (isNavigating) return;
-        
+
         console.log("[Navigation] Starting navigation to:", url);
         isNavigating = true;
         document.body.style.cursor = 'wait';
@@ -570,7 +570,7 @@
 
             const response = await fetch(url, { headers });
             console.log("[Navigation] Fetch status:", response.status);
-            
+
             if (!response.ok) {
                 throw new Error('Network response was not ok: ' + response.status);
             }
@@ -610,7 +610,7 @@
                 if (newHeader && currentHeader) {
                     console.log("[Navigation] Updating site-header...");
                     currentHeader.replaceWith(newHeader);
-                    
+
                     // Re-bind theme toggle for the new header
                     const toggleBtns = newHeader.querySelectorAll('.theme-toggle');
                     toggleBtns.forEach(btn => {
@@ -621,7 +621,7 @@
                             }
                         });
                     });
-                    
+
                     // Re-initialize dropdowns for the new header (mobile menu)
                     const dropdowns = newHeader.querySelectorAll(".nav-dropdown");
                     dropdowns.forEach(function (dropdown) {
@@ -643,7 +643,7 @@
                 if (doc.body) {
                     document.body.className = doc.body.className;
                 }
-                
+
                 // Re-initialize page scripts
                 console.log("[Navigation] Re-initializing page...");
                 initPage();
@@ -675,16 +675,16 @@
         const hasText = data.has_text_content;
         const templateId = hasText ? 'tmpl-post-standard' : 'tmpl-post-immersive';
         const template = document.getElementById(templateId);
-        
+
         if (!template) {
             console.error("Template not found:", templateId);
-            window.location.reload(); 
+            window.location.reload();
             return;
         }
 
         const clone = template.content.cloneNode(true);
         const post = data.post;
-        
+
         // 1. Update Title and Metadata
         const titleEl = clone.querySelector('.post-title') || clone.querySelector('.site-title');
         if (titleEl) titleEl.textContent = post.title;
@@ -717,19 +717,19 @@
              // Render Carousel
              const container = clone.querySelector('.carousel-container');
              const indicators = clone.querySelector('.carousel-indicators');
-             
+
              if (container && data.post_media && data.post_media.length > 0) {
                  const prevBtn = container.querySelector('.carousel-prev');
-                 
+
                  data.post_media.forEach((item, index) => {
                      // Slide
                      const slide = document.createElement('div');
                      slide.className = 'carousel-slide' + (index === 0 ? ' active' : '');
                      slide.dataset.type = item.type;
-                     
+
                      let mediaEl;
                      const url = item.url.startsWith('http') || item.url.startsWith('/') ? item.url : '/media/originals/' + item.url;
-                     
+
                      if (item.type === 'video') {
                          mediaEl = document.createElement('video');
                          mediaEl.src = url;
@@ -744,11 +744,11 @@
                          mediaEl.alt = post.title + " - Media " + (index + 1);
                          mediaEl.className = 'immersive-bg-image';
                      }
-                     
+
                      slide.appendChild(mediaEl);
                      // Insert before buttons
                      container.insertBefore(slide, prevBtn);
-                     
+
                      // Dot
                      if (indicators) {
                          const dot = document.createElement('button');
@@ -758,7 +758,7 @@
                          indicators.appendChild(dot);
                      }
                  });
-                 
+
                  // Hide controls if single item
                  if (data.post_media.length <= 1) {
                      const prev = container.querySelector('.carousel-prev');
@@ -798,7 +798,7 @@
 
         // 4. Navigation
         const navContainer = clone.querySelector('.post-navigation');
-        
+
         if (navContainer && (data.prev_post || data.next_post)) {
              if (data.prev_post) {
                  const a = document.createElement('a');
@@ -809,7 +809,7 @@
              } else {
                  navContainer.appendChild(document.createElement('div'));
              }
-             
+
              if (data.next_post) {
                  const a = document.createElement('a');
                  a.href = '/posts/' + data.next_post.slug;
@@ -818,19 +818,19 @@
                  navContainer.appendChild(a);
              }
         }
-        
+
         // Inject hidden navigation data for keyboard shortcuts
         const navData = document.createElement('div');
         navData.id = 'post-nav-data';
         navData.style.display = 'none';
         if (data.prev_post) navData.dataset.prevUrl = '/posts/' + data.prev_post.slug;
         if (data.next_post) navData.dataset.nextUrl = '/posts/' + data.next_post.slug;
-        
+
         // 5. Header
         const headerTemplateId = hasText ? 'tmpl-header-default' : 'tmpl-header-immersive';
         const headerTemplate = document.getElementById(headerTemplateId);
         const headerClone = headerTemplate.content.cloneNode(true);
-        
+
         if (hasText) {
              const titleLink = headerClone.querySelector('.site-title');
              if(titleLink) {
@@ -840,15 +840,15 @@
              const subtitle = headerClone.querySelector('.site-subtitle');
              if(subtitle) subtitle.textContent = data.blog_subtitle;
 
-             // Show create-post and admin-link buttons if logged in
+             // Show create-post and light-link buttons if logged in
              if (data.is_logged_in) {
                  const createPostBtn = headerClone.querySelector('.create-post');
                  if (createPostBtn) {
                      createPostBtn.style.display = 'flex';
                  }
-                 const adminLink = headerClone.querySelector('.admin-link');
-                 if (adminLink) {
-                     adminLink.style.display = 'flex';
+                 const lightLink = headerClone.querySelector('.light-link');
+                 if (lightLink) {
+                     lightLink.style.display = 'flex';
                  }
                  const titleLink = headerClone.querySelector('.site-title');
                  if (titleLink) {
@@ -858,13 +858,13 @@
         } else {
              const title = headerClone.querySelector('.site-title');
              if(title) title.textContent = post.title;
-             
+
              const date = headerClone.querySelector('.post-date');
              if(date) {
                  date.setAttribute('datetime', post.published_iso);
                  date.textContent = post.published_date;
              }
-             
+
              const hViewsEl = headerClone.querySelector('.post-views');
              if (hViewsEl) {
                  if (data.blog_settings.show_view_counts && post.view_count) {
@@ -902,14 +902,14 @@
                     </svg>
                 `;
 
-                // Show create-post and admin-link buttons
+                // Show create-post and light-link buttons
                 const createPostBtn = headerRight.querySelector('.create-post');
                 if (createPostBtn) {
                     createPostBtn.style.display = 'flex';
                 }
-                const adminLink = headerRight.querySelector('.admin-link');
-                if (adminLink) {
-                    adminLink.style.display = 'flex';
+                const lightLink = headerRight.querySelector('.light-link');
+                if (lightLink) {
+                    lightLink.style.display = 'flex';
                 }
 
                 // Insert edit button before create-post button
@@ -948,13 +948,13 @@
 
         // Update Body Class
         document.body.className = hasText ? 'public-layout post-single-page' : 'immersive-layout';
-        
+
         // Update Title
         document.title = post.title;
 
         // Re-init
         initPage();
-        
+
         // Re-bind header events
         const toggleBtns = header.querySelectorAll('.theme-toggle');
         toggleBtns.forEach(btn => {
@@ -1064,15 +1064,15 @@
         document.addEventListener('touchend', function(e) {
             const touchEndX = e.changedTouches[0].clientX;
             const touchEndY = e.changedTouches[0].clientY;
-            
+
             handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
         }, {passive: true});
-        
+
         function handleSwipe(startX, startY, endX, endY) {
             const diffX = endX - startX;
             const diffY = endY - startY;
             const threshold = 50; // min distance
-            
+
             // Determine if horizontal or vertical swipe
             if (Math.abs(diffX) > Math.abs(diffY)) {
                 // Horizontal
@@ -1088,9 +1088,9 @@
                 if (Math.abs(diffY) > threshold) {
                     // Only trigger vertical nav if at boundaries to avoid scroll conflict
                     // Use a slightly larger buffer for robust detection across browsers
-                    const isAtTop = window.scrollY <= 5; 
+                    const isAtTop = window.scrollY <= 5;
                     const isAtBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50;
-                    
+
                     if (diffY < 0 && isAtBottom) {
                         performNavigation("down"); // Swipe Up -> ArrowDown
                     } else if (diffY > 0 && isAtTop) {
@@ -1572,6 +1572,85 @@
     }
 
     /**
+     * Responsive Tag Filters in Header
+     * shows (all), (...), and all tags that fit in the rest of the space.
+     * Preserves the active tag and ensures All/More are always visible.
+     */
+    function initResponsiveTagFilters() {
+        const container = document.querySelector('.site-header .tags-filters');
+        if (!container) return;
+
+        function updateFilters() {
+            // Get computed gap
+            const style = window.getComputedStyle(container);
+            const gap = parseFloat(style.gap) || 0;
+            const containerWidth = container.clientWidth;
+
+            if (containerWidth === 0) return;
+
+            const buttons = Array.from(container.querySelectorAll('.filter-btn'));
+
+            // Identify key buttons
+            const allBtn = buttons.find(b => b.getAttribute('href') === '/');
+            const moreBtn = buttons.find(b => b.getAttribute('href') === '/tags' || b.title === 'All Tags');
+            const activeBtn = buttons.find(b => b.classList.contains('active'));
+
+            if (!allBtn || !moreBtn) return;
+
+            // Step 1: Show all buttons temporarily to measure natural widths
+            buttons.forEach(btn => {
+                btn.style.display = 'inline-flex';
+                btn.style.flexShrink = '0';
+            });
+
+            // Step 2: Priority layout (Essential width)
+            let currentWidth = allBtn.offsetWidth + gap + moreBtn.offsetWidth;
+            if (activeBtn && activeBtn !== allBtn && activeBtn !== moreBtn) {
+                currentWidth += activeBtn.offsetWidth + gap;
+            }
+
+            // Step 3: Fill available space with other tags
+            const tagBtns = buttons.filter(b => b !== allBtn && b !== moreBtn && b !== activeBtn);
+
+            tagBtns.forEach(btn => {
+                const btnWidth = btn.offsetWidth;
+                const cost = btnWidth + gap;
+
+                if (currentWidth + cost <= containerWidth) {
+                    btn.style.display = 'inline-flex';
+                    currentWidth += cost;
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
+
+            // Step 4: Ensure active button is always visible
+            if (activeBtn) {
+                activeBtn.style.display = 'inline-flex';
+            }
+
+            // Mark as ready to show
+            requestAnimationFrame(() => {
+                container.classList.add('is-ready');
+            });
+        }
+
+        // Use ResizeObserver for more accurate container-based measurement
+        const observer = new ResizeObserver(() => {
+            requestAnimationFrame(updateFilters);
+        });
+
+        observer.observe(container);
+
+        // Initial run
+        updateFilters();
+
+        registerCleanup(() => {
+            observer.disconnect();
+        });
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -1584,6 +1663,7 @@
         initCodeCopy();
         initAjaxPostsNavigation();
         initAjaxTagsNavigation();
+        initResponsiveTagFilters();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {
