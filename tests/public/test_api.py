@@ -5,11 +5,9 @@ Tests the public-facing HTML pages: homepage, single post, tag archive, and gall
 
 from datetime import datetime, timedelta
 
-from fastapi import status
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import MagicMock, patch
-import pytest
 
 from app.api import public
 from app.api.public import serialize_post
@@ -813,10 +811,10 @@ async def test_single_post_hidden(client: AsyncClient, db: AsyncSession):
 async def test_serialize_post_no_excerpt(db: AsyncSession):
     """Test serialize_post logic for generating excerpt."""
     post = Post(
-        title="T", 
-        slug="s", 
-        content="<p>Paragraph 1</p><p>Paragraph 2</p>", 
-        status=PostStatus.PUBLISHED, 
+        title="T",
+        slug="s",
+        content="<p>Paragraph 1</p><p>Paragraph 2</p>",
+        status=PostStatus.PUBLISHED,
         author_id=1,
         formatter=PostFormatter.HTML,
         published_at=datetime.utcnow()
@@ -867,28 +865,6 @@ async def test_homepage_pagination(client: AsyncClient, db: AsyncSession):
     resp = await client.get("/?page=2")
     assert resp.status_code == 200
 @pytest.mark.asyncio
-async def test_single_post_ajax(client: AsyncClient, db: AsyncSession):
-    """Test single post with AJAX request."""
-    user = User(username="postuser", email="post@test.com", password_hash="hash", display_name="Post User")
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    post = Post(
-        title="AJAX Single Post",
-        slug="ajax-single-post",
-        content="Content here",
-        status=PostStatus.PUBLISHED,
-        author_id=user.id,
-        published_at=datetime.utcnow()
-    )
-    db.add(post)
-    await db.commit()
-    resp = await client.get(f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "post" in data
-    assert data["post"]["title"] == "AJAX Single Post"
-@pytest.mark.asyncio
 async def test_single_post_increments_view_count(client: AsyncClient, db: AsyncSession):
     """Test that viewing a post increments view count."""
     user = User(username="viewuser", email="view@test.com", password_hash="hash", display_name="View User")
@@ -909,11 +885,6 @@ async def test_single_post_increments_view_count(client: AsyncClient, db: AsyncS
     await client.get(f"/posts/{post.slug}")
     await db.refresh(post)
     assert post.view_count == 1
-@pytest.mark.asyncio
-async def test_single_post_not_found(client: AsyncClient):
-    """Test single post with non-existent slug."""
-    resp = await client.get("/posts/non-existent-slug-12345")
-    assert resp.status_code == 404
 @pytest.mark.asyncio
 async def test_single_post_draft_not_accessible(client: AsyncClient, db: AsyncSession):
     """Test that draft posts are not accessible publicly."""
@@ -955,33 +926,6 @@ async def test_tag_archive(client: AsyncClient, db: AsyncSession):
     await db.commit()
     resp = await client.get(f"/tag/{tag.slug}")
     assert resp.status_code == 200
-@pytest.mark.asyncio
-async def test_tag_archive_ajax(client: AsyncClient, db: AsyncSession):
-    """Test tag archive with AJAX request."""
-    user = User(username="tagajaxuser", email="tagajax@test.com", password_hash="hash", display_name="Tag AJAX User")
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    tag = Tag(name="AjaxTag", slug="ajax-tag", post_count=1)
-    db.add(tag)
-    await db.commit()
-    post = Post(
-        title="AJAX Tagged Post",
-        slug="ajax-tagged-post",
-        content="Content",
-        status=PostStatus.PUBLISHED,
-        author_id=user.id,
-        published_at=datetime.utcnow()
-    )
-    post.tags.append(tag)
-    db.add(post)
-    await db.commit()
-    resp = await client.get(f"/tag/{tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "posts" in data
-    assert "tag" in data
-    assert data["tag"]["slug"] == "ajax-tag"
 @pytest.mark.asyncio
 async def test_tag_archive_not_found(client: AsyncClient):
     """Test tag archive with non-existent tag."""
@@ -1093,14 +1037,6 @@ async def test_sitemap(client: AsyncClient, db: AsyncSession):
     assert resp.status_code == 200
     assert "xml" in resp.headers["content-type"].lower()
     assert "sitemap-post" in resp.text
-@pytest.mark.asyncio
-async def test_robots_txt(client: AsyncClient):
-    """Test robots.txt generation."""
-    resp = await client.get("/robots.txt")
-    assert resp.status_code == 200
-    assert "User-agent: *" in resp.text
-    assert "Disallow: /light/" in resp.text
-    assert "Sitemap:" in resp.text
 @pytest.mark.asyncio
 async def test_single_post_with_thumbnail(client: AsyncClient, db: AsyncSession):
     """Test single post with thumbnail."""
@@ -1342,17 +1278,17 @@ async def test_post_preview_token(client: AsyncClient, db: AsyncSession):
     await db.commit()
     await db.refresh(user)
     p = Post(
-        title="Draft Preview", 
-        slug="draft-preview", 
-        content="Preview Content", 
-        status=PostStatus.DRAFT, 
+        title="Draft Preview",
+        slug="draft-preview",
+        content="Preview Content",
+        status=PostStatus.DRAFT,
         author_id=user.id,
         preview_token="validtoken",
         preview_expires_at=datetime.utcnow() + timedelta(hours=1)
     )
     db.add(p)
     await db.commit()
-    resp = await client.get(f"/preview/validtoken")
+    resp = await client.get("/preview/validtoken")
     assert resp.status_code == 200
     assert "Draft Preview" in resp.text or "Preview Content" in resp.text
 
@@ -1436,17 +1372,17 @@ async def test_prev_next_post_navigation(client: AsyncClient, db: AsyncSession):
     """Test previous and next post navigation logic."""
     now = datetime.utcnow()
     p1 = Post(
-        title="Post 1", slug="p1", content="c", 
+        title="Post 1", slug="p1", content="c",
         status=PostStatus.PUBLISHED, published_at=now - timedelta(days=2),
         formatter=PostFormatter.MARKDOWN, author_id=1
     )
     p2 = Post(
-        title="Post 2", slug="p2", content="c", 
+        title="Post 2", slug="p2", content="c",
         status=PostStatus.PUBLISHED, published_at=now - timedelta(days=1),
         formatter=PostFormatter.MARKDOWN, author_id=1
     )
     p3 = Post(
-        title="Post 3", slug="p3", content="c", 
+        title="Post 3", slug="p3", content="c",
         status=PostStatus.PUBLISHED, published_at=now,
         formatter=PostFormatter.MARKDOWN, author_id=1
     )
@@ -1471,7 +1407,7 @@ async def test_post_serialization_with_media_and_excerpt(client: AsyncClient, db
     db.add(post)
     await db.commit()
     response = await client.get(
-        "/", 
+        "/",
         headers={"X-Requested-With": "XMLHttpRequest"}
     )
     assert response.status_code == 200
@@ -1480,28 +1416,6 @@ async def test_post_serialization_with_media_and_excerpt(client: AsyncClient, db
     assert post_data["has_image"] is True
     # Excerpt should be generated
     assert post_data["excerpt"] is not None
-@pytest.mark.asyncio
-async def test_tags_page_ajax(client: AsyncClient, db: AsyncSession):
-    """Test tags page AJAX request."""
-    response = await client.get(
-        "/tags", 
-        headers={"X-Requested-With": "XMLHttpRequest"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert "posts" in data
-    assert "tags" not in data # Tags page ajax returns list of posts for the view
-    tag = Tag(name="FilterTag", slug="filter-tag")
-    db.add(tag)
-    await db.commit()
-    response = await client.get(
-        f"/tags/{tag.slug}", 
-        headers={"X-Requested-With": "XMLHttpRequest"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert "posts" in data
-    assert data["current_tag"] == tag.slug
 @pytest.mark.asyncio
 async def test_feed_cache_check(client: AsyncClient, enable_cache):
     """Test feed cache check explicitly."""

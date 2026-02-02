@@ -1,10 +1,20 @@
 """Coverage tests for Main Application."""
 
-import pytest
-from httpx import AsyncClient
+import contextlib
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
-from app.main import app, global_exception_handler
+
+import pytest
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.main import app, global_exception_handler
+from app.models.post import Post, PostFormatter, PostStatus
+from app.models.tag import Tag
+
 
 @pytest.mark.asyncio
 async def test_health_check(client: AsyncClient):
@@ -18,14 +28,14 @@ async def test_global_exception_handler():
     """Test global exception handler."""
     request = MagicMock(spec=Request)
     exc = Exception("Test error")
-    
+
     # Test with debug=True
     with patch("app.main.settings.debug", True):
         response = await global_exception_handler(request, exc)
         assert response.status_code == 500
-        data = url_content = response.body.decode()
+        data = response.body.decode()
         assert "Test error" in data
-    
+
     # Test with debug=False
     with patch("app.main.settings.debug", False):
         response = await global_exception_handler(request, exc)
@@ -36,9 +46,10 @@ async def test_global_exception_handler():
 @pytest.mark.asyncio
 async def test_preview_post_endpoint(client: AsyncClient, db):
     """Test preview post endpoint in main.py."""
-    from app.models.post import Post, PostStatus, PostFormatter
     from datetime import datetime, timedelta
-    
+
+    from app.models.post import Post, PostFormatter, PostStatus
+
     # Create post with token
     post = Post(
         title="Preview",
@@ -52,7 +63,7 @@ async def test_preview_post_endpoint(client: AsyncClient, db):
     )
     db.add(post)
     await db.commit()
-    
+
     response = await client.get("/preview/token123")
     assert response.status_code == 200
     assert response.json()["preview_mode"] is True
@@ -66,9 +77,10 @@ async def test_preview_post_invalid_token(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_preview_post_expired(client: AsyncClient, db):
     """Test preview post with expired token."""
-    from app.models.post import Post, PostStatus, PostFormatter
     from datetime import datetime, timedelta
-    
+
+    from app.models.post import Post, PostFormatter, PostStatus
+
     post = Post(
         title="Expired",
         slug="expired",
@@ -81,17 +93,10 @@ async def test_preview_post_expired(client: AsyncClient, db):
     )
     db.add(post)
     await db.commit()
-    
+
     response = await client.get("/preview/token_exp")
     assert response.status_code == 410
-"""Coverage tests for database.py and main.py."""
 
-import pytest
-from app.database import get_db
-from app.main import app
-from fastapi.exceptions import RequestValidationError
-from fastapi import Request
-from unittest.mock import MagicMock
 
 @pytest.mark.asyncio
 async def test_get_db_yields_session():
@@ -101,10 +106,8 @@ async def test_get_db_yields_session():
     assert session is not None
     await session.close()
     # clean up
-    try:
+    with contextlib.suppress(StopAsyncIteration):
         await anext(gen)
-    except StopAsyncIteration:
-        pass
 
 def test_app_startup_shutdown():
     """Test app events (mocked usually as they run in lifespan)."""
@@ -121,20 +124,9 @@ async def test_validation_exception_handler():
     if handler:
         request = MagicMock(spec=Request)
         exc = RequestValidationError(errors=[{"loc": ("body", "field"), "msg": "error", "type": "type_error"}])
-        
+
         resp = await handler(request, exc)
         assert resp.status_code == 422
-"""Additional tests to improve code coverage.
-
-Focuses on testing code paths not covered by existing tests.
-"""
-
-import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.post import Post, PostFormatter, PostStatus
-from app.models.tag import Tag
-from datetime import datetime, timedelta
 
 
 # Helper fixture for creating published post with all fields

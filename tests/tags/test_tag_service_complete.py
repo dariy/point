@@ -1,7 +1,7 @@
 """Final tests to achieve 100% tag service coverage."""
 
-from sqlalchemy.ext.asyncio import AsyncSession
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.tag import TagCreate, TagUpdate
 from app.services.tag_service import TagService
@@ -40,8 +40,8 @@ class TestTagServiceEdgeCases:
     async def test_get_tag_cloud_no_posts(self, tag_service: TagService, db: AsyncSession):
         """Test tag cloud returns empty when tags have no posts."""
         # Create tags with 0 posts
-        t1 = await tag_service.create_tag(TagCreate(name="Tag1", is_featured=True))
-        t2 = await tag_service.create_tag(TagCreate(name="Tag2", is_featured=True))
+        await tag_service.create_tag(TagCreate(name="Tag1", is_featured=True))
+        await tag_service.create_tag(TagCreate(name="Tag2", is_featured=True))
         await db.commit()
 
         # Both tags have post_count = 0, so cloud should be empty

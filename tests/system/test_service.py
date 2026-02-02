@@ -1,12 +1,11 @@
 """Additional tests for SystemService coverage."""
 
-from pathlib import Path
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
 
-from app.config import get_settings
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.system_service import SystemService
 
 
@@ -36,10 +35,10 @@ async def test_get_logs_not_found(system_service: SystemService):
 async def test_get_logs_error(system_service: SystemService):
     """Test error handling when reading log file."""
     # Mock Path.exists to return True but open to fail
-    with patch("pathlib.Path.exists", return_value=True):
-        with patch("builtins.open", side_effect=Exception("Read Error")):
-            logs = system_service.get_logs("app")
-            assert any("Error reading log" in line for line in logs)
+    with patch("pathlib.Path.exists", return_value=True), \
+         patch("builtins.open", side_effect=Exception("Read Error")):
+        logs = system_service.get_logs("app")
+        assert any("Error reading log" in line for line in logs)
 
 @pytest.mark.asyncio
 async def test_clear_cache_pattern(system_service: SystemService):
@@ -48,12 +47,11 @@ async def test_clear_cache_pattern(system_service: SystemService):
         mock_cache = MagicMock()
         mock_cache.clear_pattern = AsyncMock(return_value=5)
         mock_get_cache.return_value = mock_cache
-        
+
         cleared = await system_service.clear_cache("posts/*")
         assert cleared == 5
         mock_cache.clear_pattern.assert_called_with("posts/*")
 
-from unittest.mock import AsyncMock
 
 
 

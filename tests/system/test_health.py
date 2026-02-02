@@ -1,7 +1,7 @@
 """Tests for system endpoints (health check, root)."""
 
-from httpx import AsyncClient
 import pytest
+from httpx import AsyncClient
 
 
 class TestHealthEndpoint:
