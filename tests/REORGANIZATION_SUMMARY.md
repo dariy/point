@@ -24,7 +24,7 @@ tests/
 **After** (Feature-based):
 ```
 tests/
-├── admin/             # Admin interface (1 file, 44 tests)
+├── light/             # light interface (1 file, 44 tests)
 ├── auth/              # Authentication (3 files, ~80 tests)
 ├── posts/             # Post management (5 files, ~120 tests)
 ├── media/             # Media management (2 files, ~60 tests)
@@ -49,14 +49,14 @@ tests/
 - **Issue**: Missing `enable_cache` fixture after merging `test_public_routes_coverage.py`
 - **Fix**: Added fixture to `public/test_api.py` (lines 125-147)
 
-#### Admin Auth Tests (8 failures → 0)
+#### light Auth Tests (8 failures → 0)
 - **Issue**: `autouse=True` fixture applying global auth override
 - **Root cause**: Duplicate fixtures from merged coverage file
 - **Fix**:
   - Removed `autouse=True` parameter
-  - Renamed conflicting fixtures (`admin_user_coverage`)
+  - Renamed conflicting fixtures (`light_user_coverage`)
   - Explicitly added `override_auth` to tests needing it
-  - All 44 admin tests now passing
+  - All 44 light tests now passing
 
 ## Test Results
 
@@ -69,7 +69,7 @@ tests/
 ✅ Coverage: 78.41%
 
 # By module
-- admin/: 44 passed
+- light/: 44 passed
 - auth/: ~80 passed
 - posts/: ~120 passed
 - media/: ~60 passed
@@ -92,7 +92,7 @@ Overall: **78.41%** (target: 80%)
 - `app/services/system_service.py` - 96%
 
 ### Medium Coverage (70-90%)
-- `app/api/admin.py` - 71%
+- `app/api/light.py` - 71%
 - `app/api/tags.py` - 76%
 - `app/api/media.py` - 77%
 - `app/services/tag_service.py` - 74%
@@ -126,7 +126,7 @@ Overall: **78.41%** (target: 80%)
 | `test_api/test_posts.py` + `test_api/test_posts_coverage*.py` | `posts/test_api.py` |
 | `test_services/test_post_service_coverage.py` | `posts/test_service.py` |
 | `test_api/test_quick_post_integration.py` | `posts/test_quick_post.py` |
-| `test_api/test_admin.py` + `test_api/test_admin_coverage.py` | `admin/test_api.py` |
+| `test_api/test_light.py` + `test_api/test_light_coverage.py` | `light/test_api.py` |
 | `test_main_coverage.py` + `test_db_main_coverage.py` + `test_additional_coverage.py` | `infrastructure/test_main.py` |
 
 ### Removed Files
@@ -141,7 +141,7 @@ To improve coverage to 80%+:
 1. Add tests for uncovered public API routes
 2. Increase formatter utility test coverage
 3. Add tests for edge cases in post service
-4. Add tests for error handling paths in admin routes
+4. Add tests for error handling paths in light routes
 
 ## Commands
 

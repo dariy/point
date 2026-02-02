@@ -204,10 +204,10 @@ class TestLogin:
     ) -> None:
         """Test authentication failure without username (coverage test)."""
         user = User(
-            username="admin",
-            email="admin@example.com",
+            username="light",
+            email="light@example.com",
             password_hash=hash_password("correctpassword"),
-            display_name="Admin",
+            display_name="light",
         )
         db.add(user)
         await db.commit()

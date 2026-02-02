@@ -55,7 +55,7 @@ A lightweight, professional-grade personal photo blog engine built with FastAPI,
    podman compose exec blog python scripts/init_db.py
    ```
 
-The blog will be available at `http://localhost:8000`. The admin interface ("Light") is at `http://localhost:8000/light/login`.
+The blog will be available at `http://localhost:8000`. The light interface ("Light") is at `http://localhost:8000/light/login`.
 
 ## ⚙️ Configuration
 
@@ -308,7 +308,7 @@ git pull origin main
 
 ### Monitoring
 
-Access the admin dashboard at `https://yourdomain.com/light/` to view:
+Access the light dashboard at `https://yourdomain.com/light/` to view:
 - System statistics (storage, database size, cache stats)
 - Application logs
 - Active sessions
@@ -345,7 +345,7 @@ docker-compose -f docker-compose.prod.yml restart nginx
 ## 📊 Monitoring & Performance
 
 - **Health Check Endpoint**: `https://yourdomain.com/health`
-- **System Stats**: Available in the admin dashboard
+- **System Stats**: Available in the light dashboard
 - **Logs**: `/var/lib/photo-blog/data/logs/`
 - **Backups**: `/var/lib/photo-blog/data/backups/`
 
