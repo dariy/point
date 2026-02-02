@@ -52,9 +52,9 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
 
 
 @pytest.fixture
-async def tag_admin_headers(client: AsyncClient, db: AsyncSession):
-    """Create admin user and return auth headers."""
-    user = User(username="tagadmin", email="t@test.com", password_hash="hash", display_name="TagAdmin")
+async def tag_light_headers(client: AsyncClient, db: AsyncSession):
+    """Create light user and return auth headers."""
+    user = User(username="taglight", email="t@test.com", password_hash="hash", display_name="Taglight")
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -197,13 +197,13 @@ class TestTagCreate:
         assert "already exists" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_create_tag_duplicate(self, client: AsyncClient, tag_admin_headers, db: AsyncSession):
+    async def test_create_tag_duplicate(self, client: AsyncClient, tag_light_headers, db: AsyncSession):
         """Test creating duplicate tag."""
         t = Tag(name="Dup", slug="dup")
         db.add(t)
         await db.commit()
 
-        resp = await client.post("/api/tags", json={"name": "Dup"}, headers=tag_admin_headers)
+        resp = await client.post("/api/tags", json={"name": "Dup"}, headers=tag_light_headers)
         assert resp.status_code == 409
 
     @pytest.mark.asyncio
@@ -315,13 +315,13 @@ class TestTagUpdate:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_update_tag(self, client: AsyncClient, tag_admin_headers, db: AsyncSession):
+    async def test_update_tag(self, client: AsyncClient, tag_light_headers, db: AsyncSession):
         """Test updating a tag."""
         t = Tag(name="OldName", slug="old-name")
         db.add(t)
         await db.commit()
 
-        resp = await client.put(f"/api/tags/{t.id}", json={"name": "NewName"}, headers=tag_admin_headers)
+        resp = await client.put(f"/api/tags/{t.id}", json={"name": "NewName"}, headers=tag_light_headers)
         assert resp.status_code == 200
         assert resp.json()["name"] == "NewName"
 
@@ -390,9 +390,9 @@ class TestTagDelete:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_tag_not_found(self, client: AsyncClient, tag_admin_headers):
+    async def test_delete_tag_not_found(self, client: AsyncClient, tag_light_headers):
         """Test deleting non-existent tag."""
-        resp = await client.delete("/api/tags/999", headers=tag_admin_headers)
+        resp = await client.delete("/api/tags/999", headers=tag_light_headers)
         assert resp.status_code == 404
 
     @pytest.mark.asyncio

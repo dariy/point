@@ -22,9 +22,9 @@ def media_service(db: AsyncSession):
 
 
 @pytest.fixture
-async def admin_auth_headers(client: AsyncClient, db: AsyncSession):
-    """Create admin user and return auth headers."""
-    user = User(username="media_admin", email="ma@test.com", password_hash="hash", display_name="MediaAdmin")
+async def light_auth_headers(client: AsyncClient, db: AsyncSession):
+    """Create light user and return auth headers."""
+    user = User(username="media_light", email="ma@test.com", password_hash="hash", display_name="Medialight")
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -52,12 +52,12 @@ class TestStorageStats:
 
     @pytest.mark.asyncio
     async def test_stats_empty_storage(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test stats when storage is empty."""
         response = await client.get(
             "/api/media/stats",
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 200
@@ -68,9 +68,9 @@ class TestStorageStats:
         assert "usage_percent" in data
 
     @pytest.mark.asyncio
-    async def test_media_stats(self, client: AsyncClient, admin_auth_headers):
+    async def test_media_stats(self, client: AsyncClient, light_auth_headers):
         """Test media stats endpoint."""
-        resp = await client.get("/api/media/stats", headers=admin_auth_headers)
+        resp = await client.get("/api/media/stats", headers=light_auth_headers)
         assert resp.status_code == 200
         assert "total_size_mb" in resp.json()
 
@@ -105,12 +105,12 @@ class TestOrphanedMedia:
 
     @pytest.mark.asyncio
     async def test_list_orphaned_empty(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test listing orphaned media when none exists."""
         response = await client.get(
             "/api/media/orphaned",
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 200
@@ -120,12 +120,12 @@ class TestOrphanedMedia:
 
     @pytest.mark.asyncio
     async def test_delete_orphaned_empty(
-        self, client: AsyncClient, admin_auth_headers: dict
+        self, client: AsyncClient, light_auth_headers: dict
     ) -> None:
         """Test deleting orphaned when none exists."""
         response = await client.delete(
             "/api/media/orphaned",
-            headers=admin_auth_headers,
+            headers=light_auth_headers,
         )
 
         assert response.status_code == 200

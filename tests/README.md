@@ -8,7 +8,7 @@ The tests are organized by **feature/module** rather than by layer (API/service)
 
 ```
 tests/
-├── admin/              # Admin interface tests
+├── light/              # light interface tests
 │   └── test_api.py
 ├── auth/               # Authentication & authorization
 │   ├── test_api.py
@@ -119,7 +119,7 @@ tests/
 ### New Structure
 ```
 tests/
-├── admin/              # All admin-related tests
+├── light/              # All light-related tests
 ├── posts/              # All post-related tests
 ├── media/              # All media-related tests
 └── ...                 # etc.
