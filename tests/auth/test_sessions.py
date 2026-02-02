@@ -3,10 +3,10 @@
 This module contains tests for listing, terminating sessions.
 """
 
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-import hashlib
-import pytest
 
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
@@ -115,7 +115,7 @@ class TestSessions:
         """Test session list construction with multiple sessions (coverage test)."""
         # Create multiple sessions
         sessions = []
-        for i in range(5):
+        for _ in range(5):
             response = await client.post(
                 "/api/auth/login",
                 json={
