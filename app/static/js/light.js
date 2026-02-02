@@ -375,6 +375,14 @@
 
             showToast('Deleted successfully');
 
+            // Handle redirect if specified
+            if (btn.dataset.redirectUrl) {
+                setTimeout(() => {
+                    window.location.href = btn.dataset.redirectUrl;
+                }, 500);
+                return;
+            }
+
             // Remove element or reload
             const row = btn.closest('tr, .media-item, .card');
             if (row) {
