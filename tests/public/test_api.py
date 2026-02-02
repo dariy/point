@@ -3,7 +3,7 @@
 Tests the public-facing HTML pages: homepage, single post, tag archive, and gallery.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -55,7 +55,7 @@ async def published_post(db: AsyncSession, sample_tag: Tag) -> Post:
         excerpt="Test excerpt",
         status=PostStatus.PUBLISHED,
         formatter=PostFormatter.MARKDOWN,
-        published_at=datetime.utcnow() - timedelta(hours=1),
+        published_at=datetime.now(UTC) - timedelta(hours=1),
         view_count=10,
         thumbnail_path="2026/01/test-image.jpg",
         author_id=1,
@@ -105,7 +105,7 @@ async def multiple_posts(db: AsyncSession, sample_tag: Tag) -> list[Post]:
             excerpt=f"Excerpt for post {i + 1}",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow() - timedelta(hours=i),
+            published_at=datetime.now(UTC) - timedelta(hours=i),
             view_count=i * 5,
             thumbnail_path=f"2026/01/image-{i + 1}.jpg" if i % 2 == 0 else None,
             author_id=1,
@@ -748,7 +748,7 @@ async def test_homepage_ajax_json(client: AsyncClient, db: AsyncSession):
 @pytest.mark.asyncio
 async def test_single_post_ajax(client: AsyncClient, db: AsyncSession):
     """Test single post AJAX request."""
-    post = Post(title="Ajax Post", slug="ajax-post", content="Content", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.utcnow())
+    post = Post(title="Ajax Post", slug="ajax-post", content="Content", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
     db.add(post)
     await db.commit()
     resp = await client.get("/posts/ajax-post", headers={"X-Requested-With": "XMLHttpRequest"})
@@ -802,7 +802,7 @@ async def test_tag_not_found(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_single_post_hidden(client: AsyncClient, db: AsyncSession):
     """Test accessing a hidden post."""
-    post = Post(title="Hidden", slug="hidden", content="Hidden content", status=PostStatus.HIDDEN, author_id=1, published_at=datetime.utcnow())
+    post = Post(title="Hidden", slug="hidden", content="Hidden content", status=PostStatus.HIDDEN, author_id=1, published_at=datetime.now(UTC))
     db.add(post)
     await db.commit()
     resp = await client.get("/posts/hidden")
@@ -818,7 +818,7 @@ async def test_serialize_post_no_excerpt(db: AsyncSession):
         status=PostStatus.PUBLISHED,
         author_id=1,
         formatter=PostFormatter.HTML,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     data = serialize_post(post)
     assert data["preview_html"] is not None
@@ -835,7 +835,7 @@ async def test_homepage_ajax_request(client: AsyncClient, db: AsyncSession):
         content="AJAX content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -859,7 +859,7 @@ async def test_homepage_pagination(client: AsyncClient, db: AsyncSession):
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            published_at=datetime.utcnow()
+            published_at=datetime.now(UTC)
         )
         db.add(post)
     await db.commit()
@@ -878,7 +878,7 @@ async def test_single_post_increments_view_count(client: AsyncClient, db: AsyncS
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         view_count=0
     )
     db.add(post)
@@ -920,7 +920,7 @@ async def test_tag_archive(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     post.tags.append(tag)
     db.add(post)
@@ -945,7 +945,7 @@ async def test_tags_page(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -967,7 +967,7 @@ async def test_tags_page_with_tag_filter(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     post.tags.append(tag)
     db.add(post)
@@ -987,7 +987,7 @@ async def test_tags_page_ajax(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -1009,7 +1009,7 @@ async def test_rss_feed(client: AsyncClient, db: AsyncSession):
         content="RSS content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -1030,7 +1030,7 @@ async def test_sitemap(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -1051,7 +1051,7 @@ async def test_single_post_with_thumbnail(client: AsyncClient, db: AsyncSession)
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         thumbnail_path="/media/test.jpg"
     )
     db.add(post)
@@ -1065,7 +1065,7 @@ async def test_single_post_with_prev_next(client: AsyncClient, db: AsyncSession)
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    base_time = datetime.utcnow()
+    base_time = datetime.now(UTC)
     post1 = Post(
         title="First Post",
         slug="first-post",
@@ -1110,7 +1110,7 @@ async def test_homepage_with_featured_posts(client: AsyncClient, db: AsyncSessio
         content="Featured content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         is_featured=True
     )
     db.add(post)
@@ -1134,7 +1134,7 @@ async def test_tag_archive_pagination(client: AsyncClient, db: AsyncSession):
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            published_at=datetime.utcnow()
+            published_at=datetime.now(UTC)
         )
         post.tags.append(tag)
         db.add(post)
@@ -1154,7 +1154,7 @@ async def test_single_post_hidden_status(client: AsyncClient, db: AsyncSession):
         content="Hidden content",
         status=PostStatus.HIDDEN,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -1173,7 +1173,7 @@ async def test_serialize_post_with_media(client: AsyncClient, db: AsyncSession):
         content='![Test Image](/media/test.jpg "Test")',
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN
     )
     db.add(post)
@@ -1190,8 +1190,8 @@ async def test_search_posts(client: AsyncClient, db: AsyncSession):
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    p1 = Post(title="Python Tutorial", slug="python-tutorial", content="Learn Python", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.utcnow())
-    p2 = Post(title="Rust Guide", slug="rust-guide", content="Learn Rust", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.utcnow())
+    p1 = Post(title="Python Tutorial", slug="python-tutorial", content="Learn Python", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
+    p2 = Post(title="Rust Guide", slug="rust-guide", content="Learn Rust", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
     db.add_all([p1, p2])
     await db.commit()
     resp = await client.get("/?q=Python")
@@ -1205,8 +1205,8 @@ async def test_posts_by_author(client: AsyncClient, db: AsyncSession):
     db.add(author)
     await db.commit()
     await db.refresh(author)
-    p1 = Post(title="Writer Post", slug="writer-post", content="C", status=PostStatus.PUBLISHED, author_id=author.id, published_at=datetime.utcnow())
-    p2 = Post(title="Other Post", slug="other-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.utcnow())
+    p1 = Post(title="Writer Post", slug="writer-post", content="C", status=PostStatus.PUBLISHED, author_id=author.id, published_at=datetime.now(UTC))
+    p2 = Post(title="Other Post", slug="other-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
     db.add_all([p1, p2])
     await db.commit()
     pass
@@ -1217,7 +1217,7 @@ async def test_feeds(client: AsyncClient, db: AsyncSession):
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    p = Post(title="Feed Post", slug="feed-post", content="Content", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.utcnow())
+    p = Post(title="Feed Post", slug="feed-post", content="Content", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
     db.add(p)
     await db.commit()
     resp = await client.get("/feed.xml")
@@ -1235,7 +1235,7 @@ async def test_theme_cookie(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_sitemap_content(client: AsyncClient, db: AsyncSession):
     """Test sitemap structure."""
-    p = Post(title="Sitemap Post", slug="sitemap-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.utcnow())
+    p = Post(title="Sitemap Post", slug="sitemap-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
     db.add(p)
     await db.commit()
     resp = await client.get("/sitemap.xml")
@@ -1285,7 +1285,7 @@ async def test_post_preview_token(client: AsyncClient, db: AsyncSession):
         status=PostStatus.DRAFT,
         author_id=user.id,
         preview_token="validtoken",
-        preview_expires_at=datetime.utcnow() + timedelta(hours=1)
+        preview_expires_at=datetime.now(UTC) + timedelta(hours=1)
     )
     db.add(p)
     await db.commit()
@@ -1371,7 +1371,7 @@ async def test_sitemap_cache_hit(client: AsyncClient, db: AsyncSession, enable_c
 @pytest.mark.asyncio
 async def test_prev_next_post_navigation(client: AsyncClient, db: AsyncSession):
     """Test previous and next post navigation logic."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     p1 = Post(
         title="Post 1", slug="p1", content="c",
         status=PostStatus.PUBLISHED, published_at=now - timedelta(days=2),
@@ -1465,7 +1465,7 @@ async def test_homepage_ajax_pagination(client: AsyncClient, db: AsyncSession):
 @pytest.mark.asyncio
 async def test_single_post_ajax_full(client: AsyncClient, db: AsyncSession):
     """Test single post AJAX response with next/prev and media."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     p1 = Post(title="P1", slug="p1", content="c", status=PostStatus.PUBLISHED, published_at=now - timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=1)
     p2 = Post(title="P2", slug="p2", content="![Img](/a.jpg)", status=PostStatus.PUBLISHED, published_at=now, formatter=PostFormatter.MARKDOWN, author_id=1)
     p3 = Post(title="P3", slug="p3", content="c", status=PostStatus.PUBLISHED, published_at=now + timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=1)

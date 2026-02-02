@@ -3,7 +3,7 @@
 Stores tags with support for descriptions, custom URLs, and importance marking.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,7 +40,7 @@ class Tag(Base):
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     post_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
     # Relationship to posts through association table

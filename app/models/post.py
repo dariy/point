@@ -3,7 +3,7 @@
 Stores blog posts with support for drafts, publishing, and custom URLs.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum as PyEnum
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
@@ -73,12 +73,12 @@ class Post(Base):
         DateTime(timezone=True), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
     author_id: Mapped[int] = mapped_column(
@@ -128,7 +128,10 @@ class Post(Base):
         """Check if preview token is still valid."""
         if not self.preview_token or not self.preview_expires_at:
             return False
-        return datetime.utcnow() < self.preview_expires_at.replace(tzinfo=None)
+        expires_at = self.preview_expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        return datetime.now(UTC) < expires_at
 
 
 # Import for relationship (avoid circular import)
