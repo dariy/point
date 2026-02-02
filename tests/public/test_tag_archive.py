@@ -1,6 +1,6 @@
 """Tests for tag archive and tags gallery pages."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -49,7 +49,7 @@ async def test_tag_archive_current_tag_in_navigation(client: AsyncClient, db: As
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -106,7 +106,7 @@ async def test_tags_page_ajax_structure(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         tags=[tag]
     )
     db.add(post)
@@ -143,7 +143,7 @@ async def sample_tag_with_posts(db: AsyncSession, test_user) -> Tag:
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow() - timedelta(hours=i),
+            published_at=datetime.now(UTC) - timedelta(hours=i),
             author_id=test_user["user"].id,
         )
         post.tags.append(tag)

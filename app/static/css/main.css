@@ -241,7 +241,7 @@ img {
 
 .site-main {
     /*flex: 1;*/
-    padding: var(--spacing-md) 0 0;
+    padding: var(--spacing-sm) 0;
 }
 
 .main-container {
@@ -408,7 +408,7 @@ img {
 .site-footer {
     background: var(--footer-bg);
     color: var(--footer-text);
-    padding: var(--spacing-xl) var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
     margin-top: auto;
     transition: background-color var(--transition-theme);
 }

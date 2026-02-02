@@ -1,6 +1,6 @@
 """Tests for sitemap functionality."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -48,7 +48,7 @@ async def test_sitemap_excludes_draft_posts(client: AsyncClient, db: AsyncSessio
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(pub_post)
 
