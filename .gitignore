@@ -130,3 +130,4 @@ nginx/ssl/*.crt
 
 # Deployment artifacts
 deployment-*.log
+blog_shell.sh
