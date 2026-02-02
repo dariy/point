@@ -103,31 +103,31 @@
    =========================== */
 [data-theme="dark"] {
     /* Semantic Colors */
-    --light-bg: #0f172a;
-    --light-sidebar-bg: #1e293b;
+    --light-bg: #121212;
+    --light-sidebar-bg: #181818;
     --light-sidebar-text: #94a3b8;
     --light-sidebar-text-hover: #ffffff;
-    --light-sidebar-active-bg: #334155;
-    --light-sidebar-border: #475569;
-    --light-header-bg: #1e293b;
-    --light-header-border: #334155;
-    --light-content-bg: #1e293b;
+    --light-sidebar-active-bg: #2d2d2d;
+    --light-sidebar-border: #333333;
+    --light-header-bg: #1e1e1e;
+    --light-header-border: #2d2d2d;
+    --light-content-bg: #1e1e1e;
     --light-text-primary: #f1f5f9;
     --light-text-secondary: #cbd5e1;
     --light-text-muted: #64748b;
-    --light-border: #334155;
+    --light-border: #2d2d2d;
     --light-border-focus: #3b82f6;
-    --light-input-bg: #1e293b;
-    --light-hover-bg: #334155;
-    --light-card-bg: #1e293b;
+    --light-input-bg: #1e1e1e;
+    --light-hover-bg: #2d2d2d;
+    --light-card-bg: #1e1e1e;
 
     /* Brand adjustments */
     --color-primary: #3b82f6;
     --color-primary-hover: #60a5fa;
-    --color-primary-light: rgba(59, 130, 246, 0.8);
-    --color-success-light: rgba(16, 185, 129, 0.8);
-    --color-warning-light: rgba(245, 158, 11, 0.8);
-    --color-danger-light: rgba(239, 68, 68, 0.8);
+    --color-primary-light: rgba(59, 130, 246, 0.2);
+    --color-success-light: rgba(16, 185, 129, 0.2);
+    --color-warning-light: rgba(245, 158, 11, 0.2);
+    --color-danger-light: rgba(239, 68, 68, 0.2);
 
     --color-success: rgba(255,255,255,0.8);
     --btn-text-contrast: #ffffff;
@@ -140,10 +140,10 @@
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
 
     /* Grays inverted for dark theme */
-    --color-gray-50: #0f172a;
-    --color-gray-100: #1e293b;
-    --color-gray-200: #334155;
-    --color-gray-300: #475569;
+    --color-gray-50: #121212;
+    --color-gray-100: #1e1e1e;
+    --color-gray-200: #2d2d2d;
+    --color-gray-300: #404040;
     --color-gray-400: #64748b;
     --color-gray-500: #94a3b8;
     --color-gray-600: #cbd5e1;
@@ -215,7 +215,7 @@ a:hover {
 }
 
 .sidebar-header {
-    padding: var(--spacing-lg);
+    padding: var(--spacing-md);
     border-bottom: 1px solid var(--light-sidebar-border);
 }
 
