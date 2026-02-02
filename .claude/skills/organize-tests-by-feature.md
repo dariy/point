@@ -186,7 +186,7 @@ tests/
 - Comments section
 - Contact forms
 
-**Admin/Authenticated Features**:
+**light/Authenticated Features**:
 - Dashboard
 - Post editor
 - Media library
@@ -220,7 +220,7 @@ When using this skill:
 
 1. **Invoke with target directory**:
    ```
-   Reorganize tests by feature in tests/admin/
+   Reorganize tests by feature in tests/light/
    ```
 
 2. **Review current structure**:

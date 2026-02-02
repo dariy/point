@@ -1307,8 +1307,8 @@ img {
     height: 20px;
 }
 
-/* Admin Link Button */
-.admin-link {
+/* light Link Button */
+.light-link {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1324,13 +1324,13 @@ img {
     text-decoration: none;
 }
 
-.admin-link:hover {
+.light-link:hover {
     background-color: var(--surface-hover);
     color: var(--text-primary);
     border-color: var(--border-secondary);
 }
 
-.admin-link svg {
+.light-link svg {
     width: 20px;
     height: 20px;
 }
@@ -1556,7 +1556,7 @@ img {
 .immersive-layout .site-header svg,
 .immersive-layout .site-header .theme-toggle,
 .immersive-layout .site-header .create-post,
-.immersive-layout .site-header .admin-link {
+.immersive-layout .site-header .light-link {
     color: white;
     border-color: rgba(255, 255, 255, 0.3);
 }
@@ -1567,7 +1567,7 @@ img {
 [data-theme="light"].immersive-layout .site-header svg,
 [data-theme="light"].immersive-layout .site-header .theme-toggle,
 [data-theme="light"].immersive-layout .site-header .create-post,
-[data-theme="light"].immersive-layout .site-header .admin-link {
+[data-theme="light"].immersive-layout .site-header .light-link {
     color: var(--text-primary);
     border-color: var(--border-primary);
 }
