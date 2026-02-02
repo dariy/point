@@ -22,7 +22,7 @@ def test_make_unique_slug_edge_cases():
     assert make_unique_slug("", {"untitled"}) == "untitled-1"
     # Truncation for suffix
     assert make_unique_slug("a" * 200, {"a" * 200}, max_length=200) == "a" * 198 + "-1"
-    
+
     # Safety limit
     with pytest.raises(ValueError):
         existing = {f"test-{i}" for i in range(1, 10002)}

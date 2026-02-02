@@ -3,8 +3,8 @@
 This module contains unit tests for password change operations.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService

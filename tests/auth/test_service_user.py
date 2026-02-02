@@ -3,8 +3,8 @@
 This module contains unit tests for user creation and retrieval.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService

@@ -6,8 +6,8 @@ Creates all tables and optionally creates an initial light user.
 
 import asyncio
 import getpass
-import sys
 import hashlib
+import sys
 from pathlib import Path
 
 # Add parent directory to path for imports

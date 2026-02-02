@@ -7,9 +7,9 @@ including authentication, dashboard, posts, tags, media, settings, security, and
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
 
 from app.dependencies import get_current_user
 from app.main import app
@@ -18,7 +18,6 @@ from app.models.post import Post, PostFormatter, PostStatus
 from app.models.session import Session
 from app.models.settings import BlogSettings
 from app.models.tag import Tag
-from app.models.user import User
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
 
@@ -115,12 +114,13 @@ class TestRequireAuth:
     @pytest.mark.asyncio
     async def test_require_auth_raises_exception_when_no_user(self) -> None:
         """Test require_auth raises HTTPException when user is None."""
-        from app.api.light import require_auth
         from fastapi import HTTPException
+
+        from app.api.light import require_auth
 
         try:
             await require_auth(user=None)
-            assert False, "Should have raised HTTPException"
+            pytest.fail("Should have raised HTTPException")
         except HTTPException as e:
             assert e.status_code == 303
             assert e.headers["Location"] == "/light/login"
@@ -141,8 +141,9 @@ class TestGetBaseContext:
 
     def test_get_base_context_without_user(self, client: AsyncClient) -> None:
         """Test get_base_context creates proper context without user."""
-        from app.api.light import get_base_context
         from unittest.mock import Mock
+
+        from app.api.light import get_base_context
 
         request = Mock()
         context = get_base_context(request)
@@ -156,8 +157,9 @@ class TestGetBaseContext:
 
     def test_get_base_context_with_user(self, test_user: dict) -> None:
         """Test get_base_context creates proper context with user."""
-        from app.api.light import get_base_context
         from unittest.mock import Mock
+
+        from app.api.light import get_base_context
 
         request = Mock()
         context = get_base_context(request, test_user["user"])

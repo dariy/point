@@ -5,11 +5,10 @@ This module contains tests for user logout functionality.
 
 from datetime import datetime, timedelta
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-import hashlib
-import pytest
 
 from app.dependencies import SESSION_COOKIE_NAME
 from app.models.session import Session

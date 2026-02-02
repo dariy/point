@@ -92,7 +92,7 @@ data/
 logs/
 
 # Media uploads (local development)
-media/
+/media/
 
 # Cache
 cache/
