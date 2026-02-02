@@ -1,18 +1,17 @@
 """Tests for media upload functionality."""
 
+import io
 from datetime import datetime, timedelta
 from pathlib import Path
-import io
+from unittest.mock import MagicMock, patch
 
-from PIL import Image
+import pytest
 from fastapi import HTTPException
 from httpx import AsyncClient
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
 
-from app.dependencies import SESSION_COOKIE_NAME
-from app.models.media import FileType, Media
+from app.models.media import FileType
 from app.models.session import Session
 from app.models.user import User
 from app.schemas.auth import UserCreate

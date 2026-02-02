@@ -1,11 +1,11 @@
 """Additional tests to boost tag service coverage to 90%."""
 
-from unittest.mock import patch, AsyncMock
-from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
+from unittest.mock import patch
 
-from app.models.post import Post, PostStatus, PostFormatter
-from app.models.tag import Tag
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.post import Post, PostFormatter, PostStatus
 from app.schemas.tag import TagCreate, TagUpdate
 from app.services.tag_service import TagService
 
@@ -217,7 +217,7 @@ class TestAddTagsToPost:
         assert len(tags1) == 2
 
         # Add same tags again (should skip duplicates)
-        tags2 = await tag_service.add_tags_to_post(post, ["Tag1", "Tag2"])
+        await tag_service.add_tags_to_post(post, ["Tag1", "Tag2"])
         await db.refresh(post, ["tags"])
         assert len(post.tags) == 2  # Still only 2 tags
 

@@ -7,16 +7,15 @@ template rendering, and complex scenarios.
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
 
 from app.models.media import FileType, Media
 from app.models.post import Post, PostFormatter, PostStatus
 from app.models.session import Session
 from app.models.settings import BlogSettings
 from app.models.tag import Tag
-from app.models.user import User
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
 

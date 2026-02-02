@@ -1,9 +1,10 @@
 """Tests for security interface routes."""
 
+import hashlib
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-import hashlib
-import pytest
 
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
@@ -19,7 +20,7 @@ async def test_user(db: AsyncSession) -> dict:
     auth_service = AuthService(db)
     raw_password = "testpassword123"
     hashed_name = hashlib.sha256(raw_password.encode()).hexdigest()
-    
+
     user_data = UserCreate(
         username="security_test",
         email="security@example.com",

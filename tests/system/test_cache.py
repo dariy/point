@@ -3,9 +3,7 @@
 Tests the FileCache class and cache invalidation functions.
 """
 
-from pathlib import Path
 import asyncio
-import tempfile
 import time
 
 import pytest

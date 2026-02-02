@@ -1,8 +1,6 @@
 """Tests for Media model properties and behavior."""
 
-import pytest
-from datetime import datetime
-from app.models.media import Media, FileType
+from app.models.media import FileType, Media
 
 
 def test_media_model_repr():

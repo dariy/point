@@ -1,12 +1,13 @@
 """Tests for RSS feed functionality."""
 
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
 from app.models.post import Post, PostStatus
+from app.models.user import User
 
 
 @pytest.mark.asyncio

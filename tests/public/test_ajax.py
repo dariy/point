@@ -1,6 +1,12 @@
+from datetime import datetime, timedelta
+
 import pytest
-from datetime import datetime
-from app.models.post import Post, PostStatus, PostFormatter
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.post import Post, PostFormatter, PostStatus
+from app.models.tag import Tag
+
 
 @pytest.mark.asyncio
 async def test_single_post_ajax(client, db, test_user):
@@ -87,15 +93,7 @@ async def test_single_post_immersive_ajax(client, db, test_user):
     # this might be tricky, but let's assume standard behavior.
     assert data["has_text_content"] is False
     assert len(data["post_media"]) > 0
-"""Tests for AJAX pagination."""
 
-import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta
-
-from app.models.post import Post, PostFormatter, PostStatus
-from app.models.tag import Tag
 
 @pytest.fixture
 async def sample_posts(db: AsyncSession) -> list[Post]:

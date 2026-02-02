@@ -1,14 +1,15 @@
 """Tests for caching behavior across public endpoints."""
 
-import pytest
-from unittest.mock import patch
 from datetime import datetime, timedelta
+from unittest.mock import patch
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
 from app.models.post import Post, PostStatus
 from app.models.tag import Tag
+from app.models.user import User
 from app.services.cache_service import get_cache
 
 
