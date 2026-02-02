@@ -161,6 +161,16 @@ jobs:
             # Login to GitHub Container Registry (requires GHCR_TOKEN secret with read:packages scope)
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
 
+            # Clean up Docker resources to free disk space
+            echo "Cleaning up Docker resources..."
+            docker image prune -af --filter "until=168h" || true
+            docker container prune -f || true
+            docker builder prune -af || true
+
+            # Show disk space before pull
+            echo "Disk space before pull:"
+            df -h / | tail -1
+
             # Pull specific Docker image by SHA tag (first 7 chars of commit SHA)
             echo "Pulling image with tag: ${IMAGE_TAG:0:7}"
             docker pull ghcr.io/dariy/point:${IMAGE_TAG:0:7}
