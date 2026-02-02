@@ -1,7 +1,7 @@
 """Coverage tests for Main Application."""
 
 import contextlib
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -46,7 +46,7 @@ async def test_global_exception_handler():
 @pytest.mark.asyncio
 async def test_preview_post_endpoint(client: AsyncClient, db):
     """Test preview post endpoint in main.py."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from app.models.post import Post, PostFormatter, PostStatus
 
@@ -59,7 +59,7 @@ async def test_preview_post_endpoint(client: AsyncClient, db):
         formatter=PostFormatter.MARKDOWN,
         author_id=1,
         preview_token="token123",
-        preview_expires_at=datetime.utcnow() + timedelta(hours=1)
+        preview_expires_at=datetime.now(UTC) + timedelta(hours=1)
     )
     db.add(post)
     await db.commit()
@@ -77,7 +77,7 @@ async def test_preview_post_invalid_token(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_preview_post_expired(client: AsyncClient, db):
     """Test preview post with expired token."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from app.models.post import Post, PostFormatter, PostStatus
 
@@ -89,7 +89,7 @@ async def test_preview_post_expired(client: AsyncClient, db):
         formatter=PostFormatter.MARKDOWN,
         author_id=1,
         preview_token="token_exp",
-        preview_expires_at=datetime.utcnow() - timedelta(hours=1)
+        preview_expires_at=datetime.now(UTC) - timedelta(hours=1)
     )
     db.add(post)
     await db.commit()
@@ -146,7 +146,7 @@ async def full_published_post(db: AsyncSession) -> Post:
         excerpt="A great journey",
         status=PostStatus.PUBLISHED,
         formatter=PostFormatter.MARKDOWN,
-        published_at=datetime.utcnow() - timedelta(days=1),
+        published_at=datetime.now(UTC) - timedelta(days=1),
         view_count=100,
         thumbnail_path="2026/01/thumb.jpg",
         author_id=1,
@@ -273,7 +273,7 @@ class TestPostMediaExtraction:
             content="![Img1](img1.jpg) Some text ![Img2](img2.jpg) More text <img src='img3.jpg'>",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(UTC),
             author_id=1,
         )
         db.add(post)
@@ -295,7 +295,7 @@ class TestPostMediaExtraction:
             content="This is just plain text with no images or videos.",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(UTC),
             author_id=1,
         )
         db.add(post)
@@ -322,7 +322,7 @@ class TestPostNavigation:
             content="Content 1",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow() - timedelta(days=2),
+            published_at=datetime.now(UTC) - timedelta(days=2),
             author_id=1,
         )
         post2 = Post(
@@ -331,7 +331,7 @@ class TestPostNavigation:
             content="Content 2",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow() - timedelta(days=1),
+            published_at=datetime.now(UTC) - timedelta(days=1),
             author_id=1,
         )
         post3 = Post(
@@ -340,7 +340,7 @@ class TestPostNavigation:
             content="Content 3",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(UTC),
             author_id=1,
         )
         db.add_all([post1, post2, post3])
@@ -367,7 +367,7 @@ class TestRawFormatter:
             content="<div><p>This is <strong>raw</strong> HTML</p></div>",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.HTML,
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(UTC),
             author_id=1,
         )
         db.add(post)

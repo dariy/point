@@ -4,7 +4,7 @@ Handles password hashing, session creation, and authentication logic.
 """
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
 import bcrypt
@@ -165,7 +165,7 @@ class AuthService:
 
         # Update last login
         await self.db.execute(
-            update(User).where(User.id == user.id).values(last_login=datetime.utcnow())
+            update(User).where(User.id == user.id).values(last_login=datetime.now(UTC))
         )
 
         return user
@@ -198,7 +198,7 @@ class AuthService:
         else:
             expiry_hours = settings.session_expiry_public_hours
 
-        expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
+        expires_at = datetime.now(UTC) + timedelta(hours=expiry_hours)
 
         # Create session
         session = Session(
@@ -243,7 +243,7 @@ class AuthService:
         await self.db.execute(
             update(Session)
             .where(Session.id == session.id)
-            .values(last_activity=datetime.utcnow())
+            .values(last_activity=datetime.now(UTC))
         )
 
         return session
@@ -342,6 +342,6 @@ class AuthService:
             Number of sessions removed
         """
         result = await self.db.execute(
-            delete(Session).where(Session.expires_at < datetime.utcnow())
+            delete(Session).where(Session.expires_at < datetime.now(UTC))
         )
         return int(result.rowcount)  # type: ignore[attr-defined]

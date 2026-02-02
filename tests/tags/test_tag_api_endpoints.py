@@ -1,6 +1,6 @@
 """Tests for tag API endpoints."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -62,7 +62,7 @@ async def tag_light_headers(client: AsyncClient, db: AsyncSession):
     session = Session(
         user_id=user.id,
         token=hash_token("tag-token"),
-        expires_at=datetime.utcnow() + timedelta(days=1),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
         user_agent="test"
     )

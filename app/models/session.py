@@ -3,7 +3,7 @@
 Tracks active user sessions for security and management.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,7 +40,7 @@ class Session(Base):
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     expires_at: Mapped[datetime] = mapped_column(
@@ -49,7 +49,7 @@ class Session(Base):
     )
     last_activity: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -62,7 +62,10 @@ class Session(Base):
     @property
     def is_expired(self) -> bool:
         """Check if session has expired."""
-        return datetime.utcnow() > self.expires_at.replace(tzinfo=None)
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        return datetime.now(UTC) > expires_at
 
 
 # Import User for relationship (avoid circular import at module level)

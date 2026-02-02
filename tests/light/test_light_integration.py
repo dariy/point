@@ -4,7 +4,7 @@ These tests focus on executing complete code paths including all context updates
 template rendering, and complex scenarios.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -88,9 +88,9 @@ async def test_dashboard_full_integration(
             token=f"token{i}",
             ip_address=f"127.0.0.{i}",
             user_agent="test",
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=1),
-            last_activity=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+            last_activity=datetime.now(UTC),
         )
         for i in range(3)
     ]
