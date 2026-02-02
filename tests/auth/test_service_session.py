@@ -5,9 +5,9 @@ This module contains unit tests for session creation, validation, and cleanup.
 
 from datetime import datetime, timedelta
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
 
 from app.models.session import Session
 from app.models.user import User

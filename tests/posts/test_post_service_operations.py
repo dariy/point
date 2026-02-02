@@ -4,14 +4,15 @@
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 # Third-party
 from sqlalchemy.ext.asyncio import AsyncSession
-import pytest
 
 # Local
 from app.models.post import Post, PostFormatter, PostStatus
 from app.schemas.post import PostCreate, PostUpdate
-from app.services.post_service import PostService, _view_counts_buffer
+from app.services.post_service import PostService
 
 
 @pytest.fixture

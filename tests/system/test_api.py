@@ -1,9 +1,10 @@
 """Tests for system API.
 """
 
-from httpx import AsyncClient
 from unittest.mock import patch
+
 import pytest
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
