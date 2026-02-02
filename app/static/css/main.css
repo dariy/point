@@ -122,11 +122,11 @@
    =========================== */
 [data-theme="dark"] {
     /* Semantic Colors - Background */
-    --bg-primary: #0f172a;
-    --bg-carouselle: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --bg-elevated: #1e293b;
+    --bg-primary: #121212;
+    --bg-carouselle: #121212;
+    --bg-secondary: #1e1e1e;
+    --bg-tertiary: #2d2d2d;
+    --bg-elevated: #1e1e1e;
     --bg-overlay: rgba(0, 0, 0, 0.7);
 
     /* Semantic Colors - Text */
@@ -135,18 +135,18 @@
     --text-tertiary: #cbd5e1; /* #94a3b8; */
     --text-immersive: #cbd5e1;
     --text-muted: #64748b;
-    --text-inverted: #0f172a;
+    --text-inverted: #121212;
 
     /* Semantic Colors - Borders */
-    --border-primary: #334155;
-    --border-secondary: #475569;
+    --border-primary: #2d2d2d;
+    --border-secondary: #404040;
     --border-focus: #3b82f6;
 
     /* Semantic Colors - Surfaces */
-    --surface-card: #1e293b;
-    --surface-input: #1e293b;
-    --surface-hover: #334155;
-    --surface-active: #475569;
+    --surface-card: #1e1e1e;
+    --surface-input: #1e1e1e;
+    --surface-hover: #2d2d2d;
+    --surface-active: #404040;
 
     /* Shadows (darker for dark theme) */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
@@ -157,12 +157,12 @@
         0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
 
     /* Component-specific */
-    --header-bg: rgba(30, 41, 59, 0.8);
-    --footer-bg: rgba(30, 41, 59, 0.8);
+    --header-bg: rgba(30, 30, 30, 0.8);
+    --footer-bg: rgba(30, 30, 30, 0.8);
     --footer-text: #94a3b8;
-    --code-bg: #0f172a;
+    --code-bg: #121212;
     --code-text: #e2e8f0;
-    --inline-code-bg: #334155;
+    --inline-code-bg: #2d2d2d;
     --inline-code-text: #e2e8f0;
 
     /* Brand adjustments for dark theme */
@@ -171,10 +171,10 @@
     --color-primary-light: rgba(59, 130, 246, 0.2);
 
     /* Grays (inverted for dark theme) */
-    --color-gray-50: #0f172a;
-    --color-gray-100: #1e293b;
-    --color-gray-200: #334155;
-    --color-gray-300: #475569;
+    --color-gray-50: #121212;
+    --color-gray-100: #1e1e1e;
+    --color-gray-200: #2d2d2d;
+    --color-gray-300: #404040;
     --color-gray-400: #64748b;
     --color-gray-500: #94a3b8;
     --color-gray-600: #cbd5e1;
@@ -638,7 +638,7 @@ img {
 }
 
 [data-theme="dark"] .post-card-edit-btn {
-    background: rgba(30, 41, 59, 0.8);
+    background: rgba(30, 30, 30, 0.8);
     color: white;
 }
 
@@ -1752,7 +1752,7 @@ video.immersive-bg-image {
 }
 
 [data-theme="dark"] .post-info-card {
-    background: rgba(15, 23, 42, 0.9);
+    background: rgba(30, 30, 30, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
