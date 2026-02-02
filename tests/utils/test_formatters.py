@@ -1,19 +1,18 @@
 """Tests for formatter utilities."""
 
-import pytest
 
 from app.utils.formatters import (
-    markdown_to_html,
-    format_content,
-    strip_html,
-    generate_excerpt,
-    sanitize_html,
-    truncate_text,
-    extract_first_image,
+    determine_thumbnail,
     extract_all_images,
     extract_all_media,
+    extract_first_image,
+    format_content,
+    generate_excerpt,
+    markdown_to_html,
+    sanitize_html,
+    strip_html,
     truncate_paragraphs,
-    determine_thumbnail,
+    truncate_text,
 )
 
 

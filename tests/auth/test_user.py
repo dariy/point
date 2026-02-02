@@ -3,10 +3,10 @@
 This module contains tests for getting current user information.
 """
 
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-import hashlib
-import pytest
 
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService

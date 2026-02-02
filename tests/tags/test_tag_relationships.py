@@ -1,11 +1,10 @@
 """Tests for post-tag relationship operations."""
 
-from sqlalchemy.ext.asyncio import AsyncSession
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.post import Post, PostStatus
 from app.models.tag import Tag
-from app.schemas.tag import TagCreate
 from app.services.tag_service import TagService
 
 

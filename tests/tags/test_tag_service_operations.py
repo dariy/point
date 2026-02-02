@@ -1,7 +1,7 @@
 """Tests for tag service operations."""
 
-from sqlalchemy.ext.asyncio import AsyncSession
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.post import Post, PostStatus
 from app.models.tag import Tag
@@ -68,7 +68,7 @@ class TestTagUpdate:
         """Test updating tag name to existing one raises ValueError."""
         service = TagService(db)
         t1 = await service.create_tag(TagCreate(name="Tag1"))
-        t2 = await service.create_tag(TagCreate(name="Tag2"))
+        await service.create_tag(TagCreate(name="Tag2"))
 
         with pytest.raises(ValueError):
             await service.update_tag(t1.id, TagUpdate(name="Tag2"))

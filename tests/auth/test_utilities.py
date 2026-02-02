@@ -3,8 +3,8 @@
 This module contains tests for password hashing, token generation, and verification.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.auth_service import (
     generate_session_token,

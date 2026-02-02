@@ -1,11 +1,12 @@
 
-import pytest
-import time
 import json
-import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-from app.services.cache_service import FileCache, CacheEntry
+import time
+from unittest.mock import patch
+
+import pytest
+
+from app.services.cache_service import CacheEntry, FileCache
+
 
 @pytest.fixture
 async def temp_cache(tmp_path):
@@ -20,11 +21,11 @@ async def test_get_expired_entry(temp_cache):
     # Create expired entry manually
     key = "expired_key"
     entry = CacheEntry(content="c", created_at=time.time()-10, expires_at=time.time()-5)
-    
+
     path = temp_cache._get_cache_path(key)
     with open(path, "w") as f:
         json.dump(entry.to_dict(), f)
-        
+
     result = await temp_cache.get(key)
     assert result is None
     # Should be deleted
@@ -53,7 +54,7 @@ async def test_clear_all_no_dir(tmp_path):
 async def test_clear_pattern_pages_os_error(temp_cache):
     """Test clear_pattern pages handles OSError."""
     await temp_cache.set("p1", "c")
-    
+
     with patch("aiofiles.os.remove", side_effect=OSError("Error")):
         count = await temp_cache.clear_pattern("pages:*")
         assert count == 0
@@ -62,7 +63,7 @@ async def test_clear_pattern_pages_os_error(temp_cache):
 async def test_clear_pattern_feeds_os_error(temp_cache):
     """Test clear_pattern feeds handles OSError."""
     await temp_cache.set("f1", "c", cache_type="feeds")
-    
+
     with patch("aiofiles.os.remove", side_effect=OSError("Error")):
         count = await temp_cache.clear_pattern("feeds:*")
         assert count == 0
@@ -73,7 +74,7 @@ async def test_cleanup_expired_corrupted_file(temp_cache):
     path = temp_cache.pages_dir / "corrupt.json"
     with open(path, "w") as f:
         f.write("{invalid json")
-        
+
     count = await temp_cache.cleanup_expired()
     # Should delete the corrupted file
     assert count == 1
@@ -85,7 +86,7 @@ async def test_cleanup_expired_non_json_file(temp_cache):
     path = temp_cache.pages_dir / "other.txt"
     with open(path, "w") as f:
         f.write("text")
-        
+
     count = await temp_cache.cleanup_expired()
     assert count == 0
     assert path.exists()
@@ -94,7 +95,7 @@ async def test_cleanup_expired_non_json_file(temp_cache):
 async def test_get_stats_os_error(temp_cache):
     """Test get_stats handles OSError during stat."""
     await temp_cache.set("p1", "c")
-    
+
     with patch("aiofiles.os.stat", side_effect=OSError("Error")):
         stats = await temp_cache.get_stats()
         assert stats["pages"]["size_bytes"] == 0
