@@ -94,12 +94,56 @@
     }
 
     /**
+     * Initialize card toggling
+     */
+    function initCardToggling() {
+        const cardHeaders = document.querySelectorAll('.card-header');
+        
+        cardHeaders.forEach(header => {
+            // Check if card should be foldable (all cards with headers in editor)
+            const card = header.closest('.card');
+            if (!card) return;
+            
+            // Add indicator icon if not present
+            if (!header.querySelector('.toggle-icon')) {
+                const icon = document.createElement('span');
+                icon.className = 'toggle-icon';
+                icon.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+                icon.style.marginLeft = 'auto';
+                
+                // If header has flex-between, append to it, otherwise make header flex
+                if (header.classList.contains('flex-between')) {
+                    header.appendChild(icon);
+                } else {
+                    header.classList.add('flex-between');
+                    // Add flex styles if not present (handled by CSS class usually, but ensure it)
+                    header.style.display = 'flex';
+                    header.style.alignItems = 'center';
+                    header.style.justifyContent = 'space-between';
+                    header.appendChild(icon);
+                }
+            }
+            
+            // Handle click
+            header.addEventListener('click', function(e) {
+                // Don't trigger if clicking buttons inside header
+                if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.badge')) {
+                    return;
+                }
+                
+                card.classList.toggle('collapsed');
+            });
+        });
+    }
+
+    /**
      * Initialize all editor features
      */
     function init() {
         initPreviewToggle();
         initPostForm();
         initKeyboardShortcuts();
+        initCardToggling();
     }
 
     // Initialize on DOM ready
