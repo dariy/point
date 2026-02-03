@@ -78,6 +78,47 @@ async def create_light_user() -> bool:
             return False
 
 
+async def create_default_admin() -> bool:
+    """Create default admin user if no users exist.
+    
+    Creates user with credentials admin/admin.
+    
+    Returns:
+        True if user created, False if skipped
+    """
+    async with async_session_maker() as db:
+        auth_service = AuthService(db)
+
+        # Check if any user exists
+        # Since we don't have a count method handy on the service, checking for 'admin' specifically
+        # However, to be safe for dev envs, let's just try to create 'admin'
+        existing = await auth_service.get_user_by_username("admin")
+        if existing:
+            print("Admin user already exists, skipping creation.")
+            return False
+
+        print("Creating default admin user (admin/admin)...")
+        
+        # Hash "admin" with SHA-256
+        hashed_password = hashlib.sha256("admin".encode()).hexdigest()
+
+        user_data = UserCreate(
+            username="admin",
+            email="admin@example.com",
+            password=hashed_password,
+            display_name="Administrator",
+        )
+
+        try:
+            user = await auth_service.create_user(user_data)
+            await db.commit()
+            print(f"Default admin user '{user.username}' created successfully!")
+            return True
+        except Exception as e:
+            print(f"Failed to create admin user: {e}")
+            return False
+
+
 async def main() -> None:
     """Initialize database tables and optionally create light user."""
     print("Creating database tables...")
@@ -87,6 +128,10 @@ async def main() -> None:
     # Check for --create-light flag
     if "--create-light" in sys.argv:
         await create_light_user()
+    
+    # Check for --create-admin flag
+    if "--create-admin" in sys.argv:
+        await create_default_admin()
 
     # Close engine
     await engine.dispose()
