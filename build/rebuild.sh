@@ -1,0 +1,10 @@
+#!/bin/bash
+cd "$(dirname "$0")"
+# Generate timestamp-based version for development builds
+export DEV_BUILD_VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+
+echo "Building with version: $DEV_BUILD_VERSION"
+
+podman compose -f docker-compose.dev.yml build --build-arg BUILD_VERSION=$DEV_BUILD_VERSION
+podman compose -f docker-compose.dev.yml down
+podman compose -f docker-compose.dev.yml up -d
