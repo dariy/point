@@ -98,6 +98,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: build/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -123,7 +124,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          source: "docker-compose*.yml"
+          source: "build/docker-compose*.yml"
           target: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
           overwrite: true
           strip_components: 0
@@ -141,36 +142,39 @@ jobs:
           envs: BUILD_VERSION,IMAGE_TAG
           script: |
             cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
+            
+            # Create build directory if it doesn't exist (since strip_components: 0 is used)
+            mkdir -p build
 
             # Pull latest code (optional - if using git deployment)
             if [ -d .git ]; then
               git pull origin main
             fi
 
-            # Set version and image tag in .env file
-            if [ -f .env ]; then
-              sed -i '/^APP_VERSION=/d' .env
-              sed -i '/^IMAGE_TAG=/d' .env
-              echo "APP_VERSION=${BUILD_VERSION}" >> .env
-              echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> .env
+            # Set version and image tag in .env file (now in build/ directory)
+            if [ -f build/.env ]; then
+              sed -i '/^APP_VERSION=/d' build/.env
+              sed -i '/^IMAGE_TAG=/d' build/.env
+              echo "APP_VERSION=${BUILD_VERSION}" >> build/.env
+              echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> build/.env
             else
-              echo "APP_VERSION=${BUILD_VERSION}" > .env
-              echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> .env
+              echo "APP_VERSION=${BUILD_VERSION}" > build/.env
+              echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> build/.env
             fi
 
-            # Login to GitHub Container Registry (requires GHCR_TOKEN secret with read:packages scope)
+            # Login to GitHub Container Registry
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
 
-            # Pull specific Docker image by SHA tag (first 7 chars of commit SHA)
-            echo "Pulling image with tag: ${IMAGE_TAG:0:7}"
+            # Pull specific Docker image
             docker pull ghcr.io/dariy/point:${IMAGE_TAG:0:7}
-
-            # Also tag as latest for convenience
             docker tag ghcr.io/dariy/point:${IMAGE_TAG:0:7} ghcr.io/dariy/point:latest
 
-            # Export truncated IMAGE_TAG to environment (overrides full SHA from SSH action)
+            # Export truncated IMAGE_TAG to environment
             export IMAGE_TAG=${IMAGE_TAG:0:7}
             echo "Using IMAGE_TAG=${IMAGE_TAG} for docker-compose"
+
+            # Deploy new version from build directory
+            cd build
 
             # Backup database before deployment
             docker compose exec -T blog python -c "
@@ -180,7 +184,6 @@ jobs:
             print(f'Backup created: {backup_path}')
             " || echo "Backup failed, continuing deployment..."
 
-            # Deploy new version
             docker compose -f docker-compose.prod.yml up -d blog
 
             # Verify correct image is running
