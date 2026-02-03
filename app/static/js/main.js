@@ -897,7 +897,7 @@
                 if (createPostBtn) {
                     createPostBtn.style.display = 'flex';
                 }
-                const lightLink = headerRight.querySelector('.light-link');
+                const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
                     lightLink.style.display = 'flex';
                 }
