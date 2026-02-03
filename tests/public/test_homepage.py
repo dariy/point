@@ -1,6 +1,6 @@
 """Tests for homepage functionality."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -22,7 +22,7 @@ async def test_homepage_pagination_invalid_page_number(client: AsyncClient, db: 
     post = Post(
         title="Test", slug="test", content="Content",
         status=PostStatus.PUBLISHED, author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -54,7 +54,7 @@ async def test_homepage_ajax_structure(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -89,7 +89,7 @@ async def sample_posts(db: AsyncSession, test_user) -> list[Post]:
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow() - timedelta(hours=i),
+            published_at=datetime.now(UTC) - timedelta(hours=i),
             author_id=test_user["user"].id,
         )
         db.add(post)

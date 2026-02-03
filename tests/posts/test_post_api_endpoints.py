@@ -92,7 +92,7 @@ async def auth_headers(client: AsyncClient, db: AsyncSession):
     session = Session(
         user_id=user.id,
         token=hash_token("post-token"),
-        expires_at=datetime.utcnow() + timedelta(days=1),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
         user_agent="test"
     )
@@ -691,7 +691,7 @@ class TestWithdrawPost:
     ) -> None:
         """Test permissions for withdrawing posts."""
         user = test_user["user"]
-        post = Post(title="Pub", slug="pub", content="c", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.utcnow())
+        post = Post(title="Pub", slug="pub", content="c", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
         db.add(post)
         await db.commit()
 
@@ -834,7 +834,7 @@ class TestPreviewLink:
             status=PostStatus.DRAFT,
             author_id=user.id,
             preview_token="valid_token",
-            preview_expires_at=datetime.utcnow() + timedelta(days=1)
+            preview_expires_at=datetime.now(UTC) + timedelta(days=1)
         )
         db.add(post)
         await db.commit()
@@ -848,7 +848,7 @@ class TestPreviewLink:
         assert resp.status_code == 404
 
         # Expired token
-        post.preview_expires_at = datetime.utcnow() - timedelta(hours=1)
+        post.preview_expires_at = datetime.now(UTC) - timedelta(hours=1)
         await db.commit()
 
         resp = await client.get(f"/api/posts/{post.id}/preview?token=valid_token", cookies=auth_cookies)

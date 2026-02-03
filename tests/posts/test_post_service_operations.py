@@ -1,7 +1,7 @@
 """Tests for PostService business logic operations."""
 
 # Standard library
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -130,7 +130,7 @@ class TestGetPost:
             status=PostStatus.DRAFT,
             author_id=1,
             preview_token="token",
-            preview_expires_at=datetime.utcnow() - timedelta(hours=1)
+            preview_expires_at=datetime.now(UTC) - timedelta(hours=1)
         )
         db.add(post)
         await db.commit()

@@ -4,7 +4,7 @@ Handles file upload, processing, storage, and cleanup operations.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models.media import FileType, Media
+from app.utils.formatters import extract_all_media
 from app.utils.image_processor import (
     ImageProcessor,
     calculate_checksum,
@@ -163,7 +164,7 @@ class MediaService:
 
         # Generate unique filename and paths
         unique_filename = self._generate_unique_filename(filename)
-        now = created_at or datetime.utcnow()
+        now = created_at or datetime.now(UTC)
         original_path, thumbnail_path, original_rel, thumbnail_rel = (
             self._get_storage_paths(unique_filename, now.year, now.month)
         )
@@ -267,7 +268,11 @@ class MediaService:
             query = query.where(Media.file_type == FileType(file_type))
 
         if orphaned_only:
-            query = query.where(Media.post_id.is_(None))
+            orphaned, _, _ = await self.get_orphaned_media()
+            orphaned_ids = [m.id for m in orphaned]
+            if not orphaned_ids:
+                return [], 0
+            query = query.where(Media.id.in_(orphaned_ids))
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -348,14 +353,86 @@ class MediaService:
 
         return True, freed_bytes
 
-    async def get_orphaned_media(self) -> tuple[list[Media], int, int]:
-        """Get all orphaned media (not linked to any post).
+    async def get_orphaned_media(self, grace_period_hours: int = 24) -> tuple[list[Media], int, int]:
+        """Get all orphaned media (not linked to any post and not used in content).
+
+        Args:
+            grace_period_hours: Hours to wait before considering a file orphaned.
 
         Returns:
             Tuple of (orphaned_list, count, total_size)
         """
-        result = await self.db.execute(select(Media).where(Media.post_id.is_(None)))
-        orphaned = list(result.scalars().all())
+        from app.models.post import Post
+        from app.models.settings import BlogSettings
+        from app.models.user import User
+
+        # 1. Get candidates: no post_id and older than grace period
+        now = datetime.now(UTC)
+        grace_threshold = now - timedelta(hours=grace_period_hours)
+
+        result = await self.db.execute(
+            select(Media).where(
+                Media.post_id.is_(None),
+                Media.uploaded_at < grace_threshold
+            )
+        )
+        candidates = list(result.scalars().all())
+
+        if not candidates:
+            return [], 0, 0
+
+        # 2. Collect all potential media references from the database
+        used_paths = set()
+
+        # Helper to extract and normalize paths
+        def collect_paths(text: str | None) -> None:
+            if not text:
+                return
+            found = extract_all_media(text)
+            for item in found:
+                url = item["url"]
+                # Normalize URL to relative path used in DB
+                if "/media/" in url:
+                    # Extract everything after /media/
+                    path = url.split("/media/", 1)[1]
+                    # Remove query parameters
+                    path = path.split("?", 1)[0]
+                    used_paths.add(path)
+                else:
+                    # Could be direct relative path or external (ignored)
+                    used_paths.add(url)
+
+        # Scan Posts
+        post_result = await self.db.execute(
+            select(Post.content, Post.excerpt, Post.thumbnail_path)
+        )
+        for post_row in post_result.all():
+            collect_paths(post_row.content)
+            collect_paths(post_row.excerpt)
+            if post_row.thumbnail_path:
+                # thumbnail_path in Post might be a URL or relative path
+                collect_paths(post_row.thumbnail_path)
+
+        # Scan Users (avatars)
+        user_result = await self.db.execute(select(User.avatar_path))
+        for user_row in user_result.all():
+            if user_row.avatar_path:
+                collect_paths(user_row.avatar_path)
+
+        # Scan Settings
+        settings_result = await self.db.execute(select(BlogSettings.value))
+        for settings_row in settings_result.all():
+            collect_paths(settings_row.value)
+
+        # 3. Filter candidates
+        orphaned = []
+        for media in candidates:
+            # Check original path and thumbnail path
+            if media.original_path not in used_paths and (
+                not media.thumbnail_path or media.thumbnail_path not in used_paths
+            ):
+                orphaned.append(media)
+
         total_size = sum(m.file_size for m in orphaned)
 
         return orphaned, len(orphaned), total_size
@@ -392,15 +469,8 @@ class MediaService:
         total_files = total_row[0] or 0
         total_size = total_row[1] or 0
 
-        # Orphaned files
-        orphaned_result = await self.db.execute(
-            select(func.count(), func.sum(Media.file_size)).where(
-                Media.post_id.is_(None)
-            )
-        )
-        orphaned_row = orphaned_result.one()
-        orphaned_files = orphaned_row[0] or 0
-        orphaned_size = orphaned_row[1] or 0
+        # Orphaned files (using refined logic)
+        _, orphaned_files, orphaned_size = await self.get_orphaned_media()
 
         # By type breakdown
         by_type = {}
