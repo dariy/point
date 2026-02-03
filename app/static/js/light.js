@@ -375,6 +375,14 @@
 
             showToast('Deleted successfully');
 
+            // Handle redirect if specified
+            if (btn.dataset.redirectUrl) {
+                setTimeout(() => {
+                    window.location.href = btn.dataset.redirectUrl;
+                }, 500);
+                return;
+            }
+
             // Remove element or reload
             const row = btn.closest('tr, .media-item, .card');
             if (row) {
@@ -398,20 +406,22 @@
         if (!btn) return;
 
         e.preventDefault();
-        const url = btn.dataset.copyUrl;
+        
+        const textToCopy = btn.dataset.copyMarkdown || (window.location.origin + btn.dataset.copyUrl);
+        const message = btn.dataset.copyMarkdown ? 'Markdown copied to clipboard' : 'URL copied to clipboard';
 
         try {
-            await navigator.clipboard.writeText(window.location.origin + url);
-            showToast('URL copied to clipboard');
+            await navigator.clipboard.writeText(textToCopy);
+            showToast(message);
         } catch (error) {
             // Fallback for older browsers
             const input = document.createElement('input');
-            input.value = window.location.origin + url;
+            input.value = textToCopy;
             document.body.appendChild(input);
             input.select();
             document.execCommand('copy');
             document.body.removeChild(input);
-            showToast('URL copied to clipboard');
+            showToast(message);
         }
     }
 

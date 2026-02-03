@@ -3,7 +3,7 @@
 This module contains tests for user logout functionality.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -99,9 +99,9 @@ class TestLogout:
             token=hashed,
             ip_address="127.0.0.1",
             user_agent="Test",
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(hours=1),
-            last_activity=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            last_activity=datetime.now(UTC),
         )
         db.add(session)
         await db.commit()

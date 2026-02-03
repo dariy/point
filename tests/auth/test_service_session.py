@@ -3,7 +3,7 @@
 This module contains unit tests for session creation, validation, and cleanup.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -112,7 +112,7 @@ class TestSessionManagement:
         session = Session(
             user_id=user.id,
             token=hash_token(plain_token),
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
             ip_address="127.0.0.1",
             user_agent="test",
         )
@@ -262,14 +262,14 @@ class TestSessionManagement:
         s1 = Session(
             user_id=1,
             token="t1",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
             ip_address="1",
             user_agent="1",
         )
         s2 = Session(
             user_id=1,
             token="t2",
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             ip_address="2",
             user_agent="2",
         )

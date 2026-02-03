@@ -1,6 +1,6 @@
 """Tests for caching behavior across public endpoints."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -30,7 +30,7 @@ async def test_homepage_cache_with_second_page(client: AsyncClient, db: AsyncSes
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            published_at=datetime.utcnow() - timedelta(hours=i)
+            published_at=datetime.now(UTC) - timedelta(hours=i)
         )
         db.add(post)
     await db.commit()
@@ -58,7 +58,7 @@ async def test_homepage_ajax_bypasses_cache(client: AsyncClient, db: AsyncSessio
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()
@@ -87,7 +87,7 @@ async def test_single_post_view_count_increments_on_cache(client: AsyncClient, d
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         view_count=0
     )
     db.add(post)
@@ -144,7 +144,7 @@ async def test_single_post_caches_miss_content(client: AsyncClient, db: AsyncSes
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(post)
     await db.commit()

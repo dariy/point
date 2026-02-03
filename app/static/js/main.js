@@ -881,19 +881,9 @@
         if (data.is_logged_in) {
             const headerRight = headerClone.querySelector('.header-right');
             if (headerRight) {
-                // Adjust styles to match server-side rendering
-                headerRight.style.width = 'auto';
-                headerRight.style.display = 'flex';
-                headerRight.style.justifyContent = 'flex-end';
-                headerRight.style.gap = '0.5rem';
-
                 const editBtn = document.createElement('a');
                 editBtn.href = '/light/posts/' + post.id;
-                editBtn.className = 'theme-toggle';
-                editBtn.style.display = 'flex';
-                editBtn.style.alignItems = 'center';
-                editBtn.style.justifyContent = 'center';
-                editBtn.style.textDecoration = 'none';
+                editBtn.className = 'header-action-btn edit-post-btn';
                 editBtn.title = 'Edit Post';
                 editBtn.innerHTML = `
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -907,7 +897,7 @@
                 if (createPostBtn) {
                     createPostBtn.style.display = 'flex';
                 }
-                const lightLink = headerRight.querySelector('.light-link');
+                const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
                     lightLink.style.display = 'flex';
                 }

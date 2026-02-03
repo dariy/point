@@ -1,6 +1,6 @@
 """Tests for storage operations (stats, orphaned cleanup, paths, duplicates)."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -32,7 +32,7 @@ async def light_auth_headers(client: AsyncClient, db: AsyncSession):
     session = Session(
         user_id=user.id,
         token=hash_token("media-token"),
-        expires_at=datetime.utcnow() + timedelta(days=1),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
         user_agent="test"
     )
@@ -139,8 +139,29 @@ class TestOrphanedMedia:
         # We need to mock physical file existence or ensure they don't crash
         # MediaService uses aiofiles.os.remove which we can patch
 
-        m1 = Media(filename="o1.jpg", original_path="o1.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c1", post_id=None)
-        m2 = Media(filename="o2.jpg", original_path="o2.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=20, checksum="c2", post_id=1)
+        # Use old timestamp to bypass grace period
+        old_time = datetime.now(UTC) - timedelta(days=2)
+
+        m1 = Media(
+            filename="o1.jpg",
+            original_path="o1.jpg",
+            file_type=FileType.IMAGE,
+            mime_type="i/j",
+            file_size=10,
+            checksum="c1",
+            post_id=None,
+            uploaded_at=old_time
+        )
+        m2 = Media(
+            filename="o2.jpg",
+            original_path="o2.jpg",
+            file_type=FileType.IMAGE,
+            mime_type="i/j",
+            file_size=20,
+            checksum="c2",
+            post_id=1,
+            uploaded_at=old_time
+        )
         db.add_all([m1, m2])
         await db.commit()
 
@@ -158,10 +179,74 @@ class TestOrphanedMedia:
             assert res.scalars().first() is None
 
     @pytest.mark.asyncio
+    async def test_cleanup_orphaned_grace_period(self, db: AsyncSession):
+        """Test that media within grace period is not cleaned up."""
+        service = MediaService(db)
+        m1 = Media(
+            filename="recent.jpg",
+            original_path="recent.jpg",
+            file_type=FileType.IMAGE,
+            mime_type="i/j",
+            file_size=10,
+            checksum="crecent",
+            post_id=None,
+            uploaded_at=datetime.now(UTC) - timedelta(hours=1)
+        )
+        db.add(m1)
+        await db.commit()
+
+        deleted, freed = await service.cleanup_orphaned()
+        assert deleted == 0
+        assert freed == 0
+
+    @pytest.mark.asyncio
+    async def test_cleanup_orphaned_used_in_markdown(self, db: AsyncSession):
+        """Test that media used in markdown is not cleaned up even if post_id is NULL."""
+        from app.models.post import Post, PostStatus
+        service = MediaService(db)
+
+        # Create media
+        old_time = datetime.now(UTC) - timedelta(days=2)
+        m1 = Media(
+            filename="used.jpg",
+            original_path="originals/2026/02/used.jpg",
+            file_type=FileType.IMAGE,
+            mime_type="image/jpeg",
+            file_size=50,
+            checksum="cused",
+            post_id=None,
+            uploaded_at=old_time
+        )
+        db.add(m1)
+
+        # Create user for author_id
+        user = User(username="author", email="a@t.com", password_hash="h", display_name="A")
+        db.add(user)
+        await db.flush()
+
+        # Create post referencing the media in markdown
+        p = Post(
+            title="Post",
+            slug="post",
+            content="Check this image: ![](/media/originals/2026/02/used.jpg)",
+            author_id=user.id,
+            status=PostStatus.PUBLISHED
+        )
+        db.add(p)
+        await db.commit()
+
+        deleted, freed = await service.cleanup_orphaned()
+        assert deleted == 0
+        assert freed == 0
+
+    @pytest.mark.asyncio
     async def test_cleanup_orphaned_success(self, db: AsyncSession):
         """Test cleanup orphaned deletes files."""
         service = MediaService(db)
-        await service.upload_file(b"clean me", "clean.mp4", "video/mp4")
+        # Upload a file and then make it old
+        media = await service.upload_file(b"clean me", "clean.mp4", "video/mp4")
+        media.uploaded_at = datetime.now(UTC) - timedelta(days=2)
+        await db.commit()
 
         count, bytes_freed = await service.cleanup_orphaned()
         assert count > 0

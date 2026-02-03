@@ -1,6 +1,6 @@
 """Tests for media management operations (list, get, update, delete)."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -24,7 +24,7 @@ async def light_auth_headers(client: AsyncClient, db: AsyncSession):
     session = Session(
         user_id=user.id,
         token=hash_token("media-token"),
-        expires_at=datetime.utcnow() + timedelta(days=1),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
         user_agent="test"
     )
@@ -100,8 +100,11 @@ class TestMediaList:
     async def test_list_media_filters(self, db: AsyncSession):
         """Test listing media with filters."""
         service = MediaService(db)
-        m1 = Media(filename="1.jpg", original_path="1.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c1", post_id=1)
-        m2 = Media(filename="2.mp4", original_path="2.mp4", file_type=FileType.VIDEO, mime_type="v/m", file_size=20, checksum="c2", post_id=None)
+        # Old timestamp to bypass grace period
+        old_time = datetime.now(UTC) - timedelta(days=2)
+
+        m1 = Media(filename="1.jpg", original_path="1.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c1", post_id=1, uploaded_at=old_time)
+        m2 = Media(filename="2.mp4", original_path="2.mp4", file_type=FileType.VIDEO, mime_type="v/m", file_size=20, checksum="c2", post_id=None, uploaded_at=old_time)
         db.add_all([m1, m2])
         await db.commit()
 
@@ -119,11 +122,14 @@ class TestMediaList:
     async def test_list_media_orphaned_only(self, db: AsyncSession):
         """Test listing only orphaned media."""
         service = MediaService(db)
-        # Orphaned
+        # Orphaned and old
         m1 = await service.upload_file(b"c1", "o.mp4", "video/mp4")
+        m1.uploaded_at = datetime.now(UTC) - timedelta(days=2)
+        await db.commit()
 
         items, total = await service.list_media(orphaned_only=True)
-        assert m1 in items
+        # Compare by ID since objects might be from different sessions
+        assert any(item.id == m1.id for item in items)
 
 
 class TestMediaGet:
