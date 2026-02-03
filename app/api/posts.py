@@ -70,7 +70,6 @@ def post_to_response(
         data["content"] = post.content
         data["content_html"] = service.render_content(post)
         data["formatter"] = post.formatter
-        data["custom_url"] = post.custom_url
         data["meta_description"] = post.meta_description
 
     return data
@@ -194,7 +193,7 @@ async def get_post_by_slug(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ) -> PostResponse:
-    """Get a post by slug or custom URL.
+    """Get a post by slug.
 
     Public users can only see published posts.
     """

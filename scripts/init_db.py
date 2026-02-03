@@ -80,9 +80,9 @@ async def create_light_user() -> bool:
 
 async def create_default_admin() -> bool:
     """Create default admin user if no users exist.
-    
+
     Creates user with credentials admin/admin.
-    
+
     Returns:
         True if user created, False if skipped
     """
@@ -98,7 +98,7 @@ async def create_default_admin() -> bool:
             return False
 
         print("Creating default admin user (admin/admin)...")
-        
+
         # Hash "admin" with SHA-256
         hashed_password = hashlib.sha256("admin".encode()).hexdigest()
 
@@ -128,7 +128,7 @@ async def main() -> None:
     # Check for --create-light flag
     if "--create-light" in sys.argv:
         await create_light_user()
-    
+
     # Check for --create-admin flag
     if "--create-admin" in sys.argv:
         await create_default_admin()
