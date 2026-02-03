@@ -385,7 +385,7 @@ class MediaService:
         used_paths = set()
 
         # Helper to extract and normalize paths
-        def collect_paths(text: str | None):
+        def collect_paths(text: str | None) -> None:
             if not text:
                 return
             found = extract_all_media(text)
@@ -406,23 +406,23 @@ class MediaService:
         post_result = await self.db.execute(
             select(Post.content, Post.excerpt, Post.thumbnail_path)
         )
-        for row in post_result.all():
-            collect_paths(row.content)
-            collect_paths(row.excerpt)
-            if row.thumbnail_path:
+        for post_row in post_result.all():
+            collect_paths(post_row.content)
+            collect_paths(post_row.excerpt)
+            if post_row.thumbnail_path:
                 # thumbnail_path in Post might be a URL or relative path
-                collect_paths(row.thumbnail_path)
+                collect_paths(post_row.thumbnail_path)
 
         # Scan Users (avatars)
         user_result = await self.db.execute(select(User.avatar_path))
-        for row in user_result.all():
-            if row.avatar_path:
-                collect_paths(row.avatar_path)
+        for user_row in user_result.all():
+            if user_row.avatar_path:
+                collect_paths(user_row.avatar_path)
 
         # Scan Settings
         settings_result = await self.db.execute(select(BlogSettings.value))
-        for row in settings_result.all():
-            collect_paths(row.value)
+        for settings_row in settings_result.all():
+            collect_paths(settings_row.value)
 
         # 3. Filter candidates
         orphaned = []
