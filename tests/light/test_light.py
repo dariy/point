@@ -4,7 +4,7 @@ This test suite provides extensive coverage for all light (light) interface rout
 including authentication, dashboard, posts, tags, media, settings, security, and system pages.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -251,7 +251,7 @@ class TestDashboard:
             file_type=FileType.IMAGE,
             mime_type="image/jpeg",
             file_size=1024,
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=datetime.now(UTC),
             checksum="abc123",
         )
         # Create additional session
@@ -260,9 +260,9 @@ class TestDashboard:
             token="test_token",
             ip_address="127.0.0.1",
             user_agent="test",
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=1),
-            last_activity=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+            last_activity=datetime.now(UTC),
         )
 
         db.add_all([p1, p2, t1, m1, s1])
@@ -413,7 +413,7 @@ class TestPostsList:
             content="Content",
             status=PostStatus.PUBLISHED,
             author_id=test_user["user"].id,
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(UTC),
             formatter=PostFormatter.MARKDOWN,
         )
         db.add(post)

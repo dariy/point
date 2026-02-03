@@ -1,6 +1,6 @@
 """Tests for RSS feed functionality."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -26,7 +26,7 @@ async def test_rss_feed_limit_20_posts(client: AsyncClient, db: AsyncSession):
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            published_at=datetime.utcnow() - timedelta(hours=i)
+            published_at=datetime.now(UTC) - timedelta(hours=i)
         )
         db.add(post)
     await db.commit()
@@ -55,7 +55,7 @@ async def test_rss_feed_excludes_draft_posts(client: AsyncClient, db: AsyncSessi
         content="Public content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(pub_post)
 

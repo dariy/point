@@ -1,7 +1,7 @@
 """Tests for media upload functionality."""
 
 import io
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -83,7 +83,7 @@ async def light_auth_headers(client: AsyncClient, db: AsyncSession):
     session = Session(
         user_id=user.id,
         token=hash_token("media-token"),
-        expires_at=datetime.utcnow() + timedelta(days=1),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
         user_agent="test"
     )
