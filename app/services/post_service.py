@@ -143,7 +143,7 @@ class PostService:
                 # If they provide "foo", and "foo" exists, maybe they want "foo-1".
                 # Let's check `_generate_unique_slug` usage.
                 pass
-            
+
             # Actually, let's just use the logic:
             # If slug provided, start with that base. Ensure unique.
             base_slug = slugify(post_data.slug)
@@ -337,10 +337,10 @@ class PostService:
                     # Fallback to title if title is also being updated, or existing title
                     title_to_use = update_data.get("title", post.title)
                     base_slug = slugify(title_to_use)
-                
+
                 existing_slugs = await self._get_existing_slugs(exclude_id=post.id)
                 post.slug = make_unique_slug(base_slug, existing_slugs)
-            
+
             # Remove from update_data so we don't set it again blindly (though setattr would work)
             del update_data["slug"]
 
