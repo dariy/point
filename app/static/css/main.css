@@ -280,6 +280,15 @@ img {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    width: auto;
+}
+
+.header-left-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
 }
 
 .site-header .tags-filters {
@@ -1260,6 +1269,7 @@ img {
     flex: 1;
     display: flex;
     align-items: center;
+    gap: var(--spacing-sm);
 }
 
 .post-header-bar .header-center {
