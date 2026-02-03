@@ -20,6 +20,25 @@
     }
 
     /**
+     * Initialize tags input handling
+     */
+    function initTagsInput() {
+        const tagsInput = document.getElementById('tags');
+        if (!tagsInput) { alert("!!!"); return };
+
+        tagsInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // Add comma if not present at end
+                const val = tagsInput.value.trim();
+                if (val && !val.endsWith(',')) {
+                    tagsInput.value = val + ', ';
+                }
+            }
+        });
+    }
+
+    /**
      * Initialize post form submission
      */
     function initPostForm() {
@@ -40,9 +59,9 @@
                 excerpt: formData.get('excerpt') || null,
                 status: formData.get('status'),
                 is_featured: formData.get('is_featured') === '1',
-                custom_url: formData.get('custom_url') || null,
+                slug: formData.get('slug') || null,
                 meta_description: formData.get('meta_description') || null,
-                tags: formData.get('tags') ? formData.get('tags').split(',').filter(t => t.trim()) : []
+                tags: formData.get('tags') ? formData.get('tags').split(',').map(t => t.trim()).filter(t => t.length > 0) : []
             };
 
             const url = postId ? `/api/posts/${postId}` : '/api/posts';
@@ -87,8 +106,12 @@
         document.addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                const saveBtn = document.getElementById('btn-save');
+                const saveBtn = document.getElementById('btn-save'); // Note: ID in template is btn-save-header
                 if (saveBtn) saveBtn.click();
+                else {
+                    const headerSave = document.getElementById('btn-save-header');
+                    if (headerSave) headerSave.click();
+                }
             }
         });
     }
@@ -141,6 +164,7 @@
      */
     function init() {
         initPreviewToggle();
+        initTagsInput();
         initPostForm();
         initKeyboardShortcuts();
         initCardToggling();

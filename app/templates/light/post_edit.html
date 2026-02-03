@@ -49,45 +49,35 @@
                         >
                     </div>
                     <div class="form-group">
-                        <label for="title" class="form-label">Custom URL</label>
+                        <label for="slug" class="form-label">Slug</label>
                         <input
                             type="text"
-                            id="custom_url"
-                            name="custom_url"
-                            value="{{ post.custom_url if post and post.custom_url else '' }}"
+                            id="slug"
+                            name="slug"
+                            value="{{ post.slug if post else '' }}"
                             class="form-input"
-                            placeholder="custom-slug"
+                            placeholder="url-slug"
                         >
-                        <span class="form-help">Leave empty to use auto-generated slug</span>
+                        <span class="form-help">Leave empty to auto-generate from title</span>
                     </div>
                     <div class="form-group">
                         <label for="tags" class="form-label">Tags</label>
-                        <input
-                            type="text"
-                            id="tags"
-                            name="tags"
-                            value="{{ post_tags | join(',') if post_tags else '' }}"
-                            class="form-input"
-                            placeholder="Add tags..."
-                        >
+                        <div class="tags-input" data-tags='{{ all_tags | tojson | safe }}'>
+                            <input
+                                type="hidden"
+                                name="tags"
+                                value="{{ post_tags | join(',') if post_tags else '' }}"
+                            >
+                            <input
+                                type="text"
+                                id="tags"
+                                class="form-input"
+                                placeholder="Add tags..."
+                            >
+                            <div class="tags-suggestions"></div>
+                        </div>
                         <span class="form-help">Press Enter or comma to add tags</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- Excerpt -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>Excerpt</h3>
-                </div>
-                <div class="card-body">
-                    <textarea
-                        id="excerpt"
-                        name="excerpt"
-                        class="form-textarea"
-                        rows="3"
-                        placeholder="Brief summary (auto-generated if empty)..."
-                    >{{ post.excerpt if post else '' }}</textarea>
                 </div>
             </div>
 
@@ -144,6 +134,22 @@
 
         <!-- Sidebar -->
         <div class="editor-sidebar">
+            <!-- Excerpt -->
+            <div class="card collapsed">
+                <div class="card-header">
+                    <h3>Excerpt</h3>
+                </div>
+                <div class="card-body">
+                    <textarea
+                        id="excerpt"
+                        name="excerpt"
+                        class="form-textarea"
+                        rows="3"
+                        placeholder="Brief summary (auto-generated if empty)..."
+                    >{{ post.excerpt if post else '' }}</textarea>
+                </div>
+            </div>
+
             <!-- Publish Box -->
             <div class="card collapsed">
                 <div class="card-header">

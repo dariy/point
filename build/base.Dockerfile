@@ -22,6 +22,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     sqlite3 \
+    zsh \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python packages from wheels
