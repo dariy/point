@@ -57,11 +57,22 @@
     <header class="site-header">
         <div class="header-container">
             {% block header_content %}
-            <div class="site-branding">
-                <a href="/" class="site-title{% if user %} authenticated{% endif %}">{{ blog_title }}</a>
-                {% if blog_subtitle %}
-                <p class="site-subtitle">{{ blog_subtitle }}</p>
+            <div class="header-left-group">
+                {% if user %}
+                <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                        <path d="M2 17l10 5 10-5"></path>
+                        <path d="M2 12l10 5 10-5"></path>
+                    </svg>
+                </a>
                 {% endif %}
+                <div class="site-branding">
+                    <a href="/" class="site-title{% if user %} authenticated{% endif %}">{{ blog_title }}</a>
+                    {% if blog_subtitle %}
+                    <p class="site-subtitle">{{ blog_subtitle }}</p>
+                    {% endif %}
+                </div>
             </div>
             {% block header_filters %}{% endblock %}
             <nav class="site-nav">
@@ -69,13 +80,6 @@
                 <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 5v14M5 12h14"></path>
-                    </svg>
-                </a>
-                <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                        <path d="M2 17l10 5 10-5"></path>
-                        <path d="M2 12l10 5 10-5"></path>
                     </svg>
                 </a>
                 {% endif %}
@@ -120,21 +124,23 @@
 
 <!-- Client-side Templates for AJAX Navigation -->
 <template id="tmpl-header-default">
-    <div class="site-branding">
-        <a href="/" class="site-title"></a>
-        <p class="site-subtitle"></p>
-    </div>
-    <nav class="site-nav">
-        <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 5v14M5 12h14"></path>
-            </svg>
-        </a>
+    <div class="header-left-group">
         <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel" style="display: none;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                 <path d="M2 17l10 5 10-5"></path>
                 <path d="M2 12l10 5 10-5"></path>
+            </svg>
+        </a>
+        <div class="site-branding">
+            <a href="/" class="site-title"></a>
+            <p class="site-subtitle"></p>
+        </div>
+    </div>
+    <nav class="site-nav">
+        <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M5 12h14"></path>
             </svg>
         </a>
         <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
@@ -157,26 +163,11 @@
 </template>
 
 <template id="tmpl-header-immersive">
-    <div class="post-header-bar" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+    <div class="post-header-bar">
         <div class="header-left">
-            <a href="/" class="nav-link" style="padding: 0.5rem;" title="Back to Home">
+            <a href="/" class="nav-link" title="Back to Home">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
-            </a>
-        </div>
-        <div class="header-center" style="text-align: center; display: flex; flex-direction: column; align-items: center;">
-            <h1 class="site-title" style="margin: 0; font-size: 1.25rem;"></h1>
-            <div class="post-meta" style="font-size: 0.875rem; opacity: 0.9; margin-bottom: 0;">
-                <time class="post-date"></time>
-                <span class="post-meta-divider">·</span>
-                <span class="post-views"></span>
-            </div>
-        </div>
-        <div class="header-right" style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-            <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14M5 12h14"></path>
                 </svg>
             </a>
             <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel" style="display: none;">
@@ -184,6 +175,21 @@
                     <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                     <path d="M2 17l10 5 10-5"></path>
                     <path d="M2 12l10 5 10-5"></path>
+                </svg>
+            </a>
+        </div>
+        <div class="header-center">
+            <h1 class="site-title"></h1>
+            <div class="post-meta">
+                <time class="post-date"></time>
+                <span class="post-meta-divider">·</span>
+                <span class="post-views"></span>
+            </div>
+        </div>
+        <div class="header-right">
+            <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12h14"></path>
                 </svg>
             </a>
             <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -17,7 +17,7 @@ async def test_single_post_ajax(client, db, test_user):
         slug="ajax-test-post",
         content="<p>Test Content</p>",
         status=PostStatus.PUBLISHED,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
         author_id=test_user["user"].id
     )
@@ -59,7 +59,7 @@ async def test_single_post_immersive_ajax(client, db, test_user):
         slug="immersive-post",
         content="![Image](test.jpg)",
         status=PostStatus.PUBLISHED,
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
         author_id=test_user["user"].id
     )
@@ -106,7 +106,7 @@ async def sample_posts(db: AsyncSession) -> list[Post]:
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow() - timedelta(hours=i),
+            published_at=datetime.now(UTC) - timedelta(hours=i),
             author_id=1,
         )
         db.add(post)
@@ -129,7 +129,7 @@ async def sample_tag_with_posts(db: AsyncSession) -> Tag:
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.utcnow() - timedelta(hours=i),
+            published_at=datetime.now(UTC) - timedelta(hours=i),
             author_id=1,
         )
         post.tags.append(tag)

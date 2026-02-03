@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, or_, select, update
@@ -145,7 +145,7 @@ class PostService:
             custom_url=post_data.custom_url,
             meta_description=post_data.meta_description,
             author_id=author_id,
-            published_at=datetime.utcnow() if post_data.status.value == PostStatus.PUBLISHED.value else None,
+            published_at=datetime.now(UTC) if post_data.status.value == PostStatus.PUBLISHED.value else None,
         )
 
         self.db.add(post)
@@ -306,7 +306,7 @@ class PostService:
 
             # Set published_at if status changed to published and not already set
             if field == "status" and value == PostStatus.PUBLISHED and not post.published_at:
-                post.published_at = datetime.utcnow()
+                post.published_at = datetime.now(UTC)
 
             setattr(post, field, value)
 
@@ -373,7 +373,7 @@ class PostService:
             return None
 
         post.status = PostStatus.PUBLISHED
-        post.published_at = datetime.utcnow()
+        post.published_at = datetime.now(UTC)
 
         # Clear preview token on publish
         post.preview_token = None
@@ -463,7 +463,7 @@ class PostService:
 
         # Generate new token
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(days=expires_days)
+        expires_at = datetime.now(UTC) + timedelta(days=expires_days)
 
         post.preview_token = token
         post.preview_expires_at = expires_at

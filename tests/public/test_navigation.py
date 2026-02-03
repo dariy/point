@@ -1,6 +1,6 @@
 """Tests for post navigation (previous/next post links)."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -25,7 +25,7 @@ async def test_single_post_first_has_no_previous(client: AsyncClient, db: AsyncS
         content="First",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow() - timedelta(days=10)
+        published_at=datetime.now(UTC) - timedelta(days=10)
     )
     db.add(first_post)
     await db.commit()
@@ -54,7 +54,7 @@ async def test_single_post_last_has_no_next(client: AsyncClient, db: AsyncSessio
         content="Last",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.utcnow()
+        published_at=datetime.now(UTC)
     )
     db.add(last_post)
     await db.commit()
