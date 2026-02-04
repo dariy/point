@@ -193,7 +193,7 @@ rollback() {
 # Main deployment flow
 main() {
     log_info "========================================="
-    log_info "Photo Blog - Production Deployment"
+    log_info "Point - Production Deployment"
     log_info "========================================="
 
     # Pre-deployment checks

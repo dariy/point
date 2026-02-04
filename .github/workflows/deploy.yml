@@ -125,7 +125,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
           source: "build/docker-compose*.yml"
-          target: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
+          target: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
           overwrite: true
           strip_components: 0
 
@@ -141,10 +141,10 @@ jobs:
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
           envs: BUILD_VERSION,IMAGE_TAG
           script: |
-            cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/photo-blog' }}
+            cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
             
-            # Create build directory if it doesn't exist (since strip_components: 0 is used)
-            mkdir -p build
+            # Create build and data directories if they don't exist (since strip_components: 0 is used)
+            mkdir -p build data
 
             # Pull latest code (optional - if using git deployment)
             if [ -d .git ]; then
