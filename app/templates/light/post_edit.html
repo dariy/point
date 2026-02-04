@@ -6,7 +6,19 @@
 {% block page_title %}{% if post %}Edit Post{% else %}New Post{% endif %}{% endblock %}
 
 {% block header_actions %}
+<button type="submit" form="post-form" id="btn-save-header" class="btn btn-primary">Save</button>
 <a href="/light/posts" class="btn btn-outline">Cancel</a>
+{% if post %}
+<button
+    type="button"
+    class="btn btn-danger"
+    data-delete-url="/api/posts/{{ post.id }}"
+    data-delete-name="{{ post.title }}"
+    data-redirect-url="/light/posts"
+>
+    Delete Post
+</button>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -35,6 +47,36 @@
                             placeholder="Enter post title..."
                             style="font-size: 1.25rem; font-weight: 600;"
                         >
+                    </div>
+                    <div class="form-group">
+                        <label for="slug" class="form-label">Slug</label>
+                        <input
+                            type="text"
+                            id="slug"
+                            name="slug"
+                            value="{{ post.slug if post else '' }}"
+                            class="form-input"
+                            placeholder="url-slug"
+                        >
+                        <span class="form-help">Leave empty to auto-generate from title</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="tags" class="form-label">Tags</label>
+                        <div class="tags-input" data-tags='{{ all_tags | tojson | safe }}'>
+                            <input
+                                type="hidden"
+                                name="tags"
+                                value="{{ post_tags | join(',') if post_tags else '' }}"
+                            >
+                            <input
+                                type="text"
+                                id="tags"
+                                class="form-input"
+                                placeholder="Add tags..."
+                            >
+                            <div class="tags-suggestions"></div>
+                        </div>
+                        <span class="form-help">Press Enter or comma to add tags</span>
                     </div>
                 </div>
             </div>
@@ -92,8 +134,24 @@
 
         <!-- Sidebar -->
         <div class="editor-sidebar">
+            <!-- Excerpt -->
+            <div class="card collapsed">
+                <div class="card-header">
+                    <h3>Excerpt</h3>
+                </div>
+                <div class="card-body">
+                    <textarea
+                        id="excerpt"
+                        name="excerpt"
+                        class="form-textarea"
+                        rows="3"
+                        placeholder="Brief summary (auto-generated if empty)..."
+                    >{{ post.excerpt if post else '' }}</textarea>
+                </div>
+            </div>
+
             <!-- Publish Box -->
-            <div class="card">
+            <div class="card collapsed">
                 <div class="card-header">
                     <h3>Publish</h3>
                 </div>
@@ -102,7 +160,7 @@
                         <label for="status" class="form-label">Status</label>
                         <select id="status" name="status" class="form-select">
                             {% for s in statuses %}
-                            <option value="{{ s }}" {% if post and post.status.value == s %}selected{% endif %}>
+                            <option value="{{ s }}" {% if post and post.status.value == s %}selected{% elif not post and s == 'published' %}selected{% endif %}>
                                 {{ s|capitalize }}
                             </option>
                             {% endfor %}
@@ -132,63 +190,14 @@
                     </div>
                     {% endif %}
                 </div>
-                <div class="card-footer">
-                    <button type="submit" id="btn-save" class="btn btn-primary btn-block">
-                        Save
-                    </button>
-                </div>
             </div>
 
-            <!-- Tags -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>Tags</h3>
-                </div>
-                <div class="card-body">
-                    <div class="tags-input" data-tags='{{ all_tags | tojson }}'>
-                        <input type="hidden" name="tags" value="{{ post_tags | join(',') if post_tags else '' }}">
-                        <input type="text" placeholder="Add tags...">
-                        <div class="tags-suggestions" style="display: none;"></div>
-                    </div>
-                    <span class="form-help">Press Enter or comma to add tags</span>
-                </div>
-            </div>
-
-            <!-- Excerpt -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>Excerpt</h3>
-                </div>
-                <div class="card-body">
-                    <textarea
-                        id="excerpt"
-                        name="excerpt"
-                        class="form-textarea"
-                        rows="3"
-                        placeholder="Brief summary (auto-generated if empty)..."
-                    >{{ post.excerpt if post else '' }}</textarea>
-                </div>
-            </div>
-
-            <!-- SEO -->
-            <div class="card">
+            <!-- SEO (Remaining) -->
+            <div class="card collapsed">
                 <div class="card-header">
                     <h3>SEO</h3>
                 </div>
                 <div class="card-body">
-                    <div class="form-group">
-                        <label for="custom_url" class="form-label">Custom URL</label>
-                        <input
-                            type="text"
-                            id="custom_url"
-                            name="custom_url"
-                            value="{{ post.custom_url if post and post.custom_url else '' }}"
-                            class="form-input"
-                            placeholder="custom-slug"
-                        >
-                        <span class="form-help">Leave empty to use auto-generated slug</span>
-                    </div>
-
                     <div class="form-group">
                         <label for="meta_description" class="form-label">Meta Description</label>
                         <textarea
@@ -201,26 +210,6 @@
                     </div>
                 </div>
             </div>
-
-            {% if post %}
-            <!-- Danger Zone -->
-            <div class="card">
-                <div class="card-header">
-                    <h3>Danger Zone</h3>
-                </div>
-                <div class="card-body">
-                    <button
-                        type="button"
-                        class="btn btn-danger btn-block"
-                        data-delete-url="/api/posts/{{ post.id }}"
-                        data-delete-name="{{ post.title }}"
-                        data-redirect-url="/light/posts"
-                    >
-                        Delete Post
-                    </button>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div>
 </form>

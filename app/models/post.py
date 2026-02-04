@@ -85,9 +85,6 @@ class Post(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     thumbnail_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    custom_url: Mapped[str | None] = mapped_column(
-        String(200), unique=True, nullable=True
-    )
     meta_description: Mapped[str | None] = mapped_column(String(300), nullable=True)
     preview_token: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True, index=True
