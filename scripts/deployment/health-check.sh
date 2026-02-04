@@ -53,7 +53,7 @@ check_database() {
 check_disk_space() {
     echo -n "Checking disk space... "
 
-    USAGE=$(df -h /var/lib/photo-blog/data | awk 'NR==2 {print $5}' | sed 's/%//')
+    USAGE=$(df -h /var/lib/point/data | awk 'NR==2 {print $5}' | sed 's/%//')
 
     if [ "$USAGE" -lt 90 ]; then
         echo -e "${GREEN}OK${NC} (${USAGE}% used)"
