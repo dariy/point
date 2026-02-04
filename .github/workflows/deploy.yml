@@ -134,12 +134,14 @@ jobs:
         env:
           BUILD_VERSION: ${{ needs.build.outputs.version }}
           IMAGE_TAG: ${{ github.sha }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: BUILD_VERSION,IMAGE_TAG
+          envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET
           script: |
             cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
             
@@ -156,6 +158,13 @@ jobs:
               echo "APP_VERSION=${BUILD_VERSION}" > build/.env
               echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> build/.env
             fi
+
+            # Add / update sensitive secrets in build/.env (do NOT print them)
+            sed -i '/^SECRET_KEY=/d' build/.env || true
+            sed -i '/^SESSION_SECRET=/d' build/.env || true
+            printf '%s\n' "SECRET_KEY=${SECRET_KEY}" >> build/.env
+            printf '%s\n' "SESSION_SECRET=${SESSION_SECRET}" >> build/.env
+            chmod 600 build/.env
 
             # Login to GitHub Container Registry
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
