@@ -1,6 +1,6 @@
 #!/bin/bash
 # Production Server Setup Script
-# This script prepares a fresh server for Photo Blog deployment
+# This script prepares a fresh server for Point deployment
 
 set -e
 
@@ -23,7 +23,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 log_info "========================================="
-log_info "Photo Blog - Production Server Setup"
+log_info "Point - Production Server Setup"
 log_info "========================================="
 
 # Update system
@@ -88,8 +88,8 @@ fi
 
 # Create project directory
 log_info "Creating project directory..."
-PROJECT_DIR="/opt/photo-blog"
-DATA_DIR="/var/lib/photo-blog/data"
+PROJECT_DIR="/opt/point"
+DATA_DIR="/var/lib/point/data"
 
 mkdir -p "$PROJECT_DIR"
 mkdir -p "$DATA_DIR"/{media,cache,logs,backups}
@@ -142,16 +142,16 @@ log_info "Add your deployment SSH public key to: $DEPLOY_HOME/.ssh/authorized_ke
 
 # Create systemd service (optional)
 log_info "Creating systemd service..."
-cat > /etc/systemd/system/photo-blog.service <<'EOF'
+cat > /etc/systemd/system/point.service <<'EOF'
 [Unit]
-Description=Photo Blog
+Description=Point Blog
 Requires=docker.service
 After=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/photo-blog
+WorkingDirectory=/opt/point
 ExecStart=/usr/local/bin/docker-compose -f docker-compose.prod.yml up -d
 ExecStop=/usr/local/bin/docker-compose -f docker-compose.prod.yml down
 User=deploy
@@ -166,8 +166,8 @@ log_success "Systemd service created"
 
 # Set up log rotation
 log_info "Configuring log rotation..."
-cat > /etc/logrotate.d/photo-blog <<'EOF'
-/var/lib/photo-blog/data/logs/*.log {
+cat > /etc/logrotate.d/point <<'EOF'
+/var/lib/point/data/logs/*.log {
     daily
     missingok
     rotate 14
@@ -177,7 +177,7 @@ cat > /etc/logrotate.d/photo-blog <<'EOF'
     create 0640 deploy deploy
     sharedscripts
     postrotate
-        docker-compose -f /opt/photo-blog/docker-compose.prod.yml restart point >/dev/null 2>&1 || true
+        docker-compose -f /opt/point/docker-compose.prod.yml restart point >/dev/null 2>&1 || true
     endscript
 }
 EOF
@@ -185,9 +185,9 @@ log_success "Log rotation configured"
 
 # Create backup cron job
 log_info "Setting up automated backups..."
-cat > /etc/cron.d/photo-blog-backup <<'EOF'
-# Photo Blog automated backup
-0 2 * * * deploy cd /opt/photo-blog && /opt/photo-blog/scripts/backup.sh >/var/log/photo-blog-backup.log 2>&1
+cat > /etc/cron.d/point-backup <<'EOF'
+# Point automated backup
+0 2 * * * deploy cd /opt/point && /opt/point/scripts/backup.sh >/var/log/point-backup.log 2>&1
 EOF
 log_success "Backup cron job created"
 
@@ -198,10 +198,10 @@ log_success "========================================="
 echo ""
 log_info "Next steps:"
 echo "1. Add deployment SSH key to /home/deploy/.ssh/authorized_keys"
-echo "2. Clone repository to /opt/photo-blog"
+echo "2. Clone repository to /opt/point"
 echo "3. Copy .env.production.example to .env and configure"
 echo "4. Obtain SSL certificate: certbot certonly --standalone -d yourdomain.com"
-echo "5. Deploy: cd /opt/photo-blog && ./scripts/deployment/deploy.sh"
+echo "5. Deploy: cd /opt/point && ./scripts/deployment/deploy.sh"
 echo ""
 log_info "Deployment user: deploy"
 log_info "Project directory: $PROJECT_DIR"
