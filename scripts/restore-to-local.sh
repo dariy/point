@@ -20,7 +20,7 @@ if [ ! -f "$BACKUP_FILE" ]; then
 fi
 
 # Configuration - adjust these or set via environment variables
-LOCAL_CONTAINER="${LOCAL_CONTAINER:-photo-blog}"
+LOCAL_CONTAINER="${LOCAL_CONTAINER:-point}"
 LOCAL_SUDO="${LOCAL_SUDO:-}"  # Set to "sudo" if docker requires root
 
 # Detect container runtime (docker or podman)
@@ -85,9 +85,12 @@ TEMP_DIR=\$(mktemp -d)
 tar -xzf /tmp/$BACKUP_NAME -C \$TEMP_DIR
 
 echo 'Restoring database...'
-if [ -f \$TEMP_DIR/blog.db ]; then
-    cp \$TEMP_DIR/blog.db /data/blog.db
-    echo '  Database restored'
+if [ -f \$TEMP_DIR/point.db ]; then
+    cp \$TEMP_DIR/point.db /data/point.db
+    echo '  Database restored (from point.db)'
+elif [ -f \$TEMP_DIR/blog.db ]; then
+    cp \$TEMP_DIR/blog.db /data/point.db
+    echo '  Database restored (from legacy blog.db -> point.db)'
 fi
 
 echo 'Restoring media...'
