@@ -14,8 +14,41 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.database import async_session_maker, create_tables, engine
+from app.config import get_settings
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
+
+
+def migrate_legacy_db_name() -> None:
+    """Rename legacy blog.db to point.db if it exists and point.db does not."""
+    settings = get_settings()
+    db_url = settings.database_url
+    if "sqlite" not in db_url:
+        return
+
+    # Extract path from URL (e.g., sqlite+aiosqlite:////data/point.db -> /data/point.db)
+    # Handle both absolute (////) and relative (///) paths
+    if "sqlite+aiosqlite:////" in db_url:
+        db_path_str = db_url.replace("sqlite+aiosqlite:////", "/")
+    else:
+        db_path_str = db_url.replace("sqlite+aiosqlite:///", "")
+    
+    current_db_path = Path(db_path_str)
+    
+    # If current DB already exists, nothing to do
+    if current_db_path.exists():
+        return
+        
+    # Check for legacy DB name in the same directory
+    legacy_db_path = current_db_path.parent / "blog.db"
+    
+    if legacy_db_path.exists():
+        print(f"Migrating legacy database: {legacy_db_path} -> {current_db_path}")
+        try:
+            legacy_db_path.rename(current_db_path)
+            print("Database migration successful.")
+        except Exception as e:
+            print(f"Error migrating database: {e}")
 
 
 async def create_light_user() -> bool:
@@ -121,6 +154,10 @@ async def create_default_admin() -> bool:
 
 async def main() -> None:
     """Initialize database tables and optionally create light user."""
+    
+    # Check for legacy database migration
+    migrate_legacy_db_name()
+    
     print("Creating database tables...")
     await create_tables()
     print("Database tables created successfully!")

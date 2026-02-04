@@ -72,11 +72,11 @@ Set the following variables:
 
 **Production Server:**
 - `PROD_HOST` - SSH connection to production (e.g., `user@192.168.1.100`)
-- `PROD_CONTAINER` - Container name on production (default: `photo-blog`)
+- `PROD_CONTAINER` - Container name on production (default: `point-prod`)
 - `PROD_SUDO` - Set to "sudo" if docker requires root (default: empty)
 
 **Local Container:**
-- `LOCAL_CONTAINER` - Container name on lab machine (default: `photo-blog`)
+- `LOCAL_CONTAINER` - Container name on lab machine (default: `point`)
 - `LOCAL_SUDO` - Set to "sudo" if docker requires root (default: empty)
 
 **Storage:**
@@ -151,7 +151,7 @@ source scripts/backup-config.sh
 ./scripts/backup-from-local.sh
 
 # Option 3: Set variables inline
-LOCAL_CONTAINER=photo-blog ./scripts/backup-from-local.sh
+LOCAL_CONTAINER=point ./scripts/backup-from-local.sh
 ```
 
 This will:
@@ -176,7 +176,7 @@ source scripts/backup-config.sh
 ./scripts/restore-to-local.sh ./backups/backup_2026-01-30_local.tar.gz
 
 # Option 3: Set variables inline
-LOCAL_CONTAINER=photo-blog ./scripts/restore-to-local.sh ./backups/backup.tar.gz
+LOCAL_CONTAINER=point ./scripts/restore-to-local.sh ./backups/backup.tar.gz
 ```
 
 This will:
@@ -329,7 +329,7 @@ crontab -e
 ssh user@production-server.com echo "Connection successful"
 
 # Check container is running
-ssh user@production-server.com docker ps | grep photo-blog
+ssh user@production-server.com docker ps | grep point-prod
 ```
 
 ### Backup Not Found
@@ -356,17 +356,13 @@ Update `PROD_CONTAINER` in `backup-config.sh` accordingly.
 
 ## Backup File Format
 
-Backup files are `.tar.gz` archives containing:
+Backup files are .tar.gz archives containing:
 
 ```
 backup_YYYY-MM-DD_HH-MM-SS.tar.gz
-├── blog.db          # SQLite database
+├── point.db         # SQLite database
 └── media/           # Media files
-    ├── originals/
-    ├── large/
-    ├── medium/
-    └── small/
-```
+
 
 ## Security Notes
 
