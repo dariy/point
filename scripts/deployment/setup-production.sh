@@ -177,7 +177,7 @@ cat > /etc/logrotate.d/photo-blog <<'EOF'
     create 0640 deploy deploy
     sharedscripts
     postrotate
-        docker-compose -f /opt/photo-blog/docker-compose.prod.yml restart blog >/dev/null 2>&1 || true
+        docker-compose -f /opt/photo-blog/docker-compose.prod.yml restart point >/dev/null 2>&1 || true
     endscript
 }
 EOF
