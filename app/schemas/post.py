@@ -35,13 +35,13 @@ class PostBase(BaseModel):
     status: PostStatus = Field(default=PostStatus.DRAFT)
     is_featured: bool = Field(default=False)
     thumbnail_path: str | None = Field(default=None, max_length=500)
-    custom_url: str | None = Field(default=None, max_length=200)
     meta_description: str | None = Field(default=None, max_length=300)
 
 
 class PostCreate(PostBase):
     """Schema for creating a post."""
 
+    slug: str | None = Field(default=None, max_length=200, description="Optional explicit slug")
     tags: list[str] = Field(default_factory=list, description="Tag names to associate")
 
     model_config = ConfigDict(
@@ -61,13 +61,13 @@ class PostUpdate(BaseModel):
     """Schema for updating a post (all fields optional)."""
 
     title: str | None = Field(default=None, min_length=1, max_length=500)
+    slug: str | None = Field(default=None, min_length=1, max_length=200)
     content: str | None = Field(default=None, min_length=1)
     excerpt: str | None = Field(default=None, max_length=1000)
     formatter: PostFormatter | None = Field(default=None)
     status: PostStatus | None = Field(default=None)
     is_featured: bool | None = Field(default=None)
     thumbnail_path: str | None = Field(default=None, max_length=500)
-    custom_url: str | None = Field(default=None, max_length=200)
     meta_description: str | None = Field(default=None, max_length=300)
     tags: list[str] | None = Field(default=None)
 
@@ -101,7 +101,6 @@ class PostResponse(BaseModel):
     updated_at: datetime
     author: AuthorResponse
     thumbnail_path: str | None
-    custom_url: str | None
     meta_description: str | None
     tags: list[str] = Field(default_factory=list)
 

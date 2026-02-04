@@ -65,7 +65,7 @@
     --light-sidebar-text-hover: #ffffff;
     --light-sidebar-active-bg: #1e293b;
     --light-sidebar-border: #334155;
-    --light-header-bg: #ffffff;
+    --light-header-bg: rgba(255, 255, 255, 0.8);
     --light-header-border: #e2e8f0;
     --light-content-bg: #ffffff;
     --light-text-primary: #0f172a;
@@ -109,7 +109,7 @@
     --light-sidebar-text-hover: #ffffff;
     --light-sidebar-active-bg: #2d2d2d;
     --light-sidebar-border: #333333;
-    --light-header-bg: #1e1e1e;
+    --light-header-bg: rgba(30, 30, 30, 0.8);
     --light-header-border: #2d2d2d;
     --light-content-bg: #1e1e1e;
     --light-text-primary: #f1f5f9;
@@ -331,6 +331,7 @@ a:hover {
     justify-content: space-between;
     z-index: 50;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
+    backdrop-filter: blur(4px);
 }
 
 .light-header h1 {
@@ -612,6 +613,7 @@ input[type="password"] {
     border-bottom: 1px solid var(--light-border);
     background-color: var(--light-hover-bg);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
+    cursor: pointer;
 }
 
 .card-header h2,
@@ -630,6 +632,21 @@ input[type="password"] {
     border-top: 1px solid var(--light-border);
     background-color: var(--light-hover-bg);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
+}
+
+/* Foldable cards support */
+.card.collapsed .card-body,
+.card.collapsed .card-footer {
+    display: none;
+}
+
+.toggle-icon {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.card.collapsed .toggle-icon {
+    transform: rotate(-90deg);
 }
 
 /* ===========================
@@ -971,6 +988,7 @@ input[type="password"] {
 }
 
 .tags-input {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xs);
@@ -988,13 +1006,20 @@ input[type="password"] {
 
 .tags-input .tag {
     background-color: var(--color-primary-light);
-    color: var(--btn-text-contrast);
+    color: var(--color-primary);
+    font-weight: 500;
 }
 
 .tags-input .tag-remove {
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.tags-input .tag-remove:hover {
+    opacity: 1;
 }
 
 .tags-input input {
@@ -1004,6 +1029,37 @@ input[type="password"] {
     outline: none;
     padding: var(--spacing-xs);
     font-size: var(--font-size-sm);
+    background: transparent;
+    color: var(--light-text-primary);
+}
+
+.tags-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--light-card-bg);
+    border: 1px solid var(--light-border);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    display: none;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 4px;
+}
+
+.suggestion-item {
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--light-text-primary);
+    transition: background-color var(--transition-fast);
+}
+
+.suggestion-item:hover {
+    background-color: var(--light-hover-bg);
+    color: var(--color-primary);
 }
 
 /* ===========================

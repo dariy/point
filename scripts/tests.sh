@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Change to project root relative to script location
+cd "$(dirname "$0")/.."
+
 # Test runner script
 # Usage: ./tests.sh [file_or_folder] [options]
 # If no parameter provided, tests entire tests/ directory
