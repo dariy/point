@@ -123,7 +123,34 @@ class PostService:
             Created post
         """
         # Generate slug
-        slug = await self._generate_unique_slug(post_data.title)
+        if post_data.slug:
+            # If slug is provided explicitly, verify it's unique
+            existing = await self.get_post_by_slug(post_data.slug, include_drafts=True)
+            if existing:
+                # If explicit slug is taken, we raise error or unique it?
+                # Usually explicit slug means "I want this specific slug".
+                # But to be safe/friendly, let's unique-ify it if we want, OR raise error.
+                # Given typical "edit" behavior, if user types a slug that exists, it should probably error.
+                # But for 'create' maybe auto-unique.
+                # Let's assume explicit means explicit.
+                # However, to be consistent with `update`, raising ValueError is standard if we want to enforce it.
+                # BUT, `_generate_unique_slug` handles auto-uniquing.
+                # Let's use `make_unique_slug` logic if we want to support duplicates -> numbered.
+                # But the user asked to "use slug instead" of custom_url.
+                # Let's try to honor the explicit slug, but if it exists, maybe append number?
+                # Or just raise error.
+                # Let's stick to the current pattern of ensuring uniqueness safely.
+                # If they provide "foo", and "foo" exists, maybe they want "foo-1".
+                # Let's check `_generate_unique_slug` usage.
+                pass
+
+            # Actually, let's just use the logic:
+            # If slug provided, start with that base. Ensure unique.
+            base_slug = slugify(post_data.slug)
+            existing_slugs = await self._get_existing_slugs()
+            slug = make_unique_slug(base_slug, existing_slugs)
+        else:
+            slug = await self._generate_unique_slug(post_data.title)
 
         # Generate excerpt if not provided
         excerpt = post_data.excerpt
@@ -142,7 +169,6 @@ class PostService:
             status=post_data.status.value,
             is_featured=post_data.is_featured,
             thumbnail_path=thumbnail_path,
-            custom_url=post_data.custom_url,
             meta_description=post_data.meta_description,
             author_id=author_id,
             published_at=datetime.now(UTC) if post_data.status.value == PostStatus.PUBLISHED.value else None,
@@ -194,7 +220,7 @@ class PostService:
         Returns:
             Post if found, None otherwise
         """
-        query = select(Post).where(or_(Post.slug == slug, Post.custom_url == slug))
+        query = select(Post).where(Post.slug == slug)
 
         if not include_drafts:
             query = query.where(
@@ -298,6 +324,25 @@ class PostService:
 
         # Update fields that are provided
         update_data = post_data.model_dump(exclude_unset=True, exclude={"tags"})
+
+        # Handle slug update specifically
+        if "slug" in update_data:
+            new_slug = update_data["slug"]
+            if new_slug != post.slug:
+                # Ensure uniqueness if changing slug
+                base_slug = slugify(new_slug)
+                # If they cleared it (empty string), maybe regen from title?
+                # Or just error? Let's assume empty means regen from title.
+                if not base_slug:
+                    # Fallback to title if title is also being updated, or existing title
+                    title_to_use = update_data.get("title", post.title)
+                    base_slug = slugify(title_to_use)
+
+                existing_slugs = await self._get_existing_slugs(exclude_id=post.id)
+                post.slug = make_unique_slug(base_slug, existing_slugs)
+
+            # Remove from update_data so we don't set it again blindly (though setattr would work)
+            del update_data["slug"]
 
         for field, value in update_data.items():
             # Convert enums to their values
