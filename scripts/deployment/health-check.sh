@@ -41,7 +41,7 @@ check_docker() {
 check_database() {
     echo -n "Checking database... "
 
-    if [ -f "data/blog.db" ]; then
+    if [ -f "data/point.db" ]; then
         echo -e "${GREEN}OK${NC}"
         return 0
     else

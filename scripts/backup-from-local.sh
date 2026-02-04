@@ -5,7 +5,7 @@
 set -e
 
 # Configuration - adjust these or set via environment variables
-LOCAL_CONTAINER="${LOCAL_CONTAINER:-photo-blog}"
+LOCAL_CONTAINER="${LOCAL_CONTAINER:-point}"
 LOCAL_SUDO="${LOCAL_SUDO:-}"  # Set to "sudo" if docker requires root
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-./backups}"
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
@@ -61,7 +61,12 @@ $DOCKER_CMD exec $LOCAL_CONTAINER python -c "from app.services.backup_service im
         TEMP_DIR=$(mktemp -d)
 
         # Copy database and media
-        cp /data/blog.db "$TEMP_DIR/blog.db" 2>/dev/null || true
+        if [ -f /data/point.db ]; then
+            cp /data/point.db "$TEMP_DIR/point.db"
+        elif [ -f /data/blog.db ]; then
+             cp /data/blog.db "$TEMP_DIR/point.db"
+        fi
+        
         mkdir -p "$TEMP_DIR/media"
         cp -r /data/media/* "$TEMP_DIR/media/" 2>/dev/null || true
 
