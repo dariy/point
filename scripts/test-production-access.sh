@@ -16,7 +16,7 @@ if [ -f "scripts/backup-config.sh" ]; then
 else
     echo "⚠ backup-config.sh not found, using defaults"
     PROD_HOST="${PROD_HOST:-user@production-server.com}"
-    PROD_CONTAINER="${PROD_CONTAINER:-photo-blog}"
+    PROD_CONTAINER="${PROD_CONTAINER:-point-prod}"
     PROD_SUDO="${PROD_SUDO:-}"
 fi
 

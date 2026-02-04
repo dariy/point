@@ -48,7 +48,7 @@ class BackupService:
 
             # Using shutil.copy2 for DB
             if self.db_path.exists():
-                shutil.copy2(self.db_path, temp_dir / "blog.db")
+                shutil.copy2(self.db_path, temp_dir / "point.db")
 
             # Backup media
             if self.media_dir.exists():
@@ -140,7 +140,11 @@ class BackupService:
                 tar.extractall(temp_dir)
 
             # Restore database
-            db_backup = temp_dir / "blog.db"
+            db_backup = temp_dir / "point.db"
+            if not db_backup.exists():
+                # Fallback for older backups
+                db_backup = temp_dir / "blog.db"
+
             if db_backup.exists():
                 shutil.copy2(db_backup, self.db_path)
                 logger.info("Database restored")
