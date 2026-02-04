@@ -188,14 +188,14 @@ jobs:
             cd build
 
             # Backup database before deployment
-            docker compose exec -T point python -c "
+            docker compose exec -T point-prod python -c "
             from app.services.backup_service import BackupService
             service = BackupService()
             backup_path = service.create_backup()
             print(f'Backup created: {backup_path}')
             " || echo "Backup failed, continuing deployment..."
 
-            docker compose -f docker-compose.prod.yml up -d point
+            docker compose -f docker-compose.prod.yml up -d point-prod
 
             # Verify correct image is running
             echo "Verifying deployed image..."
@@ -219,7 +219,7 @@ jobs:
             max_attempts=12
             attempt=0
             while [ $attempt -lt $max_attempts ]; do
-              if docker compose exec -T point curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
+              if docker compose exec -T point-prod curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
                 echo "Health check passed!"
                 exit 0
               fi
@@ -230,7 +230,7 @@ jobs:
 
             # If health check fails, show logs for debugging
             echo "Health check failed! Container logs:"
-            docker compose logs --tail=50 point
+            docker compose logs --tail=50 point-prod
             exit 1
 
       - name: External Health Check
