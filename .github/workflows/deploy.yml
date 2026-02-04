@@ -11,7 +11,27 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'app/**/*.{py,js}'
+              - 'tests/**/*.py'
+              - 'scripts/**/*.{py,js}'
+              - 'requirements.txt'
+              - 'pyproject.toml'
+
   test:
+    needs: check-changes
+    if: needs.check-changes.outputs.code == 'true'
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +67,12 @@ jobs:
           fail_ci_if_error: false
 
   build:
-    needs: test
+    needs: [test, check-changes]
+    if: |
+      always() &&
+      needs.check-changes.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
+
     runs-on: ubuntu-latest
     permissions:
       contents: read
