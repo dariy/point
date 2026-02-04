@@ -56,10 +56,10 @@ ssh user@production-server.com
 sudo visudo -f /etc/sudoers.d/docker-backup
 
 # Add these lines (replace 'username' with your actual username):
-username ALL=(ALL) NOPASSWD: /usr/bin/docker exec photo-blog *
-username ALL=(ALL) NOPASSWD: /usr/bin/docker cp photo-blog\:* *
-username ALL=(ALL) NOPASSWD: /usr/bin/docker cp * photo-blog\:*
-username ALL=(ALL) NOPASSWD: /usr/bin/docker restart photo-blog
+username ALL=(ALL) NOPASSWD: /usr/bin/docker exec point-prod *
+username ALL=(ALL) NOPASSWD: /usr/bin/docker cp point-prod\:* *
+username ALL=(ALL) NOPASSWD: /usr/bin/docker cp * point-prod\:*
+username ALL=(ALL) NOPASSWD: /usr/bin/docker restart point-prod
 
 # Save and exit (Ctrl+X, then Y, then Enter)
 
