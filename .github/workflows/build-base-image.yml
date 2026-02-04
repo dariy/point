@@ -1,0 +1,16 @@
+on:
+  push:
+    paths:
+      - 'requirements.txt'
+      - 'build/base.Dockerfile'
+
+jobs:
+  build-base:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and Push Base Image
+        uses: docker/build-push-action@v5
+        with:
+          file: ./build/base.Dockerfile
+          tags: ghcr.io/dariy/point-base:latest
+          push: true
