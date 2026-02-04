@@ -1,16 +1,30 @@
+name: Build Base Image
+
 on:
   push:
+    branches: [main]
     paths:
       - 'requirements.txt'
       - 'build/base.Dockerfile'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-base
 
 jobs:
   build-base:
     runs-on: ubuntu-latest
     steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and Push Base Image
         uses: docker/build-push-action@v5
         with:
           file: ./build/base.Dockerfile
-          tags: ghcr.io/dariy/point-base:latest
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           push: true
