@@ -6,6 +6,7 @@ on:
     paths:
       - 'requirements.txt'
       - 'build/base.Dockerfile'
+      - '.github/workflows/build-base-image.yml'
 
 env:
   REGISTRY: ghcr.io
