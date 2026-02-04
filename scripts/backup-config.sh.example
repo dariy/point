@@ -14,7 +14,7 @@
 export PROD_HOST="user@your-production-server.com"
 
 # Container name on production (as shown in 'docker ps')
-export PROD_CONTAINER="photo-blog"
+export PROD_CONTAINER="point-prod"
 
 # Docker command prefix on production
 # Leave empty if user is in docker group
@@ -27,7 +27,7 @@ export PROD_SUDO=""
 # ==================================================
 
 # Local container name on lab machine (as shown in 'docker ps')
-export LOCAL_CONTAINER="photo-blog"
+export LOCAL_CONTAINER="point"
 
 # Docker command prefix on local machine
 # Leave empty if user is in docker group

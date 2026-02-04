@@ -6,7 +6,7 @@ set -e
 
 # Configuration - adjust these or set via environment variables
 PROD_HOST="${PROD_HOST:-user@production-server.com}"
-PROD_CONTAINER="${PROD_CONTAINER:-photo-blog}"
+PROD_CONTAINER="${PROD_CONTAINER:-point-prod}"
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-./backups}"
 PROD_SUDO="${PROD_SUDO:-}"  # Set to "sudo" if docker requires root
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
