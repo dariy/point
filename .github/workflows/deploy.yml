@@ -14,7 +14,7 @@ jobs:
   check-changes:
     runs-on: ubuntu-latest
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      run_tests: ${{ steps.filter.outputs.code }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -22,15 +22,19 @@ jobs:
         with:
           filters: |
             code:
-              - 'app/**/*.{py,js}'
+              - 'app/**/*.py'
+              - 'app/**/*.js'
               - 'tests/**/*.py'
-              - 'scripts/**/*.{py,js}'
+              - 'scripts/**/*.py'
               - 'requirements.txt'
               - 'pyproject.toml'
+            infra:
+              - 'build/**'
+              - '.github/workflows/deploy.yml'
 
   test:
     needs: check-changes
-    if: needs.check-changes.outputs.code == 'true'
+    if: needs.check-changes.outputs.run_tests == 'true'
 
     runs-on: ubuntu-latest
     steps:
@@ -67,11 +71,11 @@ jobs:
           fail_ci_if_error: false
 
   build:
-    needs: [test, check-changes]
+    needs: [check-changes, test]
     if: |
-      always() &&
       needs.check-changes.result == 'success' &&
-      (needs.test.result == 'success' || needs.test.result == 'skipped')
+      !failure() &&
+      !cancelled()
 
     runs-on: ubuntu-latest
     permissions:
@@ -123,7 +127,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: build/Dockerfile
+          file: build/prod.Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
