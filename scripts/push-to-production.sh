@@ -21,7 +21,7 @@ fi
 
 # Configuration - adjust these or set via environment variables
 PROD_HOST="${PROD_HOST:-user@production-server.com}"
-PROD_CONTAINER="${PROD_CONTAINER:-photo-blog}"
+PROD_CONTAINER="${PROD_CONTAINER:-point-prod}"
 PROD_SUDO="${PROD_SUDO:-}"  # Set to "sudo" if docker requires root
 
 # Build docker command prefix
@@ -68,9 +68,12 @@ TEMP_DIR=\$(mktemp -d)
 tar -xzf /tmp/$BACKUP_NAME -C \$TEMP_DIR
 
 echo \"Restoring database...\"
-if [ -f \$TEMP_DIR/blog.db ]; then
-    cp \$TEMP_DIR/blog.db /data/blog.db
-    echo \"  Database restored\"
+if [ -f \$TEMP_DIR/point.db ]; then
+    cp \$TEMP_DIR/point.db /data/point.db
+    echo \"  Database restored (from point.db)\"
+elif [ -f \$TEMP_DIR/blog.db ]; then
+    cp \$TEMP_DIR/blog.db /data/point.db
+    echo \"  Database restored (from legacy blog.db -> point.db)\"
 fi
 
 echo \"Restoring media...\"
