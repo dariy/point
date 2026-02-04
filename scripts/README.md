@@ -317,7 +317,7 @@ Add to crontab on lab machine:
 crontab -e
 
 # Add daily backup at 2 AM
-0 2 * * * cd /path/to/photo-blog && source scripts/backup-config.sh && ./scripts/pull-from-production.sh >> /var/log/photo-blog-backup.log 2>&1
+0 2 * * * cd /opt/point && source scripts/backup-config.sh && ./scripts/pull-from-production.sh >> /var/log/point-backup.log 2>&1
 ```
 
 ## Troubleshooting
