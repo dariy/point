@@ -1,0 +1,34 @@
+services:
+  point:
+    build:
+      context: ..
+      dockerfile: build/Dockerfile
+    image: ghcr.io/dariy/point:main
+    container_name: point
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - point-data:/data
+    env_file:
+      - .env
+    environment:
+      - TZ=UTC
+      - DATABASE_URL=sqlite+aiosqlite:////data/point.db
+      - STORAGE_PATH=/data
+    networks:
+      - point-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  point-data:
+    driver: local
+
+networks:
+  point-network:
+    driver: bridge
