@@ -20,6 +20,25 @@
     }
 
     /**
+     * Initialize tags input handling
+     */
+    function initTagsInput() {
+        const tagsInput = document.getElementById('tags');
+        if (!tagsInput) { alert("!!!"); return };
+
+        tagsInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // Add comma if not present at end
+                const val = tagsInput.value.trim();
+                if (val && !val.endsWith(',')) {
+                    tagsInput.value = val + ', ';
+                }
+            }
+        });
+    }
+
+    /**
      * Initialize post form submission
      */
     function initPostForm() {
@@ -40,9 +59,9 @@
                 excerpt: formData.get('excerpt') || null,
                 status: formData.get('status'),
                 is_featured: formData.get('is_featured') === '1',
-                custom_url: formData.get('custom_url') || null,
+                slug: formData.get('slug') || null,
                 meta_description: formData.get('meta_description') || null,
-                tags: formData.get('tags') ? formData.get('tags').split(',').filter(t => t.trim()) : []
+                tags: formData.get('tags') ? formData.get('tags').split(',').map(t => t.trim()).filter(t => t.length > 0) : []
             };
 
             const url = postId ? `/api/posts/${postId}` : '/api/posts';
@@ -87,9 +106,56 @@
         document.addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                const saveBtn = document.getElementById('btn-save');
+                const saveBtn = document.getElementById('btn-save'); // Note: ID in template is btn-save-header
                 if (saveBtn) saveBtn.click();
+                else {
+                    const headerSave = document.getElementById('btn-save-header');
+                    if (headerSave) headerSave.click();
+                }
             }
+        });
+    }
+
+    /**
+     * Initialize card toggling
+     */
+    function initCardToggling() {
+        const cardHeaders = document.querySelectorAll('.card-header');
+        
+        cardHeaders.forEach(header => {
+            // Check if card should be foldable (all cards with headers in editor)
+            const card = header.closest('.card');
+            if (!card) return;
+            
+            // Add indicator icon if not present
+            if (!header.querySelector('.toggle-icon')) {
+                const icon = document.createElement('span');
+                icon.className = 'toggle-icon';
+                icon.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+                icon.style.marginLeft = 'auto';
+                
+                // If header has flex-between, append to it, otherwise make header flex
+                if (header.classList.contains('flex-between')) {
+                    header.appendChild(icon);
+                } else {
+                    header.classList.add('flex-between');
+                    // Add flex styles if not present (handled by CSS class usually, but ensure it)
+                    header.style.display = 'flex';
+                    header.style.alignItems = 'center';
+                    header.style.justifyContent = 'space-between';
+                    header.appendChild(icon);
+                }
+            }
+            
+            // Handle click
+            header.addEventListener('click', function(e) {
+                // Don't trigger if clicking buttons inside header
+                if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.badge')) {
+                    return;
+                }
+                
+                card.classList.toggle('collapsed');
+            });
         });
     }
 
@@ -98,8 +164,10 @@
      */
     function init() {
         initPreviewToggle();
+        initTagsInput();
         initPostForm();
         initKeyboardShortcuts();
+        initCardToggling();
     }
 
     // Initialize on DOM ready
