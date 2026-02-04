@@ -2,9 +2,9 @@
 # This file provides production-specific settings and optional nginx reverse proxy
 
 services:
-  blog:
+  point:
     image: ghcr.io/dariy/point:${IMAGE_TAG:-latest}
-    container_name: photo-blog-prod
+    container_name: point-prod
     restart: unless-stopped
 
     ports:
@@ -23,7 +23,7 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
 
       # Database
-      - DATABASE_URL=sqlite+aiosqlite:////data/blog.db
+      - DATABASE_URL=sqlite+aiosqlite:////data/point.db
       - STORAGE_PATH=/data
 
       # Blog settings
@@ -50,10 +50,10 @@ services:
 
     volumes:
       # Use named volume for data persistence
-      - blog-data:/data
+      - point-data:/data
 
     networks:
-      - blog-network
+      - point-network
 
     # Health check
     healthcheck:
@@ -83,48 +83,14 @@ services:
     tmpfs:
       - /tmp:size=100M,mode=1777
 
-  # Optional: Nginx reverse proxy for HTTPS
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: photo-blog-nginx
-    restart: unless-stopped
-
-    ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - blog-data:/data:ro  # Serve static files
-
-    depends_on:
-      blog:
-        condition: service_healthy
-
-    networks:
-      - blog-network
-
-    # Health check
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-    # Security options
-    security_opt:
-      - no-new-privileges:true
-
 volumes:
-  blog-data:
+  point-data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DATA_PATH:-./data}
+      device: ${DATA_PATH:-../data}
 
 networks:
-  blog-network:
+  point-network:
     driver: bridge
