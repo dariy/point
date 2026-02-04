@@ -10,7 +10,7 @@ fi
 
 BACKUP_FILE="$1"
 DATA_DIR="data"
-DB_FILE="${DATA_DIR}/blog.db"
+DB_FILE="${DATA_DIR}/point.db"
 MEDIA_DIR="${DATA_DIR}/media"
 
 if [ ! -f "$BACKUP_FILE" ]; then
@@ -35,10 +35,14 @@ TEMP_DIR=$(mktemp -d)
 tar -xzf "$BACKUP_FILE" -C "$TEMP_DIR"
 
 # Restore database
-if [ -f "$TEMP_DIR/blog.db" ]; then
+if [ -f "$TEMP_DIR/point.db" ]; then
+    mkdir -p "$DATA_DIR"
+    cp "$TEMP_DIR/point.db" "$DB_FILE"
+    echo "  Database restored (from point.db)"
+elif [ -f "$TEMP_DIR/blog.db" ]; then
     mkdir -p "$DATA_DIR"
     cp "$TEMP_DIR/blog.db" "$DB_FILE"
-    echo "  Database restored"
+    echo "  Database restored (from legacy blog.db)"
 fi
 
 # Restore media

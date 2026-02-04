@@ -6,7 +6,7 @@ set -e
 # Configuration
 DATA_DIR="data"
 BACKUP_DIR="${DATA_DIR}/backups"
-DB_FILE="${DATA_DIR}/blog.db"
+DB_FILE="${DATA_DIR}/point.db"
 MEDIA_DIR="${DATA_DIR}/media"
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
 BACKUP_FILE="${BACKUP_DIR}/backup_${TIMESTAMP}.tar.gz"
@@ -22,7 +22,7 @@ mkdir -p "$TEMP_DIR/media"
 
 # Copy database
 if [ -f "$DB_FILE" ]; then
-    cp "$DB_FILE" "$TEMP_DIR/blog.db"
+    cp "$DB_FILE" "$TEMP_DIR/point.db"
     echo "  Database included"
 else
     echo "  WARNING: Database file not found at $DB_FILE"

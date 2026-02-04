@@ -15,12 +15,16 @@ fi
 
 # Find the container name (try both prod and dev names)
 CONTAINER_NAME=""
-if docker ps --format '{{.Names}}' | grep -q "photo-blog-prod"; then
+if docker ps --format '{{.Names}}' | grep -q "point-prod"; then
+    CONTAINER_NAME="point-prod"
+elif docker ps --format '{{.Names}}' | grep -q "point"; then
+    CONTAINER_NAME="point"
+elif docker ps --format '{{.Names}}' | grep -q "photo-blog-prod"; then
     CONTAINER_NAME="photo-blog-prod"
 elif docker ps --format '{{.Names}}' | grep -q "photo-blog"; then
     CONTAINER_NAME="photo-blog"
 else
-    echo "❌ No running photo-blog container found"
+    echo "❌ No running point container found"
     echo ""
     echo "Available containers:"
     docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
