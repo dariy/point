@@ -2,7 +2,7 @@
  * Light JavaScript - Photo Blog Engine
  */
 
-(function() {
+(function () {
     'use strict';
 
     // ===========================
@@ -332,8 +332,12 @@
         }
 
         close() {
-            this.overlay.classList.remove('active');
-            document.body.style.overflow = '';
+            this.overlay.classList.add('closing');
+            setTimeout(() => {
+                this.overlay.classList.remove('active');
+                this.overlay.classList.remove('closing');
+                document.body.style.overflow = '';
+            }, 300);
         }
     }
 
@@ -406,7 +410,7 @@
         if (!btn) return;
 
         e.preventDefault();
-        
+
         const textToCopy = btn.dataset.copyMarkdown || (window.location.origin + btn.dataset.copyUrl);
         const message = btn.dataset.copyMarkdown ? 'Markdown copied to clipboard' : 'URL copied to clipboard';
 
@@ -514,7 +518,7 @@
                 const data = JSON.parse(draft);
                 if (!titleInput.value && data.title) titleInput.value = data.title;
                 if (!contentInput.value && data.content) contentInput.value = data.content;
-            } catch (e) {}
+            } catch (e) { }
         }
 
         // Auto-save

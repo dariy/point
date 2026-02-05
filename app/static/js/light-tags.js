@@ -16,7 +16,13 @@
         ? new window.LightUtils.Modal(modal)
         : {
             open: () => modal.classList.add('active'),
-            close: () => modal.classList.remove('active')
+            close: () => {
+                modal.classList.add('closing');
+                setTimeout(() => {
+                    modal.classList.remove('active');
+                    modal.classList.remove('closing');
+                }, 300);
+            }
         };
 
     /**
