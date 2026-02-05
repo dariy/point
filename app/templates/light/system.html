@@ -58,21 +58,22 @@
                         <h4>Application Cache</h4>
                         <p>Clear rendered pages and RSS feed cache.</p>
                     </div>
-                    <button class="btn btn-outline" onclick="clearCache('all')">Clear All Cache</button>
+                    <button class="btn btn-outline" data-action="clear-cache" data-pattern="all">Clear All
+                        Cache</button>
                 </div>
                 <div class="op-item">
                     <div class="op-info">
                         <h4>System Backup</h4>
                         <p>Trigger a manual database and media backup.</p>
                     </div>
-                    <button class="btn btn-primary" onclick="triggerBackup(event)">Backup Now</button>
+                    <button class="btn btn-primary" data-action="trigger-backup">Backup Now</button>
                 </div>
                 <div class="op-item">
                     <div class="op-info">
                         <h4>Orphaned Media</h4>
                         <p>Cleanup files not linked to any post.</p>
                     </div>
-                    <button class="btn btn-outline" onclick="cleanupOrphaned()">Cleanup</button>
+                    <button class="btn btn-outline" data-action="cleanup-orphaned">Cleanup</button>
                 </div>
             </div>
         </div>
@@ -82,7 +83,7 @@
     <div class="system-card backups-card">
         <div class="card-header">
             <h3 class="card-title">Backup Archives</h3>
-            <button class="btn btn-sm btn-primary" onclick="refreshBackups()">Refresh</button>
+            <button class="btn btn-sm btn-primary" data-action="refresh-backups">Refresh</button>
         </div>
         <div id="backups-list" class="backups-list">
             <div class="loading">Loading backups...</div>
@@ -94,11 +95,11 @@
         <div class="card-header">
             <h3 class="card-title">System Logs</h3>
             <div class="header-actions">
-                <select id="log-type" onchange="refreshLogs()">
+                <select id="log-type">
                     <option value="app">App Log</option>
                     <option value="error">Error Log</option>
                 </select>
-                <button class="btn btn-sm" onclick="refreshLogs()">Refresh</button>
+                <button class="btn btn-sm" data-action="refresh-logs">Refresh</button>
             </div>
         </div>
         <div class="log-viewer" id="log-content">
