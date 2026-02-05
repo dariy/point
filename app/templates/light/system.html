@@ -43,7 +43,8 @@
                 </div>
                 <div class="stat-item">
                     <span class="stat-label">Backups:</span>
-                    <span class="stat-value">{{ stats.backup_count }} (Last: {{ stats.last_backup_at.strftime('%Y-%m-%d %H:%M') if stats.last_backup_at else 'Never' }})</span>
+                    <span class="stat-value">{{ stats.backup_count }} (Last: {{ stats.last_backup_at.strftime('%Y-%m-%d
+                        %H:%M') if stats.last_backup_at else 'Never' }})</span>
                 </div>
             </div>
         </div>
@@ -64,7 +65,7 @@
                         <h4>System Backup</h4>
                         <p>Trigger a manual database and media backup.</p>
                     </div>
-                    <button class="btn btn-primary" onclick="triggerBackup()">Backup Now</button>
+                    <button class="btn btn-primary" onclick="triggerBackup(event)">Backup Now</button>
                 </div>
                 <div class="op-item">
                     <div class="op-info">

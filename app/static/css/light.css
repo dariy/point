@@ -1743,6 +1743,15 @@ input[type="password"] {
     display: flex;
 }
 
+.modal-overlay.closing {
+    animation: fadeOut 0.3s ease-in forwards;
+}
+
+.modal-overlay.closing .modal,
+.modal-overlay.closing .modal-content {
+    animation: slideDown 0.3s ease-in forwards;
+}
+
 .modal {
     background-color: var(--light-card-bg);
     border-radius: 12px;
@@ -1793,6 +1802,25 @@ input[type="password"] {
     gap: 12px;
 }
 
+.modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    color: var(--light-text-muted);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+    padding: 4px;
+    z-index: 10;
+}
+
+.modal-close:hover {
+    color: var(--light-text-primary);
+}
+
 @keyframes slideUp {
     from {
         transform: translateY(20px);
@@ -1802,6 +1830,28 @@ input[type="password"] {
     to {
         transform: translateY(0);
         opacity: 1;
+    }
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
     }
 }
 
