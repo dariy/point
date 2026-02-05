@@ -3,7 +3,7 @@
  * Handles tag creation, editing, and property toggling
  */
 
-(function() {
+(function () {
     'use strict';
 
     const modal = document.getElementById('tag-modal');
@@ -11,10 +11,18 @@
 
     if (!modal || !form) return;
 
+    // Use LightUtils.Modal if available
+    const modalInstance = (window.LightUtils && window.LightUtils.Modal)
+        ? new window.LightUtils.Modal(modal)
+        : {
+            open: () => modal.classList.add('active'),
+            close: () => modal.classList.remove('active')
+        };
+
     /**
      * Open modal for creating new tag
      */
-    window.openNewTagModal = function() {
+    const openNewTagModal = function () {
         document.getElementById('modal-title').textContent = 'New Tag';
         document.getElementById('tag-id').value = '';
         document.getElementById('tag-name').value = '';
@@ -22,21 +30,23 @@
         document.getElementById('tag-description').value = '';
         document.getElementById('tag-important').checked = false;
         document.getElementById('tag-featured').checked = false;
-        modal.classList.add('active');
+
+        modalInstance.open();
     };
 
     /**
      * Open modal for editing existing tag
      */
-    window.editTag = async function(id, name, slug, description, isImportant, isFeatured) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
         document.getElementById('tag-slug').value = slug;
-        document.getElementById('tag-description').value = description;
-        document.getElementById('tag-important').checked = isImportant;
-        document.getElementById('tag-featured').checked = isFeatured;
-        modal.classList.add('active');
+        document.getElementById('tag-description').value = description || '';
+        document.getElementById('tag-important').checked = !!isImportant;
+        document.getElementById('tag-featured').checked = !!isFeatured;
+
+        modalInstance.open();
 
         // Try to fetch fresh data
         try {
@@ -57,21 +67,22 @@
     /**
      * Close tag modal
      */
-    window.closeTagModal = function() {
-        modal.classList.remove('active');
+    const closeTagModal = function () {
+        modalInstance.close();
     };
 
     /**
      * Toggle tag property (important/featured)
      */
-    window.toggleTagProperty = async function(id, property, currentValue) {
+    const toggleTagProperty = async function (id, property, currentValue) {
         const newValue = !currentValue;
         const data = {};
         data[property] = newValue;
 
         const btnId = property === 'is_important' ? `toggle-important-${id}` : `toggle-featured-${id}`;
         const btn = document.getElementById(btnId);
-        const originalHtml = btn.innerHTML;
+
+        if (!btn) return;
 
         // Optimistic UI update or loading state
         btn.style.opacity = '0.5';
@@ -90,12 +101,12 @@
             if (response.ok) {
                 const tag = await response.json();
 
-                // Update button state and onclick handler
+                // Update button state 
                 btn.disabled = false;
                 btn.style.opacity = '1';
 
-                // Update the onclick attribute for the next toggle
-                btn.onclick = () => toggleTagProperty(id, property, newValue);
+                // Update data attribute for next toggle
+                btn.dataset.value = newValue ? 'true' : 'false';
 
                 // Update SVG and titles
                 const svg = btn.querySelector('svg');
@@ -107,8 +118,13 @@
                     // Update the tag name link class if it exists in this row
                     const nameLink = btn.closest('tr').querySelector('td a.tag');
                     if (nameLink) {
-                        if (newValue) nameLink.classList.add('tag-important');
-                        else nameLink.classList.remove('tag-important');
+                        if (newValue) {
+                            nameLink.classList.add('tag-important');
+                            nameLink.dataset.tagImportant = 'true';
+                        } else {
+                            nameLink.classList.remove('tag-important');
+                            nameLink.dataset.tagImportant = 'false';
+                        }
                     }
                 } else {
                     svg.setAttribute('fill', newValue ? 'var(--color-primary)' : 'var(--light-text-muted)');
@@ -116,37 +132,72 @@
                     btn.title = newValue ? 'Remove featured mark' : 'Mark as featured';
                 }
 
-                window.LightUtils.showToast('Updated successfully');
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast('Updated successfully');
+                }
             } else {
-                const error = await response.json();
-                window.LightUtils.showToast(error.detail || 'Failed to update tag', 'error');
+                const errorData = await response.json().catch(() => ({}));
+                const msg = errorData.detail || 'Failed to update tag';
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast(msg, 'error');
+                }
                 btn.disabled = false;
                 btn.style.opacity = '1';
             }
         } catch (error) {
             console.error('Toggle error:', error);
-            window.LightUtils.showToast('An error occurred', 'error');
+            if (window.LightUtils && window.LightUtils.showToast) {
+                window.LightUtils.showToast('An error occurred', 'error');
+            }
             btn.disabled = false;
             btn.style.opacity = '1';
         }
     };
 
-    // Close modal on overlay click
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            closeTagModal();
+    // Event Delegation
+    document.addEventListener('click', function (e) {
+        // New Tag
+        if (e.target.closest('[data-action="new-tag"]')) {
+            e.preventDefault();
+            openNewTagModal();
+            return;
         }
-    });
 
-    // Close modal on escape
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
+        // Close Modal
+        if (e.target.closest('[data-action="close-tag-modal"]')) {
+            e.preventDefault();
             closeTagModal();
+            return;
+        }
+
+        // Edit Tag
+        const editBtn = e.target.closest('[data-action="edit-tag"]');
+        if (editBtn) {
+            e.preventDefault();
+            const id = editBtn.dataset.tagId;
+            const name = editBtn.dataset.tagName;
+            const slug = editBtn.dataset.tagSlug;
+            const description = editBtn.dataset.tagDescription;
+            const isImportant = editBtn.dataset.tagImportant === 'true';
+            const isFeatured = editBtn.dataset.tagFeatured === 'true';
+            editTag(id, name, slug, description, isImportant, isFeatured);
+            return;
+        }
+
+        // Toggle Property
+        const toggleBtn = e.target.closest('[data-action="toggle-tag-property"]');
+        if (toggleBtn) {
+            e.preventDefault();
+            const id = toggleBtn.dataset.tagId;
+            const property = toggleBtn.dataset.property;
+            const value = toggleBtn.dataset.value === 'true';
+            toggleTagProperty(id, property, value);
+            return;
         }
     });
 
     // Form submission
-    form.addEventListener('submit', async function(e) {
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
 
         const id = document.getElementById('tag-id').value;
@@ -161,6 +212,14 @@
         const url = id ? `/api/tags/${id}` : '/api/tags';
         const method = id ? 'PUT' : 'POST';
 
+        // Disable submit button
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalBtnText = submitBtn ? submitBtn.textContent : 'Save';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+        }
+
         try {
             const response = await fetch(url, {
                 method: method,
@@ -174,13 +233,32 @@
             if (response.ok) {
                 window.location.reload();
             } else {
-                const error = await response.json();
-                window.LightUtils.showToast(error.detail || 'Failed to save tag', 'error');
+                const errorData = await response.json().catch(() => ({}));
+                const msg = errorData.detail || 'Failed to save tag';
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast(msg, 'error');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalBtnText;
+                }
             }
         } catch (error) {
             console.error('Save error:', error);
-            window.LightUtils.showToast('An error occurred', 'error');
+            if (window.LightUtils && window.LightUtils.showToast) {
+                window.LightUtils.showToast('An error occurred', 'error');
+            }
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
+            }
         }
     });
+
+    // Also expose to window for cases where other components might need it (e.g. quick edit from elsewhere)
+    window.openNewTagModal = openNewTagModal;
+    window.editTag = editTag;
+    window.closeTagModal = closeTagModal;
+    window.toggleTagProperty = toggleTagProperty;
 
 })();
