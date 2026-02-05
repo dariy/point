@@ -261,10 +261,4 @@
         }
     });
 
-    // Also expose to window for cases where other components might need it (e.g. quick edit from elsewhere)
-    window.openNewTagModal = openNewTagModal;
-    window.editTag = editTag;
-    window.closeTagModal = closeTagModal;
-    window.toggleTagProperty = toggleTagProperty;
-
 })();
