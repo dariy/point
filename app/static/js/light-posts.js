@@ -3,13 +3,13 @@
  * Handles post filtering and list management
  */
 
-(function() {
+(function () {
     'use strict';
 
     /**
      * Filter posts by status
      */
-    window.filterByStatus = function(status) {
+    const filterByStatus = function (status) {
         const url = new URL(window.location);
         if (status) {
             url.searchParams.set('status_filter', status);
@@ -19,5 +19,11 @@
         url.searchParams.delete('page');
         window.location = url;
     };
+
+    // Initialize
+    const statusFilter = document.querySelector('[data-action="filter-status"]');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', (e) => filterByStatus(e.target.value));
+    }
 
 })();

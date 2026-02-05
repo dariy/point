@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <style>
+    .logo-shape { fill: #000000; }
+    @media (prefers-color-scheme: dark) {
+      .logo-shape { fill: #ffffff; }
+    }
+  </style>
+  <g class="logo-shape">
+    <circle cx="64" cy="64" r="64"/>
+    <circle cx="112" cy="112" r="16"/>
+    <rect width="48" height="48" x="80" y="64"/>
+    <rect width="48" height="48" x="64" y="80"/>
+  </g>
+</svg>
