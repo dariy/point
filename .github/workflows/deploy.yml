@@ -11,7 +11,26 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'app/**'
+              - 'tests/**'
+              - 'requirements.txt'
+              - 'pyproject.toml'
+              - 'package.json'
+
   test:
+    needs: filter
+    if: needs.filter.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +66,8 @@ jobs:
           fail_ci_if_error: false
 
   build:
-    needs: test
+    needs: [filter, test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -102,8 +122,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILD_VERSION=${{ steps.version.outputs.version }}
@@ -163,7 +183,7 @@ jobs:
             fi
 
             # Login to GitHub Container Registry
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
 
             # Clean up Docker resources to free disk space
             echo "Cleaning up Docker resources..."
@@ -177,8 +197,8 @@ jobs:
 
             # Pull specific Docker image by SHA tag (first 7 chars of commit SHA)
             echo "Pulling image with tag: ${IMAGE_TAG:0:7}"
-            docker pull ghcr.io/dariy/point:${IMAGE_TAG:0:7}
-            docker tag ghcr.io/dariy/point:${IMAGE_TAG:0:7} ghcr.io/dariy/point:latest
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7}
+            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
             # Export truncated IMAGE_TAG to environment
             export IMAGE_TAG=${IMAGE_TAG:0:7}
@@ -205,7 +225,7 @@ jobs:
 
             if [[ ! "${DEPLOYED_IMAGE}" =~ ${IMAGE_TAG:0:7} ]]; then
               echo "ERROR: Deployed image tag does not match expected tag!"
-              echo "Expected: ghcr.io/dariy/point:${IMAGE_TAG:0:7}"
+              echo "Expected: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7}"
               echo "Got: ${DEPLOYED_IMAGE}"
               exit 1
             fi
@@ -265,7 +285,7 @@ jobs:
           echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ needs.build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Image Tag**: ${GITHUB_SHA:0:7}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Full Image**: ghcr.io/dariy/point:${GITHUB_SHA:0:7}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Full Image**: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA:0:7}" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: prod" >> $GITHUB_STEP_SUMMARY
           echo "- **Host**: ${{ secrets.DEPLOY_HOST }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
