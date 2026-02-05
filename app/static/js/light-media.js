@@ -3,7 +3,7 @@
  * Handles media upload, filtering, and file management
  */
 
-(function() {
+(function () {
     'use strict';
 
     const uploadModal = document.getElementById('upload-modal');
@@ -12,21 +12,25 @@
     /**
      * Open upload modal
      */
-    window.openUploadModal = function() {
+    window.openUploadModal = function () {
         uploadModal.classList.add('active');
     };
 
     /**
      * Close upload modal
      */
-    window.closeUploadModal = function() {
-        uploadModal.classList.remove('active');
+    window.closeUploadModal = function () {
+        uploadModal.classList.add('closing');
+        setTimeout(() => {
+            uploadModal.classList.remove('active');
+            uploadModal.classList.remove('closing');
+        }, 300);
     };
 
     /**
      * Filter media by type
      */
-    window.filterByType = function(type) {
+    window.filterByType = function (type) {
         const url = new URL(window.location);
         if (type) {
             url.searchParams.set('file_type', type);
@@ -79,7 +83,7 @@
     }
 
     // Close modal on overlay click
-    uploadModal.addEventListener('click', function(e) {
+    uploadModal.addEventListener('click', function (e) {
         if (e.target === uploadModal) {
             closeUploadModal();
         }
