@@ -21,10 +21,13 @@ class TagBase(BaseModel):
 class TagCreate(TagBase):
     """Schema for creating a tag."""
 
+    slug: str | None = Field(default=None, min_length=1, max_length=100)
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "name": "Travel",
+                "slug": "travel-tips",
                 "description": "Posts about travel and adventures",
                 "is_important": True,
                 "is_featured": False,
