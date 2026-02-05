@@ -129,7 +129,7 @@
     --color-warning-light: rgba(245, 158, 11, 0.2);
     --color-danger-light: rgba(239, 68, 68, 0.2);
 
-    --color-success: rgba(255,255,255,0.8);
+    --color-success: rgba(255, 255, 255, 0.8);
     --btn-text-contrast: #ffffff;
     --color-warning: var(--btn-text-contrast);
 
@@ -157,7 +157,9 @@
 /* ===========================
    Reset & Base
    =========================== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -1284,6 +1286,7 @@ input[type="password"] {
         transform: translateX(100%);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -1309,15 +1312,37 @@ input[type="password"] {
     text-align: center;
 }
 
-.mt-1 { margin-top: var(--spacing-sm); }
-.mt-2 { margin-top: var(--spacing-md); }
-.mt-3 { margin-top: var(--spacing-lg); }
-.mt-4 { margin-top: var(--spacing-xl); }
+.mt-1 {
+    margin-top: var(--spacing-sm);
+}
 
-.mb-1 { margin-bottom: var(--spacing-sm); }
-.mb-2 { margin-bottom: var(--spacing-md); }
-.mb-3 { margin-bottom: var(--spacing-lg); }
-.mb-4 { margin-bottom: var(--spacing-xl); }
+.mt-2 {
+    margin-top: var(--spacing-md);
+}
+
+.mt-3 {
+    margin-top: var(--spacing-lg);
+}
+
+.mt-4 {
+    margin-top: var(--spacing-xl);
+}
+
+.mb-1 {
+    margin-bottom: var(--spacing-sm);
+}
+
+.mb-2 {
+    margin-bottom: var(--spacing-md);
+}
+
+.mb-3 {
+    margin-bottom: var(--spacing-lg);
+}
+
+.mb-4 {
+    margin-bottom: var(--spacing-xl);
+}
 
 .flex {
     display: flex;
@@ -1329,8 +1354,13 @@ input[type="password"] {
     align-items: center;
 }
 
-.gap-1 { gap: var(--spacing-sm); }
-.gap-2 { gap: var(--spacing-md); }
+.gap-1 {
+    gap: var(--spacing-sm);
+}
+
+.gap-2 {
+    gap: var(--spacing-md);
+}
 
 /* ===========================
    Theme Toggle
@@ -1698,7 +1728,7 @@ input[type="password"] {
 /* ===========================
    Modal Dialogs
    =========================== */
-.modal {
+.modal-overlay {
     display: none;
     position: fixed;
     inset: 0;
@@ -1706,10 +1736,26 @@ input[type="password"] {
     background-color: rgba(0, 0, 0, 0.5);
     justify-content: center;
     align-items: center;
-    overflow: auto;
+    backdrop-filter: blur(2px);
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal {
+    background-color: var(--light-card-bg);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    min-width: 400px;
+    max-width: 90%;
+    animation: slideUp 0.3s ease-out;
+    position: relative;
+    z-index: 10001;
 }
 
 .modal-content {
+    /* Keeping this for backward compatibility if used anywhere else */
     background-color: var(--light-card-bg);
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -1752,6 +1798,7 @@ input[type="password"] {
         transform: translateY(20px);
         opacity: 0;
     }
+
     to {
         transform: translateY(0);
         opacity: 1;
