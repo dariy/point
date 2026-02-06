@@ -352,10 +352,13 @@
         if (!immersiveBody) return;
 
         let idleTimer;
-        const idleTime = 2000; // 4 seconds
+        const idleTime = 5000; // Auto-hide after 5 seconds of inactivity
+        let lastShowTime = 0;
+        const minShowDuration = 3000; // UI stays visible for at least 3 seconds
 
         function showUI() {
             immersiveBody.classList.remove("ui-hidden");
+            lastShowTime = Date.now();
             resetIdleTimer();
         }
 
@@ -372,8 +375,17 @@
             }
 
             clearTimeout(idleTimer);
+            // Don't auto-show UI on touch events - let handleClick manage toggle on mobile
+            // This prevents the race where touchstart shows UI then click immediately hides it
+            if (e && (e.type === "touchstart" || e.type === "touchend")) {
+                if (!immersiveBody.classList.contains("ui-hidden")) {
+                    idleTimer = setTimeout(hideUI, idleTime);
+                }
+                return;
+            }
             if (immersiveBody.classList.contains("ui-hidden")) {
                 immersiveBody.classList.remove("ui-hidden");
+                lastShowTime = Date.now();
             }
             idleTimer = setTimeout(hideUI, idleTime);
         }
@@ -391,8 +403,14 @@
             if (immersiveBody.classList.contains("ui-hidden")) {
                 showUI();
             } else {
-                hideUI();
-                clearTimeout(idleTimer);
+                // Only allow hiding if the UI has been visible for the minimum duration
+                if (Date.now() - lastShowTime >= minShowDuration) {
+                    hideUI();
+                    clearTimeout(idleTimer);
+                } else {
+                    // User tapped again too soon - just reset the idle timer
+                    resetIdleTimer();
+                }
             }
         }
 
@@ -1045,23 +1063,30 @@
     function initTouchNavigation() {
         let touchStartX = 0;
         let touchStartY = 0;
+        let touchStartTime = 0;
 
         document.addEventListener('touchstart', function(e) {
             touchStartX = e.changedTouches[0].clientX;
             touchStartY = e.changedTouches[0].clientY;
+            touchStartTime = Date.now();
         }, {passive: true});
 
         document.addEventListener('touchend', function(e) {
             const touchEndX = e.changedTouches[0].clientX;
             const touchEndY = e.changedTouches[0].clientY;
+            const elapsed = Date.now() - touchStartTime;
 
-            handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
+            handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY, elapsed);
         }, {passive: true});
 
-        function handleSwipe(startX, startY, endX, endY) {
+        function handleSwipe(startX, startY, endX, endY, elapsed) {
             const diffX = endX - startX;
             const diffY = endY - startY;
-            const threshold = 50; // min distance
+            const threshold = 50; // min distance for horizontal
+            const verticalThreshold = 80; // larger threshold for vertical to avoid Chrome conflicts
+            const maxSwipeTime = 800; // ignore very slow drags (likely scroll, not swipe)
+
+            if (elapsed > maxSwipeTime) return;
 
             // Determine if horizontal or vertical swipe
             if (Math.abs(diffX) > Math.abs(diffY)) {
@@ -1074,16 +1099,17 @@
                     }
                 }
             } else {
-                // Vertical
-                if (Math.abs(diffY) > threshold) {
-                    // Only trigger vertical nav if at boundaries to avoid scroll conflict
-                    // Use a slightly larger buffer for robust detection across browsers
+                // Vertical - require stronger vertical intent to avoid browser gesture conflicts
+                const verticalRatio = Math.abs(diffY) / (Math.abs(diffX) + 1);
+                if (Math.abs(diffY) > verticalThreshold && verticalRatio > 2) {
                     const isAtTop = window.scrollY <= 5;
                     const isAtBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50;
 
+                    // For swipe-down (navigate to prev): require touch start below top 60px
+                    // to avoid conflict with Chrome's pull-to-refresh zone
                     if (diffY < 0 && isAtBottom) {
                         performNavigation("down"); // Swipe Up -> ArrowDown
-                    } else if (diffY > 0 && isAtTop) {
+                    } else if (diffY > 0 && isAtTop && startY > 60) {
                         performNavigation("up"); // Swipe Down -> ArrowUp
                     }
                 }
