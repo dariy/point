@@ -1,6 +1,7 @@
 {% extends "public/base.html" %}
 
-{% block body_class %}{% if not has_text_content %}immersive-layout{% else %}public-layout post-single-page{% endif %}{% endblock %}
+{% block body_class %}{% if not has_text_content %}immersive-layout{% else %}public-layout post-single-page{% endif %}{%
+endblock %}
 
 {% block page_title %}{{ post.title }}{% endblock %}
 
@@ -14,10 +15,12 @@
 <meta property="og:url" content="{{ request.url }}" />
 <meta property="og:locale" content="en_US" />
 {% if post.thumbnail_path %}
-<meta property="og:image" content="{{ request.url.scheme }}://{{ request.url.netloc }}/media/originals/{{ post.thumbnail_path }}" />
+<meta property="og:image"
+    content="{{ request.url.scheme }}://{{ request.url.netloc }}/media/originals/{{ post.thumbnail_path }}" />
 <meta property="og:image:alt" content="{{ post.title }}" />
 {% endif %}
-<meta property="article:published_time" content="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}" />
+<meta property="article:published_time"
+    content="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}" />
 {% if post.updated_at %}
 <meta property="article:modified_time" content="{{ post.updated_at.isoformat() }}" />
 {% endif %}
@@ -30,7 +33,8 @@
 {% block twitter_meta %}
 {% if post.thumbnail_path %}
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:image" content="{{ request.url.scheme }}://{{ request.url.netloc }}/media/originals/{{ post.thumbnail_path }}" />
+<meta name="twitter:image"
+    content="{{ request.url.scheme }}://{{ request.url.netloc }}/media/originals/{{ post.thumbnail_path }}" />
 <meta name="twitter:image:alt" content="{{ post.title }}" />
 {% else %}
 <meta name="twitter:card" content="summary" />
@@ -45,7 +49,7 @@
     <div class="header-left">
         <a href="/" class="nav-link" title="Back to Home">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
         </a>
     </div>
@@ -64,28 +68,13 @@
     <div class="header-right">
         {% if user %}
         <a href="/light/posts/{{ post.id }}" class="header-action-btn edit-post-btn" title="Edit Post">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
         </a>
         {% endif %}
-        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
-            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="5"></circle>
-                <line x1="12" y1="1" x2="12" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="23"></line>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                <line x1="1" y1="12" x2="3" y2="12"></line>
-                <line x1="21" y1="12" x2="23" y2="12"></line>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-            </svg>
-            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-            </svg>
-        </button>
     </div>
 </div>
 {% else %}
@@ -99,67 +88,50 @@
     <!-- Main Visual Layer -->
     <div class="immersive-visuals">
         {% if post_media and post_media|length > 1 %}
-            <div class="carousel-container">
-                {% for item in post_media %}
-                <div class="carousel-slide {% if loop.first %}active{% endif %}" data-type="{{ item.type }}">
-                    {% if item.type == 'video' %}
-                        <video
-                            src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
-                            class="immersive-bg-image"
-                            {% if loop.first %}autoplay{% endif %}
-                            muted
-                            loop
-                            playsinline
-                        ></video>
-                    {% else %}
-                        <img
-                            src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
-                            alt="{{ post.title }} - Media {{ loop.index }}"
-                            class="immersive-bg-image"
-                        />
-                    {% endif %}
-                </div>
-                {% endfor %}
-                <button class="carousel-prev" aria-label="Previous media">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="15 18 9 12 15 6"></polyline>
-                    </svg>
-                </button>
-                <button class="carousel-next" aria-label="Next media">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                </button>
-                <div class="carousel-indicators">
-                    {% for item in post_media %}
-                    <button class="carousel-dot {% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}" aria-label="Go to media {{ loop.index }}"></button>
-                    {% endfor %}
-                </div>
-            </div>
-        {% elif post_media %}
-            {% if post_media[0].type == 'video' %}
+        <div class="carousel-container">
+            {% for item in post_media %}
+            <div class="carousel-slide {% if loop.first %}active{% endif %}" data-type="{{ item.type }}">
+                {% if item.type == 'video' %}
                 <video
-                    src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
-                    class="immersive-bg-image"
-                    autoplay
-                    muted
-                    loop
-                    playsinline
-                    controls
-                ></video>
-            {% else %}
-                <img
-                    src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
-                    alt="{{ post.title }}"
-                    class="immersive-bg-image"
-                />
-            {% endif %}
+                    src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
+                    class="immersive-bg-image" {% if loop.first %}autoplay{% endif %} muted loop playsinline></video>
+                {% else %}
+                <img src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
+                    alt="{{ post.title }} - Media {{ loop.index }}" class="immersive-bg-image" />
+                {% endif %}
+            </div>
+            {% endfor %}
+            <button class="carousel-prev" aria-label="Previous media">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <button class="carousel-next" aria-label="Next media">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </button>
+            <div class="carousel-indicators">
+                {% for item in post_media %}
+                <button class="carousel-dot {% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}"
+                    aria-label="Go to media {{ loop.index }}"></button>
+                {% endfor %}
+            </div>
+        </div>
+        {% elif post_media %}
+        {% if post_media[0].type == 'video' %}
+        <video
+            src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
+            class="immersive-bg-image" autoplay muted loop playsinline controls></video>
+        {% else %}
+        <img src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
+            alt="{{ post.title }}" class="immersive-bg-image" />
+        {% endif %}
         {% elif post.thumbnail_path %}
-            <img
-                src="{{ post.thumbnail_path if post.thumbnail_path.startswith('http') or post.thumbnail_path.startswith('/') else '/media/originals/' + post.thumbnail_path }}"
-                alt="{{ post.title }}"
-                class="immersive-bg-image"
-            />
+        <img src="{{ post.thumbnail_path if post.thumbnail_path.startswith('http') or post.thumbnail_path.startswith('/') else '/media/originals/' + post.thumbnail_path }}"
+            alt="{{ post.title }}" class="immersive-bg-image" />
         {% endif %}
     </div>
 
@@ -290,8 +262,7 @@
 </article>
 {% endif %}
 
-<div id="post-nav-data" style="display: none;"
-     data-prev-url="{% if prev_post %}/posts/{{ prev_post.slug }}{% endif %}"
-     data-next-url="{% if next_post %}/posts/{{ next_post.slug }}{% endif %}">
+<div id="post-nav-data" style="display: none;" data-prev-url="{% if prev_post %}/posts/{{ prev_post.slug }}{% endif %}"
+    data-next-url="{% if next_post %}/posts/{{ next_post.slug }}{% endif %}">
 </div>
 {% endblock %}

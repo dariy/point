@@ -68,6 +68,7 @@
 
     /* Semantic Colors - Text */
     --text-primary: #0f172a;
+    --text-primary-hover: black;
     --text-secondary: #475569;
     --text-tertiary: #64748b;
     --text-immersive: #ffffff;
@@ -133,6 +134,7 @@
 
     /* Semantic Colors - Text */
     --text-primary: #f1f5f9;
+    --text-primary-hover: #ffffff;
     --text-secondary: #cbd5e1;
     --text-tertiary: #cbd5e1;
     /* #94a3b8; */
@@ -283,8 +285,8 @@ img {
 
 .site-branding {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-sm);
     flex-shrink: 0;
     width: auto;
 }
@@ -331,6 +333,11 @@ img {
     line-height: 1;
 }
 
+.site-branding:hover,
+.site-branding:hover * {
+    color: var(--color-primary);
+}
+
 .app-logo {
     display: inline-block;
     vertical-align: middle;
@@ -340,16 +347,8 @@ img {
 }
 
 .app-logo .logo-shape {
-    fill: var(--color-primary);
+    fill: var(--text-primary);
     transition: fill var(--transition-theme);
-}
-
-.app-logo:hover .logo-shape {
-    fill: var(--color-primary-hover);
-}
-
-.site-title:hover {
-    color: var(--color-primary);
 }
 
 /* Authenticated indicator - site title color change */
@@ -364,7 +363,7 @@ img {
 .site-subtitle {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
-    margin-top: -2px;
+    margin: 0;
     transition: color var(--transition-theme);
 }
 
@@ -1408,6 +1407,22 @@ img {
 .theme-toggle .icon-sun,
 .theme-toggle .icon-moon {
     display: none;
+}
+
+.logo.theme-toggle {
+    width: 1rem;
+    height: 1rem;
+    border: none;
+    align-items: end;
+}
+
+.logo.theme-toggle.authenticated * {
+    fill: var(--color-primary);
+}
+
+.logo.theme-toggle svg {
+    width: 1rem;
+    height: 1rem;
 }
 
 /* Show sun icon in dark mode (to switch to light) */
