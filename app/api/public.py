@@ -411,7 +411,9 @@ async def single_post(
                 "prev_post": {"title": prev_post.title, "slug": prev_post.slug} if prev_post else None,
                 "next_post": {"title": next_post.title, "slug": next_post.slug} if next_post else None,
                 "blog_settings": {
-                    "show_view_counts": blog_settings_dict.get("show_view_counts", True)
+                    "show_view_counts": blog_settings_dict.get("show_view_counts", True),
+                    "enable_analytics": blog_settings_dict.get("enable_analytics", False),
+                    "google_analytics_id": blog_settings_dict.get("google_analytics_id", "")
                 },
                 "blog_title": settings.app_name,
                 "blog_subtitle": getattr(settings, "blog_subtitle", ""),
