@@ -657,9 +657,15 @@
                 // Update document title
                 if (doc.title) document.title = doc.title;
 
-                // Update body classes (essential for immersive layout vs standard)
+                // Update body attributes
                 if (doc.body) {
                     document.body.className = doc.body.className;
+                    const newGaId = doc.body.getAttribute('data-ga-id');
+                    if (newGaId) {
+                        document.body.setAttribute('data-ga-id', newGaId);
+                    } else {
+                        document.body.removeAttribute('data-ga-id');
+                    }
                 }
 
                 // Re-initialize page scripts
@@ -670,6 +676,15 @@
             // Update URL
             if (pushState) {
                 history.pushState({}, '', url);
+
+                // Track page view in Google Analytics
+                const gaId = document.body.getAttribute('data-ga-id');
+                if (gaId && window.gtag) {
+                    gtag('config', gaId, {
+                        'page_path': url,
+                        'page_title': document.title
+                    });
+                }
             }
 
             // Scroll to top
@@ -689,6 +704,15 @@
     function renderPost(data) {
         console.log("[Navigation] Rendering post from JSON data");
         cleanupPage();
+
+        // Update GA settings if provided
+        if (data.blog_settings) {
+            if (data.blog_settings.enable_analytics && data.blog_settings.google_analytics_id) {
+                document.body.setAttribute('data-ga-id', data.blog_settings.google_analytics_id);
+            } else {
+                document.body.removeAttribute('data-ga-id');
+            }
+        }
 
         const hasText = data.has_text_content;
         const templateId = hasText ? 'tmpl-post-standard' : 'tmpl-post-immersive';
