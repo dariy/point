@@ -5,7 +5,6 @@ Provides common fixtures for testing the Photo Blog application.
 
 import os
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta
 
 # Disable caching in tests BEFORE importing app
 os.environ["CACHE_ENABLED"] = "false"
