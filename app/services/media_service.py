@@ -369,12 +369,12 @@ class MediaService:
         # Record old URLs for reference updates
         old_url = self.get_media_url(media)
         old_media_path = f"/media/{media.original_path}"
-        
+
         # Perform physical rename
         old_original_full = self.storage_path / "media" / media.original_path
         if old_original_full.exists():
              await aiofiles.os.rename(old_original_full, new_original_full)
-        
+
         if media.thumbnail_path and new_thumbnail_rel:
             old_thumbnail_full = self.storage_path / "media" / media.thumbnail_path
             new_thumbnail_full = self.storage_path / "media" / new_thumbnail_rel
@@ -385,7 +385,7 @@ class MediaService:
         media.filename = new_filename
         media.original_path = new_original_rel
         media.thumbnail_path = new_thumbnail_rel
-        
+
         # Get new URLs
         new_url = self.get_media_url(media)
         new_media_path = f"/media/{new_original_rel}"
@@ -398,16 +398,18 @@ class MediaService:
 
         return media
 
-    async def _update_references(self, old_url: str, new_url: str, old_path: str, new_path: str):
+    async def _update_references(self, old_url: str, new_url: str, old_path: str, new_path: str) -> None:
         """Update all references to a media file in post content."""
-        from app.models.post import Post
         from sqlalchemy import update
+
+        from app.models.post import Post
 
         # Update content and excerpt in posts
         # Note: We replace both the simplified URL and the full /media/ path
         for o, n in [(old_url, new_url), (old_path, new_path)]:
-            if o == n: continue
-            
+            if o == n:
+                continue
+
             # Content replacement
             await self.db.execute(
                 update(Post)
@@ -596,10 +598,10 @@ class MediaService:
         return {
             "total_files": total_files,
             "total_size_bytes": total_size,
-            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "total_size_mb": round(float(total_size) / (1024 * 1024), 2),
             "quota_bytes": quota,
-            "quota_mb": round(quota / (1024 * 1024), 2),
-            "usage_percent": round((total_size / quota) * 100, 2) if quota else 0,
+            "quota_mb": round(float(quota) / (1024 * 1024), 2),
+            "usage_percent": round((float(total_size) / quota) * 100, 2) if quota else 0,
             "orphaned_files": orphaned_files,
             "orphaned_size_bytes": orphaned_size,
             "by_type": by_type,
