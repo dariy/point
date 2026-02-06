@@ -201,6 +201,7 @@ html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     background-color: var(--bg-primary);
+    overscroll-behavior-y: contain;
 }
 
 body {
@@ -418,6 +419,7 @@ img {
     background: var(--footer-bg);
     color: var(--footer-text);
     padding: var(--spacing-sm) var(--spacing-md);
+    padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
     margin-top: auto;
     transition: background-color var(--transition-theme);
 }
@@ -1615,7 +1617,7 @@ img {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
     color: rgba(255, 255, 255, 0.8);
     border-top: none;
-    padding-bottom: var(--spacing-lg);
+    padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
     transition:
         opacity 0.4s ease,
         transform 0.4s ease;
