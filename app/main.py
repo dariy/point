@@ -198,12 +198,22 @@ async def global_exception_handler(_request: Request, exc: Exception) -> JSONRes
 
 
 @app.get("/health", tags=["System"])
-async def health_check() -> dict[str, str]:
+async def health_check(
+    db: Any = Depends(get_db),
+) -> dict[str, str]:
     """Health check endpoint.
 
+    Verifies the application is running and the database is accessible.
+
+    Args:
+        db: Database session
+
     Returns:
-        Status indicating the application is running
+        Status indicating the application is running and DB is reachable
     """
+    from sqlalchemy import text
+
+    await db.execute(text("SELECT 1"))
     return {"status": "healthy"}
 
 
