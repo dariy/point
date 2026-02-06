@@ -4,23 +4,23 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/light.css">
+<script src="/static/js/theme.js"></script>
 {% endblock %}
 
 {% block body_class %}login-page{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/auth.js"></script>
+{% endblock %}
 
 {% block body %}
 <div class="login-container">
     <div class="login-card">
         <div class="login-header">
             <h1>
-                <svg class="app-logo" viewBox="0 0 128 128" version="1.1" xmlns="http://www.w3.org/2000/svg">
-                    <g class="logo-shape">
-                        <circle cx="64" cy="64" r="64" />
-                        <circle cx="112" cy="112" r="16" />
-                        <rect width="48" height="48" x="80" y="64" />
-                        <rect width="48" height="48" x="64" y="80" />
-                    </g>
-                </svg>
+                <a href="#" class="logo theme-toggle" title="Toggle theme">
+                    {% include "shared/logo.html" %}
+                </a>
                 <span>{{ app_name }}</span>
             </h1>
         </div>
@@ -50,6 +50,4 @@
         </form>
     </div>
 </div>
-
-<script src="/static/js/auth.js"></script>
 {% endblock %}
