@@ -35,6 +35,46 @@ def markdown_to_html(content: str) -> str:
     return md.convert(content)
 
 
+def preprocess_media_links(content: str) -> str:
+    """Convert simplified media paths to standard Markdown or HTML.
+
+    Converts /YYYY/MM/filename.ext on its own line to a proper media tag.
+
+    Args:
+        content: Raw content
+
+    Returns:
+        Content with simplified links converted
+    """
+    import re
+    from pathlib import Path
+
+    lines = content.split("\n")
+    new_lines = []
+
+    # regex for /YYYY/MM/filename.ext
+    pattern = re.compile(
+        r"^/(\d{4})/(\d{2})/([^ \n]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|mov|webm))$"
+    )
+
+    for line in lines:
+        stripped = line.strip()
+        match = pattern.match(stripped)
+        if match:
+            filename = match.group(3)
+            ext = Path(filename).suffix.lower()
+            if ext in (".mp4", ".mov", ".webm"):
+                new_lines.append(
+                    f'<video src="{stripped}" controls muted loop playsinline style="max-width: 100%;"></video>'
+                )
+            else:
+                new_lines.append(f"![{filename}]({stripped})")
+        else:
+            new_lines.append(line)
+
+    return "\n".join(new_lines)
+
+
 def format_content(content: str, formatter: str) -> str:
     """Format content based on formatter type.
 
@@ -46,10 +86,12 @@ def format_content(content: str, formatter: str) -> str:
         Formatted HTML content
     """
     if formatter == "markdown":
-        return markdown_to_html(content)
+        # Pre-process simplified media links
+        preprocessed = preprocess_media_links(content)
+        return markdown_to_html(preprocessed)
     elif formatter == "html":
         # HTML content is passed through (should be sanitized on input)
-        return content
+        return preprocess_media_links(content)
     else:
         # Raw text - escape HTML and preserve whitespace
         escaped = html.escape(content)
@@ -349,6 +391,9 @@ def extract_all_media(content: str) -> list[dict[str, str]]:
         if any(url_lower.endswith(ext) for ext in video_extensions):
             return "video"
         return default_type
+
+    # Preprocess simplified media links
+    content = preprocess_media_links(content)
 
     # 1. Markdown images: ![alt](url)
     markdown_matches = re.findall(r"!\[.*?\]\((.*?)(?:\s+\".*?\")?\)", content)

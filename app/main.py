@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -205,6 +205,29 @@ async def health_check() -> dict[str, str]:
         Status indicating the application is running
     """
     return {"status": "healthy"}
+
+
+@app.get("/{year:int}/{month:int}/{filename}", tags=["Media"])
+async def serve_simplified_media(year: int, month: int, filename: str):
+    """Serve media files using the simplified path /YYYY/MM/filename.
+
+    Args:
+        year: Year directory
+        month: Month directory
+        filename: Filename
+
+    Returns:
+        File response
+    """
+    file_path = (
+        Path(settings.storage_path) / "media" / "originals" / str(year) / f"{month:02d}" / filename
+    )
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media not found",
+        )
+    return FileResponse(file_path)
 
 
 @app.get("/preview/{token}", tags=["Public"])
