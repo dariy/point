@@ -87,4 +87,28 @@ async def test_update_setting_mixed_types(settings_service: SettingsService):
     assert all_s["enable_analytics"] is False
 
 
+@pytest.mark.asyncio
+async def test_analytics_settings(settings_service: SettingsService):
+    """Test getting and updating analytics settings."""
+    # Check defaults
+    settings = await settings_service.get_all_settings()
+    assert "enable_analytics" in settings
+    assert "google_analytics_id" in settings
+
+    # Update settings
+    await settings_service.update_settings({
+        "enable_analytics": True,
+        "google_analytics_id": "G-TEST123"
+    })
+
+    # Verify update
+    updated = await settings_service.get_all_settings()
+    assert updated["enable_analytics"] is True
+    assert updated["google_analytics_id"] == "G-TEST123"
+
+    # Test single get
+    ga_id = await settings_service.get_setting("google_analytics_id")
+    assert ga_id == "G-TEST123"
+
+
 
