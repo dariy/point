@@ -1122,7 +1122,7 @@ echo "Restore completed from $BACKUP_FILE"
 ### Features to Consider
 - [ ] Full-text search with FTS5
 - [ ] Comments system (with moderation)
-- [ ] Social media integration (auto-post to Twitter, Instagram)
+- [ ] Social media integration (auto-post to Instagram)
 - [ ] Image EXIF data extraction and display
 - [ ] Geolocation tagging
 - [ ] Multi-language content (i18n)

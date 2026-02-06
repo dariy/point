@@ -21,12 +21,6 @@
 <meta property="og:locale" content="en_US">
 {% endblock %}
 
-<!-- Twitter Card defaults (can be overridden by child templates) -->
-{% block twitter_meta %}
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="{{ self.page_title() }} | {{ blog_title }}">
-<meta name="twitter:description" content="{{ self.meta_description() }}">
-{% endblock %}
 {% endblock %}
 
 {% block extra_css %}
@@ -42,7 +36,8 @@
 <!-- Drop Zone Overlay for Quick Post Creation -->
 <div class="drop-zone-overlay" id="drop-zone-overlay">
     <div class="drop-zone-content">
-        <svg class="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="17 8 12 3 7 8"></polyline>
             <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -58,17 +53,13 @@
         <div class="header-container">
             {% block header_content %}
             <div class="header-left-group">
-                {% if user %}
-                <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                        <path d="M2 17l10 5 10-5"></path>
-                        <path d="M2 12l10 5 10-5"></path>
-                    </svg>
-                </a>
-                {% endif %}
                 <div class="site-branding">
-                    <a href="/" class="site-title{% if user %} authenticated{% endif %}">{{ blog_title }}</a>
+                    <a href="#" class="logo theme-toggle{% if user %} authenticated{% endif %}">
+                        {% include "shared/logo.html" %}
+                    </a>
+                    <a href="/" class="site-title{% if user %} authenticated{% endif %}">
+                        <span>{{ blog_title }}</span>
+                    </a>
                     {% if blog_subtitle %}
                     <p class="site-subtitle">{{ blog_subtitle }}</p>
                     {% endif %}
@@ -78,27 +69,12 @@
             <nav class="site-nav">
                 {% if user %}
                 <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
                         <path d="M12 5v14M5 12h14"></path>
                     </svg>
                 </a>
                 {% endif %}
-                <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
-                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="5"></circle>
-                        <line x1="12" y1="1" x2="12" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="23"></line>
-                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                        <line x1="1" y1="12" x2="3" y2="12"></line>
-                        <line x1="21" y1="12" x2="23" y2="12"></line>
-                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                    </svg>
-                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                    </svg>
-                </button>
             </nav>
             {% endblock %}
         </div>
@@ -126,25 +102,32 @@
 <template id="tmpl-header-default">
     <div class="header-left-group">
         <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel" style="display: none;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
                 <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                 <path d="M2 17l10 5 10-5"></path>
                 <path d="M2 12l10 5 10-5"></path>
             </svg>
         </a>
         <div class="site-branding">
-            <a href="/" class="site-title"></a>
+            <a href="/" class="site-title">
+                {% include "shared/logo.html" %}
+                <span class="title-text"></span>
+            </a>
             <p class="site-subtitle"></p>
         </div>
     </div>
     <nav class="site-nav">
-        <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post"
+            style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
                 <path d="M12 5v14M5 12h14"></path>
             </svg>
         </a>
         <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
-            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="5"></circle>
                 <line x1="12" y1="1" x2="12" y2="3"></line>
                 <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -155,7 +138,8 @@
                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
             </svg>
-            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
             </svg>
         </button>
@@ -167,11 +151,13 @@
         <div class="header-left">
             <a href="/" class="nav-link" title="Back to Home">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
                 </svg>
             </a>
-            <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel" style="display: none;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <a href="/light" class="light-link" title="Go to light panel" aria-label="light panel"
+                style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
                     <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                     <path d="M2 17l10 5 10-5"></path>
                     <path d="M2 12l10 5 10-5"></path>
@@ -179,7 +165,10 @@
             </a>
         </div>
         <div class="header-center">
-            <h1 class="site-title"></h1>
+            <h1 class="site-title">
+                {% include "shared/logo.html" %}
+                <span class="title-text"></span>
+            </h1>
             <div class="post-meta">
                 <time class="post-date"></time>
                 <span class="post-meta-divider">·</span>
@@ -187,13 +176,16 @@
             </div>
         </div>
         <div class="header-right">
-            <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post" style="display: none;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post"
+                style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
                     <path d="M12 5v14M5 12h14"></path>
                 </svg>
             </a>
             <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5"></circle>
                     <line x1="12" y1="1" x2="12" y2="3"></line>
                     <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -204,7 +196,8 @@
                     <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
                     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
                 </svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                 </svg>
             </button>
@@ -242,12 +235,14 @@
             <div class="carousel-container">
                 <!-- Slides injected here -->
                 <button class="carousel-prev" aria-label="Previous media">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
                 <button class="carousel-next" aria-label="Next media">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </button>

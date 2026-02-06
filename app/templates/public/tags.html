@@ -12,11 +12,6 @@
 
 {% block content %}
 <div class="tags-page">
-    <!--header class="page-header">
-        <h1 class="page-title">Tags</h1>
-        <p class="page-description">Browse all photos</p>
-    </header-->
-
     {% if tags %}
     <div class="tags-filters" id="tags-filters">
         <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}">All</a>
@@ -32,4 +27,54 @@
         {% include "public/partials/tags_grid.html" %}
     </div>
 </div>
+{% endblock %}
+
+{% block footer_pagination %}
+{% if total_pages > 1 %}
+<nav class="pagination tags-pagination" aria-label="Tags pagination">
+    {% if current_tag %}
+    {% set pagination_base = '/tags/' + current_tag %}
+    {% else %}
+    {% set pagination_base = '/tags' %}
+    {% endif %}
+
+    {% if page > 1 %}
+    <a href="{{ pagination_base }}?page={{ page - 1 }}" class="pagination-link ajax-link" aria-label="Previous page">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+        </svg>
+    </a>
+    {% else %}
+    <span class="pagination-link disabled">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+        </svg>
+    </span>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}
+    <span class="pagination-link active">{{ p }}</span>
+    {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %} <a
+        href="{{ pagination_base }}?page={{ p }}" class="pagination-link ajax-link">{{ p }}</a>
+        {% elif p == page - 2 or p == page + 2 %}
+        <span class="pagination-ellipsis">&hellip;</span>
+        {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %} <a href="{{ pagination_base }}?page={{ page + 1 }}"
+            class="pagination-link ajax-link" aria-label="Next page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6" />
+            </svg>
+            </a>
+            {% else %}
+            <span class="pagination-link disabled">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
+            </span>
+            {% endif %}
+</nav>
+{% endif %}
 {% endblock %}
