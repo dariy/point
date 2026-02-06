@@ -713,7 +713,7 @@ curl http://localhost:8000/tag/travel
 
 - [x] **8.5 Meta Tags**
   - [x] Add Open Graph tags
-  - [x] Add Twitter Card tags
+
   - [x] Dynamic meta descriptions
   - [x] Canonical URLs
 
@@ -731,7 +731,7 @@ curl http://localhost:8000/tag/travel
 1. Valid RSS feed with posts
 2. Sitemap for search engines
 3. robots.txt
-4. Open Graph/Twitter meta tags
+4. Open Graph meta tags
 5. Canonical URLs
 
 ### Validation Criteria
@@ -1270,7 +1270,7 @@ Track significant milestones here:
 | 2026-01-23 | 5 | Phase 5 complete | Tag model, PostTag association, tag service, post-tag integration, API endpoints, 22 new tests (138 total) |
 | 2026-01-23 | 6 | Phase 6 complete | Light interface with dashboard, post editor, media library, tags manager |
 | 2026-01-24 | 7 | Phase 7 complete | Public frontend with homepage, single post, tag archive, gallery, 25 new tests (163 total) |
-| 2026-01-24 | 8 | Phase 8 complete | RSS feed, sitemap, robots.txt, Open Graph & Twitter Card meta tags, canonical URLs, 29 new tests (192 total) |
+| 2026-01-24 | 8 | Phase 8 complete | RSS feed, sitemap, robots.txt, Open Graph meta tags, canonical URLs, 29 new tests (192 total) |
 | 2026-01-24 | 9 | Phase 9 complete | Dark/light theming with CSS variables, theme.js for toggle and system preference detection, theme switcher UI, light theming, 24 new tests |
 | 2026-01-25 | 10 | Phase 10 complete | File-based caching with FileCache class, page caching for public routes, cache invalidation on post/tag changes, static asset caching headers, 22 new tests |
 | 2026-01-27 | 11 | Phase 11 complete | Scheduler service with APScheduler, background tasks for session cleanup and view count flushing, backup service with scripts and API endpoint, 13 new tests |
