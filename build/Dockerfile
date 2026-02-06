@@ -24,7 +24,6 @@ WORKDIR /app
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -49,7 +48,7 @@ RUN mkdir -p /data/media/originals \
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # Non-root user
 RUN useradd -m -u 1000 appuser && \
