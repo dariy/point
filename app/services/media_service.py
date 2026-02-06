@@ -614,12 +614,7 @@ class MediaService:
         Returns:
             Public URL path
         """
-        # Return simplified path format: /YYYY/MM/filename
-        # original_path is "originals/YYYY/MM/filename"
-        parts = media.original_path.split("/")
-        if len(parts) >= 4:
-            return f"/{parts[1]}/{parts[2]}/{parts[3]}"
-        return f"/media/{media.original_path}"
+        return media.url
 
     def get_thumbnail_url(self, media: Media) -> str | None:
         """Get public URL for thumbnail.

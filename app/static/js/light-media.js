@@ -6,20 +6,20 @@
 (function () {
     'use strict';
 
-    const uploadModal = document.getElementById('upload-modal');
-    if (!uploadModal) return;
+    let uploadModal;
 
     /**
      * Open upload modal
      */
     const openUploadModal = function () {
-        uploadModal.classList.add('active');
+        if (uploadModal) uploadModal.classList.add('active');
     };
 
     /**
      * Close upload modal
      */
     const closeUploadModal = function () {
+        if (!uploadModal) return;
         uploadModal.classList.add('closing');
         setTimeout(() => {
             uploadModal.classList.remove('active');
@@ -86,20 +86,6 @@
         }, 500);
     }
 
-    // Event listeners
-    document.addEventListener('click', function (e) {
-        if (e.target.closest('[data-action="open-upload-modal"]')) {
-            openUploadModal();
-        } else if (e.target.closest('[data-action="close-upload-modal"]')) {
-            closeUploadModal();
-        } else if (e.target.closest('[data-action="rename-media"]')) {
-            const btn = e.target.closest('[data-action="rename-media"]');
-            const mediaId = btn.dataset.mediaId;
-            const oldFilename = btn.dataset.filename;
-            handleRename(mediaId, oldFilename);
-        }
-    });
-
     /**
      * Handle media renaming
      */
@@ -141,43 +127,77 @@
         }
     }
 
-    const typeFilter = document.querySelector('[data-action="filter-type"]');
-    if (typeFilter) {
-        typeFilter.addEventListener('change', (e) => filterByType(e.target.value));
+    /**
+     * Initialize media library features
+     */
+    function init() {
+        uploadModal = document.getElementById('upload-modal');
+
+        // Main action listeners
+        document.addEventListener('click', function (e) {
+            const uploadOpenBtn = e.target.closest('[data-action="open-upload-modal"]');
+            const uploadCloseBtn = e.target.closest('[data-action="close-upload-modal"]');
+            const renameBtn = e.target.closest('[data-action="rename-media"]');
+
+            if (uploadOpenBtn) {
+                openUploadModal();
+            } else if (uploadCloseBtn) {
+                closeUploadModal();
+            } else if (renameBtn) {
+                const mediaId = renameBtn.dataset.mediaId;
+                const oldFilename = renameBtn.dataset.filename;
+                handleRename(mediaId, oldFilename);
+            }
+        });
+
+        // Type filter listener
+        const typeFilter = document.querySelector('[data-action="filter-type"]');
+        if (typeFilter) {
+            typeFilter.addEventListener('change', (e) => filterByType(e.target.value));
+        }
+
+        // Modal overlay click listener
+        if (uploadModal) {
+            uploadModal.addEventListener('click', function (e) {
+                if (e.target === uploadModal) {
+                    closeUploadModal();
+                }
+            });
+        }
+
+        // Enhanced upload area initialization
+        const uploadArea = document.querySelector('.upload-area');
+        if (uploadArea) {
+            const fileInput = uploadArea.querySelector('input[type="file"]');
+
+            uploadArea.addEventListener('click', () => fileInput.click());
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                await handleFiles(e.dataTransfer.files);
+            });
+
+            fileInput.addEventListener('change', async (e) => {
+                await handleFiles(e.target.files);
+            });
+        }
     }
 
-    // Close modal on overlay click
-    uploadModal.addEventListener('click', function (e) {
-        if (e.target === uploadModal) {
-            closeUploadModal();
-        }
-    });
-
-    // Enhanced upload area
-    const uploadArea = document.querySelector('.upload-area');
-    if (uploadArea) {
-        const fileInput = uploadArea.querySelector('input[type="file"]');
-
-        uploadArea.addEventListener('click', () => fileInput.click());
-
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            await handleFiles(e.dataTransfer.files);
-        });
-
-        fileInput.addEventListener('change', async (e) => {
-            await handleFiles(e.target.files);
-        });
+    // Run initialization
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 
 })();
