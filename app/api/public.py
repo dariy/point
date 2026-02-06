@@ -415,8 +415,8 @@ async def single_post(
                     "enable_analytics": blog_settings_dict.get("enable_analytics", False),
                     "google_analytics_id": blog_settings_dict.get("google_analytics_id", "")
                 },
-                "blog_title": settings.app_name,
-                "blog_subtitle": getattr(settings, "blog_subtitle", ""),
+                "blog_title": blog_settings_dict.get("blog_title", settings.app_name),
+                "blog_subtitle": blog_settings_dict.get("blog_subtitle", getattr(settings, "blog_subtitle", "")),
                 "is_logged_in": user is not None,
             }
         )
@@ -785,13 +785,16 @@ async def rss_feed(
 
     base_url = get_base_url(request)
 
+    settings_service = SettingsService(db)
+    blog_settings = await settings_service.get_all_settings()
+
     context = {
         "request": request,
-        "blog_title": settings.app_name,
-        "blog_subtitle": getattr(settings, "blog_subtitle", ""),
-        "author_name": getattr(settings, "author_name", "Light"),
-        "author_email": getattr(settings, "author_email", ""),
-        "language": getattr(settings, "default_language", "en"),
+        "blog_title": blog_settings.get("blog_title", settings.app_name),
+        "blog_subtitle": blog_settings.get("blog_subtitle", getattr(settings, "blog_subtitle", "")),
+        "author_name": blog_settings.get("author_name", getattr(settings, "author_name", "Light")),
+        "author_email": blog_settings.get("author_email", getattr(settings, "author_email", "")),
+        "language": blog_settings.get("default_language", getattr(settings, "default_language", "en")),
         "base_url": base_url,
         "build_date": build_date,
         "posts": posts_data,
