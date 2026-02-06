@@ -92,8 +92,54 @@
             openUploadModal();
         } else if (e.target.closest('[data-action="close-upload-modal"]')) {
             closeUploadModal();
+        } else if (e.target.closest('[data-action="rename-media"]')) {
+            const btn = e.target.closest('[data-action="rename-media"]');
+            const mediaId = btn.dataset.mediaId;
+            const oldFilename = btn.dataset.filename;
+            handleRename(mediaId, oldFilename);
         }
     });
+
+    /**
+     * Handle media renaming
+     */
+    async function handleRename(mediaId, oldFilename) {
+        const newFilename = prompt('Enter new filename:', oldFilename);
+        if (!newFilename || newFilename === oldFilename) return;
+
+        try {
+            const response = await fetch(`/api/media/${mediaId}/rename`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ new_filename: newFilename }),
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.detail || 'Rename failed';
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast(errorMessage, 'error');
+                } else {
+                    alert(errorMessage);
+                }
+                return;
+            }
+
+            if (window.LightUtils && window.LightUtils.showToast) {
+                window.LightUtils.showToast('Media renamed and post references updated');
+            }
+
+            setTimeout(() => window.location.reload(), 500);
+        } catch (error) {
+            console.error('Rename error:', error);
+            if (window.LightUtils && window.LightUtils.showToast) {
+                window.LightUtils.showToast('An error occurred during rename', 'error');
+            }
+        }
+    }
 
     const typeFilter = document.querySelector('[data-action="filter-type"]');
     if (typeFilter) {

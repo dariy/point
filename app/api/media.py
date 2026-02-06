@@ -26,6 +26,7 @@ from app.schemas.media import (
     BulkDeleteResponse,
     MediaDeleteResponse,
     MediaListResponse,
+    MediaRename,
     MediaResponse,
     MediaUpdate,
     MediaUploadResponse,
@@ -389,6 +390,43 @@ async def update_media(
         caption=update_data.caption,
         post_id=update_data.post_id,
     )
+
+    if not media:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media not found",
+        )
+
+    await db.commit()
+    return media_to_response(media, service)
+
+
+@router.post(
+    "/{media_id}/rename",
+    response_model=MediaResponse,
+    summary="Rename media file",
+)
+async def rename_media(
+    media_id: int,
+    rename_data: MediaRename,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_auth),
+) -> Any:
+    """Rename a media file and update references in posts.
+
+    Requires authentication.
+    """
+    service = MediaService(db)
+    try:
+        media = await service.rename_media(
+            media_id=media_id,
+            new_filename=rename_data.new_filename,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
     if not media:
         raise HTTPException(

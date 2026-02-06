@@ -34,6 +34,12 @@ class MediaUpdate(BaseModel):
     post_id: int | None = Field(default=None)
 
 
+class MediaRename(BaseModel):
+    """Schema for renaming media."""
+
+    new_filename: str = Field(..., min_length=1, max_length=255)
+
+
 class MediaResponse(BaseModel):
     """Schema for media response."""
 
