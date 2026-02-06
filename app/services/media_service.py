@@ -322,6 +322,111 @@ class MediaService:
 
         return media
 
+    async def rename_media(self, media_id: int, new_filename: str) -> Media | None:
+        """Rename a media file and update all references in posts.
+
+        Args:
+            media_id: Media ID to rename
+            new_filename: New filename with extension
+
+        Returns:
+            Updated media if successful, None otherwise
+        """
+        media = await self.get_media_by_id(media_id)
+        if not media:
+            return None
+
+        # Sanitize and prepare new filename
+        new_filename = sanitize_filename(new_filename)
+        old_ext = Path(media.filename).suffix.lower()
+        new_ext = Path(new_filename).suffix.lower()
+
+        # If extension missing, add old one
+        if not new_ext and old_ext:
+            new_filename += old_ext
+
+        if new_filename == media.filename:
+            return media
+
+        # Determine path components
+        parts = media.original_path.split("/")
+        if len(parts) < 4:
+            return None
+        date_path = f"{parts[1]}/{parts[2]}"
+
+        # New relative paths
+        new_original_rel = f"originals/{date_path}/{new_filename}"
+        new_thumbnail_rel = None
+        if media.thumbnail_path:
+            thumb_ext = Path(media.thumbnail_path).suffix
+            new_thumbnail_rel = f"thumbnails/{date_path}/{Path(new_filename).stem}{thumb_ext}"
+
+        # Paths on disk
+        new_original_full = self.storage_path / "media" / new_original_rel
+        if new_original_full.exists():
+             raise ValueError(f"File already exists: {new_filename}")
+
+        # Record old URLs for reference updates
+        old_url = self.get_media_url(media)
+        old_media_path = f"/media/{media.original_path}"
+        
+        # Perform physical rename
+        old_original_full = self.storage_path / "media" / media.original_path
+        if old_original_full.exists():
+             await aiofiles.os.rename(old_original_full, new_original_full)
+        
+        if media.thumbnail_path and new_thumbnail_rel:
+            old_thumbnail_full = self.storage_path / "media" / media.thumbnail_path
+            new_thumbnail_full = self.storage_path / "media" / new_thumbnail_rel
+            if old_thumbnail_full.exists():
+                await aiofiles.os.rename(old_thumbnail_full, new_thumbnail_full)
+
+        # Update media record
+        media.filename = new_filename
+        media.original_path = new_original_rel
+        media.thumbnail_path = new_thumbnail_rel
+        
+        # Get new URLs
+        new_url = self.get_media_url(media)
+        new_media_path = f"/media/{new_original_rel}"
+
+        # Update references in posts
+        await self._update_references(old_url, new_url, old_media_path, new_media_path)
+
+        await self.db.flush()
+        await self.db.refresh(media)
+
+        return media
+
+    async def _update_references(self, old_url: str, new_url: str, old_path: str, new_path: str):
+        """Update all references to a media file in post content."""
+        from app.models.post import Post
+        from sqlalchemy import update
+
+        # Update content and excerpt in posts
+        # Note: We replace both the simplified URL and the full /media/ path
+        for o, n in [(old_url, new_url), (old_path, new_path)]:
+            if o == n: continue
+            
+            # Content replacement
+            await self.db.execute(
+                update(Post)
+                .where(Post.content.contains(o))
+                .values(content=func.replace(Post.content, o, n))
+            )
+            # Excerpt replacement
+            await self.db.execute(
+                update(Post)
+                .where(Post.excerpt.contains(o))
+                .values(excerpt=func.replace(Post.excerpt, o, n))
+            )
+            # Thumbnail path replacement
+            await self.db.execute(
+                update(Post)
+                .where(Post.thumbnail_path == o)
+                .values(thumbnail_path=n)
+            )
+
     async def delete_media(self, media_id: int) -> tuple[bool, int]:
         """Delete a media file and its database record.
 
@@ -509,6 +614,11 @@ class MediaService:
         Returns:
             Public URL path
         """
+        # Return simplified path format: /YYYY/MM/filename
+        # original_path is "originals/YYYY/MM/filename"
+        parts = media.original_path.split("/")
+        if len(parts) >= 4:
+            return f"/{parts[1]}/{parts[2]}/{parts[3]}"
         return f"/media/{media.original_path}"
 
     def get_thumbnail_url(self, media: Media) -> str | None:
