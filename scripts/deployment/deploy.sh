@@ -124,7 +124,7 @@ wait_for_health() {
 
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         if docker compose -f "$COMPOSE_FILE" exec -T point \
-            curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
+            python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" > /dev/null 2>&1; then
             log_success "Service is healthy!"
             return 0
         fi
