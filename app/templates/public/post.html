@@ -30,19 +30,6 @@ endblock %}
 {% endfor %}
 {% endblock %}
 
-{% block twitter_meta %}
-{% if post.thumbnail_path %}
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:image"
-    content="{{ request.url.scheme }}://{{ request.url.netloc }}/media/originals/{{ post.thumbnail_path }}" />
-<meta name="twitter:image:alt" content="{{ post.title }}" />
-{% else %}
-<meta name="twitter:card" content="summary" />
-{% endif %}
-<meta name="twitter:title" content="{{ post.title }}" />
-<meta name="twitter:description" content="{{ post.meta_description or post.excerpt or '' }}" />
-{% endblock %}
-
 {% block header_content %}
 {% if not has_text_content %}
 <div class="post-header-bar">
