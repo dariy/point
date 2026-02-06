@@ -3,7 +3,7 @@
  * Handles post editing, preview, and form submission
  */
 
-(function() {
+(function () {
     'use strict';
 
     /**
@@ -13,7 +13,7 @@
         const previewToggle = document.querySelector('.preview-toggle');
         if (!previewToggle) return;
 
-        previewToggle.addEventListener('click', function() {
+        previewToggle.addEventListener('click', function () {
             const previewCard = document.getElementById('preview-card');
             previewCard.style.display = previewCard.style.display === 'none' ? 'block' : 'none';
         });
@@ -26,7 +26,7 @@
         const tagsInput = document.getElementById('tags');
         if (!tagsInput) { alert("!!!"); return };
 
-        tagsInput.addEventListener('keydown', function(e) {
+        tagsInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 // Add comma if not present at end
@@ -45,7 +45,7 @@
         const postForm = document.getElementById('post-form');
         if (!postForm) return;
 
-        postForm.addEventListener('submit', async function(e) {
+        postForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
             const form = e.target;
@@ -103,7 +103,7 @@
      */
     function initKeyboardShortcuts() {
         // Keyboard shortcut for save (Ctrl/Cmd + S)
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 const saveBtn = document.getElementById('btn-save'); // Note: ID in template is btn-save-header
@@ -121,19 +121,19 @@
      */
     function initCardToggling() {
         const cardHeaders = document.querySelectorAll('.card-header');
-        
+
         cardHeaders.forEach(header => {
             // Check if card should be foldable (all cards with headers in editor)
             const card = header.closest('.card');
             if (!card) return;
-            
+
             // Add indicator icon if not present
             if (!header.querySelector('.toggle-icon')) {
                 const icon = document.createElement('span');
                 icon.className = 'toggle-icon';
                 icon.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
                 icon.style.marginLeft = 'auto';
-                
+
                 // If header has flex-between, append to it, otherwise make header flex
                 if (header.classList.contains('flex-between')) {
                     header.appendChild(icon);
@@ -146,17 +146,28 @@
                     header.appendChild(icon);
                 }
             }
-            
+
             // Handle click
-            header.addEventListener('click', function(e) {
+            header.addEventListener('click', function (e) {
                 // Don't trigger if clicking buttons inside header
                 if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.badge')) {
                     return;
                 }
-                
+
                 card.classList.toggle('collapsed');
             });
         });
+    }
+
+    /**
+     * Initialize autofocus for elements with data-autofocus
+     */
+    function initAutofocus() {
+        const postForm = document.getElementById('post-form');
+        if (postForm && postForm.dataset.autofocus === 'true') {
+            const titleInput = document.getElementById('title');
+            if (titleInput) titleInput.focus();
+        }
     }
 
     /**
@@ -168,6 +179,7 @@
         initPostForm();
         initKeyboardShortcuts();
         initCardToggling();
+        initAutofocus();
     }
 
     // Initialize on DOM ready

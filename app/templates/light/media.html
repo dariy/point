@@ -6,9 +6,9 @@
 {% block page_title %}Media Library{% endblock %}
 
 {% block header_actions %}
-<button type="button" class="btn btn-primary" onclick="openUploadModal()">
+<button type="button" class="btn btn-primary" data-action="open-upload-modal">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-        <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+        <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
     </svg>
     Upload
 </button>
@@ -19,10 +19,10 @@
 <div class="filters">
     <div class="filter-group">
         <label class="filter-label">Type:</label>
-        <select class="filter-select" onchange="filterByType(this.value)">
+        <select class="filter-select" data-action="filter-type">
             <option value="">All</option>
             {% for ft in file_types %}
-            <option value="{{ ft }}" {% if file_type == ft %}selected{% endif %}>
+            <option value="{{ ft }}" {% if file_type==ft %}selected{% endif %}>
                 {{ ft|capitalize }}
             </option>
             {% endfor %}
@@ -48,15 +48,17 @@
             <div class="file-icon">
                 {% if item.file_type.value == 'video' %}
                 <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                    <path
+                        d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
                 </svg>
                 {% elif item.file_type.value == 'document' %}
                 <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                    <path
+                        d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
                 </svg>
                 {% else %}
                 <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                    <path d="M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6z"/>
+                    <path d="M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6z" />
                 </svg>
                 {% endif %}
             </div>
@@ -72,26 +74,18 @@
             </div>
         </div>
         <div class="media-item-actions">
-            <button
-                type="button"
-                class="btn btn-sm btn-outline"
-                data-copy-url="/media/{{ item.original_path }}"
+            <button type="button" class="btn btn-sm btn-outline" data-copy-url="/media/{{ item.original_path }}"
                 data-copy-markdown="![{{ item.alt_text or '' }}](/media/{{ item.original_path }})"
-                title="Copy Markdown"
-            >
+                title="Copy Markdown">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                    <path
+                        d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
                 </svg>
             </button>
-            <button
-                type="button"
-                class="btn btn-sm btn-danger"
-                data-delete-url="/api/media/{{ item.id }}"
-                data-delete-name="{{ item.filename }}"
-                title="Delete"
-            >
+            <button type="button" class="btn btn-sm btn-danger" data-delete-url="/api/media/{{ item.id }}"
+                data-delete-name="{{ item.filename }}" title="Delete">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
                 </svg>
             </button>
         </div>
@@ -102,7 +96,8 @@
 <div class="empty-state">
     <div class="empty-state-icon">
         <svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor">
-            <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+            <path
+                d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
         </svg>
     </div>
     <div class="empty-state-title">No media files</div>
@@ -110,7 +105,7 @@
     <p>No {{ file_type }} files found. <a href="/light/media">View all files</a></p>
     {% else %}
     <p>Upload your first file to get started.</p>
-    <button type="button" class="btn btn-primary mt-2" onclick="openUploadModal()">
+    <button type="button" class="btn btn-primary mt-2" data-action="open-upload-modal">
         Upload File
     </button>
     {% endif %}
@@ -132,7 +127,7 @@
                 <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" style="display: none;">
                 <div class="upload-area-icon">
                     <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                        <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+                        <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
                     </svg>
                 </div>
                 <div class="upload-area-text">
@@ -148,10 +143,12 @@
             </div>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeUploadModal()">Close</button>
+            <button type="button" class="btn btn-secondary" data-action="close-upload-modal">Close</button>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script src="/static/js/light-media.js"></script>
 {% endblock %}

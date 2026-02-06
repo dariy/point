@@ -23,12 +23,11 @@ jobs:
         with:
           filters: |
             code:
-              - 'app/**/*.py'
-              - 'app/**/*.js'
-              - 'tests/**/*.py'
-              - 'scripts/**/*.py'
+              - 'app/**'
+              - 'tests/**'
               - 'requirements.txt'
               - 'pyproject.toml'
+              - 'package.json'
             infra:
               - 'build/**'
               - '.github/workflows/deploy.yml'
@@ -36,7 +35,6 @@ jobs:
   test:
     needs: check-changes
     if: needs.check-changes.outputs.run_tests == 'true'
-
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,7 +75,6 @@ jobs:
       needs.check-changes.result == 'success' &&
       !failure() &&
       !cancelled()
-
     runs-on: ubuntu-latest
     permissions:
       contents: read

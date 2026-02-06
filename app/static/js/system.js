@@ -3,7 +3,7 @@
  * Handles system tools, backups, logs, and modal dialogs
  */
 
-(function() {
+(function () {
     'use strict';
 
     // ===========================
@@ -18,11 +18,11 @@
      */
     function createModals() {
         // Create confirm modal
-        const confirmModal = document.createElement('div');
-        confirmModal.id = 'confirm-modal';
-        confirmModal.className = 'modal';
-        confirmModal.innerHTML = `
-            <div class="modal-content">
+        const confirmOverlay = document.createElement('div');
+        confirmOverlay.id = 'confirm-modal';
+        confirmOverlay.className = 'modal-overlay';
+        confirmOverlay.innerHTML = `
+            <div class="modal">
                 <div class="modal-header">
                     <h3 id="confirm-title">Confirm Action</h3>
                 </div>
@@ -30,19 +30,19 @@
                     <p id="confirm-message"></p>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-outline" onclick="closeConfirmModal(false)">Cancel</button>
-                    <button class="btn btn-primary" id="confirm-btn" onclick="closeConfirmModal(true)">Confirm</button>
+                    <button class="btn btn-outline" data-action="confirm-cancel">Cancel</button>
+                    <button class="btn btn-primary" id="confirm-btn" data-action="confirm-ok">Confirm</button>
                 </div>
             </div>
         `;
-        document.body.appendChild(confirmModal);
+        document.body.appendChild(confirmOverlay);
 
         // Create alert modal
-        const alertModal = document.createElement('div');
-        alertModal.id = 'alert-modal';
-        alertModal.className = 'modal';
-        alertModal.innerHTML = `
-            <div class="modal-content">
+        const alertOverlay = document.createElement('div');
+        alertOverlay.id = 'alert-modal';
+        alertOverlay.className = 'modal-overlay';
+        alertOverlay.innerHTML = `
+            <div class="modal">
                 <div class="modal-header">
                     <h3 id="alert-title">Notification</h3>
                 </div>
@@ -50,20 +50,24 @@
                     <p id="alert-message"></p>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-primary" onclick="closeAlertModal()">OK</button>
+                    <button class="btn btn-primary" data-action="alert-ok">OK</button>
                 </div>
             </div>
         `;
-        document.body.appendChild(alertModal);
+        document.body.appendChild(alertOverlay);
 
-        // Close modal on background click
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) {
-                if (e.target.id === 'confirm-modal') {
-                    closeConfirmModal(false);
-                } else if (e.target.id === 'alert-modal') {
-                    closeAlertModal();
-                }
+        // Event listeners for modals
+        confirmOverlay.addEventListener('click', (e) => {
+            if (e.target === confirmOverlay || e.target.closest('[data-action="confirm-cancel"]')) {
+                closeConfirmModal(false);
+            } else if (e.target.closest('[data-action="confirm-ok"]')) {
+                closeConfirmModal(true);
+            }
+        });
+
+        alertOverlay.addEventListener('click', (e) => {
+            if (e.target === alertOverlay || e.target.closest('[data-action="alert-ok"]')) {
+                closeAlertModal();
             }
         });
     }
@@ -71,7 +75,7 @@
     /**
      * Show confirmation dialog
      */
-    window.showConfirm = function(title, message, confirmText = 'Confirm', isDanger = false) {
+    const showConfirm = function (title, message, confirmText = 'Confirm', isDanger = false) {
         return new Promise((resolve) => {
             const modal = document.getElementById('confirm-modal');
             document.getElementById('confirm-title').textContent = title;
@@ -79,7 +83,7 @@
             const confirmBtn = document.getElementById('confirm-btn');
             confirmBtn.textContent = confirmText;
             confirmBtn.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
-            modal.style.display = 'flex';
+            modal.classList.add('active');
             confirmCallback = resolve;
         });
     };
@@ -87,23 +91,28 @@
     /**
      * Close confirmation dialog
      */
-    window.closeConfirmModal = function(result) {
-        document.getElementById('confirm-modal').style.display = 'none';
-        if (confirmCallback) {
-            confirmCallback(result);
-            confirmCallback = null;
-        }
+    const closeConfirmModal = function (result) {
+        const modal = document.getElementById('confirm-modal');
+        modal.classList.add('closing');
+        setTimeout(() => {
+            modal.classList.remove('active');
+            modal.classList.remove('closing');
+            if (confirmCallback) {
+                confirmCallback(result);
+                confirmCallback = null;
+            }
+        }, 300);
     };
 
     /**
      * Show alert dialog
      */
-    window.showAlert = function(title, message) {
+    const showAlert = function (title, message) {
         return new Promise((resolve) => {
             const modal = document.getElementById('alert-modal');
             document.getElementById('alert-title').textContent = title;
             document.getElementById('alert-message').textContent = message;
-            modal.style.display = 'flex';
+            modal.classList.add('active');
             alertCallback = resolve;
         });
     };
@@ -111,12 +120,17 @@
     /**
      * Close alert dialog
      */
-    window.closeAlertModal = function() {
-        document.getElementById('alert-modal').style.display = 'none';
-        if (alertCallback) {
-            alertCallback();
-            alertCallback = null;
-        }
+    const closeAlertModal = function () {
+        const modal = document.getElementById('alert-modal');
+        modal.classList.add('closing');
+        setTimeout(() => {
+            modal.classList.remove('active');
+            modal.classList.remove('closing');
+            if (alertCallback) {
+                alertCallback();
+                alertCallback = null;
+            }
+        }, 300);
     };
 
     // ===========================
@@ -126,7 +140,7 @@
     /**
      * Clear application cache
      */
-    window.clearCache = async function(pattern) {
+    const clearCache = async function (pattern) {
         const confirmed = await showConfirm(
             'Clear Cache',
             'Are you sure you want to clear the cache? This may temporarily slow down page loads.',
@@ -151,10 +165,12 @@
     /**
      * Trigger manual backup
      */
-    window.triggerBackup = async function() {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Backing up...';
+    const triggerBackup = async function (event) {
+        const btn = event ? event.currentTarget : null;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Backing up...';
+        }
 
         try {
             const response = await fetch('/api/system/backup', { method: 'POST' });
@@ -168,15 +184,17 @@
         } catch (error) {
             await showAlert('Error', error.message);
         } finally {
-            btn.disabled = false;
-            btn.textContent = 'Backup Now';
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Backup Now';
+            }
         }
     };
 
     /**
      * Cleanup orphaned media files
      */
-    window.cleanupOrphaned = async function() {
+    const cleanupOrphaned = async function () {
         const confirmed = await showConfirm(
             'Delete Orphaned Media',
             'Are you sure you want to delete orphaned media files? This action cannot be undone.',
@@ -202,8 +220,11 @@
     /**
      * Refresh system logs
      */
-    window.refreshLogs = async function() {
-        const logType = document.getElementById('log-type').value;
+    const refreshLogs = async function () {
+        const logTypeSelect = document.getElementById('log-type');
+        if (!logTypeSelect) return;
+
+        const logType = logTypeSelect.value;
         const logContent = document.getElementById('log-content');
         logContent.innerHTML = '<div class="log-line">Loading logs...</div>';
 
@@ -228,7 +249,7 @@
     /**
      * Refresh backup list
      */
-    window.refreshBackups = async function() {
+    const refreshBackups = async function () {
         const backupsList = document.getElementById('backups-list');
         backupsList.innerHTML = '<div class="loading">Loading backups...</div>';
 
@@ -249,8 +270,8 @@
                                 </div>
                             </div>
                             <div class="backup-actions">
-                                <button class="btn btn-sm btn-primary" onclick="restoreBackup('${backup.filename}')">Restore</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteBackup('${backup.filename}')">Delete</button>
+                                <button class="btn btn-sm btn-primary" data-action="restore-backup" data-filename="${backup.filename}">Restore</button>
+                                <button class="btn btn-sm btn-danger" data-action="delete-backup" data-filename="${backup.filename}">Delete</button>
                             </div>
                         </div>
                     `).join('');
@@ -266,7 +287,7 @@
     /**
      * Restore from backup
      */
-    window.restoreBackup = async function(filename) {
+    const restoreBackup = async function (filename, btn) {
         // First confirmation
         const confirmed1 = await showConfirm(
             'Restore Backup - Warning',
@@ -285,10 +306,11 @@
         );
         if (!confirmed2) return;
 
-        const btn = event.target;
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Restoring...';
+        const originalText = btn ? btn.textContent : 'Restore';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Restoring...';
+        }
 
         try {
             const response = await fetch('/api/system/backups/' + encodeURIComponent(filename) + '/restore', {
@@ -300,20 +322,24 @@
                 window.location.reload();
             } else {
                 await showAlert('Error', data.detail);
-                btn.disabled = false;
-                btn.textContent = originalText;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
             }
         } catch (error) {
             await showAlert('Error', error.message);
-            btn.disabled = false;
-            btn.textContent = originalText;
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
         }
     };
 
     /**
      * Delete backup
      */
-    window.deleteBackup = async function(filename) {
+    const deleteBackup = async function (filename, btn) {
         const confirmed = await showConfirm(
             'Delete Backup',
             'Are you sure you want to delete this backup?\n\n' + filename + '\n\nThis action cannot be undone.',
@@ -322,10 +348,11 @@
         );
         if (!confirmed) return;
 
-        const btn = event.target;
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Deleting...';
+        const originalText = btn ? btn.textContent : 'Delete';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Deleting...';
+        }
 
         try {
             const response = await fetch('/api/system/backups/' + encodeURIComponent(filename), {
@@ -337,13 +364,17 @@
                 refreshBackups();
             } else {
                 await showAlert('Error', data.detail);
-                btn.disabled = false;
-                btn.textContent = originalText;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
             }
         } catch (error) {
             await showAlert('Error', error.message);
-            btn.disabled = false;
-            btn.textContent = originalText;
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
         }
     };
 
@@ -354,7 +385,7 @@
     /**
      * Format date for display
      */
-    window.formatDate = function(dateStr) {
+    const formatDate = function (dateStr) {
         const date = new Date(dateStr);
         return date.toLocaleString('en-US', {
             year: 'numeric',
@@ -368,7 +399,7 @@
     /**
      * Format file size for display
      */
-    window.formatSize = function(bytes) {
+    const formatSize = function (bytes) {
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
         return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
@@ -390,6 +421,51 @@
             logContent.scrollTop = logContent.scrollHeight;
         }
         refreshBackups();
+
+        // Event delegation for dynamic components
+        document.addEventListener('click', (e) => {
+            // Backup management actions
+            const restoreBtn = e.target.closest('[data-action="restore-backup"]');
+            if (restoreBtn) {
+                restoreBackup(restoreBtn.dataset.filename, restoreBtn);
+                return;
+            }
+
+            const deleteBtn = e.target.closest('[data-action="delete-backup"]');
+            if (deleteBtn) {
+                deleteBackup(deleteBtn.dataset.filename, deleteBtn);
+                return;
+            }
+
+            // Static page actions
+            const actionBtn = e.target.closest('[data-action]');
+            if (!actionBtn) return;
+
+            const action = actionBtn.dataset.action;
+            switch (action) {
+                case 'clear-cache':
+                    clearCache(actionBtn.dataset.pattern || 'all');
+                    break;
+                case 'trigger-backup':
+                    triggerBackup({ currentTarget: actionBtn });
+                    break;
+                case 'cleanup-orphaned':
+                    cleanupOrphaned();
+                    break;
+                case 'refresh-backups':
+                    refreshBackups();
+                    break;
+                case 'refresh-logs':
+                    refreshLogs();
+                    break;
+            }
+        });
+
+        // Event for log type change
+        const logTypeSelect = document.getElementById('log-type');
+        if (logTypeSelect) {
+            logTypeSelect.addEventListener('change', refreshLogs);
+        }
     }
 
     // Initialize on DOM ready

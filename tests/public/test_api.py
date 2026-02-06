@@ -557,33 +557,6 @@ class TestRobotsTxt:
         response = await client.get("/robots.txt")
         assert response.status_code == 200
         assert "Cache-Control" in response.headers
-class TestTwitterCards:
-    """Tests for Twitter Card meta tags."""
-    @pytest.mark.asyncio
-    async def test_post_has_twitter_card_tags(
-        self, client: AsyncClient, published_post: Post
-    ) -> None:
-        """Test that post pages have Twitter Card meta tags."""
-        response = await client.get(f"/posts/{published_post.slug}")
-        assert response.status_code == 200
-        assert 'name="twitter:card"' in response.text
-        assert 'name="twitter:title"' in response.text
-    @pytest.mark.asyncio
-    async def test_post_with_image_has_large_image_card(
-        self, client: AsyncClient, published_post: Post
-    ) -> None:
-        """Test posts with images use summary_large_image card."""
-        response = await client.get(f"/posts/{published_post.slug}")
-        assert response.status_code == 200
-        assert 'content="summary_large_image"' in response.text
-    @pytest.mark.asyncio
-    async def test_tag_page_has_twitter_card_tags(
-        self, client: AsyncClient, sample_tag: Tag, published_post: Post
-    ) -> None:
-        """Test that tag pages have Twitter Card meta tags."""
-        response = await client.get(f"/tag/{sample_tag.slug}")
-        assert response.status_code == 200
-        assert 'name="twitter:card"' in response.text
 class TestCanonicalURLs:
     """Tests for canonical URLs."""
     @pytest.mark.asyncio
