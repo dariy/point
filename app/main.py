@@ -219,7 +219,7 @@ async def health_check(
 
 
 @app.get("/{year:int}/{month:int}/{filename}", tags=["Media"])
-async def serve_simplified_media(year: int, month: int, filename: str):
+async def serve_simplified_media(year: int, month: int, filename: str) -> FileResponse:
     """Serve media files using the simplified path /YYYY/MM/filename.
 
     Args:

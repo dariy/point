@@ -1,14 +1,14 @@
 """Tests for simplified media serving and notation."""
 
+from unittest.mock import patch
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from pathlib import Path
-from unittest.mock import patch
-from app.models.media import Media, FileType
-from app.services.media_service import MediaService
+
+from app.models.media import FileType, Media
 from app.utils.formatters import format_content
-from app.config import get_settings
+
 
 @pytest.fixture
 def patch_storage(tmp_path):
@@ -24,14 +24,14 @@ def patch_storage(tmp_path):
 async def test_serve_simplified_media(client: AsyncClient, db: AsyncSession, patch_storage):
     """Test the simplified media serving route."""
     tmp_path = patch_storage
-    
+
     # Create directory structure
     media_dir = tmp_path / "media" / "originals" / "2024" / "08"
     media_dir.mkdir(parents=True, exist_ok=True)
-    
+
     file_path = media_dir / "test.jpg"
     file_path.write_bytes(b"dummy image content")
-    
+
     # Create media record in DB
     media = Media(
         filename="test.jpg",
@@ -43,7 +43,7 @@ async def test_serve_simplified_media(client: AsyncClient, db: AsyncSession, pat
     )
     db.add(media)
     await db.commit()
-    
+
     # Test serving via simplified route
     response = await client.get("/2024/08/test.jpg")
     assert response.status_code == 200
