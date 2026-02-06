@@ -21,6 +21,17 @@
 <meta property="og:locale" content="en_US">
 {% endblock %}
 
+{% if blog_settings.enable_analytics and blog_settings.google_analytics_id %}
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ blog_settings.google_analytics_id }}"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', '{{ blog_settings.google_analytics_id }}');
+</script>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_css %}
@@ -29,7 +40,11 @@
 {% endblock %}
 
 {% block body_class %}public-layout{% endblock %}
-{% block body_attrs %}{% if user %}data-logged-in="true"{% endif %}{% endblock %}
+{% block body_attrs %}
+{% if user %}data-logged-in="true"{% endif %}
+{% if blog_settings.enable_analytics and blog_settings.google_analytics_id %}data-ga-id="{{
+blog_settings.google_analytics_id }}"{% endif %}
+{% endblock %}
 
 {% block body %}
 {% if user %}
