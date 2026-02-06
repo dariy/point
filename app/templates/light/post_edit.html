@@ -9,26 +9,17 @@
 <button type="submit" form="post-form" id="btn-save-header" class="btn btn-primary">Save</button>
 <a href="/light/posts" class="btn btn-outline">Cancel</a>
 {% if post %}
-<button
-    type="button"
-    class="btn btn-danger"
-    data-delete-url="/api/posts/{{ post.id }}"
-    data-delete-name="{{ post.title }}"
-    data-redirect-url="/light/posts"
->
+<button type="button" class="btn btn-danger" data-delete-url="/api/posts/{{ post.id }}"
+    data-delete-name="{{ post.title }}" data-redirect-url="/light/posts">
     Delete Post
 </button>
 {% endif %}
 {% endblock %}
 
 {% block content %}
-<form
-    id="post-form"
-    class="post-form editor-form"
-    method="POST"
-    action="/api/posts{% if post %}/{{ post.id }}{% endif %}"
-    data-post-id="{{ post.id if post else '' }}"
->
+<form id="post-form" class="post-form editor-form" method="POST"
+    action="/api/posts{% if post %}/{{ post.id }}{% endif %}" data-post-id="{{ post.id if post else '' }}"
+    data-autofocus="{{ 'true' if initial_thumbnail else 'false' }}">
     <div class="editor-container">
         <!-- Main Editor -->
         <div class="editor-main">
@@ -37,43 +28,21 @@
                 <div class="card-body">
                     <div class="form-group">
                         <label for="title" class="form-label">Title <span class="required">*</span></label>
-                        <input
-                            type="text"
-                            id="title"
-                            name="title"
-                            value="{{ post.title if post else '' }}"
-                            class="form-input"
-                            required
-                            placeholder="Enter post title..."
-                            style="font-size: 1.25rem; font-weight: 600;"
-                        >
+                        <input type="text" id="title" name="title" value="{{ post.title if post else '' }}"
+                            class="form-input" required placeholder="Enter post title..."
+                            style="font-size: 1.25rem; font-weight: 600;">
                     </div>
                     <div class="form-group">
                         <label for="slug" class="form-label">Slug</label>
-                        <input
-                            type="text"
-                            id="slug"
-                            name="slug"
-                            value="{{ post.slug if post else '' }}"
-                            class="form-input"
-                            placeholder="url-slug"
-                        >
+                        <input type="text" id="slug" name="slug" value="{{ post.slug if post else '' }}"
+                            class="form-input" placeholder="url-slug">
                         <span class="form-help">Leave empty to auto-generate from title</span>
                     </div>
                     <div class="form-group">
                         <label for="tags" class="form-label">Tags</label>
                         <div class="tags-input" data-tags='{{ all_tags | tojson | safe }}'>
-                            <input
-                                type="hidden"
-                                name="tags"
-                                value="{{ post_tags | join(',') if post_tags else '' }}"
-                            >
-                            <input
-                                type="text"
-                                id="tags"
-                                class="form-input"
-                                placeholder="Add tags..."
-                            >
+                            <input type="hidden" name="tags" value="{{ post_tags | join(',') if post_tags else '' }}">
+                            <input type="text" id="tags" class="form-input" placeholder="Add tags...">
                             <div class="tags-suggestions"></div>
                         </div>
                         <span class="form-help">Press Enter or comma to add tags</span>
@@ -111,13 +80,8 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    <textarea
-                        id="content"
-                        name="content"
-                        class="form-textarea editor-content"
-                        rows="20"
-                        placeholder="Write your post content in Markdown..."
-                    >{{ post.content if post else (initial_content if initial_content else '') }}</textarea>
+                    <textarea id="content" name="content" class="form-textarea editor-content" rows="20"
+                        placeholder="Write your post content in Markdown...">{{ post.content if post else (initial_content if initial_content else '') }}</textarea>
                 </div>
             </div>
 
@@ -140,13 +104,8 @@
                     <h3>Excerpt</h3>
                 </div>
                 <div class="card-body">
-                    <textarea
-                        id="excerpt"
-                        name="excerpt"
-                        class="form-textarea"
-                        rows="3"
-                        placeholder="Brief summary (auto-generated if empty)..."
-                    >{{ post.excerpt if post else '' }}</textarea>
+                    <textarea id="excerpt" name="excerpt" class="form-textarea" rows="3"
+                        placeholder="Brief summary (auto-generated if empty)...">{{ post.excerpt if post else '' }}</textarea>
                 </div>
             </div>
 
@@ -160,7 +119,8 @@
                         <label for="status" class="form-label">Status</label>
                         <select id="status" name="status" class="form-select">
                             {% for s in statuses %}
-                            <option value="{{ s }}" {% if post and post.status.value == s %}selected{% elif not post and s == 'published' %}selected{% endif %}>
+                            <option value="{{ s }}" {% if post and post.status.value==s %}selected{% elif not post and
+                                s=='published' %}selected{% endif %}>
                                 {{ s|capitalize }}
                             </option>
                             {% endfor %}
@@ -169,14 +129,8 @@
 
                     <div class="form-group form-checkbox">
                         <label class="checkbox-label">
-                            <input
-                                type="checkbox"
-                                id="is_featured"
-                                name="is_featured"
-                                value="1"
-                                class="form-checkbox-input"
-                                {% if post and post.is_featured %}checked{% endif %}
-                            >
+                            <input type="checkbox" id="is_featured" name="is_featured" value="1"
+                                class="form-checkbox-input" {% if post and post.is_featured %}checked{% endif %}>
                             <span class="checkbox-text">Featured post</span>
                         </label>
                     </div>
@@ -200,13 +154,8 @@
                 <div class="card-body">
                     <div class="form-group">
                         <label for="meta_description" class="form-label">Meta Description</label>
-                        <textarea
-                            id="meta_description"
-                            name="meta_description"
-                            class="form-textarea"
-                            rows="2"
-                            placeholder="Description for search engines..."
-                        >{{ post.meta_description if post else '' }}</textarea>
+                        <textarea id="meta_description" name="meta_description" class="form-textarea" rows="2"
+                            placeholder="Description for search engines...">{{ post.meta_description if post else '' }}</textarea>
                     </div>
                 </div>
             </div>
@@ -214,11 +163,8 @@
     </div>
 </form>
 
+{% endblock %}
+
+{% block extra_js %}
 <script src="/static/js/light-editor.js"></script>
-{% if initial_thumbnail %}
-<script>
-// Auto-focus title field when image was dropped
-document.getElementById('title').focus();
-</script>
-{% endif %}
 {% endblock %}

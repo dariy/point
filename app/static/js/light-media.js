@@ -3,7 +3,7 @@
  * Handles media upload, filtering, and file management
  */
 
-(function() {
+(function () {
     'use strict';
 
     const uploadModal = document.getElementById('upload-modal');
@@ -12,21 +12,25 @@
     /**
      * Open upload modal
      */
-    window.openUploadModal = function() {
+    const openUploadModal = function () {
         uploadModal.classList.add('active');
     };
 
     /**
      * Close upload modal
      */
-    window.closeUploadModal = function() {
-        uploadModal.classList.remove('active');
+    const closeUploadModal = function () {
+        uploadModal.classList.add('closing');
+        setTimeout(() => {
+            uploadModal.classList.remove('active');
+            uploadModal.classList.remove('closing');
+        }, 300);
     };
 
     /**
      * Filter media by type
      */
-    window.filterByType = function(type) {
+    const filterByType = function (type) {
         const url = new URL(window.location);
         if (type) {
             url.searchParams.set('file_type', type);
@@ -65,10 +69,14 @@
                     const errorData = await response.json().catch(() => ({}));
                     console.error('Server error details:', errorData);
                     const errorMessage = errorData.detail?.message || errorData.detail || 'Upload failed';
-                    window.LightUtils.showToast(`Failed: ${files[i].name} - ${errorMessage}`, 'error');
+                    if (window.LightUtils && window.LightUtils.showToast) {
+                        window.LightUtils.showToast(`Failed: ${files[i].name} - ${errorMessage}`, 'error');
+                    }
                 }
             } catch (error) {
-                window.LightUtils.showToast(`Failed: ${files[i].name}`, 'error');
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast(`Failed: ${files[i].name}`, 'error');
+                }
             }
         }
 
@@ -78,8 +86,22 @@
         }, 500);
     }
 
+    // Event listeners
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('[data-action="open-upload-modal"]')) {
+            openUploadModal();
+        } else if (e.target.closest('[data-action="close-upload-modal"]')) {
+            closeUploadModal();
+        }
+    });
+
+    const typeFilter = document.querySelector('[data-action="filter-type"]');
+    if (typeFilter) {
+        typeFilter.addEventListener('change', (e) => filterByType(e.target.value));
+    }
+
     // Close modal on overlay click
-    uploadModal.addEventListener('click', function(e) {
+    uploadModal.addEventListener('click', function (e) {
         if (e.target === uploadModal) {
             closeUploadModal();
         }
