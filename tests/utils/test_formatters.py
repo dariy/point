@@ -9,6 +9,7 @@ from app.utils.formatters import (
     format_content,
     generate_excerpt,
     markdown_to_html,
+    preprocess_media_links,
     sanitize_html,
     strip_html,
     truncate_paragraphs,
@@ -435,7 +436,6 @@ def test_determine_thumbnail_video_fallback():
     assert result[0] == "video.mp4"
     assert result[1] is True
 
-
 def test_determine_thumbnail_prefer_image_over_video():
     """Test that image is preferred over video."""
     content = '<video src="video.mp4"></video> ![Image](photo.jpg)'
@@ -448,3 +448,40 @@ def test_determine_thumbnail_empty_content():
     """Test with no content and no thumbnail."""
     result = determine_thumbnail("", None)
     assert result == (None, False)
+
+
+# preprocess_media_links tests
+def test_preprocess_media_links_image():
+    """Test preprocessing simplified image link."""
+    content = "/2024/08/test.jpg"
+    result = preprocess_media_links(content)
+    assert "![test.jpg](/2024/08/test.jpg)" in result
+
+
+def test_preprocess_media_links_video():
+    """Test preprocessing simplified video link."""
+    content = "/2024/08/test.mp4"
+    result = preprocess_media_links(content)
+    assert '<video src="/2024/08/test.mp4"' in result
+
+
+def test_preprocess_media_links_not_at_start():
+    """Test that simplified links not on their own line are ignored."""
+    content = "See /2024/08/test.jpg here"
+    result = preprocess_media_links(content)
+    assert result == content
+
+
+def test_preprocess_media_links_no_extension():
+    """Test that links without extensions are ignored."""
+    content = "/2024/08/test"
+    result = preprocess_media_links(content)
+    assert result == content
+
+
+def test_format_content_with_simplified_links():
+    """Test format_content handles simplified links via preprocessing."""
+    content = "/2024/08/test.jpg"
+    result = format_content(content, "markdown")
+    assert 'src="/2024/08/test.jpg"' in result
+    assert 'alt="test.jpg"' in result

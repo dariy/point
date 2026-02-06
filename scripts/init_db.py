@@ -13,8 +13,8 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import async_session_maker, create_tables, engine
 from app.config import get_settings
+from app.database import async_session_maker, create_tables, engine
 from app.schemas.auth import UserCreate
 from app.services.auth_service import AuthService
 
@@ -32,16 +32,16 @@ def migrate_legacy_db_name() -> None:
         db_path_str = db_url.replace("sqlite+aiosqlite:////", "/")
     else:
         db_path_str = db_url.replace("sqlite+aiosqlite:///", "")
-    
+
     current_db_path = Path(db_path_str)
-    
+
     # If current DB already exists, nothing to do
     if current_db_path.exists():
         return
-        
+
     # Check for legacy DB name in the same directory
     legacy_db_path = current_db_path.parent / "blog.db"
-    
+
     if legacy_db_path.exists():
         print(f"Migrating legacy database: {legacy_db_path} -> {current_db_path}")
         try:
@@ -133,7 +133,7 @@ async def create_default_admin() -> bool:
         print("Creating default admin user (admin/admin)...")
 
         # Hash "admin" with SHA-256
-        hashed_password = hashlib.sha256("admin".encode()).hexdigest()
+        hashed_password = hashlib.sha256(b"admin").hexdigest()
 
         user_data = UserCreate(
             username="admin",
@@ -154,10 +154,10 @@ async def create_default_admin() -> bool:
 
 async def main() -> None:
     """Initialize database tables and optionally create light user."""
-    
+
     # Check for legacy database migration
     migrate_legacy_db_name()
-    
+
     print("Creating database tables...")
     await create_tables()
     print("Database tables created successfully!")

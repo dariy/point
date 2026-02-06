@@ -142,14 +142,15 @@ class TestRequireAuth:
 class TestGetBaseContext:
     """Test cases for get_base_context helper."""
 
-    def test_get_base_context_without_user(self, client: AsyncClient) -> None:
+    @pytest.mark.asyncio
+    async def test_get_base_context_without_user(self, db: AsyncSession) -> None:
         """Test get_base_context creates proper context without user."""
         from unittest.mock import Mock
 
         from app.api.light import get_base_context
 
         request = Mock()
-        context = get_base_context(request)
+        context = await get_base_context(db, request)
 
         assert "request" in context
         assert "user" in context
@@ -158,7 +159,8 @@ class TestGetBaseContext:
         assert "app_name" in context
         assert "app_version" in context
 
-    def test_get_base_context_with_user(self, test_user: dict) -> None:
+    @pytest.mark.asyncio
+    async def test_get_base_context_with_user(self, db: AsyncSession, test_user: dict) -> None:
         """Test get_base_context creates proper context with user."""
         from unittest.mock import Mock
 
@@ -166,7 +168,7 @@ class TestGetBaseContext:
 
         assert test_user is not None
         request = Mock()
-        context = get_base_context(request, test_user["user"])
+        context = await get_base_context(db, request, test_user["user"])
 
         assert context["user"] == test_user["user"]
 

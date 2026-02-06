@@ -101,6 +101,16 @@ class Media(Base):
         """Check if media is not linked to any post."""
         return self.post_id is None
 
+    @property
+    def url(self) -> str:
+        """Get simplified public URL for the media file."""
+        # Return simplified path format: /YYYY/MM/filename
+        # original_path is "originals/YYYY/MM/filename"
+        parts = self.original_path.split("/")
+        if len(parts) >= 4:
+            return f"/{parts[1]}/{parts[2]}/{parts[3]}"
+        return f"/media/{self.original_path}"
+
 
 # Import for relationship (avoid circular import)
 from app.models.post import Post  # noqa: E402, F401
