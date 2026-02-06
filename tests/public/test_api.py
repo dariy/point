@@ -1468,3 +1468,55 @@ async def test_tag_archive_ajax_full(client: AsyncClient, db: AsyncSession):
     assert data["tag"]["slug"] == tag.slug
     assert len(data["posts"]) == 1
     assert data["posts"][0]["slug"] == post.slug
+
+
+class TestPublicAnalytics:
+    """Tests for Google Analytics integration in public routes."""
+
+    @pytest.mark.asyncio
+    async def test_analytics_script_rendered(self, client: AsyncClient, db: AsyncSession):
+        """Test that GA script is rendered when enabled."""
+        # Update settings to enable GA
+        from app.services.settings_service import SettingsService
+        settings_service = SettingsService(db)
+        await settings_service.update_settings({
+            "enable_analytics": True,
+            "google_analytics_id": "G-HTML-TEST"
+        })
+        await db.commit()
+
+        response = await client.get("/")
+        assert response.status_code == 200
+        assert "googletagmanager.com/gtag/js?id=G-HTML-TEST" in response.text
+        assert "gtag('config', 'G-HTML-TEST');" in response.text
+        assert 'data-ga-id="G-HTML-TEST"' in response.text
+
+    @pytest.mark.asyncio
+    async def test_analytics_ajax_data(self, client: AsyncClient, db: AsyncSession):
+        """Test that GA data is included in AJAX response."""
+        # Update settings
+        from app.services.settings_service import SettingsService
+        settings_service = SettingsService(db)
+        await settings_service.update_settings({
+            "enable_analytics": True,
+            "google_analytics_id": "G-AJAX-TEST"
+        })
+        await db.commit()
+
+        # Create a post
+        post = Post(
+            title="GA Post",
+            slug="ga-post",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=1,
+            published_at=datetime.now(UTC)
+        )
+        db.add(post)
+        await db.commit()
+
+        response = await client.get("/posts/ga-post", headers={"X-Requested-With": "XMLHttpRequest"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["blog_settings"]["enable_analytics"] is True
+        assert data["blog_settings"]["google_analytics_id"] == "G-AJAX-TEST"
