@@ -304,7 +304,7 @@ class TestStoragePaths:
         with pytest.MonkeyPatch().context() as m:
             m.setattr("app.services.media_service.ensure_directory", MagicMock())
             orig_f, thumb_f, orig_r, thumb_r = media_service._get_storage_paths("file.jpg", 2026, 1)
-            assert "originals/2026/01/file.jpg" in str(orig_f)
+            assert "originals/2026/01/file.jpg" in orig_f.as_posix()
             assert orig_r == "originals/2026/01/file.jpg"
 
     def test_storage_paths_format_for_quick_post(self, media_service: MediaService):
