@@ -5,16 +5,17 @@ on:
     branches: [main]
     tags:
       - 'v*'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  filter:
+  check-changes:
     runs-on: ubuntu-latest
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      run_tests: ${{ steps.filter.outputs.code }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -27,10 +28,13 @@ jobs:
               - 'requirements.txt'
               - 'pyproject.toml'
               - 'package.json'
+            infra:
+              - 'build/**'
+              - '.github/workflows/deploy.yml'
 
   test:
-    needs: filter
-    if: needs.filter.outputs.code == 'true'
+    needs: check-changes
+    if: needs.check-changes.outputs.run_tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,8 +70,11 @@ jobs:
           fail_ci_if_error: false
 
   build:
-    needs: [filter, test]
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    needs: [check-changes, test]
+    if: |
+      needs.check-changes.result == 'success' &&
+      !failure() &&
+      !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,7 +125,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: build/Dockerfile
+          file: build/prod.Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -131,7 +138,10 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: |
+      always() &&
+      (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') &&
+      needs.build.result == 'success'
     environment: prod
     steps:
       - name: Checkout repository
@@ -144,7 +154,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          source: "build/docker-compose*.yml"
+          source: "build/docker-compose.prod.yml"
           target: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
           overwrite: true
           strip_components: 0
@@ -154,22 +164,19 @@ jobs:
         env:
           BUILD_VERSION: ${{ needs.build.outputs.version }}
           IMAGE_TAG: ${{ github.sha }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: BUILD_VERSION,IMAGE_TAG
+          envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET
           script: |
             cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
             
             # Create build and data directories if they don't exist (since strip_components: 0 is used)
             mkdir -p build data
-
-            # Pull latest code (optional - if using git deployment)
-            if [ -d .git ]; then
-              git pull origin main
-            fi
 
             # Set version and image tag in .env file (now in build/ directory)
             if [ -f build/.env ]; then
@@ -181,6 +188,13 @@ jobs:
               echo "APP_VERSION=${BUILD_VERSION}" > build/.env
               echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> build/.env
             fi
+
+            # Add / update sensitive secrets in build/.env (do NOT print them)
+            sed -i '/^SECRET_KEY=/d' build/.env || true
+            sed -i '/^SESSION_SECRET=/d' build/.env || true
+            printf '%s\n' "SECRET_KEY=${SECRET_KEY}" >> build/.env
+            printf '%s\n' "SESSION_SECRET=${SESSION_SECRET}" >> build/.env
+            chmod 600 build/.env
 
             # Login to GitHub Container Registry
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
