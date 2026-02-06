@@ -34,3 +34,14 @@ def test_media_model_properties():
     assert m3.is_audio
     assert not m3.is_image
     assert not m3.is_video
+
+
+def test_media_model_url():
+    """Test the simplified URL property."""
+    # Standard path
+    m1 = Media(original_path="originals/2024/08/test.jpg")
+    assert m1.url == "/2024/08/test.jpg"
+
+    # Non-standard path
+    m2 = Media(original_path="custom/path/file.png")
+    assert m2.url == "/media/custom/path/file.png"

@@ -36,21 +36,24 @@ templates = Jinja2Templates(directory=str(templates_dir))
 settings = get_settings()
 
 
-def get_base_context(request: Request, user: User | None = None) -> dict[str, Any]:
+async def get_base_context(db: AsyncSession, request: Request, user: User | None = None) -> dict[str, Any]:
     """Get base context for all light templates.
 
     Args:
+        db: Database session
         request: FastAPI request
         user: Optional current user
 
     Returns:
         Base context dictionary
     """
+    settings_service = SettingsService(db)
+    blog_title = await settings_service.get_setting("blog_title")
     return {
         "request": request,
         "user": user,
         "settings": settings,
-        "app_name": settings.app_name,
+        "app_name": blog_title or settings.app_name,
         "app_version": settings.app_version,
     }
 
@@ -80,12 +83,14 @@ async def require_auth(
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(
     request: Request,
+    db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
 ) -> Response:
     """Render login page.
 
     Args:
         request: FastAPI request
+        db: Database session
         user: Current user (if already logged in)
 
     Returns:
@@ -94,7 +99,7 @@ async def login_page(
     if user:
         return RedirectResponse(url="/light/", status_code=status.HTTP_303_SEE_OTHER)
 
-    context = get_base_context(request)
+    context = await get_base_context(db, request)
     context["error"] = request.query_params.get("error")
     return templates.TemplateResponse("light/login.html", context)
 
@@ -150,7 +155,7 @@ async def dashboard(
     # Get active sessions count
     active_sessions = await db.scalar(select(func.count()).select_from(Session))
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "total_posts": total_posts or 0,
@@ -159,7 +164,7 @@ async def dashboard(
             "total_views": total_views,
             "total_tags": total_tags or 0,
             "total_media": total_media or 0,
-            "storage_used_mb": round(storage_used_mb, 2),
+            "storage_used_mb": round(float(storage_used_mb), 2),
             "storage_quota_mb": settings.storage_quota_mb,
             "recent_posts": recent_posts,
             "active_sessions": active_sessions or 0,
@@ -209,7 +214,7 @@ async def posts_list(
 
     total_pages = (total + per_page - 1) // per_page
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "posts": posts,
@@ -261,7 +266,7 @@ async def new_post(
         initial_content = f"![](/media/{media_path})"
         initial_thumbnail = f"/media/{media_path}"
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "post": None,
@@ -314,7 +319,7 @@ async def edit_post(
     # Get post's current tags
     post_tags = [t.name for t in post.tags]
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "post": post,
@@ -363,7 +368,7 @@ async def tags_page(
     total = len(tags)
     total_pages = 1
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "tags": tags,
@@ -417,7 +422,7 @@ async def media_page(
     result = await db.execute(select(Media.file_type).distinct())
     file_types = [row[0].value for row in result.all()]
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "media_items": media_items,
@@ -455,7 +460,7 @@ async def settings_page(
     settings_service = SettingsService(db)
     blog_settings = await settings_service.get_all_settings()
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "blog_settings": blog_settings,
@@ -467,12 +472,14 @@ async def settings_page(
 @router.get("/security", response_class=HTMLResponse)
 async def security_page(
     request: Request,
+    db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_current_user),
 ) -> Response:
     """Render security settings page.
 
     Args:
         request: FastAPI request
+        db: Database session
         user: Current user
 
     Returns:
@@ -483,7 +490,7 @@ async def security_page(
             url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     return templates.TemplateResponse("light/security.html", context)
 
 
@@ -512,7 +519,7 @@ async def system_page(
     stats = await system_service.get_system_stats()
     logs = system_service.get_logs(log_type="app", lines=50)
 
-    context = get_base_context(request, user)
+    context = await get_base_context(db, request, user)
     context.update(
         {
             "stats": stats,

@@ -710,12 +710,7 @@
             // Check if we need to prepend a newline
             const needsNewline = startPos > 0 && text.substring(startPos - 1, startPos) !== '\n';
 
-            let tag = '';
-            if (data.file_type === 'video') {
-                tag = `<video src="${data.url}" controls muted loop playsinline style="max-width: 100%;"></video>\n`;
-            } else {
-                tag = `![${data.filename}](${data.url})\n`;
-            }
+            let tag = `${data.url}\n`;
 
             const content = (needsNewline ? '\n' : '') + tag;
             const endPos = this.textarea.selectionEnd;
