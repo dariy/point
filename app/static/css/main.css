@@ -68,6 +68,7 @@
 
     /* Semantic Colors - Text */
     --text-primary: #0f172a;
+    --text-primary-hover: black;
     --text-secondary: #475569;
     --text-tertiary: #64748b;
     --text-immersive: #ffffff;
@@ -114,6 +115,8 @@
     --color-gray-800: #1e293b;
     --color-gray-900: #0f172a;
 
+    --logo-fill: #000000;
+
     color-scheme: light;
 }
 
@@ -131,8 +134,10 @@
 
     /* Semantic Colors - Text */
     --text-primary: #f1f5f9;
+    --text-primary-hover: #ffffff;
     --text-secondary: #cbd5e1;
-    --text-tertiary: #cbd5e1; /* #94a3b8; */
+    --text-tertiary: #cbd5e1;
+    /* #94a3b8; */
     --text-immersive: #cbd5e1;
     --text-muted: #64748b;
     --text-inverted: #121212;
@@ -181,6 +186,8 @@
     --color-gray-700: #e2e8f0;
     --color-gray-800: #f1f5f9;
     --color-gray-900: #f8fafc;
+
+    --logo-fill: #ffffff;
 
     color-scheme: dark;
 }
@@ -279,7 +286,8 @@ img {
 
 .site-branding {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
     flex-shrink: 0;
     width: auto;
 }
@@ -292,10 +300,17 @@ img {
     flex-shrink: 0;
 }
 
+.header-left-group>* {
+    height: 2rem;
+}
+
 .site-header .tags-filters {
     flex: 1;
     min-width: 0;
     margin: 0 var(--spacing-md);
+    padding: 4px 0 0;
+    display: flex;
+    align-items: center;
     justify-content: center;
     flex-wrap: nowrap;
     overflow: hidden;
@@ -313,10 +328,28 @@ img {
     color: var(--text-primary);
     letter-spacing: -0.02em;
     transition: color var(--transition-theme);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    line-height: 1;
 }
 
-.site-title:hover {
+.site-branding:hover,
+.site-branding:hover * {
     color: var(--color-primary);
+}
+
+.app-logo {
+    display: inline-block;
+    vertical-align: middle;
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+.app-logo .logo-shape {
+    fill: var(--text-primary);
+    transition: fill var(--transition-theme);
 }
 
 /* Authenticated indicator - site title color change */
@@ -331,7 +364,7 @@ img {
 .site-subtitle {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
-    margin-top: -2px;
+    margin: 0;
     transition: color var(--transition-theme);
 }
 
@@ -528,10 +561,13 @@ img {
     transition:
         all var(--transition-normal),
         background-color var(--transition-theme);
-    text-decoration: none; /* Make sure links inside look clean */
-    display: block; /* Ensure it behaves as a block element */
+    text-decoration: none;
+    /* Make sure links inside look clean */
+    display: block;
+    /* Ensure it behaves as a block element */
     position: relative;
-    height: 100%; /* Ensure uniform height in grid if possible, though grid-items stretch */
+    height: 100%;
+    /* Ensure uniform height in grid if possible, though grid-items stretch */
     display: flex;
     flex-direction: column;
     cursor: pointer;
@@ -544,8 +580,10 @@ img {
 
 /* --- HAS IMAGE STYLE --- */
 .post-card.has-image {
-    min-height: 320px; /* Minimum height for image cards */
-    color: var(--text-inverted); /* Default text color on image */
+    min-height: 320px;
+    /* Minimum height for image cards */
+    color: var(--text-inverted);
+    /* Default text color on image */
 }
 
 .post-card-background {
@@ -594,12 +632,10 @@ img {
     position: absolute;
     inset: 0;
     z-index: 10;
-    background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.9) 0%,
-        rgba(0, 0, 0, 0.4) 60%,
-        rgba(0, 0, 0, 0.1) 100%
-    );
+    background: linear-gradient(to top,
+            rgba(0, 0, 0, 0.9) 0%,
+            rgba(0, 0, 0, 0.4) 60%,
+            rgba(0, 0, 0, 0.1) 100%);
     padding: var(--spacing-lg);
     display: flex;
     flex-direction: column;
@@ -630,7 +666,8 @@ img {
     box-shadow: var(--shadow-sm);
     transition: all var(--transition-fast);
     backdrop-filter: blur(4px);
-    opacity: 0; /* Hidden by default, shown on hover */
+    opacity: 0;
+    /* Hidden by default, shown on hover */
 }
 
 .post-card:hover .post-card-edit-btn {
@@ -658,9 +695,11 @@ img {
     color: white;
     font-size: var(--font-size-lg);
 }
+
 .post-card-content.overlay .post-card-meta {
     color: rgba(255, 255, 255, 0.8);
 }
+
 .post-card-content.overlay .post-card-excerpt {
     color: rgba(255, 255, 255, 0.9);
     font-size: var(--font-size-sm);
@@ -737,7 +776,8 @@ img {
 
 /* Text Preview for No Image Posts */
 .post-card-text-preview {
-    font-size: var(--font-size-base); /* Slightly larger for emphasis */
+    font-size: var(--font-size-base);
+    /* Slightly larger for emphasis */
     color: var(--text-secondary);
     line-height: 1.6;
     overflow: hidden;
@@ -757,7 +797,8 @@ img {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xs);
-    margin-top: auto; /* Push to bottom in flex container */
+    margin-top: auto;
+    /* Push to bottom in flex container */
 }
 
 /* ===========================
@@ -772,9 +813,11 @@ img {
 .featured-post .post-card.has-image {
     min-height: 500px;
 }
+
 .featured-post .post-card-content.overlay .post-card-title {
     font-size: var(--font-size-3xl);
 }
+
 .featured-post .post-card-content.overlay .post-card-excerpt {
     font-size: var(--font-size-base);
     -webkit-line-clamp: 4;
@@ -797,9 +840,11 @@ img {
     color: var(--color-primary);
     margin-bottom: var(--spacing-sm);
 }
+
 /* Override badge for overlay */
 .post-card-content.overlay .featured-badge {
-    color: var(--color-accent); /* Brighter blue for dark bg */
+    color: var(--color-accent);
+    /* Brighter blue for dark bg */
 }
 
 /* ===========================
@@ -1104,6 +1149,7 @@ img {
 /* Tags Filters */
 .tags-filters {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
     gap: var(--spacing-sm);
     justify-content: center;
@@ -1114,9 +1160,13 @@ img {
 }
 
 .filter-btn {
-    padding: var(--spacing-sm) var(--spacing-md);
+    display: inline-flex;
+    align-items: center;
+    height: 2rem;
+    padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
     font-weight: 500;
+    line-height: 1;
     color: var(--text-secondary);
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
@@ -1361,6 +1411,22 @@ img {
     display: none;
 }
 
+.logo.theme-toggle {
+    width: 1rem;
+    height: 1rem;
+    border: none;
+    align-items: end;
+}
+
+.logo.theme-toggle.authenticated * {
+    fill: var(--color-primary);
+}
+
+.logo.theme-toggle svg {
+    width: 1rem;
+    height: 1rem;
+}
+
 /* Show sun icon in dark mode (to switch to light) */
 [data-theme="dark"] .theme-toggle .icon-sun {
     display: block;
@@ -1551,7 +1617,8 @@ img {
     left: 0;
     right: 0;
     z-index: 50;
-    background: rgba(0, 0, 0, 0.4); /* Default dark for contrast */
+    background: rgba(0, 0, 0, 0.4);
+    /* Default dark for contrast */
     backdrop-filter: blur(4px);
     border-bottom: none;
     color: white;
@@ -1678,7 +1745,8 @@ img {
 .immersive-bg-image {
     width: 100%;
     height: 100%;
-    object-fit: contain; /* Show the whole image */
+    object-fit: contain;
+    /* Show the whole image */
     transition: opacity 0.3s ease;
 }
 
@@ -1743,16 +1811,20 @@ video.immersive-bg-image {
     position: absolute;
     inset: 0;
     z-index: 20;
-    pointer-events: none; /* Allow clicking through to toggle */
+    pointer-events: none;
+    /* Allow clicking through to toggle */
     display: flex;
     flex-direction: column;
-    justify-content: center; /* Center the info card */
+    justify-content: center;
+    /* Center the info card */
     align-items: center;
-    padding: 80px 40px; /* Clear header/footer areas */
+    padding: 80px 40px;
+    /* Clear header/footer areas */
     transition:
         opacity 0.4s ease,
         transform 0.4s ease;
-    background: rgba(0, 0, 0, 0.3); /* Slight dim to make text readable */
+    background: rgba(0, 0, 0, 0.3);
+    /* Slight dim to make text readable */
 }
 
 .post-info-card {
@@ -1764,12 +1836,14 @@ video.immersive-bg-image {
     border-radius: var(--border-radius-xl);
     width: 100%;
     max-width: 700px;
-    max-height: 80vh; /* Leave some space */
+    max-height: 80vh;
+    /* Leave some space */
     display: flex;
     flex-direction: column;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
     transition: opacity 0.3s ease;
-    overflow: hidden; /* For inner scroll */
+    overflow: hidden;
+    /* For inner scroll */
 }
 
 [data-theme="dark"] .post-info-card {
@@ -1787,7 +1861,8 @@ video.immersive-bg-image {
 
 .post-content-scrollable {
     overflow-y: auto;
-    padding-right: var(--spacing-sm); /* Avoid scrollbar covering text */
+    padding-right: var(--spacing-sm);
+    /* Avoid scrollbar covering text */
     flex: 1;
     /* Custom scrollbar */
     scrollbar-width: thin;
@@ -1851,7 +1926,8 @@ video.immersive-bg-image {
 }
 
 .immersive-layout.ui-hidden .immersive-visuals {
-    cursor: none; /* Hide cursor for better immersion */
+    cursor: none;
+    /* Hide cursor for better immersion */
 }
 
 /* ===========================
@@ -2014,9 +2090,12 @@ video.immersive-bg-image {
 }
 
 @keyframes dropZoneBounce {
-    0%, 100% {
+
+    0%,
+    100% {
         transform: translateY(0);
     }
+
     50% {
         transform: translateY(-10px);
     }
@@ -2026,6 +2105,7 @@ video.immersive-bg-image {
     from {
         transform: rotate(0deg);
     }
+
     to {
         transform: rotate(360deg);
     }
@@ -2047,9 +2127,12 @@ video.immersive-bg-image {
 }
 
 @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.7;
     }
