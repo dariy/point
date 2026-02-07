@@ -1797,9 +1797,21 @@ input[type="password"] {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     min-width: 400px;
     max-width: 90%;
+    width: 600px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
     animation: slideUp 0.3s ease-out;
     position: relative;
     z-index: 10001;
+    overflow: hidden;
+}
+
+.modal form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
 }
 
 .modal-content {
@@ -1808,12 +1820,16 @@ input[type="password"] {
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     min-width: 400px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
     animation: slideUp 0.3s ease-out;
 }
 
 .modal-header {
     padding: 20px 24px;
     border-bottom: 1px solid var(--light-border);
+    flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -1825,6 +1841,8 @@ input[type="password"] {
 .modal-body {
     padding: 24px;
     color: var(--light-text-primary);
+    overflow-y: auto;
+    flex: 1;
 }
 
 .modal-body p {
@@ -1839,6 +1857,7 @@ input[type="password"] {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
+    flex-shrink: 0;
 }
 
 .modal-close {

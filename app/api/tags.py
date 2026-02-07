@@ -46,6 +46,8 @@ def tag_to_response(tag: TagModel) -> dict[str, Any]:
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "url": tag.url,
+        "parents": [tag_to_list_item(p) for p in tag.parents],
+        "children": [tag_to_list_item(c) for c in tag.children],
     }
 
 
