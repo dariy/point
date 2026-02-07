@@ -1578,7 +1578,7 @@ img {
     }
 
     .site-footer {
-        padding-top: var(--spacing-lg);
+        padding-top: var(--spacing-sm);
     }
 
     .footer-content {
