@@ -15,10 +15,32 @@
     {% if tags %}
     <div class="tags-filters" id="tags-filters">
         <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}">All</a>
-        {% for tag in tags %}
-        <a href="/tags/{{ tag.slug }}" class="filter-btn ajax-link {% if current_tag == tag.slug %}active{% endif %}">
-            {{ tag.name }}
-        </a>
+        {% for group in tags %}
+        <div class="tag-group">
+            <div class="tag-group-header">
+                <a href="/tags/{{ group.tag.slug }}"
+                    class="filter-btn ajax-link {% if current_tag == group.tag.slug %}active{% endif %}">
+                    {{ group.tag.name }}
+                </a>
+                {% if group.children %}
+                <button class="toggle-children" aria-label="Toggle children">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+                {% endif %}
+            </div>
+            {% if group.children %}
+            <div class="tag-children" style="display: none;">
+                {% for child in group.children %}
+                <a href="/tags/{{ child.slug }}"
+                    class="filter-btn ajax-link {% if current_tag == child.slug %}active{% endif %}">
+                    {{ child.name }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
         {% endfor %}
     </div>
     {% endif %}

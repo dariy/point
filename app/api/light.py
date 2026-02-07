@@ -266,12 +266,16 @@ async def new_post(
         initial_content = f"![](/media/{media_path})"
         initial_thumbnail = f"/media/{media_path}"
 
+    hierarchical_tags = await tag_service.get_hierarchical_tags()
+    meta_tags = [group for group in hierarchical_tags if group["children"]]
+
     context = await get_base_context(db, request, user)
     context.update(
         {
             "post": None,
             "tags": tags,
             "all_tags": [t.name for t in tags],
+            "hierarchical_tags": meta_tags,
             "statuses": [s.value for s in PostStatus],
             "initial_content": initial_content,
             "initial_thumbnail": initial_thumbnail,
@@ -312,9 +316,11 @@ async def edit_post(
             status_code=status.HTTP_404_NOT_FOUND, detail="Post not found"
         )
 
-    # Get all tags for autocomplete
+    # Get all tags for autocomplete and hierarchy
     tag_service = TagService(db)
     tags = await tag_service.list_tags()
+    hierarchical_tags = await tag_service.get_hierarchical_tags()
+    meta_tags = [group for group in hierarchical_tags if group["children"]]
 
     # Get post's current tags
     post_tags = [t.name for t in post.tags]
@@ -326,6 +332,7 @@ async def edit_post(
             "post_tags": post_tags,
             "tags": tags,
             "all_tags": [t.name for t in tags],
+            "hierarchical_tags": meta_tags,
             "statuses": [s.value for s in PostStatus],
         }
     )
@@ -339,6 +346,7 @@ async def tags_page(
     user: User | None = Depends(get_current_user),
     page: int = 1,
     search: str | None = None,
+    parent_id: int | None = None,
     sort_by: str = "name",
     sort_order: str = "asc",
 ) -> Response:
@@ -350,6 +358,7 @@ async def tags_page(
         user: Current user
         page: Page number
         search: Optional search term
+        parent_id: Optional parent tag ID filter
         sort_by: Column to sort by
         sort_order: Sort order (asc/desc)
 
@@ -363,8 +372,12 @@ async def tags_page(
 
     tag_service = TagService(db)
     tags = await tag_service.list_tags(
-        search=search, sort_by=sort_by, sort_order=sort_order
+        search=search, parent_id=parent_id, sort_by=sort_by, sort_order=sort_order
     )
+    all_tags = await tag_service.list_tags()
+    # For filter dropdown, we want tags that ARЕ parents
+    parent_tags = [t for t in all_tags if len(t.children) > 0]
+
     total = len(tags)
     total_pages = 1
 
@@ -376,6 +389,8 @@ async def tags_page(
             "total_pages": total_pages,
             "total": total,
             "search": search,
+            "parent_id": parent_id,
+            "parent_tags": parent_tags,
             "sort_by": sort_by,
             "sort_order": sort_order,
         }

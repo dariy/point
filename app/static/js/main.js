@@ -1702,6 +1702,26 @@
     }
 
     /**
+     * Tag Toggles for Hierarchical Tags
+     */
+    function initTagToggles() {
+        const groups = document.querySelectorAll(".tag-group");
+        groups.forEach(group => {
+            const toggle = group.querySelector(".toggle-children");
+            const children = group.querySelector(".tag-children");
+            if (!toggle || !children) return;
+
+            toggle.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const isHidden = children.style.display === "none";
+                children.style.display = isHidden ? "flex" : "none";
+                toggle.classList.toggle("active", isHidden);
+            });
+        });
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -1715,6 +1735,7 @@
         initAjaxPostsNavigation();
         initAjaxTagsNavigation();
         initResponsiveTagFilters();
+        initTagToggles();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {

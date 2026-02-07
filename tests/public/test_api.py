@@ -40,7 +40,7 @@ async def sample_tag(db: AsyncSession) -> Tag:
     await db.refresh(tag)
     return tag
 @pytest.fixture
-async def published_post(db: AsyncSession, sample_tag: Tag) -> Post:
+async def published_post(db: AsyncSession, sample_tag: Tag, test_user) -> Post:
     """Create a published post for testing.
     Args:
         db: Database session
@@ -58,7 +58,7 @@ async def published_post(db: AsyncSession, sample_tag: Tag) -> Post:
         published_at=datetime.now(UTC) - timedelta(hours=1),
         view_count=10,
         thumbnail_path="2026/01/test-image.jpg",
-        author_id=1,
+        author_id=test_user["user"].id,
     )
     post.tags.append(sample_tag)
     db.add(post)
@@ -68,7 +68,7 @@ async def published_post(db: AsyncSession, sample_tag: Tag) -> Post:
     await db.commit()
     return post
 @pytest.fixture
-async def draft_post(db: AsyncSession) -> Post:
+async def draft_post(db: AsyncSession, test_user) -> Post:
     """Create a draft post for testing.
     Args:
         db: Database session
@@ -81,14 +81,14 @@ async def draft_post(db: AsyncSession) -> Post:
         content="This is a draft post.",
         status=PostStatus.DRAFT,
         formatter=PostFormatter.MARKDOWN,
-        author_id=1,
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
     await db.refresh(post)
     return post
 @pytest.fixture
-async def multiple_posts(db: AsyncSession, sample_tag: Tag) -> list[Post]:
+async def multiple_posts(db: AsyncSession, sample_tag: Tag, test_user) -> list[Post]:
     """Create multiple published posts for testing.
     Args:
         db: Database session
@@ -108,7 +108,7 @@ async def multiple_posts(db: AsyncSession, sample_tag: Tag) -> list[Post]:
             published_at=datetime.now(UTC) - timedelta(hours=i),
             view_count=i * 5,
             thumbnail_path=f"2026/01/image-{i + 1}.jpg" if i % 2 == 0 else None,
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         if i < 5:
             post.tags.append(sample_tag)
@@ -242,7 +242,7 @@ class TestSinglePost:
         assert published_post.view_count == initial_count + 1
     @pytest.mark.asyncio
     async def test_post_page_loads_with_none_published_at(
-        self, client: AsyncClient, db: AsyncSession, sample_tag: Tag
+        self, client: AsyncClient, db: AsyncSession, sample_tag: Tag, test_user
     ) -> None:
         """Test that post page loads even if published_at is None.
         This prevents regression of the ArgumentError issue.
@@ -254,7 +254,7 @@ class TestSinglePost:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=None,
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         post.tags.append(sample_tag)
         db.add(post)
@@ -719,7 +719,7 @@ async def test_homepage_ajax_json(client: AsyncClient, db: AsyncSession):
     assert "posts" in data
     assert "pagination" in data
 @pytest.mark.asyncio
-async def test_single_post_ajax(client: AsyncClient, db: AsyncSession):
+async def test_single_post_ajax(client: AsyncClient, db: AsyncSession, test_user):
     """Test single post AJAX request."""
     post = Post(title="Ajax Post", slug="ajax-post", content="Content", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
     db.add(post)
@@ -773,7 +773,7 @@ async def test_tag_not_found(client: AsyncClient):
     resp = await client.get("/tag/non-existent")
     assert resp.status_code == 404
 @pytest.mark.asyncio
-async def test_single_post_hidden(client: AsyncClient, db: AsyncSession):
+async def test_single_post_hidden(client: AsyncClient, db: AsyncSession, test_user):
     """Test accessing a hidden post."""
     post = Post(title="Hidden", slug="hidden", content="Hidden content", status=PostStatus.HIDDEN, author_id=1, published_at=datetime.now(UTC))
     db.add(post)
@@ -782,14 +782,14 @@ async def test_single_post_hidden(client: AsyncClient, db: AsyncSession):
     assert resp.status_code == 200
     assert "Hidden content" in resp.text
 @pytest.mark.asyncio
-async def test_serialize_post_no_excerpt(db: AsyncSession):
+async def test_serialize_post_no_excerpt(db: AsyncSession, test_user):
     """Test serialize_post logic for generating excerpt."""
     post = Post(
         title="T",
         slug="s",
         content="<p>Paragraph 1</p><p>Paragraph 2</p>",
         status=PostStatus.PUBLISHED,
-        author_id=1,
+        author_id=test_user["user"].id,
         formatter=PostFormatter.HTML,
         published_at=datetime.now(UTC)
     )
@@ -1179,7 +1179,7 @@ async def test_posts_by_author(client: AsyncClient, db: AsyncSession):
     await db.commit()
     await db.refresh(author)
     p1 = Post(title="Writer Post", slug="writer-post", content="C", status=PostStatus.PUBLISHED, author_id=author.id, published_at=datetime.now(UTC))
-    p2 = Post(title="Other Post", slug="other-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
+    p2 = Post(title="Other Post", slug="other-post", content="C", status=PostStatus.PUBLISHED, author_id=author.id, published_at=datetime.now(UTC))
     db.add_all([p1, p2])
     await db.commit()
     pass
@@ -1206,9 +1206,9 @@ async def test_theme_cookie(client: AsyncClient):
     assert resp.status_code == 200
     # Check if body class has dark-theme if logic exists, otherwise just pass
 @pytest.mark.asyncio
-async def test_sitemap_content(client: AsyncClient, db: AsyncSession):
+async def test_sitemap_content(client: AsyncClient, db: AsyncSession, test_user):
     """Test sitemap structure."""
-    p = Post(title="Sitemap Post", slug="sitemap-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
+    p = Post(title="Sitemap Post", slug="sitemap-post", content="C", status=PostStatus.PUBLISHED, author_id=test_user["user"].id, published_at=datetime.now(UTC))
     db.add(p)
     await db.commit()
     resp = await client.get("/sitemap.xml")
@@ -1268,7 +1268,7 @@ async def test_post_preview_token(client: AsyncClient, db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_homepage_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache):
+async def test_homepage_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache, test_user):
     """Test homepage cache hit."""
     # Create a published post to ensure content
     post = Post(
@@ -1277,7 +1277,7 @@ async def test_homepage_cache_hit(client: AsyncClient, db: AsyncSession, enable_
         content="Test content",
         status=PostStatus.PUBLISHED,
         formatter=PostFormatter.MARKDOWN,
-        author_id=1,
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
@@ -1290,7 +1290,7 @@ async def test_homepage_cache_hit(client: AsyncClient, db: AsyncSession, enable_
     assert response2.status_code == 200
     assert response2.headers["X-Cache"] == "HIT"
 @pytest.mark.asyncio
-async def test_single_post_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache):
+async def test_single_post_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache, test_user):
     """Test single post cache hit."""
     post = Post(
         title="Cache Single Post",
@@ -1298,7 +1298,7 @@ async def test_single_post_cache_hit(client: AsyncClient, db: AsyncSession, enab
         content="Test content",
         status=PostStatus.PUBLISHED,
         formatter=PostFormatter.MARKDOWN,
-        author_id=1,
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
@@ -1342,23 +1342,23 @@ async def test_sitemap_cache_hit(client: AsyncClient, db: AsyncSession, enable_c
     assert response2.status_code == 200
     assert response2.headers["X-Cache"] == "HIT"
 @pytest.mark.asyncio
-async def test_prev_next_post_navigation(client: AsyncClient, db: AsyncSession):
+async def test_prev_next_post_navigation(client: AsyncClient, db: AsyncSession, test_user):
     """Test previous and next post navigation logic."""
     now = datetime.now(UTC)
     p1 = Post(
         title="Post 1", slug="p1", content="c",
         status=PostStatus.PUBLISHED, published_at=now - timedelta(days=2),
-        formatter=PostFormatter.MARKDOWN, author_id=1
+        formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id
     )
     p2 = Post(
         title="Post 2", slug="p2", content="c",
         status=PostStatus.PUBLISHED, published_at=now - timedelta(days=1),
-        formatter=PostFormatter.MARKDOWN, author_id=1
+        formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id
     )
     p3 = Post(
         title="Post 3", slug="p3", content="c",
         status=PostStatus.PUBLISHED, published_at=now,
-        formatter=PostFormatter.MARKDOWN, author_id=1
+        formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id
     )
     db.add_all([p1, p2, p3])
     await db.commit()
@@ -1368,7 +1368,7 @@ async def test_prev_next_post_navigation(client: AsyncClient, db: AsyncSession):
     assert p1.slug in content
     assert p3.slug in content
 @pytest.mark.asyncio
-async def test_post_serialization_with_media_and_excerpt(client: AsyncClient, db: AsyncSession):
+async def test_post_serialization_with_media_and_excerpt(client: AsyncClient, db: AsyncSession, test_user):
     """Test post serialization with media but no explicit excerpt."""
     post = Post(
         title="Media Post",
@@ -1376,7 +1376,7 @@ async def test_post_serialization_with_media_and_excerpt(client: AsyncClient, db
         content="![Image](/path/to/img.jpg)\n\nSome text content here.",
         status=PostStatus.PUBLISHED,
         formatter=PostFormatter.MARKDOWN,
-        author_id=1,
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
@@ -1409,7 +1409,7 @@ async def test_get_db_context_overrides(client: AsyncClient, db: AsyncSession):
     assert response.status_code == 200
     assert "Custom Title" in response.text
 @pytest.mark.asyncio
-async def test_homepage_ajax_pagination(client: AsyncClient, db: AsyncSession):
+async def test_homepage_ajax_pagination(client: AsyncClient, db: AsyncSession, test_user):
     """Test homepage AJAX pagination response structure."""
     setting = BlogSettings(key="posts_per_page", value="10", value_type="int")
     db.add(setting)
@@ -1420,7 +1420,7 @@ async def test_homepage_ajax_pagination(client: AsyncClient, db: AsyncSession):
             content="Content",
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         db.add(post)
     await db.commit()
@@ -1436,12 +1436,12 @@ async def test_homepage_ajax_pagination(client: AsyncClient, db: AsyncSession):
     assert len(data["posts"]) == 5
     assert data["pagination"]["has_next"] is False
 @pytest.mark.asyncio
-async def test_single_post_ajax_full(client: AsyncClient, db: AsyncSession):
+async def test_single_post_ajax_full(client: AsyncClient, db: AsyncSession, test_user):
     """Test single post AJAX response with next/prev and media."""
     now = datetime.now(UTC)
-    p1 = Post(title="P1", slug="p1", content="c", status=PostStatus.PUBLISHED, published_at=now - timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=1)
-    p2 = Post(title="P2", slug="p2", content="![Img](/a.jpg)", status=PostStatus.PUBLISHED, published_at=now, formatter=PostFormatter.MARKDOWN, author_id=1)
-    p3 = Post(title="P3", slug="p3", content="c", status=PostStatus.PUBLISHED, published_at=now + timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=1)
+    p1 = Post(title="P1", slug="p1", content="c", status=PostStatus.PUBLISHED, published_at=now - timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
+    p2 = Post(title="P2", slug="p2", content="![Img](/a.jpg)", status=PostStatus.PUBLISHED, published_at=now, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
+    p3 = Post(title="P3", slug="p3", content="c", status=PostStatus.PUBLISHED, published_at=now + timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
     db.add_all([p1, p2, p3])
     await db.commit()
     response = await client.get(f"/posts/{p2.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
@@ -1453,12 +1453,12 @@ async def test_single_post_ajax_full(client: AsyncClient, db: AsyncSession):
     assert len(data["post_media"]) > 0
     assert data["post_media"][0]["url"] == "/a.jpg"
 @pytest.mark.asyncio
-async def test_tag_archive_ajax_full(client: AsyncClient, db: AsyncSession):
+async def test_tag_archive_ajax_full(client: AsyncClient, db: AsyncSession, test_user):
     """Test tag archive AJAX response."""
     tag = Tag(name="AjaxTag", slug="ajax-tag")
     db.add(tag)
     await db.commit()
-    post = Post(title="Tagged", slug="tagged", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
+    post = Post(title="Tagged", slug="tagged", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
     post.tags.append(tag)
     db.add(post)
     await db.commit()
@@ -1492,7 +1492,7 @@ class TestPublicAnalytics:
         assert 'data-ga-id="G-HTML-TEST"' in response.text
 
     @pytest.mark.asyncio
-    async def test_analytics_ajax_data(self, client: AsyncClient, db: AsyncSession):
+    async def test_analytics_ajax_data(self, client: AsyncClient, db: AsyncSession, test_user):
         """Test that GA data is included in AJAX response."""
         # Update settings
         from app.services.settings_service import SettingsService
@@ -1509,7 +1509,7 @@ class TestPublicAnalytics:
             slug="ga-post",
             content="Content",
             status=PostStatus.PUBLISHED,
-            author_id=1,
+            author_id=test_user["user"].id,
             published_at=datetime.now(UTC)
         )
         db.add(post)

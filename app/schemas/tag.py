@@ -22,6 +22,7 @@ class TagCreate(TagBase):
     """Schema for creating a tag."""
 
     slug: str | None = Field(default=None, min_length=1, max_length=100)
+    parent_ids: list[int] = Field(default_factory=list)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -31,6 +32,7 @@ class TagCreate(TagBase):
                 "description": "Posts about travel and adventures",
                 "is_important": True,
                 "is_featured": False,
+                "parent_ids": [],
             }
         }
     )
@@ -45,6 +47,17 @@ class TagUpdate(BaseModel):
     custom_url: str | None = Field(default=None, max_length=200)
     is_important: bool | None = Field(default=None)
     is_featured: bool | None = Field(default=None)
+    parent_ids: list[int] | None = Field(default=None)
+
+
+class TagListItem(BaseModel):
+    """Schema for tag in list view (lighter response)."""
+
+    id: int
+    name: str
+    slug: str
+    is_important: bool
+    post_count: int
 
 
 class TagResponse(BaseModel):
@@ -60,18 +73,10 @@ class TagResponse(BaseModel):
     post_count: int
     created_at: datetime
     url: str = Field(description="Computed URL for the tag")
+    parents: list[TagListItem] = Field(default_factory=list)
+    children: list[TagListItem] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class TagListItem(BaseModel):
-    """Schema for tag in list view (lighter response)."""
-
-    id: int
-    name: str
-    slug: str
-    is_important: bool
-    post_count: int
 
     model_config = ConfigDict(from_attributes=True)
 

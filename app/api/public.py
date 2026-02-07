@@ -307,7 +307,10 @@ async def single_post(
     # Get post with tags
     query = (
         select(Post)
-        .options(selectinload(Post.tags))
+        .options(
+            selectinload(Post.tags).selectinload(Tag.parents),
+            selectinload(Post.tags).selectinload(Tag.children),
+        )
         .where(Post.slug == slug)
         .where(
             or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
@@ -388,6 +391,21 @@ async def single_post(
         next_result = await db.execute(next_query)
         next_post = next_result.scalar_one_or_none()
 
+    # Build hierarchical tags for the post
+    all_post_tags = set(post.tags)
+    all_post_parents = {p for t in post.tags for p in t.parents}
+    # Top level tags are parents OR tags with no parents
+    top_level_tags = sorted(all_post_parents | {t for t in all_post_tags if not t.parents}, key=lambda x: x.name)
+
+    hierarchical_post_tags: list[dict[str, Any]] = []
+    for tag in top_level_tags:
+        # Children of this tag that are also associated with the post
+        children = [c for c in tag.children if c in all_post_tags]
+        hierarchical_post_tags.append({
+            "tag": tag,
+            "children": sorted(children, key=lambda x: x.name)
+        })
+
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         settings_service = SettingsService(db)
@@ -404,7 +422,7 @@ async def single_post(
                     "view_count": post.view_count,
                     "content_html": content_html,
                     "thumbnail_path": post.thumbnail_path,
-                    "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+                    "tags": [{"name": t.name, "slug": t.slug} for t in sorted(all_post_tags | all_post_parents, key=lambda x: x.name)],
                 },
                 "has_text_content": has_text_content,
                 "post_media": post_media,
@@ -418,6 +436,12 @@ async def single_post(
                 "blog_title": blog_settings_dict.get("blog_title", settings.app_name),
                 "blog_subtitle": blog_settings_dict.get("blog_subtitle", getattr(settings, "blog_subtitle", "")),
                 "is_logged_in": user is not None,
+                "post_tags_with_parents": [
+                    {
+                        "tag": {"name": h["tag"].name, "slug": h["tag"].slug},
+                        "children": [{"name": c.name, "slug": c.slug} for c in h["children"]]
+                    } for h in hierarchical_post_tags
+                ],
             }
         )
 
@@ -428,6 +452,7 @@ async def single_post(
     context.update(
         {
             "post": post,
+            "post_tags_with_parents": hierarchical_post_tags,
             "content_html": content_html,
             "has_text_content": has_text_content,
             "post_media": post_media,
@@ -516,10 +541,6 @@ async def tag_archive(
     )
 
     total_pages = ceil(total / per_page)
-
-    # Load tags for each post
-    for post in posts:
-        await db.refresh(post, ["tags"])
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -616,12 +637,18 @@ async def tags_page(
     )
 
     # Filter by tag if provided
+    tag_obj = None
     if tag_slug:
-        tag_result = await db.execute(select(Tag).where(Tag.slug == tag_slug))
-        tag_obj = tag_result.scalar_one_or_none()
+        tag_service = TagService(db)
+        tag_obj = await tag_service.get_tag_by_slug(tag_slug)
 
         if tag_obj:
-            query = query.join(post_tags).where(post_tags.c.tag_id == tag_obj.id)
+            tag_ids = await tag_service.get_descendant_tag_ids(tag_obj.id)
+            query = (
+                query.join(post_tags, Post.id == post_tags.c.post_id)
+                .where(post_tags.c.tag_id.in_(tag_ids))
+                .distinct()
+            )
 
     query = query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
 
@@ -635,11 +662,9 @@ async def tags_page(
     posts_result = await db.execute(query.offset(offset).limit(per_page))
     posts = list(posts_result.scalars().all())
 
-    # Get all tags with posts for filter
-    tags_result = await db.execute(
-        select(Tag).where(Tag.post_count > 0).order_by(Tag.name)
-    )
-    all_tags = list(tags_result.scalars().all())
+    # Get all tags with posts for filter (hierarchical)
+    tag_service = TagService(db)
+    all_tags = await tag_service.get_hierarchical_tags(include_empty=False)
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -703,6 +728,7 @@ async def tags_page(
             "total_pages": total_pages,
             "total": total,
             "tags": all_tags,
+            "tag": tag_obj,
             "current_tag": tag_slug,
             "user": user,
         }

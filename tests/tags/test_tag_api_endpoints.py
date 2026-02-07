@@ -434,15 +434,16 @@ class TestTagPosts:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_posts_by_tag_pagination(self, client: AsyncClient, db: AsyncSession):
+    async def test_get_posts_by_tag_pagination(self, client: AsyncClient, db: AsyncSession, test_user):
         """Test pagination for get posts by tag."""
+        user_id = test_user["user"].id
         tag = Tag(name="T1", slug="t1")
         db.add(tag)
         await db.commit()
 
         # Add posts
         for i in range(15):
-            post = Post(title=f"P{i}", slug=f"p{i}", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
+            post = Post(title=f"P{i}", slug=f"p{i}", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=user_id)
             post.tags.append(tag)
             db.add(post)
         await db.commit()
