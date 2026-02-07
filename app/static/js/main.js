@@ -821,22 +821,6 @@
                 }
             }
 
-            // Render Tags for Immersive - add to footer
-            if (post.tags && post.tags.length > 0) {
-                const footerContent = document.querySelector('.footer-content');
-                if (footerContent) {
-                    const tagsDiv = document.createElement('div');
-                    tagsDiv.className = 'immersive-tags';
-                    post.tags.forEach(tag => {
-                        const a = document.createElement('a');
-                        a.href = '/tag/' + tag.slug;
-                        a.className = 'post-tag';
-                        a.textContent = tag.name;
-                        tagsDiv.appendChild(a);
-                    });
-                    footerContent.appendChild(tagsDiv);
-                }
-            }
         }
 
         // 3. Tags (Standard only)
@@ -998,6 +982,26 @@
 
         // Update Title
         document.title = post.title;
+
+        // Update footer tags for immersive posts
+        const existingFooterTags = document.querySelector('.footer-content .immersive-tags');
+        if (existingFooterTags) existingFooterTags.remove();
+
+        if (!hasText && post.tags && post.tags.length > 0) {
+            const footerContent = document.querySelector('.footer-content');
+            if (footerContent) {
+                const tagsDiv = document.createElement('div');
+                tagsDiv.className = 'immersive-tags';
+                post.tags.forEach(tag => {
+                    const a = document.createElement('a');
+                    a.href = '/tag/' + tag.slug;
+                    a.className = 'post-tag';
+                    a.textContent = tag.name;
+                    tagsDiv.appendChild(a);
+                });
+                footerContent.appendChild(tagsDiv);
+            }
+        }
 
         // Re-init
         initPage();
