@@ -37,13 +37,21 @@
         document.getElementById('tag-important').checked = false;
         document.getElementById('tag-featured').checked = false;
 
+        document.getElementById('tag-parents').selectedIndex = -1;
+        // Show all options in parents list
+        const parentsSelect = document.getElementById('tag-parents');
+        Array.from(parentsSelect.options).forEach(opt => {
+            opt.selected = false;
+            opt.style.display = 'block';
+        });
+
         modalInstance.open();
     };
 
     /**
      * Open modal for editing existing tag
      */
-    const editTag = async function (id, name, slug, description, isImportant, isFeatured) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured, parentIds) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
@@ -51,6 +59,23 @@
         document.getElementById('tag-description').value = description || '';
         document.getElementById('tag-important').checked = !!isImportant;
         document.getElementById('tag-featured').checked = !!isFeatured;
+
+        const parentsSelect = document.getElementById('tag-parents');
+        if (parentsSelect) {
+            let ids = [];
+            try {
+                ids = typeof parentIds === 'string' ? JSON.parse(parentIds) : (parentIds || []);
+            } catch (e) {
+                console.warn('Failed to parse parentIds:', e);
+            }
+
+            Array.from(parentsSelect.options).forEach(opt => {
+                opt.selected = ids.includes(parseInt(opt.value));
+                // Hide self from selection to prevent circular/self reference
+                opt.style.display = opt.value === id ? 'none' : 'block';
+                if (opt.value === id) opt.selected = false;
+            });
+        }
 
         modalInstance.open();
 
@@ -64,6 +89,15 @@
                 document.getElementById('tag-description').value = tag.description || '';
                 document.getElementById('tag-important').checked = tag.is_important;
                 document.getElementById('tag-featured').checked = tag.is_featured;
+
+                if (parentsSelect) {
+                    const ids = tag.parents ? tag.parents.map(p => p.id) : [];
+                    Array.from(parentsSelect.options).forEach(opt => {
+                        opt.selected = ids.includes(parseInt(opt.value));
+                        opt.style.display = opt.value == tag.id ? 'none' : 'block';
+                        if (opt.value == tag.id) opt.selected = false;
+                    });
+                }
             }
         } catch (error) {
             console.warn('Failed to fetch fresh tag data:', error);
@@ -186,7 +220,8 @@
             const description = editBtn.dataset.tagDescription;
             const isImportant = editBtn.dataset.tagImportant === 'true';
             const isFeatured = editBtn.dataset.tagFeatured === 'true';
-            editTag(id, name, slug, description, isImportant, isFeatured);
+            const parentIds = editBtn.dataset.tagParents || '[]';
+            editTag(id, name, slug, description, isImportant, isFeatured, parentIds);
             return;
         }
 
@@ -212,7 +247,8 @@
             slug: document.getElementById('tag-slug').value || null,
             description: document.getElementById('tag-description').value || null,
             is_important: document.getElementById('tag-important').checked,
-            is_featured: document.getElementById('tag-featured').checked
+            is_featured: document.getElementById('tag-featured').checked,
+            parent_ids: Array.from(document.getElementById('tag-parents').selectedOptions).map(opt => parseInt(opt.value))
         };
 
         const url = id ? `/api/tags/${id}` : '/api/tags';

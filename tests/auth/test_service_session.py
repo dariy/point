@@ -206,10 +206,10 @@ class TestSessionManagement:
 
     @pytest.mark.asyncio
     async def test_terminate_session_not_found(
-        self, auth_service: AuthService
+        self, auth_service: AuthService, test_user: dict
     ) -> None:
         """Test terminating non-existent session."""
-        result = await auth_service.terminate_session(999, 1)
+        result = await auth_service.terminate_session(999, test_user["user"].id)
         assert result is False
 
     @pytest.mark.asyncio
@@ -255,19 +255,20 @@ class TestSessionManagement:
 
     @pytest.mark.asyncio
     async def test_cleanup_expired_sessions(
-        self, auth_service: AuthService, db: AsyncSession
+        self, auth_service: AuthService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test cleaning up expired sessions."""
+        user_id = test_user["user"].id
         # Create sessions - one expired, one valid
         s1 = Session(
-            user_id=1,
+            user_id=user_id,
             token="t1",
             expires_at=datetime.now(UTC) - timedelta(hours=1),
             ip_address="1",
             user_agent="1",
         )
         s2 = Session(
-            user_id=1,
+            user_id=user_id,
             token="t2",
             expires_at=datetime.now(UTC) + timedelta(hours=1),
             ip_address="2",

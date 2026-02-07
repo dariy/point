@@ -18,9 +18,10 @@ class TestSetPostTags:
     """Test setting tags on posts."""
 
     @pytest.mark.asyncio
-    async def test_set_post_tags_create_new(self, tag_service: TagService, db: AsyncSession):
+    async def test_set_post_tags_create_new(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test setting post tags creates new tags."""
-        post = Post(title="P", slug="p", content="C", author_id=1)
+        user_id = test_user["user"].id
+        post = Post(title="P", slug="p", content="C", author_id=user_id)
         db.add(post)
         await db.commit()
         await db.refresh(post, ["tags"])  # Load tags
@@ -31,13 +32,14 @@ class TestSetPostTags:
         assert {t.name for t in tags} == {"New Tag 1", "New Tag 2"}
 
     @pytest.mark.asyncio
-    async def test_set_post_tags_existing(self, tag_service: TagService, db: AsyncSession):
+    async def test_set_post_tags_existing(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test setting post tags uses existing tags."""
+        user_id = test_user["user"].id
         tag1 = Tag(name="Existing", slug="existing", post_count=0)
         db.add(tag1)
         await db.commit()
 
-        post = Post(title="P", slug="p", content="C", author_id=1)
+        post = Post(title="P", slug="p", content="C", author_id=user_id)
         db.add(post)
         await db.commit()
         await db.refresh(post, ["tags"])  # Load tags
@@ -54,10 +56,10 @@ class TestAddTagsToPost:
     """Test adding tags to posts."""
 
     @pytest.mark.asyncio
-    async def test_add_tags_empty_string(self, db: AsyncSession):
+    async def test_add_tags_empty_string(self, db: AsyncSession, test_user):
         """Test adding tags with empty strings ignored."""
         service = TagService(db)
-        user_id = 1  # Dummy
+        user_id = test_user["user"].id
         post = Post(title="T", slug="t", content="c", status=PostStatus.DRAFT, author_id=user_id)
         db.add(post)
         await db.commit()
@@ -72,10 +74,11 @@ class TestRemoveTagsFromPost:
     """Test removing tags from posts."""
 
     @pytest.mark.asyncio
-    async def test_remove_tags_from_post(self, tag_service: TagService, db: AsyncSession):
+    async def test_remove_tags_from_post(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test removing tags from post."""
+        user_id = test_user["user"].id
         tag1 = Tag(name="Tag1", slug="tag1", post_count=1)
-        post = Post(title="P", slug="p", content="C", author_id=1)
+        post = Post(title="P", slug="p", content="C", author_id=user_id)
         post.tags.append(tag1)
         db.add_all([tag1, post])
         await db.commit()
@@ -88,10 +91,10 @@ class TestRemoveTagsFromPost:
         assert tag1.post_count == 0
 
     @pytest.mark.asyncio
-    async def test_remove_tags_updates_counts(self, db: AsyncSession):
+    async def test_remove_tags_updates_counts(self, db: AsyncSession, test_user):
         """Test that removing tags updates their post counts."""
         service = TagService(db)
-        user_id = 1
+        user_id = test_user["user"].id
         post = Post(title="T", slug="t", content="c", status=PostStatus.PUBLISHED, author_id=user_id)
         db.add(post)
         await db.commit()

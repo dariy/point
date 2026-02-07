@@ -133,8 +133,14 @@ class TestOrphanedMedia:
         assert data["deleted_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_cleanup_orphaned(self, db: AsyncSession):
+    async def test_cleanup_orphaned(self, db: AsyncSession, test_user: dict):
         """Test cleanup of orphaned media."""
+        from app.models.post import Post, PostFormatter, PostStatus
+        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
+        db.add(post)
+        await db.commit()
+        await db.refresh(post)
+
         service = MediaService(db)
         # We need to mock physical file existence or ensure they don't crash
         # MediaService uses aiofiles.os.remove which we can patch
@@ -159,7 +165,7 @@ class TestOrphanedMedia:
             mime_type="i/j",
             file_size=20,
             checksum="c2",
-            post_id=1,
+            post_id=post.id,
             uploaded_at=old_time
         )
         db.add_all([m1, m2])
