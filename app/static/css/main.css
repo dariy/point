@@ -1710,13 +1710,20 @@ img {
 
 .immersive-layout .footer-content {
     display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
+    flex-wrap: wrap-reverse;
+    align-items: flex-end;
+    gap: var(--spacing-xs) var(--spacing-md);
     text-align: left;
 }
 
+.immersive-layout .footer-content .footer-copyright {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .immersive-layout .footer-content .immersive-tags {
-    align-self: flex-end;
+    flex: 1 1 0%;
+    min-width: 0;
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-sm);
