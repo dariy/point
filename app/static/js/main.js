@@ -14,6 +14,9 @@
     function cleanupPage() {
         cleanupFunctions.forEach(fn => fn());
         cleanupFunctions = [];
+        // Clean up immersive tags from footer
+        const footerTags = document.querySelector('.footer-content .immersive-tags');
+        if (footerTags) footerTags.remove();
     }
 
     /**
@@ -654,6 +657,13 @@
                     });
                 }
 
+                // Update Footer (pagination, tags)
+                const newFooterContent = doc.querySelector('.footer-content');
+                const currentFooterContent = document.querySelector('.footer-content');
+                if (newFooterContent && currentFooterContent) {
+                    currentFooterContent.innerHTML = newFooterContent.innerHTML;
+                }
+
                 // Update document title
                 if (doc.title) document.title = doc.title;
 
@@ -811,16 +821,21 @@
                 }
             }
 
-            // Render Tags for Immersive
-            const tagsContainer = clone.querySelector('.immersive-tags');
-            if (tagsContainer && post.tags) {
-                post.tags.forEach(tag => {
-                    const a = document.createElement('a');
-                    a.href = '/tag/' + tag.slug;
-                    a.className = 'post-tag';
-                    a.textContent = tag.name;
-                    tagsContainer.appendChild(a);
-                });
+            // Render Tags for Immersive - add to footer
+            if (post.tags && post.tags.length > 0) {
+                const footerContent = document.querySelector('.footer-content');
+                if (footerContent) {
+                    const tagsDiv = document.createElement('div');
+                    tagsDiv.className = 'immersive-tags';
+                    post.tags.forEach(tag => {
+                        const a = document.createElement('a');
+                        a.href = '/tag/' + tag.slug;
+                        a.className = 'post-tag';
+                        a.textContent = tag.name;
+                        tagsDiv.appendChild(a);
+                    });
+                    footerContent.appendChild(tagsDiv);
+                }
             }
         }
 
