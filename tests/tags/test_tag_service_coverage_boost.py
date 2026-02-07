@@ -159,14 +159,15 @@ class TestGetPostsByTag:
     """Test get_posts_by_tag scenarios."""
 
     @pytest.mark.asyncio
-    async def test_get_posts_by_tag_include_drafts(self, tag_service: TagService, db: AsyncSession):
+    async def test_get_posts_by_tag_include_drafts(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test getting posts by tag including drafts."""
+        user_id = test_user["user"].id
         tag = await tag_service.create_tag(TagCreate(name="Test Tag"))
         await db.commit()
 
         # Create published and draft posts
-        p1 = Post(title="Published", slug="published", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
-        p2 = Post(title="Draft", slug="draft", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=1)
+        p1 = Post(title="Published", slug="published", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=user_id)
+        p2 = Post(title="Draft", slug="draft", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=user_id)
         p1.tags.append(tag)
         p2.tags.append(tag)
         db.add_all([p1, p2])
@@ -183,14 +184,15 @@ class TestGetPostsByTag:
         assert len(posts) == 1
 
     @pytest.mark.asyncio
-    async def test_get_posts_by_tag_pagination_offset(self, tag_service: TagService, db: AsyncSession):
+    async def test_get_posts_by_tag_pagination_offset(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test get_posts_by_tag with pagination offset."""
+        user_id = test_user["user"].id
         tag = await tag_service.create_tag(TagCreate(name="Test"))
         await db.commit()
 
         # Create multiple posts
         for i in range(5):
-            post = Post(title=f"Post {i}", slug=f"post-{i}", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
+            post = Post(title=f"Post {i}", slug=f"post-{i}", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=user_id)
             post.tags.append(tag)
             db.add(post)
         await db.commit()
@@ -205,9 +207,10 @@ class TestAddTagsToPost:
     """Test add_tags_to_post scenarios."""
 
     @pytest.mark.asyncio
-    async def test_add_tags_to_post_skip_duplicates(self, tag_service: TagService, db: AsyncSession):
+    async def test_add_tags_to_post_skip_duplicates(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test adding tags skips duplicates."""
-        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, author_id=1)
+        user_id = test_user["user"].id
+        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, author_id=user_id)
         db.add(post)
         await db.commit()
         await db.refresh(post, ["tags"])
@@ -226,9 +229,10 @@ class TestSetPostTags:
     """Test set_post_tags scenarios."""
 
     @pytest.mark.asyncio
-    async def test_set_post_tags_updates_removed_tag_counts(self, tag_service: TagService, db: AsyncSession):
+    async def test_set_post_tags_updates_removed_tag_counts(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test that set_post_tags updates counts for removed tags."""
-        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, author_id=1)
+        user_id = test_user["user"].id
+        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, author_id=user_id)
         db.add(post)
         await db.commit()
         await db.refresh(post, ["tags"])

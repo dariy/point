@@ -23,6 +23,14 @@
             <input type="text" name="search" class="form-input" placeholder="Search tags by name..."
                 value="{{ search or '' }}">
         </div>
+        <div class="filter-group">
+            <select name="parent_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Parents (Meta-tags)</option>
+                {% for t in parent_tags %}
+                <option value="{{ t.id }}" {% if parent_id==t.id %}selected{% endif %}>{{ t.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <button type="submit" class="btn btn-primary">Search</button>
         {% if search %}
         <a href="/light/tags" class="btn btn-outline">Clear</a>
@@ -148,7 +156,8 @@
                             data-tag-id="{{ tag.id }}" data-tag-name="{{ tag.name }}" data-tag-slug="{{ tag.slug }}"
                             data-tag-description="{{ tag.description or '' }}"
                             data-tag-important="{{ 'true' if tag.is_important else 'false' }}"
-                            data-tag-featured="{{ 'true' if tag.is_featured else 'false' }}" title="Edit">
+                            data-tag-featured="{{ 'true' if tag.is_featured else 'false' }}"
+                            data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}' title="Edit">
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                                 <path
                                     d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
@@ -230,6 +239,17 @@
                         <input type="checkbox" id="tag-featured" name="is_featured" class="form-checkbox-input">
                         <span class="checkbox-text">Mark as featured (Show in footer)</span>
                     </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="tag-parents" class="form-label">Parents (Meta-tags)</label>
+                    <select id="tag-parents" name="parent_ids" class="form-select" multiple style="height: 100px;">
+                        {% for t in tags %}
+                        <option value="{{ t.id }}">{{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-hint">Select tags that logically contain this tag (e.g., #newyork has parents
+                        #city, #us).</small>
                 </div>
             </div>
             <div class="modal-footer">

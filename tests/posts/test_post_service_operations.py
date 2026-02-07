@@ -25,27 +25,43 @@ class TestListPosts:
     """Test cases for listing posts with filters."""
 
     @pytest.mark.asyncio
-    async def test_list_posts_by_author(self, db: AsyncSession) -> None:
+    async def test_list_posts_by_author(self, db: AsyncSession, test_user: dict) -> None:
         """Test listing posts filtered by author."""
         service = PostService(db)
+        user_id = test_user["user"].id
+
+        # Create second user
+        from app.schemas.auth import UserCreate
+        from app.services.auth_service import AuthService
+        auth_service = AuthService(db)
+        user2 = await auth_service.create_user(UserCreate(username="user2", email="u2@e.com", password="testpassword123", display_name="U2"))
+        await db.commit()
 
         # Create posts
-        p1 = Post(title="P1", slug="p1", content="c", author_id=1, status=PostStatus.PUBLISHED)
-        p2 = Post(title="P2", slug="p2", content="c", author_id=2, status=PostStatus.PUBLISHED)
+        p1 = Post(title="P1", slug="p1", content="c", author_id=user_id, status=PostStatus.PUBLISHED)
+        p2 = Post(title="P2", slug="p2", content="c", author_id=user2.id, status=PostStatus.PUBLISHED)
         db.add_all([p1, p2])
         await db.commit()
 
-        posts, _ = await service.list_posts(author_id=1)
+        posts, _ = await service.list_posts(author_id=user_id)
         assert len(posts) == 1
         assert posts[0].title == "P1"
 
     @pytest.mark.asyncio
     async def test_list_posts_filters(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test listing posts with various filters."""
-        p1 = Post(title="P1", slug="p1", content="C", status=PostStatus.PUBLISHED, author_id=1, is_featured=True)
-        p2 = Post(title="P2", slug="p2", content="C", status=PostStatus.DRAFT, author_id=2, is_featured=False)
+        user_id = test_user["user"].id
+
+        from app.schemas.auth import UserCreate
+        from app.services.auth_service import AuthService
+        auth_service = AuthService(db)
+        user2 = await auth_service.create_user(UserCreate(username="user2_f", email="u2f@e.com", password="testpassword123", display_name="U2 F"))
+        await db.commit()
+
+        p1 = Post(title="P1", slug="p1", content="C", status=PostStatus.PUBLISHED, author_id=user_id, is_featured=True)
+        p2 = Post(title="P2", slug="p2", content="C", status=PostStatus.DRAFT, author_id=user2.id, is_featured=False)
         db.add_all([p1, p2])
         await db.commit()
 
@@ -55,7 +71,7 @@ class TestListPosts:
         assert posts[0].id == p2.id
 
         # Author filter
-        posts, _ = await post_service.list_posts(author_id=2, include_drafts=True)
+        posts, _ = await post_service.list_posts(author_id=user2.id, include_drafts=True)
         assert len(posts) == 1
         assert posts[0].id == p2.id
 
@@ -69,24 +85,24 @@ class TestCreatePost:
     """Test cases for creating posts."""
 
     @pytest.mark.asyncio
-    async def test_create_post_with_excerpt(self, post_service: PostService) -> None:
+    async def test_create_post_with_excerpt(self, post_service: PostService, test_user: dict) -> None:
         """Test creating post with provided excerpt."""
         post_data = PostCreate(
             title="Title",
             content="Content",
             excerpt="Custom Excerpt"
         )
-        post = await post_service.create_post(post_data, author_id=1)
+        post = await post_service.create_post(post_data, author_id=test_user["user"].id)
         assert post.excerpt == "Custom Excerpt"
 
     @pytest.mark.asyncio
-    async def test_create_post_with_tags(self, post_service: PostService, db: AsyncSession) -> None:
+    async def test_create_post_with_tags(self, post_service: PostService, db: AsyncSession, test_user: dict) -> None:
         """Test creating post with tags."""
         mock_tag_service = MagicMock()
         mock_tag_service.set_post_tags = AsyncMock()
 
         post_data = PostCreate(title="T", content="C", tags=["tag1"])
-        await post_service.create_post_with_tags(post_data, 1, mock_tag_service)
+        await post_service.create_post_with_tags(post_data, test_user["user"].id, mock_tag_service)
 
         assert mock_tag_service.set_post_tags.called
 
@@ -96,7 +112,7 @@ class TestGetPost:
 
     @pytest.mark.asyncio
     async def test_get_post_by_slug_include_drafts(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test getting post by slug including drafts."""
         post = Post(
@@ -104,7 +120,7 @@ class TestGetPost:
             slug="draft",
             content="Content",
             status=PostStatus.DRAFT,
-            author_id=1
+            author_id=test_user["user"].id
         )
         db.add(post)
         await db.commit()
@@ -120,7 +136,7 @@ class TestGetPost:
 
     @pytest.mark.asyncio
     async def test_get_post_by_preview_token_invalid(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test getting post by invalid or expired preview token."""
         post = Post(
@@ -128,7 +144,7 @@ class TestGetPost:
             slug="draft",
             content="Content",
             status=PostStatus.DRAFT,
-            author_id=1,
+            author_id=test_user["user"].id,
             preview_token="token",
             preview_expires_at=datetime.now(UTC) - timedelta(hours=1)
         )
@@ -148,10 +164,10 @@ class TestUpdatePost:
     """Test cases for updating posts."""
 
     @pytest.mark.asyncio
-    async def test_update_post_enum_conversion(self, db: AsyncSession) -> None:
+    async def test_update_post_enum_conversion(self, db: AsyncSession, test_user: dict) -> None:
         """Test updating post with Enum value triggers value conversion."""
         service = PostService(db)
-        post = Post(title="P", slug="p", content="c", author_id=1, status=PostStatus.DRAFT)
+        post = Post(title="P", slug="p", content="c", author_id=test_user["user"].id, status=PostStatus.DRAFT)
         db.add(post)
         await db.commit()
 
@@ -161,10 +177,10 @@ class TestUpdatePost:
         assert post.status == PostStatus.PUBLISHED.value
 
     @pytest.mark.asyncio
-    async def test_update_post_sets_published_at(self, db: AsyncSession) -> None:
+    async def test_update_post_sets_published_at(self, db: AsyncSession, test_user: dict) -> None:
         """Test setting status to PUBLISHED sets published_at."""
         service = PostService(db)
-        post = Post(title="P", slug="p", content="c", author_id=1, status=PostStatus.DRAFT, published_at=None)
+        post = Post(title="P", slug="p", content="c", author_id=test_user["user"].id, status=PostStatus.DRAFT, published_at=None)
         db.add(post)
         await db.commit()
 
@@ -173,10 +189,10 @@ class TestUpdatePost:
         assert post.published_at is not None
 
     @pytest.mark.asyncio
-    async def test_update_post_regenerates_excerpt(self, db: AsyncSession) -> None:
+    async def test_update_post_regenerates_excerpt(self, db: AsyncSession, test_user: dict) -> None:
         """Test updating content regenerates excerpt if not provided."""
         service = PostService(db)
-        post = Post(title="P", slug="p", content="Old content", excerpt="Old excerpt", author_id=1, status=PostStatus.DRAFT)
+        post = Post(title="P", slug="p", content="Old content", excerpt="Old excerpt", author_id=test_user["user"].id, status=PostStatus.DRAFT)
         db.add(post)
         await db.commit()
 
@@ -187,10 +203,10 @@ class TestUpdatePost:
 
     @pytest.mark.asyncio
     async def test_update_post_author_mismatch(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test update fails if author ID doesn't match."""
-        post = Post(title="P", slug="p", content="C", author_id=1)
+        post = Post(title="P", slug="p", content="C", author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 
@@ -199,10 +215,10 @@ class TestUpdatePost:
 
     @pytest.mark.asyncio
     async def test_update_post_regenerate_excerpt(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test excerpt is regenerated if content changes."""
-        post = Post(title="P", slug="p", content="Old Content", excerpt="Old Excerpt", author_id=1)
+        post = Post(title="P", slug="p", content="Old Content", excerpt="Old Excerpt", author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 
@@ -214,10 +230,10 @@ class TestUpdatePost:
 
     @pytest.mark.asyncio
     async def test_update_post_with_tags(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test updating post with tags."""
-        post = Post(title="P", slug="p", content="C", author_id=1)
+        post = Post(title="P", slug="p", content="C", author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 
@@ -254,10 +270,10 @@ class TestDeletePost:
     """Test cases for deleting posts."""
 
     @pytest.mark.asyncio
-    async def test_delete_post_author_mismatch(self, db: AsyncSession) -> None:
+    async def test_delete_post_author_mismatch(self, db: AsyncSession, test_user: dict) -> None:
         """Test delete post fails if author_id mismatches."""
         service = PostService(db)
-        post = Post(title="P", slug="p", content="c", author_id=1, status=PostStatus.DRAFT)
+        post = Post(title="P", slug="p", content="c", author_id=test_user["user"].id, status=PostStatus.DRAFT)
         db.add(post)
         await db.commit()
 
@@ -270,10 +286,10 @@ class TestDeletePost:
 
     @pytest.mark.asyncio
     async def test_delete_post_author_mismatch_alternate(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test delete fails if author ID doesn't match."""
-        post = Post(title="P", slug="p", content="C", author_id=1)
+        post = Post(title="P", slug="p", content="C", author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 
@@ -286,10 +302,10 @@ class TestStatusTransitions:
 
     @pytest.mark.asyncio
     async def test_hide_post(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test hiding a post."""
-        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, author_id=1)
+        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 
@@ -303,10 +319,10 @@ class TestPreviewLinks:
 
     @pytest.mark.asyncio
     async def test_revoke_preview_link(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test revoking preview link."""
-        post = Post(title="P", slug="p", content="C", author_id=1, preview_token="t")
+        post = Post(title="P", slug="p", content="C", author_id=test_user["user"].id, preview_token="t")
         db.add(post)
         await db.commit()
 
@@ -333,12 +349,13 @@ class TestSlugGeneration:
 
     @pytest.mark.asyncio
     async def test_get_existing_slugs_exclude_id(
-        self, post_service: PostService, db: AsyncSession
+        self, post_service: PostService, db: AsyncSession, test_user: dict
     ) -> None:
         """Test getting existing slugs excluding a specific ID."""
+        user_id = test_user["user"].id
         # Create two posts
-        post1 = Post(title="Post 1", slug="post-1", content="Content", author_id=1)
-        post2 = Post(title="Post 2", slug="post-2", content="Content", author_id=1)
+        post1 = Post(title="Post 1", slug="post-1", content="Content", author_id=user_id)
+        post2 = Post(title="Post 2", slug="post-2", content="Content", author_id=user_id)
         db.add_all([post1, post2])
         await db.commit()
 
@@ -366,10 +383,10 @@ class TestCacheInvalidation:
     """Test cases for cache invalidation."""
 
     @pytest.mark.asyncio
-    async def test_cache_invalidation_exceptions(self, db: AsyncSession) -> None:
+    async def test_cache_invalidation_exceptions(self, db: AsyncSession, test_user: dict) -> None:
         """Test cache invalidation exceptions are caught and logged."""
         service = PostService(db)
-        post = Post(title="P", slug="p", content="c", author_id=1, status=PostStatus.PUBLISHED)
+        post = Post(title="P", slug="p", content="c", author_id=test_user["user"].id, status=PostStatus.PUBLISHED)
         db.add(post)
         await db.commit()
 
