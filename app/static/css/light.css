@@ -221,7 +221,7 @@ a:hover {
 }
 
 .sidebar-header {
-    padding: var(--spacing-md) calc(var(--spacing-lg) + 1px);
+    padding: 0 var(--spacing-lg);
     border-bottom: 1px solid var(--light-sidebar-border);
     display: flex;
     align-items: center;
@@ -260,18 +260,35 @@ h1 .app-logo {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: none;
     color: var(--light-sidebar-text);
-    width: auto;
-    height: auto;
+    transition: color var(--transition-fast);
+    border: none;
+    background: transparent;
     padding: 0;
-    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
 }
 
 .sidebar-header .homepage-link:hover {
     color: var(--light-sidebar-text-hover);
     background: transparent;
     border: none;
+}
+
+.sidebar-header .public-home-link {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--light-sidebar-text);
+    transition: color var(--transition-fast);
+    border: none;
+    background: transparent;
+    padding: 0;
+}
+
+.sidebar-header .public-home-link:hover {
+    color: var(--light-sidebar-text-hover);
 }
 
 .sidebar-nav {

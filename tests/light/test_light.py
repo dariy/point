@@ -158,6 +158,8 @@ class TestGetBaseContext:
         assert "settings" in context
         assert "app_name" in context
         assert "app_version" in context
+        assert "public_url" in context
+        assert context["public_url"] == "/"
 
     @pytest.mark.asyncio
     async def test_get_base_context_with_user(self, db: AsyncSession, test_user: dict) -> None:
@@ -200,6 +202,8 @@ class TestDashboard:
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "Dashboard" in response.text
+        assert 'class="public-home-link"' in response.text
+        assert 'href="/"' in response.text
 
     @pytest.mark.asyncio
     async def test_dashboard_shows_stats(
@@ -655,6 +659,11 @@ class TestEditPost:
         assert "Edit Test Post" in response.text
         assert "Tag1" in response.text
         assert "Tag2" in response.text
+        # Verify contextual public_url
+        assert f'href="/posts/{post.slug}"' in response.text
+        # Verify categories section is gone
+        assert "Categories (Meta-tags)" not in response.text
+        assert "categories-picker" not in response.text
 
 
 class TestTagsPage:
@@ -701,6 +710,7 @@ class TestTagsPage:
         )
         assert response.status_code == 200
         assert "AppleTag" in response.text
+        assert 'href="/tags"' in response.text
 
     @pytest.mark.asyncio
     async def test_tags_page_with_all_params(
