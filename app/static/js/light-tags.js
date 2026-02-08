@@ -37,12 +37,11 @@
         document.getElementById('tag-important').checked = false;
         document.getElementById('tag-featured').checked = false;
 
-        document.getElementById('tag-parents').selectedIndex = -1;
-        // Show all options in parents list
-        const parentsSelect = document.getElementById('tag-parents');
-        Array.from(parentsSelect.options).forEach(opt => {
-            opt.selected = false;
-            opt.style.display = 'block';
+        // Clear chip checkboxes in parents picker
+        const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
+        parentChips.forEach(chip => {
+            chip.checked = false;
+            chip.closest('.category-chip').style.display = 'block';
         });
 
         modalInstance.open();
@@ -60,20 +59,22 @@
         document.getElementById('tag-important').checked = !!isImportant;
         document.getElementById('tag-featured').checked = !!isFeatured;
 
-        const parentsSelect = document.getElementById('tag-parents');
-        if (parentsSelect) {
+        const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
+        if (parentChips.length) {
             let ids = [];
             try {
                 ids = typeof parentIds === 'string' ? JSON.parse(parentIds) : (parentIds || []);
+                ids = ids.map(id => parseInt(id));
             } catch (e) {
                 console.warn('Failed to parse parentIds:', e);
             }
 
-            Array.from(parentsSelect.options).forEach(opt => {
-                opt.selected = ids.includes(parseInt(opt.value));
+            parentChips.forEach(chip => {
+                const chipValue = parseInt(chip.value);
+                chip.checked = ids.includes(chipValue);
                 // Hide self from selection to prevent circular/self reference
-                opt.style.display = opt.value === id ? 'none' : 'block';
-                if (opt.value === id) opt.selected = false;
+                chip.closest('.category-chip').style.display = chipValue == id ? 'none' : 'block';
+                if (chipValue == id) chip.checked = false;
             });
         }
 
@@ -90,12 +91,13 @@
                 document.getElementById('tag-important').checked = tag.is_important;
                 document.getElementById('tag-featured').checked = tag.is_featured;
 
-                if (parentsSelect) {
-                    const ids = tag.parents ? tag.parents.map(p => p.id) : [];
-                    Array.from(parentsSelect.options).forEach(opt => {
-                        opt.selected = ids.includes(parseInt(opt.value));
-                        opt.style.display = opt.value == tag.id ? 'none' : 'block';
-                        if (opt.value == tag.id) opt.selected = false;
+                if (parentChips.length) {
+                    const ids = tag.parents ? tag.parents.map(p => parseInt(p.id)) : [];
+                    parentChips.forEach(chip => {
+                        const chipValue = parseInt(chip.value);
+                        chip.checked = ids.includes(chipValue);
+                        chip.closest('.category-chip').style.display = chipValue == tag.id ? 'none' : 'block';
+                        if (chipValue == tag.id) chip.checked = false;
                     });
                 }
             }
@@ -248,7 +250,7 @@
             description: document.getElementById('tag-description').value || null,
             is_important: document.getElementById('tag-important').checked,
             is_featured: document.getElementById('tag-featured').checked,
-            parent_ids: Array.from(document.getElementById('tag-parents').selectedOptions).map(opt => parseInt(opt.value))
+            parent_ids: Array.from(document.querySelectorAll('#tag-parents-picker input:checked')).map(cb => parseInt(cb.value))
         };
 
         const url = id ? `/api/tags/${id}` : '/api/tags';
