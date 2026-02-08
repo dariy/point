@@ -846,7 +846,7 @@
                 const a = document.createElement('a');
                 a.href = '/posts/' + data.prev_post.slug;
                 a.className = 'post-nav-link prev';
-                a.innerHTML = '<span class="post-nav-label">Previous Post</span><span class="post-nav-title">' + data.prev_post.title + '</span>';
+                a.innerHTML = '<span class="post-nav-title">&larr; ' + data.prev_post.title + '</span>';
                 navContainer.appendChild(a);
             } else {
                 navContainer.appendChild(document.createElement('div'));
@@ -856,7 +856,7 @@
                 const a = document.createElement('a');
                 a.href = '/posts/' + data.next_post.slug;
                 a.className = 'post-nav-link next';
-                a.innerHTML = '<span class="post-nav-label">Next Post</span><span class="post-nav-title">' + data.next_post.title + '</span>';
+                a.innerHTML = '<span class="post-nav-title">' + data.next_post.title + ' &rarr; </span>';
                 navContainer.appendChild(a);
             }
         }

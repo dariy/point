@@ -230,8 +230,7 @@ endblock %}
         <div class="post-navigation">
             {% if prev_post %}
             <a href="/posts/{{ prev_post.slug }}" class="post-nav-link prev">
-                <span class="post-nav-label">Previous Post</span>
-                <span class="post-nav-title">{{ prev_post.title }}</span>
+                <span class="post-nav-title">&larr; {{ prev_post.title }}</span>
             </a>
             {% else %}
             <div></div> <!-- Spacer -->
@@ -239,8 +238,7 @@ endblock %}
 
             {% if next_post %}
             <a href="/posts/{{ next_post.slug }}" class="post-nav-link next">
-                <span class="post-nav-label">Next Post</span>
-                <span class="post-nav-title">{{ next_post.title }}</span>
+                <span class="post-nav-title">{{ next_post.title }} &rarr;</span>
             </a>
             {% endif %}
         </div>

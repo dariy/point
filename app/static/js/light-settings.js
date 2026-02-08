@@ -3,7 +3,7 @@
  * Handles blog settings form submission
  */
 
-(function() {
+(function () {
     'use strict';
 
     function initSettingsForm() {
@@ -17,8 +17,7 @@
             const status = document.getElementById('save-status');
 
             saveBtn.disabled = true;
-            status.textContent = 'Saving...';
-            status.className = 'save-status';
+            saveBtn.textContent = 'Saving...';
 
             const formData = new FormData(form);
             const settings = {};
@@ -46,21 +45,24 @@
                 });
 
                 if (response.ok) {
-                    status.textContent = 'Settings saved successfully!';
-                    status.classList.add('success');
-                    setTimeout(() => {
-                        status.textContent = '';
-                    }, 3000);
+                    // Use toast notification
+                    if (window.LightUtils && window.LightUtils.showToast) {
+                        window.LightUtils.showToast('Settings saved successfully!', 'success');
+                    }
                 } else {
                     const data = await response.json();
-                    status.textContent = 'Error: ' + (data.detail || 'Failed to save settings');
-                    status.classList.add('error');
+                    const errorMsg = data.detail || 'Failed to save settings';
+                    if (window.LightUtils && window.LightUtils.showToast) {
+                        window.LightUtils.showToast(errorMsg, 'error');
+                    }
                 }
             } catch (error) {
-                status.textContent = 'Error: ' + error.message;
-                status.classList.add('error');
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast('Error: ' + error.message, 'error');
+                }
             } finally {
                 saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Settings';
             }
         });
     }

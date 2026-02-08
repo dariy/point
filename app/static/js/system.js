@@ -77,10 +77,47 @@
      */
     const showConfirm = function (title, message, confirmText = 'Confirm', isDanger = false) {
         return new Promise((resolve) => {
+            // Ensure modals are created
+            const modalExists = !!document.getElementById('confirm-modal');
+            if (!modalExists) {
+                createModals();
+                // Defer to allow innerHTML to be parsed
+                setTimeout(() => {
+                    const modal = document.getElementById('confirm-modal');
+                    const titleEl = document.getElementById('confirm-title');
+                    const messageEl = document.getElementById('confirm-message');
+                    const confirmBtn = document.getElementById('confirm-btn');
+
+                    if (!modal || !titleEl || !messageEl || !confirmBtn) {
+                        console.error('Modal elements still not found after creation');
+                        resolve(window.confirm(message));
+                        return;
+                    }
+
+                    titleEl.textContent = title;
+                    messageEl.textContent = message;
+                    confirmBtn.textContent = confirmText;
+                    confirmBtn.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
+                    modal.classList.add('active');
+                    confirmCallback = resolve;
+                }, 0);
+                return;
+            }
+
             const modal = document.getElementById('confirm-modal');
-            document.getElementById('confirm-title').textContent = title;
-            document.getElementById('confirm-message').textContent = message;
+            const titleEl = document.getElementById('confirm-title');
+            const messageEl = document.getElementById('confirm-message');
             const confirmBtn = document.getElementById('confirm-btn');
+
+            // Safety checks - only log error if modal should exist
+            if (!modal || !titleEl || !messageEl || !confirmBtn) {
+                // Fallback to native confirm
+                resolve(window.confirm(message));
+                return;
+            }
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
             confirmBtn.textContent = confirmText;
             confirmBtn.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
             modal.classList.add('active');
@@ -93,6 +130,8 @@
      */
     const closeConfirmModal = function (result) {
         const modal = document.getElementById('confirm-modal');
+        if (!modal) return;
+
         modal.classList.add('closing');
         setTimeout(() => {
             modal.classList.remove('active');
@@ -109,9 +148,45 @@
      */
     const showAlert = function (title, message) {
         return new Promise((resolve) => {
+            // Ensure modals are created
+            const modalExists = !!document.getElementById('alert-modal');
+            if (!modalExists) {
+                createModals();
+                // Defer to allow innerHTML to be parsed
+                setTimeout(() => {
+                    const modal = document.getElementById('alert-modal');
+                    const titleEl = document.getElementById('alert-title');
+                    const messageEl = document.getElementById('alert-message');
+
+                    if (!modal || !titleEl || !messageEl) {
+                        console.error('Alert modal elements still not found after creation');
+                        window.alert(message);
+                        resolve();
+                        return;
+                    }
+
+                    titleEl.textContent = title;
+                    messageEl.textContent = message;
+                    modal.classList.add('active');
+                    alertCallback = resolve;
+                }, 0);
+                return;
+            }
+
             const modal = document.getElementById('alert-modal');
-            document.getElementById('alert-title').textContent = title;
-            document.getElementById('alert-message').textContent = message;
+            const titleEl = document.getElementById('alert-title');
+            const messageEl = document.getElementById('alert-message');
+
+            // Safety checks
+            if (!modal || !titleEl || !messageEl) {
+                // Fallback to native alert
+                window.alert(message);
+                resolve();
+                return;
+            }
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
             modal.classList.add('active');
             alertCallback = resolve;
         });
@@ -122,6 +197,8 @@
      */
     const closeAlertModal = function () {
         const modal = document.getElementById('alert-modal');
+        if (!modal) return;
+
         modal.classList.add('closing');
         setTimeout(() => {
             modal.classList.remove('active');
