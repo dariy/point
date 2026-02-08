@@ -44,13 +44,20 @@
             chip.closest('.category-chip').style.display = 'block';
         });
 
+        // Clear chip checkboxes in children picker
+        const childChips = document.querySelectorAll('#tag-children-picker input[type="checkbox"]');
+        childChips.forEach(chip => {
+            chip.checked = false;
+            chip.closest('.category-chip').style.display = 'block';
+        });
+
         modalInstance.open();
     };
 
     /**
      * Open modal for editing existing tag
      */
-    const editTag = async function (id, name, slug, description, isImportant, isFeatured, parentIds) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured, parentIds, childIds) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
@@ -78,6 +85,25 @@
             });
         }
 
+        const childChips = document.querySelectorAll('#tag-children-picker input[type="checkbox"]');
+        if (childChips.length) {
+            let ids = [];
+            try {
+                ids = typeof childIds === 'string' ? JSON.parse(childIds) : (childIds || []);
+                ids = ids.map(id => parseInt(id));
+            } catch (e) {
+                console.warn('Failed to parse childIds:', e);
+            }
+
+            childChips.forEach(chip => {
+                const chipValue = parseInt(chip.value);
+                chip.checked = ids.includes(chipValue);
+                // Hide self from selection to prevent circular/self reference
+                chip.closest('.category-chip').style.display = chipValue == id ? 'none' : 'block';
+                if (chipValue == id) chip.checked = false;
+            });
+        }
+
         modalInstance.open();
 
         // Try to fetch fresh data
@@ -94,6 +120,16 @@
                 if (parentChips.length) {
                     const ids = tag.parents ? tag.parents.map(p => parseInt(p.id)) : [];
                     parentChips.forEach(chip => {
+                        const chipValue = parseInt(chip.value);
+                        chip.checked = ids.includes(chipValue);
+                        chip.closest('.category-chip').style.display = chipValue == tag.id ? 'none' : 'block';
+                        if (chipValue == tag.id) chip.checked = false;
+                    });
+                }
+
+                if (childChips.length) {
+                    const ids = tag.children ? tag.children.map(p => parseInt(p.id)) : [];
+                    childChips.forEach(chip => {
                         const chipValue = parseInt(chip.value);
                         chip.checked = ids.includes(chipValue);
                         chip.closest('.category-chip').style.display = chipValue == tag.id ? 'none' : 'block';
@@ -223,7 +259,8 @@
             const isImportant = editBtn.dataset.tagImportant === 'true';
             const isFeatured = editBtn.dataset.tagFeatured === 'true';
             const parentIds = editBtn.dataset.tagParents || '[]';
-            editTag(id, name, slug, description, isImportant, isFeatured, parentIds);
+            const childIds = editBtn.dataset.tagChildren || '[]';
+            editTag(id, name, slug, description, isImportant, isFeatured, parentIds, childIds);
             return;
         }
 
@@ -250,7 +287,8 @@
             description: document.getElementById('tag-description').value || null,
             is_important: document.getElementById('tag-important').checked,
             is_featured: document.getElementById('tag-featured').checked,
-            parent_ids: Array.from(document.querySelectorAll('#tag-parents-picker input:checked')).map(cb => parseInt(cb.value))
+            parent_ids: Array.from(document.querySelectorAll('#tag-parents-picker input:checked')).map(cb => parseInt(cb.value)),
+            child_ids: Array.from(document.querySelectorAll('#tag-children-picker input:checked')).map(cb => parseInt(cb.value))
         };
 
         const url = id ? `/api/tags/${id}` : '/api/tags';

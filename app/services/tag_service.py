@@ -99,6 +99,12 @@ class TagService:
             )
             tag.parents = list(parents.scalars().all())
 
+        if tag_data.child_ids:
+            children = await self.db.execute(
+                select(Tag).where(Tag.id.in_(tag_data.child_ids))
+            )
+            tag.children = list(children.scalars().all())
+
         self.db.add(tag)
         await self.db.flush()
         await self.db.refresh(tag, attribute_names=["parents", "children"])
@@ -216,6 +222,12 @@ class TagService:
                 select(Tag).where(Tag.id.in_(tag_data.parent_ids))
             )
             tag.parents = list(parents.scalars().all())
+
+        if tag_data.child_ids is not None:
+            children = await self.db.execute(
+                select(Tag).where(Tag.id.in_(tag_data.child_ids))
+            )
+            tag.children = list(children.scalars().all())
 
         await self.db.flush()
         await self.db.refresh(tag, attribute_names=["parents", "children"])
