@@ -346,7 +346,7 @@ async def tags_page(
     user: User | None = Depends(get_current_user),
     page: int = 1,
     search: str | None = None,
-    parent_id: int | None = None,
+    parent_id: str | None = None,
     sort_by: str = "name",
     sort_order: str = "asc",
 ) -> Response:
@@ -358,7 +358,7 @@ async def tags_page(
         user: Current user
         page: Page number
         search: Optional search term
-        parent_id: Optional parent tag ID filter
+        parent_id: Optional parent tag ID filter (string to handle empty form values)
         sort_by: Column to sort by
         sort_order: Sort order (asc/desc)
 
@@ -370,14 +370,18 @@ async def tags_page(
             url="/light/login", status_code=status.HTTP_303_SEE_OTHER
         )
 
+    # Handle empty parent_id from form submission
+    pid = None
+    if parent_id and parent_id.isdigit():
+        pid = int(parent_id)
+
     tag_service = TagService(db)
     tags = await tag_service.list_tags(
-        search=search, parent_id=parent_id, sort_by=sort_by, sort_order=sort_order
+        search=search, parent_id=pid, sort_by=sort_by, sort_order=sort_order
     )
     all_tags = await tag_service.list_tags()
     # For filter dropdown, we want tags that ARЕ parents
     parent_tags = [t for t in all_tags if len(t.children) > 0]
-
     total = len(tags)
     total_pages = 1
 
@@ -391,7 +395,7 @@ async def tags_page(
             "total_pages": total_pages,
             "total": total,
             "search": search,
-            "parent_id": parent_id,
+            "parent_id": pid,
             "parent_tags": parent_tags,
             "hierarchical_tags": hierarchical_tags,
             "sort_by": sort_by,

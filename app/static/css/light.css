@@ -242,7 +242,7 @@ a:hover {
     display: inline-block;
     vertical-align: middle;
     width: 1rem;
-    fill: var(--light-text-primary);
+    fill: currentColor;
     transition: fill var(--transition-theme);
 }
 
@@ -1983,4 +1983,9 @@ input[type="password"] {
 
 .category-chip .hidden-checkbox:focus+.chip-label {
     box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+.category-chip .chip-label.sub-tag {
+    margin-left: 1rem;
+    opacity: 0.8;
 }
