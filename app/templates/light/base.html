@@ -16,12 +16,20 @@
 <div class="light-container">
     <nav class="light-sidebar">
         <div class="sidebar-header">
-            <a href="/" class="homepage-link" target="_blank" aria-label="View public homepage"
-                title="View public homepage">
+            <a href="#" class="homepage-link theme-toggle" aria-label="Toggle theme" title="Toggle theme">
                 {% include "shared/logo.html" %}
             </a>
             <a href="/light/" class="logo" title="{{ app_name }}">
                 <span class="logo-text">{{ app_name }}</span>
+            </a>
+            <a href="{{ public_url }}" class="public-home-link" target="_blank" title="View public page"
+                aria-label="View public page">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
             </a>
         </div>
         <ul class="sidebar-nav">
@@ -97,24 +105,6 @@
         <header class="light-header">
             <h1>{% block page_title %}Dashboard{% endblock %}</h1>
             <div class="header-actions">
-                <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
-                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="5"></circle>
-                        <line x1="12" y1="1" x2="12" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="23"></line>
-                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                        <line x1="1" y1="12" x2="3" y2="12"></line>
-                        <line x1="21" y1="12" x2="23" y2="12"></line>
-                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                    </svg>
-                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                    </svg>
-                </button>
                 {% block header_actions %}{% endblock %}
             </div>
         </header>
@@ -135,6 +125,22 @@
             {% block content %}{% endblock %}
         </div>
     </main>
+</div>
+
+<!-- Global Confirmation Modal -->
+<div id="confirm-modal" class="modal-overlay">
+    <div class="modal" style="width: 400px; min-width: 300px;">
+        <div class="modal-header">
+            <h3 id="confirm-title">Confirm Action</h3>
+        </div>
+        <div class="modal-body">
+            <p id="confirm-message">Are you sure you want to proceed?</p>
+        </div>
+        <div class="modal-footer">
+            <button id="confirm-cancel" class="btn btn-secondary">Cancel</button>
+            <button id="confirm-ok" class="btn btn-danger">Delete</button>
+        </div>
+    </div>
 </div>
 
 <script src="/static/js/light.js"></script>
