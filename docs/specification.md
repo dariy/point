@@ -310,6 +310,13 @@ async def process_image(file):
 - Tag description at top of page
 - Custom meta description for SEO
 
+#### Hierarchical Tags (Meta-tags)
+- Tags support parent-child relationships (DAG structure).
+- **Recursive Retrieval**: Viewing a parent tag displays posts from all its descendant tags.
+- **Recursive Counting**: Tag `post_count` includes unique posts from the entire subtree.
+- **Circular Reference Protection**: Traversal algorithms prevent infinite loops in the hierarchy.
+- For more details, see [Meta-Tag System documentation](META-TAGGING.md).
+
 ### 4. Authentication & Sessions
 
 #### Login System
