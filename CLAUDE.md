@@ -991,6 +991,14 @@ async def get_my_posts(
     pass
 ```
 
+### Task: Managing Hierarchical Tags (Meta-tags)
+
+1. **Hierarchy**: Use `Tag.parents` and `Tag.children` relationships.
+2. **Recursive Logic**: Use `TagService.get_descendant_tag_ids(tag_id)` for retrieval.
+3. **Post Counts**: Use `TagService.update_post_counts_recursive(tag_ids)` after any tag changes to propagate counts to ancestors.
+4. **Validation**: Ensure no circular references are introduced, or use the robust visited-set traversal methods.
+5. **Testing**: Add tests to `tests/tags/test_recursive_retrieval.py`.
+
 ### Pattern: Service Layer
 
 ```python
