@@ -6,12 +6,13 @@ Stores user credentials and profile information.
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Integer, String
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
 
-class User(Base):
+class User(AsyncAttrs, Base):
     """User model for blog lightistrators.
 
     Attributes:

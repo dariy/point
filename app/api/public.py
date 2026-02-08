@@ -307,10 +307,6 @@ async def single_post(
     # Get post with tags
     query = (
         select(Post)
-        .options(
-            selectinload(Post.tags).selectinload(Tag.parents),
-            selectinload(Post.tags).selectinload(Tag.children),
-        )
         .where(Post.slug == slug)
         .where(
             or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
@@ -318,16 +314,26 @@ async def single_post(
     )
     result = await db.execute(query)
     post = result.scalar_one_or_none()
-
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found",
         )
 
-    # Always increment view count (even if we return cached content)
+    # Explicitly load relationships using awaitable_attrs to avoid MissingGreenlet
+    try:
+        await post.awaitable_attrs.tags
+        await post.awaitable_attrs.author
+        for tag in post.tags:
+            await tag.awaitable_attrs.parents
+            await tag.awaitable_attrs.children
+    except Exception as e:
+        logger.error("Error loading relationships for post %s: %s", slug, e)
+        # Continue anyway, might still render partially
+
+    # Increment view count
     post.view_count = (post.view_count or 0) + 1
-    await db.commit()
+    await db.flush()
 
     # Check cache if enabled (after incrementing view count)
     # Skip cache if user is logged in
@@ -391,20 +397,9 @@ async def single_post(
         next_result = await db.execute(next_query)
         next_post = next_result.scalar_one_or_none()
 
-    # Build hierarchical tags for the post
-    all_post_tags = set(post.tags)
-    all_post_parents = {p for t in post.tags for p in t.parents}
-    # Top level tags are parents OR tags with no parents
-    top_level_tags = sorted(all_post_parents | {t for t in all_post_tags if not t.parents}, key=lambda x: x.name)
-
-    hierarchical_post_tags: list[dict[str, Any]] = []
-    for tag in top_level_tags:
-        # Children of this tag that are also associated with the post
-        children = [c for c in tag.children if c in all_post_tags]
-        hierarchical_post_tags.append({
-            "tag": tag,
-            "children": sorted(children, key=lambda x: x.name)
-        })
+    # Get explicitly selected tags for the post
+    tags = await post.awaitable_attrs.tags
+    all_post_tags = sorted(list(tags), key=lambda x: x.name)
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -422,7 +417,7 @@ async def single_post(
                     "view_count": post.view_count,
                     "content_html": content_html,
                     "thumbnail_path": post.thumbnail_path,
-                    "tags": [{"name": t.name, "slug": t.slug} for t in sorted(all_post_tags | all_post_parents, key=lambda x: x.name)],
+                    "tags": [{"name": t.name, "slug": t.slug} for t in all_post_tags],
                 },
                 "has_text_content": has_text_content,
                 "post_media": post_media,
@@ -436,12 +431,7 @@ async def single_post(
                 "blog_title": blog_settings_dict.get("blog_title", settings.app_name),
                 "blog_subtitle": blog_settings_dict.get("blog_subtitle", getattr(settings, "blog_subtitle", "")),
                 "is_logged_in": user is not None,
-                "post_tags_with_parents": [
-                    {
-                        "tag": {"name": h["tag"].name, "slug": h["tag"].slug},
-                        "children": [{"name": c.name, "slug": c.slug} for c in h["children"]]
-                    } for h in hierarchical_post_tags
-                ],
+                "post_tags_with_parents": [], # Legacy, no longer used
             }
         )
 
@@ -452,7 +442,6 @@ async def single_post(
     context.update(
         {
             "post": post,
-            "post_tags_with_parents": hierarchical_post_tags,
             "content_html": content_html,
             "has_text_content": has_text_content,
             "post_media": post_media,
@@ -643,7 +632,17 @@ async def tags_page(
         tag_obj = await tag_service.get_tag_by_slug(tag_slug)
 
         if tag_obj:
-            tag_ids = await tag_service.get_descendant_tag_ids(tag_obj.id)
+            # For child tags (like "Ufa" with parent "City"), we should only show posts with this specific tag.
+            # Only for top-level parent tags (like "City") we should show posts from all children recursively.
+            has_parents = len(await tag_obj.awaitable_attrs.parents) > 0
+            
+            if has_parents:
+                # This is a sub-tag, use strict filtering
+                tag_ids = {tag_obj.id}
+            else:
+                # This is a top-level tag, common to include all children
+                tag_ids = await tag_service.get_descendant_tag_ids(tag_obj.id)
+                
             query = (
                 query.join(post_tags, Post.id == post_tags.c.post_id)
                 .where(post_tags.c.tag_id.in_(tag_ids))

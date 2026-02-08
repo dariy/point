@@ -85,6 +85,9 @@ def format_content(content: str, formatter: str) -> str:
     Returns:
         Formatted HTML content
     """
+    # Normalize line endings
+    content = content.replace("\r\n", "\n")
+    
     if formatter == "markdown":
         # Pre-process simplified media links
         preprocessed = preprocess_media_links(content)
@@ -115,7 +118,7 @@ def strip_html(html_content: str) -> str:
     text = re.sub(r"<[^>]+>", "", html_content)
     # Decode HTML entities
     text = html.unescape(text)
-    # Normalize whitespace
+    # Normalize whitespace (including \r\n and multiple spaces)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
