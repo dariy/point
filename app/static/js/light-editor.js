@@ -37,26 +37,7 @@
             }
         });
     }
-    /**
-     * Initialize categories picker
-     */
-    function initCategoriesPicker() {
-        const categoriesChips = document.querySelectorAll('.category-chip input[type="checkbox"]');
-        if (!categoriesChips.length) return;
 
-        // When a chip is toggled, we don't necessarily need to add it to the visible tags list immediately
-        // if we collect them during form submission. But for better UX, let's add them to the TagsInput.
-        categoriesChips.forEach(chip => {
-            chip.addEventListener('change', function () {
-                const tagName = this.value;
-                const tagsInputWrapper = document.querySelector('.tags-input');
-                if (!tagsInputWrapper) return;
-
-                // We can't easily access the TagsInput instance here without exposing it.
-                // For now, we'll just let the form submission handle it.
-            });
-        });
-    }
 
     /**
      * Initialize post form submission
@@ -72,10 +53,8 @@
             const formData = new FormData(form);
             const postId = form.dataset.postId;
 
-            // Collect tags from both hidden input and category chips
-            const tagsFromInput = formData.get('tags') ? formData.get('tags').split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
-            const tagsFromCategories = Array.from(document.querySelectorAll('.category-chip input:checked')).map(cb => cb.value);
-            const allTags = Array.from(new Set([...tagsFromInput, ...tagsFromCategories]));
+            // Collect tags from hidden input
+            const allTags = formData.get('tags') ? formData.get('tags').split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
 
             // Build request body
             const data = {
@@ -201,7 +180,7 @@
     function init() {
         initPreviewToggle();
         initTagsInput();
-        initCategoriesPicker();
+
         initPostForm();
         initKeyboardShortcuts();
         initCardToggling();

@@ -345,10 +345,55 @@
     // Confirm Dialog
     // ===========================
 
-    function confirm(message) {
+    /**
+     * Custom confirmation dialog using Modal
+     */
+    function confirm(message, options = {}) {
         return new Promise((resolve) => {
-            const result = window.confirm(message);
-            resolve(result);
+            const modalEl = document.getElementById('confirm-modal');
+            if (!modalEl) {
+                // Fallback to native confirm if modal element is missing
+                const result = window.confirm(message);
+                resolve(result);
+                return;
+            }
+
+            const titleEl = modalEl.querySelector('#confirm-title');
+            const messageEl = modalEl.querySelector('#confirm-message');
+            const okBtn = modalEl.querySelector('#confirm-ok');
+            const cancelBtn = modalEl.querySelector('#confirm-cancel');
+
+            if (titleEl) titleEl.textContent = options.title || 'Confirm Action';
+            if (messageEl) messageEl.textContent = message;
+            if (okBtn) {
+                okBtn.textContent = options.okText || 'OK';
+                okBtn.className = `btn btn-${options.okVariant || 'danger'}`;
+            }
+            if (cancelBtn) cancelBtn.textContent = options.cancelText || 'Cancel';
+
+            const modal = new Modal(modalEl);
+
+            const handleOk = () => {
+                modal.close();
+                cleanup();
+                resolve(true);
+            };
+
+            const handleCancel = () => {
+                modal.close();
+                cleanup();
+                resolve(false);
+            };
+
+            const cleanup = () => {
+                okBtn.removeEventListener('click', handleOk);
+                cancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            okBtn.addEventListener('click', handleOk);
+            cancelBtn.addEventListener('click', handleCancel);
+
+            modal.open();
         });
     }
 

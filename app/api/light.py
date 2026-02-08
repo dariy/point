@@ -55,6 +55,7 @@ async def get_base_context(db: AsyncSession, request: Request, user: User | None
         "settings": settings,
         "app_name": blog_title or settings.app_name,
         "app_version": settings.app_version,
+        "public_url": "/",
     }
 
 
@@ -266,8 +267,7 @@ async def new_post(
         initial_content = f"![](/media/{media_path})"
         initial_thumbnail = f"/media/{media_path}"
 
-    hierarchical_tags = await tag_service.get_hierarchical_tags()
-    meta_tags = [group for group in hierarchical_tags if group["children"]]
+
 
     context = await get_base_context(db, request, user)
     context.update(
@@ -275,7 +275,7 @@ async def new_post(
             "post": None,
             "tags": tags,
             "all_tags": [t.name for t in tags],
-            "hierarchical_tags": meta_tags,
+
             "statuses": [s.value for s in PostStatus],
             "initial_content": initial_content,
             "initial_thumbnail": initial_thumbnail,
@@ -319,8 +319,7 @@ async def edit_post(
     # Get all tags for autocomplete and hierarchy
     tag_service = TagService(db)
     tags = await tag_service.list_tags()
-    hierarchical_tags = await tag_service.get_hierarchical_tags()
-    meta_tags = [group for group in hierarchical_tags if group["children"]]
+
 
     # Get post's current tags
     post_tags = [t.name for t in post.tags]
@@ -332,8 +331,9 @@ async def edit_post(
             "post_tags": post_tags,
             "tags": tags,
             "all_tags": [t.name for t in tags],
-            "hierarchical_tags": meta_tags,
+
             "statuses": [s.value for s in PostStatus],
+            "public_url": f"/posts/{post.slug}",
         }
     )
     return templates.TemplateResponse("light/post_edit.html", context)
@@ -400,6 +400,7 @@ async def tags_page(
             "hierarchical_tags": hierarchical_tags,
             "sort_by": sort_by,
             "sort_order": sort_order,
+            "public_url": "/tags",
         }
     )
     return templates.TemplateResponse("light/tags.html", context)
