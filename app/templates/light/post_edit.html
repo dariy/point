@@ -6,12 +6,47 @@
 {% block page_title %}{% if post %}Edit Post{% else %}New Post{% endif %}{% endblock %}
 
 {% block header_actions %}
-<button type="submit" form="post-form" id="btn-save-header" class="btn btn-primary">Save</button>
-<a href="/light/posts" class="btn btn-outline">Cancel</a>
+<button type="button" class="btn btn-outline" id="add-media-btn" title="Add Media" aria-label="Add Media">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+        <polyline points="21 15 16 10 5 21"></polyline>
+    </svg>
+</button>
+<button type="button" class="btn btn-outline preview-toggle" title="Toggle Preview" aria-label="Toggle Preview">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+</button>
+<button type="submit" form="post-form" id="btn-save-header" class="btn btn-primary" title="Save Post"
+    aria-label="Save Post">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+        <polyline points="7 3 7 8 15 8"></polyline>
+    </svg>
+</button>
+<a href="/light/posts" class="btn btn-outline" title="Cancel and Return to Posts" aria-label="Cancel">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+</a>
 {% if post %}
 <button type="button" class="btn btn-danger" data-delete-url="/api/posts/{{ post.id }}"
-    data-delete-name="{{ post.title }}" data-redirect-url="/light/posts">
-    Delete Post
+    data-delete-name="{{ post.title }}" data-redirect-url="/light/posts" title="Delete Post" aria-label="Delete Post">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+    </svg>
 </button>
 {% endif %}
 {% endblock %}
@@ -73,17 +108,13 @@
 
             <!-- Content -->
             <div class="card">
-                <div class="card-header flex-between">
+                <div class="card-header">
                     <h3>Content</h3>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-sm btn-outline preview-toggle">
-                            Preview
-                        </button>
-                    </div>
                 </div>
                 <div class="card-body">
                     <textarea id="content" name="content" class="form-textarea editor-content" rows="20"
                         placeholder="Write your post content in Markdown...">{{ post.content if post else (initial_content if initial_content else '') }}</textarea>
+                    <input type="file" id="media-file-input" accept="image/*,video/*" multiple style="display: none;">
                 </div>
             </div>
 

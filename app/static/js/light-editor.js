@@ -7,19 +7,6 @@
     'use strict';
 
     /**
-     * Initialize preview toggle
-     */
-    function initPreviewToggle() {
-        const previewToggle = document.querySelector('.preview-toggle');
-        if (!previewToggle) return;
-
-        previewToggle.addEventListener('click', function () {
-            const previewCard = document.getElementById('preview-card');
-            previewCard.style.display = previewCard.style.display === 'none' ? 'block' : 'none';
-        });
-    }
-
-    /**
      * Initialize tags input handling
      */
     function initTagsInput() {
@@ -175,12 +162,118 @@
     }
 
     /**
+     * Initialize Add Media button
+     */
+    function initMediaButton() {
+        const addMediaBtn = document.getElementById('add-media-btn');
+        const fileInput = document.getElementById('media-file-input');
+        const contentTextarea = document.getElementById('content');
+
+        if (!addMediaBtn || !fileInput || !contentTextarea) return;
+
+        // Trigger file input when button is clicked
+        addMediaBtn.addEventListener('click', function () {
+            fileInput.click();
+        });
+
+        // Handle file selection
+        fileInput.addEventListener('change', async function (e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            const postForm = document.getElementById('post-form');
+            const postId = postForm ? postForm.dataset.postId : null;
+
+            for (const file of files) {
+                // Check if image or video
+                const isImage = file.type.startsWith('image/');
+                const isVideo = file.type.startsWith('video/');
+
+                if (!isImage && !isVideo) {
+                    if (window.LightUtils && window.LightUtils.showToast) {
+                        window.LightUtils.showToast(`Skipped ${file.name}: Not an image or video`, 'warning');
+                    }
+                    continue;
+                }
+
+                // Show uploading state
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast(`Uploading ${file.name}...`, 'info');
+                }
+
+                await uploadAndInsertMedia(file, postId, contentTextarea);
+            }
+
+            // Clear the file input so the same file can be selected again
+            fileInput.value = '';
+        });
+    }
+
+    /**
+     * Upload a file and insert it into the content textarea
+     */
+    async function uploadAndInsertMedia(file, postId, textarea) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (postId) {
+            formData.append('post_id', postId);
+        }
+
+        try {
+            const response = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.detail?.message || errorData.detail || 'Upload failed';
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+
+            // Insert media tag at cursor position
+            const startPos = textarea.selectionStart;
+            const text = textarea.value;
+
+            // Check if we need to prepend a newline
+            const needsNewline = startPos > 0 && text.substring(startPos - 1, startPos) !== '\n';
+
+            let tag = `${data.url}\n`;
+            const content = (needsNewline ? '\n' : '') + tag;
+            const endPos = textarea.selectionEnd;
+
+            // Insert at cursor
+            textarea.value = text.substring(0, startPos) + content + text.substring(endPos, text.length);
+
+            // Move cursor after inserted text
+            const newPos = startPos + content.length;
+            textarea.selectionStart = newPos;
+            textarea.selectionEnd = newPos;
+
+            // Trigger input event for auto-save and preview
+            textarea.dispatchEvent(new Event('input'));
+
+            if (window.LightUtils && window.LightUtils.showToast) {
+                window.LightUtils.showToast(`Uploaded: ${file.name}`);
+            }
+
+        } catch (error) {
+            if (window.LightUtils && window.LightUtils.showToast) {
+                window.LightUtils.showToast(`Failed to upload: ${file.name}`, 'error');
+            }
+            console.error('Upload error:', error);
+        }
+    }
+
+    /**
      * Initialize all editor features
      */
     function init() {
-        initPreviewToggle();
         initTagsInput();
-
+        initMediaButton();
         initPostForm();
         initKeyboardShortcuts();
         initCardToggling();

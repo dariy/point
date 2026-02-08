@@ -598,7 +598,10 @@
 
         if (previewToggle) {
             previewToggle.addEventListener('click', () => {
-                previewPanel.classList.toggle('active');
+                const previewCard = document.getElementById('preview-card');
+                if (previewCard) {
+                    previewCard.style.display = previewCard.style.display === 'none' ? 'block' : 'none';
+                }
             });
         }
 
@@ -612,6 +615,14 @@
             try {
                 // Simple markdown preview (basic)
                 let html = content
+                    // Standalone image URLs (on their own line) - convert to img tags
+                    .replace(/^(\/\d{4}\/\d{2}\/[^\s]+\.(jpg|jpeg|png|gif|webp|mp4|webm))$/gm, (match) => {
+                        const isVideo = match.match(/\.(mp4|webm)$/i);
+                        if (isVideo) {
+                            return `<video src="${match}" controls style="max-width: 100%;"></video>`;
+                        }
+                        return `<img src="${match}" alt="" style="max-width: 100%;">`;
+                    })
                     // Headers
                     .replace(/^### (.*$)/gm, '<h3>$1</h3>')
                     .replace(/^## (.*$)/gm, '<h2>$1</h2>')
@@ -622,8 +633,14 @@
                     .replace(/\*(.*?)\*/g, '<em>$1</em>')
                     // Links
                     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-                    // Images
-                    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+                    // Images (markdown format) - handle relative URLs
+                    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+                        // If URL starts with /, prepend /media
+                        if (url.startsWith('/') && !url.startsWith('/media')) {
+                            url = '/media' + url;
+                        }
+                        return `<img src="${url}" alt="${alt}" style="max-width: 100%;">`;
+                    })
                     // Line breaks
                     .replace(/\n\n/g, '</p><p>')
                     .replace(/\n/g, '<br>');
