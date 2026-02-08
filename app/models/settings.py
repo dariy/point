@@ -6,12 +6,13 @@ Stores key-value pairs for application-level configuration.
 from datetime import datetime
 
 from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
 
-class BlogSettings(Base):
+class BlogSettings(AsyncAttrs, Base):
     """Model for storing application settings in key-value pairs.
 
     Values are stored as strings and converted back to their intended type

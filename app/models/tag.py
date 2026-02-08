@@ -16,6 +16,7 @@ from sqlalchemy import (
     Table,
     Text,
 )
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -37,7 +38,7 @@ tag_relationships = Table(
 )
 
 
-class Tag(Base):
+class Tag(AsyncAttrs, Base):
     """Tag model for categorizing posts.
 
     Attributes:

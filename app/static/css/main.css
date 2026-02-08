@@ -900,6 +900,51 @@ img {
     color: var(--color-primary);
 }
 
+.tag-group-inline {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-right: var(--spacing-md);
+}
+
+.post-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.post-tag:hover {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.post-tag.parent-tag {
+    background: transparent;
+    padding-left: 0;
+    padding-right: 2px;
+    font-weight: 600;
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-primary);
+}
+
+.post-tag.parent-tag:hover {
+    color: var(--color-primary);
+}
+
+.post-tag.child-tag {
+    /* Styles for child tags if needed */
+}
+
 .tag-link .count {
     font-size: var(--font-size-xs);
     color: var(--text-muted);

@@ -23,6 +23,7 @@ class TagCreate(TagBase):
 
     slug: str | None = Field(default=None, min_length=1, max_length=100)
     parent_ids: list[int] = Field(default_factory=list)
+    child_ids: list[int] = Field(default_factory=list)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -33,6 +34,7 @@ class TagCreate(TagBase):
                 "is_important": True,
                 "is_featured": False,
                 "parent_ids": [],
+                "child_ids": [],
             }
         }
     )
@@ -48,6 +50,7 @@ class TagUpdate(BaseModel):
     is_important: bool | None = Field(default=None)
     is_featured: bool | None = Field(default=None)
     parent_ids: list[int] | None = Field(default=None)
+    child_ids: list[int] | None = Field(default=None)
 
 
 class TagListItem(BaseModel):
