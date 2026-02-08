@@ -242,12 +242,16 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="tag-parents" class="form-label">Parents (Meta-tags)</label>
-                    <select id="tag-parents" name="parent_ids" class="form-select" multiple style="height: 100px;">
-                        {% for t in tags %}
-                        <option value="{{ t.id }}">{{ t.name }}</option>
+                    <label class="form-label">Parents (Meta-tags)</label>
+                    <div id="tag-parents-picker" class="categories-picker flex flex-wrap gap-2 mb-2"
+                        style="max-height: 200px; overflow-y: auto; padding: 4px; border: 1px solid var(--light-border); border-radius: var(--radius-sm);">
+                        {% for group in hierarchical_tags %}
+                        <label class="category-chip">
+                            <input type="checkbox" name="parent_ids" value="{{ group.tag.id }}" class="hidden-checkbox">
+                            <span class="chip-label">{{ group.tag.name }}</span>
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                     <small class="form-hint">Select tags that logically contain this tag (e.g., #newyork has parents
                         #city, #us).</small>
                 </div>
