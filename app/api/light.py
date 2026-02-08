@@ -381,6 +381,8 @@ async def tags_page(
     total = len(tags)
     total_pages = 1
 
+    hierarchical_tags = await tag_service.get_hierarchical_tags()
+
     context = await get_base_context(db, request, user)
     context.update(
         {
@@ -391,6 +393,7 @@ async def tags_page(
             "search": search,
             "parent_id": parent_id,
             "parent_tags": parent_tags,
+            "hierarchical_tags": hierarchical_tags,
             "sort_by": sort_by,
             "sort_order": sort_order,
         }
