@@ -272,6 +272,8 @@ img {
     transition:
         background-color var(--transition-theme),
         border-color var(--transition-theme);
+    overflow: visible;
+    /* Prevent clipping of dropdowns */
 }
 
 .header-container {
@@ -282,6 +284,8 @@ img {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    overflow: visible;
+    /* Prevent clipping of dropdowns */
 }
 
 .site-branding {
@@ -313,14 +317,198 @@ img {
     align-items: center;
     justify-content: center;
     flex-wrap: nowrap;
-    overflow: hidden;
-    opacity: 0;
-    transition: opacity var(--transition-fast);
+    overflow: visible;
+    /* Allow dropdowns */
 }
 
-.site-header .tags-filters.is-ready {
-    opacity: 1;
+/* Header Dropdown Tags */
+.site-header .tag-group {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    overflow: visible !important;
+    /* Critical fix for clipping */
 }
+
+/* Standalone header filter buttons */
+.site-header .tags-filters>.filter-btn {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
+    height: 2rem;
+    padding: 0 var(--spacing-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1;
+    transition: all var(--transition-fast);
+    box-sizing: border-box;
+    text-rendering: optimizeLegibility;
+}
+
+.site-header .tags-filters>.filter-btn:hover,
+.site-header .tags-filters>.filter-btn.active {
+    border-color: var(--color-primary);
+}
+
+.site-header .tags-filters>.filter-btn.active {
+    background-color: var(--color-primary);
+    color: var(--text-inverted);
+}
+
+.site-header .tag-group-header {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
+    height: 2rem;
+    transition: all var(--transition-fast);
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.site-header .tag-group-header:hover,
+.site-header .tag-group-header:has(.filter-btn.active),
+.site-header .tag-group.is-open .tag-group-header {
+    border-color: var(--color-primary);
+}
+
+.site-header .tag-group-header:has(.filter-btn.active) {
+    background-color: var(--color-primary);
+}
+
+.site-header .tag-group-header .filter-btn {
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    padding: 0 0 0 var(--spacing-md);
+    height: 100%;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: normal;
+    text-rendering: optimizeLegibility;
+}
+
+.site-header .tag-group-header:hover .filter-btn,
+.site-header .tag-group-header:has(.filter-btn.active) .filter-btn,
+.site-header .tag-group.is-open .filter-btn {
+    color: var(--color-primary) !important;
+}
+
+.site-header .tag-group-header:has(.filter-btn.active) .filter-btn {
+    color: var(--text-inverted) !important;
+}
+
+.site-header .tag-group-header .toggle-children {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0 0.25rem 0 0.25rem;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.site-header .tag-group-header .toggle-children svg {
+    transition: transform var(--transition-fast);
+    transform-origin: center;
+}
+
+.site-header .tag-group:hover .toggle-children svg,
+.site-header .tag-group.is-open .toggle-children svg,
+.site-header .tag-group-header:has(.filter-btn.active) .toggle-children svg {
+    transform: rotate(180deg);
+}
+
+.site-header .tag-group:hover .toggle-children,
+.site-header .tag-group.is-open .toggle-children,
+.site-header .tag-group-header:has(.filter-btn.active) .toggle-children {
+    color: var(--color-primary);
+}
+
+.site-header .tag-group-header:has(.filter-btn.active) .toggle-children {
+    color: var(--text-inverted);
+}
+
+.site-header .tag-children {
+    position: absolute;
+    top: 100%;
+    /* Added bridge gap is handled via ::before */
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-xl);
+    padding: var(--spacing-sm);
+    display: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+    width: max-content;
+    max-width: 75vw;
+    backdrop-filter: blur(12px);
+}
+
+
+.site-header .tag-children::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    /* Bridge the gap */
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: transparent;
+}
+
+.site-header .tag-group:hover .tag-children,
+.site-header .tag-group.is-open .tag-children {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    animation: dropdownFadeIn 0.2s ease-out forwards;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        margin-top: -10px;
+    }
+
+    to {
+        opacity: 1;
+        margin-top: 0;
+    }
+}
+
+.site-header .tag-children .filter-btn {
+    width: auto;
+    justify-content: center;
+    border: 1px solid var(--border-primary) !important;
+    background: var(--bg-secondary) !important;
+    height: 1.75rem;
+    padding: 0 var(--spacing-sm);
+    border-radius: 9999px;
+    color: var(--text-secondary) !important;
+    font-size: var(--font-size-xs);
+    transition: all var(--transition-fast);
+}
+
+.site-header .tag-children .filter-btn:hover,
+.site-header .tag-children .filter-btn.active {
+    background: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+    color: var(--text-inverted) !important;
+}
+
+
+
 
 .site-title {
     font-size: var(--font-size-xl);
@@ -941,9 +1129,7 @@ img {
     color: var(--color-primary);
 }
 
-.post-tag.child-tag {
-    /* Styles for child tags if needed */
-}
+
 
 .tag-link .count {
     font-size: var(--font-size-xs);
@@ -1235,7 +1421,8 @@ img {
     border-radius: 1rem;
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
-    overflow: hidden;
+    overflow: visible;
+    /* Changed from hidden to support header dropdowns and nested content */
     transition: all var(--transition-fast);
 }
 
@@ -1287,6 +1474,11 @@ img {
 .toggle-children:hover {
     background-color: var(--surface-hover);
     color: var(--text-primary);
+}
+
+.toggle-children svg {
+    transition: transform var(--transition-fast);
+    transform-origin: center;
 }
 
 .toggle-children.active svg {

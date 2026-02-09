@@ -10,41 +10,47 @@
 <meta name="description" content="Browse posts by tags">
 {% endblock %}
 
+{% block header_filters %}
+<div class="tags-filters" id="tags-filters">
+    <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}" data-role="all">All</a>
+    {% for group in tag_groups %}
+    {% if group.children %}
+    <div class="tag-group">
+        {% set active_child = group.children | selectattr("slug", "equalto", current_tag) | first if current_tag else
+        none %}
+        <div class="tag-group-header">
+            <a href="/tags/{{ group.tag.slug }}"
+                class="filter-btn ajax-link {% if current_tag == group.tag.slug or active_child %}active{% endif %}"
+                data-original-name="{{ group.tag.name }}">
+                {{ active_child.name if active_child else group.tag.name }}
+            </a>
+            <button class="toggle-children" aria-label="Toggle children">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+        </div>
+        <div class="tag-children">
+            {% for child in group.children %}
+            <a href="/tags/{{ child.slug }}"
+                class="filter-btn ajax-link {% if current_tag == child.slug %}active{% endif %}">
+                {{ child.name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <a href="/tags/{{ group.tag.slug }}"
+        class="filter-btn ajax-link {% if current_tag == group.tag.slug %}active{% endif %}">
+        {{ group.tag.name }}
+    </a>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="tags-page">
-    {% if tags %}
-    <div class="tags-filters" id="tags-filters">
-        <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}">All</a>
-        {% for group in tags %}
-        <div class="tag-group">
-            <div class="tag-group-header">
-                <a href="/tags/{{ group.tag.slug }}"
-                    class="filter-btn ajax-link {% if current_tag == group.tag.slug %}active{% endif %}">
-                    {{ group.tag.name }}
-                </a>
-                {% if group.children %}
-                <button class="toggle-children" aria-label="Toggle children">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
-                {% endif %}
-            </div>
-            {% if group.children %}
-            <div class="tag-children" style="display: none;">
-                {% for child in group.children %}
-                <a href="/tags/{{ child.slug }}"
-                    class="filter-btn ajax-link {% if current_tag == child.slug %}active{% endif %}">
-                    {{ child.name }}
-                </a>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
     <div id="tags-content">
         {% include "public/partials/tags_grid.html" %}
     </div>

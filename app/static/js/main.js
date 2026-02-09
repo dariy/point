@@ -1201,6 +1201,62 @@
     }
 
     /**
+     * Update Site Header Filters
+     * Syncs active states and handles hierarchical tag name swapping.
+     */
+    function updateActiveSiteFilters(url) {
+        const filtersContainer = document.querySelector('.site-header .tags-filters');
+        if (!filtersContainer) return;
+
+        const urlObj = new URL(url, window.location.origin);
+        const pathParts = urlObj.pathname.split('/').filter(p => p);
+
+        // Tag could be at /tag/SLUG or /tags/SLUG
+        let tag = null;
+        if (pathParts[0] === 'tag' || pathParts[0] === 'tags') {
+            tag = pathParts.length > 1 ? pathParts[1] : null;
+        }
+
+        const buttons = filtersContainer.querySelectorAll('.filter-btn');
+
+        // First, reset all buttons to inactive and restore original names for parent buttons
+        buttons.forEach(btn => {
+            btn.classList.remove('active');
+            const originalName = btn.getAttribute('data-original-name');
+            if (originalName) {
+                btn.textContent = originalName;
+            }
+        });
+
+        // Then, set active states and swap names for groups with active children
+        buttons.forEach(btn => {
+            const btnUrl = new URL(btn.href, window.location.origin);
+            const btnPathParts = btnUrl.pathname.split('/').filter(p => p);
+            const btnTag = btnPathParts.length > 1 ? btnPathParts[1] : null;
+
+            if (tag === btnTag) {
+                btn.classList.add('active');
+
+                // If this is a child tag, handle the parent group header
+                const tagGroup = btn.closest('.tag-group');
+                if (tagGroup) {
+                    const headerBtn = tagGroup.querySelector('.tag-group-header .filter-btn');
+                    if (headerBtn && headerBtn !== btn) {
+                        headerBtn.classList.add('active');
+                        headerBtn.textContent = btn.textContent;
+                    }
+                }
+            } else if (!tag && (btn.dataset.role === 'all' || btn.getAttribute('href') === '/')) {
+                // Handle "All" button
+                btn.classList.add('active');
+            }
+        });
+
+        // Trigger responsive filter update
+        window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
+    }
+
+    /**
      * AJAX Navigation for Post Lists (Homepage and Tag Archives)
      */
     function initAjaxPostsNavigation() {
@@ -1222,6 +1278,7 @@
                     renderPosts(data, postsContainer);
 
                     window.history.pushState({}, '', url);
+                    updateActiveSiteFilters(url);
                     attachAjaxListeners();
                     if (typeof initPostCardVideos === 'function') {
                         initPostCardVideos();
@@ -1435,8 +1492,9 @@
                     renderTags(data);
 
                     window.history.pushState({}, '', url);
-                    updateActiveFilter(url);
+                    updateActiveSiteFilters(url);
                     attachTagsListeners();
+                    initTagToggles();
                     if (typeof initPostCardVideos === 'function') {
                         initPostCardVideos();
                     }
@@ -1578,26 +1636,7 @@
             paginationContainer.innerHTML = html;
         }
 
-        function updateActiveFilter(url) {
-            if (!filtersContainer) return;
 
-            const urlObj = new URL(url, window.location.origin);
-            const pathParts = urlObj.pathname.split('/').filter(p => p);
-            const tag = pathParts.length > 1 ? pathParts[1] : null;
-
-            const buttons = filtersContainer.querySelectorAll('.filter-btn');
-            buttons.forEach(btn => {
-                const btnUrl = new URL(btn.href, window.location.origin);
-                const btnPathParts = btnUrl.pathname.split('/').filter(p => p);
-                const btnTag = btnPathParts.length > 1 ? btnPathParts[1] : null;
-
-                if (tag === btnTag) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
 
         function attachTagsListeners() {
             const links = document.querySelectorAll('.ajax-link');
@@ -1639,45 +1678,62 @@
 
             if (containerWidth === 0) return;
 
-            const buttons = Array.from(container.querySelectorAll('.filter-btn'));
+            const items = Array.from(container.children);
 
-            // Identify key buttons
-            const allBtn = buttons.find(b => b.getAttribute('href') === '/');
-            const moreBtn = buttons.find(b => b.getAttribute('href') === '/tags' || b.title === 'All Tags');
-            const activeBtn = buttons.find(b => b.classList.contains('active'));
+            // Identify key items
+            const allBtn = items.find(el => {
+                const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
+                return b && (b.dataset.role === 'all' || b.getAttribute('href') === '/');
+            });
+            const moreBtn = items.find(el => {
+                const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
+                return b && (b.dataset.role === 'more' || (b.getAttribute('href') === '/tags' && b !== allBtn));
+            });
+            const activeItem = items.find(el => {
+                if (el.classList.contains('active')) return true;
+                if (el.querySelector('.filter-btn.active')) return true;
+                return false;
+            });
 
-            if (!allBtn || !moreBtn) return;
+            if (!allBtn) {
+                container.classList.add('is-ready');
+                return;
+            }
 
-            // Step 1: Show all buttons temporarily to measure natural widths
-            buttons.forEach(btn => {
-                btn.style.display = 'inline-flex';
-                btn.style.flexShrink = '0';
+            // Step 1: Show all items temporarily to measure natural widths
+            items.forEach(item => {
+                item.style.display = 'inline-flex';
+                item.style.flexShrink = '0';
             });
 
             // Step 2: Priority layout (Essential width)
-            let currentWidth = allBtn.offsetWidth + gap + moreBtn.offsetWidth;
-            if (activeBtn && activeBtn !== allBtn && activeBtn !== moreBtn) {
-                currentWidth += activeBtn.offsetWidth + gap;
+            let currentWidth = allBtn.offsetWidth + gap;
+            if (moreBtn) {
+                currentWidth += moreBtn.offsetWidth + gap;
+            }
+
+            if (activeItem && activeItem !== allBtn && activeItem !== moreBtn) {
+                currentWidth += activeItem.offsetWidth + gap;
             }
 
             // Step 3: Fill available space with other tags
-            const tagBtns = buttons.filter(b => b !== allBtn && b !== moreBtn && b !== activeBtn);
+            const tagItems = items.filter(el => el !== allBtn && el !== moreBtn && el !== activeItem);
 
-            tagBtns.forEach(btn => {
-                const btnWidth = btn.offsetWidth;
-                const cost = btnWidth + gap;
+            tagItems.forEach(item => {
+                const itemWidth = item.offsetWidth;
+                const cost = itemWidth + gap;
 
                 if (currentWidth + cost <= containerWidth) {
-                    btn.style.display = 'inline-flex';
+                    item.style.display = 'inline-flex';
                     currentWidth += cost;
                 } else {
-                    btn.style.display = 'none';
+                    item.style.display = 'none';
                 }
             });
 
-            // Step 4: Ensure active button is always visible
-            if (activeBtn) {
-                activeBtn.style.display = 'inline-flex';
+            // Step 4: Ensure active item is always visible
+            if (activeItem) {
+                activeItem.style.display = 'inline-flex';
             }
 
             // Mark as ready to show
@@ -1692,6 +1748,11 @@
         });
 
         observer.observe(container);
+
+        // Listen for internal filter updates
+        window.addEventListener('siteFiltersUpdated', () => {
+            requestAnimationFrame(updateFilters);
+        });
 
         // Initial run
         updateFilters();
@@ -1711,12 +1772,66 @@
             const children = group.querySelector(".tag-children");
             if (!toggle || !children) return;
 
+            // Helper to prevent menu overflow
+            const adjustMenuPosition = () => {
+                // Reset transform first to get original position
+                children.style.transform = '';
+
+                // Show temporarily to measure (if not already displayed)
+                const originallyHidden = window.getComputedStyle(children).display === 'none';
+                if (originallyHidden) {
+                    children.style.visibility = 'hidden';
+                    children.style.display = 'flex';
+                }
+
+                const menuRect = children.getBoundingClientRect();
+                const viewportWidth = window.innerWidth;
+                const margin = 20; // Distance from screen edge
+
+                let offset = 0;
+                if (menuRect.left < margin) {
+                    offset = margin - menuRect.left;
+                } else if (menuRect.right > viewportWidth - margin) {
+                    offset = (viewportWidth - margin) - menuRect.right;
+                }
+
+                // If menu is open, apply the offset.
+                // We use two translateX to keep the base centering and add the correction.
+                if (offset !== 0) {
+                    children.style.transform = `translateX(-50%) translateX(${offset}px)`;
+                } else {
+                    children.style.transform = 'translateX(-50%)';
+                }
+
+                if (originallyHidden) {
+                    children.style.display = '';
+                    children.style.visibility = '';
+                }
+            };
+
             toggle.addEventListener("click", (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const isHidden = children.style.display === "none";
-                children.style.display = isHidden ? "flex" : "none";
-                toggle.classList.toggle("active", isHidden);
+
+                const isOpen = group.classList.toggle("is-open");
+
+                if (isOpen) {
+                    adjustMenuPosition();
+                    // Close other groups
+                    groups.forEach(other => {
+                        if (other !== group) other.classList.remove("is-open");
+                    });
+                }
+            });
+
+            // Handle hover repositioning
+            group.addEventListener("mouseenter", adjustMenuPosition);
+
+            // Close when clicking outside
+            document.addEventListener("click", (e) => {
+                if (!group.contains(e.target)) {
+                    group.classList.remove("is-open");
+                }
             });
         });
     }

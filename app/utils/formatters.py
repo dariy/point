@@ -93,7 +93,7 @@ def linkify_urls(html_content: str) -> str:
         r'(https?://[^\s<>"\']+)',  # The URL itself
         re.IGNORECASE
     )
-    
+
     def replace_url(match):
         url = match.group(1)
         # Strip all trailing whitespace (including \r\n) and punctuation
@@ -102,10 +102,10 @@ def linkify_urls(html_content: str) -> str:
         while url and url[-1] in '.,;:!?)':
             url = url[:-1]
         return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>'
-    
+
     # Split content by tags to avoid modifying content inside tags
     parts = re.split(r'(<[^>]+>)', html_content)
-    
+
     result = []
     for i, part in enumerate(parts):
         # Only linkify text content (odd indices), not tags (even indices)
@@ -115,13 +115,13 @@ def linkify_urls(html_content: str) -> str:
             preceding = ''.join(parts[:i])
             open_a_tags = len(re.findall(r'<a\s', preceding, re.IGNORECASE))
             close_a_tags = len(re.findall(r'</a>', preceding, re.IGNORECASE))
-            
+
             # Only linkify if we're not inside an <a> tag
             if open_a_tags == close_a_tags:
                 part = url_pattern.sub(replace_url, part)
-        
+
         result.append(part)
-    
+
     return ''.join(result)
 
 
@@ -137,9 +137,9 @@ def format_content(content: str, formatter: str) -> str:
     """
     # Normalize line endings
     content = content.replace("\r\n", "\n")
-    
+
     html_output = ""
-    
+
     if formatter == "markdown":
         # Pre-process simplified media links
         preprocessed = preprocess_media_links(content)
@@ -151,10 +151,10 @@ def format_content(content: str, formatter: str) -> str:
         # Raw text - escape HTML and preserve whitespace
         escaped = html.escape(content)
         html_output = f"<pre>{escaped}</pre>"
-    
+
     # Apply URL linkification to all formatted content
     html_output = linkify_urls(html_output)
-    
+
     return html_output
 
 
