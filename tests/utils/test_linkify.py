@@ -104,13 +104,13 @@ def test_linkify_urls_strips_trailing_whitespace():
     result1 = linkify_urls(text1)
     assert 'href="https://en.wikipedia.org/wiki/Test"' in result1
     assert 'href="https://en.wikipedia.org/wiki/Test\r\n"' not in result1
-    
+
     # Test with \n
     text2 = "Check https://example.com\n for info"
     result2 = linkify_urls(text2)
     assert 'href="https://example.com"' in result2
     assert 'href="https://example.com\n"' not in result2
-    
+
     # Test with spaces
     text3 = "Check https://test.org   for info"
     result3 = linkify_urls(text3)
