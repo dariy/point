@@ -324,43 +324,50 @@ class TagService:
         include_empty: bool = True,
         search: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Get tags grouped by parents (meta-tags).
+        """Get tags grouped recursively by parents (meta-tags).
 
         Returns:
-            List of meta-tags (tags with children) and top-level tags.
+            List of meta-tags (tags with children) and top-level tags in a recursive structure.
         """
-        # Always fetch all tags to ensure we have the structural context (parents).
-        # Otherwise children with parents are skipped if their parents are missing from
-        # the list because they have no posts (when include_empty=False).
+        # Fetch all tags with their relationships
         all_tags = await self.list_tags(include_empty=True)
 
-        # Identify which tags are actually "visible" based on filters
+        # Identify visible tags
         if not include_empty or search:
-            # Re-fetch with filters to get the "target" tags
             visible_tags = await self.list_tags(include_empty=include_empty, search=search)
             visible_ids = {t.id for t in visible_tags}
         else:
             visible_ids = {t.id for t in all_tags}
 
+        def build_tree(tag: Tag, visible_ids: set[int]) -> list[dict[str, Any]]:
+            children_trees = []
+            # Sort children by name for consistent UI
+            sorted_children = sorted(tag.children, key=lambda x: x.name)
+            
+            for child in sorted_children:
+                child_tree = build_tree(child, visible_ids)
+                # Include child if it's visible OR has visible descendants
+                if child.id in visible_ids or child_tree:
+                    children_trees.append({
+                        "tag": child,
+                        "children": child_tree
+                    })
+            return children_trees
+
         hierarchy: list[dict[str, Any]] = []
 
+        # Only start from roots (tags with no parents)
         for tag in all_tags:
-            # Only top-level tags (those with no parents) act as group roots in our 2-level UI
             if not tag.parents:
-                # Filter children to only those that should be visible
-                children = [t for t in tag.children if t.id in visible_ids]
+                tree = build_tree(tag, visible_ids)
+                if tag.id in visible_ids or tree:
+                    hierarchy.append({
+                        "tag": tag,
+                        "children": tree
+                    })
 
-                # Tag itself should be shown if it's visible OR has visible children
-                if tag.id in visible_ids or children:
-                    hierarchy.append(
-                        {
-                            "tag": tag,
-                            "children": children,
-                        }
-                    )
-
-        # Sort by tag name
-        hierarchy.sort(key=lambda x: str(x["tag"].name))
+        # Sort top-level by name
+        hierarchy.sort(key=lambda x: x["tag"].name)
         return hierarchy
 
     async def get_important_tags(self, limit: int = 10) -> list[Tag]:

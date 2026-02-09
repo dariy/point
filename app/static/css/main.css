@@ -331,7 +331,8 @@ img {
 }
 
 /* Standalone header filter buttons */
-.site-header .tags-filters>.filter-btn {
+/* Filter buttons - both standalone and within lists */
+.site-header .filter-btn {
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
@@ -342,18 +343,19 @@ img {
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
     font-weight: 500;
-    line-height: 1;
+    line-height: normal;
     transition: all var(--transition-fast);
     box-sizing: border-box;
+    white-space: nowrap;
     text-rendering: optimizeLegibility;
 }
 
-.site-header .tags-filters>.filter-btn:hover,
-.site-header .tags-filters>.filter-btn.active {
+.site-header .filter-btn:hover,
+.site-header .filter-btn.active {
     border-color: var(--color-primary);
 }
 
-.site-header .tags-filters>.filter-btn.active {
+.site-header .filter-btn.active {
     background-color: var(--color-primary);
     color: var(--text-inverted);
 }
@@ -367,12 +369,11 @@ img {
     height: 2rem;
     transition: all var(--transition-fast);
     box-sizing: border-box;
-    overflow: hidden;
 }
 
 .site-header .tag-group-header:hover,
 .site-header .tag-group-header:has(.filter-btn.active),
-.site-header .tag-group.is-open .tag-group-header {
+.site-header .tag-group.is-open>.tag-group-header {
     border-color: var(--color-primary);
 }
 
@@ -384,32 +385,52 @@ img {
     border: none !important;
     background: transparent !important;
     color: var(--text-secondary) !important;
-    padding: 0 0 0 var(--spacing-md);
+    padding: 0 0.25rem 0 var(--spacing-md);
+    /* Reduced right padding because arrow follows */
     height: 100%;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-sm) !important;
     font-weight: 500;
     line-height: normal;
     text-rendering: optimizeLegibility;
+    border-radius: 0 !important;
+    /* Prevent inner pill shape */
+    box-shadow: none !important;
 }
 
 .site-header .tag-group-header:hover .filter-btn,
-.site-header .tag-group-header:has(.filter-btn.active) .filter-btn,
+.site-header .tag-group-header:has(.active) .filter-btn,
 .site-header .tag-group.is-open .filter-btn {
     color: var(--color-primary) !important;
 }
 
-.site-header .tag-group-header:has(.filter-btn.active) .filter-btn {
+.site-header .tag-group-header:has(.active) .filter-btn {
     color: var(--text-inverted) !important;
+}
+
+/* Ensure children in dropdowns match exactly */
+.site-header .tag-children .filter-btn,
+.site-header .tag-children .tag-group-header {
+    height: 2rem !important;
+    font-size: var(--font-size-sm) !important;
+}
+
+.site-header .tag-children .filter-btn {
+    padding: 0 var(--spacing-md) !important;
+    /* Standalone child padding */
 }
 
 .site-header .tag-group-header .toggle-children {
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    padding: 0 0.25rem 0 0.25rem;
+    padding: 0 0.5rem 0 0.25rem;
+    /* Balanced spacing around the arrow */
     display: flex;
     align-items: center;
+    justify-content: center;
     cursor: pointer;
+    height: 100%;
+    align-self: stretch;
 }
 
 .site-header .tag-group-header .toggle-children svg {
@@ -417,26 +438,36 @@ img {
     transform-origin: center;
 }
 
-.site-header .tag-group:hover .toggle-children svg,
-.site-header .tag-group.is-open .toggle-children svg,
-.site-header .tag-group-header:has(.filter-btn.active) .toggle-children svg {
-    transform: rotate(180deg);
+.site-header .tag-group {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    border: none !important;
+    /* Prevent outer border conflict */
+    background: transparent !important;
+    border-radius: 0 !important;
+    height: auto;
 }
 
-.site-header .tag-group:hover .toggle-children,
-.site-header .tag-group.is-open .toggle-children,
-.site-header .tag-group-header:has(.filter-btn.active) .toggle-children {
+.site-header .tag-group:hover>.tag-group-header .toggle-children,
+.site-header .tag-group.is-open>.tag-group-header .toggle-children,
+.site-header .tag-group-header:has(.active) .toggle-children {
     color: var(--color-primary);
 }
 
-.site-header .tag-group-header:has(.filter-btn.active) .toggle-children {
-    color: var(--text-inverted);
+.site-header .tag-group:hover>.tag-group-header .toggle-children svg,
+.site-header .tag-group.is-open>.tag-group-header .toggle-children svg,
+.site-header .tag-group-header:has(.active) .toggle-children svg {
+    transform: rotate(180deg);
+}
+
+.site-header .tag-group-header:has(.active) .toggle-children {
+    color: var(--text-inverted) !important;
 }
 
 .site-header .tag-children {
     position: absolute;
-    top: 100%;
-    /* Added bridge gap is handled via ::before */
+    top: calc(100% + var(--spacing-xs));
     left: 50%;
     transform: translateX(-50%);
     background: var(--surface-card);
@@ -446,14 +477,17 @@ img {
     display: none;
     flex-direction: row;
     flex-wrap: wrap;
+    align-items: center;
+    /* Ensure all children have same baseline/centering */
     justify-content: center;
     gap: var(--spacing-xs);
     z-index: 1000;
     box-shadow: var(--shadow-lg);
     width: max-content;
-    max-width: 75vw;
+    max-width: 80vw;
     backdrop-filter: blur(12px);
 }
+
 
 
 .site-header .tag-children::before {
@@ -467,8 +501,8 @@ img {
     background: transparent;
 }
 
-.site-header .tag-group:hover .tag-children,
-.site-header .tag-group.is-open .tag-children {
+.site-header .tag-group:hover>.tag-children,
+.site-header .tag-group.is-open>.tag-children {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -487,25 +521,7 @@ img {
     }
 }
 
-.site-header .tag-children .filter-btn {
-    width: auto;
-    justify-content: center;
-    border: 1px solid var(--border-primary) !important;
-    background: var(--bg-secondary) !important;
-    height: 1.75rem;
-    padding: 0 var(--spacing-sm);
-    border-radius: 9999px;
-    color: var(--text-secondary) !important;
-    font-size: var(--font-size-xs);
-    transition: all var(--transition-fast);
-}
-
-.site-header .tag-children .filter-btn:hover,
-.site-header .tag-children .filter-btn.active {
-    background: var(--color-primary) !important;
-    border-color: var(--color-primary) !important;
-    color: var(--text-inverted) !important;
-}
+/* Removed mini-tag overrides to maintain 2rem consistency across all levels */
 
 
 
@@ -1431,7 +1447,7 @@ img {
 }
 
 .tag-group:has(.filter-btn.active) {
-    border-color: var(--color-primary);
+    /* border-color: var(--color-primary); */
 }
 
 .tag-group-header {
@@ -1485,20 +1501,7 @@ img {
     transform: rotate(180deg);
 }
 
-.tag-children {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-sm);
-    border-top: 1px solid var(--border-primary);
-    background-color: var(--bg-secondary);
-}
-
-.tag-children .filter-btn {
-    font-size: var(--font-size-xs);
-    height: 1.5rem;
-    padding: 0 var(--spacing-sm);
-}
+/* Removed generic overrides to maintain consistency between header and main content tags */
 
 /* ===========================
    Pagination
