@@ -923,16 +923,37 @@
         if (data.is_logged_in) {
             const headerRight = headerClone.querySelector('.header-right');
             if (headerRight) {
-                const editBtn = document.createElement('a');
+                // Check if edit button already exists to prevent duplicates
+                let editBtn = headerRight.querySelector('.edit-post-btn');
+
+                if (!editBtn) {
+                    // Create new edit button only if it doesn't exist
+                    editBtn = document.createElement('a');
+                    editBtn.className = 'header-action-btn edit-post-btn';
+                    editBtn.title = 'Edit Post';
+                    editBtn.innerHTML = `
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    `;
+
+                    // Insert edit button before create-post button
+                    const createPostBtn = headerRight.querySelector('.create-post');
+                    if (createPostBtn) {
+                        headerRight.insertBefore(editBtn, createPostBtn);
+                    } else {
+                        const themeToggle = headerRight.querySelector('.theme-toggle');
+                        if (themeToggle) {
+                            headerRight.insertBefore(editBtn, themeToggle);
+                        } else {
+                            headerRight.appendChild(editBtn);
+                        }
+                    }
+                }
+
+                // Update the href for the current post
                 editBtn.href = '/light/posts/' + post.id;
-                editBtn.className = 'header-action-btn edit-post-btn';
-                editBtn.title = 'Edit Post';
-                editBtn.innerHTML = `
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                `;
 
                 // Show create-post and light-link buttons
                 const createPostBtn = headerRight.querySelector('.create-post');
@@ -942,18 +963,6 @@
                 const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
                     lightLink.style.display = 'flex';
-                }
-
-                // Insert edit button before create-post button
-                if (createPostBtn) {
-                    headerRight.insertBefore(editBtn, createPostBtn);
-                } else {
-                    const themeToggle = headerRight.querySelector('.theme-toggle');
-                    if (themeToggle) {
-                        headerRight.insertBefore(editBtn, themeToggle);
-                    } else {
-                        headerRight.appendChild(editBtn);
-                    }
                 }
             }
         }
@@ -1274,15 +1283,25 @@
 
                 // Propagate active state and name swapping up the chosen hierarchy
                 let currentGroup = bestMatch.closest('.tag-group');
+
                 while (currentGroup) {
                     const headerBtn = currentGroup.querySelector('.tag-group-header .filter-btn');
+                    const parentElement = currentGroup.parentElement;
+                    const nextGroup = parentElement ? parentElement.closest('.tag-group') : null;
+
                     if (headerBtn) {
                         headerBtn.classList.add('active');
-                        headerBtn.textContent = bestMatch.textContent;
+                        // Rule: The top-most group header button always swaps its text with the selected sub-tag 
+                        // to show the current filter status prominently. 
+                        // Intermediate groups keep their original names to provide hierarchical context.
+                        if (!nextGroup) {
+                            headerBtn.textContent = bestMatch.textContent;
+                        }
                     }
-                    const parentElement = currentGroup.parentElement;
-                    currentGroup = parentElement ? parentElement.closest('.tag-group') : null;
+                    currentGroup = nextGroup;
                 }
+
+
             }
         }
 
@@ -1789,7 +1808,9 @@
         });
 
         // Initial run
+        updateActiveSiteFilters(window.location.href);
         updateFilters();
+
 
         registerCleanup(() => {
             observer.disconnect();
