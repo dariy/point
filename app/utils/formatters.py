@@ -135,8 +135,8 @@ def format_content(content: str, formatter: str) -> str:
     Returns:
         Formatted HTML content
     """
-    # Normalize line endings
-    content = content.replace("\r\n", "\n")
+    # Normalize line endings - remove both actual CRLF and literal \r\n strings
+    content = content.replace("\\r\\n", "")
 
     html_output = ""
 

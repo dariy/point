@@ -115,6 +115,21 @@ async def get_db_context(
     if "author_name" in blog_settings:
         context["author_name"] = blog_settings["author_name"]
 
+    # Fetch about post if configured
+    about_post_slug = None
+    if "about_post_id" in blog_settings and blog_settings["about_post_id"]:
+        try:
+            about_post_result = await db.execute(
+                select(Post).where(Post.id == blog_settings["about_post_id"])
+            )
+            about_post = about_post_result.scalar_one_or_none()
+            if about_post:
+                about_post_slug = about_post.slug
+        except Exception as e:
+            logger.warning("Failed to fetch about post: %s", e)
+
+    context["about_post_slug"] = about_post_slug
+
     return context
 
 
