@@ -24,8 +24,9 @@
 
             // Handle form data
             for (const [key, value] of formData.entries()) {
-                if (['posts_per_page', 'max_image_width', 'jpeg_quality', 'storage_quota_mb'].includes(key)) {
-                    settings[key] = parseInt(value, 10);
+                if (['posts_per_page', 'max_image_width', 'jpeg_quality', 'storage_quota_mb', 'about_post_id'].includes(key)) {
+                    // Parse as integer, but only if value is not empty
+                    settings[key] = value ? parseInt(value, 10) : null;
                 } else {
                     settings[key] = value;
                 }

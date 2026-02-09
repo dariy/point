@@ -348,7 +348,7 @@ class TagService:
             children_trees = []
             # Sort children by name for consistent UI
             sorted_children = sorted(tag.children, key=lambda x: x.name)
-            
+
             for child in sorted_children:
                 child_tree = build_tree(child, visible_ids)
                 # Include child if it's visible OR has visible descendants
