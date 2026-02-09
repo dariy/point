@@ -23,6 +23,7 @@ async def test_health_check(client: AsyncClient):
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
 
+
 @pytest.mark.asyncio
 async def test_global_exception_handler():
     """Test global exception handler."""
@@ -43,6 +44,7 @@ async def test_global_exception_handler():
         data = response.body.decode()
         assert "Internal server error" in data
 
+
 @pytest.mark.asyncio
 async def test_preview_post_endpoint(client: AsyncClient, db):
     """Test preview post endpoint in main.py."""
@@ -59,7 +61,7 @@ async def test_preview_post_endpoint(client: AsyncClient, db):
         formatter=PostFormatter.MARKDOWN,
         author_id=1,
         preview_token="token123",
-        preview_expires_at=datetime.now(UTC) + timedelta(hours=1)
+        preview_expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     db.add(post)
     await db.commit()
@@ -68,11 +70,13 @@ async def test_preview_post_endpoint(client: AsyncClient, db):
     assert response.status_code == 200
     assert response.json()["preview_mode"] is True
 
+
 @pytest.mark.asyncio
 async def test_preview_post_invalid_token(client: AsyncClient):
     """Test preview post with invalid token."""
     response = await client.get("/preview/invalid")
     assert response.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_preview_post_expired(client: AsyncClient, db):
@@ -89,7 +93,7 @@ async def test_preview_post_expired(client: AsyncClient, db):
         formatter=PostFormatter.MARKDOWN,
         author_id=1,
         preview_token="token_exp",
-        preview_expires_at=datetime.now(UTC) - timedelta(hours=1)
+        preview_expires_at=datetime.now(UTC) - timedelta(hours=1),
     )
     db.add(post)
     await db.commit()
@@ -109,11 +113,13 @@ async def test_get_db_yields_session():
     with contextlib.suppress(StopAsyncIteration):
         await anext(gen)
 
+
 def test_app_startup_shutdown():
     """Test app events (mocked usually as they run in lifespan)."""
     # Lifespan testing requires TestClient with with block usually, which is covered by other tests running client.
     # We can check if routes are registered
     assert len(app.routes) > 0
+
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler():
@@ -123,7 +129,9 @@ async def test_validation_exception_handler():
     # If not explicitly registered (FastAPI default), this might return None or default
     if handler:
         request = MagicMock(spec=Request)
-        exc = RequestValidationError(errors=[{"loc": ("body", "field"), "msg": "error", "type": "type_error"}])
+        exc = RequestValidationError(
+            errors=[{"loc": ("body", "field"), "msg": "error", "type": "type_error"}]
+        )
 
         resp = await handler(request, exc)
         assert resp.status_code == 422
@@ -169,10 +177,7 @@ class TestAjaxRequests:
         full_published_post: Post,
     ):
         """Test homepage returns JSON for AJAX requests."""
-        response = await client.get(
-            "/",
-            headers={"X-Requested-With": "XMLHttpRequest"}
-        )
+        response = await client.get("/", headers={"X-Requested-With": "XMLHttpRequest"})
         assert response.status_code == 200
         data = response.json()
         assert "posts" in data
@@ -188,7 +193,7 @@ class TestAjaxRequests:
         """Test single post returns JSON for AJAX requests."""
         response = await client.get(
             f"/posts/{full_published_post.slug}",
-            headers={"X-Requested-With": "XMLHttpRequest"}
+            headers={"X-Requested-With": "XMLHttpRequest"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -206,8 +211,7 @@ class TestAjaxRequests:
         """Test tag archive returns JSON for AJAX requests."""
         tag = full_published_post.tags[0]
         response = await client.get(
-            f"/tags/{tag.slug}",
-            headers={"X-Requested-With": "XMLHttpRequest"}
+            f"/tags/{tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -222,8 +226,7 @@ class TestAjaxRequests:
     ):
         """Test gallery returns JSON for AJAX requests."""
         response = await client.get(
-            "/tags",
-            headers={"X-Requested-With": "XMLHttpRequest"}
+            "/tags", headers={"X-Requested-With": "XMLHttpRequest"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -392,7 +395,9 @@ class TestTagsPage:
         response = await client.get("/tags")
         assert response.status_code == 200
         # Should list tags
-        assert "photography" in response.text.lower() or "travel" in response.text.lower()
+        assert (
+            "photography" in response.text.lower() or "travel" in response.text.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_tags_page_empty(

@@ -3,7 +3,6 @@
 This module contains tests for listing, terminating sessions.
 """
 
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,9 +51,7 @@ class TestSessions:
     """Test cases for session management endpoints."""
 
     @pytest.mark.asyncio
-    async def test_list_sessions(
-        self, client: AsyncClient, auth_cookies: dict
-    ) -> None:
+    async def test_list_sessions(self, client: AsyncClient, auth_cookies: dict) -> None:
         """Test listing user sessions."""
         response = await client.get(
             "/api/auth/sessions",
@@ -71,9 +68,7 @@ class TestSessions:
         assert len(current_sessions) == 1
 
     @pytest.mark.asyncio
-    async def test_list_sessions_unauthenticated(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_list_sessions_unauthenticated(self, client: AsyncClient) -> None:
         """Test listing sessions without authentication."""
         response = await client.get("/api/auth/sessions")
 

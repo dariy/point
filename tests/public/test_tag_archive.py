@@ -12,7 +12,9 @@ from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_featured_tags_filtering_by_post_count(client: AsyncClient, db: AsyncSession):
+async def test_featured_tags_filtering_by_post_count(
+    client: AsyncClient, db: AsyncSession
+):
     """Test that tags with post_count = 0 are excluded from navigation."""
     # Create tags with different post counts
     tag1 = Tag(name="HasPosts", slug="has-posts", post_count=5, is_featured=True)
@@ -30,9 +32,16 @@ async def test_featured_tags_filtering_by_post_count(client: AsyncClient, db: As
 
 
 @pytest.mark.asyncio
-async def test_tag_archive_current_tag_in_navigation(client: AsyncClient, db: AsyncSession):
+async def test_tag_archive_current_tag_in_navigation(
+    client: AsyncClient, db: AsyncSession
+):
     """Test that current tag appears in navigation even if not featured."""
-    user = User(username="taguser", email="tag@test.com", password_hash="hash", display_name="Tag")
+    user = User(
+        username="taguser",
+        email="tag@test.com",
+        password_hash="hash",
+        display_name="Tag",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -49,7 +58,7 @@ async def test_tag_archive_current_tag_in_navigation(client: AsyncClient, db: As
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
@@ -74,7 +83,9 @@ async def test_tag_archive_ajax_structure(client: AsyncClient, db: AsyncSession)
     db.add(tag)
     await db.commit()
 
-    resp = await client.get(f"/tag/{tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        f"/tag/{tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert resp.status_code == 200
     data = resp.json()
 
@@ -90,7 +101,12 @@ async def test_tag_archive_ajax_structure(client: AsyncClient, db: AsyncSession)
 async def test_tags_page_ajax_structure(client: AsyncClient, db: AsyncSession):
     """Test full structure of tags page (gallery) AJAX response."""
     # Create a post with a tag
-    user = User(username="galleryuser", email="gallery@test.com", password_hash="hash", display_name="Gallery")
+    user = User(
+        username="galleryuser",
+        email="gallery@test.com",
+        password_hash="hash",
+        display_name="Gallery",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -107,7 +123,7 @@ async def test_tags_page_ajax_structure(client: AsyncClient, db: AsyncSession):
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        tags=[tag]
+        tags=[tag],
     )
     db.add(post)
     await db.commit()
@@ -155,9 +171,14 @@ async def sample_tag_with_posts(db: AsyncSession, test_user) -> Tag:
 
 
 @pytest.mark.asyncio
-async def test_tag_archive_ajax_pagination(client: AsyncClient, sample_tag_with_posts: Tag):
+async def test_tag_archive_ajax_pagination(
+    client: AsyncClient, sample_tag_with_posts: Tag
+):
     """Test tag archive returns JSON for AJAX requests."""
-    response = await client.get(f"/tag/{sample_tag_with_posts.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    response = await client.get(
+        f"/tag/{sample_tag_with_posts.slug}",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
@@ -169,7 +190,9 @@ async def test_tag_archive_ajax_pagination(client: AsyncClient, sample_tag_with_
 
 
 @pytest.mark.asyncio
-async def test_tag_archive_html_has_ajax_class(client: AsyncClient, sample_tag_with_posts: Tag):
+async def test_tag_archive_html_has_ajax_class(
+    client: AsyncClient, sample_tag_with_posts: Tag
+):
     """Test tag archive HTML pagination links have ajax-link class."""
     response = await client.get(f"/tag/{sample_tag_with_posts.slug}")
     assert response.status_code == 200

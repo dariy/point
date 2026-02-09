@@ -4,13 +4,13 @@ Defines Pydantic models for media upload and management operations.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class FileType(str, Enum):
+class FileType(StrEnum):
     """Supported file types."""
 
     IMAGE = "image"

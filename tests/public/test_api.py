@@ -39,6 +39,8 @@ async def sample_tag(db: AsyncSession) -> Tag:
     await db.commit()
     await db.refresh(tag)
     return tag
+
+
 @pytest.fixture
 async def published_post(db: AsyncSession, sample_tag: Tag) -> Post:
     """Create a published post for testing.
@@ -67,6 +69,8 @@ async def published_post(db: AsyncSession, sample_tag: Tag) -> Post:
     sample_tag.post_count = 1
     await db.commit()
     return post
+
+
 @pytest.fixture
 async def draft_post(db: AsyncSession) -> Post:
     """Create a draft post for testing.
@@ -87,6 +91,8 @@ async def draft_post(db: AsyncSession) -> Post:
     await db.commit()
     await db.refresh(post)
     return post
+
+
 @pytest.fixture
 async def multiple_posts(db: AsyncSession, sample_tag: Tag) -> list[Post]:
     """Create multiple published posts for testing.
@@ -148,20 +154,21 @@ async def enable_cache():
 
 class TestHomepage:
     """Tests for the homepage."""
+
     @pytest.mark.asyncio
     async def test_homepage_loads(self, client: AsyncClient) -> None:
         """Test that homepage loads successfully."""
         response = await client.get("/")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
+
     @pytest.mark.asyncio
-    async def test_homepage_shows_no_posts_message(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_homepage_shows_no_posts_message(self, client: AsyncClient) -> None:
         """Test homepage shows empty state when no posts exist."""
         response = await client.get("/")
         assert response.status_code == 200
         assert "No posts yet" in response.text
+
     @pytest.mark.asyncio
     async def test_homepage_shows_published_posts(
         self, client: AsyncClient, published_post: Post
@@ -170,6 +177,7 @@ class TestHomepage:
         response = await client.get("/")
         assert response.status_code == 200
         assert published_post.title in response.text
+
     @pytest.mark.asyncio
     async def test_homepage_hides_draft_posts(
         self, client: AsyncClient, draft_post: Post
@@ -178,6 +186,7 @@ class TestHomepage:
         response = await client.get("/")
         assert response.status_code == 200
         assert draft_post.title not in response.text
+
     @pytest.mark.asyncio
     async def test_homepage_pagination(
         self, client: AsyncClient, multiple_posts: list[Post]
@@ -190,8 +199,11 @@ class TestHomepage:
         response = await client.get("/?page=2")
         assert response.status_code == 200
         assert "Test Post 11" in response.text
+
+
 class TestSinglePost:
     """Tests for single post view."""
+
     @pytest.mark.asyncio
     async def test_post_page_loads(
         self, client: AsyncClient, published_post: Post
@@ -201,6 +213,7 @@ class TestSinglePost:
         assert response.status_code == 200
         assert published_post.title in response.text
         assert "text/html" in response.headers["content-type"]
+
     @pytest.mark.asyncio
     async def test_post_page_shows_content(
         self, client: AsyncClient, published_post: Post
@@ -210,6 +223,7 @@ class TestSinglePost:
         assert response.status_code == 200
         # Content is currently hidden/removed in the immersive layout
         # assert published_post.content in response.text
+
     @pytest.mark.asyncio
     async def test_post_page_shows_tags(
         self, client: AsyncClient, published_post: Post
@@ -218,11 +232,13 @@ class TestSinglePost:
         response = await client.get(f"/posts/{published_post.slug}")
         assert response.status_code == 200
         assert "Test Tag" in response.text
+
     @pytest.mark.asyncio
     async def test_post_not_found(self, client: AsyncClient) -> None:
         """Test that non-existent post returns 404."""
         response = await client.get("/posts/non-existent-slug")
         assert response.status_code == 404
+
     @pytest.mark.asyncio
     async def test_draft_post_not_accessible(
         self, client: AsyncClient, draft_post: Post
@@ -230,6 +246,7 @@ class TestSinglePost:
         """Test that draft posts are not publicly accessible."""
         response = await client.get(f"/posts/{draft_post.slug}")
         assert response.status_code == 404
+
     @pytest.mark.asyncio
     async def test_view_count_increments(
         self, client: AsyncClient, published_post: Post, db: AsyncSession
@@ -240,6 +257,7 @@ class TestSinglePost:
         assert response.status_code == 200
         await db.refresh(published_post)
         assert published_post.view_count == initial_count + 1
+
     @pytest.mark.asyncio
     async def test_post_page_loads_with_none_published_at(
         self, client: AsyncClient, db: AsyncSession, sample_tag: Tag
@@ -263,8 +281,11 @@ class TestSinglePost:
         response = await client.get(f"/posts/{post.slug}")
         assert response.status_code == 200
         assert post.title in response.text
+
+
 class TestTagArchive:
     """Tests for tag archive pages."""
+
     @pytest.mark.asyncio
     async def test_tag_page_loads(
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
@@ -274,6 +295,7 @@ class TestTagArchive:
         assert response.status_code == 200
         assert sample_tag.name in response.text
         assert "text/html" in response.headers["content-type"]
+
     @pytest.mark.asyncio
     async def test_tag_page_shows_posts(
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
@@ -282,6 +304,7 @@ class TestTagArchive:
         response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
         assert published_post.title in response.text
+
     @pytest.mark.asyncio
     async def test_tag_page_shows_description(
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
@@ -291,11 +314,13 @@ class TestTagArchive:
         assert response.status_code == 200
         assert sample_tag.description is not None
         assert sample_tag.description in response.text
+
     @pytest.mark.asyncio
     async def test_tag_not_found(self, client: AsyncClient) -> None:
         """Test that non-existent tag returns 404."""
         response = await client.get("/tag/non-existent-tag")
         assert response.status_code == 404
+
     @pytest.mark.asyncio
     async def test_tag_page_pagination(
         self, client: AsyncClient, sample_tag: Tag, multiple_posts: list[Post]
@@ -304,8 +329,11 @@ class TestTagArchive:
         # First page should load
         response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
+
+
 class TestGallery:
     """Tests for gallery page."""
+
     @pytest.mark.asyncio
     async def test_gallery_page_loads(self, client: AsyncClient) -> None:
         """Test that gallery page loads successfully."""
@@ -313,6 +341,7 @@ class TestGallery:
         assert response.status_code == 200
         assert "Tags" in response.text
         assert "text/html" in response.headers["content-type"]
+
     @pytest.mark.asyncio
     async def test_gallery_shows_posts_with_thumbnails(
         self, client: AsyncClient, published_post: Post
@@ -321,6 +350,7 @@ class TestGallery:
         response = await client.get("/tags")
         assert response.status_code == 200
         assert published_post.title in response.text
+
     @pytest.mark.asyncio
     async def test_gallery_filter_by_tag(
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
@@ -329,12 +359,14 @@ class TestGallery:
         response = await client.get(f"/tags/{sample_tag.slug}")
         assert response.status_code == 200
         assert published_post.title in response.text
+
     @pytest.mark.asyncio
     async def test_gallery_empty_state(self, client: AsyncClient) -> None:
         """Test gallery shows empty state when no images."""
         response = await client.get("/tags")
         assert response.status_code == 200
         assert "No photos yet" in response.text
+
     @pytest.mark.asyncio
     async def test_gallery_pagination(
         self, client: AsyncClient, multiple_posts: list[Post]
@@ -344,8 +376,11 @@ class TestGallery:
         assert response.status_code == 200
         response = await client.get("/tags?page=2")
         assert response.status_code == 200
+
+
 class TestMetaTags:
     """Tests for SEO meta tags."""
+
     @pytest.mark.asyncio
     async def test_post_has_og_tags(
         self, client: AsyncClient, published_post: Post
@@ -356,6 +391,7 @@ class TestMetaTags:
         assert 'property="og:title"' in response.text
         assert 'property="og:type"' in response.text
         assert 'property="og:url"' in response.text
+
     @pytest.mark.asyncio
     async def test_post_has_article_tags(
         self, client: AsyncClient, published_post: Post
@@ -364,8 +400,11 @@ class TestMetaTags:
         response = await client.get(f"/posts/{published_post.slug}")
         assert response.status_code == 200
         assert 'property="article:published_time"' in response.text
+
+
 class TestNavigation:
     """Tests for navigation elements."""
+
     @pytest.mark.asyncio
     async def test_homepage_has_nav(self, client: AsyncClient) -> None:
         """Test homepage has navigation links."""
@@ -373,6 +412,7 @@ class TestNavigation:
         assert response.status_code == 200
         assert 'href="/"' in response.text
         assert 'href="/tags"' in response.text
+
     @pytest.mark.asyncio
     async def test_post_has_prev_next_navigation(
         self, client: AsyncClient, multiple_posts: list[Post]
@@ -385,14 +425,18 @@ class TestNavigation:
         assert response.status_code == 200
         # Should have navigation links
         # assert "Previous Post" in response.text or "Next Post" in response.text
+
+
 class TestRSSFeed:
     """Tests for RSS feed."""
+
     @pytest.mark.asyncio
     async def test_rss_feed_loads(self, client: AsyncClient) -> None:
         """Test that RSS feed loads successfully."""
         response = await client.get("/feed.xml")
         assert response.status_code == 200
         assert "application/rss+xml" in response.headers["content-type"]
+
     @pytest.mark.asyncio
     async def test_rss_feed_is_valid_xml(self, client: AsyncClient) -> None:
         """Test that RSS feed is valid XML."""
@@ -402,6 +446,7 @@ class TestRSSFeed:
         assert "<rss version=" in response.text
         assert "<channel>" in response.text
         assert "</rss>" in response.text
+
     @pytest.mark.asyncio
     async def test_rss_feed_contains_posts(
         self, client: AsyncClient, published_post: Post
@@ -411,6 +456,7 @@ class TestRSSFeed:
         assert response.status_code == 200
         assert published_post.title in response.text
         assert f"/posts/{published_post.slug}" in response.text
+
     @pytest.mark.asyncio
     async def test_rss_feed_excludes_drafts(
         self, client: AsyncClient, draft_post: Post
@@ -419,10 +465,9 @@ class TestRSSFeed:
         response = await client.get("/feed.xml")
         assert response.status_code == 200
         assert draft_post.title not in response.text
+
     @pytest.mark.asyncio
-    async def test_rss_feed_has_required_elements(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_rss_feed_has_required_elements(self, client: AsyncClient) -> None:
         """Test that RSS feed has required channel elements."""
         response = await client.get("/feed.xml")
         assert response.status_code == 200
@@ -430,12 +475,14 @@ class TestRSSFeed:
         assert "<link>" in response.text
         assert "<description>" in response.text
         assert "<lastBuildDate>" in response.text
+
     @pytest.mark.asyncio
     async def test_rss_feed_has_cache_header(self, client: AsyncClient) -> None:
         """Test that RSS feed has cache control header."""
         response = await client.get("/feed.xml")
         assert response.status_code == 200
         assert "Cache-Control" in response.headers
+
     @pytest.mark.asyncio
     async def test_rss_feed_item_has_required_elements(
         self, client: AsyncClient, published_post: Post
@@ -446,14 +493,18 @@ class TestRSSFeed:
         assert "<item>" in response.text
         assert "<guid" in response.text
         assert "<pubDate>" in response.text
+
+
 class TestSitemap:
     """Tests for sitemap."""
+
     @pytest.mark.asyncio
     async def test_sitemap_loads(self, client: AsyncClient) -> None:
         """Test that sitemap loads successfully."""
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert "application/xml" in response.headers["content-type"]
+
     @pytest.mark.asyncio
     async def test_sitemap_is_valid_xml(self, client: AsyncClient) -> None:
         """Test that sitemap is valid XML."""
@@ -462,18 +513,21 @@ class TestSitemap:
         assert '<?xml version="1.0"' in response.text
         assert "<urlset" in response.text
         assert "</urlset>" in response.text
+
     @pytest.mark.asyncio
     async def test_sitemap_contains_homepage(self, client: AsyncClient) -> None:
         """Test that sitemap contains homepage."""
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert "<loc>http://test/</loc>" in response.text
+
     @pytest.mark.asyncio
     async def test_sitemap_contains_gallery(self, client: AsyncClient) -> None:
         """Test that sitemap contains gallery page."""
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert "<loc>http://test/tags</loc>" in response.text
+
     @pytest.mark.asyncio
     async def test_sitemap_contains_posts(
         self, client: AsyncClient, published_post: Post
@@ -482,6 +536,7 @@ class TestSitemap:
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert f"/posts/{published_post.slug}" in response.text
+
     @pytest.mark.asyncio
     async def test_sitemap_contains_tags(
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
@@ -490,6 +545,7 @@ class TestSitemap:
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert f"/tag/{sample_tag.slug}" in response.text
+
     @pytest.mark.asyncio
     async def test_sitemap_excludes_drafts(
         self, client: AsyncClient, draft_post: Post
@@ -498,12 +554,14 @@ class TestSitemap:
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert draft_post.slug not in response.text
+
     @pytest.mark.asyncio
     async def test_sitemap_has_cache_header(self, client: AsyncClient) -> None:
         """Test that sitemap has cache control header."""
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert "Cache-Control" in response.headers
+
     @pytest.mark.asyncio
     async def test_sitemap_has_lastmod(
         self, client: AsyncClient, published_post: Post
@@ -512,38 +570,44 @@ class TestSitemap:
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert "<lastmod>" in response.text
+
+
 class TestRobotsTxt:
     """Tests for robots.txt."""
+
     @pytest.mark.asyncio
     async def test_robots_txt_loads(self, client: AsyncClient) -> None:
         """Test that robots.txt loads successfully."""
         response = await client.get("/robots.txt")
         assert response.status_code == 200
         assert "text/plain" in response.headers["content-type"]
+
     @pytest.mark.asyncio
     async def test_robots_txt_has_user_agent(self, client: AsyncClient) -> None:
         """Test that robots.txt has User-agent directive."""
         response = await client.get("/robots.txt")
         assert response.status_code == 200
         assert "User-agent:" in response.text
+
     @pytest.mark.asyncio
-    async def test_robots_txt_allows_public_pages(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_robots_txt_allows_public_pages(self, client: AsyncClient) -> None:
         """Test that robots.txt allows public pages."""
         response = await client.get("/robots.txt")
         assert response.status_code == 200
         assert "Allow: /" in response.text
+
     @pytest.mark.asyncio
     async def test_robots_txt_disallows_light(self, client: AsyncClient) -> None:
         response = await client.get("/robots.txt")
         assert "Disallow: /light/" in response.text
+
     @pytest.mark.asyncio
     async def test_robots_txt_disallows_api(self, client: AsyncClient) -> None:
         """Test that robots.txt disallows API endpoints."""
         response = await client.get("/robots.txt")
         assert response.status_code == 200
         assert "Disallow: /api/" in response.text
+
     @pytest.mark.asyncio
     async def test_robots_txt_has_sitemap(self, client: AsyncClient) -> None:
         """Test that robots.txt references sitemap."""
@@ -551,20 +615,25 @@ class TestRobotsTxt:
         assert response.status_code == 200
         assert "Sitemap:" in response.text
         assert "/sitemap.xml" in response.text
+
     @pytest.mark.asyncio
     async def test_robots_txt_has_cache_header(self, client: AsyncClient) -> None:
         """Test that robots.txt has cache control header."""
         response = await client.get("/robots.txt")
         assert response.status_code == 200
         assert "Cache-Control" in response.headers
+
+
 class TestCanonicalURLs:
     """Tests for canonical URLs."""
+
     @pytest.mark.asyncio
     async def test_homepage_has_canonical(self, client: AsyncClient) -> None:
         """Test homepage has canonical URL."""
         response = await client.get("/")
         assert response.status_code == 200
         assert 'rel="canonical"' in response.text
+
     @pytest.mark.asyncio
     async def test_post_has_canonical(
         self, client: AsyncClient, published_post: Post
@@ -573,6 +642,7 @@ class TestCanonicalURLs:
         response = await client.get(f"/posts/{published_post.slug}")
         assert response.status_code == 200
         assert 'rel="canonical"' in response.text
+
     @pytest.mark.asyncio
     async def test_homepage_has_rss_link(self, client: AsyncClient) -> None:
         """Test homepage has RSS feed link."""
@@ -580,24 +650,27 @@ class TestCanonicalURLs:
         assert response.status_code == 200
         assert 'type="application/rss+xml"' in response.text
         assert 'href="/feed.xml"' in response.text
+
+
 class TestTheming:
     """Tests for theming system."""
+
     @pytest.mark.asyncio
-    async def test_homepage_has_color_scheme_meta(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_homepage_has_color_scheme_meta(self, client: AsyncClient) -> None:
         """Test homepage has color-scheme meta tag."""
         response = await client.get("/")
         assert response.status_code == 200
         assert 'name="color-scheme"' in response.text
         assert 'content="light dark"' in response.text
+
     @pytest.mark.asyncio
     async def test_homepage_has_theme_toggle(self, client: AsyncClient) -> None:
         """Test homepage has theme toggle button."""
         response = await client.get("/")
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
-        assert 'Toggle theme' in response.text or 'Toggle dark mode' in response.text
+        assert "Toggle theme" in response.text or "Toggle dark mode" in response.text
+
     @pytest.mark.asyncio
     async def test_homepage_has_theme_icons(self, client: AsyncClient) -> None:
         """Test homepage has sun and moon icons for theme toggle."""
@@ -605,27 +678,29 @@ class TestTheming:
         assert response.status_code == 200
         assert 'class="icon-sun"' in response.text
         assert 'class="icon-moon"' in response.text
+
     @pytest.mark.asyncio
     async def test_homepage_loads_theme_js(self, client: AsyncClient) -> None:
         """Test homepage loads theme.js script."""
         response = await client.get("/")
         assert response.status_code == 200
         assert 'src="/static/js/theme.js"' in response.text
+
     @pytest.mark.asyncio
     async def test_theme_js_file_exists(self, client: AsyncClient) -> None:
         """Test that theme.js file is accessible."""
         response = await client.get("/static/js/theme.js")
         assert response.status_code == 200
         assert "ThemeManager" in response.text
+
     @pytest.mark.asyncio
-    async def test_theme_js_has_toggle_function(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_theme_js_has_toggle_function(self, client: AsyncClient) -> None:
         """Test theme.js has toggle functionality."""
         response = await client.get("/static/js/theme.js")
         assert response.status_code == 200
         assert "toggleTheme" in response.text
         assert "data-theme" in response.text
+
     @pytest.mark.asyncio
     async def test_theme_js_has_system_preference_detection(
         self, client: AsyncClient
@@ -635,6 +710,7 @@ class TestTheming:
         assert response.status_code == 200
         assert "prefers-color-scheme" in response.text
         assert "matchMedia" in response.text
+
     @pytest.mark.asyncio
     async def test_theme_js_has_localStorage_persistence(
         self, client: AsyncClient
@@ -644,6 +720,7 @@ class TestTheming:
         assert response.status_code == 200
         assert "localStorage" in response.text
         assert "theme-preference" in response.text
+
     @pytest.mark.asyncio
     async def test_post_page_has_theme_toggle(
         self, client: AsyncClient, published_post: Post
@@ -652,12 +729,14 @@ class TestTheming:
         response = await client.get(f"/posts/{published_post.slug}")
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
+
     @pytest.mark.asyncio
     async def test_gallery_has_theme_toggle(self, client: AsyncClient) -> None:
         """Test gallery page has theme toggle button."""
         response = await client.get("/tags")
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
+
     @pytest.mark.asyncio
     async def test_tag_page_has_theme_toggle(
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
@@ -666,16 +745,16 @@ class TestTheming:
         response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
+
     @pytest.mark.asyncio
-    async def test_main_css_has_dark_theme_variables(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_main_css_has_dark_theme_variables(self, client: AsyncClient) -> None:
         """Test main.css has dark theme CSS variables."""
         response = await client.get("/static/css/main.css")
         assert response.status_code == 200
         assert '[data-theme="dark"]' in response.text
         assert "--bg-primary" in response.text
         assert "--text-primary" in response.text
+
     @pytest.mark.asyncio
     async def test_main_css_has_light_theme_variables(
         self, client: AsyncClient
@@ -684,17 +763,20 @@ class TestTheming:
         response = await client.get("/static/css/main.css")
         assert response.status_code == 200
         assert '[data-theme="light"]' in response.text or ":root" in response.text
+
     @pytest.mark.asyncio
-    async def test_main_css_has_theme_transition(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_main_css_has_theme_transition(self, client: AsyncClient) -> None:
         """Test main.css has smooth theme transition."""
         response = await client.get("/static/css/main.css")
         assert response.status_code == 200
         assert "--transition-theme" in response.text
+
+
 @pytest.fixture
 def settings():
     return get_settings()
+
+
 @pytest.mark.asyncio
 async def test_homepage_cache(client: AsyncClient, db: AsyncSession, settings):
     """Test homepage cache hit."""
@@ -710,6 +792,8 @@ async def test_homepage_cache(client: AsyncClient, db: AsyncSession, settings):
         # If it's still MISS, we might need to check if cache is actually working in test env
     finally:
         settings.cache_enabled = original_cache_enabled
+
+
 @pytest.mark.asyncio
 async def test_homepage_ajax_json(client: AsyncClient, db: AsyncSession):
     """Test homepage AJAX request returns JSON."""
@@ -718,26 +802,43 @@ async def test_homepage_ajax_json(client: AsyncClient, db: AsyncSession):
     data = resp.json()
     assert "posts" in data
     assert "pagination" in data
+
+
 @pytest.mark.asyncio
 async def test_single_post_ajax(client: AsyncClient, db: AsyncSession):
     """Test single post AJAX request."""
-    post = Post(title="Ajax Post", slug="ajax-post", content="Content", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
+    post = Post(
+        title="Ajax Post",
+        slug="ajax-post",
+        content="Content",
+        status=PostStatus.PUBLISHED,
+        author_id=1,
+        published_at=datetime.now(UTC),
+    )
     db.add(post)
     await db.commit()
-    resp = await client.get("/posts/ajax-post", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        "/posts/ajax-post", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["post"]["title"] == "Ajax Post"
+
+
 @pytest.mark.asyncio
 async def test_tag_archive_ajax(client: AsyncClient, db: AsyncSession):
     """Test tag archive AJAX request."""
     tag = Tag(name="Ajax Tag", slug="ajax-tag")
     db.add(tag)
     await db.commit()
-    resp = await client.get("/tag/ajax-tag", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        "/tag/ajax-tag", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["tag"]["name"] == "Ajax Tag"
+
+
 @pytest.mark.asyncio
 async def test_rss_feed_cache(client: AsyncClient, settings):
     """Test RSS feed cache hit."""
@@ -750,6 +851,8 @@ async def test_rss_feed_cache(client: AsyncClient, settings):
         assert resp2.status_code == 200
     finally:
         settings.cache_enabled = original_cache_enabled
+
+
 @pytest.mark.asyncio
 async def test_sitemap_cache(client: AsyncClient, settings):
     """Test sitemap cache hit."""
@@ -762,25 +865,40 @@ async def test_sitemap_cache(client: AsyncClient, settings):
         assert resp2.status_code == 200
     finally:
         settings.cache_enabled = original_cache_enabled
+
+
 @pytest.mark.asyncio
 async def test_single_post_not_found(client: AsyncClient):
     """Test 404 for non-existent post."""
     resp = await client.get("/posts/non-existent")
     assert resp.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_tag_not_found(client: AsyncClient):
     """Test 404 for non-existent tag."""
     resp = await client.get("/tag/non-existent")
     assert resp.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_single_post_hidden(client: AsyncClient, db: AsyncSession):
     """Test accessing a hidden post."""
-    post = Post(title="Hidden", slug="hidden", content="Hidden content", status=PostStatus.HIDDEN, author_id=1, published_at=datetime.now(UTC))
+    post = Post(
+        title="Hidden",
+        slug="hidden",
+        content="Hidden content",
+        status=PostStatus.HIDDEN,
+        author_id=1,
+        published_at=datetime.now(UTC),
+    )
     db.add(post)
     await db.commit()
     resp = await client.get("/posts/hidden")
     assert resp.status_code == 200
     assert "Hidden content" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_serialize_post_no_excerpt(db: AsyncSession):
     """Test serialize_post logic for generating excerpt."""
@@ -791,14 +909,21 @@ async def test_serialize_post_no_excerpt(db: AsyncSession):
         status=PostStatus.PUBLISHED,
         author_id=1,
         formatter=PostFormatter.HTML,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     data = serialize_post(post)
     assert data["preview_html"] is not None
+
+
 @pytest.mark.asyncio
 async def test_homepage_ajax_request(client: AsyncClient, db: AsyncSession):
     """Test homepage with AJAX request returns JSON."""
-    user = User(username="ajaxuser", email="ajax@test.com", password_hash="hash", display_name="AJAX User")
+    user = User(
+        username="ajaxuser",
+        email="ajax@test.com",
+        password_hash="hash",
+        display_name="AJAX User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -808,7 +933,7 @@ async def test_homepage_ajax_request(client: AsyncClient, db: AsyncSession):
         content="AJAX content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
@@ -818,10 +943,17 @@ async def test_homepage_ajax_request(client: AsyncClient, db: AsyncSession):
     assert "posts" in data
     assert "pagination" in data
     assert isinstance(data["posts"], list)
+
+
 @pytest.mark.asyncio
 async def test_homepage_pagination(client: AsyncClient, db: AsyncSession):
     """Test homepage pagination."""
-    user = User(username="pageuser", email="page@test.com", password_hash="hash", display_name="Page User")
+    user = User(
+        username="pageuser",
+        email="page@test.com",
+        password_hash="hash",
+        display_name="Page User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -832,16 +964,23 @@ async def test_homepage_pagination(client: AsyncClient, db: AsyncSession):
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            published_at=datetime.now(UTC)
+            published_at=datetime.now(UTC),
         )
         db.add(post)
     await db.commit()
     resp = await client.get("/?page=2")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_single_post_increments_view_count(client: AsyncClient, db: AsyncSession):
     """Test that viewing a post increments view count."""
-    user = User(username="viewuser", email="view@test.com", password_hash="hash", display_name="View User")
+    user = User(
+        username="viewuser",
+        email="view@test.com",
+        password_hash="hash",
+        display_name="View User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -852,17 +991,24 @@ async def test_single_post_increments_view_count(client: AsyncClient, db: AsyncS
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        view_count=0
+        view_count=0,
     )
     db.add(post)
     await db.commit()
     await client.get(f"/posts/{post.slug}")
     await db.refresh(post)
     assert post.view_count == 1
+
+
 @pytest.mark.asyncio
 async def test_single_post_draft_not_accessible(client: AsyncClient, db: AsyncSession):
     """Test that draft posts are not accessible publicly."""
-    user = User(username="draftuser", email="draft@test.com", password_hash="hash", display_name="Draft User")
+    user = User(
+        username="draftuser",
+        email="draft@test.com",
+        password_hash="hash",
+        display_name="Draft User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -871,16 +1017,23 @@ async def test_single_post_draft_not_accessible(client: AsyncClient, db: AsyncSe
         slug="draft-post",
         content="Draft content",
         status=PostStatus.DRAFT,
-        author_id=user.id
+        author_id=user.id,
     )
     db.add(post)
     await db.commit()
     resp = await client.get(f"/posts/{post.slug}")
     assert resp.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_tag_archive(client: AsyncClient, db: AsyncSession):
     """Test tag archive page."""
-    user = User(username="taguser", email="tag@test.com", password_hash="hash", display_name="Tag User")
+    user = User(
+        username="taguser",
+        email="tag@test.com",
+        password_hash="hash",
+        display_name="Tag User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -893,22 +1046,31 @@ async def test_tag_archive(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     post.tags.append(tag)
     db.add(post)
     await db.commit()
     resp = await client.get(f"/tag/{tag.slug}")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_tag_archive_not_found(client: AsyncClient):
     """Test tag archive with non-existent tag."""
     resp = await client.get("/tag/non-existent-tag-12345")
     assert resp.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_tags_page(client: AsyncClient, db: AsyncSession):
     """Test tags/gallery page."""
-    user = User(username="galleryuser", email="gallery@test.com", password_hash="hash", display_name="Gallery User")
+    user = User(
+        username="galleryuser",
+        email="gallery@test.com",
+        password_hash="hash",
+        display_name="Gallery User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -918,16 +1080,23 @@ async def test_tags_page(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
     resp = await client.get("/tags")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_tags_page_with_tag_filter(client: AsyncClient, db: AsyncSession):
     """Test tags page filtered by tag."""
-    user = User(username="filteruser", email="filter@test.com", password_hash="hash", display_name="Filter User")
+    user = User(
+        username="filteruser",
+        email="filter@test.com",
+        password_hash="hash",
+        display_name="Filter User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -940,17 +1109,24 @@ async def test_tags_page_with_tag_filter(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     post.tags.append(tag)
     db.add(post)
     await db.commit()
     resp = await client.get(f"/tags/{tag.slug}")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_tags_page_ajax(client: AsyncClient, db: AsyncSession):
     """Test tags page with AJAX request."""
-    user = User(username="tagsajax", email="tagsajax@test.com", password_hash="hash", display_name="Tags AJAX")
+    user = User(
+        username="tagsajax",
+        email="tagsajax@test.com",
+        password_hash="hash",
+        display_name="Tags AJAX",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -960,7 +1136,7 @@ async def test_tags_page_ajax(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
@@ -969,10 +1145,17 @@ async def test_tags_page_ajax(client: AsyncClient, db: AsyncSession):
     data = resp.json()
     assert "posts" in data
     assert "pagination" in data
+
+
 @pytest.mark.asyncio
 async def test_rss_feed(client: AsyncClient, db: AsyncSession):
     """Test RSS feed generation."""
-    user = User(username="rssuser", email="rss@test.com", password_hash="hash", display_name="RSS User")
+    user = User(
+        username="rssuser",
+        email="rss@test.com",
+        password_hash="hash",
+        display_name="RSS User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -982,7 +1165,7 @@ async def test_rss_feed(client: AsyncClient, db: AsyncSession):
         content="RSS content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
@@ -990,10 +1173,17 @@ async def test_rss_feed(client: AsyncClient, db: AsyncSession):
     assert resp.status_code == 200
     assert "xml" in resp.headers["content-type"].lower()
     assert "RSS Post" in resp.text or "rss-post" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_sitemap(client: AsyncClient, db: AsyncSession):
     """Test sitemap generation."""
-    user = User(username="sitemapuser", email="sitemap@test.com", password_hash="hash", display_name="Sitemap User")
+    user = User(
+        username="sitemapuser",
+        email="sitemap@test.com",
+        password_hash="hash",
+        display_name="Sitemap User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1003,7 +1193,7 @@ async def test_sitemap(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
@@ -1011,10 +1201,17 @@ async def test_sitemap(client: AsyncClient, db: AsyncSession):
     assert resp.status_code == 200
     assert "xml" in resp.headers["content-type"].lower()
     assert "sitemap-post" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_single_post_with_thumbnail(client: AsyncClient, db: AsyncSession):
     """Test single post with thumbnail."""
-    user = User(username="thumbuser", email="thumb@test.com", password_hash="hash", display_name="Thumb User")
+    user = User(
+        username="thumbuser",
+        email="thumb@test.com",
+        password_hash="hash",
+        display_name="Thumb User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1025,16 +1222,23 @@ async def test_single_post_with_thumbnail(client: AsyncClient, db: AsyncSession)
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        thumbnail_path="/media/test.jpg"
+        thumbnail_path="/media/test.jpg",
     )
     db.add(post)
     await db.commit()
     resp = await client.get(f"/posts/{post.slug}")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_single_post_with_prev_next(client: AsyncClient, db: AsyncSession):
     """Test single post navigation with prev/next posts."""
-    user = User(username="navuser", email="nav@test.com", password_hash="hash", display_name="Nav User")
+    user = User(
+        username="navuser",
+        email="nav@test.com",
+        password_hash="hash",
+        display_name="Nav User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1045,7 +1249,7 @@ async def test_single_post_with_prev_next(client: AsyncClient, db: AsyncSession)
         content="First",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=base_time - timedelta(hours=2)
+        published_at=base_time - timedelta(hours=2),
     )
     post2 = Post(
         title="Second Post",
@@ -1053,7 +1257,7 @@ async def test_single_post_with_prev_next(client: AsyncClient, db: AsyncSession)
         content="Second",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=base_time - timedelta(hours=1)
+        published_at=base_time - timedelta(hours=1),
     )
     post3 = Post(
         title="Third Post",
@@ -1061,19 +1265,28 @@ async def test_single_post_with_prev_next(client: AsyncClient, db: AsyncSession)
         content="Third",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=base_time
+        published_at=base_time,
     )
     db.add_all([post1, post2, post3])
     await db.commit()
-    resp = await client.get(f"/posts/{post2.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        f"/posts/{post2.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert resp.status_code == 200
     data = resp.json()
     # Should have both prev and next
     assert "prev_post" in data or "next_post" in data
+
+
 @pytest.mark.asyncio
 async def test_homepage_with_featured_posts(client: AsyncClient, db: AsyncSession):
     """Test homepage with featured posts."""
-    user = User(username="featuser", email="feat@test.com", password_hash="hash", display_name="Feat User")
+    user = User(
+        username="featuser",
+        email="feat@test.com",
+        password_hash="hash",
+        display_name="Feat User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1084,16 +1297,23 @@ async def test_homepage_with_featured_posts(client: AsyncClient, db: AsyncSessio
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        is_featured=True
+        is_featured=True,
     )
     db.add(post)
     await db.commit()
     resp = await client.get("/")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_tag_archive_pagination(client: AsyncClient, db: AsyncSession):
     """Test tag archive with pagination."""
-    user = User(username="tagpageuser", email="tagpage@test.com", password_hash="hash", display_name="Tag Page User")
+    user = User(
+        username="tagpageuser",
+        email="tagpage@test.com",
+        password_hash="hash",
+        display_name="Tag Page User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1107,17 +1327,24 @@ async def test_tag_archive_pagination(client: AsyncClient, db: AsyncSession):
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            published_at=datetime.now(UTC)
+            published_at=datetime.now(UTC),
         )
         post.tags.append(tag)
         db.add(post)
     await db.commit()
     resp = await client.get(f"/tag/{tag.slug}?page=2")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_single_post_hidden_status(client: AsyncClient, db: AsyncSession):
     """Test accessing a hidden post (should be accessible unlike draft)."""
-    user = User(username="hiddenuser", email="hidden@test.com", password_hash="hash", display_name="Hidden User")
+    user = User(
+        username="hiddenuser",
+        email="hidden@test.com",
+        password_hash="hash",
+        display_name="Hidden User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1127,16 +1354,23 @@ async def test_single_post_hidden_status(client: AsyncClient, db: AsyncSession):
         content="Hidden content",
         status=PostStatus.HIDDEN,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
     resp = await client.get(f"/posts/{post.slug}")
     assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_serialize_post_with_media(client: AsyncClient, db: AsyncSession):
     """Test post serialization with media content."""
-    user = User(username="mediauser", email="media@test.com", password_hash="hash", display_name="Media User")
+    user = User(
+        username="mediauser",
+        email="media@test.com",
+        password_hash="hash",
+        display_name="Media User",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1147,7 +1381,7 @@ async def test_serialize_post_with_media(client: AsyncClient, db: AsyncSession):
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        formatter=PostFormatter.MARKDOWN
+        formatter=PostFormatter.MARKDOWN,
     )
     db.add(post)
     await db.commit()
@@ -1155,42 +1389,98 @@ async def test_serialize_post_with_media(client: AsyncClient, db: AsyncSession):
     assert resp.status_code == 200
     data = resp.json()
     assert "posts" in data
+
+
 @pytest.mark.asyncio
 async def test_search_posts(client: AsyncClient, db: AsyncSession):
     """Test searching for posts."""
     # Create a user first
-    user = User(username="author", email="a@test.com", password_hash="hash", display_name="Author")
+    user = User(
+        username="author",
+        email="a@test.com",
+        password_hash="hash",
+        display_name="Author",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    p1 = Post(title="Python Tutorial", slug="python-tutorial", content="Learn Python", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
-    p2 = Post(title="Rust Guide", slug="rust-guide", content="Learn Rust", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
+    p1 = Post(
+        title="Python Tutorial",
+        slug="python-tutorial",
+        content="Learn Python",
+        status=PostStatus.PUBLISHED,
+        author_id=user.id,
+        published_at=datetime.now(UTC),
+    )
+    p2 = Post(
+        title="Rust Guide",
+        slug="rust-guide",
+        content="Learn Rust",
+        status=PostStatus.PUBLISHED,
+        author_id=user.id,
+        published_at=datetime.now(UTC),
+    )
     db.add_all([p1, p2])
     await db.commit()
     resp = await client.get("/?q=Python")
     assert resp.status_code == 200
     assert "Python Tutorial" in resp.text or "python-tutorial" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_posts_by_author(client: AsyncClient, db: AsyncSession):
     """Test filtering posts by author."""
     # Assuming user 1 exists from seed or other tests, but let's create a specific one
-    author = User(username="writer", email="w@test.com", password_hash="hash", display_name="Writer")
+    author = User(
+        username="writer",
+        email="w@test.com",
+        password_hash="hash",
+        display_name="Writer",
+    )
     db.add(author)
     await db.commit()
     await db.refresh(author)
-    p1 = Post(title="Writer Post", slug="writer-post", content="C", status=PostStatus.PUBLISHED, author_id=author.id, published_at=datetime.now(UTC))
-    p2 = Post(title="Other Post", slug="other-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
+    p1 = Post(
+        title="Writer Post",
+        slug="writer-post",
+        content="C",
+        status=PostStatus.PUBLISHED,
+        author_id=author.id,
+        published_at=datetime.now(UTC),
+    )
+    p2 = Post(
+        title="Other Post",
+        slug="other-post",
+        content="C",
+        status=PostStatus.PUBLISHED,
+        author_id=1,
+        published_at=datetime.now(UTC),
+    )
     db.add_all([p1, p2])
     await db.commit()
     pass
+
+
 @pytest.mark.asyncio
 async def test_feeds(client: AsyncClient, db: AsyncSession):
     """Test RSS and Atom feeds."""
-    user = User(username="feedauthor", email="fa@test.com", password_hash="hash", display_name="Feed Author")
+    user = User(
+        username="feedauthor",
+        email="fa@test.com",
+        password_hash="hash",
+        display_name="Feed Author",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    p = Post(title="Feed Post", slug="feed-post", content="Content", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
+    p = Post(
+        title="Feed Post",
+        slug="feed-post",
+        content="Content",
+        status=PostStatus.PUBLISHED,
+        author_id=user.id,
+        published_at=datetime.now(UTC),
+    )
     db.add(p)
     await db.commit()
     resp = await client.get("/feed.xml")
@@ -1198,6 +1488,8 @@ async def test_feeds(client: AsyncClient, db: AsyncSession):
     assert "xml" in resp.headers["content-type"].lower()
     assert "Feed Post" in resp.text or "feed-post" in resp.text
     # If it returns 404, we just assert that.
+
+
 @pytest.mark.asyncio
 async def test_theme_cookie(client: AsyncClient):
     """Test theme persistence via cookie if implemented via backend or just js."""
@@ -1205,16 +1497,27 @@ async def test_theme_cookie(client: AsyncClient):
     resp = await client.get("/", cookies={"theme": "dark"})
     assert resp.status_code == 200
     # Check if body class has dark-theme if logic exists, otherwise just pass
+
+
 @pytest.mark.asyncio
 async def test_sitemap_content(client: AsyncClient, db: AsyncSession):
     """Test sitemap structure."""
-    p = Post(title="Sitemap Post", slug="sitemap-post", content="C", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
+    p = Post(
+        title="Sitemap Post",
+        slug="sitemap-post",
+        content="C",
+        status=PostStatus.PUBLISHED,
+        author_id=1,
+        published_at=datetime.now(UTC),
+    )
     db.add(p)
     await db.commit()
     resp = await client.get("/sitemap.xml")
     assert resp.status_code == 200
     assert "sitemap-post" in resp.text
     assert "urlset" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_robots_txt(client: AsyncClient):
     """Test robots.txt content."""
@@ -1222,12 +1525,16 @@ async def test_robots_txt(client: AsyncClient):
     assert resp.status_code == 200
     assert "User-agent: *" in resp.text
     assert "Disallow: /light/" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_404_handling(client: AsyncClient):
     """Test custom 404 page."""
     resp = await client.get("/non-existent-page-12345")
     assert resp.status_code == 404
     assert "Not Found" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_archive_date_routes(client: AsyncClient, db: AsyncSession):
     """Test date-based archive routes if they exist."""
@@ -1235,6 +1542,8 @@ async def test_archive_date_routes(client: AsyncClient, db: AsyncSession):
     # public.py snippets didn't explicitly show date routes, but let's try.
     # If they don't exist, we can remove this.
     pass
+
+
 @pytest.mark.asyncio
 async def test_tag_cloud_widget(client: AsyncClient, db: AsyncSession):
     """Test tag cloud data on homepage."""
@@ -1244,10 +1553,17 @@ async def test_tag_cloud_widget(client: AsyncClient, db: AsyncSession):
     resp = await client.get("/")
     assert resp.status_code == 200
     # Tag may or may not appear on homepage depending on post count requirements
+
+
 @pytest.mark.asyncio
 async def test_post_preview_token(client: AsyncClient, db: AsyncSession):
     """Test accessing a draft post with a preview token."""
-    user = User(username="previewauthor", email="pa@test.com", password_hash="hash", display_name="Preview Author")
+    user = User(
+        username="previewauthor",
+        email="pa@test.com",
+        password_hash="hash",
+        display_name="Preview Author",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -1258,7 +1574,7 @@ async def test_post_preview_token(client: AsyncClient, db: AsyncSession):
         status=PostStatus.DRAFT,
         author_id=user.id,
         preview_token="validtoken",
-        preview_expires_at=datetime.now(UTC) + timedelta(hours=1)
+        preview_expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     db.add(p)
     await db.commit()
@@ -1289,8 +1605,12 @@ async def test_homepage_cache_hit(client: AsyncClient, db: AsyncSession, enable_
     response2 = await client.get("/")
     assert response2.status_code == 200
     assert response2.headers["X-Cache"] == "HIT"
+
+
 @pytest.mark.asyncio
-async def test_single_post_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache):
+async def test_single_post_cache_hit(
+    client: AsyncClient, db: AsyncSession, enable_cache
+):
     """Test single post cache hit."""
     post = Post(
         title="Cache Single Post",
@@ -1309,8 +1629,12 @@ async def test_single_post_cache_hit(client: AsyncClient, db: AsyncSession, enab
     response2 = await client.get(f"/posts/{post.slug}")
     assert response2.status_code == 200
     assert response2.headers["X-Cache"] == "HIT"
+
+
 @pytest.mark.asyncio
-async def test_tag_archive_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache):
+async def test_tag_archive_cache_hit(
+    client: AsyncClient, db: AsyncSession, enable_cache
+):
     """Test tag archive cache hit."""
     tag = Tag(name="CacheTag", slug="cache-tag")
     db.add(tag)
@@ -1321,6 +1645,8 @@ async def test_tag_archive_cache_hit(client: AsyncClient, db: AsyncSession, enab
     response2 = await client.get(f"/tag/{tag.slug}")
     assert response2.status_code == 200
     assert response2.headers["X-Cache"] == "HIT"
+
+
 @pytest.mark.asyncio
 async def test_rss_feed_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache):
     """Test RSS feed cache hit."""
@@ -1331,6 +1657,8 @@ async def test_rss_feed_cache_hit(client: AsyncClient, db: AsyncSession, enable_
     response2 = await client.get("/feed.xml")
     assert response2.status_code == 200
     assert response2.headers["X-Cache"] == "HIT"
+
+
 @pytest.mark.asyncio
 async def test_sitemap_cache_hit(client: AsyncClient, db: AsyncSession, enable_cache):
     """Test sitemap cache hit."""
@@ -1341,24 +1669,38 @@ async def test_sitemap_cache_hit(client: AsyncClient, db: AsyncSession, enable_c
     response2 = await client.get("/sitemap.xml")
     assert response2.status_code == 200
     assert response2.headers["X-Cache"] == "HIT"
+
+
 @pytest.mark.asyncio
 async def test_prev_next_post_navigation(client: AsyncClient, db: AsyncSession):
     """Test previous and next post navigation logic."""
     now = datetime.now(UTC)
     p1 = Post(
-        title="Post 1", slug="p1", content="c",
-        status=PostStatus.PUBLISHED, published_at=now - timedelta(days=2),
-        formatter=PostFormatter.MARKDOWN, author_id=1
+        title="Post 1",
+        slug="p1",
+        content="c",
+        status=PostStatus.PUBLISHED,
+        published_at=now - timedelta(days=2),
+        formatter=PostFormatter.MARKDOWN,
+        author_id=1,
     )
     p2 = Post(
-        title="Post 2", slug="p2", content="c",
-        status=PostStatus.PUBLISHED, published_at=now - timedelta(days=1),
-        formatter=PostFormatter.MARKDOWN, author_id=1
+        title="Post 2",
+        slug="p2",
+        content="c",
+        status=PostStatus.PUBLISHED,
+        published_at=now - timedelta(days=1),
+        formatter=PostFormatter.MARKDOWN,
+        author_id=1,
     )
     p3 = Post(
-        title="Post 3", slug="p3", content="c",
-        status=PostStatus.PUBLISHED, published_at=now,
-        formatter=PostFormatter.MARKDOWN, author_id=1
+        title="Post 3",
+        slug="p3",
+        content="c",
+        status=PostStatus.PUBLISHED,
+        published_at=now,
+        formatter=PostFormatter.MARKDOWN,
+        author_id=1,
     )
     db.add_all([p1, p2, p3])
     await db.commit()
@@ -1367,8 +1709,12 @@ async def test_prev_next_post_navigation(client: AsyncClient, db: AsyncSession):
     content = response.text
     assert p1.slug in content
     assert p3.slug in content
+
+
 @pytest.mark.asyncio
-async def test_post_serialization_with_media_and_excerpt(client: AsyncClient, db: AsyncSession):
+async def test_post_serialization_with_media_and_excerpt(
+    client: AsyncClient, db: AsyncSession
+):
     """Test post serialization with media but no explicit excerpt."""
     post = Post(
         title="Media Post",
@@ -1380,16 +1726,15 @@ async def test_post_serialization_with_media_and_excerpt(client: AsyncClient, db
     )
     db.add(post)
     await db.commit()
-    response = await client.get(
-        "/",
-        headers={"X-Requested-With": "XMLHttpRequest"}
-    )
+    response = await client.get("/", headers={"X-Requested-With": "XMLHttpRequest"})
     assert response.status_code == 200
     data = response.json()
     post_data = next(p for p in data["posts"] if p["id"] == post.id)
     assert post_data["has_image"] is True
     # Excerpt should be generated
     assert post_data["excerpt"] is not None
+
+
 @pytest.mark.asyncio
 async def test_feed_cache_check(client: AsyncClient, enable_cache):
     """Test feed cache check explicitly."""
@@ -1399,15 +1744,21 @@ async def test_feed_cache_check(client: AsyncClient, enable_cache):
     response = await client.get("/feed.xml")
     assert response.status_code == 200
     assert response.headers["X-Cache"] == "HIT"
+
+
 @pytest.mark.asyncio
 async def test_get_db_context_overrides(client: AsyncClient, db: AsyncSession):
     """Test that blog settings override default context."""
-    settings_service = BlogSettings(key="blog_title", value="Custom Title", value_type="str")
+    settings_service = BlogSettings(
+        key="blog_title", value="Custom Title", value_type="str"
+    )
     db.add(settings_service)
     await db.commit()
     response = await client.get("/")
     assert response.status_code == 200
     assert "Custom Title" in response.text
+
+
 @pytest.mark.asyncio
 async def test_homepage_ajax_pagination(client: AsyncClient, db: AsyncSession):
     """Test homepage AJAX pagination response structure."""
@@ -1424,27 +1775,59 @@ async def test_homepage_ajax_pagination(client: AsyncClient, db: AsyncSession):
         )
         db.add(post)
     await db.commit()
-    response = await client.get("/?page=1", headers={"X-Requested-With": "XMLHttpRequest"})
+    response = await client.get(
+        "/?page=1", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert response.status_code == 200
     data = response.json()
     assert "posts" in data
     assert len(data["posts"]) == 10
     assert data["pagination"]["has_next"] is True
-    response = await client.get("/?page=2", headers={"X-Requested-With": "XMLHttpRequest"})
+    response = await client.get(
+        "/?page=2", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert response.status_code == 200
     data = response.json()
     assert len(data["posts"]) == 5
     assert data["pagination"]["has_next"] is False
+
+
 @pytest.mark.asyncio
 async def test_single_post_ajax_full(client: AsyncClient, db: AsyncSession):
     """Test single post AJAX response with next/prev and media."""
     now = datetime.now(UTC)
-    p1 = Post(title="P1", slug="p1", content="c", status=PostStatus.PUBLISHED, published_at=now - timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=1)
-    p2 = Post(title="P2", slug="p2", content="![Img](/a.jpg)", status=PostStatus.PUBLISHED, published_at=now, formatter=PostFormatter.MARKDOWN, author_id=1)
-    p3 = Post(title="P3", slug="p3", content="c", status=PostStatus.PUBLISHED, published_at=now + timedelta(days=1), formatter=PostFormatter.MARKDOWN, author_id=1)
+    p1 = Post(
+        title="P1",
+        slug="p1",
+        content="c",
+        status=PostStatus.PUBLISHED,
+        published_at=now - timedelta(days=1),
+        formatter=PostFormatter.MARKDOWN,
+        author_id=1,
+    )
+    p2 = Post(
+        title="P2",
+        slug="p2",
+        content="![Img](/a.jpg)",
+        status=PostStatus.PUBLISHED,
+        published_at=now,
+        formatter=PostFormatter.MARKDOWN,
+        author_id=1,
+    )
+    p3 = Post(
+        title="P3",
+        slug="p3",
+        content="c",
+        status=PostStatus.PUBLISHED,
+        published_at=now + timedelta(days=1),
+        formatter=PostFormatter.MARKDOWN,
+        author_id=1,
+    )
     db.add_all([p1, p2, p3])
     await db.commit()
-    response = await client.get(f"/posts/{p2.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    response = await client.get(
+        f"/posts/{p2.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["post"]["slug"] == p2.slug
@@ -1452,17 +1835,28 @@ async def test_single_post_ajax_full(client: AsyncClient, db: AsyncSession):
     assert data["next_post"]["slug"] == p3.slug
     assert len(data["post_media"]) > 0
     assert data["post_media"][0]["url"] == "/a.jpg"
+
+
 @pytest.mark.asyncio
 async def test_tag_archive_ajax_full(client: AsyncClient, db: AsyncSession):
     """Test tag archive AJAX response."""
     tag = Tag(name="AjaxTag", slug="ajax-tag")
     db.add(tag)
     await db.commit()
-    post = Post(title="Tagged", slug="tagged", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
+    post = Post(
+        title="Tagged",
+        slug="tagged",
+        content="c",
+        status=PostStatus.PUBLISHED,
+        formatter=PostFormatter.MARKDOWN,
+        author_id=1,
+    )
     post.tags.append(tag)
     db.add(post)
     await db.commit()
-    response = await client.get(f"/tag/{tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    response = await client.get(
+        f"/tag/{tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["tag"]["slug"] == tag.slug
@@ -1474,15 +1868,17 @@ class TestPublicAnalytics:
     """Tests for Google Analytics integration in public routes."""
 
     @pytest.mark.asyncio
-    async def test_analytics_script_rendered(self, client: AsyncClient, db: AsyncSession):
+    async def test_analytics_script_rendered(
+        self, client: AsyncClient, db: AsyncSession
+    ):
         """Test that GA script is rendered when enabled."""
         # Update settings to enable GA
         from app.services.settings_service import SettingsService
+
         settings_service = SettingsService(db)
-        await settings_service.update_settings({
-            "enable_analytics": True,
-            "google_analytics_id": "G-HTML-TEST"
-        })
+        await settings_service.update_settings(
+            {"enable_analytics": True, "google_analytics_id": "G-HTML-TEST"}
+        )
         await db.commit()
 
         response = await client.get("/")
@@ -1496,11 +1892,11 @@ class TestPublicAnalytics:
         """Test that GA data is included in AJAX response."""
         # Update settings
         from app.services.settings_service import SettingsService
+
         settings_service = SettingsService(db)
-        await settings_service.update_settings({
-            "enable_analytics": True,
-            "google_analytics_id": "G-AJAX-TEST"
-        })
+        await settings_service.update_settings(
+            {"enable_analytics": True, "google_analytics_id": "G-AJAX-TEST"}
+        )
         await db.commit()
 
         # Create a post
@@ -1510,12 +1906,14 @@ class TestPublicAnalytics:
             content="Content",
             status=PostStatus.PUBLISHED,
             author_id=1,
-            published_at=datetime.now(UTC)
+            published_at=datetime.now(UTC),
         )
         db.add(post)
         await db.commit()
 
-        response = await client.get("/posts/ga-post", headers={"X-Requested-With": "XMLHttpRequest"})
+        response = await client.get(
+            "/posts/ga-post", headers={"X-Requested-With": "XMLHttpRequest"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["blog_settings"]["enable_analytics"] is True

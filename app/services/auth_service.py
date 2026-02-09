@@ -18,6 +18,7 @@ from app.schemas.auth import UserCreate
 
 settings = get_settings()
 
+
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt.
 

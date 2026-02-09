@@ -18,7 +18,9 @@ class TestSetPostTags:
     """Test setting tags on posts."""
 
     @pytest.mark.asyncio
-    async def test_set_post_tags_create_new(self, tag_service: TagService, db: AsyncSession):
+    async def test_set_post_tags_create_new(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test setting post tags creates new tags."""
         post = Post(title="P", slug="p", content="C", author_id=1)
         db.add(post)
@@ -31,7 +33,9 @@ class TestSetPostTags:
         assert {t.name for t in tags} == {"New Tag 1", "New Tag 2"}
 
     @pytest.mark.asyncio
-    async def test_set_post_tags_existing(self, tag_service: TagService, db: AsyncSession):
+    async def test_set_post_tags_existing(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test setting post tags uses existing tags."""
         tag1 = Tag(name="Existing", slug="existing", post_count=0)
         db.add(tag1)
@@ -58,7 +62,9 @@ class TestAddTagsToPost:
         """Test adding tags with empty strings ignored."""
         service = TagService(db)
         user_id = 1  # Dummy
-        post = Post(title="T", slug="t", content="c", status=PostStatus.DRAFT, author_id=user_id)
+        post = Post(
+            title="T", slug="t", content="c", status=PostStatus.DRAFT, author_id=user_id
+        )
         db.add(post)
         await db.commit()
         await db.refresh(post, attribute_names=["tags"])
@@ -72,7 +78,9 @@ class TestRemoveTagsFromPost:
     """Test removing tags from posts."""
 
     @pytest.mark.asyncio
-    async def test_remove_tags_from_post(self, tag_service: TagService, db: AsyncSession):
+    async def test_remove_tags_from_post(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test removing tags from post."""
         tag1 = Tag(name="Tag1", slug="tag1", post_count=1)
         post = Post(title="P", slug="p", content="C", author_id=1)
@@ -92,7 +100,13 @@ class TestRemoveTagsFromPost:
         """Test that removing tags updates their post counts."""
         service = TagService(db)
         user_id = 1
-        post = Post(title="T", slug="t", content="c", status=PostStatus.PUBLISHED, author_id=user_id)
+        post = Post(
+            title="T",
+            slug="t",
+            content="c",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
         db.add(post)
         await db.commit()
         await db.refresh(post, attribute_names=["tags"])

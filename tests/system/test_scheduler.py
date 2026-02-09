@@ -1,4 +1,3 @@
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,10 +16,11 @@ def test_scheduler_init():
         assert scheduler.add_job.call_count == 3
 
         # Check specific jobs (approximate check based on call args)
-        jobs = [call.kwargs.get('id') for call in scheduler.add_job.call_args_list]
+        jobs = [call.kwargs.get("id") for call in scheduler.add_job.call_args_list]
         assert "cleanup_sessions" in jobs
         assert "flush_view_counts" in jobs
         assert "daily_backup" in jobs
+
 
 def test_scheduler_lifecycle():
     with patch("app.services.scheduler_service.AsyncIOScheduler"):
@@ -31,6 +31,7 @@ def test_scheduler_lifecycle():
 
         service.shutdown()
         service.scheduler.shutdown.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_tasks_execution():
@@ -52,8 +53,12 @@ async def test_tasks_execution():
             await service.flush_view_counts()
             MockPost.flush_view_counts.assert_called_once()
 
-    with patch("app.services.scheduler_service.BackupService"), \
-         patch("asyncio.BaseEventLoop.run_in_executor", new_callable=AsyncMock) as mock_executor:
+    with (
+        patch("app.services.scheduler_service.BackupService"),
+        patch(
+            "asyncio.BaseEventLoop.run_in_executor", new_callable=AsyncMock
+        ) as mock_executor,
+    ):
         # Test daily_backup
         # Since it runs in executor, we just want to ensure it calls the helper
         # or we can mock run_in_executor
@@ -101,9 +106,12 @@ async def test_scheduler_cleanup_sessions():
         scheduler = SchedulerService()
 
         # Mock auth service and session
-        with patch("app.services.scheduler_service.async_session_maker") as mock_session_maker, \
-             patch("app.services.scheduler_service.AuthService") as MockAuthService:
-
+        with (
+            patch(
+                "app.services.scheduler_service.async_session_maker"
+            ) as mock_session_maker,
+            patch("app.services.scheduler_service.AuthService") as MockAuthService,
+        ):
             mock_session = MagicMock()
             mock_session.__aenter__.return_value = mock_session
             mock_session_maker.return_value = mock_session
@@ -124,9 +132,10 @@ async def test_scheduler_create_backup():
     with patch("app.services.scheduler_service.AsyncIOScheduler"):
         scheduler = SchedulerService()
 
-        with patch("app.services.scheduler_service.BackupService"), \
-             patch("asyncio.get_running_loop") as mock_get_loop:
-
+        with (
+            patch("app.services.scheduler_service.BackupService"),
+            patch("asyncio.get_running_loop") as mock_get_loop,
+        ):
             mock_loop = MagicMock()
             mock_get_loop.return_value = mock_loop
 

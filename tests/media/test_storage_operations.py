@@ -24,7 +24,12 @@ def media_service(db: AsyncSession):
 @pytest.fixture
 async def light_auth_headers(client: AsyncClient, db: AsyncSession):
     """Create light user and return auth headers."""
-    user = User(username="media_light", email="ma@test.com", password_hash="hash", display_name="Medialight")
+    user = User(
+        username="media_light",
+        email="ma@test.com",
+        password_hash="hash",
+        display_name="Medialight",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -34,7 +39,7 @@ async def light_auth_headers(client: AsyncClient, db: AsyncSession):
         token=hash_token("media-token"),
         expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
-        user_agent="test"
+        user_agent="test",
     )
     db.add(session)
     await db.commit()
@@ -78,7 +83,14 @@ class TestStorageStats:
     async def test_get_storage_stats(self, db: AsyncSession):
         """Test storage stats calculation."""
         service = MediaService(db)
-        m = Media(filename="s.jpg", original_path="s.jpg", file_type=FileType.IMAGE, mime_type="image/jpeg", file_size=1024*1024, checksum="cs")
+        m = Media(
+            filename="s.jpg",
+            original_path="s.jpg",
+            file_type=FileType.IMAGE,
+            mime_type="image/jpeg",
+            file_size=1024 * 1024,
+            checksum="cs",
+        )
         db.add(m)
         await db.commit()
 
@@ -150,7 +162,7 @@ class TestOrphanedMedia:
             file_size=10,
             checksum="c1",
             post_id=None,
-            uploaded_at=old_time
+            uploaded_at=old_time,
         )
         m2 = Media(
             filename="o2.jpg",
@@ -160,7 +172,7 @@ class TestOrphanedMedia:
             file_size=20,
             checksum="c2",
             post_id=1,
-            uploaded_at=old_time
+            uploaded_at=old_time,
         )
         db.add_all([m1, m2])
         await db.commit()
@@ -190,7 +202,7 @@ class TestOrphanedMedia:
             file_size=10,
             checksum="crecent",
             post_id=None,
-            uploaded_at=datetime.now(UTC) - timedelta(hours=1)
+            uploaded_at=datetime.now(UTC) - timedelta(hours=1),
         )
         db.add(m1)
         await db.commit()
@@ -203,6 +215,7 @@ class TestOrphanedMedia:
     async def test_cleanup_orphaned_used_in_markdown(self, db: AsyncSession):
         """Test that media used in markdown is not cleaned up even if post_id is NULL."""
         from app.models.post import Post, PostStatus
+
         service = MediaService(db)
 
         # Create media
@@ -215,12 +228,14 @@ class TestOrphanedMedia:
             file_size=50,
             checksum="cused",
             post_id=None,
-            uploaded_at=old_time
+            uploaded_at=old_time,
         )
         db.add(m1)
 
         # Create user for author_id
-        user = User(username="author", email="a@t.com", password_hash="h", display_name="A")
+        user = User(
+            username="author", email="a@t.com", password_hash="h", display_name="A"
+        )
         db.add(user)
         await db.flush()
 
@@ -230,7 +245,7 @@ class TestOrphanedMedia:
             slug="post",
             content="Check this image: ![](/media/originals/2026/02/used.jpg)",
             author_id=user.id,
-            status=PostStatus.PUBLISHED
+            status=PostStatus.PUBLISHED,
         )
         db.add(p)
         await db.commit()
@@ -266,7 +281,7 @@ class TestDuplicateDetection:
             file_type=FileType.IMAGE,
             mime_type="image/jpeg",
             file_size=100,
-            checksum="dup_checksum"
+            checksum="dup_checksum",
         )
         db.add(m)
         await db.commit()
@@ -303,7 +318,9 @@ class TestStoragePaths:
         """Test storage path generation."""
         with pytest.MonkeyPatch().context() as m:
             m.setattr("app.services.media_service.ensure_directory", MagicMock())
-            orig_f, thumb_f, orig_r, thumb_r = media_service._get_storage_paths("file.jpg", 2026, 1)
+            orig_f, thumb_f, orig_r, thumb_r = media_service._get_storage_paths(
+                "file.jpg", 2026, 1
+            )
             assert "originals/2026/01/file.jpg" in orig_f.as_posix()
             assert orig_r == "originals/2026/01/file.jpg"
 

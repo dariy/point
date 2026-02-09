@@ -36,7 +36,9 @@ templates = Jinja2Templates(directory=str(templates_dir))
 settings = get_settings()
 
 
-async def get_base_context(db: AsyncSession, request: Request, user: User | None = None) -> dict[str, Any]:
+async def get_base_context(
+    db: AsyncSession, request: Request, user: User | None = None
+) -> dict[str, Any]:
     """Get base context for all light templates.
 
     Args:

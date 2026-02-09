@@ -4,7 +4,6 @@ This module contains tests for user login functionality including
 single-user mode, remember_me, and various error conditions.
 """
 
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession

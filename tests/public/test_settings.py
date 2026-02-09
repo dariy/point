@@ -12,7 +12,9 @@ from app.models.settings import BlogSettings
 async def test_get_db_context_without_settings(db: AsyncSession):
     """Test get_db_context fetches settings when not provided."""
     # Ensure some settings exist
-    setting = BlogSettings(key="blog_title", value="Context Test Title", value_type="string")
+    setting = BlogSettings(
+        key="blog_title", value="Context Test Title", value_type="string"
+    )
     db.add(setting)
     await db.commit()
 
@@ -27,10 +29,14 @@ async def test_get_db_context_without_settings(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_db_context_overrides_blog_title(client: AsyncClient, db: AsyncSession):
+async def test_get_db_context_overrides_blog_title(
+    client: AsyncClient, db: AsyncSession
+):
     """Test that database blog_title setting overrides default."""
     # Create custom setting
-    setting = BlogSettings(key="blog_title", value="Custom Blog Title", value_type="string")
+    setting = BlogSettings(
+        key="blog_title", value="Custom Blog Title", value_type="string"
+    )
     db.add(setting)
     await db.commit()
 
@@ -41,9 +47,13 @@ async def test_get_db_context_overrides_blog_title(client: AsyncClient, db: Asyn
 
 
 @pytest.mark.asyncio
-async def test_get_db_context_overrides_blog_subtitle(client: AsyncClient, db: AsyncSession):
+async def test_get_db_context_overrides_blog_subtitle(
+    client: AsyncClient, db: AsyncSession
+):
     """Test that database blog_subtitle setting overrides default."""
-    setting = BlogSettings(key="blog_subtitle", value="My Custom Subtitle", value_type="string")
+    setting = BlogSettings(
+        key="blog_subtitle", value="My Custom Subtitle", value_type="string"
+    )
     db.add(setting)
     await db.commit()
 
@@ -53,7 +63,9 @@ async def test_get_db_context_overrides_blog_subtitle(client: AsyncClient, db: A
 
 
 @pytest.mark.asyncio
-async def test_get_db_context_overrides_author_name(client: AsyncClient, db: AsyncSession):
+async def test_get_db_context_overrides_author_name(
+    client: AsyncClient, db: AsyncSession
+):
     """Test that database author_name setting overrides default."""
     setting = BlogSettings(key="author_name", value="Jane Doe", value_type="string")
     db.add(setting)

@@ -7,9 +7,6 @@ from httpx import AsyncClient
 class TestHealthEndpoint:
     """Test cases for the /health endpoint."""
 
-
-
-
     @pytest.mark.asyncio
     async def test_health_returns_200(self, client: AsyncClient) -> None:
         """Test that health endpoint returns 200 OK."""
@@ -63,7 +60,3 @@ class TestSecurityHeaders:
         assert "x-xss-protection" in response.headers
 
         assert "content-security-policy" in response.headers
-
-
-
-

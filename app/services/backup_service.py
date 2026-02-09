@@ -130,7 +130,9 @@ class BackupService:
         if backup_path.parent != self.backup_dir:
             raise ValueError("Backup file must be in backups directory")
 
-        temp_dir = self.backup_dir / f"restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        temp_dir = (
+            self.backup_dir / f"restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
 
         try:
             temp_dir.mkdir()

@@ -315,7 +315,9 @@ class TagService:
         )
         return list(result.scalars().all())
 
-    async def get_tag_cloud(self, limit: int = 20, featured: bool = True) -> list[dict[str, Any]]:
+    async def get_tag_cloud(
+        self, limit: int = 20, featured: bool = True
+    ) -> list[dict[str, Any]]:
         """Get tags for tag cloud with weights.
 
         Args:
@@ -416,7 +418,9 @@ class TagService:
         # Get paginated results
         offset = (page - 1) * per_page
         query = (
-            query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
+            query.order_by(
+                Post.published_at.desc().nulls_last(), Post.created_at.desc()
+            )
             .offset(offset)
             .limit(per_page)
         )

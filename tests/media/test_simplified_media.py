@@ -20,8 +20,11 @@ def patch_storage(tmp_path):
             mock_service_settings.return_value.storage_path = str(tmp_path)
             yield tmp_path
 
+
 @pytest.mark.asyncio
-async def test_serve_simplified_media(client: AsyncClient, db: AsyncSession, patch_storage):
+async def test_serve_simplified_media(
+    client: AsyncClient, db: AsyncSession, patch_storage
+):
     """Test the simplified media serving route."""
     tmp_path = patch_storage
 
@@ -39,7 +42,7 @@ async def test_serve_simplified_media(client: AsyncClient, db: AsyncSession, pat
         file_type=FileType.IMAGE,
         mime_type="image/jpeg",
         file_size=19,
-        checksum="dummy_simple"
+        checksum="dummy_simple",
     )
     db.add(media)
     await db.commit()
@@ -50,11 +53,13 @@ async def test_serve_simplified_media(client: AsyncClient, db: AsyncSession, pat
     assert response.content == b"dummy image content"
     assert response.headers["content-type"] == "image/jpeg"
 
+
 @pytest.mark.asyncio
 async def test_serve_simplified_media_not_found(client: AsyncClient, patch_storage):
     """Test 404 for missing simplified media."""
     response = await client.get("/2024/08/nonexistent.jpg")
     assert response.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_simplified_notation_rendering():
@@ -67,7 +72,8 @@ async def test_simplified_notation_rendering():
     content_video = "/2024/08/video.mp4"
     rendered_video = format_content(content_video, "markdown")
     assert '<video src="/2024/08/video.mp4"' in rendered_video
-    assert 'controls' in rendered_video
+    assert "controls" in rendered_video
+
 
 @pytest.mark.asyncio
 async def test_simplified_notation_mixed_content():

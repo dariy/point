@@ -231,7 +231,12 @@ async def serve_simplified_media(year: int, month: int, filename: str) -> FileRe
         File response
     """
     file_path = (
-        Path(settings.storage_path) / "media" / "originals" / str(year) / f"{month:02d}" / filename
+        Path(settings.storage_path)
+        / "media"
+        / "originals"
+        / str(year)
+        / f"{month:02d}"
+        / filename
     )
     if not file_path.exists():
         raise HTTPException(

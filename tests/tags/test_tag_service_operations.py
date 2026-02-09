@@ -19,7 +19,9 @@ class TestTagCreation:
     """Test tag creation operations."""
 
     @pytest.mark.asyncio
-    async def test_create_tag_duplicate_name(self, tag_service: TagService, db: AsyncSession):
+    async def test_create_tag_duplicate_name(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test creating tag with duplicate name raises ValueError."""
         tag1 = Tag(name="Tag 1", slug="tag-1", post_count=0)
         db.add(tag1)
@@ -46,7 +48,9 @@ class TestTagUpdate:
             await tag_service.update_tag(tag1.id, TagUpdate(name="Tag 2"))
 
     @pytest.mark.asyncio
-    async def test_update_tag_slug_conflict(self, tag_service: TagService, db: AsyncSession):
+    async def test_update_tag_slug_conflict(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test updating tag slug to an existing one raises ValueError."""
         tag1 = Tag(name="Tag 1", slug="tag-1", post_count=0)
         tag2 = Tag(name="Tag 2", slug="tag-2", post_count=0)
@@ -133,7 +137,9 @@ class TestTagListing:
         assert tags[0].name == "Apple"
 
     @pytest.mark.asyncio
-    async def test_get_important_and_featured_tags(self, tag_service: TagService, db: AsyncSession):
+    async def test_get_important_and_featured_tags(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test getting important and featured tags."""
         t1 = Tag(name="T1", slug="t1", post_count=1, is_important=True)
         t2 = Tag(name="T2", slug="t2", post_count=1, is_featured=True)
@@ -153,13 +159,21 @@ class TestPostCounts:
     """Test post count management."""
 
     @pytest.mark.asyncio
-    async def test_update_all_post_counts(self, tag_service: TagService, db: AsyncSession):
+    async def test_update_all_post_counts(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test recalculating post counts."""
         # Create tag and posts
         tag = Tag(name="Tag", slug="tag", post_count=0)
-        p1 = Post(title="P1", slug="p1", content="C", status=PostStatus.PUBLISHED, author_id=1)
-        p2 = Post(title="P2", slug="p2", content="C", status=PostStatus.DRAFT, author_id=1)
-        p3 = Post(title="P3", slug="p3", content="C", status=PostStatus.PUBLISHED, author_id=1)
+        p1 = Post(
+            title="P1", slug="p1", content="C", status=PostStatus.PUBLISHED, author_id=1
+        )
+        p2 = Post(
+            title="P2", slug="p2", content="C", status=PostStatus.DRAFT, author_id=1
+        )
+        p3 = Post(
+            title="P3", slug="p3", content="C", status=PostStatus.PUBLISHED, author_id=1
+        )
 
         p1.tags.append(tag)
         p2.tags.append(tag)
@@ -176,7 +190,9 @@ class TestPostCounts:
         assert tag.post_count == 2
 
     @pytest.mark.asyncio
-    async def test_update_all_post_counts_orphaned_tags(self, tag_service: TagService, db: AsyncSession):
+    async def test_update_all_post_counts_orphaned_tags(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test that tags with no posts get count 0."""
         tag = Tag(name="Orphan", slug="orphan", post_count=5)  # Incorrect count
         db.add(tag)

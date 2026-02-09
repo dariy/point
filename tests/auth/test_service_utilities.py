@@ -3,7 +3,6 @@
 This module contains unit tests for authentication utility functions.
 """
 
-
 from app.services.auth_service import verify_password
 
 # =============================================================================

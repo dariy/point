@@ -4,7 +4,7 @@ Stores blog posts with support for drafts, publishing, and custom URLs.
 """
 
 from datetime import UTC, datetime
-from enum import Enum as PyEnum
+from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class PostStatus(str, PyEnum):
+class PostStatus(StrEnum):
     """Post publication status."""
 
     DRAFT = "draft"
@@ -20,7 +20,7 @@ class PostStatus(str, PyEnum):
     HIDDEN = "hidden"
 
 
-class PostFormatter(str, PyEnum):
+class PostFormatter(StrEnum):
     """Content formatter type."""
 
     MARKDOWN = "markdown"

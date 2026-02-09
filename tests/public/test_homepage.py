@@ -11,18 +11,28 @@ from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_homepage_pagination_invalid_page_number(client: AsyncClient, db: AsyncSession):
+async def test_homepage_pagination_invalid_page_number(
+    client: AsyncClient, db: AsyncSession
+):
     """Test homepage with invalid page numbers."""
     # Create a test user and post
-    user = User(username="testuser", email="test@test.com", password_hash="hash", display_name="Test")
+    user = User(
+        username="testuser",
+        email="test@test.com",
+        password_hash="hash",
+        display_name="Test",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
     post = Post(
-        title="Test", slug="test", content="Content",
-        status=PostStatus.PUBLISHED, author_id=user.id,
-        published_at=datetime.now(UTC)
+        title="Test",
+        slug="test",
+        content="Content",
+        status=PostStatus.PUBLISHED,
+        author_id=user.id,
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
@@ -43,7 +53,12 @@ async def test_homepage_pagination_invalid_page_number(client: AsyncClient, db: 
 @pytest.mark.asyncio
 async def test_homepage_ajax_structure(client: AsyncClient, db: AsyncSession):
     """Test full structure of homepage AJAX response."""
-    user = User(username="ajaxhome", email="ajaxhome@test.com", password_hash="hash", display_name="AJAX Home")
+    user = User(
+        username="ajaxhome",
+        email="ajaxhome@test.com",
+        password_hash="hash",
+        display_name="AJAX Home",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -54,7 +69,7 @@ async def test_homepage_ajax_structure(client: AsyncClient, db: AsyncSession):
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(post)
     await db.commit()
@@ -119,7 +134,9 @@ async def test_homepage_ajax_pagination(client: AsyncClient, sample_posts: list[
 
 
 @pytest.mark.asyncio
-async def test_homepage_html_has_ajax_class(client: AsyncClient, sample_posts: list[Post]):
+async def test_homepage_html_has_ajax_class(
+    client: AsyncClient, sample_posts: list[Post]
+):
     """Test homepage HTML pagination links have ajax-link class."""
     # Request page 1, ensure multiple pages (default limit 10, posts 15)
     response = await client.get("/")

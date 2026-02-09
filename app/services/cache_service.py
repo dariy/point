@@ -92,7 +92,9 @@ class FileCache:
         await aiofiles.os.makedirs(self.pages_dir, exist_ok=True)
         await aiofiles.os.makedirs(self.feeds_dir, exist_ok=True)
 
-    def _generate_key(self, url: str, query_params: dict[str, Any] | None = None) -> str:
+    def _generate_key(
+        self, url: str, query_params: dict[str, Any] | None = None
+    ) -> str:
         """Generate cache key from URL and query parameters.
 
         Args:

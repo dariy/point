@@ -102,9 +102,7 @@ class TestChangePassword:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_change_password_unauthenticated(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_change_password_unauthenticated(self, client: AsyncClient) -> None:
         """Test password change without authentication."""
         response = await client.post(
             "/api/auth/change-password",

@@ -17,6 +17,7 @@ def test_slugify_edge_cases():
     assert slugify("a-long-slug-that-should-be-truncated", max_length=10) == "a-long"
     assert slugify("alongslugwithout-hyphens", max_length=5) == "along"
 
+
 def test_make_unique_slug_edge_cases():
     # Empty base
     assert make_unique_slug("", {"untitled"}) == "untitled-1"
@@ -29,6 +30,7 @@ def test_make_unique_slug_edge_cases():
         existing.add("test")
         make_unique_slug("test", existing)
 
+
 def test_is_valid_slug_edge_cases():
     assert is_valid_slug("") is False
     assert is_valid_slug(None) is False
@@ -39,11 +41,3 @@ def test_is_valid_slug_edge_cases():
     assert is_valid_slug("trailing-hyphen-") is False
     assert is_valid_slug("double--hyphen") is False
     assert is_valid_slug("slug.with.dots") is False
-
-
-
-
-
-
-
-

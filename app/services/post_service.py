@@ -171,7 +171,9 @@ class PostService:
             thumbnail_path=thumbnail_path,
             meta_description=post_data.meta_description,
             author_id=author_id,
-            published_at=datetime.now(UTC) if post_data.status.value == PostStatus.PUBLISHED.value else None,
+            published_at=datetime.now(UTC)
+            if post_data.status.value == PostStatus.PUBLISHED.value
+            else None,
         )
 
         self.db.add(post)
@@ -224,7 +226,10 @@ class PostService:
 
         if not include_drafts:
             query = query.where(
-                or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
+                or_(
+                    Post.status == PostStatus.PUBLISHED,
+                    Post.status == PostStatus.HIDDEN,
+                )
             )
 
         result = await self.db.execute(query)
@@ -350,7 +355,11 @@ class PostService:
                 value = value.value
 
             # Set published_at if status changed to published and not already set
-            if field == "status" and value == PostStatus.PUBLISHED and not post.published_at:
+            if (
+                field == "status"
+                and value == PostStatus.PUBLISHED
+                and not post.published_at
+            ):
                 post.published_at = datetime.now(UTC)
 
             setattr(post, field, value)

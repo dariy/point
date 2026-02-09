@@ -80,9 +80,7 @@ class TestUserManagement:
         assert first_user.id == created_user.id
 
     @pytest.mark.asyncio
-    async def test_get_first_user_empty_db(
-        self, auth_service: AuthService
-    ) -> None:
+    async def test_get_first_user_empty_db(self, auth_service: AuthService) -> None:
         """Test getting first user when database is empty."""
         first_user = await auth_service.get_first_user()
         assert first_user is None

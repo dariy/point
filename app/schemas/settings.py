@@ -1,5 +1,4 @@
-"""Settings schemas for API validation.
-"""
+"""Settings schemas for API validation."""
 
 from datetime import datetime
 from typing import Any

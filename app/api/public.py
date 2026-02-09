@@ -124,7 +124,9 @@ def serialize_post(post: Post) -> dict[str, Any]:
 
     # Check for media
     media_list = extract_all_media(post.content)
-    has_image = post.thumbnail_path is not None or any(m["type"] == "image" for m in media_list)
+    has_image = post.thumbnail_path is not None or any(
+        m["type"] == "image" for m in media_list
+    )
     has_video = any(m["type"] == "video" for m in media_list)
     has_media = has_image or has_video
 
@@ -134,10 +136,10 @@ def serialize_post(post: Post) -> dict[str, Any]:
     if not excerpt:
         # Generate generic excerpt
         if has_media:
-             excerpt = generate_excerpt(post.content, post.formatter, 200)
+            excerpt = generate_excerpt(post.content, post.formatter, 200)
         else:
-             content_html = format_content(post.content, post.formatter)
-             preview_html = truncate_paragraphs(content_html)
+            content_html = format_content(post.content, post.formatter)
+            preview_html = truncate_paragraphs(content_html)
 
     # Selection logic for thumbnail:
     # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
@@ -151,15 +153,15 @@ def serialize_post(post: Post) -> dict[str, Any]:
         "title": post.title,
         "slug": post.slug,
         "thumbnail_path": thumb_path,
-        "published_date": pub_date.strftime('%B %d, %Y'),
+        "published_date": pub_date.strftime("%B %d, %Y"),
         "published_iso": pub_date.isoformat(),
         "view_count": post.view_count,
         "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
         "excerpt": excerpt,
         "preview_html": preview_html,
-        "has_image": has_media, # Keep key name for frontend layout compatibility
-        "is_video": is_video_thumb, # This specific thumbnail is a video
-        "has_video": has_video, # The post contains at least one video
+        "has_image": has_media,  # Keep key name for frontend layout compatibility
+        "is_video": is_video_thumb,  # This specific thumbnail is a video
+        "has_video": has_video,  # The post contains at least one video
         "is_featured": post.is_featured,
     }
 
@@ -189,7 +191,11 @@ async def homepage(
         cached = await cache.get_by_url("/", query_params)
         # Skip cache for AJAX requests as they need JSON
         # Also skip cache if user is logged in to show edit buttons
-        if cached and request.headers.get("X-Requested-With") != "XMLHttpRequest" and not user:
+        if (
+            cached
+            and request.headers.get("X-Requested-With") != "XMLHttpRequest"
+            and not user
+        ):
             logger.debug("Cache hit for homepage page=%d", page)
             return HTMLResponse(
                 content=cached.content,
@@ -267,7 +273,11 @@ async def homepage(
     response = templates.TemplateResponse("public/index.html", context)
 
     # Store in cache if enabled
-    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest" and not user:
+    if (
+        settings.cache_enabled
+        and request.headers.get("X-Requested-With") != "XMLHttpRequest"
+        and not user
+    ):
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         # Get rendered content
@@ -399,7 +409,9 @@ async def single_post(
                     "id": post.id,
                     "title": post.title,
                     "slug": post.slug,
-                    "published_date": (post.published_at or post.created_at).strftime('%B %d, %Y'),
+                    "published_date": (post.published_at or post.created_at).strftime(
+                        "%B %d, %Y"
+                    ),
                     "published_iso": (post.published_at or post.created_at).isoformat(),
                     "view_count": post.view_count,
                     "content_html": content_html,
@@ -408,15 +420,27 @@ async def single_post(
                 },
                 "has_text_content": has_text_content,
                 "post_media": post_media,
-                "prev_post": {"title": prev_post.title, "slug": prev_post.slug} if prev_post else None,
-                "next_post": {"title": next_post.title, "slug": next_post.slug} if next_post else None,
+                "prev_post": {"title": prev_post.title, "slug": prev_post.slug}
+                if prev_post
+                else None,
+                "next_post": {"title": next_post.title, "slug": next_post.slug}
+                if next_post
+                else None,
                 "blog_settings": {
-                    "show_view_counts": blog_settings_dict.get("show_view_counts", True),
-                    "enable_analytics": blog_settings_dict.get("enable_analytics", False),
-                    "google_analytics_id": blog_settings_dict.get("google_analytics_id", "")
+                    "show_view_counts": blog_settings_dict.get(
+                        "show_view_counts", True
+                    ),
+                    "enable_analytics": blog_settings_dict.get(
+                        "enable_analytics", False
+                    ),
+                    "google_analytics_id": blog_settings_dict.get(
+                        "google_analytics_id", ""
+                    ),
                 },
                 "blog_title": blog_settings_dict.get("blog_title", settings.app_name),
-                "blog_subtitle": blog_settings_dict.get("blog_subtitle", getattr(settings, "blog_subtitle", "")),
+                "blog_subtitle": blog_settings_dict.get(
+                    "blog_subtitle", getattr(settings, "blog_subtitle", "")
+                ),
                 "is_logged_in": user is not None,
             }
         )
@@ -565,7 +589,11 @@ async def tag_archive(
     response = templates.TemplateResponse("public/tag.html", context)
 
     # Store in cache if enabled
-    if settings.cache_enabled and request.headers.get("X-Requested-With") != "XMLHttpRequest" and not user:
+    if (
+        settings.cache_enabled
+        and request.headers.get("X-Requested-With") != "XMLHttpRequest"
+        and not user
+    ):
         cache = await get_cache()
         query_params = {"page": page} if page > 1 else None
         content = bytes(response.body).decode("utf-8")
@@ -623,7 +651,9 @@ async def tags_page(
         if tag_obj:
             query = query.join(post_tags).where(post_tags.c.tag_id == tag_obj.id)
 
-    query = query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
+    query = query.order_by(
+        Post.published_at.desc().nulls_last(), Post.created_at.desc()
+    )
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -791,10 +821,18 @@ async def rss_feed(
     context = {
         "request": request,
         "blog_title": blog_settings.get("blog_title", settings.app_name),
-        "blog_subtitle": blog_settings.get("blog_subtitle", getattr(settings, "blog_subtitle", "")),
-        "author_name": blog_settings.get("author_name", getattr(settings, "author_name", "Light")),
-        "author_email": blog_settings.get("author_email", getattr(settings, "author_email", "")),
-        "language": blog_settings.get("default_language", getattr(settings, "default_language", "en")),
+        "blog_subtitle": blog_settings.get(
+            "blog_subtitle", getattr(settings, "blog_subtitle", "")
+        ),
+        "author_name": blog_settings.get(
+            "author_name", getattr(settings, "author_name", "Light")
+        ),
+        "author_email": blog_settings.get(
+            "author_email", getattr(settings, "author_email", "")
+        ),
+        "language": blog_settings.get(
+            "default_language", getattr(settings, "default_language", "en")
+        ),
         "base_url": base_url,
         "build_date": build_date,
         "posts": posts_data,

@@ -14,9 +14,6 @@ from app.services.auth_service import AuthService
 async def test_user(db: AsyncSession) -> dict:
     """Create a test user and return credentials."""
 
-
-
-
     auth_service = AuthService(db)
     raw_password = "testpassword123"
     hashed_name = hashlib.sha256(raw_password.encode()).hexdigest()
@@ -94,7 +91,3 @@ class TestSecurityPage:
         assert response.status_code == 200
         assert 'id="password-form"' not in response.text
         assert "Update Password" not in response.text
-
-
-
-

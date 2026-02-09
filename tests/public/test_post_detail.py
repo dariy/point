@@ -22,15 +22,14 @@ async def test_single_post_ajax(client: AsyncClient, db: AsyncSession, test_user
         status=PostStatus.PUBLISHED,
         published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
-        author_id=test_user["user"].id
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
 
     # Request with AJAX header
     response = await client.get(
-        f"/posts/{post.slug}",
-        headers={"X-Requested-With": "XMLHttpRequest"}
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
     )
 
     assert response.status_code == 200
@@ -55,7 +54,9 @@ async def test_single_post_ajax(client: AsyncClient, db: AsyncSession, test_user
 
 
 @pytest.mark.asyncio
-async def test_single_post_immersive_ajax(client: AsyncClient, db: AsyncSession, test_user):
+async def test_single_post_immersive_ajax(
+    client: AsyncClient, db: AsyncSession, test_user
+):
     """Test fetching a media-only post via AJAX returns JSON with correct flags."""
     # Create a post with only image, no text
     post = Post(
@@ -65,15 +66,14 @@ async def test_single_post_immersive_ajax(client: AsyncClient, db: AsyncSession,
         status=PostStatus.PUBLISHED,
         published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
-        author_id=test_user["user"].id
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
 
     # Request with AJAX header
     response = await client.get(
-        f"/posts/{post.slug}",
-        headers={"X-Requested-With": "XMLHttpRequest"}
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
     )
 
     assert response.status_code == 200
@@ -85,9 +85,16 @@ async def test_single_post_immersive_ajax(client: AsyncClient, db: AsyncSession,
 
 
 @pytest.mark.asyncio
-async def test_single_post_with_thumbnail_not_in_content(client: AsyncClient, db: AsyncSession):
+async def test_single_post_with_thumbnail_not_in_content(
+    client: AsyncClient, db: AsyncSession
+):
     """Test post with thumbnail that's not in content media."""
-    user = User(username="thumbuser", email="thumb@test.com", password_hash="hash", display_name="Thumb")
+    user = User(
+        username="thumbuser",
+        email="thumb@test.com",
+        password_hash="hash",
+        display_name="Thumb",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -99,13 +106,15 @@ async def test_single_post_with_thumbnail_not_in_content(client: AsyncClient, db
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        thumbnail_path="/media/thumb.jpg"
+        thumbnail_path="/media/thumb.jpg",
     )
     db.add(post)
     await db.commit()
 
     # Get post as AJAX to check media list
-    resp = await client.get(f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert resp.status_code == 200
     data = resp.json()
 
@@ -115,9 +124,16 @@ async def test_single_post_with_thumbnail_not_in_content(client: AsyncClient, db
 
 
 @pytest.mark.asyncio
-async def test_single_post_ajax_response_complete(client: AsyncClient, db: AsyncSession):
+async def test_single_post_ajax_response_complete(
+    client: AsyncClient, db: AsyncSession
+):
     """Test that AJAX response has all required fields."""
-    user = User(username="ajaxcomplete", email="complete@test.com", password_hash="hash", display_name="Complete")
+    user = User(
+        username="ajaxcomplete",
+        email="complete@test.com",
+        password_hash="hash",
+        display_name="Complete",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -134,7 +150,7 @@ async def test_single_post_ajax_response_complete(client: AsyncClient, db: Async
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        formatter="markdown"
+        formatter="markdown",
     )
     db.add(post)
     await db.commit()
@@ -144,7 +160,9 @@ async def test_single_post_ajax_response_complete(client: AsyncClient, db: Async
     post.tags.append(tag)
     await db.commit()
 
-    resp = await client.get(f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     assert resp.status_code == 200
     data = resp.json()
 
@@ -176,9 +194,16 @@ async def test_single_post_ajax_response_complete(client: AsyncClient, db: Async
 
 
 @pytest.mark.asyncio
-async def test_single_post_thumbnail_duplication_logic(client: AsyncClient, db: AsyncSession):
+async def test_single_post_thumbnail_duplication_logic(
+    client: AsyncClient, db: AsyncSession
+):
     """Test complex thumbnail duplication avoidance logic in single_post."""
-    user = User(username="thumbdup", email="thumbdup@test.com", password_hash="hash", display_name="Thumb Dup")
+    user = User(
+        username="thumbdup",
+        email="thumbdup@test.com",
+        password_hash="hash",
+        display_name="Thumb Dup",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -191,7 +216,7 @@ async def test_single_post_thumbnail_duplication_logic(client: AsyncClient, db: 
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        thumbnail_path="/media/image.jpg"
+        thumbnail_path="/media/image.jpg",
     )
     db.add(post1)
 
@@ -203,20 +228,24 @@ async def test_single_post_thumbnail_duplication_logic(client: AsyncClient, db: 
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC),
-        thumbnail_path="image2.jpg"
+        thumbnail_path="image2.jpg",
     )
     db.add(post2)
 
     await db.commit()
 
     # Check Case 1
-    resp = await client.get(f"/posts/{post1.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        f"/posts/{post1.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     data = resp.json()
     # Should only have one media item (duplicate avoided)
     assert len(data["post_media"]) == 1
 
     # Check Case 2
-    resp = await client.get(f"/posts/{post2.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    resp = await client.get(
+        f"/posts/{post2.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
     data = resp.json()
     # Should only have one media item (duplicate avoided despite different path strings)
     assert len(data["post_media"]) == 1

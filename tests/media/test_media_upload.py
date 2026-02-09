@@ -20,7 +20,9 @@ from app.services.media_service import MediaService
 from app.utils.validators import FileValidationError
 
 
-def create_test_image(width: int = 100, height: int = 100, format: str = "JPEG") -> bytes:
+def create_test_image(
+    width: int = 100, height: int = 100, format: str = "JPEG"
+) -> bytes:
     """Create a test image in memory.
 
     Args:
@@ -75,7 +77,12 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
 @pytest.fixture
 async def light_auth_headers(client: AsyncClient, db: AsyncSession):
     """Create light user and return auth headers."""
-    user = User(username="media_light", email="ma@test.com", password_hash="hash", display_name="Medialight")
+    user = User(
+        username="media_light",
+        email="ma@test.com",
+        password_hash="hash",
+        display_name="Medialight",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -85,7 +92,7 @@ async def light_auth_headers(client: AsyncClient, db: AsyncSession):
         token=hash_token("media-token"),
         expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
-        user_agent="test"
+        user_agent="test",
     )
     db.add(session)
     await db.commit()
@@ -197,57 +204,64 @@ class TestMediaUploadValidation:
         assert "not allowed" in response.json()["detail"]["message"]
 
     @pytest.mark.asyncio
-    async def test_upload_media_validation(self, client: AsyncClient, light_auth_headers):
+    async def test_upload_media_validation(
+        self, client: AsyncClient, light_auth_headers
+    ):
         """Test upload validation errors."""
         # Invalid extension
-        files = {'file': ('test.xyz', io.BytesIO(b"test"), 'application/octet-stream')}
-        resp = await client.post("/api/media/upload", files=files, headers=light_auth_headers)
+        files = {"file": ("test.xyz", io.BytesIO(b"test"), "application/octet-stream")}
+        resp = await client.post(
+            "/api/media/upload", files=files, headers=light_auth_headers
+        )
         assert resp.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_upload_file_validation_error(self, client: AsyncClient, auth_cookies: dict):
+    async def test_upload_file_validation_error(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test upload file with validation error."""
         with patch("app.api.media.validate_upload_file") as mock_validate:
             mock_validate.side_effect = Exception("Validation failed")
 
             files = {"file": ("test.jpg", b"content", "image/jpeg")}
             response = await client.post(
-                "/api/media/upload",
-                files=files,
-                cookies=auth_cookies
+                "/api/media/upload", files=files, cookies=auth_cookies
             )
             assert response.status_code == 400
             assert "Validation failed" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_upload_file_http_exception(self, client: AsyncClient, auth_cookies: dict):
+    async def test_upload_file_http_exception(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test upload file with HTTPException from validator."""
         with patch("app.api.media.validate_upload_file") as mock_validate:
-            mock_validate.side_effect = HTTPException(status_code=413, detail="Too large")
+            mock_validate.side_effect = HTTPException(
+                status_code=413, detail="Too large"
+            )
 
             files = {"file": ("large.jpg", b"content", "image/jpeg")}
             response = await client.post(
-                "/api/media/upload",
-                files=files,
-                cookies=auth_cookies
+                "/api/media/upload", files=files, cookies=auth_cookies
             )
             assert response.status_code == 413
             assert "Too large" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_upload_file_service_exception(self, client: AsyncClient, auth_cookies: dict):
+    async def test_upload_file_service_exception(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test upload file with FileValidationError from service."""
-        with patch("app.api.media.validate_upload_file") as mock_validate, \
-             patch("app.services.media_service.MediaService.upload_file") as mock_upload:
-
+        with (
+            patch("app.api.media.validate_upload_file") as mock_validate,
+            patch("app.services.media_service.MediaService.upload_file") as mock_upload,
+        ):
             mock_validate.return_value = (b"c", "f.jpg", "image/jpeg", 10)
             mock_upload.side_effect = FileValidationError("Service invalid", "field")
 
             files = {"file": ("test.jpg", b"content", "image/jpeg")}
             response = await client.post(
-                "/api/media/upload",
-                files=files,
-                cookies=auth_cookies
+                "/api/media/upload", files=files, cookies=auth_cookies
             )
             # The API catches FileValidationError and converts to 400
             assert response.status_code == 400
@@ -280,19 +294,28 @@ class TestMultipleFileUpload:
     """Test multiple file upload functionality."""
 
     @pytest.mark.asyncio
-    async def test_upload_multiple_files_partial_failure(self, client: AsyncClient, auth_cookies: dict):
+    async def test_upload_multiple_files_partial_failure(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test multiple file upload with some failures."""
         with patch("app.api.media.validate_upload_file") as mock_validate:
             # First call succeeds, second raises
             mock_validate.side_effect = [
                 (b"content1", "valid.jpg", "image/jpeg", 100),
-                FileValidationError("Invalid file", "file")
+                FileValidationError("Invalid file", "file"),
             ]
 
-            with patch("app.services.media_service.MediaService.upload_file") as mock_upload, \
-                 patch("app.services.media_service.MediaService.get_media_url") as mock_get_url, \
-                 patch("app.services.media_service.MediaService.get_thumbnail_url") as mock_get_thumb:
-
+            with (
+                patch(
+                    "app.services.media_service.MediaService.upload_file"
+                ) as mock_upload,
+                patch(
+                    "app.services.media_service.MediaService.get_media_url"
+                ) as mock_get_url,
+                patch(
+                    "app.services.media_service.MediaService.get_thumbnail_url"
+                ) as mock_get_thumb,
+            ):
                 # Create a proper mock with all required attributes
                 mock_media = MagicMock()
                 mock_media.id = 1
@@ -310,13 +333,11 @@ class TestMultipleFileUpload:
 
                 files = [
                     ("files", ("valid.jpg", b"content1", "image/jpeg")),
-                    ("files", ("invalid.txt", b"content2", "text/plain"))
+                    ("files", ("invalid.txt", b"content2", "text/plain")),
                 ]
 
                 response = await client.post(
-                    "/api/media/upload/multiple",
-                    files=files,
-                    cookies=auth_cookies
+                    "/api/media/upload/multiple", files=files, cookies=auth_cookies
                 )
 
                 assert response.status_code == 201
@@ -327,7 +348,9 @@ class TestMultipleFileUpload:
                 assert data["failed"][0]["filename"] == "invalid.txt"
 
     @pytest.mark.asyncio
-    async def test_upload_multiple_files_generic_error(self, client: AsyncClient, auth_cookies: dict):
+    async def test_upload_multiple_files_generic_error(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test multiple file upload with generic error."""
         with patch("app.api.media.validate_upload_file") as mock_validate:
             mock_validate.side_effect = Exception("Unexpected error")
@@ -335,9 +358,7 @@ class TestMultipleFileUpload:
             files = [("files", ("error.jpg", b"content", "image/jpeg"))]
 
             response = await client.post(
-                "/api/media/upload/multiple",
-                files=files,
-                cookies=auth_cookies
+                "/api/media/upload/multiple", files=files, cookies=auth_cookies
             )
 
             assert response.status_code == 201

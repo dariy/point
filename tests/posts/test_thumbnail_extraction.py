@@ -94,9 +94,7 @@ class TestThumbnailExtraction:
         assert response.json()["thumbnail_path"] == "/media/first.jpg"
 
         # 2. Update content with new image
-        update_data = {
-            "content": "Second image: ![img](/media/second.jpg)"
-        }
+        update_data = {"content": "Second image: ![img](/media/second.jpg)"}
         response = await client.put(
             f"/api/posts/{post_id}",
             json=update_data,
@@ -126,9 +124,7 @@ class TestThumbnailExtraction:
         assert response.json()["thumbnail_path"] == "/media/exists.jpg"
 
         # 2. Update content removing image
-        update_data = {
-            "content": "No image here anymore."
-        }
+        update_data = {"content": "No image here anymore."}
         response = await client.put(
             f"/api/posts/{post_id}",
             json=update_data,
@@ -158,9 +154,7 @@ class TestThumbnailExtraction:
         assert response.json()["thumbnail_path"] == "/media/keep.jpg"
 
         # 2. Update title only
-        update_data = {
-            "title": "New Title"
-        }
+        update_data = {"title": "New Title"}
         response = await client.put(
             f"/api/posts/{post_id}",
             json=update_data,

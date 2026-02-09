@@ -13,7 +13,12 @@ from app.models.user import User
 @pytest.mark.asyncio
 async def test_rss_feed_limit_20_posts(client: AsyncClient, db: AsyncSession):
     """Test that RSS feed limits to 20 most recent posts."""
-    user = User(username="rssuser", email="rss@test.com", password_hash="hash", display_name="RSS")
+    user = User(
+        username="rssuser",
+        email="rss@test.com",
+        password_hash="hash",
+        display_name="RSS",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -26,7 +31,7 @@ async def test_rss_feed_limit_20_posts(client: AsyncClient, db: AsyncSession):
             content=f"Content {i}",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            published_at=datetime.now(UTC) - timedelta(hours=i)
+            published_at=datetime.now(UTC) - timedelta(hours=i),
         )
         db.add(post)
     await db.commit()
@@ -43,7 +48,12 @@ async def test_rss_feed_limit_20_posts(client: AsyncClient, db: AsyncSession):
 @pytest.mark.asyncio
 async def test_rss_feed_excludes_draft_posts(client: AsyncClient, db: AsyncSession):
     """Test that draft posts don't appear in RSS feed."""
-    user = User(username="rssdraft", email="rssdraft@test.com", password_hash="hash", display_name="RSS Draft")
+    user = User(
+        username="rssdraft",
+        email="rssdraft@test.com",
+        password_hash="hash",
+        display_name="RSS Draft",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -55,7 +65,7 @@ async def test_rss_feed_excludes_draft_posts(client: AsyncClient, db: AsyncSessi
         content="Public content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(pub_post)
 
@@ -65,7 +75,7 @@ async def test_rss_feed_excludes_draft_posts(client: AsyncClient, db: AsyncSessi
         slug="draft-post",
         content="Draft content",
         status=PostStatus.DRAFT,
-        author_id=user.id
+        author_id=user.id,
     )
     db.add(draft_post)
     await db.commit()

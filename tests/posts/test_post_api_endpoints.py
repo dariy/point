@@ -84,7 +84,12 @@ async def second_user_cookies(client: AsyncClient, second_user: dict) -> dict:
 @pytest.fixture
 async def auth_headers(client: AsyncClient, db: AsyncSession):
     """Create auth headers with session token."""
-    user = User(username="poster", email="p@test.com", password_hash="hash", display_name="Poster")
+    user = User(
+        username="poster",
+        email="p@test.com",
+        password_hash="hash",
+        display_name="Poster",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -94,7 +99,7 @@ async def auth_headers(client: AsyncClient, db: AsyncSession):
         token=hash_token("post-token"),
         expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
-        user_agent="test"
+        user_agent="test",
     )
     db.add(session)
     await db.commit()
@@ -233,7 +238,9 @@ class TestCreatePost:
         self, client: AsyncClient, auth_headers: dict
     ) -> None:
         """Test post creation validation."""
-        resp = await client.post("/api/posts", json={"content": "c"}, headers=auth_headers)
+        resp = await client.post(
+            "/api/posts", json={"content": "c"}, headers=auth_headers
+        )
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
@@ -244,7 +251,13 @@ class TestCreatePost:
         user = await db.scalar(select(User).where(User.username == "poster"))
 
         # Pre-create post with specific slug
-        p = Post(title="My Slug", slug="my-slug", content="C", status=PostStatus.DRAFT, author_id=user.id)
+        p = Post(
+            title="My Slug",
+            slug="my-slug",
+            content="C",
+            status=PostStatus.DRAFT,
+            author_id=user.id,
+        )
         db.add(p)
         await db.commit()
 
@@ -313,11 +326,22 @@ class TestGetPost:
 
     @pytest.mark.asyncio
     async def test_get_post_draft_permissions(
-        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, second_user_cookies: dict, test_user: dict
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict,
+        second_user_cookies: dict,
+        test_user: dict,
     ) -> None:
         """Test permissions for viewing draft posts."""
         user = test_user["user"]
-        post = Post(title="Draft", slug="draft", content="c", status=PostStatus.DRAFT, author_id=user.id)
+        post = Post(
+            title="Draft",
+            slug="draft",
+            content="c",
+            status=PostStatus.DRAFT,
+            author_id=user.id,
+        )
         db.add(post)
         await db.commit()
 
@@ -410,9 +434,27 @@ class TestListPosts:
         user = test_user["user"]
 
         # Create posts with different statuses
-        p1 = Post(title="Pub", slug="pub", content="c", status=PostStatus.PUBLISHED, author_id=user.id)
-        p2 = Post(title="Draft", slug="draft", content="c", status=PostStatus.DRAFT, author_id=user.id)
-        p3 = Post(title="Hidden", slug="hidden", content="c", status=PostStatus.HIDDEN, author_id=user.id)
+        p1 = Post(
+            title="Pub",
+            slug="pub",
+            content="c",
+            status=PostStatus.PUBLISHED,
+            author_id=user.id,
+        )
+        p2 = Post(
+            title="Draft",
+            slug="draft",
+            content="c",
+            status=PostStatus.DRAFT,
+            author_id=user.id,
+        )
+        p3 = Post(
+            title="Hidden",
+            slug="hidden",
+            content="c",
+            status=PostStatus.HIDDEN,
+            author_id=user.id,
+        )
         db.add_all([p1, p2, p3])
         await db.commit()
 
@@ -477,7 +519,13 @@ class TestUpdatePost:
     ) -> None:
         """Test updating a post."""
         user = await db.scalar(select(User).where(User.username == "poster"))
-        p = Post(title="Old", slug="old", content="Old", status=PostStatus.DRAFT, author_id=user.id)
+        p = Post(
+            title="Old",
+            slug="old",
+            content="Old",
+            status=PostStatus.DRAFT,
+            author_id=user.id,
+        )
         db.add(p)
         await db.commit()
 
@@ -492,13 +540,15 @@ class TestUpdatePost:
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
         """Test update post returning None (not found/denied)."""
-        with patch("app.services.post_service.PostService.update_post_with_tags") as mock_update:
+        with patch(
+            "app.services.post_service.PostService.update_post_with_tags"
+        ) as mock_update:
             mock_update.return_value = None
 
             response = await client.put(
                 "/api/posts/999",
                 json={"title": "Updated", "content": "c", "status": "draft"},
-                cookies=auth_cookies
+                cookies=auth_cookies,
             )
             assert response.status_code == 404
 
@@ -553,7 +603,13 @@ class TestDeletePost:
     ) -> None:
         """Test deleting a post."""
         user = await db.scalar(select(User).where(User.username == "poster"))
-        p = Post(title="Del", slug="del", content="Del", status=PostStatus.DRAFT, author_id=user.id)
+        p = Post(
+            title="Del",
+            slug="del",
+            content="Del",
+            status=PostStatus.DRAFT,
+            author_id=user.id,
+        )
         db.add(p)
         await db.commit()
 
@@ -609,16 +665,29 @@ class TestPublishPost:
 
     @pytest.mark.asyncio
     async def test_publish_post_permissions(
-        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, second_user_cookies: dict, test_user: dict
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict,
+        second_user_cookies: dict,
+        test_user: dict,
     ) -> None:
         """Test permissions for publishing posts."""
         user = test_user["user"]
-        post = Post(title="Draft", slug="draft", content="c", status=PostStatus.DRAFT, author_id=user.id)
+        post = Post(
+            title="Draft",
+            slug="draft",
+            content="c",
+            status=PostStatus.DRAFT,
+            author_id=user.id,
+        )
         db.add(post)
         await db.commit()
 
         # Other user cannot publish -> 404
-        resp = await client.post(f"/api/posts/{post.id}/publish", cookies=second_user_cookies)
+        resp = await client.post(
+            f"/api/posts/{post.id}/publish", cookies=second_user_cookies
+        )
         assert resp.status_code == 404
 
         # Post not found -> 404
@@ -630,15 +699,26 @@ class TestPublishPost:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
     ) -> None:
         """Test publish post denied (not author)."""
-        user2 = User(username="user3", email="u3@e.com", password_hash="hash", display_name="U3")
+        user2 = User(
+            username="user3", email="u3@e.com", password_hash="hash", display_name="U3"
+        )
         db.add(user2)
         await db.commit()
 
-        post = Post(title="U3 Draft", slug="u3-draft", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=user2.id)
+        post = Post(
+            title="U3 Draft",
+            slug="u3-draft",
+            content="c",
+            status=PostStatus.DRAFT,
+            formatter=PostFormatter.MARKDOWN,
+            author_id=user2.id,
+        )
         db.add(post)
         await db.commit()
 
-        response = await client.post(f"/api/posts/{post.id}/publish", cookies=auth_cookies)
+        response = await client.post(
+            f"/api/posts/{post.id}/publish", cookies=auth_cookies
+        )
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -646,13 +726,22 @@ class TestPublishPost:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
     ) -> None:
         """Test publish post service returns None."""
-        post = Post(title="My Draft", slug="my-draft", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=1)
+        post = Post(
+            title="My Draft",
+            slug="my-draft",
+            content="c",
+            status=PostStatus.DRAFT,
+            formatter=PostFormatter.MARKDOWN,
+            author_id=1,
+        )
         db.add(post)
         await db.commit()
 
         with patch("app.services.post_service.PostService.publish_post") as mock_pub:
             mock_pub.return_value = None
-            response = await client.post(f"/api/posts/{post.id}/publish", cookies=auth_cookies)
+            response = await client.post(
+                f"/api/posts/{post.id}/publish", cookies=auth_cookies
+            )
             assert response.status_code == 404
 
 
@@ -687,16 +776,30 @@ class TestWithdrawPost:
 
     @pytest.mark.asyncio
     async def test_withdraw_post_permissions(
-        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, second_user_cookies: dict, test_user: dict
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict,
+        second_user_cookies: dict,
+        test_user: dict,
     ) -> None:
         """Test permissions for withdrawing posts."""
         user = test_user["user"]
-        post = Post(title="Pub", slug="pub", content="c", status=PostStatus.PUBLISHED, author_id=user.id, published_at=datetime.now(UTC))
+        post = Post(
+            title="Pub",
+            slug="pub",
+            content="c",
+            status=PostStatus.PUBLISHED,
+            author_id=user.id,
+            published_at=datetime.now(UTC),
+        )
         db.add(post)
         await db.commit()
 
         # Other user cannot withdraw -> 404
-        resp = await client.post(f"/api/posts/{post.id}/withdraw", cookies=second_user_cookies)
+        resp = await client.post(
+            f"/api/posts/{post.id}/withdraw", cookies=second_user_cookies
+        )
         assert resp.status_code == 404
 
         # Post not found -> 404
@@ -708,15 +811,26 @@ class TestWithdrawPost:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
     ) -> None:
         """Test withdraw post denied (not author)."""
-        user2 = User(username="user4", email="u4@e.com", password_hash="hash", display_name="U4")
+        user2 = User(
+            username="user4", email="u4@e.com", password_hash="hash", display_name="U4"
+        )
         db.add(user2)
         await db.commit()
 
-        post = Post(title="U4 Pub", slug="u4-pub", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=user2.id)
+        post = Post(
+            title="U4 Pub",
+            slug="u4-pub",
+            content="c",
+            status=PostStatus.PUBLISHED,
+            formatter=PostFormatter.MARKDOWN,
+            author_id=user2.id,
+        )
         db.add(post)
         await db.commit()
 
-        response = await client.post(f"/api/posts/{post.id}/withdraw", cookies=auth_cookies)
+        response = await client.post(
+            f"/api/posts/{post.id}/withdraw", cookies=auth_cookies
+        )
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -724,13 +838,22 @@ class TestWithdrawPost:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
     ) -> None:
         """Test withdraw post service returns None."""
-        post = Post(title="My Pub", slug="my-pub", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
+        post = Post(
+            title="My Pub",
+            slug="my-pub",
+            content="c",
+            status=PostStatus.PUBLISHED,
+            formatter=PostFormatter.MARKDOWN,
+            author_id=1,
+        )
         db.add(post)
         await db.commit()
 
         with patch("app.services.post_service.PostService.withdraw_post") as mock_wd:
             mock_wd.return_value = None
-            response = await client.post(f"/api/posts/{post.id}/withdraw", cookies=auth_cookies)
+            response = await client.post(
+                f"/api/posts/{post.id}/withdraw", cookies=auth_cookies
+            )
             assert response.status_code == 404
 
 
@@ -755,7 +878,11 @@ class TestPreviewLink:
 
     @pytest.mark.asyncio
     async def test_preview_link_access(
-        self, client: AsyncClient, auth_cookies: dict, sample_post: Post, db: AsyncSession
+        self,
+        client: AsyncClient,
+        auth_cookies: dict,
+        sample_post: Post,
+        db: AsyncSession,
     ) -> None:
         """Test accessing a draft post via preview link."""
         # Generate preview link
@@ -805,16 +932,29 @@ class TestPreviewLink:
 
     @pytest.mark.asyncio
     async def test_generate_preview_link_permissions(
-        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, second_user_cookies: dict, test_user: dict
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict,
+        second_user_cookies: dict,
+        test_user: dict,
     ) -> None:
         """Test permissions for generating preview links."""
         user = test_user["user"]
-        post = Post(title="Draft", slug="draft", content="c", status=PostStatus.DRAFT, author_id=user.id)
+        post = Post(
+            title="Draft",
+            slug="draft",
+            content="c",
+            status=PostStatus.DRAFT,
+            author_id=user.id,
+        )
         db.add(post)
         await db.commit()
 
         # Other user cannot generate -> 404
-        resp = await client.post(f"/api/posts/{post.id}/preview", cookies=second_user_cookies)
+        resp = await client.post(
+            f"/api/posts/{post.id}/preview", cookies=second_user_cookies
+        )
         assert resp.status_code == 404
 
         # Post not found -> 404
@@ -834,24 +974,30 @@ class TestPreviewLink:
             status=PostStatus.DRAFT,
             author_id=user.id,
             preview_token="valid_token",
-            preview_expires_at=datetime.now(UTC) + timedelta(days=1)
+            preview_expires_at=datetime.now(UTC) + timedelta(days=1),
         )
         db.add(post)
         await db.commit()
 
         # Valid token
-        resp = await client.get(f"/api/posts/{post.id}/preview?token=valid_token", cookies=auth_cookies)
+        resp = await client.get(
+            f"/api/posts/{post.id}/preview?token=valid_token", cookies=auth_cookies
+        )
         assert resp.status_code == 200
 
         # Invalid token
-        resp = await client.get(f"/api/posts/{post.id}/preview?token=invalid_token", cookies=auth_cookies)
+        resp = await client.get(
+            f"/api/posts/{post.id}/preview?token=invalid_token", cookies=auth_cookies
+        )
         assert resp.status_code == 404
 
         # Expired token
         post.preview_expires_at = datetime.now(UTC) - timedelta(hours=1)
         await db.commit()
 
-        resp = await client.get(f"/api/posts/{post.id}/preview?token=valid_token", cookies=auth_cookies)
+        resp = await client.get(
+            f"/api/posts/{post.id}/preview?token=valid_token", cookies=auth_cookies
+        )
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
@@ -859,15 +1005,26 @@ class TestPreviewLink:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
     ) -> None:
         """Test generate preview link denied."""
-        user2 = User(username="user5", email="u5@e.com", password_hash="hash", display_name="U5")
+        user2 = User(
+            username="user5", email="u5@e.com", password_hash="hash", display_name="U5"
+        )
         db.add(user2)
         await db.commit()
 
-        post = Post(title="U5 Draft", slug="u5-draft", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=user2.id)
+        post = Post(
+            title="U5 Draft",
+            slug="u5-draft",
+            content="c",
+            status=PostStatus.DRAFT,
+            formatter=PostFormatter.MARKDOWN,
+            author_id=user2.id,
+        )
         db.add(post)
         await db.commit()
 
-        response = await client.post(f"/api/posts/{post.id}/preview", cookies=auth_cookies)
+        response = await client.post(
+            f"/api/posts/{post.id}/preview", cookies=auth_cookies
+        )
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -875,13 +1032,24 @@ class TestPreviewLink:
         self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
     ) -> None:
         """Test generate preview link service failure."""
-        post = Post(title="My Draft 2", slug="my-draft-2", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=1)
+        post = Post(
+            title="My Draft 2",
+            slug="my-draft-2",
+            content="c",
+            status=PostStatus.DRAFT,
+            formatter=PostFormatter.MARKDOWN,
+            author_id=1,
+        )
         db.add(post)
         await db.commit()
 
-        with patch("app.services.post_service.PostService.generate_preview_link") as mock_gen:
+        with patch(
+            "app.services.post_service.PostService.generate_preview_link"
+        ) as mock_gen:
             mock_gen.return_value = None
-            response = await client.post(f"/api/posts/{post.id}/preview", cookies=auth_cookies)
+            response = await client.post(
+                f"/api/posts/{post.id}/preview", cookies=auth_cookies
+            )
             assert response.status_code == 404
 
 

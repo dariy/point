@@ -130,9 +130,7 @@ class TestSessionManagement:
         assert result.scalars().first() is None
 
     @pytest.mark.asyncio
-    async def test_validate_session_not_found(
-        self, auth_service: AuthService
-    ) -> None:
+    async def test_validate_session_not_found(self, auth_service: AuthService) -> None:
         """Test validating a non-existent session."""
         result = await auth_service.validate_session("nonexistent_token")
         assert result is None
@@ -205,9 +203,7 @@ class TestSessionManagement:
         assert result.scalar_one_or_none() is None
 
     @pytest.mark.asyncio
-    async def test_terminate_session_not_found(
-        self, auth_service: AuthService
-    ) -> None:
+    async def test_terminate_session_not_found(self, auth_service: AuthService) -> None:
         """Test terminating non-existent session."""
         result = await auth_service.terminate_session(999, 1)
         assert result is False

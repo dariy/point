@@ -1,5 +1,4 @@
-"""Tests for system API.
-"""
+"""Tests for system API."""
 
 from unittest.mock import patch
 
@@ -17,6 +16,8 @@ async def test_get_system_stats(client: AsyncClient, auth_cookies: dict):
     assert "posts_count" in data
     assert "media_count" in data
     assert "cache_size_kb" in data
+
+
 @pytest.mark.asyncio
 async def test_get_logs(client: AsyncClient, auth_cookies: dict):
     """Test getting system logs."""
@@ -25,6 +26,8 @@ async def test_get_logs(client: AsyncClient, auth_cookies: dict):
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
+
+
 @pytest.mark.asyncio
 async def test_clear_cache(client: AsyncClient, auth_cookies: dict):
     """Test clearing cache."""
@@ -33,22 +36,23 @@ async def test_clear_cache(client: AsyncClient, auth_cookies: dict):
     data = response.json()
     assert data["status"] == "success"
     assert "cleared_count" in data
+
+
 @pytest.mark.asyncio
 async def test_manual_backup(client: AsyncClient, auth_cookies: dict):
     """Test triggering a manual backup."""
     with patch("app.api.system.BackupService") as MockBackupService:
         mock_service = MockBackupService.return_value
         mock_service.create_backup.return_value = "/path/to/backup.tar.gz"
-        response = await client.post(
-            "/api/system/backup",
-            cookies=auth_cookies
-        )
+        response = await client.post("/api/system/backup", cookies=auth_cookies)
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success"
         assert data["path"] == "/path/to/backup.tar.gz"
         mock_service.create_backup.assert_called_once()
         mock_service.cleanup_old_backups.assert_called_once()
+
+
 @pytest.mark.asyncio
 async def test_system_unauthorized(client: AsyncClient):
     """Test system endpoints without authentication."""

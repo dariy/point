@@ -14,6 +14,7 @@ def test_backup_service_init(tmp_path):
         assert service.backup_dir == tmp_path / "data" / "backups"
         assert service.backup_dir.exists()
 
+
 def test_create_backup(tmp_path):
     # Setup data
     data_dir = tmp_path / "data"
@@ -36,6 +37,7 @@ def test_create_backup(tmp_path):
         # Verify cleanup of temp files
         assert len(list(service.backup_dir.glob("temp_*"))) == 0
 
+
 def test_list_backups(tmp_path):
     with patch("app.services.backup_service.settings") as mock_settings:
         mock_settings.storage_path = str(tmp_path / "data")
@@ -53,13 +55,17 @@ def test_list_backups(tmp_path):
         # Ensure file2 is newer
         import os
         import time
+
         now = time.time()
         os.utime(file1, (now - 100, now - 100))
         os.utime(file2, (now, now))
 
         backups = service.list_backups()
         assert len(backups) == 2
-        assert backups[0]["filename"] == "backup_2026-01-02_10-00-00.tar.gz"  # Newest first
+        assert (
+            backups[0]["filename"] == "backup_2026-01-02_10-00-00.tar.gz"
+        )  # Newest first
+
 
 def test_delete_backup(tmp_path):
     with patch("app.services.backup_service.settings") as mock_settings:
@@ -74,6 +80,7 @@ def test_delete_backup(tmp_path):
         assert not (service.backup_dir / filename).exists()
         assert service.delete_backup("nonexistent") is False
 
+
 def test_cleanup_old_backups(tmp_path):
     with patch("app.services.backup_service.settings") as mock_settings:
         mock_settings.storage_path = str(tmp_path / "data")
@@ -86,8 +93,10 @@ def test_cleanup_old_backups(tmp_path):
         old_backup.touch()
         # Set mtime to 60 days ago
         import time
+
         sixty_days_ago = time.time() - (60 * 86400)
         import os
+
         os.utime(old_backup, (sixty_days_ago, sixty_days_ago))
 
         # Create new backup
@@ -98,6 +107,7 @@ def test_cleanup_old_backups(tmp_path):
 
         assert not old_backup.exists()
         assert new_backup.exists()
+
 
 def test_restore_backup(tmp_path):
     """Test restoring a backup."""
@@ -144,6 +154,7 @@ def test_restore_backup(tmp_path):
         # Verify cleanup of temp restore directory
         assert len(list(service.backup_dir.glob("restore_*"))) == 0
 
+
 def test_restore_backup_invalid_filename(tmp_path):
     """Test that restore rejects invalid filenames."""
     with patch("app.services.backup_service.settings") as mock_settings:
@@ -154,11 +165,13 @@ def test_restore_backup_invalid_filename(tmp_path):
 
         # Test path traversal attempts
         import pytest
+
         with pytest.raises(ValueError, match="Invalid backup filename"):
             service.restore_backup("../etc/passwd")
 
         with pytest.raises(ValueError, match="Invalid backup filename"):
             service.restore_backup("backup/../../file.tar.gz")
+
 
 def test_restore_backup_nonexistent(tmp_path):
     """Test that restore raises error for nonexistent backup."""
@@ -169,5 +182,6 @@ def test_restore_backup_nonexistent(tmp_path):
         service = BackupService()
 
         import pytest
+
         with pytest.raises(FileNotFoundError):
             service.restore_backup("nonexistent.tar.gz")

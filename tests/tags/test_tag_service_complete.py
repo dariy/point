@@ -17,15 +17,16 @@ class TestTagServiceEdgeCases:
     """Edge case tests for complete coverage."""
 
     @pytest.mark.asyncio
-    async def test_update_tag_name_with_explicit_slug(self, tag_service: TagService, db: AsyncSession):
+    async def test_update_tag_name_with_explicit_slug(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test updating tag name with explicit slug provided (skips auto-generation)."""
         tag = await tag_service.create_tag(TagCreate(name="Original"))
         await db.commit()
 
         # Update both name and slug explicitly
         updated = await tag_service.update_tag(
-            tag.id,
-            TagUpdate(name="New Name", slug="explicit-slug")
+            tag.id, TagUpdate(name="New Name", slug="explicit-slug")
         )
         assert updated.name == "New Name"
         assert updated.slug == "explicit-slug"  # Uses explicit slug, not auto-generated
@@ -37,7 +38,9 @@ class TestTagServiceEdgeCases:
         assert cloud == []
 
     @pytest.mark.asyncio
-    async def test_get_tag_cloud_no_posts(self, tag_service: TagService, db: AsyncSession):
+    async def test_get_tag_cloud_no_posts(
+        self, tag_service: TagService, db: AsyncSession
+    ):
         """Test tag cloud returns empty when tags have no posts."""
         # Create tags with 0 posts
         await tag_service.create_tag(TagCreate(name="Tag1", is_featured=True))

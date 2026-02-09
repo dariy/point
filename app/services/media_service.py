@@ -359,12 +359,14 @@ class MediaService:
         new_thumbnail_rel = None
         if media.thumbnail_path:
             thumb_ext = Path(media.thumbnail_path).suffix
-            new_thumbnail_rel = f"thumbnails/{date_path}/{Path(new_filename).stem}{thumb_ext}"
+            new_thumbnail_rel = (
+                f"thumbnails/{date_path}/{Path(new_filename).stem}{thumb_ext}"
+            )
 
         # Paths on disk
         new_original_full = self.storage_path / "media" / new_original_rel
         if new_original_full.exists():
-             raise ValueError(f"File already exists: {new_filename}")
+            raise ValueError(f"File already exists: {new_filename}")
 
         # Record old URLs for reference updates
         old_url = self.get_media_url(media)
@@ -373,7 +375,7 @@ class MediaService:
         # Perform physical rename
         old_original_full = self.storage_path / "media" / media.original_path
         if old_original_full.exists():
-             await aiofiles.os.rename(old_original_full, new_original_full)
+            await aiofiles.os.rename(old_original_full, new_original_full)
 
         if media.thumbnail_path and new_thumbnail_rel:
             old_thumbnail_full = self.storage_path / "media" / media.thumbnail_path
@@ -398,7 +400,9 @@ class MediaService:
 
         return media
 
-    async def _update_references(self, old_url: str, new_url: str, old_path: str, new_path: str) -> None:
+    async def _update_references(
+        self, old_url: str, new_url: str, old_path: str, new_path: str
+    ) -> None:
         """Update all references to a media file in post content."""
         from sqlalchemy import update
 
@@ -424,9 +428,7 @@ class MediaService:
             )
             # Thumbnail path replacement
             await self.db.execute(
-                update(Post)
-                .where(Post.thumbnail_path == o)
-                .values(thumbnail_path=n)
+                update(Post).where(Post.thumbnail_path == o).values(thumbnail_path=n)
             )
 
     async def delete_media(self, media_id: int) -> tuple[bool, int]:
@@ -460,7 +462,9 @@ class MediaService:
 
         return True, freed_bytes
 
-    async def get_orphaned_media(self, grace_period_hours: int = 24) -> tuple[list[Media], int, int]:
+    async def get_orphaned_media(
+        self, grace_period_hours: int = 24
+    ) -> tuple[list[Media], int, int]:
         """Get all orphaned media (not linked to any post and not used in content).
 
         Args:
@@ -479,8 +483,7 @@ class MediaService:
 
         result = await self.db.execute(
             select(Media).where(
-                Media.post_id.is_(None),
-                Media.uploaded_at < grace_threshold
+                Media.post_id.is_(None), Media.uploaded_at < grace_threshold
             )
         )
         candidates = list(result.scalars().all())
@@ -601,7 +604,9 @@ class MediaService:
             "total_size_mb": round(float(total_size) / (1024 * 1024), 2),
             "quota_bytes": quota,
             "quota_mb": round(float(quota) / (1024 * 1024), 2),
-            "usage_percent": round((float(total_size) / quota) * 100, 2) if quota else 0,
+            "usage_percent": round((float(total_size) / quota) * 100, 2)
+            if quota
+            else 0,
             "orphaned_files": orphaned_files,
             "orphaned_size_bytes": orphaned_size,
             "by_type": by_type,

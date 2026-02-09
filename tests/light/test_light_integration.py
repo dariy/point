@@ -100,6 +100,7 @@ async def test_dashboard_full_integration(
 
     # Create actual media files for storage calculation
     from app.config import get_settings
+
     settings = get_settings()
     media_path = Path(settings.storage_path) / "media"
     media_path.mkdir(parents=True, exist_ok=True)
@@ -144,7 +145,9 @@ async def test_posts_list_full_context(
     await db.commit()
 
     # Test with status filter
-    response = await client.get("/light/posts?status_filter=published&page=1", cookies=auth_cookies)
+    response = await client.get(
+        "/light/posts?status_filter=published&page=1", cookies=auth_cookies
+    )
     assert response.status_code == 200
 
     # Test without filter
@@ -235,42 +238,48 @@ async def test_media_page_complete_context(
 ) -> None:
     """Test media page with complete context including file type filtering."""
     # Create media files of different types
-    media_items = [
-        Media(
-            filename=f"image{i}.jpg",
-            original_path=f"originals/image{i}.jpg",
-            file_type=FileType.IMAGE,
-            mime_type="image/jpeg",
-            file_size=1024 * i,
-            checksum=f"img_checksum{i}",
-        )
-        for i in range(1, 6)
-    ] + [
-        Media(
-            filename=f"video{i}.mp4",
-            original_path=f"originals/video{i}.mp4",
-            file_type=FileType.VIDEO,
-            mime_type="video/mp4",
-            file_size=2048 * i,
-            checksum=f"vid_checksum{i}",
-        )
-        for i in range(1, 4)
-    ] + [
-        Media(
-            filename="audio.mp3",
-            original_path="originals/audio.mp3",
-            file_type=FileType.AUDIO,
-            mime_type="audio/mp3",
-            file_size=512,
-            checksum="audio_checksum",
-        )
-    ]
+    media_items = (
+        [
+            Media(
+                filename=f"image{i}.jpg",
+                original_path=f"originals/image{i}.jpg",
+                file_type=FileType.IMAGE,
+                mime_type="image/jpeg",
+                file_size=1024 * i,
+                checksum=f"img_checksum{i}",
+            )
+            for i in range(1, 6)
+        ]
+        + [
+            Media(
+                filename=f"video{i}.mp4",
+                original_path=f"originals/video{i}.mp4",
+                file_type=FileType.VIDEO,
+                mime_type="video/mp4",
+                file_size=2048 * i,
+                checksum=f"vid_checksum{i}",
+            )
+            for i in range(1, 4)
+        ]
+        + [
+            Media(
+                filename="audio.mp3",
+                original_path="originals/audio.mp3",
+                file_type=FileType.AUDIO,
+                mime_type="audio/mp3",
+                file_size=512,
+                checksum="audio_checksum",
+            )
+        ]
+    )
 
     db.add_all(media_items)
     await db.commit()
 
     # Test with file_type filter
-    response = await client.get("/light/media?file_type=image&page=1", cookies=auth_cookies)
+    response = await client.get(
+        "/light/media?file_type=image&page=1", cookies=auth_cookies
+    )
     assert response.status_code == 200
     assert "image1.jpg" in response.text or "image" in response.text.lower()
 
@@ -286,8 +295,14 @@ async def test_settings_page_complete_context(
     """Test settings page with blog settings populated."""
     # Create blog settings
     settings = [
-        BlogSettings(key="blog_title", value="Integration Test Blog", value_type="string"),
-        BlogSettings(key="blog_description", value="A test blog for integration", value_type="string"),
+        BlogSettings(
+            key="blog_title", value="Integration Test Blog", value_type="string"
+        ),
+        BlogSettings(
+            key="blog_description",
+            value="A test blog for integration",
+            value_type="string",
+        ),
         BlogSettings(key="posts_per_page", value="10", value_type="integer"),
         BlogSettings(key="enable_comments", value="true", value_type="boolean"),
     ]

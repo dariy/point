@@ -16,7 +16,12 @@ from app.services.media_service import MediaService
 @pytest.fixture
 async def light_auth_headers(client: AsyncClient, db: AsyncSession):
     """Create light user and return auth headers."""
-    user = User(username="media_light", email="ma@test.com", password_hash="hash", display_name="Medialight")
+    user = User(
+        username="media_light",
+        email="ma@test.com",
+        password_hash="hash",
+        display_name="Medialight",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -26,7 +31,7 @@ async def light_auth_headers(client: AsyncClient, db: AsyncSession):
         token=hash_token("media-token"),
         expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
-        user_agent="test"
+        user_agent="test",
     )
     db.add(session)
     await db.commit()
@@ -75,23 +80,36 @@ class TestMediaList:
         assert data["per_page"] == 5
 
     @pytest.mark.asyncio
-    async def test_list_media_pagination(self, client: AsyncClient, light_auth_headers, db: AsyncSession):
+    async def test_list_media_pagination(
+        self, client: AsyncClient, light_auth_headers, db: AsyncSession
+    ):
         """Test media list pagination."""
         # Create enough items
         media_items = [
-            Media(filename=f"{i}.jpg", original_path=f"{i}.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum=f"c{i}")
+            Media(
+                filename=f"{i}.jpg",
+                original_path=f"{i}.jpg",
+                file_type=FileType.IMAGE,
+                mime_type="i/j",
+                file_size=10,
+                checksum=f"c{i}",
+            )
             for i in range(15)
         ]
         db.add_all(media_items)
         await db.commit()
 
-        resp = await client.get("/api/media?page=1&per_page=10", headers=light_auth_headers)
+        resp = await client.get(
+            "/api/media?page=1&per_page=10", headers=light_auth_headers
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["media"]) == 10
         assert data["total"] >= 15
 
-        resp = await client.get("/api/media?page=2&per_page=10", headers=light_auth_headers)
+        resp = await client.get(
+            "/api/media?page=2&per_page=10", headers=light_auth_headers
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["media"]) >= 5
@@ -103,8 +121,26 @@ class TestMediaList:
         # Old timestamp to bypass grace period
         old_time = datetime.now(UTC) - timedelta(days=2)
 
-        m1 = Media(filename="1.jpg", original_path="1.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c1", post_id=1, uploaded_at=old_time)
-        m2 = Media(filename="2.mp4", original_path="2.mp4", file_type=FileType.VIDEO, mime_type="v/m", file_size=20, checksum="c2", post_id=None, uploaded_at=old_time)
+        m1 = Media(
+            filename="1.jpg",
+            original_path="1.jpg",
+            file_type=FileType.IMAGE,
+            mime_type="i/j",
+            file_size=10,
+            checksum="c1",
+            post_id=1,
+            uploaded_at=old_time,
+        )
+        m2 = Media(
+            filename="2.mp4",
+            original_path="2.mp4",
+            file_type=FileType.VIDEO,
+            mime_type="v/m",
+            file_size=20,
+            checksum="c2",
+            post_id=None,
+            uploaded_at=old_time,
+        )
         db.add_all([m1, m2])
         await db.commit()
 
@@ -180,14 +216,25 @@ class TestMediaUpdate:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_update_media_metadata(self, client: AsyncClient, light_auth_headers, db: AsyncSession):
+    async def test_update_media_metadata(
+        self, client: AsyncClient, light_auth_headers, db: AsyncSession
+    ):
         """Test updating media metadata via API."""
-        m = Media(filename="u.jpg", original_path="u.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c")
+        m = Media(
+            filename="u.jpg",
+            original_path="u.jpg",
+            file_type=FileType.IMAGE,
+            mime_type="i/j",
+            file_size=10,
+            checksum="c",
+        )
         db.add(m)
         await db.commit()
 
         data = {"alt_text": "Updated Alt", "caption": "Updated Caption"}
-        resp = await client.patch(f"/api/media/{m.id}", json=data, headers=light_auth_headers)
+        resp = await client.patch(
+            f"/api/media/{m.id}", json=data, headers=light_auth_headers
+        )
         assert resp.status_code == 200
         assert resp.json()["alt_text"] == "Updated Alt"
 
@@ -201,12 +248,14 @@ class TestMediaUpdate:
             file_type=FileType.IMAGE,
             mime_type="image/jpeg",
             file_size=100,
-            checksum="c"
+            checksum="c",
         )
         db.add(m)
         await db.commit()
 
-        updated = await service.update_media(m.id, alt_text="Alt", caption="Cap", post_id=1)
+        updated = await service.update_media(
+            m.id, alt_text="Alt", caption="Cap", post_id=1
+        )
         assert updated is not None
         assert updated.alt_text == "Alt"
         assert updated.caption == "Cap"
@@ -238,7 +287,9 @@ class TestMediaDelete:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_media_not_found(self, client: AsyncClient, light_auth_headers):
+    async def test_delete_media_not_found(
+        self, client: AsyncClient, light_auth_headers
+    ):
         """Test deleting non-existent media."""
         resp = await client.delete("/api/media/99999", headers=light_auth_headers)
         assert resp.status_code == 404

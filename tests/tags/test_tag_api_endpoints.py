@@ -54,7 +54,12 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
 @pytest.fixture
 async def tag_light_headers(client: AsyncClient, db: AsyncSession):
     """Create light user and return auth headers."""
-    user = User(username="taglight", email="t@test.com", password_hash="hash", display_name="Taglight")
+    user = User(
+        username="taglight",
+        email="t@test.com",
+        password_hash="hash",
+        display_name="Taglight",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -64,7 +69,7 @@ async def tag_light_headers(client: AsyncClient, db: AsyncSession):
         token=hash_token("tag-token"),
         expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
-        user_agent="test"
+        user_agent="test",
     )
     db.add(session)
     await db.commit()
@@ -104,9 +109,7 @@ class TestTagList:
         assert data["total"] == 0
 
     @pytest.mark.asyncio
-    async def test_list_with_tags(
-        self, client: AsyncClient, sample_tag: dict
-    ) -> None:
+    async def test_list_with_tags(self, client: AsyncClient, sample_tag: dict) -> None:
         """Test listing tags with existing tags."""
         response = await client.get("/api/tags")
 
@@ -197,25 +200,29 @@ class TestTagCreate:
         assert "already exists" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_create_tag_duplicate(self, client: AsyncClient, tag_light_headers, db: AsyncSession):
+    async def test_create_tag_duplicate(
+        self, client: AsyncClient, tag_light_headers, db: AsyncSession
+    ):
         """Test creating duplicate tag."""
         t = Tag(name="Dup", slug="dup")
         db.add(t)
         await db.commit()
 
-        resp = await client.post("/api/tags", json={"name": "Dup"}, headers=tag_light_headers)
+        resp = await client.post(
+            "/api/tags", json={"name": "Dup"}, headers=tag_light_headers
+        )
         assert resp.status_code == 409
 
     @pytest.mark.asyncio
-    async def test_create_tag_value_error(self, client: AsyncClient, auth_cookies: dict):
+    async def test_create_tag_value_error(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test create tag with ValueError (e.g. invalid name)."""
         with patch("app.services.tag_service.TagService.create_tag") as mock_create:
             mock_create.side_effect = ValueError("Invalid tag name")
 
             response = await client.post(
-                "/api/tags",
-                json={"name": "New Tag"},
-                cookies=auth_cookies
+                "/api/tags", json={"name": "New Tag"}, cookies=auth_cookies
             )
             assert response.status_code == 409
             assert "Invalid tag name" in response.json()["detail"]
@@ -225,9 +232,7 @@ class TestTagGet:
     """Test cases for get tag endpoints."""
 
     @pytest.mark.asyncio
-    async def test_get_by_id(
-        self, client: AsyncClient, sample_tag: dict
-    ) -> None:
+    async def test_get_by_id(self, client: AsyncClient, sample_tag: dict) -> None:
         """Test getting tag by ID."""
         response = await client.get(f"/api/tags/{sample_tag['id']}")
 
@@ -249,9 +254,7 @@ class TestTagGet:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_by_slug(
-        self, client: AsyncClient, sample_tag: dict
-    ) -> None:
+    async def test_get_by_slug(self, client: AsyncClient, sample_tag: dict) -> None:
         """Test getting tag by slug."""
         response = await client.get(f"/api/tags/slug/{sample_tag['slug']}")
 
@@ -315,13 +318,17 @@ class TestTagUpdate:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_update_tag(self, client: AsyncClient, tag_light_headers, db: AsyncSession):
+    async def test_update_tag(
+        self, client: AsyncClient, tag_light_headers, db: AsyncSession
+    ):
         """Test updating a tag."""
         t = Tag(name="OldName", slug="old-name")
         db.add(t)
         await db.commit()
 
-        resp = await client.put(f"/api/tags/{t.id}", json={"name": "NewName"}, headers=tag_light_headers)
+        resp = await client.put(
+            f"/api/tags/{t.id}", json={"name": "NewName"}, headers=tag_light_headers
+        )
         assert resp.status_code == 200
         assert resp.json()["name"] == "NewName"
 
@@ -332,22 +339,20 @@ class TestTagUpdate:
             mock_update.return_value = None
 
             response = await client.put(
-                "/api/tags/999",
-                json={"name": "Updated"},
-                cookies=auth_cookies
+                "/api/tags/999", json={"name": "Updated"}, cookies=auth_cookies
             )
             assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_update_tag_value_error(self, client: AsyncClient, auth_cookies: dict):
+    async def test_update_tag_value_error(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test update tag conflict."""
         with patch("app.services.tag_service.TagService.update_tag") as mock_update:
             mock_update.side_effect = ValueError("Tag exists")
 
             response = await client.put(
-                "/api/tags/1",
-                json={"name": "Updated"},
-                cookies=auth_cookies
+                "/api/tags/1", json={"name": "Updated"}, cookies=auth_cookies
             )
             assert response.status_code == 409
 
@@ -396,7 +401,9 @@ class TestTagDelete:
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_tag_not_found_mock(self, client: AsyncClient, auth_cookies: dict):
+    async def test_delete_tag_not_found_mock(
+        self, client: AsyncClient, auth_cookies: dict
+    ):
         """Test delete tag not found via mock."""
         with patch("app.services.tag_service.TagService.delete_tag") as mock_delete:
             mock_delete.return_value = False
@@ -434,7 +441,9 @@ class TestTagPosts:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_posts_by_tag_pagination(self, client: AsyncClient, db: AsyncSession):
+    async def test_get_posts_by_tag_pagination(
+        self, client: AsyncClient, db: AsyncSession
+    ):
         """Test pagination for get posts by tag."""
         tag = Tag(name="T1", slug="t1")
         db.add(tag)
@@ -442,7 +451,14 @@ class TestTagPosts:
 
         # Add posts
         for i in range(15):
-            post = Post(title=f"P{i}", slug=f"p{i}", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
+            post = Post(
+                title=f"P{i}",
+                slug=f"p{i}",
+                content="c",
+                status=PostStatus.PUBLISHED,
+                formatter=PostFormatter.MARKDOWN,
+                author_id=1,
+            )
             post.tags.append(tag)
             db.add(post)
         await db.commit()

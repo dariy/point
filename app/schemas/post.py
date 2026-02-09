@@ -4,12 +4,12 @@ Defines Pydantic models for post CRUD operations.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class PostStatus(str, Enum):
+class PostStatus(StrEnum):
     """Post publication status."""
 
     DRAFT = "draft"
@@ -17,7 +17,7 @@ class PostStatus(str, Enum):
     HIDDEN = "hidden"
 
 
-class PostFormatter(str, Enum):
+class PostFormatter(StrEnum):
     """Content formatter type."""
 
     MARKDOWN = "markdown"
@@ -41,7 +41,9 @@ class PostBase(BaseModel):
 class PostCreate(PostBase):
     """Schema for creating a post."""
 
-    slug: str | None = Field(default=None, max_length=200, description="Optional explicit slug")
+    slug: str | None = Field(
+        default=None, max_length=200, description="Optional explicit slug"
+    )
     tags: list[str] = Field(default_factory=list, description="Tag names to associate")
 
     model_config = ConfigDict(

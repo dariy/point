@@ -12,7 +12,13 @@ def test_media_model_repr():
 def test_media_model_properties():
     """Test model properties."""
     # Image
-    m1 = Media(file_type=FileType.IMAGE, thumbnail_path="thumb.jpg", width=100, height=200, post_id=None)
+    m1 = Media(
+        file_type=FileType.IMAGE,
+        thumbnail_path="thumb.jpg",
+        width=100,
+        height=200,
+        post_id=None,
+    )
     assert m1.is_image
     assert not m1.is_video
     assert not m1.is_audio
@@ -21,7 +27,13 @@ def test_media_model_properties():
     assert m1.is_orphaned
 
     # Video
-    m2 = Media(file_type=FileType.VIDEO, thumbnail_path=None, width=None, height=None, post_id=1)
+    m2 = Media(
+        file_type=FileType.VIDEO,
+        thumbnail_path=None,
+        width=None,
+        height=None,
+        post_id=1,
+    )
     assert not m2.is_image
     assert m2.is_video
     assert not m2.is_audio

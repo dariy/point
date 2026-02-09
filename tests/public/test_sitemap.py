@@ -36,7 +36,12 @@ async def test_sitemap_excludes_empty_tags(client: AsyncClient, db: AsyncSession
 @pytest.mark.asyncio
 async def test_sitemap_excludes_draft_posts(client: AsyncClient, db: AsyncSession):
     """Test that draft posts don't appear in sitemap."""
-    user = User(username="sitemapuser", email="sitemap@test.com", password_hash="hash", display_name="Sitemap")
+    user = User(
+        username="sitemapuser",
+        email="sitemap@test.com",
+        password_hash="hash",
+        display_name="Sitemap",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -48,7 +53,7 @@ async def test_sitemap_excludes_draft_posts(client: AsyncClient, db: AsyncSessio
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
-        published_at=datetime.now(UTC)
+        published_at=datetime.now(UTC),
     )
     db.add(pub_post)
 
@@ -58,7 +63,7 @@ async def test_sitemap_excludes_draft_posts(client: AsyncClient, db: AsyncSessio
         slug="draft-sitemap",
         content="Content",
         status=PostStatus.DRAFT,
-        author_id=user.id
+        author_id=user.id,
     )
     db.add(draft_post)
     await db.commit()
@@ -80,6 +85,9 @@ async def test_sitemap_includes_homepage_and_gallery(client: AsyncClient):
     assert resp.status_code == 200
 
     # Should include homepage
-    assert "<loc>http://testserver/</loc>" in resp.text or "<loc>http://test/</loc>" in resp.text
+    assert (
+        "<loc>http://testserver/</loc>" in resp.text
+        or "<loc>http://test/</loc>" in resp.text
+    )
     # Should include gallery/tags page
     assert "/tags" in resp.text

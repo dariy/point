@@ -110,9 +110,7 @@ class TestImageProcessor:
 
     def test_process_rgba_image(self, processor: ImageProcessor) -> None:
         """Test processing RGBA images."""
-        image_data = create_test_image(
-            width=100, height=100, format="PNG", mode="RGBA"
-        )
+        image_data = create_test_image(width=100, height=100, format="PNG", mode="RGBA")
 
         result, width, height, format = processor.process_image(image_data)
 

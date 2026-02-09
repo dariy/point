@@ -10,12 +10,10 @@ from app.services.settings_service import SettingsService
 def settings_service(db: AsyncSession):
     return SettingsService(db)
 
+
 @pytest.mark.asyncio
 async def test_get_all_settings_empty(settings_service: SettingsService):
     """Test getting settings when empty."""
-
-
-
 
     settings = await settings_service.get_all_settings()
     # Should return defaults from env
@@ -24,28 +22,24 @@ async def test_get_all_settings_empty(settings_service: SettingsService):
     # Just checking it exists is enough or check type
     assert isinstance(settings["blog_title"], str)
 
+
 @pytest.mark.asyncio
 async def test_update_settings_multiple(settings_service: SettingsService):
     """Test updating multiple settings."""
-    update_data = {
-        "blog_title": "New Name",
-        "blog_subtitle": "Footer"
-    }
+    update_data = {"blog_title": "New Name", "blog_subtitle": "Footer"}
     await settings_service.update_settings(update_data)
 
     # Verify persistence
     fetched = await settings_service.get_all_settings()
     assert fetched["blog_title"] == "New Name"
 
-    update_data = {
-        "blog_title": "New Title",
-        "blog_subtitle": "New Subtitle"
-    }
+    update_data = {"blog_title": "New Title", "blog_subtitle": "New Subtitle"}
     await settings_service.update_settings(update_data)
 
     fetched = await settings_service.get_all_settings()
     assert fetched["blog_title"] == "New Title"
     assert fetched["blog_subtitle"] == "New Subtitle"
+
 
 @pytest.mark.asyncio
 async def test_get_setting_fallback(settings_service: SettingsService):
@@ -54,6 +48,7 @@ async def test_get_setting_fallback(settings_service: SettingsService):
     val = await settings_service.get_setting("posts_per_page")
     assert val is not None
     assert isinstance(val, int)
+
 
 @pytest.mark.asyncio
 async def test_boolean_setting(settings_service: SettingsService):
@@ -65,6 +60,7 @@ async def test_boolean_setting(settings_service: SettingsService):
     assert val is True
     assert isinstance(val, bool)
 
+
 @pytest.mark.asyncio
 async def test_int_setting(settings_service: SettingsService):
     """Test integer setting conversion."""
@@ -73,6 +69,7 @@ async def test_int_setting(settings_service: SettingsService):
     val = await settings_service.get_setting("posts_per_page")
     assert val == 50
     assert isinstance(val, int)
+
 
 @pytest.mark.asyncio
 async def test_update_setting_mixed_types(settings_service: SettingsService):
@@ -96,10 +93,9 @@ async def test_analytics_settings(settings_service: SettingsService):
     assert "google_analytics_id" in settings
 
     # Update settings
-    await settings_service.update_settings({
-        "enable_analytics": True,
-        "google_analytics_id": "G-TEST123"
-    })
+    await settings_service.update_settings(
+        {"enable_analytics": True, "google_analytics_id": "G-TEST123"}
+    )
 
     # Verify update
     updated = await settings_service.get_all_settings()
@@ -109,6 +105,3 @@ async def test_analytics_settings(settings_service: SettingsService):
     # Test single get
     ga_id = await settings_service.get_setting("google_analytics_id")
     assert ga_id == "G-TEST123"
-
-
-

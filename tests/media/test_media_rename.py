@@ -19,7 +19,12 @@ from app.services.media_service import MediaService
 @pytest.fixture
 async def auth_headers(client: AsyncClient, db: AsyncSession):
     """Create a user and return auth headers."""
-    user = User(username="rename_user", email="rename@test.com", password_hash="hash", display_name="Renamer")
+    user = User(
+        username="rename_user",
+        email="rename@test.com",
+        password_hash="hash",
+        display_name="Renamer",
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -29,11 +34,12 @@ async def auth_headers(client: AsyncClient, db: AsyncSession):
         token=hash_token("rename-token"),
         expires_at=datetime.now(UTC) + timedelta(days=1),
         ip_address="127.0.0.1",
-        user_agent="test"
+        user_agent="test",
     )
     db.add(session)
     await db.commit()
     return {"Cookie": "session_token=rename-token"}
+
 
 @pytest.fixture
 def patch_storage(tmp_path):
@@ -44,6 +50,7 @@ def patch_storage(tmp_path):
             mock_service_settings.return_value.storage_path = str(tmp_path)
             # Re-initialize MediaService with patched settings
             yield tmp_path
+
 
 @pytest.mark.asyncio
 async def test_rename_media_service(db: AsyncSession, patch_storage):
@@ -70,12 +77,17 @@ async def test_rename_media_service(db: AsyncSession, patch_storage):
         file_type=FileType.IMAGE,
         mime_type="image/jpeg",
         file_size=8,
-        checksum="dummy_rename"
+        checksum="dummy_rename",
     )
     db.add(media)
 
     # Create a post that references this media
-    user = User(username="testuser", email="test@test.com", password_hash="hash", display_name="Test User")
+    user = User(
+        username="testuser",
+        email="test@test.com",
+        password_hash="hash",
+        display_name="Test User",
+    )
     db.add(user)
     await db.flush()
 
@@ -87,7 +99,7 @@ async def test_rename_media_service(db: AsyncSession, patch_storage):
         thumbnail_path="/2024/08/old.jpg",
         author_id=user.id,
         formatter=PostFormatter.MARKDOWN,
-        status=PostStatus.PUBLISHED
+        status=PostStatus.PUBLISHED,
     )
     db.add(post)
     await db.commit()
@@ -115,8 +127,11 @@ async def test_rename_media_service(db: AsyncSession, patch_storage):
     assert "/2024/08/new.jpg" in post.excerpt
     assert post.thumbnail_path == "/2024/08/new.jpg"
 
+
 @pytest.mark.asyncio
-async def test_rename_media_api(client: AsyncClient, db: AsyncSession, auth_headers, patch_storage):
+async def test_rename_media_api(
+    client: AsyncClient, db: AsyncSession, auth_headers, patch_storage
+):
     """Test media renaming via API."""
     tmp_path = patch_storage
     media_dir = tmp_path / "media" / "originals" / "2024" / "08"
@@ -129,7 +144,7 @@ async def test_rename_media_api(client: AsyncClient, db: AsyncSession, auth_head
         file_type=FileType.IMAGE,
         mime_type="image/jpeg",
         file_size=7,
-        checksum="api_dummy_rename"
+        checksum="api_dummy_rename",
     )
     db.add(media)
     await db.commit()
@@ -137,7 +152,7 @@ async def test_rename_media_api(client: AsyncClient, db: AsyncSession, auth_head
     response = await client.post(
         f"/api/media/{media.id}/rename",
         json={"new_filename": "api_new.jpg"},
-        headers=auth_headers
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -145,8 +160,11 @@ async def test_rename_media_api(client: AsyncClient, db: AsyncSession, auth_head
     assert (media_dir / "api_new.jpg").exists()
     assert not (media_dir / "api_old.jpg").exists()
 
+
 @pytest.mark.asyncio
-async def test_rename_media_already_exists(client: AsyncClient, db: AsyncSession, auth_headers, patch_storage):
+async def test_rename_media_already_exists(
+    client: AsyncClient, db: AsyncSession, auth_headers, patch_storage
+):
     """Test error when new filename already exists."""
     tmp_path = patch_storage
     media_dir = tmp_path / "media" / "originals" / "2024" / "08"
@@ -154,14 +172,21 @@ async def test_rename_media_already_exists(client: AsyncClient, db: AsyncSession
     (media_dir / "file1.jpg").write_bytes(b"content1")
     (media_dir / "file2.jpg").write_bytes(b"content2")
 
-    m1 = Media(filename="file1.jpg", original_path="originals/2024/08/file1.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=8, checksum="c_exists")
+    m1 = Media(
+        filename="file1.jpg",
+        original_path="originals/2024/08/file1.jpg",
+        file_type=FileType.IMAGE,
+        mime_type="i/j",
+        file_size=8,
+        checksum="c_exists",
+    )
     db.add(m1)
     await db.commit()
 
     response = await client.post(
         f"/api/media/{m1.id}/rename",
         json={"new_filename": "file2.jpg"},
-        headers=auth_headers
+        headers=auth_headers,
     )
 
     assert response.status_code == 400

@@ -1,6 +1,5 @@
 """Tests for formatter utilities."""
 
-
 from app.utils.formatters import (
     determine_thumbnail,
     extract_all_images,
@@ -331,7 +330,7 @@ def test_extract_all_media_videos():
 
 def test_extract_all_media_video_by_extension():
     """Test video detection by file extension."""
-    content = '![Video](movie.mp4)'
+    content = "![Video](movie.mp4)"
     result = extract_all_media(content)
     assert len(result) == 1
     assert result[0]["type"] == "video"
@@ -423,7 +422,7 @@ def test_determine_thumbnail_explicit_video():
 
 def test_determine_thumbnail_from_content():
     """Test extracting thumbnail from content."""
-    content = '![Image](photo.jpg)'
+    content = "![Image](photo.jpg)"
     result = determine_thumbnail(content, None)
     assert result[0] == "photo.jpg"
     assert result[1] is False
@@ -435,6 +434,7 @@ def test_determine_thumbnail_video_fallback():
     result = determine_thumbnail(content, None)
     assert result[0] == "video.mp4"
     assert result[1] is True
+
 
 def test_determine_thumbnail_prefer_image_over_video():
     """Test that image is preferred over video."""

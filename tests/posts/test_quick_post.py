@@ -110,6 +110,7 @@ class TestQuickPostIntegration:
         assert expected_markdown in editor_html
         assert "/media/originals/originals/" not in editor_html
         assert "/media/originals/" in editor_html
+
     @pytest.mark.asyncio
     async def test_upload_multiple_images_sequential(
         self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
@@ -133,6 +134,7 @@ class TestQuickPostIntegration:
                 cookies=auth_cookies,
             )
             assert editor_response.status_code == 200
+
     @pytest.mark.asyncio
     async def test_upload_response_includes_all_required_fields(
         self, client: AsyncClient, auth_cookies: dict
@@ -152,6 +154,7 @@ class TestQuickPostIntegration:
             assert field in data, f"Missing required field: {field}"
         assert isinstance(data["original_path"], str)
         assert "/" in data["original_path"]
+
     @pytest.mark.asyncio
     async def test_editor_without_media_still_works(
         self, client: AsyncClient, auth_cookies: dict
@@ -163,7 +166,11 @@ class TestQuickPostIntegration:
         )
         assert response.status_code == 200
         assert "New Post" in response.text
-        assert "![](/media/" not in response.text or response.text.count("![](/media/") == 0
+        assert (
+            "![](/media/" not in response.text
+            or response.text.count("![](/media/") == 0
+        )
+
     @pytest.mark.asyncio
     async def test_upload_invalid_file_type(
         self, client: AsyncClient, auth_cookies: dict
@@ -177,6 +184,7 @@ class TestQuickPostIntegration:
             cookies=auth_cookies,
         )
         assert response.status_code == 400
+
     @pytest.mark.asyncio
     async def test_media_path_consistency(
         self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
@@ -192,12 +200,11 @@ class TestQuickPostIntegration:
         )
         assert upload_response.status_code == 201
         api_data = upload_response.json()
-        result = await db.execute(
-            select(Media).where(Media.id == api_data["id"])
-        )
+        result = await db.execute(select(Media).where(Media.id == api_data["id"]))
         media = result.scalar_one()
         assert api_data["original_path"] == media.original_path
         assert api_data["filename"] == media.filename
+
     @pytest.mark.asyncio
     async def test_quick_post_with_png_image(
         self, client: AsyncClient, auth_cookies: dict
@@ -222,10 +229,9 @@ class TestQuickPostIntegration:
         )
         assert editor_response.status_code == 200
         assert f"![](/media/{upload_data['original_path']})" in editor_response.text
+
     @pytest.mark.asyncio
-    async def test_unauthenticated_upload_fails(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_unauthenticated_upload_fails(self, client: AsyncClient) -> None:
         """Test that unauthenticated users cannot upload images."""
         image_data = create_test_image()
         files = {"file": ("test.jpg", image_data, "image/jpeg")}
@@ -234,6 +240,7 @@ class TestQuickPostIntegration:
             files=files,
         )
         assert response.status_code == 401
+
     @pytest.mark.asyncio
     async def test_unauthenticated_editor_access_fails(
         self, client: AsyncClient

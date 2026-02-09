@@ -1,5 +1,4 @@
-"""API endpoints for blog settings.
-"""
+"""API endpoints for blog settings."""
 
 from typing import Any
 

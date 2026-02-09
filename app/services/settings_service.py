@@ -53,7 +53,9 @@ class SettingsService:
             # Default to string
             return value
         except (ValueError, json.JSONDecodeError) as e:
-            logger.error("Failed to convert setting value '%s' to %s: %s", value, value_type, e)
+            logger.error(
+                "Failed to convert setting value '%s' to %s: %s", value, value_type, e
+            )
             return value
 
     def _convert_from_type(self, value: Any) -> tuple[str, str]:
@@ -107,14 +109,26 @@ class SettingsService:
         """
         # Get all settings from DB
         result = await self.db.execute(select(BlogSettings))
-        db_settings = {s.key: self._convert_to_type(s.value, s.value_type) for s in result.scalars().all()}
+        db_settings = {
+            s.key: self._convert_to_type(s.value, s.value_type)
+            for s in result.scalars().all()
+        }
 
         # Merge with env-based settings for specific blog-related keys
         blog_keys = [
-            "blog_title", "blog_subtitle", "author_name", "author_email",
-            "posts_per_page", "default_language", "default_theme",
-            "show_view_counts", "enable_analytics", "google_analytics_id",
-            "max_image_width", "jpeg_quality", "storage_quota_mb"
+            "blog_title",
+            "blog_subtitle",
+            "author_name",
+            "author_email",
+            "posts_per_page",
+            "default_language",
+            "default_theme",
+            "show_view_counts",
+            "enable_analytics",
+            "google_analytics_id",
+            "max_image_width",
+            "jpeg_quality",
+            "storage_quota_mb",
         ]
 
         settings = {}

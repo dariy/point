@@ -19,15 +19,14 @@ async def test_single_post_ajax(client, db, test_user):
         status=PostStatus.PUBLISHED,
         published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
-        author_id=test_user["user"].id
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
 
     # Request with AJAX header
     response = await client.get(
-        f"/posts/{post.slug}",
-        headers={"X-Requested-With": "XMLHttpRequest"}
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
     )
 
     assert response.status_code == 200
@@ -50,6 +49,7 @@ async def test_single_post_ajax(client, db, test_user):
     assert "blog_settings" in data
     assert "blog_title" in data
 
+
 @pytest.mark.asyncio
 async def test_single_post_immersive_ajax(client, db, test_user):
     """Test fetching a media-only post via AJAX returns JSON with correct flags."""
@@ -61,15 +61,14 @@ async def test_single_post_immersive_ajax(client, db, test_user):
         status=PostStatus.PUBLISHED,
         published_at=datetime.now(UTC),
         formatter=PostFormatter.MARKDOWN,
-        author_id=test_user["user"].id
+        author_id=test_user["user"].id,
     )
     db.add(post)
     await db.commit()
 
     # Request with AJAX header
     response = await client.get(
-        f"/posts/{post.slug}",
-        headers={"X-Requested-With": "XMLHttpRequest"}
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
     )
 
     assert response.status_code == 200
@@ -114,6 +113,7 @@ async def sample_posts(db: AsyncSession) -> list[Post]:
     await db.commit()
     return posts
 
+
 @pytest.fixture
 async def sample_tag_with_posts(db: AsyncSession) -> Tag:
     """Create a tag and attach to posts."""
@@ -139,6 +139,7 @@ async def sample_tag_with_posts(db: AsyncSession) -> Tag:
     await db.commit()
     return tag
 
+
 @pytest.mark.asyncio
 async def test_homepage_ajax_pagination(client: AsyncClient, sample_posts: list[Post]):
     """Test homepage returns JSON for AJAX requests."""
@@ -158,10 +159,16 @@ async def test_homepage_ajax_pagination(client: AsyncClient, sample_posts: list[
     assert "slug" in post
     assert "preview_html" in post or "excerpt" in post
 
+
 @pytest.mark.asyncio
-async def test_tag_archive_ajax_pagination(client: AsyncClient, sample_tag_with_posts: Tag):
+async def test_tag_archive_ajax_pagination(
+    client: AsyncClient, sample_tag_with_posts: Tag
+):
     """Test tag archive returns JSON for AJAX requests."""
-    response = await client.get(f"/tag/{sample_tag_with_posts.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    response = await client.get(
+        f"/tag/{sample_tag_with_posts.slug}",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
@@ -171,8 +178,11 @@ async def test_tag_archive_ajax_pagination(client: AsyncClient, sample_tag_with_
     assert "tag" in data
     assert data["tag"]["slug"] == sample_tag_with_posts.slug
 
+
 @pytest.mark.asyncio
-async def test_homepage_html_has_ajax_class(client: AsyncClient, sample_posts: list[Post]):
+async def test_homepage_html_has_ajax_class(
+    client: AsyncClient, sample_posts: list[Post]
+):
     """Test homepage HTML pagination links have ajax-link class."""
     # Request page 1, ensure multiple pages (default limit 10, posts 15)
     response = await client.get("/")
@@ -182,8 +192,11 @@ async def test_homepage_html_has_ajax_class(client: AsyncClient, sample_posts: l
     # ajax-link should be present
     assert "ajax-link" in response.text
 
+
 @pytest.mark.asyncio
-async def test_tag_archive_html_has_ajax_class(client: AsyncClient, sample_tag_with_posts: Tag):
+async def test_tag_archive_html_has_ajax_class(
+    client: AsyncClient, sample_tag_with_posts: Tag
+):
     """Test tag archive HTML pagination links have ajax-link class."""
     response = await client.get(f"/tag/{sample_tag_with_posts.slug}")
     assert response.status_code == 200

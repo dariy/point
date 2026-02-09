@@ -216,7 +216,17 @@ def sanitize_html(html_content: str) -> str:
     allowed_attrs = {
         "a": {"href", "title", "target", "rel"},
         "img": {"src", "alt", "title", "width", "height"},
-        "video": {"src", "controls", "width", "height", "autoplay", "muted", "loop", "poster", "preload"},
+        "video": {
+            "src",
+            "controls",
+            "width",
+            "height",
+            "autoplay",
+            "muted",
+            "loop",
+            "poster",
+            "preload",
+        },
         "source": {"src", "type"},
         "td": {"colspan", "rowspan"},
         "th": {"colspan", "rowspan"},
@@ -387,7 +397,9 @@ def extract_all_media(content: str) -> list[dict[str, str]]:
     video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
 
     def get_type(url_str: str, default_type: str = "image") -> str:
-        url_lower = url_str.lower().split("?")[0]  # Ignore query params for extension check
+        url_lower = url_str.lower().split("?")[
+            0
+        ]  # Ignore query params for extension check
         if any(url_lower.endswith(ext) for ext in video_extensions):
             return "video"
         return default_type
@@ -402,7 +414,9 @@ def extract_all_media(content: str) -> list[dict[str, str]]:
         media.append({"url": url, "type": get_type(url)})
 
     # 2. HTML img tags: <img src="url">
-    html_img_matches = re.findall(r"<img[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE)
+    html_img_matches = re.findall(
+        r"<img[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
+    )
     for match in html_img_matches:
         url = match[1].strip()
         media.append({"url": url, "type": "image"})
@@ -475,7 +489,10 @@ def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
 
     return "".join(clean_paragraphs)
 
-def determine_thumbnail(content: str, thumbnail_path: str | None) -> tuple[str | None, bool]:
+
+def determine_thumbnail(
+    content: str, thumbnail_path: str | None
+) -> tuple[str | None, bool]:
     """Determine the thumbnail path and type for a post content.
 
     Args:
@@ -488,6 +505,7 @@ def determine_thumbnail(content: str, thumbnail_path: str | None) -> tuple[str |
     media_list = extract_all_media(content)
 
     video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
+
     def is_video_url(url: str) -> bool:
         return any(url.lower().split("?")[0].endswith(ext) for ext in video_extensions)
 

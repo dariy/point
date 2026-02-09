@@ -71,7 +71,9 @@ async def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password" if login_data.username else "Invalid password",
+            detail="Invalid username or password"
+            if login_data.username
+            else "Invalid password",
         )
 
     # Create session

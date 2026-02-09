@@ -4,7 +4,7 @@ Stores metadata for uploaded images, videos, and audio files.
 """
 
 from datetime import UTC, datetime
-from enum import Enum as PyEnum
+from enum import StrEnum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class FileType(str, PyEnum):
+class FileType(StrEnum):
     """Supported file types."""
 
     IMAGE = "image"

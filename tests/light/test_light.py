@@ -160,7 +160,9 @@ class TestGetBaseContext:
         assert "app_version" in context
 
     @pytest.mark.asyncio
-    async def test_get_base_context_with_user(self, db: AsyncSession, test_user: dict) -> None:
+    async def test_get_base_context_with_user(
+        self, db: AsyncSession, test_user: dict
+    ) -> None:
         """Test get_base_context creates proper context with user."""
         from unittest.mock import Mock
 
@@ -233,7 +235,7 @@ class TestDashboard:
             status=PostStatus.PUBLISHED,
             author_id=user.id,
             view_count=10,
-            formatter=PostFormatter.MARKDOWN
+            formatter=PostFormatter.MARKDOWN,
         )
         # Create draft post
         p2 = Post(
@@ -242,7 +244,7 @@ class TestDashboard:
             content="content",
             status=PostStatus.DRAFT,
             author_id=user.id,
-            formatter=PostFormatter.MARKDOWN
+            formatter=PostFormatter.MARKDOWN,
         )
         # Create tag
         t1 = Tag(name="TestTag", slug="test-tag", post_count=1)
@@ -283,6 +285,7 @@ class TestDashboard:
         """Test dashboard calculates storage usage correctly."""
         # Create a test file in the media directory to test storage calculation
         from app.config import get_settings
+
         settings = get_settings()
         media_path = Path(settings.storage_path) / "media" / "test_storage.txt"
         media_path.parent.mkdir(parents=True, exist_ok=True)
@@ -365,7 +368,7 @@ class TestPostsList:
             content="content",
             status=PostStatus.DRAFT,
             author_id=user.id,
-            formatter=PostFormatter.MARKDOWN
+            formatter=PostFormatter.MARKDOWN,
         )
         p2 = Post(
             title="UniquePublishedTitle",
@@ -373,12 +376,14 @@ class TestPostsList:
             content="content",
             status=PostStatus.PUBLISHED,
             author_id=user.id,
-            formatter=PostFormatter.MARKDOWN
+            formatter=PostFormatter.MARKDOWN,
         )
         db.add_all([p1, p2])
         await db.commit()
 
-        response = await client.get("/light/posts?status_filter=draft", cookies=auth_cookies)
+        response = await client.get(
+            "/light/posts?status_filter=draft", cookies=auth_cookies
+        )
         assert response.status_code == 200
         assert "UniqueDraftTitle" in response.text
         # Published post should not appear when filtering for drafts
@@ -554,7 +559,9 @@ class TestNewPost:
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
         """Test new post with only media_id (no media_path)."""
-        response = await client.get("/light/posts/new?media_id=789", cookies=auth_cookies)
+        response = await client.get(
+            "/light/posts/new?media_id=789", cookies=auth_cookies
+        )
 
         assert response.status_code == 200
         assert "New Post" in response.text
@@ -565,7 +572,8 @@ class TestNewPost:
     ) -> None:
         """Test new post with only media_path (no media_id)."""
         response = await client.get(
-            "/light/posts/new?media_path=originals/2026/01/test.jpg", cookies=auth_cookies
+            "/light/posts/new?media_path=originals/2026/01/test.jpg",
+            cookies=auth_cookies,
         )
 
         assert response.status_code == 200
@@ -790,7 +798,9 @@ class TestMediaPage:
         db.add(m1)
         await db.commit()
 
-        response = await client.get("/light/media?file_type=video", cookies=auth_cookies)
+        response = await client.get(
+            "/light/media?file_type=video", cookies=auth_cookies
+        )
         assert response.status_code == 200
         assert "video.mp4" in response.text
 
@@ -948,7 +958,11 @@ class TestSystemPage:
 
         assert response.status_code == 200
         # Should show some system information
-        assert "System" in response.text or "Stats" in response.text or "Logs" in response.text
+        assert (
+            "System" in response.text
+            or "Stats" in response.text
+            or "Logs" in response.text
+        )
 
 
 class TestLogout:
@@ -1006,9 +1020,9 @@ class TestUnauthenticatedAccess:
         for endpoint in protected_endpoints:
             response = await client.get(endpoint, follow_redirects=False)
             assert response.status_code == 303, f"Endpoint {endpoint} didn't redirect"
-            assert (
-                response.headers["location"] == "/light/login"
-            ), f"Endpoint {endpoint} didn't redirect to login"
+            assert response.headers["location"] == "/light/login", (
+                f"Endpoint {endpoint} didn't redirect to login"
+            )
 
 
 class TestLightTheming:

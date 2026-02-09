@@ -1,6 +1,5 @@
 """Additional tests for SystemService coverage."""
 
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,17 +12,18 @@ from app.services.system_service import SystemService
 def system_service(db: AsyncSession):
     return SystemService(db)
 
+
 @pytest.mark.asyncio
 async def test_get_system_stats_db_path_prefixes(system_service: SystemService):
     """Test get_system_stats with various DB path formats."""
 
-
-
-
     # Mock settings.database_url
-    with patch.object(system_service.settings, "database_url", "sqlite+aiosqlite:///./test.db"):
+    with patch.object(
+        system_service.settings, "database_url", "sqlite+aiosqlite:///./test.db"
+    ):
         stats = await system_service.get_system_stats()
         assert "database_size_kb" in stats
+
 
 @pytest.mark.asyncio
 async def test_get_logs_not_found(system_service: SystemService):
@@ -31,14 +31,18 @@ async def test_get_logs_not_found(system_service: SystemService):
     logs = system_service.get_logs("nonexistent")
     assert any("not found" in line for line in logs)
 
+
 @pytest.mark.asyncio
 async def test_get_logs_error(system_service: SystemService):
     """Test error handling when reading log file."""
     # Mock Path.exists to return True but open to fail
-    with patch("pathlib.Path.exists", return_value=True), \
-         patch("builtins.open", side_effect=Exception("Read Error")):
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("builtins.open", side_effect=Exception("Read Error")),
+    ):
         logs = system_service.get_logs("app")
         assert any("Error reading log" in line for line in logs)
+
 
 @pytest.mark.asyncio
 async def test_clear_cache_pattern(system_service: SystemService):
@@ -51,8 +55,3 @@ async def test_clear_cache_pattern(system_service: SystemService):
         cleared = await system_service.clear_cache("posts/*")
         assert cleared == 5
         mock_cache.clear_pattern.assert_called_with("posts/*")
-
-
-
-
-

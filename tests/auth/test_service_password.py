@@ -90,5 +90,7 @@ class TestPasswordManagement:
         self, auth_service: AuthService
     ) -> None:
         """Test password change for non-existent user."""
-        result = await auth_service.change_password(999, "oldpassword", "newpassword123")
+        result = await auth_service.change_password(
+            999, "oldpassword", "newpassword123"
+        )
         assert result is False
