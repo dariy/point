@@ -10,7 +10,20 @@
 <meta name="description" content="Browse posts by tags">
 {% endblock %}
 
+{% block header_nav_extra %}
+{% if user and tag %}
+<a href="/light/tags?search={{ tag.name | urlencode }}" class="create-post" title="Edit Tag" aria-label="Edit Tag">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+    </svg>
+</a>
+{% endif %}
+{% endblock %}
+
 {% block header_filters %}
+
 <div class="tags-filters" id="tags-filters">
     <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}" data-role="all">All</a>
 

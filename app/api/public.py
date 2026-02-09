@@ -527,6 +527,7 @@ async def tag_archive(
         page=page,
         per_page=per_page,
         published_only=True,
+        recursive=True,
     )
 
     total_pages = ceil(total / per_page)
