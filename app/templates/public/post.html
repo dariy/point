@@ -235,3 +235,13 @@ endblock %}
     data-next-url="{% if next_post %}/posts/{{ next_post.slug }}{% endif %}">
 </div>
 {% endblock %}
+
+{% block footer_pagination %}
+{% if not has_text_content and post.tags %}
+<div class="immersive-tags">
+    {% for tag in post.tags %}
+    <a href="/tag/{{ tag.slug }}" class="post-tag">{{ tag.name }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
