@@ -483,10 +483,17 @@ async def settings_page(
     settings_service = SettingsService(db)
     blog_settings = await settings_service.get_all_settings()
 
+    # Get all posts for the "About post" dropdown
+    post_service = PostService(db)
+    all_posts, _ = await post_service.list_posts(
+        page=1, per_page=1000, include_drafts=True
+    )
+
     context = await get_base_context(db, request, user)
     context.update(
         {
             "blog_settings": blog_settings,
+            "all_posts": all_posts,
         }
     )
     return templates.TemplateResponse("light/settings.html", context)
