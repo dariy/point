@@ -222,14 +222,19 @@ class TagService:
                 select(Tag).where(Tag.id.in_(tag_data.parent_ids))
             )
             tag.parents = list(parents.scalars().all())
+            # Update counts for ancestors
+            await self.update_post_counts_recursive([tag.id])
 
         if tag_data.child_ids is not None:
             children = await self.db.execute(
                 select(Tag).where(Tag.id.in_(tag_data.child_ids))
             )
             tag.children = list(children.scalars().all())
+            # Update counts for tag and its new children's ancestors
+            await self.update_post_counts_recursive([tag.id] + list(tag_data.child_ids))
 
         await self.db.flush()
+
         await self.db.refresh(tag, attribute_names=["parents", "children"])
 
         # Invalidate cache when a tag is updated
