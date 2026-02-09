@@ -632,17 +632,8 @@ async def tags_page(
         tag_obj = await tag_service.get_tag_by_slug(tag_slug)
 
         if tag_obj:
-            # For child tags (like "Ufa" with parent "City"), we should only show posts with this specific tag.
-            # Only for top-level parent tags (like "City") we should show posts from all children recursively.
-            has_parents = len(await tag_obj.awaitable_attrs.parents) > 0
-
-            if has_parents:
-                # This is a sub-tag, use strict filtering
-                tag_ids = {tag_obj.id}
-            else:
-                # This is a top-level tag, common to include all children
-                tag_ids = await tag_service.get_descendant_tag_ids(tag_obj.id)
-
+            # Always include all children recursively to show a complete collection for any parent tag
+            tag_ids = await tag_service.get_descendant_tag_ids(tag_obj.id)
             query = (
                 query.join(post_tags, Post.id == post_tags.c.post_id)
                 .where(post_tags.c.tag_id.in_(tag_ids))

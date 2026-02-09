@@ -1204,7 +1204,7 @@
      * Update Site Header Filters
      * Syncs active states and handles hierarchical tag name swapping.
      */
-    function updateActiveSiteFilters(url) {
+    function updateActiveSiteFilters(url, triggerElement = null) {
         const filtersContainer = document.querySelector('.site-header .tags-filters');
         if (!filtersContainer) return;
 
@@ -1228,29 +1228,63 @@
             }
         });
 
-        // Then, set active states and swap names for groups with active children
+        // Identify all buttons that match the current tag
+        const matchingButtons = [];
         buttons.forEach(btn => {
             const btnUrl = new URL(btn.href, window.location.origin);
             const btnPathParts = btnUrl.pathname.split('/').filter(p => p);
             const btnTag = btnPathParts.length > 1 ? btnPathParts[1] : null;
-
             if (tag === btnTag) {
-                btn.classList.add('active');
-
-                // If this is a child tag, handle the parent group header
-                const tagGroup = btn.closest('.tag-group');
-                if (tagGroup) {
-                    const headerBtn = tagGroup.querySelector('.tag-group-header .filter-btn');
-                    if (headerBtn && headerBtn !== btn) {
-                        headerBtn.classList.add('active');
-                        headerBtn.textContent = btn.textContent;
-                    }
-                }
-            } else if (!tag && (btn.dataset.role === 'all' || btn.getAttribute('href') === '/')) {
-                // Handle "All" button
-                btn.classList.add('active');
+                matchingButtons.push(btn);
             }
         });
+
+        // If no matches by tag, handle "All"
+        if (matchingButtons.length === 0 && !tag) {
+            const allBtn = Array.from(buttons).find(btn => btn.dataset.role === 'all' || btn.getAttribute('href') === '/');
+            if (allBtn) allBtn.classList.add('active');
+        } else if (matchingButtons.length > 0) {
+            // If multiple exist, pick the "best" one
+            let bestMatch = null;
+            if (triggerElement) {
+                // If the click happened on one of these specific buttons, that's our winner
+                bestMatch = matchingButtons.find(btn => btn === triggerElement);
+                // If the trigger was a secondary element (like a tag in a post card), it won't be found here.
+            }
+
+            if (!bestMatch) {
+                // Fresh run or external trigger: pick the one with deepest nesting
+                let maxDepth = -1;
+                matchingButtons.forEach(btn => {
+                    let depth = 0;
+                    let p = btn.parentElement;
+                    while (p && p !== filtersContainer) {
+                        if (p.classList.contains('tag-group')) depth++;
+                        p = p.parentElement;
+                    }
+                    if (depth > maxDepth) {
+                        maxDepth = depth;
+                        bestMatch = btn;
+                    }
+                });
+            }
+
+            if (bestMatch) {
+                bestMatch.classList.add('active');
+
+                // Propagate active state and name swapping up the chosen hierarchy
+                let currentGroup = bestMatch.closest('.tag-group');
+                while (currentGroup) {
+                    const headerBtn = currentGroup.querySelector('.tag-group-header .filter-btn');
+                    if (headerBtn) {
+                        headerBtn.classList.add('active');
+                        headerBtn.textContent = bestMatch.textContent;
+                    }
+                    const parentElement = currentGroup.parentElement;
+                    currentGroup = parentElement ? parentElement.closest('.tag-group') : null;
+                }
+            }
+        }
 
         // Trigger responsive filter update
         window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
@@ -1263,7 +1297,7 @@
         const postsContainer = document.querySelector('.posts-main') || document.getElementById('tag-posts-container');
         if (!postsContainer) return;
 
-        async function loadPosts(url) {
+        async function loadPosts(url, triggerElement = null) {
             try {
                 postsContainer.style.opacity = '0.5';
 
@@ -1278,7 +1312,7 @@
                     renderPosts(data, postsContainer);
 
                     window.history.pushState({}, '', url);
-                    updateActiveSiteFilters(url);
+                    updateActiveSiteFilters(url, triggerElement);
                     attachAjaxListeners();
                     if (typeof initPostCardVideos === 'function') {
                         initPostCardVideos();
@@ -1457,7 +1491,7 @@
         function handleAjaxClick(e) {
             e.preventDefault();
             const url = this.getAttribute('href');
-            loadPosts(url);
+            loadPosts(url, this);
         }
 
         // Initial setup
@@ -1477,7 +1511,7 @@
         const filtersContainer = document.getElementById('tags-filters');
         if (!tagsContent) return;
 
-        async function loadTagsContent(url) {
+        async function loadTagsContent(url, triggerElement = null) {
             try {
                 tagsContent.style.opacity = '0.5';
 
@@ -1492,7 +1526,7 @@
                     renderTags(data);
 
                     window.history.pushState({}, '', url);
-                    updateActiveSiteFilters(url);
+                    updateActiveSiteFilters(url, triggerElement);
                     attachTagsListeners();
                     initTagToggles();
                     if (typeof initPostCardVideos === 'function') {
@@ -1649,7 +1683,7 @@
         function handleTagsClick(e) {
             e.preventDefault();
             const url = this.getAttribute('href');
-            loadTagsContent(url);
+            loadTagsContent(url, this);
         }
 
         // Initial setup
