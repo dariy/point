@@ -2056,27 +2056,25 @@ img {
 }
 
 .immersive-layout .site-header .site-title,
-.immersive-layout .site-header .nav-link,
 .immersive-layout .site-header .site-subtitle,
-.immersive-layout .site-header svg,
-.immersive-layout .site-header .theme-toggle,
-.immersive-layout .site-header .create-post,
-.immersive-layout .site-header .header-action-btn,
+.immersive-layout .site-header .nav-link,
+
 .immersive-layout .site-header .light-link {
     color: white;
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-[data-theme="light"].immersive-layout .site-header .site-title,
-[data-theme="light"].immersive-layout .site-header .nav-link,
-[data-theme="light"].immersive-layout .site-header .site-subtitle,
-[data-theme="light"].immersive-layout .site-header svg,
-[data-theme="light"].immersive-layout .site-header .theme-toggle,
-[data-theme="light"].immersive-layout .site-header .create-post,
-[data-theme="light"].immersive-layout .site-header .header-action-btn,
-[data-theme="light"].immersive-layout .site-header .light-link {
+.immersive-layout .site-header svg,
+.immersive-layout .site-header .theme-toggle,
+.immersive-layout .site-header .create-post,
+.immersive-layout .site-header .header-action-btn {
     color: var(--text-primary);
     border-color: var(--border-primary);
+}
+
+[data-theme="light"].immersive-layout .site-header svg {
+    color: var(--text-primary);
+    stroke: var(--text-primary);
 }
 
 .immersive-layout .site-header .nav-link:hover {
@@ -2106,9 +2104,10 @@ img {
     left: 0;
     right: 0;
     z-index: 50;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
-    color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 40%, rgba(0, 0, 0, 0.4) 80%, transparent 100%);
+    color: rgba(255, 255, 255, 0.95);
     border-top: none;
+    padding-top: var(--spacing-2xl);
     padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
     transition:
         opacity 0.4s ease,
@@ -2121,13 +2120,13 @@ img {
 }
 
 [data-theme="light"].immersive-layout .site-footer {
-    background: linear-gradient(to top, rgba(255, 255, 255, 0.9), transparent);
-    color: var(--text-secondary);
+    background: linear-gradient(to top, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.92) 40%, rgba(255, 255, 255, 0.5) 80%, transparent 100%);
+    color: var(--text-primary);
 }
 
 .immersive-layout .site-footer .footer-link,
 .immersive-layout .site-footer .footer-copyright {
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.95);
 }
 
 .immersive-layout .footer-content {
@@ -2144,8 +2143,9 @@ img {
     }
 }
 
-[data-theme="light"].immersive-layout .site-footer .footer-link {
-    color: var(--text-secondary);
+[data-theme="light"].immersive-layout .site-footer .footer-link,
+[data-theme="light"].immersive-layout .site-footer .footer-copyright {
+    color: var(--text-primary);
 }
 
 /* Immersive Components */
@@ -2201,11 +2201,11 @@ img {
 }
 
 .immersive-tags .post-tag {
-    background: rgba(0, 0, 0, 0.3);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.75);
+    color: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     pointer-events: auto;
 }
 
@@ -2216,9 +2216,11 @@ img {
 }
 
 [data-theme="light"].immersive-layout .immersive-tags .post-tag {
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.92);
     color: var(--text-primary);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 [data-theme="light"].immersive-layout .immersive-tags .post-tag:hover {
@@ -2456,6 +2458,35 @@ video.immersive-bg-image {
     background: white;
     transform: scale(1.2);
 }
+
+/* Light mode carousel controls */
+[data-theme="light"].immersive-layout .carousel-prev,
+[data-theme="light"].immersive-layout .carousel-next {
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+}
+
+[data-theme="light"].immersive-layout .carousel-prev:hover,
+[data-theme="light"].immersive-layout .carousel-next:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+[data-theme="light"].immersive-layout .carousel-indicators {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot:hover {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot.active {
+    background: white;
+}
+
 
 /* Hide carousel controls in UI hidden mode */
 .immersive-layout.ui-hidden .carousel-prev,
