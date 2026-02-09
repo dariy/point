@@ -11,7 +11,7 @@
      */
     function initTagsInput() {
         const tagsInput = document.getElementById('tags');
-        if (!tagsInput) { alert("!!!"); return };
+        if (!tagsInput) return;
 
         tagsInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
