@@ -286,6 +286,7 @@ async def get_posts_by_tag(
         page=page,
         per_page=per_page,
         published_only=published_only,
+        recursive=True,
     )
 
     pages = math.ceil(total / per_page) if total > 0 else 1
