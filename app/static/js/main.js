@@ -367,7 +367,7 @@
         }
 
         function resetIdleTimer(e) {
-            // Ignore arrow keys for immersive mode toggle
+            // Ignore arrow keys for immersive mode toggle - they should only navigate carousel
             if (e && e.type === "keydown") {
                 if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                     return;
@@ -388,6 +388,21 @@
                 lastShowTime = Date.now();
             }
             idleTimer = setTimeout(hideUI, idleTime);
+        }
+
+        function handleKeydown(e) {
+            // Space key toggles UI visibility
+            if (e.key === " " || e.code === "Space") {
+                e.preventDefault(); // Prevent page scroll
+                if (immersiveBody.classList.contains("ui-hidden")) {
+                    showUI();
+                } else {
+                    if (Date.now() - lastShowTime >= minShowDuration) {
+                        hideUI();
+                        clearTimeout(idleTimer);
+                    }
+                }
+            }
         }
 
         function handleClick(e) {
@@ -420,6 +435,9 @@
             document.addEventListener(evt, resetIdleTimer, { passive: true });
         });
 
+        // Space key for explicit UI toggle
+        document.addEventListener("keydown", handleKeydown);
+
         // Toggle on background click
         document.addEventListener("click", handleClick);
 
@@ -431,6 +449,7 @@
             events.forEach((evt) => {
                 document.removeEventListener(evt, resetIdleTimer);
             });
+            document.removeEventListener("keydown", handleKeydown);
             document.removeEventListener("click", handleClick);
         });
     }
