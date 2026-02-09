@@ -246,10 +246,10 @@
                     <label class="form-label">Parents (Meta-tags)</label>
                     <div id="tag-parents-picker" class="categories-picker flex flex-wrap gap-2 mb-2"
                         style="max-height: 200px; overflow-y: auto; padding: 4px; border: 1px solid var(--light-border); border-radius: var(--radius-sm);">
-                        {% for group in hierarchical_tags %}
+                        {% for t in all_tags %}
                         <label class="category-chip">
-                            <input type="checkbox" name="parent_ids" value="{{ group.tag.id }}" class="hidden-checkbox">
-                            <span class="chip-label">{{ group.tag.name }}</span>
+                            <input type="checkbox" name="parent_ids" value="{{ t.id }}" class="hidden-checkbox">
+                            <span class="chip-label">{{ t.name }}</span>
                         </label>
                         {% endfor %}
                     </div>
@@ -261,17 +261,11 @@
                     <label class="form-label">Children (Tags in this meta-tag)</label>
                     <div id="tag-children-picker" class="categories-picker flex flex-wrap gap-2 mb-2"
                         style="max-height: 200px; overflow-y: auto; padding: 4px; border: 1px solid var(--light-border); border-radius: var(--radius-sm);">
-                        {% for group in hierarchical_tags %}
+                        {% for t in all_tags %}
                         <label class="category-chip">
-                            <input type="checkbox" name="child_ids" value="{{ group.tag.id }}" class="hidden-checkbox">
-                            <span class="chip-label">{{ group.tag.name }}</span>
+                            <input type="checkbox" name="child_ids" value="{{ t.id }}" class="hidden-checkbox">
+                            <span class="chip-label">{{ t.name }}</span>
                         </label>
-                        {% for child in group.children %}
-                        <label class="category-chip">
-                            <input type="checkbox" name="child_ids" value="{{ child.id }}" class="hidden-checkbox">
-                            <span class="chip-label sub-tag">{{ child.name }}</span>
-                        </label>
-                        {% endfor %}
                         {% endfor %}
                     </div>
                     <small class="form-hint">Select tags that should be contained within this tag (e.g., #city can have
