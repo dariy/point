@@ -294,20 +294,7 @@
 
 
 {% block header_filters %}
-
-<div class="tags-filters">
-    {% for t in tags %}
-    <a href="/tag/{{ t.slug }}" class="filter-btn {% if t.slug == tag.slug %}active{% endif %}">{{ t.name }}</a>
-    {% endfor %}
-    <a href="/tags" class="filter-btn" title="All Tags">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
-        </svg>
-    </a>
-</div>
+{% include "public/partials/header_tags.html" %}
 {% endblock %}
 
 {% block content %}
