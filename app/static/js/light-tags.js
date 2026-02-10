@@ -41,14 +41,22 @@
         const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
         parentChips.forEach(chip => {
             chip.checked = false;
-            chip.closest('.category-chip').style.display = 'block';
+            const container = chip.closest('.category-chip');
+            if (container) {
+                container.classList.remove('hidden');
+                container.classList.add('visible-block');
+            }
         });
 
         // Clear chip checkboxes in children picker
         const childChips = document.querySelectorAll('#tag-children-picker input[type="checkbox"]');
         childChips.forEach(chip => {
             chip.checked = false;
-            chip.closest('.category-chip').style.display = 'block';
+            const container = chip.closest('.category-chip');
+            if (container) {
+                container.classList.remove('hidden');
+                container.classList.add('visible-block');
+            }
         });
 
         modalInstance.open();
@@ -80,7 +88,12 @@
                 const chipValue = parseInt(chip.value);
                 chip.checked = ids.includes(chipValue);
                 // Hide self from selection to prevent circular/self reference
-                chip.closest('.category-chip').style.display = chipValue == id ? 'none' : 'block';
+                const container = chip.closest('.category-chip');
+                if (container) {
+                    const isHidden = chipValue == id;
+                    container.classList.toggle('hidden', isHidden);
+                    container.classList.toggle('visible-block', !isHidden);
+                }
                 if (chipValue == id) chip.checked = false;
             });
         }
@@ -99,7 +112,12 @@
                 const chipValue = parseInt(chip.value);
                 chip.checked = ids.includes(chipValue);
                 // Hide self from selection to prevent circular/self reference
-                chip.closest('.category-chip').style.display = chipValue == id ? 'none' : 'block';
+                const container = chip.closest('.category-chip');
+                if (container) {
+                    const isHidden = chipValue == id;
+                    container.classList.toggle('hidden', isHidden);
+                    container.classList.toggle('visible-block', !isHidden);
+                }
                 if (chipValue == id) chip.checked = false;
             });
         }
@@ -122,7 +140,12 @@
                     parentChips.forEach(chip => {
                         const chipValue = parseInt(chip.value);
                         chip.checked = ids.includes(chipValue);
-                        chip.closest('.category-chip').style.display = chipValue == tag.id ? 'none' : 'block';
+                        const container = chip.closest('.category-chip');
+                        if (container) {
+                            const isHidden = chipValue == tag.id;
+                            container.classList.toggle('hidden', isHidden);
+                            container.classList.toggle('visible-block', !isHidden);
+                        }
                         if (chipValue == tag.id) chip.checked = false;
                     });
                 }
@@ -132,7 +155,12 @@
                     childChips.forEach(chip => {
                         const chipValue = parseInt(chip.value);
                         chip.checked = ids.includes(chipValue);
-                        chip.closest('.category-chip').style.display = chipValue == tag.id ? 'none' : 'block';
+                        const container = chip.closest('.category-chip');
+                        if (container) {
+                            const isHidden = chipValue == tag.id;
+                            container.classList.toggle('hidden', isHidden);
+                            container.classList.toggle('visible-block', !isHidden);
+                        }
                         if (chipValue == tag.id) chip.checked = false;
                     });
                 }
@@ -163,7 +191,7 @@
         if (!btn) return;
 
         // Optimistic UI update or loading state
-        btn.style.opacity = '0.5';
+        btn.classList.add('opacity-50');
         btn.disabled = true;
 
         try {
@@ -181,7 +209,8 @@
 
                 // Update button state 
                 btn.disabled = false;
-                btn.style.opacity = '1';
+                btn.classList.remove('opacity-50');
+                btn.classList.add('opacity-100');
 
                 // Update data attribute for next toggle
                 btn.dataset.value = newValue ? 'true' : 'false';
@@ -190,7 +219,8 @@
                 const svg = btn.querySelector('svg');
                 if (property === 'is_important') {
                     svg.setAttribute('fill', newValue ? 'var(--color-warning)' : 'var(--text-muted)');
-                    svg.style.opacity = newValue ? '1' : '0.3';
+                    svg.classList.toggle('opacity-30', !newValue);
+                    svg.classList.toggle('opacity-100', newValue);
                     btn.title = newValue ? 'Remove important mark' : 'Mark as important';
 
                     // Update the tag name link class if it exists in this row
@@ -206,7 +236,8 @@
                     }
                 } else {
                     svg.setAttribute('fill', newValue ? 'var(--color-primary)' : 'var(--text-muted)');
-                    svg.style.opacity = newValue ? '1' : '0.3';
+                    svg.classList.toggle('opacity-30', !newValue);
+                    svg.classList.toggle('opacity-100', newValue);
                     btn.title = newValue ? 'Remove featured mark' : 'Mark as featured';
                 }
 
@@ -220,7 +251,8 @@
                     window.LightUtils.showToast(msg, 'error');
                 }
                 btn.disabled = false;
-                btn.style.opacity = '1';
+                btn.classList.remove('opacity-50');
+                btn.classList.add('opacity-100');
             }
         } catch (error) {
             console.error('Toggle error:', error);
@@ -228,7 +260,8 @@
                 window.LightUtils.showToast('An error occurred', 'error');
             }
             btn.disabled = false;
-            btn.style.opacity = '1';
+            btn.classList.remove('opacity-50');
+            btn.classList.add('opacity-100');
         }
     };
 

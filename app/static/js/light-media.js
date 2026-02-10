@@ -49,7 +49,8 @@
 
         const progressDiv = document.getElementById('upload-progress');
         const progressBar = progressDiv.querySelector('.storage-bar-fill');
-        progressDiv.style.display = 'block';
+        progressDiv.classList.toggle('hidden', false);
+        progressDiv.classList.toggle('visible-block', true);
 
         for (let i = 0; i < files.length; i++) {
             const progress = ((i / files.length) * 100).toFixed(0);
