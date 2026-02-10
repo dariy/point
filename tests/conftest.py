@@ -4,10 +4,26 @@ Provides common fixtures for testing the Photo Blog application.
 """
 
 import os
+import subprocess
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 # Disable caching in tests BEFORE importing app
 os.environ["CACHE_ENABLED"] = "false"
+
+# Build CSS bundles BEFORE importing app (so StaticFiles can see them)
+_project_root = Path(__file__).parent.parent
+_build_script = _project_root / "build" / "build_css.sh"
+if _build_script.exists():
+    _result = subprocess.run(
+        [str(_build_script)],
+        cwd=str(_project_root),
+        capture_output=True,
+        text=True,
+        check=False
+    )
+    if _result.returncode != 0:
+        print(f"CSS build failed: {_result.stderr}")
 
 import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402

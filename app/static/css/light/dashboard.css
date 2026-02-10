@@ -1,0 +1,71 @@
+/* ===========================
+   Dashboard
+   =========================== */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.stat-card {
+    background: var(--surface-card);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow);
+    transition: background-color var(--transition-theme);
+}
+
+.stat-card .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-xs);
+}
+
+.stat-card .stat-value {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stat-card .stat-suffix {
+    font-size: var(--font-size-lg);
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+.stat-card.stat-primary .stat-value {
+    color: var(--color-primary);
+}
+
+.stat-card.stat-success .stat-value {
+    color: var(--color-success);
+}
+
+.stat-card.stat-warning .stat-value {
+    color: var(--color-warning);
+}
+
+/* Storage bar */
+.storage-bar {
+    background-color: var(--border-primary);
+    border-radius: var(--border-radius);
+    height: 8px;
+    margin-top: var(--spacing-sm);
+    overflow: hidden;
+}
+
+.storage-bar-fill {
+    background-color: var(--color-primary);
+    height: 100%;
+    border-radius: var(--border-radius);
+    transition: width var(--transition-normal);
+}
+
+.storage-bar-fill.warning {
+    background-color: var(--color-warning);
+}
+
+.storage-bar-fill.danger {
+    background-color: var(--color-danger);
+}

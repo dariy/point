@@ -54,8 +54,9 @@
 
         // Auto-remove after delay
         setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(20px)';
+            toast.classList.add('opacity-0');
+            toast.classList.add('translate-x-20');
+            toast.classList.add('transition-all');
             setTimeout(() => {
                 toast.remove();
             }, 300);
@@ -133,7 +134,8 @@
             this.suggestions.innerHTML = matches
                 .map(tag => `<div class="suggestion-item" data-tag="${tag}">${tag}</div>`)
                 .join('');
-            this.suggestions.style.display = 'block';
+            this.suggestions.classList.toggle('hidden', false);
+            this.suggestions.classList.toggle('visible-block', true);
 
             this.suggestions.querySelectorAll('.suggestion-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -146,7 +148,8 @@
 
         hideSuggestions() {
             if (this.suggestions) {
-                this.suggestions.style.display = 'none';
+                this.suggestions.classList.toggle('hidden', true);
+                this.suggestions.classList.toggle('visible-block', false);
             }
         }
 
@@ -328,7 +331,7 @@
 
         open() {
             this.overlay.classList.add('active');
-            document.body.style.overflow = 'hidden';
+            document.body.classList.add('no-overflow');
         }
 
         close() {
@@ -336,7 +339,7 @@
             setTimeout(() => {
                 this.overlay.classList.remove('active');
                 this.overlay.classList.remove('closing');
-                document.body.style.overflow = '';
+                document.body.classList.remove('no-overflow');
             }, 300);
         }
     }
@@ -402,7 +405,7 @@
                     <div class="modal-body">
                         <p id="prompt-message"></p>
                         <div class="mt-3">
-                            <input type="text" id="prompt-input" class="form-input" style="width: 100%;">
+                            <input type="text" id="prompt-input" class="form-input visible-block">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -575,7 +578,8 @@
             // Remove element or reload
             const row = btn.closest('tr, .media-item, .card');
             if (row) {
-                row.style.opacity = '0';
+                row.classList.add('opacity-0');
+                row.classList.add('transition-all');
                 setTimeout(() => row.remove(), 300);
             } else {
                 window.location.reload();
@@ -740,7 +744,9 @@
             previewToggle.addEventListener('click', () => {
                 const previewCard = document.getElementById('preview-card');
                 if (previewCard) {
-                    previewCard.style.display = previewCard.style.display === 'none' ? 'block' : 'none';
+                    const isHidden = previewCard.classList.contains('hidden');
+                    previewCard.classList.toggle('hidden', !isHidden);
+                    previewCard.classList.toggle('visible-block', isHidden);
                 }
             });
         }
@@ -759,9 +765,9 @@
                     .replace(/^(\/\d{4}\/\d{2}\/[^\s]+\.(jpg|jpeg|png|gif|webp|mp4|webm))$/gm, (match) => {
                         const isVideo = match.match(/\.(mp4|webm)$/i);
                         if (isVideo) {
-                            return `<video src="${match}" controls style="max-width: 100%;"></video>`;
+                            return `<video src="${match}" controls class="img-fluid visible-block"></video>`;
                         }
-                        return `<img src="${match}" alt="" style="max-width: 100%;">`;
+                        return `<img src="${match}" alt="" class="img-fluid visible-block">`;
                     })
                     // Headers
                     .replace(/^### (.*$)/gm, '<h3>$1</h3>')
@@ -779,7 +785,7 @@
                         if (url.startsWith('/') && !url.startsWith('/media')) {
                             url = '/media' + url;
                         }
-                        return `<img src="${url}" alt="${alt}" style="max-width: 100%;">`;
+                        return `<img src="${url}" alt="${alt}" class="img-fluid visible-block">`;
                     })
                     // Line breaks
                     .replace(/\n\n/g, '</p><p>')
@@ -940,8 +946,7 @@
         // Handle existing flash messages (server-rendered or client-rendered)
         document.querySelectorAll('.flash-messages .flash-message, .flash-messages-container .flash-message').forEach(toast => {
             setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(20px)';
+                toast.classList.add('opacity-0', 'translate-x-20', 'transition-all');
                 setTimeout(() => toast.remove(), 300);
             }, 5000);
         });

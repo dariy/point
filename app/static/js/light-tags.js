@@ -36,19 +36,30 @@
         document.getElementById('tag-description').value = '';
         document.getElementById('tag-important').checked = false;
         document.getElementById('tag-featured').checked = false;
+        document.getElementById('tag-hidden').checked = false;
+        document.getElementById('tag-hidden-posts').checked = false;
+        document.getElementById('tag-show-related').checked = false;
 
         // Clear chip checkboxes in parents picker
         const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
         parentChips.forEach(chip => {
             chip.checked = false;
-            chip.closest('.category-chip').style.display = 'block';
+            const container = chip.closest('.category-chip');
+            if (container) {
+                container.classList.remove('hidden');
+                container.classList.add('visible-block');
+            }
         });
 
         // Clear chip checkboxes in children picker
         const childChips = document.querySelectorAll('#tag-children-picker input[type="checkbox"]');
         childChips.forEach(chip => {
             chip.checked = false;
-            chip.closest('.category-chip').style.display = 'block';
+            const container = chip.closest('.category-chip');
+            if (container) {
+                container.classList.remove('hidden');
+                container.classList.add('visible-block');
+            }
         });
 
         modalInstance.open();
@@ -57,7 +68,7 @@
     /**
      * Open modal for editing existing tag
      */
-    const editTag = async function (id, name, slug, description, isImportant, isFeatured, parentIds, childIds) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, parentIds, childIds) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
@@ -65,6 +76,9 @@
         document.getElementById('tag-description').value = description || '';
         document.getElementById('tag-important').checked = !!isImportant;
         document.getElementById('tag-featured').checked = !!isFeatured;
+        document.getElementById('tag-hidden').checked = !!isHidden;
+        document.getElementById('tag-hidden-posts').checked = !!isHiddenPosts;
+        document.getElementById('tag-show-related').checked = !!isShowRelated;
 
         const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
         if (parentChips.length) {
@@ -80,7 +94,12 @@
                 const chipValue = parseInt(chip.value);
                 chip.checked = ids.includes(chipValue);
                 // Hide self from selection to prevent circular/self reference
-                chip.closest('.category-chip').style.display = chipValue == id ? 'none' : 'block';
+                const container = chip.closest('.category-chip');
+                if (container) {
+                    const isHidden = chipValue == id;
+                    container.classList.toggle('hidden', isHidden);
+                    container.classList.toggle('visible-block', !isHidden);
+                }
                 if (chipValue == id) chip.checked = false;
             });
         }
@@ -99,7 +118,12 @@
                 const chipValue = parseInt(chip.value);
                 chip.checked = ids.includes(chipValue);
                 // Hide self from selection to prevent circular/self reference
-                chip.closest('.category-chip').style.display = chipValue == id ? 'none' : 'block';
+                const container = chip.closest('.category-chip');
+                if (container) {
+                    const isHidden = chipValue == id;
+                    container.classList.toggle('hidden', isHidden);
+                    container.classList.toggle('visible-block', !isHidden);
+                }
                 if (chipValue == id) chip.checked = false;
             });
         }
@@ -116,13 +140,21 @@
                 document.getElementById('tag-description').value = tag.description || '';
                 document.getElementById('tag-important').checked = tag.is_important;
                 document.getElementById('tag-featured').checked = tag.is_featured;
+                document.getElementById('tag-hidden').checked = tag.is_hidden;
+                document.getElementById('tag-hidden-posts').checked = tag.is_hidden_posts;
+                document.getElementById('tag-show-related').checked = tag.show_related_tags_as_children;
 
                 if (parentChips.length) {
                     const ids = tag.parents ? tag.parents.map(p => parseInt(p.id)) : [];
                     parentChips.forEach(chip => {
                         const chipValue = parseInt(chip.value);
                         chip.checked = ids.includes(chipValue);
-                        chip.closest('.category-chip').style.display = chipValue == tag.id ? 'none' : 'block';
+                        const container = chip.closest('.category-chip');
+                        if (container) {
+                            const isHidden = chipValue == tag.id;
+                            container.classList.toggle('hidden', isHidden);
+                            container.classList.toggle('visible-block', !isHidden);
+                        }
                         if (chipValue == tag.id) chip.checked = false;
                     });
                 }
@@ -132,7 +164,12 @@
                     childChips.forEach(chip => {
                         const chipValue = parseInt(chip.value);
                         chip.checked = ids.includes(chipValue);
-                        chip.closest('.category-chip').style.display = chipValue == tag.id ? 'none' : 'block';
+                        const container = chip.closest('.category-chip');
+                        if (container) {
+                            const isHidden = chipValue == tag.id;
+                            container.classList.toggle('hidden', isHidden);
+                            container.classList.toggle('visible-block', !isHidden);
+                        }
                         if (chipValue == tag.id) chip.checked = false;
                     });
                 }
@@ -157,13 +194,24 @@
         const data = {};
         data[property] = newValue;
 
-        const btnId = property === 'is_important' ? `toggle-important-${id}` : `toggle-featured-${id}`;
+        // Determine button ID based on property
+        let btnId;
+        if (property === 'is_important') {
+            btnId = `toggle-important-${id}`;
+        } else if (property === 'is_featured') {
+            btnId = `toggle-featured-${id}`;
+        } else if (property === 'is_hidden') {
+            btnId = `toggle-hidden-${id}`;
+        } else if (property === 'is_hidden_posts') {
+            btnId = `toggle-hidden-posts-${id}`;
+        }
+
         const btn = document.getElementById(btnId);
 
         if (!btn) return;
 
         // Optimistic UI update or loading state
-        btn.style.opacity = '0.5';
+        btn.classList.add('opacity-50');
         btn.disabled = true;
 
         try {
@@ -181,7 +229,8 @@
 
                 // Update button state 
                 btn.disabled = false;
-                btn.style.opacity = '1';
+                btn.classList.remove('opacity-50');
+                btn.classList.add('opacity-100');
 
                 // Update data attribute for next toggle
                 btn.dataset.value = newValue ? 'true' : 'false';
@@ -189,7 +238,7 @@
                 // Update SVG and titles
                 const svg = btn.querySelector('svg');
                 if (property === 'is_important') {
-                    svg.setAttribute('fill', newValue ? 'var(--color-warning)' : 'var(--light-text-muted)');
+                    svg.setAttribute('fill', newValue ? 'var(--color-warning)' : 'var(--text-muted)');
                     svg.style.opacity = newValue ? '1' : '0.3';
                     btn.title = newValue ? 'Remove important mark' : 'Mark as important';
 
@@ -204,10 +253,24 @@
                             nameLink.dataset.tagImportant = 'false';
                         }
                     }
-                } else {
-                    svg.setAttribute('fill', newValue ? 'var(--color-primary)' : 'var(--light-text-muted)');
+                } else if (property === 'is_featured') {
+                    svg.setAttribute('fill', newValue ? 'var(--color-primary)' : 'var(--text-muted)');
                     svg.style.opacity = newValue ? '1' : '0.3';
                     btn.title = newValue ? 'Remove featured mark' : 'Mark as featured';
+                } else if (property === 'is_hidden') {
+                    svg.setAttribute('fill', newValue ? 'var(--color-danger)' : 'var(--text-muted)');
+                    svg.style.opacity = newValue ? '1' : '0.3';
+                    btn.title = newValue ? 'Unhide tag' : 'Hide tag';
+                    // Update data attribute of edit buttons in the same row
+                    const editBtns = btn.closest('tr').querySelectorAll('[data-action="edit-tag"]');
+                    editBtns.forEach(eb => eb.dataset.tagHidden = newValue ? 'true' : 'false');
+                } else if (property === 'is_hidden_posts') {
+                    svg.setAttribute('fill', newValue ? 'var(--color-danger)' : 'var(--text-muted)');
+                    svg.style.opacity = newValue ? '1' : '0.3';
+                    btn.title = newValue ? 'Show posts' : 'Hide posts';
+                    // Update data attribute of edit buttons in the same row
+                    const editBtns = btn.closest('tr').querySelectorAll('[data-action="edit-tag"]');
+                    editBtns.forEach(eb => eb.dataset.tagHiddenPosts = newValue ? 'true' : 'false');
                 }
 
                 if (window.LightUtils && window.LightUtils.showToast) {
@@ -220,7 +283,8 @@
                     window.LightUtils.showToast(msg, 'error');
                 }
                 btn.disabled = false;
-                btn.style.opacity = '1';
+                btn.classList.remove('opacity-50');
+                btn.classList.add('opacity-100');
             }
         } catch (error) {
             console.error('Toggle error:', error);
@@ -228,7 +292,8 @@
                 window.LightUtils.showToast('An error occurred', 'error');
             }
             btn.disabled = false;
-            btn.style.opacity = '1';
+            btn.classList.remove('opacity-50');
+            btn.classList.add('opacity-100');
         }
     };
 
@@ -258,9 +323,12 @@
             const description = editBtn.dataset.tagDescription;
             const isImportant = editBtn.dataset.tagImportant === 'true';
             const isFeatured = editBtn.dataset.tagFeatured === 'true';
+            const isHidden = editBtn.dataset.tagHidden === 'true';
+            const isHiddenPosts = editBtn.dataset.tagHiddenPosts === 'true';
+            const isShowRelated = editBtn.dataset.tagShowRelated === 'true';
             const parentIds = editBtn.dataset.tagParents || '[]';
             const childIds = editBtn.dataset.tagChildren || '[]';
-            editTag(id, name, slug, description, isImportant, isFeatured, parentIds, childIds);
+            editTag(id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, parentIds, childIds);
             return;
         }
 
@@ -287,6 +355,9 @@
             description: document.getElementById('tag-description').value || null,
             is_important: document.getElementById('tag-important').checked,
             is_featured: document.getElementById('tag-featured').checked,
+            is_hidden: document.getElementById('tag-hidden').checked,
+            is_hidden_posts: document.getElementById('tag-hidden-posts').checked,
+            show_related_tags_as_children: document.getElementById('tag-show-related').checked,
             parent_ids: Array.from(document.querySelectorAll('#tag-parents-picker input:checked')).map(cb => parseInt(cb.value)),
             child_ids: Array.from(document.querySelectorAll('#tag-children-picker input:checked')).map(cb => parseInt(cb.value))
         };
