@@ -188,19 +188,19 @@
             currentIndex = index;
 
             // Update navigation visibility
-            prevBtn.style.display = index > 0 ? "block" : "none";
-            nextBtn.style.display = index < items.length - 1 ? "block" : "none";
+            prevBtn.classList.toggle("hidden", index === 0);
+            nextBtn.classList.toggle("hidden", index === items.length - 1);
         }
 
         function openLightbox(index) {
             showImage(index);
             overlay.classList.add("active");
-            document.body.style.overflow = "hidden";
+            document.body.classList.add("no-overflow");
         }
 
         function closeLightbox() {
             overlay.classList.remove("active");
-            document.body.style.overflow = "";
+            document.body.classList.remove("no-overflow");
         }
 
         function showNext() {
@@ -598,7 +598,7 @@
 
         console.log("[Navigation] Starting navigation to:", url);
         isNavigating = true;
-        document.body.style.cursor = 'wait';
+        document.body.classList.add("cursor-wait");
 
         try {
             // Determine if we should request JSON (only for single posts for now)
@@ -726,7 +726,7 @@
             window.location.href = url;
         } finally {
             isNavigating = false;
-            document.body.style.cursor = '';
+            document.body.classList.remove("cursor-wait");
         }
     }
 
@@ -768,15 +768,14 @@
 
         const viewsEl = clone.querySelector('.post-views');
         if (viewsEl) {
+            const divider = clone.querySelector('.post-meta-divider');
             if (data.blog_settings.show_view_counts && post.view_count) {
                 viewsEl.textContent = post.view_count + " views";
-                viewsEl.style.display = 'inline';
-                const divider = clone.querySelector('.post-meta-divider');
-                if (divider) divider.style.display = 'inline';
+                viewsEl.classList.remove('hidden');
+                if (divider) divider.classList.remove('hidden');
             } else {
-                viewsEl.style.display = 'none';
-                const divider = clone.querySelector('.post-meta-divider');
-                if (divider) divider.style.display = 'none';
+                viewsEl.classList.add('hidden');
+                if (divider) divider.classList.add('hidden');
             }
         }
 
@@ -834,9 +833,9 @@
                 if (data.post_media.length <= 1) {
                     const prev = container.querySelector('.carousel-prev');
                     const next = container.querySelector('.carousel-next');
-                    if (prev) prev.style.display = 'none';
-                    if (next) next.style.display = 'none';
-                    if (indicators) indicators.style.display = 'none';
+                    if (prev) prev.classList.add('hidden');
+                    if (next) next.classList.add('hidden');
+                    if (indicators) indicators.classList.add('hidden');
                 }
             }
 
@@ -879,10 +878,10 @@
             }
         }
 
-        // Inject hidden navigation data for keyboard shortcuts
+        // Inject hidden navigation data
         const navData = document.createElement('div');
         navData.id = 'post-nav-data';
-        navData.style.display = 'none';
+        navData.classList.add('hidden');
         if (data.prev_post) navData.dataset.prevUrl = '/posts/' + data.prev_post.slug;
         if (data.next_post) navData.dataset.nextUrl = '/posts/' + data.next_post.slug;
 
@@ -904,11 +903,13 @@
             if (data.is_logged_in) {
                 const createPostBtn = headerClone.querySelector('.create-post');
                 if (createPostBtn) {
-                    createPostBtn.style.display = 'flex';
+                    createPostBtn.classList.remove('hidden');
+                    createPostBtn.classList.add('visible-flex');
                 }
                 const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
-                    lightLink.style.display = 'flex';
+                    lightLink.classList.remove('hidden');
+                    lightLink.classList.add('visible-flex');
                 }
                 const titleLink = headerClone.querySelector('.site-title');
                 if (titleLink) {
@@ -930,9 +931,9 @@
                 if (data.blog_settings.show_view_counts && post.view_count) {
                     hViewsEl.textContent = post.view_count + " views";
                 } else {
-                    hViewsEl.style.display = 'none';
+                    hViewsEl.classList.add('hidden');
                     const divider = headerClone.querySelector('.post-meta-divider');
-                    if (divider) divider.style.display = 'none';
+                    if (divider) divider.classList.add('hidden');
                 }
             }
         }
@@ -976,11 +977,13 @@
                 // Show create-post and light-link buttons
                 const createPostBtn = headerRight.querySelector('.create-post');
                 if (createPostBtn) {
-                    createPostBtn.style.display = 'flex';
+                    createPostBtn.classList.remove('hidden');
+                    createPostBtn.classList.add('visible-flex');
                 }
                 const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
-                    lightLink.style.display = 'flex';
+                    lightLink.classList.remove('hidden');
+                    lightLink.classList.add('visible-flex');
                 }
             }
         }
@@ -1356,7 +1359,7 @@
 
         async function loadPosts(url, triggerElement = null) {
             try {
-                postsContainer.style.opacity = '0.5';
+                postsContainer.classList.add('opacity-50');
 
                 const response = await fetch(url, {
                     headers: {
@@ -1382,7 +1385,7 @@
                 console.error('Error loading posts:', error);
                 window.location.href = url;
             } finally {
-                postsContainer.style.opacity = '1';
+                postsContainer.classList.remove('opacity-50');
             }
         }
 
@@ -1570,7 +1573,7 @@
 
         async function loadTagsContent(url, triggerElement = null) {
             try {
-                tagsContent.style.opacity = '0.5';
+                tagsContent.classList.add('opacity-50');
 
                 const response = await fetch(url, {
                     headers: {
@@ -1593,10 +1596,10 @@
                     window.location.href = url;
                 }
             } catch (error) {
-                console.error('Error loading tags:', error);
+                console.error('Error loading tags content:', error);
                 window.location.href = url;
             } finally {
-                tagsContent.style.opacity = '1';
+                tagsContent.classList.remove('opacity-50');
             }
         }
 
@@ -1675,11 +1678,12 @@
             }
 
             if (!pag || pag.total_pages <= 1) {
-                paginationContainer.style.display = 'none';
+                paginationContainer.classList.add('hidden');
                 return;
             }
 
-            paginationContainer.style.display = 'flex';
+            paginationContainer.classList.remove('hidden');
+            paginationContainer.classList.add('visible-flex');
             const tagPath = currentTag ? `/${currentTag}` : '';
             let html = '';
 
@@ -1780,7 +1784,10 @@
             });
 
             // Hide everything initially
-            allItems.forEach(item => item.style.display = 'none');
+            allItems.forEach(item => {
+                item.classList.toggle('hidden', true);
+                item.classList.toggle('visible-inline-flex', false);
+            });
 
             // Threshold for hiding tags completely to avoid branding collision
             // If the space is too small (< 100px), hide everything.
@@ -1793,16 +1800,15 @@
 
             // Step 1: Show relevant items temporarily to measure natural widths
             items.forEach(item => {
-                item.style.display = 'inline-flex';
-                item.style.flexShrink = '0';
-                item.style.visibility = 'hidden';
+                item.classList.add('is-measuring');
+                item.classList.toggle('visible-inline-flex', true);
 
                 // Store the width
                 widths.set(item, item.offsetWidth);
 
                 // Reset immediately (we'll set final display later)
-                item.style.display = 'none';
-                item.style.visibility = 'visible';
+                item.classList.remove('is-measuring');
+                item.classList.toggle('visible-inline-flex', false);
             });
 
             // Identify key items
@@ -1830,8 +1836,12 @@
             for (const item of essentials) {
                 const itemWidth = widths.get(item) || 0;
                 const cost = itemWidth + (currentWidth > 0 ? gap : 0);
-                if (currentWidth + cost <= availableWidth) {
-                    item.style.display = 'inline-flex';
+                const fits = currentWidth + cost <= availableWidth;
+
+                item.classList.toggle('hidden', !fits);
+                item.classList.toggle('visible-inline-flex', fits);
+
+                if (fits) {
                     currentWidth += cost;
                 }
             }
@@ -1841,8 +1851,12 @@
             for (const tag of otherTags) {
                 const itemWidth = widths.get(tag) || 0;
                 const cost = itemWidth + (currentWidth > 0 ? gap : 0);
-                if (currentWidth + cost <= availableWidth) {
-                    tag.style.display = 'inline-flex';
+                const fits = currentWidth + cost <= availableWidth;
+
+                tag.classList.toggle('hidden', !fits);
+                tag.classList.toggle('visible-inline-flex', fits);
+
+                if (fits) {
                     currentWidth += cost;
                 }
             }
@@ -1888,13 +1902,13 @@
             // Helper to prevent menu overflow
             const adjustMenuPosition = () => {
                 // Reset transform first to get original position
-                children.style.transform = '';
+                children.style.removeProperty('transform');
 
                 // Show temporarily to measure (if not already displayed)
                 const originallyHidden = window.getComputedStyle(children).display === 'none';
                 if (originallyHidden) {
-                    children.style.visibility = 'hidden';
-                    children.style.display = 'flex';
+                    children.classList.add('is-measuring');
+                    children.classList.add('visible-flex');
                 }
 
                 const menuRect = children.getBoundingClientRect();
@@ -1913,12 +1927,12 @@
                 if (offset !== 0) {
                     children.style.transform = `translateX(-50%) translateX(${offset}px)`;
                 } else {
-                    children.style.transform = 'translateX(-50%)';
+                    children.style.removeProperty('transform');
                 }
 
                 if (originallyHidden) {
-                    children.style.display = '';
-                    children.style.visibility = '';
+                    children.classList.remove('is-measuring');
+                    children.classList.remove('visible-flex');
                 }
             };
 
