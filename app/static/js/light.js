@@ -342,13 +342,198 @@
     }
 
     // ===========================
-    // Confirm Dialog
+    // Dialog System
     // ===========================
 
-    function confirm(message) {
+    /**
+     * Create standard modals if they don't exist
+     */
+    function ensureModals() {
+        if (!document.getElementById('confirm-modal')) {
+            const confirmOverlay = document.createElement('div');
+            confirmOverlay.id = 'confirm-modal';
+            confirmOverlay.className = 'modal-overlay';
+            confirmOverlay.innerHTML = `
+                <div class="modal" style="width: 400px; min-width: 300px;">
+                    <div class="modal-header">
+                        <h3 id="confirm-title">Confirm Action</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p id="confirm-message"></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="confirm-cancel" class="btn btn-secondary">Cancel</button>
+                        <button id="confirm-ok" class="btn btn-primary">Confirm</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(confirmOverlay);
+        }
+
+        if (!document.getElementById('alert-modal')) {
+            const alertOverlay = document.createElement('div');
+            alertOverlay.id = 'alert-modal';
+            alertOverlay.className = 'modal-overlay';
+            alertOverlay.innerHTML = `
+                <div class="modal" style="width: 400px; min-width: 300px;">
+                    <div class="modal-header">
+                        <h3 id="alert-title">Notification</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p id="alert-message"></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="alert-ok" class="btn btn-primary">OK</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(alertOverlay);
+        }
+
+        if (!document.getElementById('prompt-modal')) {
+            const promptOverlay = document.createElement('div');
+            promptOverlay.id = 'prompt-modal';
+            promptOverlay.className = 'modal-overlay';
+            promptOverlay.innerHTML = `
+                <div class="modal" style="width: 400px; min-width: 300px;">
+                    <div class="modal-header">
+                        <h3 id="prompt-title">Input Required</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p id="prompt-message"></p>
+                        <div class="mt-3">
+                            <input type="text" id="prompt-input" class="form-input" style="width: 100%;">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="prompt-cancel" class="btn btn-secondary">Cancel</button>
+                        <button id="prompt-ok" class="btn btn-primary">OK</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(promptOverlay);
+        }
+    }
+
+    /**
+     * Custom alert dialog
+     */
+    function alert(message, options = {}) {
+        ensureModals();
         return new Promise((resolve) => {
-            const result = window.confirm(message);
-            resolve(result);
+            const modalEl = document.getElementById('alert-modal');
+            const titleEl = modalEl.querySelector('#alert-title');
+            const messageEl = modalEl.querySelector('#alert-message');
+            const okBtn = modalEl.querySelector('#alert-ok');
+
+            if (titleEl) titleEl.textContent = options.title || 'Notification';
+            if (messageEl) messageEl.textContent = message;
+            if (okBtn) okBtn.textContent = options.okText || 'OK';
+
+            const modal = new Modal(modalEl);
+
+            const handleOk = () => {
+                modal.close();
+                okBtn.removeEventListener('click', handleOk);
+                resolve();
+            };
+
+            okBtn.addEventListener('click', handleOk);
+            modal.open();
+        });
+    }
+
+    /**
+     * Custom prompt dialog
+     */
+    function prompt(message, defaultValue = '', options = {}) {
+        ensureModals();
+        return new Promise((resolve) => {
+            const modalEl = document.getElementById('prompt-modal');
+            const titleEl = modalEl.querySelector('#prompt-title');
+            const messageEl = modalEl.querySelector('#prompt-message');
+            const inputEl = modalEl.querySelector('#prompt-input');
+            const okBtn = modalEl.querySelector('#prompt-ok');
+            const cancelBtn = modalEl.querySelector('#prompt-cancel');
+
+            if (titleEl) titleEl.textContent = options.title || 'Input Required';
+            if (messageEl) messageEl.textContent = message;
+            if (inputEl) {
+                inputEl.value = defaultValue;
+                inputEl.placeholder = options.placeholder || '';
+            }
+
+            const modal = new Modal(modalEl);
+
+            const handleOk = () => {
+                const value = inputEl.value;
+                modal.close();
+                cleanup();
+                resolve(value);
+            };
+
+            const handleCancel = () => {
+                modal.close();
+                cleanup();
+                resolve(null);
+            };
+
+            const cleanup = () => {
+                okBtn.removeEventListener('click', handleOk);
+                cancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            okBtn.addEventListener('click', handleOk);
+            cancelBtn.addEventListener('click', handleCancel);
+
+            modal.open();
+            setTimeout(() => inputEl.focus(), 100);
+        });
+    }
+
+    /**
+     * Custom confirmation dialog using Modal
+     */
+    function confirm(message, options = {}) {
+        ensureModals();
+        return new Promise((resolve) => {
+            const modalEl = document.getElementById('confirm-modal');
+            const titleEl = modalEl.querySelector('#confirm-title');
+            const messageEl = modalEl.querySelector('#confirm-message');
+            const okBtn = modalEl.querySelector('#confirm-ok');
+            const cancelBtn = modalEl.querySelector('#confirm-cancel');
+
+            if (titleEl) titleEl.textContent = options.title || 'Confirm Action';
+            if (messageEl) messageEl.textContent = message;
+            if (okBtn) {
+                okBtn.textContent = options.okText || 'OK';
+                okBtn.className = `btn btn-${options.okVariant || 'danger'}`;
+            }
+            if (cancelBtn) cancelBtn.textContent = options.cancelText || 'Cancel';
+
+            const modal = new Modal(modalEl);
+
+            const handleOk = () => {
+                modal.close();
+                cleanup();
+                resolve(true);
+            };
+
+            const handleCancel = () => {
+                modal.close();
+                cleanup();
+                resolve(false);
+            };
+
+            const cleanup = () => {
+                okBtn.removeEventListener('click', handleOk);
+                cancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            okBtn.addEventListener('click', handleOk);
+            cancelBtn.addEventListener('click', handleCancel);
+
+            modal.open();
         });
     }
 
@@ -553,7 +738,10 @@
 
         if (previewToggle) {
             previewToggle.addEventListener('click', () => {
-                previewPanel.classList.toggle('active');
+                const previewCard = document.getElementById('preview-card');
+                if (previewCard) {
+                    previewCard.style.display = previewCard.style.display === 'none' ? 'block' : 'none';
+                }
             });
         }
 
@@ -567,6 +755,14 @@
             try {
                 // Simple markdown preview (basic)
                 let html = content
+                    // Standalone image URLs (on their own line) - convert to img tags
+                    .replace(/^(\/\d{4}\/\d{2}\/[^\s]+\.(jpg|jpeg|png|gif|webp|mp4|webm))$/gm, (match) => {
+                        const isVideo = match.match(/\.(mp4|webm)$/i);
+                        if (isVideo) {
+                            return `<video src="${match}" controls style="max-width: 100%;"></video>`;
+                        }
+                        return `<img src="${match}" alt="" style="max-width: 100%;">`;
+                    })
                     // Headers
                     .replace(/^### (.*$)/gm, '<h3>$1</h3>')
                     .replace(/^## (.*$)/gm, '<h2>$1</h2>')
@@ -577,8 +773,14 @@
                     .replace(/\*(.*?)\*/g, '<em>$1</em>')
                     // Links
                     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-                    // Images
-                    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+                    // Images (markdown format) - handle relative URLs
+                    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+                        // If URL starts with /, prepend /media
+                        if (url.startsWith('/') && !url.startsWith('/media')) {
+                            url = '/media' + url;
+                        }
+                        return `<img src="${url}" alt="${alt}" style="max-width: 100%;">`;
+                    })
                     // Line breaks
                     .replace(/\n\n/g, '</p><p>')
                     .replace(/\n/g, '<br>');
@@ -796,6 +998,8 @@
         showToast,
         formatBytes,
         confirm,
+        alert,
+        prompt,
         Modal,
         TagsInput,
         FileUploader

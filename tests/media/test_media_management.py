@@ -97,13 +97,19 @@ class TestMediaList:
         assert len(data["media"]) >= 5
 
     @pytest.mark.asyncio
-    async def test_list_media_filters(self, db: AsyncSession):
+    async def test_list_media_filters(self, db: AsyncSession, test_user: dict):
         """Test listing media with filters."""
+        from app.models.post import Post, PostFormatter, PostStatus
+        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
+        db.add(post)
+        await db.commit()
+        await db.refresh(post)
+
         service = MediaService(db)
         # Old timestamp to bypass grace period
         old_time = datetime.now(UTC) - timedelta(days=2)
 
-        m1 = Media(filename="1.jpg", original_path="1.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c1", post_id=1, uploaded_at=old_time)
+        m1 = Media(filename="1.jpg", original_path="1.jpg", file_type=FileType.IMAGE, mime_type="i/j", file_size=10, checksum="c1", post_id=post.id, uploaded_at=old_time)
         m2 = Media(filename="2.mp4", original_path="2.mp4", file_type=FileType.VIDEO, mime_type="v/m", file_size=20, checksum="c2", post_id=None, uploaded_at=old_time)
         db.add_all([m1, m2])
         await db.commit()
@@ -192,8 +198,14 @@ class TestMediaUpdate:
         assert resp.json()["alt_text"] == "Updated Alt"
 
     @pytest.mark.asyncio
-    async def test_update_media_metadata_service(self, db: AsyncSession):
+    async def test_update_media_metadata_service(self, db: AsyncSession, test_user: dict):
         """Test updating media metadata via service."""
+        from app.models.post import Post, PostFormatter, PostStatus
+        post = Post(title="P", slug="p", content="C", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
+        db.add(post)
+        await db.commit()
+        await db.refresh(post)
+
         service = MediaService(db)
         m = Media(
             filename="test.jpg",
@@ -206,11 +218,11 @@ class TestMediaUpdate:
         db.add(m)
         await db.commit()
 
-        updated = await service.update_media(m.id, alt_text="Alt", caption="Cap", post_id=1)
+        updated = await service.update_media(m.id, alt_text="Alt", caption="Cap", post_id=post.id)
         assert updated is not None
         assert updated.alt_text == "Alt"
         assert updated.caption == "Cap"
-        assert updated.post_id == 1
+        assert updated.post_id == post.id
 
         # Not found
         assert await service.update_media(999) is None

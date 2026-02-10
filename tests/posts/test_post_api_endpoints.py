@@ -643,10 +643,10 @@ class TestPublishPost:
 
     @pytest.mark.asyncio
     async def test_publish_post_failed_service(
-        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
+        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
     ) -> None:
         """Test publish post service returns None."""
-        post = Post(title="My Draft", slug="my-draft", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=1)
+        post = Post(title="My Draft", slug="my-draft", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 
@@ -721,10 +721,10 @@ class TestWithdrawPost:
 
     @pytest.mark.asyncio
     async def test_withdraw_post_failed_service(
-        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
+        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
     ) -> None:
         """Test withdraw post service returns None."""
-        post = Post(title="My Pub", slug="my-pub", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=1)
+        post = Post(title="My Pub", slug="my-pub", content="c", status=PostStatus.PUBLISHED, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 
@@ -872,10 +872,10 @@ class TestPreviewLink:
 
     @pytest.mark.asyncio
     async def test_generate_preview_link_failed(
-        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict
+        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
     ) -> None:
         """Test generate preview link service failure."""
-        post = Post(title="My Draft 2", slug="my-draft-2", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=1)
+        post = Post(title="My Draft 2", slug="my-draft-2", content="c", status=PostStatus.DRAFT, formatter=PostFormatter.MARKDOWN, author_id=test_user["user"].id)
         db.add(post)
         await db.commit()
 

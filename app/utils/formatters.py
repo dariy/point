@@ -75,6 +75,58 @@ def preprocess_media_links(content: str) -> str:
     return "\n".join(new_lines)
 
 
+def linkify_urls(html_content: str) -> str:
+    """Convert plain text URLs to clickable anchor tags.
+
+    Detects URLs in HTML content and wraps them with <a> tags.
+    Avoids double-linking URLs that are already in anchor tags or image/video src attributes.
+
+    Args:
+        html_content: HTML string
+
+    Returns:
+        HTML with URLs converted to links
+    """
+    # URL pattern - matches http:// and https:// URLs
+    url_pattern = re.compile(
+        r'(?<!href=")(?<!src=")(?<!href=\')(?<!src=\')'  # Negative lookbehind - not in href or src
+        r'(https?://[^\s<>"\']+)',  # The URL itself
+        re.IGNORECASE
+    )
+
+
+    def replace_url(match: re.Match[str]) -> str:
+        url = match.group(1)
+        # Strip all trailing whitespace (including \r\n) and punctuation
+        url = url.rstrip()
+        # Remove trailing punctuation that's likely not part of the URL
+        while url and url[-1] in '.,;:!?)':
+            url = url[:-1]
+        return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>'
+
+
+    # Split content by tags to avoid modifying content inside tags
+    parts = re.split(r'(<[^>]+>)', html_content)
+
+    result = []
+    for i, part in enumerate(parts):
+        # Only linkify text content (odd indices), not tags (even indices)
+        if i % 2 == 0:
+            # Check if we're inside an <a> tag
+            # Simple heuristic: count opening and closing <a> tags before this part
+            preceding = ''.join(parts[:i])
+            open_a_tags = len(re.findall(r'<a\s', preceding, re.IGNORECASE))
+            close_a_tags = len(re.findall(r'</a>', preceding, re.IGNORECASE))
+
+            # Only linkify if we're not inside an <a> tag
+            if open_a_tags == close_a_tags:
+                part = url_pattern.sub(replace_url, part)
+
+        result.append(part)
+
+    return ''.join(result)
+
+
 def format_content(content: str, formatter: str) -> str:
     """Format content based on formatter type.
 
@@ -85,17 +137,27 @@ def format_content(content: str, formatter: str) -> str:
     Returns:
         Formatted HTML content
     """
+    # Normalize line endings - remove both actual CRLF and literal \r\n strings
+    content = content.replace("\\r\\n", "")
+
+    html_output = ""
+
     if formatter == "markdown":
         # Pre-process simplified media links
         preprocessed = preprocess_media_links(content)
-        return markdown_to_html(preprocessed)
+        html_output = markdown_to_html(preprocessed)
     elif formatter == "html":
         # HTML content is passed through (should be sanitized on input)
-        return preprocess_media_links(content)
+        html_output = preprocess_media_links(content)
     else:
         # Raw text - escape HTML and preserve whitespace
         escaped = html.escape(content)
-        return f"<pre>{escaped}</pre>"
+        html_output = f"<pre>{escaped}</pre>"
+
+    # Apply URL linkification to all formatted content
+    html_output = linkify_urls(html_output)
+
+    return html_output
 
 
 def strip_html(html_content: str) -> str:
@@ -115,7 +177,7 @@ def strip_html(html_content: str) -> str:
     text = re.sub(r"<[^>]+>", "", html_content)
     # Decode HTML entities
     text = html.unescape(text)
-    # Normalize whitespace
+    # Normalize whitespace (including \r\n and multiple spaces)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 

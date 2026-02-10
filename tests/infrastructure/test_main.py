@@ -44,7 +44,7 @@ async def test_global_exception_handler():
         assert "Internal server error" in data
 
 @pytest.mark.asyncio
-async def test_preview_post_endpoint(client: AsyncClient, db):
+async def test_preview_post_endpoint(client: AsyncClient, db, test_user):
     """Test preview post endpoint in main.py."""
     from datetime import UTC, datetime, timedelta
 
@@ -57,7 +57,7 @@ async def test_preview_post_endpoint(client: AsyncClient, db):
         content="Content",
         status=PostStatus.DRAFT,
         formatter=PostFormatter.MARKDOWN,
-        author_id=1,
+        author_id=test_user["user"].id,
         preview_token="token123",
         preview_expires_at=datetime.now(UTC) + timedelta(hours=1)
     )
@@ -75,7 +75,7 @@ async def test_preview_post_invalid_token(client: AsyncClient):
     assert response.status_code == 404
 
 @pytest.mark.asyncio
-async def test_preview_post_expired(client: AsyncClient, db):
+async def test_preview_post_expired(client: AsyncClient, db, test_user):
     """Test preview post with expired token."""
     from datetime import UTC, datetime, timedelta
 
@@ -87,7 +87,7 @@ async def test_preview_post_expired(client: AsyncClient, db):
         content="Content",
         status=PostStatus.DRAFT,
         formatter=PostFormatter.MARKDOWN,
-        author_id=1,
+        author_id=test_user["user"].id,
         preview_token="token_exp",
         preview_expires_at=datetime.now(UTC) - timedelta(hours=1)
     )
@@ -131,7 +131,7 @@ async def test_validation_exception_handler():
 
 # Helper fixture for creating published post with all fields
 @pytest.fixture
-async def full_published_post(db: AsyncSession) -> Post:
+async def full_published_post(db: AsyncSession, test_user) -> Post:
     """Create a comprehensive published post."""
     tag1 = Tag(name="Photography", slug="photography", post_count=0)
     tag2 = Tag(name="Travel", slug="travel", post_count=0)
@@ -149,7 +149,7 @@ async def full_published_post(db: AsyncSession) -> Post:
         published_at=datetime.now(UTC) - timedelta(days=1),
         view_count=100,
         thumbnail_path="2026/01/thumb.jpg",
-        author_id=1,
+        author_id=test_user["user"].id,
     )
     post.tags.extend([tag1, tag2])
     db.add(post)
@@ -265,6 +265,7 @@ class TestPostMediaExtraction:
         self,
         client: AsyncClient,
         db: AsyncSession,
+        test_user,
     ):
         """Test post with multiple images extracts media correctly."""
         post = Post(
@@ -274,7 +275,7 @@ class TestPostMediaExtraction:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=datetime.now(UTC),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         db.add(post)
         await db.commit()
@@ -287,6 +288,7 @@ class TestPostMediaExtraction:
         self,
         client: AsyncClient,
         db: AsyncSession,
+        test_user,
     ):
         """Test post without any media."""
         post = Post(
@@ -296,7 +298,7 @@ class TestPostMediaExtraction:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=datetime.now(UTC),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         db.add(post)
         await db.commit()
@@ -313,6 +315,7 @@ class TestPostNavigation:
         self,
         client: AsyncClient,
         db: AsyncSession,
+        test_user,
     ):
         """Test that post page includes prev/next navigation."""
         # Create three posts in sequence
@@ -323,7 +326,7 @@ class TestPostNavigation:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=datetime.now(UTC) - timedelta(days=2),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         post2 = Post(
             title="Second Post",
@@ -332,7 +335,7 @@ class TestPostNavigation:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=datetime.now(UTC) - timedelta(days=1),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         post3 = Post(
             title="Third Post",
@@ -341,7 +344,7 @@ class TestPostNavigation:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=datetime.now(UTC),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         db.add_all([post1, post2, post3])
         await db.commit()
@@ -359,6 +362,7 @@ class TestRawFormatter:
         self,
         client: AsyncClient,
         db: AsyncSession,
+        test_user,
     ):
         """Test post with HTML formatter."""
         post = Post(
@@ -368,7 +372,7 @@ class TestRawFormatter:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.HTML,
             published_at=datetime.now(UTC),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         db.add(post)
         await db.commit()
@@ -437,6 +441,7 @@ class TestPostWithoutPublishedDate:
         self,
         client: AsyncClient,
         db: AsyncSession,
+        test_user,
     ):
         """Test post that has no published_at uses created_at."""
         post = Post(
@@ -446,7 +451,7 @@ class TestPostWithoutPublishedDate:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=None,  # Explicitly no publish date
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         db.add(post)
         await db.commit()

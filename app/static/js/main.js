@@ -370,7 +370,7 @@
         }
 
         function resetIdleTimer(e) {
-            // Ignore arrow keys for immersive mode toggle
+            // Ignore arrow keys for immersive mode toggle - they should only navigate carousel
             if (e && e.type === "keydown") {
                 if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                     return;
@@ -391,6 +391,21 @@
                 lastShowTime = Date.now();
             }
             idleTimer = setTimeout(hideUI, idleTime);
+        }
+
+        function handleKeydown(e) {
+            // Space key toggles UI visibility
+            if (e.key === " " || e.code === "Space") {
+                e.preventDefault(); // Prevent page scroll
+                if (immersiveBody.classList.contains("ui-hidden")) {
+                    showUI();
+                } else {
+                    if (Date.now() - lastShowTime >= minShowDuration) {
+                        hideUI();
+                        clearTimeout(idleTimer);
+                    }
+                }
+            }
         }
 
         function handleClick(e) {
@@ -423,6 +438,9 @@
             document.addEventListener(evt, resetIdleTimer, { passive: true });
         });
 
+        // Space key for explicit UI toggle
+        document.addEventListener("keydown", handleKeydown);
+
         // Toggle on background click
         document.addEventListener("click", handleClick);
 
@@ -434,6 +452,7 @@
             events.forEach((evt) => {
                 document.removeEventListener(evt, resetIdleTimer);
             });
+            document.removeEventListener("keydown", handleKeydown);
             document.removeEventListener("click", handleClick);
         });
     }
@@ -845,7 +864,7 @@
                 const a = document.createElement('a');
                 a.href = '/posts/' + data.prev_post.slug;
                 a.className = 'post-nav-link prev';
-                a.innerHTML = '<span class="post-nav-label">Previous Post</span><span class="post-nav-title">' + data.prev_post.title + '</span>';
+                a.innerHTML = '<span class="post-nav-title">&larr; ' + data.prev_post.title + '</span>';
                 navContainer.appendChild(a);
             } else {
                 navContainer.appendChild(document.createElement('div'));
@@ -855,7 +874,7 @@
                 const a = document.createElement('a');
                 a.href = '/posts/' + data.next_post.slug;
                 a.className = 'post-nav-link next';
-                a.innerHTML = '<span class="post-nav-label">Next Post</span><span class="post-nav-title">' + data.next_post.title + '</span>';
+                a.innerHTML = '<span class="post-nav-title">' + data.next_post.title + ' &rarr; </span>';
                 navContainer.appendChild(a);
             }
         }
@@ -922,16 +941,37 @@
         if (data.is_logged_in) {
             const headerRight = headerClone.querySelector('.header-right');
             if (headerRight) {
-                const editBtn = document.createElement('a');
+                // Check if edit button already exists to prevent duplicates
+                let editBtn = headerRight.querySelector('.edit-post-btn');
+
+                if (!editBtn) {
+                    // Create new edit button only if it doesn't exist
+                    editBtn = document.createElement('a');
+                    editBtn.className = 'header-action-btn edit-post-btn';
+                    editBtn.title = 'Edit Post';
+                    editBtn.innerHTML = `
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    `;
+
+                    // Insert edit button before create-post button
+                    const createPostBtn = headerRight.querySelector('.create-post');
+                    if (createPostBtn) {
+                        headerRight.insertBefore(editBtn, createPostBtn);
+                    } else {
+                        const themeToggle = headerRight.querySelector('.theme-toggle');
+                        if (themeToggle) {
+                            headerRight.insertBefore(editBtn, themeToggle);
+                        } else {
+                            headerRight.appendChild(editBtn);
+                        }
+                    }
+                }
+
+                // Update the href for the current post
                 editBtn.href = '/light/posts/' + post.id;
-                editBtn.className = 'header-action-btn edit-post-btn';
-                editBtn.title = 'Edit Post';
-                editBtn.innerHTML = `
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                `;
 
                 // Show create-post and light-link buttons
                 const createPostBtn = headerRight.querySelector('.create-post');
@@ -941,18 +981,6 @@
                 const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
                     lightLink.style.display = 'flex';
-                }
-
-                // Insert edit button before create-post button
-                if (createPostBtn) {
-                    headerRight.insertBefore(editBtn, createPostBtn);
-                } else {
-                    const themeToggle = headerRight.querySelector('.theme-toggle');
-                    if (themeToggle) {
-                        headerRight.insertBefore(editBtn, themeToggle);
-                    } else {
-                        headerRight.appendChild(editBtn);
-                    }
                 }
             }
         }
@@ -1220,13 +1248,113 @@
     }
 
     /**
+     * Update Site Header Filters
+     * Syncs active states and handles hierarchical tag name swapping.
+     */
+    function updateActiveSiteFilters(url, triggerElement = null) {
+        const filtersContainer = document.querySelector('.site-header .tags-filters');
+        if (!filtersContainer) return;
+
+        const urlObj = new URL(url, window.location.origin);
+        const pathParts = urlObj.pathname.split('/').filter(p => p);
+
+        // Tag could be at /tag/SLUG or /tags/SLUG
+        let tag = null;
+        if (pathParts[0] === 'tag' || pathParts[0] === 'tags') {
+            tag = pathParts.length > 1 ? pathParts[1] : null;
+        }
+
+        const buttons = filtersContainer.querySelectorAll('.filter-btn');
+
+        // First, reset all buttons to inactive and restore original names for parent buttons
+        buttons.forEach(btn => {
+            btn.classList.remove('active');
+            const originalName = btn.getAttribute('data-original-name');
+            if (originalName) {
+                btn.textContent = originalName;
+            }
+        });
+
+        // Identify all buttons that match the current tag
+        const matchingButtons = [];
+        buttons.forEach(btn => {
+            const btnUrl = new URL(btn.href, window.location.origin);
+            const btnPathParts = btnUrl.pathname.split('/').filter(p => p);
+            const btnTag = btnPathParts.length > 1 ? btnPathParts[1] : null;
+            if (tag === btnTag) {
+                matchingButtons.push(btn);
+            }
+        });
+
+        // If no matches by tag, handle "All"
+        if (matchingButtons.length === 0 && !tag) {
+            const allBtn = Array.from(buttons).find(btn => btn.dataset.role === 'all' || btn.getAttribute('href') === '/');
+            if (allBtn) allBtn.classList.add('active');
+        } else if (matchingButtons.length > 0) {
+            // If multiple exist, pick the "best" one
+            let bestMatch = null;
+            if (triggerElement) {
+                // If the click happened on one of these specific buttons, that's our winner
+                bestMatch = matchingButtons.find(btn => btn === triggerElement);
+                // If the trigger was a secondary element (like a tag in a post card), it won't be found here.
+            }
+
+            if (!bestMatch) {
+                // Fresh run or external trigger: pick the one with deepest nesting
+                let maxDepth = -1;
+                matchingButtons.forEach(btn => {
+                    let depth = 0;
+                    let p = btn.parentElement;
+                    while (p && p !== filtersContainer) {
+                        if (p.classList.contains('tag-group')) depth++;
+                        p = p.parentElement;
+                    }
+                    if (depth > maxDepth) {
+                        maxDepth = depth;
+                        bestMatch = btn;
+                    }
+                });
+            }
+
+            if (bestMatch) {
+                bestMatch.classList.add('active');
+
+                // Propagate active state and name swapping up the chosen hierarchy
+                let currentGroup = bestMatch.closest('.tag-group');
+
+                while (currentGroup) {
+                    const headerBtn = currentGroup.querySelector('.tag-group-header .filter-btn');
+                    const parentElement = currentGroup.parentElement;
+                    const nextGroup = parentElement ? parentElement.closest('.tag-group') : null;
+
+                    if (headerBtn) {
+                        headerBtn.classList.add('active');
+                        // Rule: The top-most group header button always swaps its text with the selected sub-tag 
+                        // to show the current filter status prominently. 
+                        // Intermediate groups keep their original names to provide hierarchical context.
+                        if (!nextGroup) {
+                            headerBtn.textContent = bestMatch.textContent;
+                        }
+                    }
+                    currentGroup = nextGroup;
+                }
+
+
+            }
+        }
+
+        // Trigger responsive filter update
+        window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
+    }
+
+    /**
      * AJAX Navigation for Post Lists (Homepage and Tag Archives)
      */
     function initAjaxPostsNavigation() {
         const postsContainer = document.querySelector('.posts-main') || document.getElementById('tag-posts-container');
         if (!postsContainer) return;
 
-        async function loadPosts(url) {
+        async function loadPosts(url, triggerElement = null) {
             try {
                 postsContainer.style.opacity = '0.5';
 
@@ -1241,6 +1369,7 @@
                     renderPosts(data, postsContainer);
 
                     window.history.pushState({}, '', url);
+                    updateActiveSiteFilters(url, triggerElement);
                     attachAjaxListeners();
                     if (typeof initPostCardVideos === 'function') {
                         initPostCardVideos();
@@ -1419,7 +1548,7 @@
         function handleAjaxClick(e) {
             e.preventDefault();
             const url = this.getAttribute('href');
-            loadPosts(url);
+            loadPosts(url, this);
         }
 
         // Initial setup
@@ -1439,7 +1568,7 @@
         const filtersContainer = document.getElementById('tags-filters');
         if (!tagsContent) return;
 
-        async function loadTagsContent(url) {
+        async function loadTagsContent(url, triggerElement = null) {
             try {
                 tagsContent.style.opacity = '0.5';
 
@@ -1454,8 +1583,9 @@
                     renderTags(data);
 
                     window.history.pushState({}, '', url);
-                    updateActiveFilter(url);
+                    updateActiveSiteFilters(url, triggerElement);
                     attachTagsListeners();
+                    initTagToggles();
                     if (typeof initPostCardVideos === 'function') {
                         initPostCardVideos();
                     }
@@ -1597,26 +1727,7 @@
             paginationContainer.innerHTML = html;
         }
 
-        function updateActiveFilter(url) {
-            if (!filtersContainer) return;
 
-            const urlObj = new URL(url, window.location.origin);
-            const pathParts = urlObj.pathname.split('/').filter(p => p);
-            const tag = pathParts.length > 1 ? pathParts[1] : null;
-
-            const buttons = filtersContainer.querySelectorAll('.filter-btn');
-            buttons.forEach(btn => {
-                const btnUrl = new URL(btn.href, window.location.origin);
-                const btnPathParts = btnUrl.pathname.split('/').filter(p => p);
-                const btnTag = btnPathParts.length > 1 ? btnPathParts[1] : null;
-
-                if (tag === btnTag) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
 
         function attachTagsListeners() {
             const links = document.querySelectorAll('.ajax-link');
@@ -1629,7 +1740,7 @@
         function handleTagsClick(e) {
             e.preventDefault();
             const url = this.getAttribute('href');
-            loadTagsContent(url);
+            loadTagsContent(url, this);
         }
 
         // Initial setup
@@ -1658,45 +1769,62 @@
 
             if (containerWidth === 0) return;
 
-            const buttons = Array.from(container.querySelectorAll('.filter-btn'));
+            const items = Array.from(container.children);
 
-            // Identify key buttons
-            const allBtn = buttons.find(b => b.getAttribute('href') === '/');
-            const moreBtn = buttons.find(b => b.getAttribute('href') === '/tags' || b.title === 'All Tags');
-            const activeBtn = buttons.find(b => b.classList.contains('active'));
+            // Identify key items
+            const allBtn = items.find(el => {
+                const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
+                return b && (b.dataset.role === 'all' || b.getAttribute('href') === '/');
+            });
+            const moreBtn = items.find(el => {
+                const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
+                return b && (b.dataset.role === 'more' || (b.getAttribute('href') === '/tags' && b !== allBtn));
+            });
+            const activeItem = items.find(el => {
+                if (el.classList.contains('active')) return true;
+                if (el.querySelector('.filter-btn.active')) return true;
+                return false;
+            });
 
-            if (!allBtn || !moreBtn) return;
+            if (!allBtn) {
+                container.classList.add('is-ready');
+                return;
+            }
 
-            // Step 1: Show all buttons temporarily to measure natural widths
-            buttons.forEach(btn => {
-                btn.style.display = 'inline-flex';
-                btn.style.flexShrink = '0';
+            // Step 1: Show all items temporarily to measure natural widths
+            items.forEach(item => {
+                item.style.display = 'inline-flex';
+                item.style.flexShrink = '0';
             });
 
             // Step 2: Priority layout (Essential width)
-            let currentWidth = allBtn.offsetWidth + gap + moreBtn.offsetWidth;
-            if (activeBtn && activeBtn !== allBtn && activeBtn !== moreBtn) {
-                currentWidth += activeBtn.offsetWidth + gap;
+            let currentWidth = allBtn.offsetWidth + gap;
+            if (moreBtn) {
+                currentWidth += moreBtn.offsetWidth + gap;
+            }
+
+            if (activeItem && activeItem !== allBtn && activeItem !== moreBtn) {
+                currentWidth += activeItem.offsetWidth + gap;
             }
 
             // Step 3: Fill available space with other tags
-            const tagBtns = buttons.filter(b => b !== allBtn && b !== moreBtn && b !== activeBtn);
+            const tagItems = items.filter(el => el !== allBtn && el !== moreBtn && el !== activeItem);
 
-            tagBtns.forEach(btn => {
-                const btnWidth = btn.offsetWidth;
-                const cost = btnWidth + gap;
+            tagItems.forEach(item => {
+                const itemWidth = item.offsetWidth;
+                const cost = itemWidth + gap;
 
                 if (currentWidth + cost <= containerWidth) {
-                    btn.style.display = 'inline-flex';
+                    item.style.display = 'inline-flex';
                     currentWidth += cost;
                 } else {
-                    btn.style.display = 'none';
+                    item.style.display = 'none';
                 }
             });
 
-            // Step 4: Ensure active button is always visible
-            if (activeBtn) {
-                activeBtn.style.display = 'inline-flex';
+            // Step 4: Ensure active item is always visible
+            if (activeItem) {
+                activeItem.style.display = 'inline-flex';
             }
 
             // Mark as ready to show
@@ -1712,11 +1840,92 @@
 
         observer.observe(container);
 
+        // Listen for internal filter updates
+        window.addEventListener('siteFiltersUpdated', () => {
+            requestAnimationFrame(updateFilters);
+        });
+
         // Initial run
+        updateActiveSiteFilters(window.location.href);
         updateFilters();
+
 
         registerCleanup(() => {
             observer.disconnect();
+        });
+    }
+
+    /**
+     * Tag Toggles for Hierarchical Tags
+     */
+    function initTagToggles() {
+        const groups = document.querySelectorAll(".tag-group");
+        groups.forEach(group => {
+            const toggle = group.querySelector(".toggle-children");
+            const children = group.querySelector(".tag-children");
+            if (!toggle || !children) return;
+
+            // Helper to prevent menu overflow
+            const adjustMenuPosition = () => {
+                // Reset transform first to get original position
+                children.style.transform = '';
+
+                // Show temporarily to measure (if not already displayed)
+                const originallyHidden = window.getComputedStyle(children).display === 'none';
+                if (originallyHidden) {
+                    children.style.visibility = 'hidden';
+                    children.style.display = 'flex';
+                }
+
+                const menuRect = children.getBoundingClientRect();
+                const viewportWidth = window.innerWidth;
+                const margin = 20; // Distance from screen edge
+
+                let offset = 0;
+                if (menuRect.left < margin) {
+                    offset = margin - menuRect.left;
+                } else if (menuRect.right > viewportWidth - margin) {
+                    offset = (viewportWidth - margin) - menuRect.right;
+                }
+
+                // If menu is open, apply the offset.
+                // We use two translateX to keep the base centering and add the correction.
+                if (offset !== 0) {
+                    children.style.transform = `translateX(-50%) translateX(${offset}px)`;
+                } else {
+                    children.style.transform = 'translateX(-50%)';
+                }
+
+                if (originallyHidden) {
+                    children.style.display = '';
+                    children.style.visibility = '';
+                }
+            };
+
+            toggle.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const isOpen = group.classList.toggle("is-open");
+
+                if (isOpen) {
+                    adjustMenuPosition();
+                    // Close other groups
+                    groups.forEach(other => {
+                        if (other !== group) other.classList.remove("is-open");
+                    });
+                }
+            });
+
+            // Handle hover repositioning
+            group.addEventListener("mouseenter", adjustMenuPosition);
+
+            // Close when clicking outside
+            document.addEventListener("click", (e) => {
+                if (!group.contains(e.target)) {
+                    group.classList.remove("is-open");
+                }
+            });
         });
     }
 
@@ -1734,6 +1943,7 @@
         initAjaxPostsNavigation();
         initAjaxTagsNavigation();
         initResponsiveTagFilters();
+        initTagToggles();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {
