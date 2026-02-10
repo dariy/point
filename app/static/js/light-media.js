@@ -90,7 +90,13 @@
      * Handle media renaming
      */
     async function handleRename(mediaId, oldFilename) {
-        const newFilename = prompt('Enter new filename:', oldFilename);
+        let newFilename;
+        if (window.LightUtils && window.LightUtils.prompt) {
+            newFilename = await window.LightUtils.prompt('Enter new filename:', oldFilename, { title: 'Rename Media' });
+        } else {
+            newFilename = prompt('Enter new filename:', oldFilename);
+        }
+
         if (!newFilename || newFilename === oldFilename) return;
 
         try {
@@ -108,6 +114,8 @@
                 const errorMessage = errorData.detail || 'Rename failed';
                 if (window.LightUtils && window.LightUtils.showToast) {
                     window.LightUtils.showToast(errorMessage, 'error');
+                } else if (window.LightUtils && window.LightUtils.alert) {
+                    await window.LightUtils.alert(errorMessage, { title: 'Error' });
                 } else {
                     alert(errorMessage);
                 }

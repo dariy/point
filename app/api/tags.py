@@ -46,6 +46,8 @@ def tag_to_response(tag: TagModel) -> dict[str, Any]:
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "url": tag.url,
+        "parents": [tag_to_list_item(p) for p in tag.parents],
+        "children": [tag_to_list_item(c) for c in tag.children],
     }
 
 
@@ -284,6 +286,7 @@ async def get_posts_by_tag(
         page=page,
         per_page=per_page,
         published_only=published_only,
+        recursive=True,
     )
 
     pages = math.ceil(total / per_page) if total > 0 else 1

@@ -10,19 +10,69 @@
 <meta name="description" content="Browse posts by tags">
 {% endblock %}
 
+{% block header_nav_extra %}
+{% if user and tag %}
+<a href="/light/tags?search={{ tag.name | urlencode }}" class="create-post" title="Edit Tag" aria-label="Edit Tag">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+    </svg>
+</a>
+{% endif %}
+{% endblock %}
+
+{% block header_filters %}
+
+<div class="tags-filters" id="tags-filters">
+    <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}" data-role="all">All</a>
+
+    {# Recursive macro to render tag groups #}
+    {# Recursive macro to render tag groups #}
+    {% macro render_tag_group(group, current_tag) %}
+    <div class="tag-group">
+        <div class="tag-group-header">
+            <a href="/tags/{{ group.tag.slug }}"
+                class="filter-btn ajax-link {% if current_tag == group.tag.slug %}active{% endif %}"
+                data-original-name="{{ group.tag.name }}">
+                {{ group.tag.name }}
+            </a>
+            <button class="toggle-children" aria-label="Toggle children">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+        </div>
+        <div class="tag-children">
+            {% for child in group.children %}
+            {% if child.children %}
+            {{ render_tag_group(child, current_tag) }}
+            {% else %}
+            <a href="/tags/{{ child.tag.slug }}"
+                class="filter-btn ajax-link {% if current_tag == child.tag.slug %}active{% endif %}">
+                {{ child.tag.name }}
+            </a>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endmacro %}
+
+    {% for group in tag_groups %}
+    {% if group.children %}
+    {{ render_tag_group(group, current_tag) }}
+    {% else %}
+    <a href="/tags/{{ group.tag.slug }}"
+        class="filter-btn ajax-link {% if current_tag == group.tag.slug %}active{% endif %}">
+        {{ group.tag.name }}
+    </a>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="tags-page">
-    {% if tags %}
-    <div class="tags-filters" id="tags-filters">
-        <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}">All</a>
-        {% for tag in tags %}
-        <a href="/tags/{{ tag.slug }}" class="filter-btn ajax-link {% if current_tag == tag.slug %}active{% endif %}">
-            {{ tag.name }}
-        </a>
-        {% endfor %}
-    </div>
-    {% endif %}
-
     <div id="tags-content">
         {% include "public/partials/tags_grid.html" %}
     </div>
