@@ -57,18 +57,21 @@ class CachedStaticFiles(StaticFiles):
         # Create a custom send that adds cache headers
         async def send_with_cache_headers(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-
                 # Add cache control header
                 if self.immutable:
                     cache_value = f"public, max-age={self.max_age}, immutable"
                 else:
                     cache_value = f"public, max-age={self.max_age}"
 
+                # Create a new headers list with the cache control header
+                headers = list(message.get("headers", []))
                 headers.append((b"cache-control", cache_value.encode()))
-                message["headers"] = headers
 
-            await send(message)
+                # Send modified message with new headers
+                await send({**message, "headers": headers})
+            else:
+                # Pass through other message types unchanged
+                await send(message)
 
         await super().__call__(scope, receive, send_with_cache_headers)
 
