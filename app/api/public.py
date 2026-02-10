@@ -952,7 +952,7 @@ async def rss_feed(
     posts = list(posts_result.scalars().all())
 
     # Format posts for RSS
-    posts_data = []
+    posts_data: list[dict[str, Any]] = []
     for post in posts:
         pub_date = post.published_at or post.created_at
         posts_data.append(
