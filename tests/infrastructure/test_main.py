@@ -429,8 +429,8 @@ class TestGalleryFiltering:
     ):
         """Test gallery with invalid tag filter."""
         response = await client.get("/tag/nonexistent")
-        # Should still return 200, just empty results (or all posts depending on logic)
-        assert response.status_code == 200
+        # Returns 404 for nonexistent tag
+        assert response.status_code == 404
 
 
 class TestPostWithoutPublishedDate:
