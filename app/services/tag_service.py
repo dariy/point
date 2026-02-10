@@ -391,7 +391,7 @@ class TagService:
         # This includes loading children and their children recursively
         loaded_ids = set()
 
-        async def ensure_loaded(tag: Tag):
+        async def ensure_loaded(tag: Tag) -> None:
             """Recursively ensure all tag attributes are loaded."""
             if tag.id in loaded_ids:
                 return
@@ -471,7 +471,7 @@ class TagService:
         )
         if hidden_ids:
             query = query.where(Tag.id.notin_(hidden_ids))
-            
+
         result = await self.db.execute(
             query.order_by(Tag.post_count.desc())
             .limit(limit)
@@ -488,7 +488,7 @@ class TagService:
         )
         if hidden_ids:
             query = query.where(Tag.id.notin_(hidden_ids))
-            
+
         result = await self.db.execute(
             query.order_by(Tag.name)
             .limit(limit)
@@ -563,7 +563,7 @@ class TagService:
 
         offset = (page - 1) * per_page
         query = (
-            query.options(selectinload(Post.tags))
+            query.options(selectinload(Post.tags).selectinload(Tag.parents))
             .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
             .offset(offset)
             .limit(per_page)
@@ -627,7 +627,7 @@ class TagService:
     async def get_publicly_hidden_tag_ids(self) -> set[int]:
         """Get IDs of all tags that are hidden from public (self or ancestor hidden)."""
         result = await self.db.execute(
-            select(Tag.id).where((Tag.is_hidden == True) | (Tag.is_hidden_posts == True))
+            select(Tag.id).where(Tag.is_hidden | Tag.is_hidden_posts)
         )
         hidden_roots = [row[0] for row in result.all()]
 
@@ -640,7 +640,7 @@ class TagService:
     async def get_hidden_posts_tag_ids(self) -> set[int]:
         """Get IDs of all tags that hide their posts (self or ancestor has is_hidden_posts)."""
         result = await self.db.execute(
-            select(Tag.id).where(Tag.is_hidden_posts == True)
+            select(Tag.id).where(Tag.is_hidden_posts)
         )
         hidden_roots = [row[0] for row in result.all()]
 
