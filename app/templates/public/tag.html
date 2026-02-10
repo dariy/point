@@ -296,7 +296,6 @@
 {% block header_filters %}
 
 <div class="tags-filters">
-    <a href="/" class="filter-btn">All</a>
     {% for t in tags %}
     <a href="/tag/{{ t.slug }}" class="filter-btn {% if t.slug == tag.slug %}active{% endif %}">{{ t.name }}</a>
     {% endfor %}
