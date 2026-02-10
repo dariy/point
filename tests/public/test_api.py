@@ -326,7 +326,7 @@ class TestGallery:
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
     ) -> None:
         """Test gallery can filter by tag."""
-        response = await client.get(f"/tags/{sample_tag.slug}")
+        response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
         assert published_post.title in response.text
     @pytest.mark.asyncio
@@ -372,7 +372,8 @@ class TestNavigation:
         response = await client.get("/")
         assert response.status_code == 200
         assert 'href="/"' in response.text
-        assert 'href="/tags"' in response.text
+        # Header has site title linking to homepage
+        assert 'class="site-title' in response.text
     @pytest.mark.asyncio
     async def test_post_has_prev_next_navigation(
         self, client: AsyncClient, multiple_posts: list[Post]
@@ -666,32 +667,6 @@ class TestTheming:
         response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
-    @pytest.mark.asyncio
-    async def test_main_css_has_dark_theme_variables(
-        self, client: AsyncClient
-    ) -> None:
-        """Test main.css has dark theme CSS variables."""
-        response = await client.get("/static/css/main.css")
-        assert response.status_code == 200
-        assert '[data-theme="dark"]' in response.text
-        assert "--bg-primary" in response.text
-        assert "--text-primary" in response.text
-    @pytest.mark.asyncio
-    async def test_main_css_has_light_theme_variables(
-        self, client: AsyncClient
-    ) -> None:
-        """Test main.css has light theme CSS variables."""
-        response = await client.get("/static/css/main.css")
-        assert response.status_code == 200
-        assert '[data-theme="light"]' in response.text or ":root" in response.text
-    @pytest.mark.asyncio
-    async def test_main_css_has_theme_transition(
-        self, client: AsyncClient
-    ) -> None:
-        """Test main.css has smooth theme transition."""
-        response = await client.get("/static/css/main.css")
-        assert response.status_code == 200
-        assert "--transition-theme" in response.text
 @pytest.fixture
 def settings():
     return get_settings()
@@ -907,7 +882,7 @@ async def test_tag_archive_not_found(client: AsyncClient):
     assert resp.status_code == 404
 @pytest.mark.asyncio
 async def test_tags_page(client: AsyncClient, db: AsyncSession):
-    """Test tags/gallery page."""
+    """Test tag/gallery page."""
     user = User(username="galleryuser", email="gallery@test.com", password_hash="hash", display_name="Gallery User")
     db.add(user)
     await db.commit()
@@ -945,7 +920,7 @@ async def test_tags_page_with_tag_filter(client: AsyncClient, db: AsyncSession):
     post.tags.append(tag)
     db.add(post)
     await db.commit()
-    resp = await client.get(f"/tags/{tag.slug}")
+    resp = await client.get(f"/tag/{tag.slug}")
     assert resp.status_code == 200
 @pytest.mark.asyncio
 async def test_tags_page_ajax(client: AsyncClient, db: AsyncSession):

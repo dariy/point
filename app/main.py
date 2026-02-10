@@ -57,18 +57,21 @@ class CachedStaticFiles(StaticFiles):
         # Create a custom send that adds cache headers
         async def send_with_cache_headers(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-
                 # Add cache control header
                 if self.immutable:
                     cache_value = f"public, max-age={self.max_age}, immutable"
                 else:
                     cache_value = f"public, max-age={self.max_age}"
 
+                # Create a new headers list with the cache control header
+                headers = list(message.get("headers", []))
                 headers.append((b"cache-control", cache_value.encode()))
-                message["headers"] = headers
 
-            await send(message)
+                # Send modified message with new headers
+                await send({**message, "headers": headers})
+            else:
+                # Pass through other message types unchanged
+                await send(message)
 
         await super().__call__(scope, receive, send_with_cache_headers)
 
@@ -168,7 +171,7 @@ media_path = Path(settings.storage_path) / "media"
 media_path.mkdir(parents=True, exist_ok=True)
 app.mount(
     "/media",
-    CachedStaticFiles(directory=str(media_path), max_age=604800),  # 7 days
+    StaticFiles(directory=str(media_path.resolve())),
     name="media",
 )
 
@@ -176,7 +179,7 @@ app.mount(
 static_path = Path(__file__).parent / "static"
 app.mount(
     "/static",
-    CachedStaticFiles(directory=str(static_path), max_age=86400),  # 1 day
+    StaticFiles(directory=str(static_path.resolve())),
     name="static",
 )
 
