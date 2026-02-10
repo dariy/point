@@ -4,7 +4,7 @@ Handles public-facing HTML pages for the blog.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timezone
 from email.utils import format_datetime
 from math import ceil
 from pathlib import Path
@@ -71,13 +71,14 @@ def get_common_context(request: Request) -> dict[str, Any]:
 
 
 async def get_db_context(
-    db: AsyncSession, blog_settings: dict[str, Any] | None = None
+    db: AsyncSession, blog_settings: dict[str, Any] | None = None, user: User | None = None
 ) -> dict[str, Any]:
     """Get common database-dependent context variables.
 
     Args:
         db: Database session
         blog_settings: Optional pre-fetched blog settings
+        user: Current user (optional) - if provided, hidden tags will be shown
 
     Returns:
         Dictionary with tag_cloud, tags, and blog_settings
@@ -86,18 +87,24 @@ async def get_db_context(
     tag_service = TagService(db)
     tag_cloud = await tag_service.get_tag_cloud(limit=15)
 
-    # Get tags for navigation (only featured tags)
-    tags_result = await db.execute(
+    # Get hidden tags to exclude (only for non-authenticated users)
+    hidden_ids = set()
+    if not user:
+        hidden_ids = await tag_service.get_publicly_hidden_tag_ids()
+
+    tags_query = (
         select(Tag)
         .where(Tag.is_featured)
         .where(Tag.post_count > 0)
-        .order_by(Tag.name)
-        .limit(20)
     )
+    if hidden_ids:
+        tags_query = tags_query.where(Tag.id.notin_(hidden_ids))
+    
+    tags_result = await db.execute(tags_query.order_by(Tag.name).limit(20))
     tags = list(tags_result.scalars().all())
 
     # Get hierarchical tag groups for categories switcher
-    tag_groups = await tag_service.get_hierarchical_tags(include_empty=False)
+    tag_groups = await tag_service.get_hierarchical_tags(include_empty=False, public_only=(not user))
 
     # Get blog settings if not provided
     if blog_settings is None:
@@ -137,8 +144,13 @@ async def get_db_context(
     return context
 
 
-def serialize_post(post: Post) -> dict[str, Any]:
-    """Serialize post for JSON response."""
+def serialize_post(post: Post, publicly_hidden_tag_ids: set[int] | None = None) -> dict[str, Any]:
+    """Serialize post for JSON response.
+    
+    Args:
+        post: Post to serialize
+        publicly_hidden_tag_ids: Set of tag IDs to exclude from serialization (for non-authenticated users)
+    """
     pub_date = post.published_at or post.created_at
 
     # Check for media
@@ -164,6 +176,12 @@ def serialize_post(post: Post) -> dict[str, Any]:
     # 3. Or use the first video as fallback
 
     thumb_path, is_video_thumb = determine_thumbnail(post.content, post.thumbnail_path)
+    
+    # Filter tags if publicly_hidden_tag_ids is provided
+    if publicly_hidden_tag_ids is not None:
+        visible_tags = [t for t in post.tags if t.id not in publicly_hidden_tag_ids]
+    else:
+        visible_tags = post.tags
 
     return {
         "id": post.id,
@@ -173,7 +191,7 @@ def serialize_post(post: Post) -> dict[str, Any]:
         "published_date": pub_date.strftime('%B %d, %Y'),
         "published_iso": pub_date.isoformat(),
         "view_count": post.view_count,
-        "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+        "tags": [{"name": t.name, "slug": t.slug} for t in visible_tags],
         "excerpt": excerpt,
         "preview_html": preview_html,
         "has_image": has_media, # Keep key name for frontend layout compatibility
@@ -222,16 +240,45 @@ async def homepage(
     per_page = blog_settings.get("posts_per_page", 10)
     offset = (page - 1) * per_page
 
-    # Get published posts with tags
+    # Get hidden tags for posts
+    tag_service = TagService(db)
+    hidden_posts_tag_ids = await tag_service.get_hidden_posts_tag_ids()
+
+    # Base query for posts
     query = (
         select(Post)
-        .options(selectinload(Post.tags))
         .where(Post.status == PostStatus.PUBLISHED)
         .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
+        .options(selectinload(Post.tags)) # Eager load tags
     )
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
+    # Apply hidden posts filter if tags exist
+    if hidden_posts_tag_ids:
+        query = query.where(
+            ~Post.tags.any(Tag.id.in_(hidden_posts_tag_ids))
+        )
+
+    # Count query - use a more explicit approach for many-to-many filtering
+    if hidden_posts_tag_ids:
+        # Count posts that don't have any of the hidden tags
+        count_query = (
+            select(func.count(Post.id.distinct()))
+            .select_from(Post)
+            .outerjoin(post_tags, Post.id == post_tags.c.post_id)
+            .where(Post.status == PostStatus.PUBLISHED)
+            .where(
+                ~Post.id.in_(
+                    select(post_tags.c.post_id).where(post_tags.c.tag_id.in_(hidden_posts_tag_ids))
+                )
+            )
+        )
+    else:
+        # Simple count when no hidden tags
+        count_query = (
+            select(func.count(Post.id))
+            .where(Post.status == PostStatus.PUBLISHED)
+        )
+    
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
     total_pages = ceil(total / per_page)
@@ -242,7 +289,9 @@ async def homepage(
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        posts_data = [serialize_post(p) for p in posts]
+        # Get publicly hidden tag IDs for filtering if not authenticated
+        tag_filter_ids = None if user else (await TagService(db).get_publicly_hidden_tag_ids())
+        posts_data = [serialize_post(p, tag_filter_ids) for p in posts]
         return JSONResponse(
             {
                 "posts": posts_data,
@@ -269,8 +318,17 @@ async def homepage(
     recent_posts = list(recent_result.scalars().all())
 
     context = get_common_context(request)
-    db_context = await get_db_context(db, blog_settings)
+    db_context = await get_db_context(db, blog_settings, user)
     context.update(db_context)
+
+    # Filter hidden tags from posts for non-authenticated users
+    if not user:
+        tag_service = TagService(db)
+        publicly_hidden_tag_ids = await tag_service.get_publicly_hidden_tag_ids()
+        for post in posts:
+            post.tags = [t for t in post.tags if t.id not in publicly_hidden_tag_ids]
+        for post in recent_posts:
+            post.tags = [t for t in post.tags if t.id not in publicly_hidden_tag_ids]
 
     context.update(
         {
@@ -338,6 +396,22 @@ async def single_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found",
         )
+
+    # Check if post has any hidden-posts tags if not author
+    if not user:
+        tag_service = TagService(db)
+        hidden_posts_tag_ids = await tag_service.get_hidden_posts_tag_ids()
+        if hidden_posts_tag_ids:
+            # Check if any associated tag is in hidden_posts_tag_ids
+            post_tag_ids_result = await db.execute(
+                select(post_tags.c.tag_id).where(post_tags.c.post_id == post.id)
+            )
+            post_tag_ids = {row[0] for row in post_tag_ids_result.all()}
+            if any(tid in hidden_posts_tag_ids for tid in post_tag_ids):
+                 raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Post not found",
+                )
 
     # Explicitly load relationships using awaitable_attrs to avoid MissingGreenlet
     try:
@@ -418,7 +492,17 @@ async def single_post(
 
     # Get explicitly selected tags for the post
     tags = await post.awaitable_attrs.tags
-    all_post_tags = sorted(tags, key=lambda x: x.name)
+    
+    # Filter out hidden tags for non-authenticated users
+    if not user:
+        tag_service = TagService(db)
+        publicly_hidden_tag_ids = await tag_service.get_publicly_hidden_tag_ids()
+        all_post_tags = sorted(
+            [t for t in tags if t.id not in publicly_hidden_tag_ids],
+            key=lambda x: x.name
+        )
+    else:
+        all_post_tags = sorted(tags, key=lambda x: x.name)
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -455,7 +539,7 @@ async def single_post(
         )
 
     context = get_common_context(request)
-    db_context = await get_db_context(db)
+    db_context = await get_db_context(db, user=user)
     context.update(db_context)
 
     context.update(
@@ -533,6 +617,16 @@ async def tag_archive(
             detail="Tag not found",
         )
 
+    # Access control for hidden tags
+    if not user:
+        tag_service = TagService(db)
+        hidden_ids = await tag_service.get_publicly_hidden_tag_ids()
+        if tag.id in hidden_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tag not found",
+            )
+
     # Get blog settings early for pagination
     settings_service = SettingsService(db)
     blog_settings = await settings_service.get_all_settings()
@@ -547,13 +641,16 @@ async def tag_archive(
         per_page=per_page,
         published_only=True,
         recursive=True,
+        public_only=not user,  # Filter hidden posts for non-authenticated users
     )
 
     total_pages = ceil(total / per_page)
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        posts_data = [serialize_post(p) for p in posts]
+        # Get publicly hidden tag IDs for filtering if not authenticated
+        tag_filter_ids = None if user else (await tag_service.get_publicly_hidden_tag_ids())
+        posts_data = [serialize_post(p, tag_filter_ids) for p in posts]
         return JSONResponse(
             {
                 "posts": posts_data,
@@ -571,7 +668,7 @@ async def tag_archive(
         )
 
     context = get_common_context(request)
-    db_context = await get_db_context(db, blog_settings)
+    db_context = await get_db_context(db, blog_settings, user)
 
     # Ensure current tag is in the tags list for navigation bar
     if tag not in db_context["tags"]:
@@ -580,6 +677,13 @@ async def tag_archive(
         db_context["tags"].sort(key=lambda x: x.name)
 
     context.update(db_context)
+
+    # Filter hidden tags from posts for non-authenticated users
+    if not user:
+        publicly_hidden_tag_ids = await tag_service.get_publicly_hidden_tag_ids()
+        for post in posts:
+            # Filter tags in-place
+            post.tags = [t for t in post.tags if t.id not in publicly_hidden_tag_ids]
 
     context.update(
         {
@@ -644,6 +748,15 @@ async def tags_page(
         .where(Post.status == PostStatus.PUBLISHED)
     )
 
+    tag_service = TagService(db)
+    if not user:
+        # Filter out hidden-posts tags
+        hidden_posts_tag_ids = await tag_service.get_hidden_posts_tag_ids()
+        if hidden_posts_tag_ids:
+             query = query.where(Post.id.notin_(
+                select(post_tags.c.post_id).where(post_tags.c.tag_id.in_(hidden_posts_tag_ids))
+            ))
+
     # Filter by tag if provided
     tag_obj = None
     if tag_slug:
@@ -673,7 +786,7 @@ async def tags_page(
 
     # Get all tags with posts for filter (hierarchical)
     tag_service = TagService(db)
-    all_tags = await tag_service.get_hierarchical_tags(include_empty=False)
+    all_tags = await tag_service.get_hierarchical_tags(include_empty=False, public_only=(not user))
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -727,7 +840,7 @@ async def tags_page(
         )
 
     context = get_common_context(request)
-    db_context = await get_db_context(db, blog_settings)
+    db_context = await get_db_context(db, blog_settings, user)
     context.update(db_context)
 
     context.update(
@@ -762,18 +875,20 @@ def get_base_url(request: Request) -> str:
 async def rss_feed(
     request: Request,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
 ) -> Response:
     """Generate RSS feed.
 
     Args:
         request: The current request
         db: Database session
+        user: Current user (optional)
 
     Returns:
-        RSS XML feed
+        RSS feed XML
     """
     # Check cache if enabled
-    if settings.cache_enabled:
+    if settings.cache_enabled and not user:
         cache = await get_cache()
         cached = await cache.get_by_url("/feed.xml", cache_type="feeds")
         if cached:
@@ -787,37 +902,40 @@ async def rss_feed(
                 },
             )
 
-    # Get last 20 published posts
-    query = (
+    # Get all published posts
+    posts_query = (
         select(Post)
-        .options(selectinload(Post.tags))
         .where(Post.status == PostStatus.PUBLISHED)
         .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
-        .limit(20)
     )
-    result = await db.execute(query)
-    posts = list(result.scalars().all())
 
-    # Prepare post data with formatted content and dates
+    tag_service = TagService(db)
+    if not user:
+        # Filter out hidden-posts tags
+        hidden_posts_tag_ids = await tag_service.get_hidden_posts_tag_ids()
+        if hidden_posts_tag_ids:
+             posts_query = posts_query.where(Post.id.notin_(
+                select(post_tags.c.post_id).where(post_tags.c.tag_id.in_(hidden_posts_tag_ids))
+            ))
+
+    posts_result = await db.execute(posts_query)
+    posts = list(posts_result.scalars().all())
+
+    # Format posts for RSS
     posts_data = []
     for post in posts:
         pub_date = post.published_at or post.created_at
         posts_data.append(
             {
                 "title": post.title,
-                "slug": post.slug,
-                "excerpt": post.excerpt,
-                "meta_description": post.meta_description,
-                "content_html": format_content(post.content, post.formatter),
-                "thumbnail_path": post.thumbnail_path,
-                "tags": post.tags,
-                "pub_date_rfc822": format_datetime(pub_date),
+                "link": f"/posts/{post.slug}",
+                "guid": f"/posts/{post.slug}",
+                "pub_date": pub_date.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+                "description": format_content(post.content, post.formatter),
             }
         )
 
-    # Get build date
-    build_date = format_datetime(datetime.now())
-
+    build_date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
     base_url = get_base_url(request)
 
     settings_service = SettingsService(db)
@@ -888,12 +1006,20 @@ async def sitemap(
                 },
             )
 
-    # Get all published posts
     posts_query = (
         select(Post)
         .where(Post.status == PostStatus.PUBLISHED)
         .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
     )
+
+    tag_service = TagService(db)
+    # Filter out hidden-posts tags
+    hidden_posts_tag_ids = await tag_service.get_hidden_posts_tag_ids()
+    if hidden_posts_tag_ids:
+         posts_query = posts_query.where(Post.id.notin_(
+            select(post_tags.c.post_id).where(post_tags.c.tag_id.in_(hidden_posts_tag_ids))
+        ))
+
     posts_result = await db.execute(posts_query)
     posts = list(posts_result.scalars().all())
 
@@ -909,7 +1035,11 @@ async def sitemap(
         )
 
     # Get all tags with posts
+    hidden_ids = await tag_service.get_publicly_hidden_tag_ids()
     tags_query = select(Tag).where(Tag.post_count > 0).order_by(Tag.name)
+    if hidden_ids:
+        tags_query = tags_query.where(Tag.id.notin_(hidden_ids))
+    
     tags_result = await db.execute(tags_query)
     tags = list(tags_result.scalars().all())
 

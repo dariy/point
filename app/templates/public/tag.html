@@ -184,7 +184,16 @@
 
             paginationContainer.style.display = 'flex';
 
-            const tagSlug = tag ? tag.slug : '';
+            // Extract tag slug from tag object or current URL
+            let tagSlug = tag ? tag.slug : '';
+            if (!tagSlug) {
+                const urlPath = window.location.pathname;
+                const tagMatch = urlPath.match(/^\/tag\/([^\/]+)/);
+                if (tagMatch) {
+                    tagSlug = tagMatch[1];
+                }
+            }
+
             let html = '';
 
             // Previous
