@@ -216,3 +216,17 @@
         margin-top: 0;
     }
 }
+
+/* Tag Switcher Logic */
+.site-header .tags-filters[data-mode="featured"] .category-tag {
+    display: none !important;
+}
+
+.site-header .tags-filters[data-mode="categories"] .featured-tag {
+    display: none !important;
+}
+
+.site-header .switcher-btn.active {
+    background-color: var(--color-primary);
+    color: var(--text-inverted);
+}
