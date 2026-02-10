@@ -1269,12 +1269,46 @@
 
         const buttons = filtersContainer.querySelectorAll('.filter-btn');
 
+        // Helper function to update button text while preserving the lock icon SVG
+        function updateButtonText(btn, newText) {
+            // Find the text node with actual content (not just whitespace)
+            const textNode = Array.from(btn.childNodes).find(
+                node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== ''
+            );
+
+            if (textNode) {
+                // Update the existing text node
+                textNode.textContent = newText;
+            } else {
+                // No meaningful text node exists, create one
+                const svg = btn.querySelector('.hidden-tag-icon');
+
+                // Remove all existing text nodes (including whitespace)
+                Array.from(btn.childNodes).forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        btn.removeChild(node);
+                    }
+                });
+
+                // Create new text node and insert in correct position
+                const newTextNode = document.createTextNode(newText);
+
+                if (svg) {
+                    // Insert text BEFORE the SVG icon
+                    btn.insertBefore(newTextNode, svg);
+                } else {
+                    // No SVG, just prepend the text
+                    btn.insertBefore(newTextNode, btn.firstChild);
+                }
+            }
+        }
+
         // First, reset all buttons to inactive and restore original names for parent buttons
         buttons.forEach(btn => {
             btn.classList.remove('active');
             const originalName = btn.getAttribute('data-original-name');
             if (originalName) {
-                btn.textContent = originalName;
+                updateButtonText(btn, originalName);
             }
         });
 
@@ -1332,11 +1366,16 @@
 
                     if (headerBtn) {
                         headerBtn.classList.add('active');
-                        // Rule: The top-most group header button always swaps its text with the selected sub-tag 
-                        // to show the current filter status prominently. 
+                        // Rule: The top-most group header button always swaps its text with the selected sub-tag
+                        // to show the current filter status prominently.
                         // Intermediate groups keep their original names to provide hierarchical context.
                         if (!nextGroup) {
-                            headerBtn.textContent = bestMatch.textContent;
+                            // Get the text content of bestMatch without the SVG icon
+                            const bestMatchText = Array.from(bestMatch.childNodes)
+                                .filter(node => node.nodeType === Node.TEXT_NODE)
+                                .map(node => node.textContent)
+                                .join('').trim();
+                            updateButtonText(headerBtn, bestMatchText);
                         }
                     }
                     currentGroup = nextGroup;
@@ -1958,6 +1997,7 @@
                 e.stopPropagation();
 
                 const isOpen = group.classList.toggle("is-open");
+                console.log('Toggle clicked, isOpen:', isOpen, 'group:', group);
 
                 if (isOpen) {
                     adjustMenuPosition();

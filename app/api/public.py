@@ -35,6 +35,11 @@ from app.utils.formatters import (
     strip_html,
     truncate_paragraphs,
 )
+from app.utils.template_helpers import (
+    post_has_hidden_posts_tag,
+    tag_has_hidden_parent,
+    tag_has_hidden_posts_parent,
+)
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -43,6 +48,11 @@ logger = logging.getLogger(__name__)
 # Set up templates
 templates_dir = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+
+# Register template filters
+templates.env.filters["tag_has_hidden_parent"] = tag_has_hidden_parent
+templates.env.filters["tag_has_hidden_posts_parent"] = tag_has_hidden_posts_parent
+templates.env.filters["post_has_hidden_posts_tag"] = post_has_hidden_posts_tag
 
 router = APIRouter(tags=["Public"])
 
@@ -102,6 +112,15 @@ async def get_db_context(
     
     tags_result = await db.execute(tags_query.order_by(Tag.name).limit(20))
     tags = list(tags_result.scalars().all())
+
+    # Force load attributes while in async context to avoid lazy loading issues
+    for tag in tags:
+        _ = tag.id
+        _ = tag.name
+        _ = tag.slug
+        _ = tag.is_hidden
+        _ = tag.is_featured
+        _ = tag.post_count
 
     # Get hierarchical tag groups for categories switcher
     tag_groups = await tag_service.get_hierarchical_tags(include_empty=False, public_only=(not user))
@@ -183,6 +202,16 @@ def serialize_post(post: Post, publicly_hidden_tag_ids: set[int] | None = None) 
     else:
         visible_tags = post.tags
 
+    # Check if post has any tag with is_hidden_posts or parent with is_hidden_posts
+    has_hidden_posts_tag = False
+    for tag in post.tags:
+        if tag.is_hidden_posts:
+            has_hidden_posts_tag = True
+            break
+        if tag.parents and any(parent.is_hidden_posts for parent in tag.parents):
+            has_hidden_posts_tag = True
+            break
+
     return {
         "id": post.id,
         "title": post.title,
@@ -198,6 +227,7 @@ def serialize_post(post: Post, publicly_hidden_tag_ids: set[int] | None = None) 
         "is_video": is_video_thumb, # This specific thumbnail is a video
         "has_video": has_video, # The post contains at least one video
         "is_featured": post.is_featured,
+        "has_hidden_posts_tag": has_hidden_posts_tag,
     }
 
 

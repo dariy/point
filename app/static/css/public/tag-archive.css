@@ -97,12 +97,10 @@
 }
 
 .tag-group-header .filter-btn.active {
-    background-color: var(--color-primary);
     color: var(--text-inverted);
 }
 
 .tag-group-header .filter-btn:hover:not(.active) {
-    background-color: var(--surface-hover);
     color: var(--text-primary);
 }
 
