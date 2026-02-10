@@ -90,6 +90,8 @@ class TagService:
             custom_url=tag_data.custom_url,
             is_important=tag_data.is_important,
             is_featured=tag_data.is_featured,
+            is_hidden=tag_data.is_hidden,
+            is_hidden_posts=tag_data.is_hidden_posts,
             show_related_tags_as_children=tag_data.show_related_tags_as_children,
             post_count=0,
         )
@@ -218,6 +220,10 @@ class TagService:
             tag.is_important = tag_data.is_important
         if tag_data.is_featured is not None:
             tag.is_featured = tag_data.is_featured
+        if tag_data.is_hidden is not None:
+            tag.is_hidden = tag_data.is_hidden
+        if tag_data.is_hidden_posts is not None:
+            tag.is_hidden_posts = tag_data.is_hidden_posts
         if tag_data.show_related_tags_as_children is not None:
             tag.show_related_tags_as_children = tag_data.show_related_tags_as_children
         if tag_data.parent_ids is not None:
@@ -284,6 +290,7 @@ class TagService:
         parent_id: int | None = None,
         sort_by: str = "name",
         sort_order: str = "asc",
+        public_only: bool = False,
     ) -> list[Tag]:
         """List all tags.
 
@@ -293,6 +300,7 @@ class TagService:
             search: Optional search term
             sort_by: Column to sort by
             sort_order: Sort order (asc/desc)
+            public_only: Whether to filter out hidden tags
 
         Returns:
             List of tags
@@ -300,6 +308,11 @@ class TagService:
         query = select(Tag).options(
             selectinload(Tag.parents), selectinload(Tag.children)
         )
+
+        if public_only:
+            hidden_ids = await self.get_publicly_hidden_tag_ids()
+            if hidden_ids:
+                query = query.where(Tag.id.notin_(hidden_ids))
 
         if not include_empty:
             query = query.where(Tag.post_count > 0)
@@ -366,23 +379,16 @@ class TagService:
         self,
         include_empty: bool = True,
         search: str | None = None,
+        public_only: bool = False,
     ) -> list[dict[str, Any]]:
-        """Get tags grouped recursively by parents (meta-tags).
-
-        Returns:
-            List of meta-tags (tags with children) and top-level tags in a recursive structure.
-        """
+        """Get tags grouped recursively by parents (meta-tags)."""
         # Fetch all tags with their relationships
-        all_tags = await self.list_tags(include_empty=True)
+        all_tags = await self.list_tags(
+            include_empty=include_empty, search=search, public_only=public_only
+        )
 
-        # Identify visible tags
-        if not include_empty or search:
-            visible_tags = await self.list_tags(
-                include_empty=include_empty, search=search
-            )
-            visible_ids = {t.id for t in visible_tags}
-        else:
-            visible_ids = {t.id for t in all_tags}
+        # Determine which tags are "visible"
+        visible_ids = {tag.id for tag in all_tags}
 
         async def build_tree(
             tag: Tag, visible_ids: set[int], show_related: bool, branch_ids: set[int]
@@ -401,14 +407,15 @@ class TagService:
                 if child.id in visible_ids or child_tree:
                     children_trees.append({"tag": child, "children": child_tree})
 
-            # If this is a leaf (no children in hierarchy) and show_related is True,
-            # add related tags as children
+            # If this is a leaf and show_related is True, add related tags
             if not children_trees and show_related:
                 related = await self.get_related_tags(tag.id, exclude_ids=new_branch_ids)
                 for rel in related:
-                    children_trees.append(
-                        {"tag": rel, "children": [], "is_related": True}
-                    )
+                    # Filter related tags by visible_ids if public_only
+                    if rel.id in visible_ids:
+                        children_trees.append(
+                            {"tag": rel, "children": [], "is_related": True}
+                        )
 
             return children_trees
 
@@ -428,53 +435,47 @@ class TagService:
         return hierarchy
 
     async def get_important_tags(self, limit: int = 10) -> list[Tag]:
-        """Get important tags for tag cloud.
-
-        Args:
-            limit: Maximum number of tags
-
-        Returns:
-            List of important tags sorted by post count
-        """
-        result = await self.db.execute(
+        """Get important tags for tag cloud."""
+        hidden_ids = await self.get_publicly_hidden_tag_ids()
+        query = (
             select(Tag)
             .where(Tag.is_important.is_(True))
             .where(Tag.post_count > 0)
-            .order_by(Tag.post_count.desc())
+        )
+        if hidden_ids:
+            query = query.where(Tag.id.notin_(hidden_ids))
+            
+        result = await self.db.execute(
+            query.order_by(Tag.post_count.desc())
             .limit(limit)
         )
         return list(result.scalars().all())
 
     async def get_featured_tags(self, limit: int = 10) -> list[Tag]:
-        """Get featured tags for display in footer.
-
-        Args:
-            limit: Maximum number of tags
-
-        Returns:
-            List of featured tags sorted by name
-        """
-        result = await self.db.execute(
+        """Get featured tags for display in footer."""
+        hidden_ids = await self.get_publicly_hidden_tag_ids()
+        query = (
             select(Tag)
             .where(Tag.is_featured.is_(True))
             .where(Tag.post_count > 0)
-            .order_by(Tag.name)
+        )
+        if hidden_ids:
+            query = query.where(Tag.id.notin_(hidden_ids))
+            
+        result = await self.db.execute(
+            query.order_by(Tag.name)
             .limit(limit)
         )
         return list(result.scalars().all())
 
     async def get_tag_cloud(self, limit: int = 20, featured: bool = True) -> list[dict[str, Any]]:
-        """Get tags for tag cloud with weights.
+        """Get tags for tag cloud with weights."""
+        query = select(Tag)
+        hidden_ids = await self.get_publicly_hidden_tag_ids()
+        if hidden_ids:
+            query = query.where(Tag.id.notin_(hidden_ids))
 
-        Args:
-            limit: Maximum number of tags
-            featured: Only include featured tags
-
-        Returns:
-            List of tag dicts with weight (0-1)
-        """
-        query = select(Tag).where(Tag.post_count > 0)
-
+        query = query.where(Tag.post_count > 0)
         if featured:
             query = query.where(Tag.is_featured.is_(True))
 
@@ -484,7 +485,6 @@ class TagService:
         if not tag_list:
             return []
 
-        # Calculate weights based on post counts
         max_count = max(t.post_count for t in tag_list)
         min_count = min(t.post_count for t in tag_list)
         count_range = max_count - min_count or 1
@@ -500,40 +500,6 @@ class TagService:
             for tag in tag_list
         ]
 
-    async def update_post_count(self, tag_id: int) -> None:
-        """Recalculate and update post count for a tag.
-
-        This counts published posts associated with this tag or any of its
-        descendants (sub-tags) recursively.
-
-        Args:
-            tag_id: Tag ID
-        """
-        # Get all descendant IDs to count posts from sub-tags as well
-        tag_ids = await self.get_descendant_tag_ids(tag_id)
-
-        # Count published posts with any of these tags
-        count_result = await self.db.execute(
-            select(func.count(func.distinct(Post.id)))
-            .select_from(post_tags)
-            .join(Post, Post.id == post_tags.c.post_id)
-            .where(post_tags.c.tag_id.in_(tag_ids))
-            .where(Post.status == PostStatus.PUBLISHED)
-        )
-        count = count_result.scalar() or 0
-
-        # Update the tag
-        tag = await self.get_tag_by_id(tag_id)
-        if tag:
-            tag.post_count = count
-            await self.db.flush()
-
-    async def update_all_post_counts(self) -> None:
-        """Recalculate post counts for all tags."""
-        tags = await self.list_tags()
-        for tag in tags:
-            await self.update_post_count(tag.id)
-
     async def get_posts_by_tag(
         self,
         tag_id: int,
@@ -541,26 +507,14 @@ class TagService:
         per_page: int = 10,
         published_only: bool = True,
         recursive: bool = True,
+        public_only: bool = False,
     ) -> tuple[list[Post], int]:
-        """Get posts with a specific tag (and its descendants).
-
-        Args:
-            tag_id: Tag ID
-            page: Page number
-            per_page: Items per page
-            published_only: Only return published posts
-            recursive: Whether to include posts from sub-tags
-
-        Returns:
-            Tuple of (posts, total_count)
-        """
-        # Get all relevant tag IDs
+        """Get posts with a specific tag (and its descendants)."""
         if recursive:
             tag_ids = await self.get_descendant_tag_ids(tag_id)
         else:
             tag_ids = {tag_id}
 
-        # Base query
         query = (
             select(Post)
             .join(post_tags, Post.id == post_tags.c.post_id)
@@ -571,12 +525,15 @@ class TagService:
         if published_only:
             query = query.where(Post.status == PostStatus.PUBLISHED)
 
-        # Get total count
+        if public_only:
+            hidden_posts_tag_ids = await self.get_hidden_posts_tag_ids()
+            if hidden_posts_tag_ids:
+                query = query.where(~Post.tags.any(Tag.id.in_(hidden_posts_tag_ids)))
+
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0
 
-        # Get paginated results
         offset = (page - 1) * per_page
         query = (
             query.options(selectinload(Post.tags))
@@ -591,15 +548,7 @@ class TagService:
         return posts, total
 
     async def get_descendant_tag_ids(self, tag_id: int) -> set[int]:
-        """Get all descendant tag IDs recursively, avoiding circular references.
-
-        Args:
-            tag_id: Root tag ID
-
-        Returns:
-            Set of tag IDs including the root and all descendants
-        """
-        # Fetch all tags with their children to build the graph in memory
+        """Get all descendant tag IDs recursively."""
         result = await self.db.execute(
             select(Tag).options(selectinload(Tag.children))
         )
@@ -624,14 +573,7 @@ class TagService:
         return descendant_ids
 
     async def get_ancestor_tag_ids(self, tag_id: int) -> set[int]:
-        """Get all ancestor tag IDs recursively, avoiding circular references.
-
-        Args:
-            tag_id: Tag ID
-
-        Returns:
-            Set of tag IDs including the tag and all its ancestors
-        """
+        """Get all ancestor tag IDs recursively."""
         result = await self.db.execute(
             select(Tag).options(selectinload(Tag.parents))
         )
@@ -655,12 +597,58 @@ class TagService:
                         queue.append(parent.id)
         return ancestor_ids
 
-    async def update_post_counts_recursive(self, tag_ids: list[int]) -> None:
-        """Update counts for tags and all their ancestors.
+    async def get_publicly_hidden_tag_ids(self) -> set[int]:
+        """Get IDs of all tags that are hidden from public (self or ancestor hidden)."""
+        result = await self.db.execute(
+            select(Tag.id).where((Tag.is_hidden == True) | (Tag.is_hidden_posts == True))
+        )
+        hidden_roots = [row[0] for row in result.all()]
 
-        Args:
-            tag_ids: List of tag IDs that were affected
-        """
+        all_hidden = set()
+        for root_id in hidden_roots:
+            descendants = await self.get_descendant_tag_ids(root_id)
+            all_hidden.update(descendants)
+        return all_hidden
+
+    async def get_hidden_posts_tag_ids(self) -> set[int]:
+        """Get IDs of all tags that hide their posts (self or ancestor has is_hidden_posts)."""
+        result = await self.db.execute(
+            select(Tag.id).where(Tag.is_hidden_posts == True)
+        )
+        hidden_roots = [row[0] for row in result.all()]
+
+        all_hidden = set()
+        for root_id in hidden_roots:
+            descendants = await self.get_descendant_tag_ids(root_id)
+            all_hidden.update(descendants)
+        return all_hidden
+
+    async def update_post_count(self, tag_id: int) -> None:
+        """Recalculate and update post count for a tag."""
+        tag_ids = await self.get_descendant_tag_ids(tag_id)
+
+        count_result = await self.db.execute(
+            select(func.count(func.distinct(Post.id)))
+            .select_from(post_tags)
+            .join(Post, Post.id == post_tags.c.post_id)
+            .where(post_tags.c.tag_id.in_(tag_ids))
+            .where(Post.status == PostStatus.PUBLISHED)
+        )
+        count = count_result.scalar() or 0
+
+        tag = await self.get_tag_by_id(tag_id)
+        if tag:
+            tag.post_count = count
+            await self.db.flush()
+
+    async def update_all_post_counts(self) -> None:
+        """Recalculate post counts for all tags."""
+        tags = await self.list_tags()
+        for tag in tags:
+            await self.update_post_count(tag.id)
+
+    async def update_post_counts_recursive(self, tag_ids: list[int]) -> None:
+        """Update counts for tags and all their ancestors."""
         all_to_update = set()
         for tid in tag_ids:
             ancestors = await self.get_ancestor_tag_ids(tid)
@@ -670,15 +658,7 @@ class TagService:
             await self.update_post_count(tid)
 
     async def add_tags_to_post(self, post: Post, tag_names: list[str]) -> list[Tag]:
-        """Add tags to a post, creating new tags if needed.
-
-        Args:
-            post: Post to tag
-            tag_names: List of tag names
-
-        Returns:
-            List of tags added
-        """
+        """Add tags to a post, creating new tags if needed."""
         tags = []
         for name in tag_names:
             name = name.strip()
@@ -690,46 +670,20 @@ class TagService:
             tags.append(tag)
 
         await self.db.flush()
-
-        # Update post counts for affected tags (and ancestors)
         await self.update_post_counts_recursive([tag.id for tag in tags])
-
         return tags
 
     async def set_post_tags(self, post: Post, tag_names: list[str]) -> list[Tag]:
-        """Set post tags (replaces existing tags).
-
-        Args:
-            post: Post to update
-            tag_names: New list of tag names
-
-        Returns:
-            List of new tags
-        """
-        # Get current tag IDs for count update
+        """Set post tags (replaces existing tags)."""
         old_tag_ids = [tag.id for tag in post.tags]
-
-        # Clear existing tags
         post.tags.clear()
-
-        # Add new tags
         tags = await self.add_tags_to_post(post, tag_names)
-
-        # Update counts for removed tags (and ancestors)
         all_affected_ids = list(set(old_tag_ids) | {t.id for t in tags})
         await self.update_post_counts_recursive(all_affected_ids)
-
         return tags
 
     async def remove_tags_from_post(self, post: Post, tag_ids: list[int]) -> None:
-        """Remove specific tags from a post.
-
-        Args:
-            post: Post to update
-            tag_ids: List of tag IDs to remove
-        """
+        """Remove specific tags from a post."""
         post.tags = [tag for tag in post.tags if tag.id not in tag_ids]
         await self.db.flush()
-
-        # Update post counts (and ancestors)
         await self.update_post_counts_recursive(tag_ids)

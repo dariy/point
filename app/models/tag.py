@@ -65,6 +65,8 @@ class Tag(AsyncAttrs, Base):
     custom_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_important: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_hidden_posts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     show_related_tags_as_children: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
