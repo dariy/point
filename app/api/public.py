@@ -4,8 +4,7 @@ Handles public-facing HTML pages for the blog.
 """
 
 import logging
-from datetime import UTC, datetime, timezone
-from email.utils import format_datetime
+from datetime import UTC, datetime
 from math import ceil
 from pathlib import Path
 from typing import Any
@@ -109,7 +108,7 @@ async def get_db_context(
     )
     if hidden_ids:
         tags_query = tags_query.where(Tag.id.notin_(hidden_ids))
-    
+
     tags_result = await db.execute(tags_query.order_by(Tag.name).limit(20))
     tags = list(tags_result.scalars().all())
 
@@ -165,7 +164,7 @@ async def get_db_context(
 
 def serialize_post(post: Post, publicly_hidden_tag_ids: set[int] | None = None) -> dict[str, Any]:
     """Serialize post for JSON response.
-    
+
     Args:
         post: Post to serialize
         publicly_hidden_tag_ids: Set of tag IDs to exclude from serialization (for non-authenticated users)
@@ -195,7 +194,7 @@ def serialize_post(post: Post, publicly_hidden_tag_ids: set[int] | None = None) 
     # 3. Or use the first video as fallback
 
     thumb_path, is_video_thumb = determine_thumbnail(post.content, post.thumbnail_path)
-    
+
     # Filter tags if publicly_hidden_tag_ids is provided
     if publicly_hidden_tag_ids is not None:
         visible_tags = [t for t in post.tags if t.id not in publicly_hidden_tag_ids]
@@ -279,7 +278,7 @@ async def homepage(
         select(Post)
         .where(Post.status == PostStatus.PUBLISHED)
         .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
-        .options(selectinload(Post.tags)) # Eager load tags
+        .options(selectinload(Post.tags).selectinload(Tag.parents)) # Eager load tags and their parents
     )
 
     # Apply hidden posts filter if tags exist
@@ -308,7 +307,7 @@ async def homepage(
             select(func.count(Post.id))
             .where(Post.status == PostStatus.PUBLISHED)
         )
-    
+
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
     total_pages = ceil(total / per_page)
@@ -522,7 +521,7 @@ async def single_post(
 
     # Get explicitly selected tags for the post
     tags = await post.awaitable_attrs.tags
-    
+
     # Filter out hidden tags for non-authenticated users
     if not user:
         tag_service = TagService(db)
@@ -774,7 +773,7 @@ async def tags_page(
     # Base query for published posts
     query = (
         select(Post)
-        .options(selectinload(Post.tags))
+        .options(selectinload(Post.tags).selectinload(Tag.parents))
         .where(Post.status == PostStatus.PUBLISHED)
     )
 
@@ -932,11 +931,12 @@ async def rss_feed(
                 },
             )
 
-    # Get all published posts
+    # Get all published posts (limit to 20 for RSS feed)
     posts_query = (
         select(Post)
         .where(Post.status == PostStatus.PUBLISHED)
         .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
+        .limit(20)
     )
 
     tag_service = TagService(db)
@@ -958,14 +958,17 @@ async def rss_feed(
         posts_data.append(
             {
                 "title": post.title,
-                "link": f"/posts/{post.slug}",
-                "guid": f"/posts/{post.slug}",
-                "pub_date": pub_date.strftime("%a, %d %b %Y %H:%M:%S GMT"),
-                "description": format_content(post.content, post.formatter),
+                "slug": post.slug,
+                "pub_date_rfc822": pub_date.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+                "content_html": format_content(post.content, post.formatter),
+                "meta_description": None,
+                "excerpt": post.excerpt,
+                "thumbnail_path": post.thumbnail_path,
+                "tags": [],  # Empty for now as tags are filtered for public
             }
         )
 
-    build_date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    build_date = datetime.now(UTC).strftime("%a, %d %b %Y %H:%M:%S GMT")
     base_url = get_base_url(request)
 
     settings_service = SettingsService(db)
@@ -1069,7 +1072,7 @@ async def sitemap(
     tags_query = select(Tag).where(Tag.post_count > 0).order_by(Tag.name)
     if hidden_ids:
         tags_query = tags_query.where(Tag.id.notin_(hidden_ids))
-    
+
     tags_result = await db.execute(tags_query)
     tags = list(tags_result.scalars().all())
 

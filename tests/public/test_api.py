@@ -326,7 +326,7 @@ class TestGallery:
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
     ) -> None:
         """Test gallery can filter by tag."""
-        response = await client.get(f"/{sample_tag.slug}")
+        response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
         assert published_post.title in response.text
     @pytest.mark.asyncio
@@ -372,7 +372,8 @@ class TestNavigation:
         response = await client.get("/")
         assert response.status_code == 200
         assert 'href="/"' in response.text
-        assert 'href="/tags"' in response.text
+        # Header has site title linking to homepage
+        assert 'class="site-title' in response.text
     @pytest.mark.asyncio
     async def test_post_has_prev_next_navigation(
         self, client: AsyncClient, multiple_posts: list[Post]
@@ -670,8 +671,8 @@ class TestTheming:
     async def test_main_css_has_dark_theme_variables(
         self, client: AsyncClient
     ) -> None:
-        """Test main.css has dark theme CSS variables."""
-        response = await client.get("/static/css/main.css")
+        """Test tokens.css has dark theme CSS variables."""
+        response = await client.get("/static/css/public/tokens.css")
         assert response.status_code == 200
         assert '[data-theme="dark"]' in response.text
         assert "--bg-primary" in response.text
@@ -680,16 +681,16 @@ class TestTheming:
     async def test_main_css_has_light_theme_variables(
         self, client: AsyncClient
     ) -> None:
-        """Test main.css has light theme CSS variables."""
-        response = await client.get("/static/css/main.css")
+        """Test tokens.css has light theme CSS variables."""
+        response = await client.get("/static/css/public/tokens.css")
         assert response.status_code == 200
         assert '[data-theme="light"]' in response.text or ":root" in response.text
     @pytest.mark.asyncio
     async def test_main_css_has_theme_transition(
         self, client: AsyncClient
     ) -> None:
-        """Test main.css has smooth theme transition."""
-        response = await client.get("/static/css/main.css")
+        """Test tokens.css has smooth theme transition."""
+        response = await client.get("/static/css/common/tokens.css")
         assert response.status_code == 200
         assert "--transition-theme" in response.text
 @pytest.fixture
