@@ -1765,11 +1765,38 @@
             // Get computed gap
             const style = window.getComputedStyle(container);
             const gap = parseFloat(style.gap) || 0;
-            const containerWidth = container.clientWidth;
+            // Use getBoundingClientRect for more sub-pixel accuracy
+            const containerWidth = container.getBoundingClientRect().width;
 
-            if (containerWidth === 0) return;
+            // Threshold for hiding tags completely to avoid branding collision
+            // If the space is too small (< 100px), hide everything.
+            if (containerWidth < 100) {
+                Array.from(container.children).forEach(item => {
+                    item.style.display = 'none';
+                });
+                container.classList.add('is-ready');
+                return;
+            }
 
             const items = Array.from(container.children);
+            const widths = new Map();
+
+            // Step 1: Show all items temporarily to measure natural widths
+            items.forEach(item => {
+                const originalDisplay = item.style.display;
+                const originalVisibility = item.style.visibility;
+
+                item.style.display = 'inline-flex';
+                item.style.flexShrink = '0';
+                item.style.visibility = 'hidden';
+
+                // Store the width
+                widths.set(item, item.offsetWidth);
+
+                // Reset immediately (we'll set final display later)
+                item.style.display = 'none';
+                item.style.visibility = 'visible';
+            });
 
             // Identify key items
             const allBtn = items.find(el => {
@@ -1786,45 +1813,34 @@
                 return false;
             });
 
-            if (!allBtn) {
-                container.classList.add('is-ready');
-                return;
-            }
+            // Step 2: Priority layout (Essential items)
+            // Leave a small buffer (~10px) to prevent sub-pixel rounding issues or tight spacing
+            const availableWidth = containerWidth - 10;
+            let currentWidth = 0;
+            const essentials = [];
+            if (allBtn) essentials.push(allBtn);
+            if (activeItem && !essentials.includes(activeItem)) essentials.push(activeItem);
+            if (moreBtn && !essentials.includes(moreBtn)) essentials.push(moreBtn);
 
-            // Step 1: Show all items temporarily to measure natural widths
-            items.forEach(item => {
-                item.style.display = 'inline-flex';
-                item.style.flexShrink = '0';
-            });
-
-            // Step 2: Priority layout (Essential width)
-            let currentWidth = allBtn.offsetWidth + gap;
-            if (moreBtn) {
-                currentWidth += moreBtn.offsetWidth + gap;
-            }
-
-            if (activeItem && activeItem !== allBtn && activeItem !== moreBtn) {
-                currentWidth += activeItem.offsetWidth + gap;
-            }
-
-            // Step 3: Fill available space with other tags
-            const tagItems = items.filter(el => el !== allBtn && el !== moreBtn && el !== activeItem);
-
-            tagItems.forEach(item => {
-                const itemWidth = item.offsetWidth;
-                const cost = itemWidth + gap;
-
-                if (currentWidth + cost <= containerWidth) {
+            // Step 3: Show as many essential items as fit
+            for (const item of essentials) {
+                const itemWidth = widths.get(item) || 0;
+                const cost = itemWidth + (currentWidth > 0 ? gap : 0);
+                if (currentWidth + cost <= availableWidth) {
                     item.style.display = 'inline-flex';
                     currentWidth += cost;
-                } else {
-                    item.style.display = 'none';
                 }
-            });
+            }
 
-            // Step 4: Ensure active item is always visible
-            if (activeItem) {
-                activeItem.style.display = 'inline-flex';
+            // Step 4: Fill remaining space with other tags
+            const otherTags = items.filter(el => !essentials.includes(el));
+            for (const tag of otherTags) {
+                const itemWidth = widths.get(tag) || 0;
+                const cost = itemWidth + (currentWidth > 0 ? gap : 0);
+                if (currentWidth + cost <= availableWidth) {
+                    tag.style.display = 'inline-flex';
+                    currentWidth += cost;
+                }
             }
 
             // Mark as ready to show

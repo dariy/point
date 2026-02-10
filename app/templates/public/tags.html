@@ -25,9 +25,6 @@
 {% block header_filters %}
 
 <div class="tags-filters" id="tags-filters">
-    <a href="/tags" class="filter-btn ajax-link {% if not current_tag %}active{% endif %}" data-role="all">All</a>
-
-    {# Recursive macro to render tag groups #}
     {# Recursive macro to render tag groups #}
     {% macro render_tag_group(group, current_tag) %}
     <div class="tag-group">
