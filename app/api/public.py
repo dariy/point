@@ -414,7 +414,7 @@ async def single_post(
 
     # Get explicitly selected tags for the post
     tags = await post.awaitable_attrs.tags
-    all_post_tags = sorted(list(tags), key=lambda x: x.name)
+    all_post_tags = sorted(tags, key=lambda x: x.name)
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
