@@ -27,7 +27,7 @@ body {
 .main-container {
     max-width: var(--content-max-width);
     margin: 0 auto;
-    padding: var(--spacing-lg) var(--spacing-md);
+    padding: 0 var(--spacing-md);
 }
 
 /* Page Headers */

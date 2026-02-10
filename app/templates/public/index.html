@@ -433,11 +433,19 @@
 
                 paginationContainer.style.display = 'flex';
 
+                // Extract tag slug from current URL if present
+                let tagSlug = null;
+                const tagMatch = window.location.pathname.match(/^\/tag\/([^\/]+)/);
+                if (tagMatch) {
+                    tagSlug = tagMatch[1];
+                }
+
+                const basePath = tagSlug ? `/tag/${tagSlug}` : '/';
                 let html = '';
 
                 // Previous
                 if (pag.has_prev) {
-                    html += `<a href="/?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                    html += `<a href="${basePath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15 18l-6-6 6-6"/>
                 </svg>
@@ -455,7 +463,7 @@
                     if (p === pag.page) {
                         html += `<span class="pagination-link active">${p}</span>`;
                     } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                        html += `<a href="/?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+                        html += `<a href="${basePath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
                     } else if (p === pag.page - 2 || p === pag.page + 2) {
                         html += `<span class="pagination-ellipsis">&hellip;</span>`;
                     }
@@ -463,7 +471,7 @@
 
                 // Next
                 if (pag.has_next) {
-                    html += `<a href="/?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                    html += `<a href="${basePath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 18l6-6-6-6"/>
                 </svg>

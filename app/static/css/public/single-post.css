@@ -7,7 +7,6 @@
 }
 
 .post-header {
-    margin-bottom: var(--spacing-2xl);
     text-align: center;
 }
 
@@ -18,7 +17,6 @@
     gap: var(--spacing-md);
     font-size: var(--font-size-sm);
     color: var(--text-immersive);
-    margin-bottom: var(--spacing-md);
 }
 
 .post-meta-divider {
@@ -81,7 +79,6 @@
 }
 
 .post-content img {
-    margin: var(--spacing-xl) 0;
     border-radius: var(--border-radius-lg);
 }
 
