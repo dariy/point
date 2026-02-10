@@ -189,7 +189,7 @@
                 // Update SVG and titles
                 const svg = btn.querySelector('svg');
                 if (property === 'is_important') {
-                    svg.setAttribute('fill', newValue ? 'var(--color-warning)' : 'var(--light-text-muted)');
+                    svg.setAttribute('fill', newValue ? 'var(--color-warning)' : 'var(--text-muted)');
                     svg.style.opacity = newValue ? '1' : '0.3';
                     btn.title = newValue ? 'Remove important mark' : 'Mark as important';
 
@@ -205,7 +205,7 @@
                         }
                     }
                 } else {
-                    svg.setAttribute('fill', newValue ? 'var(--color-primary)' : 'var(--light-text-muted)');
+                    svg.setAttribute('fill', newValue ? 'var(--color-primary)' : 'var(--text-muted)');
                     svg.style.opacity = newValue ? '1' : '0.3';
                     btn.title = newValue ? 'Remove featured mark' : 'Mark as featured';
                 }

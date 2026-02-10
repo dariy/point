@@ -1,0 +1,27 @@
+/* ===========================
+   404 Page
+   =========================== */
+.error-page {
+    text-align: center;
+    padding: var(--spacing-3xl) var(--spacing-xl);
+}
+
+.error-code {
+    font-size: 120px;
+    font-weight: 700;
+    color: var(--border-primary);
+    line-height: 1;
+    margin-bottom: var(--spacing-md);
+}
+
+.error-title {
+    font-size: var(--font-size-2xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+}
+
+.error-text {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xl);
+}

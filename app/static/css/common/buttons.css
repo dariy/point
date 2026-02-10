@@ -1,0 +1,99 @@
+/* ===========================
+   Buttons
+   =========================== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: var(--text-inverted);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-hover);
+    color: var(--text-inverted);
+}
+
+.btn-secondary {
+    background-color: var(--surface-hover);
+    color: var(--text-secondary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.btn-success {
+    background-color: var(--color-success);
+    color: var(--text-inverted);
+}
+
+.btn-success:hover:not(:disabled) {
+    background-color: #059669;
+    color: white;
+}
+
+.btn-danger {
+    background-color: var(--color-danger);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #dc2626;
+    color: white;
+}
+
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+}
+
+.btn-outline:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    border-color: var(--border-primary);
+}
+
+.btn-ghost {
+    background-color: transparent;
+    color: var(--text-secondary);
+    padding: var(--spacing-xs);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.btn-sm {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+}
+
+.btn-lg {
+    padding: var(--spacing-md) var(--spacing-lg);
+    font-size: var(--font-size-base);
+}
+
+.btn-block {
+    display: flex;
+    width: 100%;
+}
