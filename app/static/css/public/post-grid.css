@@ -159,6 +159,30 @@
     height: 20px;
 }
 
+/* Hidden post indicator */
+.post-hidden-indicator {
+    position: absolute;
+    top: var(--spacing-sm);
+    left: var(--spacing-sm);
+    z-index: 20;
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.9);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.post-hidden-indicator svg {
+    width: 16px;
+    height: 16px;
+}
+
 /* Override text colors for overlay */
 .post-card-content.overlay .post-card-title {
     color: white;
