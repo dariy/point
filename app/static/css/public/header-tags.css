@@ -12,6 +12,12 @@
     flex-wrap: nowrap;
     overflow: visible;
     /* Allow dropdowns */
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.site-header .tags-filters.is-ready {
+    opacity: 1;
 }
 
 /* Header Dropdown Tags */
