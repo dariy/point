@@ -43,6 +43,9 @@ def tag_to_response(tag: TagModel) -> dict[str, Any]:
         "custom_url": tag.custom_url,
         "is_important": tag.is_important,
         "is_featured": tag.is_featured,
+        "is_hidden": tag.is_hidden,
+        "is_hidden_posts": tag.is_hidden_posts,
+        "show_related_tags_as_children": tag.show_related_tags_as_children,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "url": tag.url,
@@ -65,6 +68,8 @@ def tag_to_list_item(tag: TagModel) -> dict[str, Any]:
         "name": tag.name,
         "slug": tag.slug,
         "is_important": tag.is_important,
+        "is_hidden": tag.is_hidden,
+        "is_hidden_posts": tag.is_hidden_posts,
         "post_count": tag.post_count,
     }
 
@@ -299,6 +304,8 @@ async def get_posts_by_tag(
         "custom_url": tag.custom_url,
         "is_important": tag.is_important,
         "is_featured": tag.is_featured,
+        "is_hidden": tag.is_hidden,
+        "is_hidden_posts": tag.is_hidden_posts,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "posts": [

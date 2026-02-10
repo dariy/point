@@ -188,19 +188,19 @@
             currentIndex = index;
 
             // Update navigation visibility
-            prevBtn.style.display = index > 0 ? "block" : "none";
-            nextBtn.style.display = index < items.length - 1 ? "block" : "none";
+            prevBtn.classList.toggle("hidden", index === 0);
+            nextBtn.classList.toggle("hidden", index === items.length - 1);
         }
 
         function openLightbox(index) {
             showImage(index);
             overlay.classList.add("active");
-            document.body.style.overflow = "hidden";
+            document.body.classList.add("no-overflow");
         }
 
         function closeLightbox() {
             overlay.classList.remove("active");
-            document.body.style.overflow = "";
+            document.body.classList.remove("no-overflow");
         }
 
         function showNext() {
@@ -598,7 +598,7 @@
 
         console.log("[Navigation] Starting navigation to:", url);
         isNavigating = true;
-        document.body.style.cursor = 'wait';
+        document.body.classList.add("cursor-wait");
 
         try {
             // Determine if we should request JSON (only for single posts for now)
@@ -726,7 +726,7 @@
             window.location.href = url;
         } finally {
             isNavigating = false;
-            document.body.style.cursor = '';
+            document.body.classList.remove("cursor-wait");
         }
     }
 
@@ -768,15 +768,14 @@
 
         const viewsEl = clone.querySelector('.post-views');
         if (viewsEl) {
+            const divider = clone.querySelector('.post-meta-divider');
             if (data.blog_settings.show_view_counts && post.view_count) {
                 viewsEl.textContent = post.view_count + " views";
-                viewsEl.style.display = 'inline';
-                const divider = clone.querySelector('.post-meta-divider');
-                if (divider) divider.style.display = 'inline';
+                viewsEl.classList.remove('hidden');
+                if (divider) divider.classList.remove('hidden');
             } else {
-                viewsEl.style.display = 'none';
-                const divider = clone.querySelector('.post-meta-divider');
-                if (divider) divider.style.display = 'none';
+                viewsEl.classList.add('hidden');
+                if (divider) divider.classList.add('hidden');
             }
         }
 
@@ -834,9 +833,9 @@
                 if (data.post_media.length <= 1) {
                     const prev = container.querySelector('.carousel-prev');
                     const next = container.querySelector('.carousel-next');
-                    if (prev) prev.style.display = 'none';
-                    if (next) next.style.display = 'none';
-                    if (indicators) indicators.style.display = 'none';
+                    if (prev) prev.classList.add('hidden');
+                    if (next) next.classList.add('hidden');
+                    if (indicators) indicators.classList.add('hidden');
                 }
             }
 
@@ -879,10 +878,10 @@
             }
         }
 
-        // Inject hidden navigation data for keyboard shortcuts
+        // Inject hidden navigation data
         const navData = document.createElement('div');
         navData.id = 'post-nav-data';
-        navData.style.display = 'none';
+        navData.classList.add('hidden');
         if (data.prev_post) navData.dataset.prevUrl = '/posts/' + data.prev_post.slug;
         if (data.next_post) navData.dataset.nextUrl = '/posts/' + data.next_post.slug;
 
@@ -904,11 +903,13 @@
             if (data.is_logged_in) {
                 const createPostBtn = headerClone.querySelector('.create-post');
                 if (createPostBtn) {
-                    createPostBtn.style.display = 'flex';
+                    createPostBtn.classList.remove('hidden');
+                    createPostBtn.classList.add('visible-flex');
                 }
                 const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
-                    lightLink.style.display = 'flex';
+                    lightLink.classList.remove('hidden');
+                    lightLink.classList.add('visible-flex');
                 }
                 const titleLink = headerClone.querySelector('.site-title');
                 if (titleLink) {
@@ -930,9 +931,9 @@
                 if (data.blog_settings.show_view_counts && post.view_count) {
                     hViewsEl.textContent = post.view_count + " views";
                 } else {
-                    hViewsEl.style.display = 'none';
+                    hViewsEl.classList.add('hidden');
                     const divider = headerClone.querySelector('.post-meta-divider');
-                    if (divider) divider.style.display = 'none';
+                    if (divider) divider.classList.add('hidden');
                 }
             }
         }
@@ -976,11 +977,13 @@
                 // Show create-post and light-link buttons
                 const createPostBtn = headerRight.querySelector('.create-post');
                 if (createPostBtn) {
-                    createPostBtn.style.display = 'flex';
+                    createPostBtn.classList.remove('hidden');
+                    createPostBtn.classList.add('visible-flex');
                 }
                 const lightLink = headerClone.querySelector('.light-link');
                 if (lightLink) {
-                    lightLink.style.display = 'flex';
+                    lightLink.classList.remove('hidden');
+                    lightLink.classList.add('visible-flex');
                 }
             }
         }
@@ -1258,20 +1261,54 @@
         const urlObj = new URL(url, window.location.origin);
         const pathParts = urlObj.pathname.split('/').filter(p => p);
 
-        // Tag could be at /tag/SLUG or /tags/SLUG
+        // Tag could be at /tag/SLUG
         let tag = null;
-        if (pathParts[0] === 'tag' || pathParts[0] === 'tags') {
+        if (pathParts[0] === 'tag') {
             tag = pathParts.length > 1 ? pathParts[1] : null;
         }
 
         const buttons = filtersContainer.querySelectorAll('.filter-btn');
+
+        // Helper function to update button text while preserving the lock icon SVG
+        function updateButtonText(btn, newText) {
+            // Find the text node with actual content (not just whitespace)
+            const textNode = Array.from(btn.childNodes).find(
+                node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== ''
+            );
+
+            if (textNode) {
+                // Update the existing text node
+                textNode.textContent = newText;
+            } else {
+                // No meaningful text node exists, create one
+                const svg = btn.querySelector('.hidden-tag-icon');
+
+                // Remove all existing text nodes (including whitespace)
+                Array.from(btn.childNodes).forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        btn.removeChild(node);
+                    }
+                });
+
+                // Create new text node and insert in correct position
+                const newTextNode = document.createTextNode(newText);
+
+                if (svg) {
+                    // Insert text BEFORE the SVG icon
+                    btn.insertBefore(newTextNode, svg);
+                } else {
+                    // No SVG, just prepend the text
+                    btn.insertBefore(newTextNode, btn.firstChild);
+                }
+            }
+        }
 
         // First, reset all buttons to inactive and restore original names for parent buttons
         buttons.forEach(btn => {
             btn.classList.remove('active');
             const originalName = btn.getAttribute('data-original-name');
             if (originalName) {
-                btn.textContent = originalName;
+                updateButtonText(btn, originalName);
             }
         });
 
@@ -1329,11 +1366,16 @@
 
                     if (headerBtn) {
                         headerBtn.classList.add('active');
-                        // Rule: The top-most group header button always swaps its text with the selected sub-tag 
-                        // to show the current filter status prominently. 
+                        // Rule: The top-most group header button always swaps its text with the selected sub-tag
+                        // to show the current filter status prominently.
                         // Intermediate groups keep their original names to provide hierarchical context.
                         if (!nextGroup) {
-                            headerBtn.textContent = bestMatch.textContent;
+                            // Get the text content of bestMatch without the SVG icon
+                            const bestMatchText = Array.from(bestMatch.childNodes)
+                                .filter(node => node.nodeType === Node.TEXT_NODE)
+                                .map(node => node.textContent)
+                                .join('').trim();
+                            updateButtonText(headerBtn, bestMatchText);
                         }
                     }
                     currentGroup = nextGroup;
@@ -1356,7 +1398,7 @@
 
         async function loadPosts(url, triggerElement = null) {
             try {
-                postsContainer.style.opacity = '0.5';
+                postsContainer.classList.add('opacity-50');
 
                 const response = await fetch(url, {
                     headers: {
@@ -1366,7 +1408,7 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    renderPosts(data, postsContainer);
+                    renderPosts(data, postsContainer, url);
 
                     window.history.pushState({}, '', url);
                     updateActiveSiteFilters(url, triggerElement);
@@ -1382,11 +1424,11 @@
                 console.error('Error loading posts:', error);
                 window.location.href = url;
             } finally {
-                postsContainer.style.opacity = '1';
+                postsContainer.classList.remove('opacity-50');
             }
         }
 
-        function renderPosts(data, container) {
+        function renderPosts(data, container, currentUrl) {
             if (!data.posts || data.posts.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1480,13 +1522,30 @@
 
             // Add pagination if needed
             if (data.pagination && data.pagination.total_pages > 1) {
-                html += renderPagination(data.pagination, data.tag?.slug || data.current_tag);
+                html += renderPagination(data.pagination, data.tag?.slug || data.current_tag, currentUrl);
             }
 
             container.innerHTML = html;
         }
 
-        function renderPagination(pag, tagSlug) {
+        function renderPagination(pag, tagSlug, currentUrl) {
+            // If tagSlug is not provided, try to extract it from the URL being loaded
+            if (!tagSlug && currentUrl) {
+                const urlObj = new URL(currentUrl, window.location.origin);
+                const tagMatch = urlObj.pathname.match(/^\/tag\/([^\/]+)/);
+                if (tagMatch) {
+                    tagSlug = tagMatch[1];
+                }
+            }
+
+            // Fallback to current window location if still not found
+            if (!tagSlug) {
+                const tagMatch = window.location.pathname.match(/^\/tag\/([^\/]+)/);
+                if (tagMatch) {
+                    tagSlug = tagMatch[1];
+                }
+            }
+
             const basePath = tagSlug ? `/tag/${tagSlug}` : '/';
             const ariaLabel = tagSlug ? 'Tag archive pagination' : 'Posts pagination';
 
@@ -1570,7 +1629,7 @@
 
         async function loadTagsContent(url, triggerElement = null) {
             try {
-                tagsContent.style.opacity = '0.5';
+                tagsContent.classList.add('opacity-50');
 
                 const response = await fetch(url, {
                     headers: {
@@ -1593,10 +1652,10 @@
                     window.location.href = url;
                 }
             } catch (error) {
-                console.error('Error loading tags:', error);
+                console.error('Error loading tags content:', error);
                 window.location.href = url;
             } finally {
-                tagsContent.style.opacity = '1';
+                tagsContent.classList.remove('opacity-50');
             }
         }
 
@@ -1675,17 +1734,18 @@
             }
 
             if (!pag || pag.total_pages <= 1) {
-                paginationContainer.style.display = 'none';
+                paginationContainer.classList.add('hidden');
                 return;
             }
 
-            paginationContainer.style.display = 'flex';
+            paginationContainer.classList.remove('hidden');
+            paginationContainer.classList.add('visible-flex');
             const tagPath = currentTag ? `/${currentTag}` : '';
             let html = '';
 
             // Previous
             if (pag.has_prev) {
-                html += `<a href="/tags${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                html += `<a href="/tag${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M15 18l-6-6 6-6"/>
                     </svg>
@@ -1703,7 +1763,7 @@
                 if (p === pag.page) {
                     html += `<span class="pagination-link active">${p}</span>`;
                 } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="/tags${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+                    html += `<a href="/tag${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
                 } else if (p === pag.page - 2 || p === pag.page + 2) {
                     html += `<span class="pagination-ellipsis">&hellip;</span>`;
                 }
@@ -1711,7 +1771,7 @@
 
             // Next
             if (pag.has_next) {
-                html += `<a href="/tags${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                html += `<a href="/tag${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 18l6-6-6-6"/>
                     </svg>
@@ -1765,66 +1825,96 @@
             // Get computed gap
             const style = window.getComputedStyle(container);
             const gap = parseFloat(style.gap) || 0;
-            const containerWidth = container.clientWidth;
+            // Use getBoundingClientRect for more sub-pixel accuracy
+            const containerWidth = container.getBoundingClientRect().width;
 
-            if (containerWidth === 0) return;
+            const mode = container.dataset.mode || 'featured';
+            const allItems = Array.from(container.children);
 
-            const items = Array.from(container.children);
+            // Step 0: Filter items that belong to current mode
+            const items = allItems.filter(el => {
+                if (el.id === 'tags-switcher') return true;
+                if (mode === 'featured') return el.classList.contains('featured-tag');
+                if (mode === 'categories') return el.classList.contains('category-tag');
+                return false;
+            });
+
+            // Hide everything initially
+            allItems.forEach(item => {
+                item.classList.toggle('hidden', true);
+                item.classList.toggle('visible-inline-flex', false);
+            });
+
+            // Threshold for hiding tags completely to avoid branding collision
+            // If the space is too small (< 100px), hide everything.
+            if (containerWidth < 100) {
+                container.classList.add('is-ready');
+                return;
+            }
+
+            const widths = new Map();
+
+            // Step 1: Show relevant items temporarily to measure natural widths
+            items.forEach(item => {
+                item.classList.add('is-measuring');
+                item.classList.toggle('visible-inline-flex', true);
+
+                // Store the width
+                widths.set(item, item.offsetWidth);
+
+                // Reset immediately (we'll set final display later)
+                item.classList.remove('is-measuring');
+                item.classList.toggle('visible-inline-flex', false);
+            });
 
             // Identify key items
             const allBtn = items.find(el => {
                 const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
                 return b && (b.dataset.role === 'all' || b.getAttribute('href') === '/');
             });
-            const moreBtn = items.find(el => {
-                const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
-                return b && (b.dataset.role === 'more' || (b.getAttribute('href') === '/tags' && b !== allBtn));
-            });
+            const moreBtn = document.getElementById('tags-switcher');
             const activeItem = items.find(el => {
                 if (el.classList.contains('active')) return true;
                 if (el.querySelector('.filter-btn.active')) return true;
                 return false;
             });
 
-            if (!allBtn) {
-                container.classList.add('is-ready');
-                return;
-            }
+            // Step 2: Priority layout (Essential items)
+            // Leave a small buffer (~10px) to prevent sub-pixel rounding issues or tight spacing
+            const availableWidth = containerWidth - 10;
+            let currentWidth = 0;
+            const essentials = [];
+            if (allBtn) essentials.push(allBtn);
+            if (activeItem && !essentials.includes(activeItem)) essentials.push(activeItem);
+            if (moreBtn && !essentials.includes(moreBtn)) essentials.push(moreBtn);
 
-            // Step 1: Show all items temporarily to measure natural widths
-            items.forEach(item => {
-                item.style.display = 'inline-flex';
-                item.style.flexShrink = '0';
-            });
+            // Step 3: Show as many essential items as fit
+            for (const item of essentials) {
+                const itemWidth = widths.get(item) || 0;
+                const cost = itemWidth + (currentWidth > 0 ? gap : 0);
+                const fits = currentWidth + cost <= availableWidth;
 
-            // Step 2: Priority layout (Essential width)
-            let currentWidth = allBtn.offsetWidth + gap;
-            if (moreBtn) {
-                currentWidth += moreBtn.offsetWidth + gap;
-            }
+                item.classList.toggle('hidden', !fits);
+                item.classList.toggle('visible-inline-flex', fits);
 
-            if (activeItem && activeItem !== allBtn && activeItem !== moreBtn) {
-                currentWidth += activeItem.offsetWidth + gap;
-            }
-
-            // Step 3: Fill available space with other tags
-            const tagItems = items.filter(el => el !== allBtn && el !== moreBtn && el !== activeItem);
-
-            tagItems.forEach(item => {
-                const itemWidth = item.offsetWidth;
-                const cost = itemWidth + gap;
-
-                if (currentWidth + cost <= containerWidth) {
-                    item.style.display = 'inline-flex';
+                if (fits) {
                     currentWidth += cost;
-                } else {
-                    item.style.display = 'none';
                 }
-            });
+            }
 
-            // Step 4: Ensure active item is always visible
-            if (activeItem) {
-                activeItem.style.display = 'inline-flex';
+            // Step 4: Fill remaining space with other tags
+            const otherTags = items.filter(el => !essentials.includes(el));
+            for (const tag of otherTags) {
+                const itemWidth = widths.get(tag) || 0;
+                const cost = itemWidth + (currentWidth > 0 ? gap : 0);
+                const fits = currentWidth + cost <= availableWidth;
+
+                tag.classList.toggle('hidden', !fits);
+                tag.classList.toggle('visible-inline-flex', fits);
+
+                if (fits) {
+                    currentWidth += cost;
+                }
             }
 
             // Mark as ready to show
@@ -1868,13 +1958,13 @@
             // Helper to prevent menu overflow
             const adjustMenuPosition = () => {
                 // Reset transform first to get original position
-                children.style.transform = '';
+                children.style.removeProperty('transform');
 
                 // Show temporarily to measure (if not already displayed)
                 const originallyHidden = window.getComputedStyle(children).display === 'none';
                 if (originallyHidden) {
-                    children.style.visibility = 'hidden';
-                    children.style.display = 'flex';
+                    children.classList.add('is-measuring');
+                    children.classList.add('visible-flex');
                 }
 
                 const menuRect = children.getBoundingClientRect();
@@ -1893,12 +1983,12 @@
                 if (offset !== 0) {
                     children.style.transform = `translateX(-50%) translateX(${offset}px)`;
                 } else {
-                    children.style.transform = 'translateX(-50%)';
+                    children.style.removeProperty('transform');
                 }
 
                 if (originallyHidden) {
-                    children.style.display = '';
-                    children.style.visibility = '';
+                    children.classList.remove('is-measuring');
+                    children.classList.remove('visible-flex');
                 }
             };
 
@@ -1907,6 +1997,7 @@
                 e.stopPropagation();
 
                 const isOpen = group.classList.toggle("is-open");
+                console.log('Toggle clicked, isOpen:', isOpen, 'group:', group);
 
                 if (isOpen) {
                     adjustMenuPosition();
@@ -1930,6 +2021,43 @@
     }
 
     /**
+     * Switcher between Featured Tags and Categories in Header
+     */
+    function initTagSwitcher() {
+        const switcher = document.getElementById('tags-switcher');
+        const container = document.getElementById('header-tags-filters');
+
+        if (!switcher || !container) return;
+
+        function updateSets(mode) {
+            container.dataset.mode = mode;
+            if (mode === 'categories') {
+                switcher.classList.add('active');
+            } else {
+                switcher.classList.remove('active');
+            }
+            // Trigger responsive update
+            if (window.dispatchEvent) {
+                window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
+            }
+        }
+
+        // Initialize state from localStorage
+        const savedMode = localStorage.getItem('tags-filter-mode') || 'featured';
+        updateSets(savedMode);
+
+        switcher.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const currentMode = localStorage.getItem('tags-filter-mode') || 'featured';
+            const newMode = currentMode === 'featured' ? 'categories' : 'featured';
+
+            localStorage.setItem('tags-filter-mode', newMode);
+            updateSets(newMode);
+        });
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -1944,6 +2072,7 @@
         initAjaxTagsNavigation();
         initResponsiveTagFilters();
         initTagToggles();
+        initTagSwitcher();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {

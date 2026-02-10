@@ -1,0 +1,133 @@
+/* ===========================
+   Tag Archive
+   =========================== */
+.tag-header {
+    text-align: center;
+    margin-bottom: var(--spacing-2xl);
+    padding-bottom: var(--spacing-xl);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.tag-name {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+    transition: color var(--transition-theme);
+}
+
+.tag-description {
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.tag-count {
+    display: inline-block;
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-top: var(--spacing-md);
+}
+
+/* Tags Filters */
+.tags-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    justify-content: center;
+}
+
+.tags-page .tags-filters {
+    margin-bottom: var(--spacing-md);
+}
+
+.filter-btn {
+    display: inline-flex;
+    align-items: center;
+    height: 2rem;
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-secondary);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--text-inverted);
+}
+
+/* Hierarchical Tags */
+.tag-group {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    border-radius: 1rem;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    overflow: visible;
+    /* Changed from hidden to support header dropdowns and nested content */
+    transition: all var(--transition-fast);
+}
+
+.tag-group:hover {
+    border-color: var(--border-secondary);
+}
+
+.tag-group-header {
+    display: flex;
+    align-items: center;
+}
+
+.tag-group-header .filter-btn {
+    border: none;
+    background: none;
+    border-radius: 0;
+    flex: 1;
+    margin-right: -1px;
+}
+
+.tag-group-header .filter-btn.active {
+    color: var(--text-inverted);
+}
+
+.tag-group-header .filter-btn:hover:not(.active) {
+    color: var(--text-primary);
+}
+
+.toggle-children {
+    background: none;
+    border: none;
+    width: 2rem;
+    height: 2rem;
+    cursor: pointer;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    border-left: 1px solid var(--border-primary);
+}
+
+.toggle-children:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.toggle-children svg {
+    transition: transform var(--transition-fast);
+    transform-origin: center;
+}
+
+.toggle-children.active svg {
+    transform: rotate(180deg);
+}

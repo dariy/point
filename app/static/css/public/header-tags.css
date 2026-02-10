@@ -1,0 +1,255 @@
+/* ===========================
+   Header Tags Filters
+   =========================== */
+.site-header .tags-filters {
+    flex: 1;
+    min-width: 0;
+    margin: 0 var(--spacing-md);
+    padding: 4px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
+    overflow: visible;
+    /* Allow dropdowns */
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.site-header .tags-filters.is-ready {
+    opacity: 1;
+}
+
+/* Header Dropdown Tags */
+.site-header .tag-group {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-direction: column;
+    overflow: visible;
+    border: none;
+    background: transparent;
+    border-radius: 0;
+    height: auto;
+}
+
+/* Filter buttons - both standalone and within lists */
+.site-header .filter-btn {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
+    height: 2rem;
+    padding: 0 var(--spacing-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: normal;
+    transition: all var(--transition-fast);
+    box-sizing: border-box;
+    white-space: nowrap;
+    text-rendering: optimizeLegibility;
+}
+
+.site-header .filter-btn:hover,
+.site-header .filter-btn.active {
+    border-color: var(--color-primary);
+}
+
+.site-header .filter-btn.active {
+    background-color: var(--color-primary);
+    color: var(--text-inverted);
+}
+
+.site-header .tag-group-header {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
+    height: 2rem;
+    transition: all var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.site-header .tag-group-header:hover,
+.site-header .tag-group-header:has(.filter-btn.active),
+.site-header .tag-group.is-open>.tag-group-header {
+    border-color: var(--color-primary);
+}
+
+.site-header .tag-group-header:has(.filter-btn.active) {
+    background-color: var(--color-primary);
+}
+
+/* Override filter-btn styles when inside tag-group-header - use higher specificity */
+.site-header .tag-group-header>.filter-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 0 0.25rem 0 var(--spacing-md);
+    height: 100%;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: normal;
+    text-rendering: optimizeLegibility;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* .site-header .tag-group-header:hover > .filter-btn,
+.site-header .tag-group.is-open > .tag-group-header > .filter-btn {
+    color: var(--color-primary);
+} */
+
+.site-header .tag-group-header:has(.active)>.filter-btn {
+    color: var(--text-inverted);
+}
+
+.site-header .tag-group-header .toggle-children {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0 0.5rem 0 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    height: 100%;
+    align-self: stretch;
+}
+
+.site-header .tag-group-header .toggle-children svg {
+    transition: transform var(--transition-fast);
+    transform-origin: center;
+}
+
+.site-header .tag-group:hover>.tag-group-header .toggle-children,
+.site-header .tag-group.is-open>.tag-group-header .toggle-children,
+.site-header .tag-group-header:has(.active) .toggle-children {
+    color: var(--color-primary);
+}
+
+.site-header .tag-group:hover>.tag-group-header .toggle-children svg,
+.site-header .tag-group.is-open>.tag-group-header .toggle-children svg,
+.site-header .tag-group-header:has(.active) .toggle-children svg {
+    transform: rotate(180deg);
+}
+
+.site-header .tag-group-header:has(.active) .toggle-children {
+    color: var(--text-inverted);
+}
+
+/* Dropdown container - default hidden */
+.site-header .tag-children {
+    position: absolute;
+    top: calc(100% + var(--spacing-xs));
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-xl);
+    padding: var(--spacing-sm);
+    display: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+    width: max-content;
+    max-width: 80vw;
+    backdrop-filter: blur(12px);
+    visibility: hidden;
+    opacity: 0;
+}
+
+.site-header .tag-children::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: transparent;
+}
+
+/* Show dropdown on hover or when opened */
+.site-header .tag-group:hover>.tag-children,
+.site-header .tag-group.is-open>.tag-children {
+    display: flex;
+    visibility: visible;
+    opacity: 1;
+    animation: dropdownFadeIn 0.2s ease-out forwards;
+}
+
+/* Temporary class for measuring hidden dropdowns - needs higher specificity */
+.site-header .tag-group .tag-children.visible-flex,
+.site-header .tag-group .tag-children.is-measuring {
+    display: flex;
+    visibility: hidden;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        margin-top: -10px;
+    }
+
+    to {
+        opacity: 1;
+        margin-top: 0;
+    }
+}
+
+/* Ensure children in dropdowns have consistent sizing - use child combinator for specificity */
+.site-header .tag-children>.filter-btn,
+.site-header .tag-children>.tag-group .filter-btn {
+    height: 2rem;
+    font-size: var(--font-size-sm);
+}
+
+.site-header .tag-children>.filter-btn {
+    padding: 0 var(--spacing-md);
+}
+
+.site-header .tag-children>.tag-group>.tag-group-header {
+    height: 2rem;
+    font-size: var(--font-size-sm);
+}
+
+/* Tag Switcher Logic - keep these with high specificity to prevent display override */
+.site-header .tags-filters[data-mode="featured"]>.category-tag,
+.site-header .tags-filters[data-mode="featured"]>.tag-group.category-tag {
+    display: none;
+}
+
+.site-header .tags-filters[data-mode="categories"]>.featured-tag,
+.site-header .tags-filters[data-mode="categories"]>.tag-group.featured-tag {
+    display: none;
+}
+
+.site-header .switcher-btn.active {
+    background-color: var(--color-primary);
+    color: var(--text-inverted);
+}
+
+/* ===========================
+   Hidden Tag Indicator
+   =========================== */
+.site-header .hidden-tag {
+    opacity: 0.7;
+}
+
+.site-header .hidden-tag-icon {
+    display: inline-block;
+    margin-right: var(--spacing-xs);
+    vertical-align: middle;
+    opacity: 0.6;
+}
+
+.site-header .hidden-tag:hover .hidden-tag-icon {
+    opacity: 1;
+}

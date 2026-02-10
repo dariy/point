@@ -3,7 +3,7 @@
  * Handles password hashing, login, and password changes
  */
 
-(function() {
+(function () {
     'use strict';
 
     // ===========================
@@ -97,7 +97,7 @@
         const loginForm = document.getElementById('login-form');
         if (!loginForm) return;
 
-        loginForm.addEventListener('submit', async function(e) {
+        loginForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
             const form = e.target;
@@ -127,7 +127,7 @@
                     const errorDiv = document.querySelector('.login-error');
                     if (errorDiv) {
                         errorDiv.textContent = error.detail || 'Invalid credentials';
-                        errorDiv.style.display = 'block';
+                        errorDiv.classList.add('visible-block');
                     } else {
                         const newError = document.createElement('div');
                         newError.className = 'login-error';

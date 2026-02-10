@@ -187,3 +187,186 @@ class TestPostCounts:
 
         await db.refresh(tag)
         assert tag.post_count == 0
+
+
+class TestGetRelatedTags:
+    """Test get_related_tags method."""
+
+    @pytest.mark.asyncio
+    async def test_get_related_tags_returns_tags_from_same_posts(
+        self, tag_service: TagService, db: AsyncSession, test_user
+    ):
+        """Test that get_related_tags returns tags that appear on the same posts."""
+        user_id = test_user["user"].id
+
+        # Create tags with post_count > 0 so they're included in results
+        tag1 = Tag(name="Photography", slug="photography", post_count=1)
+        tag2 = Tag(name="Travel", slug="travel", post_count=1)
+        tag3 = Tag(name="Nature", slug="nature", post_count=1)
+        tag4 = Tag(name="Unrelated", slug="unrelated", post_count=1)
+
+        db.add_all([tag1, tag2, tag3, tag4])
+        await db.commit()
+
+        # Create posts with overlapping tags
+        post1 = Post(
+            title="Post 1",
+            slug="post-1",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
+        post1.tags.extend([tag1, tag2, tag3])  # tag1 appears with tag2 and tag3
+
+        post2 = Post(
+            title="Post 2",
+            slug="post-2",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
+        post2.tags.extend([tag1, tag2])  # tag1 appears with tag2 again
+
+        post3 = Post(
+            title="Post 3",
+            slug="post-3",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
+        post3.tags.append(tag4)  # tag4 doesn't appear with tag1
+
+        db.add_all([post1, post2, post3])
+        await db.commit()
+
+        # Get related tags for tag1
+        related = await tag_service.get_related_tags(tag1.id)
+
+        # Should return tag2 and tag3, but not tag1 itself or tag4
+        related_ids = {t.id for t in related}
+        assert tag2.id in related_ids
+        assert tag3.id in related_ids
+        assert tag1.id not in related_ids  # Excludes self
+        assert tag4.id not in related_ids  # Not related
+
+    @pytest.mark.asyncio
+    async def test_get_related_tags_excludes_specified_ids(
+        self, tag_service: TagService, db: AsyncSession, test_user
+    ):
+        """Test that get_related_tags excludes specified tag IDs."""
+        user_id = test_user["user"].id
+
+        tag1 = Tag(name="Tag1", slug="tag1", post_count=1)
+        tag2 = Tag(name="Tag2", slug="tag2", post_count=1)
+        tag3 = Tag(name="Tag3", slug="tag3", post_count=1)
+
+        db.add_all([tag1, tag2, tag3])
+        await db.commit()
+
+        post = Post(
+            title="Post",
+            slug="post-related",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
+        post.tags.extend([tag1, tag2, tag3])
+        db.add(post)
+        await db.commit()
+
+        # Get related tags for tag1, excluding tag2
+        related = await tag_service.get_related_tags(tag1.id, exclude_ids={tag2.id})
+
+        related_ids = {t.id for t in related}
+        assert tag3.id in related_ids
+        assert tag2.id not in related_ids  # Excluded
+        assert tag1.id not in related_ids  # Self always excluded
+
+    @pytest.mark.asyncio
+    async def test_get_related_tags_filters_empty_tags(
+        self, tag_service: TagService, db: AsyncSession, test_user
+    ):
+        """Test that get_related_tags only returns tags with post_count > 0."""
+        user_id = test_user["user"].id
+
+        tag1 = Tag(name="Tag1", slug="tag1-empty", post_count=1)
+        tag2 = Tag(name="Tag2", slug="tag2-empty", post_count=0)  # Empty tag
+
+        db.add_all([tag1, tag2])
+        await db.commit()
+
+        post = Post(
+            title="Post",
+            slug="post-empty-tags",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
+        post.tags.extend([tag1, tag2])
+        db.add(post)
+        await db.commit()
+
+        # Get related tags for tag1
+        related = await tag_service.get_related_tags(tag1.id)
+
+        # Should not include tag2 because it has post_count=0
+        related_ids = {t.id for t in related}
+        assert tag2.id not in related_ids
+
+    @pytest.mark.asyncio
+    async def test_get_related_tags_returns_empty_list_when_no_related_tags(
+        self, tag_service: TagService, db: AsyncSession, test_user
+    ):
+        """Test that get_related_tags returns empty list when there are no related tags."""
+        user_id = test_user["user"].id
+
+        tag = Tag(name="Lonely", slug="lonely", post_count=0)
+        db.add(tag)
+        await db.commit()
+
+        post = Post(
+            title="Post",
+            slug="post-lonely",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
+        post.tags.append(tag)
+        db.add(post)
+        await db.commit()
+
+        related = await tag_service.get_related_tags(tag.id)
+        assert len(related) == 0
+
+    @pytest.mark.asyncio
+    async def test_get_related_tags_orders_by_name(
+        self, tag_service: TagService, db: AsyncSession, test_user
+    ):
+        """Test that get_related_tags returns results ordered by name."""
+        user_id = test_user["user"].id
+
+        tag1 = Tag(name="Main", slug="main", post_count=1)
+        tag2 = Tag(name="Zebra", slug="zebra", post_count=1)
+        tag3 = Tag(name="Apple", slug="apple", post_count=1)
+        tag4 = Tag(name="Mango", slug="mango", post_count=1)
+
+        db.add_all([tag1, tag2, tag3, tag4])
+        await db.commit()
+
+        post = Post(
+            title="Post",
+            slug="post-ordered",
+            content="Content",
+            status=PostStatus.PUBLISHED,
+            author_id=user_id,
+        )
+        post.tags.extend([tag1, tag2, tag3, tag4])
+        db.add(post)
+        await db.commit()
+
+        related = await tag_service.get_related_tags(tag1.id)
+
+        # Should be ordered alphabetically by name
+        assert related[0].name == "Apple"
+        assert related[1].name == "Mango"
+        assert related[2].name == "Zebra"

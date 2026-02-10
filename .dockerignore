@@ -1,0 +1,23 @@
+# Docker ignore file
+.git
+.github
+.venv
+venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+test_output.log
+docs
+backups
+data
+*.pyc
+__pycache__
+
+# CSS source files - handled by build/build_css.sh
+app/static/css/common/
+app/static/css/light/
+app/static/css/public/
+build/
+# We want to keep app/static/css/light.css and app/static/css/main.css
