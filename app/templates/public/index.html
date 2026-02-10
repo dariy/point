@@ -18,9 +18,17 @@
 
         {% if loop.first and post.is_featured %}
         <div class="featured-post">
-            <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}"
+            <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %} {% if user and post|post_has_hidden_posts_tag %}hidden-post{% endif %}"
                 onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                 {% if user %}
+                {% if post|post_has_hidden_posts_tag %}
+                <div class="post-hidden-indicator" title="This post has hidden tags">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                </div>
+                {% endif %}
                 <a href="/light/posts/{{ post.id }}" class="post-card-edit-btn" title="Edit Post">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -107,9 +115,17 @@
             </article>
         </div>
         {% else %}
-        <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}"
+        <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %} {% if user and post|post_has_hidden_posts_tag %}hidden-post{% endif %}"
             onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
             {% if user %}
+            {% if post|post_has_hidden_posts_tag %}
+            <div class="post-hidden-indicator" title="This post has hidden tags">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            </div>
+            {% endif %}
             <a href="/light/posts/{{ post.id }}" class="post-card-edit-btn" title="Edit Post">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -306,6 +322,14 @@
                     const hasImage = post.has_image;
                     const isVideo = post.is_video;
 
+                    const hiddenIndicator = (data.is_logged_in && post.has_hidden_posts_tag) ? `
+                            <div class="post-hidden-indicator" title="This post has hidden tags">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                            </div>` : '';
+
                     const editBtn = data.is_logged_in ? `
                             <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -316,7 +340,8 @@
 
                     if (showFeatured) {
                         html += `<div class="featured-post">
-                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'} ${data.is_logged_in && post.has_hidden_posts_tag ? 'hidden-post' : ''}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                            ${hiddenIndicator}
                             ${editBtn}
                             ${hasImage ? `
                                 <div class="post-card-background">
@@ -367,7 +392,8 @@
                         </article>
                     </div>`;
                     } else {
-                        html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'} ${data.is_logged_in && post.has_hidden_posts_tag ? 'hidden-post' : ''}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        ${hiddenIndicator}
                         ${editBtn}
                         ${hasImage ? `
                             <div class="post-card-background">

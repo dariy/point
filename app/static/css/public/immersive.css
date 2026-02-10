@@ -185,6 +185,21 @@
     border-color: var(--color-primary);
 }
 
+.immersive-tags .post-tag.hidden-posts-tag {
+    opacity: 0.7;
+}
+
+.immersive-tags .post-tag .hidden-tag-icon {
+    display: inline-block;
+    margin-right: var(--spacing-xs);
+    vertical-align: middle;
+    opacity: 0.6;
+}
+
+.immersive-tags .post-tag.hidden-posts-tag:hover .hidden-tag-icon {
+    opacity: 1;
+}
+
 video.immersive-bg-image {
     margin-bottom: 6em;
 }

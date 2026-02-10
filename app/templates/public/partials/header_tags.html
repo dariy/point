@@ -4,15 +4,16 @@
 <div class="tag-group">
     <div class="tag-group-header">
         <a href="/tag/{{ group.tag.slug }}"
-            class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and group.tag.is_hidden %}hidden-tag{% endif %}"
+            class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
             data-original-name="{{ group.tag.name }}">
-            {{ group.tag.name }}
-            {% if user and group.tag.is_hidden %}
-            <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
+            <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
             {% endif %}
+            {{ group.tag.name }}
         </a>
         <button class="toggle-children" aria-label="Toggle children">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -26,14 +27,15 @@
         {{ render_tag_group(child, active_tag_slug) }}
         {% else %}
         <a href="/tag/{{ child.tag.slug }}"
-            class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and child.tag.is_hidden %}hidden-tag{% endif %}">
-            {{ child.tag.name }}
-            {% if user and child.tag.is_hidden %}
-            <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}">
+            {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}
+            <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
             {% endif %}
+            {{ child.tag.name }}
         </a>
         {% endif %}
         {% endfor %}
@@ -45,13 +47,14 @@
     {% for t in tags %}
     <a href="/tag/{{ t.slug }}"
         class="filter-btn ajax-link featured-tag {% if active_tag_slug == t.slug %}active{% endif %} {% if user and t.is_hidden %}hidden-tag{% endif %}">
-        {{ t.name }}
         {% if user and t.is_hidden %}
-        <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
         {% endif %}
+        {{ t.name }}
     </a>
     {% endfor %}
 
@@ -60,15 +63,16 @@
     <div class="tag-group category-tag">
         <div class="tag-group-header">
             <a href="/tag/{{ group.tag.slug }}"
-                class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and group.tag.is_hidden %}hidden-tag{% endif %}"
+                class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
                 data-original-name="{{ group.tag.name }}">
-                {{ group.tag.name }}
-                {% if user and group.tag.is_hidden %}
-                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
+                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                 </svg>
                 {% endif %}
+                {{ group.tag.name }}
             </a>
             <button class="toggle-children" aria-label="Toggle children">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -82,14 +86,15 @@
             {{ render_tag_group(child, active_tag_slug) }}
             {% else %}
             <a href="/tag/{{ child.tag.slug }}"
-                class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and child.tag.is_hidden %}hidden-tag{% endif %}">
-                {{ child.tag.name }}
-                {% if user and child.tag.is_hidden %}
-                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}">
+                {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}
+                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                 </svg>
                 {% endif %}
+                {{ child.tag.name }}
             </a>
             {% endif %}
             {% endfor %}
@@ -97,14 +102,15 @@
     </div>
     {% else %}
     <a href="/tag/{{ group.tag.slug }}"
-        class="filter-btn ajax-link category-tag {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and group.tag.is_hidden %}hidden-tag{% endif %}">
-        {{ group.tag.name }}
-        {% if user and group.tag.is_hidden %}
-        <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        class="filter-btn ajax-link category-tag {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}">
+        {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
+        <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
         {% endif %}
+        {{ group.tag.name }}
     </a>
     {% endif %}
     {% endfor %}
@@ -118,41 +124,3 @@
         </svg>
     </button>
 </div>
-
-<style>
-    .tags-set {
-        display: flex;
-        gap: var(--spacing-xs);
-        align-items: center;
-    }
-
-    .tags-filters {
-        gap: var(--spacing-xs);
-    }
-
-    .switcher-btn {
-        padding: 0 var(--spacing-sm) !important;
-        cursor: pointer;
-    }
-
-    /* Simple fade transition */
-    .tags-set {
-        transition: opacity 0.2s ease;
-    }
-
-    /* Hidden tag indicator */
-    .hidden-tag {
-        opacity: 0.7;
-    }
-
-    .hidden-tag-icon {
-        display: inline-block;
-        margin-left: 4px;
-        vertical-align: middle;
-        opacity: 0.6;
-    }
-
-    .hidden-tag:hover .hidden-tag-icon {
-        opacity: 1;
-    }
-</style>

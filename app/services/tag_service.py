@@ -387,6 +387,28 @@ class TagService:
             include_empty=include_empty, search=search, public_only=public_only
         )
 
+        # Force load all attributes we'll need in templates while in async context
+        # This includes loading children and their children recursively
+        loaded_ids = set()
+
+        async def ensure_loaded(tag: Tag):
+            """Recursively ensure all tag attributes are loaded."""
+            if tag.id in loaded_ids:
+                return
+            loaded_ids.add(tag.id)
+
+            await tag.awaitable_attrs.parents
+            await tag.awaitable_attrs.children
+            # Load parents' attributes recursively (for checking hidden ancestors)
+            for parent in tag.parents:
+                await ensure_loaded(parent)
+            # Load children's attributes recursively
+            for child in tag.children:
+                await ensure_loaded(child)
+
+        for tag in all_tags:
+            await ensure_loaded(tag)
+
         # Determine which tags are "visible"
         visible_ids = {tag.id for tag in all_tags}
 
@@ -395,7 +417,12 @@ class TagService:
         ) -> list[dict[str, Any]]:
             children_trees = []
             # Sort children by name for consistent UI
-            sorted_children = sorted(tag.children, key=lambda x: x.name)
+            # Filter children to only include those in visible_ids first
+            filtered_children = [
+                child for child in tag.children
+                if child.id in visible_ids
+            ]
+            sorted_children = sorted(filtered_children, key=lambda x: x.name)
 
             new_branch_ids = branch_ids | {tag.id}
 
@@ -403,15 +430,15 @@ class TagService:
                 child_tree = await build_tree(
                     child, visible_ids, show_related, new_branch_ids
                 )
-                # Include child if it's visible OR has visible descendants
-                if child.id in visible_ids or child_tree:
-                    children_trees.append({"tag": child, "children": child_tree})
+                # At this point, child is already known to be visible
+                # Include child with its tree (which might be empty)
+                children_trees.append({"tag": child, "children": child_tree})
 
             # If this is a leaf and show_related is True, add related tags
             if not children_trees and show_related:
                 related = await self.get_related_tags(tag.id, exclude_ids=new_branch_ids)
                 for rel in related:
-                    # Filter related tags by visible_ids if public_only
+                    # Filter related tags by visible_ids
                     if rel.id in visible_ids:
                         children_trees.append(
                             {"tag": rel, "children": [], "is_related": True}
