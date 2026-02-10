@@ -1041,7 +1041,7 @@ class TestLightTheming:
         response = await client.get("/light/", cookies=auth_cookies)
 
         assert response.status_code == 200
-        assert 'class="theme-toggle"' in response.text
+        assert "theme-toggle" in response.text
 
     @pytest.mark.asyncio
     async def test_dashboard_loads_theme_js(

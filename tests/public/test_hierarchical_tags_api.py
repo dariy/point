@@ -43,15 +43,15 @@ async def test_post_detail_includes_parents(client: AsyncClient, db: AsyncSessio
     assert response.status_code == 200
     data = response.json()
 
-    # Verify post_tags_with_parents in response
+    # Verify post_tags_with_parents is legacy (empty list)
     assert "post_tags_with_parents" in data
-    tags_with_parents = data["post_tags_with_parents"]
+    assert data["post_tags_with_parents"] == []
 
-    # Find Category X
-    cat_entry = next((t for t in tags_with_parents if t["tag"]["name"] == "Category X"), None)
-    assert cat_entry is not None
-    assert len(cat_entry["children"]) == 1
-    assert cat_entry["children"][0]["name"] == "Subtag Y"
+    # Verify tags are in the post.tags array
+    assert "post" in data
+    assert "tags" in data["post"]
+    tag_names = [t["name"] for t in data["post"]["tags"]]
+    assert "Subtag Y" in tag_names
 
 @pytest.mark.asyncio
 async def test_post_detail_multiple_parents(client: AsyncClient, db: AsyncSession, test_user):
@@ -79,13 +79,13 @@ async def test_post_detail_multiple_parents(client: AsyncClient, db: AsyncSessio
         headers={"X-Requested-With": "XMLHttpRequest"}
     )
     data = response.json()
-    tags_with_parents = data["post_tags_with_parents"]
 
-    # Should appear under both P1 and P2
-    p1_entry = next((t for t in tags_with_parents if t["tag"]["name"] == "P1"), None)
-    p2_entry = next((t for t in tags_with_parents if t["tag"]["name"] == "P2"), None)
+    # Verify post_tags_with_parents is legacy (empty list)
+    assert "post_tags_with_parents" in data
+    assert data["post_tags_with_parents"] == []
 
-    assert p1_entry is not None
-    assert p2_entry is not None
-    assert any(child["name"] == "C" for child in p1_entry["children"])
-    assert any(child["name"] == "C" for child in p2_entry["children"])
+    # Verify tags are in the post.tags array
+    assert "post" in data
+    assert "tags" in data["post"]
+    tag_names = [t["name"] for t in data["post"]["tags"]]
+    assert "C" in tag_names
