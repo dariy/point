@@ -65,6 +65,9 @@ class Tag(AsyncAttrs, Base):
     custom_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_important: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    show_related_tags_as_children: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     post_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False

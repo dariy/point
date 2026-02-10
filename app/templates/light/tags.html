@@ -102,6 +102,7 @@
                                 data-tag-description="{{ tag.description or '' }}"
                                 data-tag-important="{{ 'true' if tag.is_important else 'false' }}"
                                 data-tag-featured="{{ 'true' if tag.is_featured else 'false' }}"
+                                data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
                                 class="tag {% if tag.is_important %}tag-important{% endif %}"
                                 style="width: fit-content;" title="Edit tag">
                                 {{ tag.name }}
@@ -112,8 +113,8 @@
                         </div>
                     </td>
                     <td class="text-muted">
-                        <a href="/tags/{{ tag.slug }}" target="_blank" title="View public tag page" class="slug-link">
-                            /tags/{{ tag.slug }}
+                        <a href="/tag/{{ tag.slug }}" target="_blank" title="View public tag page" class="slug-link">
+                            /tag/{{ tag.slug }}
                         </a>
                     </td>
                     <td>
@@ -145,7 +146,7 @@
                         </button>
                     </td>
                     <td class="actions">
-                        <a href="/tags/{{ tag.slug }}" target="_blank" class="btn btn-sm btn-outline"
+                        <a href="/tag/{{ tag.slug }}" target="_blank" class="btn btn-sm btn-outline"
                             title="View public page">
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                                 <path
@@ -157,6 +158,7 @@
                             data-tag-description="{{ tag.description or '' }}"
                             data-tag-important="{{ 'true' if tag.is_important else 'false' }}"
                             data-tag-featured="{{ 'true' if tag.is_featured else 'false' }}"
+                            data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
                             data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}'
                             data-tag-children='{{ tag.children | map(attribute="id") | list | tojson }}' title="Edit">
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -239,6 +241,14 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="tag-featured" name="is_featured" class="form-checkbox-input">
                         <span class="checkbox-text">Mark as featured (Show in footer)</span>
+                    </label>
+                </div>
+
+                <div class="form-group form-checkbox">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="tag-show-related" name="show_related_tags_as_children"
+                            class="form-checkbox-input">
+                        <span class="checkbox-text">Show related tags as children in menu</span>
                     </label>
                 </div>
 
