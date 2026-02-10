@@ -30,6 +30,12 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Build CSS bundles
+        run: chmod +x build/build_css.sh && ./build/build_css.sh
+
+      - name: Cleanup source CSS
+        run: rm -rf app/static/css/common/ app/static/css/light/ app/static/css/public/
+
       - name: Run linting
         run: |
           echo "Running ruff linting..."

@@ -49,6 +49,12 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Build CSS bundles
+        run: chmod +x build/build_css.sh && ./build/build_css.sh
+
+      - name: Cleanup source CSS
+        run: rm -rf app/static/css/common/ app/static/css/light/ app/static/css/public/
+
       - name: Run linting
         run: |
           ruff check app/
@@ -84,6 +90,12 @@ jobs:
       image_sha_tag: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Build CSS bundles
+        run: chmod +x build/build_css.sh && ./build/build_css.sh
+
+      - name: Cleanup source CSS
+        run: rm -rf app/static/css/common/ app/static/css/light/ app/static/css/public/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
