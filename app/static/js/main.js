@@ -1768,24 +1768,31 @@
             // Use getBoundingClientRect for more sub-pixel accuracy
             const containerWidth = container.getBoundingClientRect().width;
 
+            const mode = container.dataset.mode || 'featured';
+            const allItems = Array.from(container.children);
+
+            // Step 0: Filter items that belong to current mode
+            const items = allItems.filter(el => {
+                if (el.id === 'tags-switcher') return true;
+                if (mode === 'featured') return el.classList.contains('featured-tag');
+                if (mode === 'categories') return el.classList.contains('category-tag');
+                return false;
+            });
+
+            // Hide everything initially
+            allItems.forEach(item => item.style.display = 'none');
+
             // Threshold for hiding tags completely to avoid branding collision
             // If the space is too small (< 100px), hide everything.
             if (containerWidth < 100) {
-                Array.from(container.children).forEach(item => {
-                    item.style.display = 'none';
-                });
                 container.classList.add('is-ready');
                 return;
             }
 
-            const items = Array.from(container.children);
             const widths = new Map();
 
-            // Step 1: Show all items temporarily to measure natural widths
+            // Step 1: Show relevant items temporarily to measure natural widths
             items.forEach(item => {
-                const originalDisplay = item.style.display;
-                const originalVisibility = item.style.visibility;
-
                 item.style.display = 'inline-flex';
                 item.style.flexShrink = '0';
                 item.style.visibility = 'hidden';
@@ -1803,10 +1810,7 @@
                 const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
                 return b && (b.dataset.role === 'all' || b.getAttribute('href') === '/');
             });
-            const moreBtn = items.find(el => {
-                const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
-                return b && (b.dataset.role === 'more' || (b.getAttribute('href') === '/tags' && b !== allBtn));
-            });
+            const moreBtn = document.getElementById('tags-switcher');
             const activeItem = items.find(el => {
                 if (el.classList.contains('active')) return true;
                 if (el.querySelector('.filter-btn.active')) return true;
@@ -1946,6 +1950,43 @@
     }
 
     /**
+     * Switcher between Featured Tags and Categories in Header
+     */
+    function initTagSwitcher() {
+        const switcher = document.getElementById('tags-switcher');
+        const container = document.getElementById('header-tags-filters');
+
+        if (!switcher || !container) return;
+
+        function updateSets(mode) {
+            container.dataset.mode = mode;
+            if (mode === 'categories') {
+                switcher.classList.add('active');
+            } else {
+                switcher.classList.remove('active');
+            }
+            // Trigger responsive update
+            if (window.dispatchEvent) {
+                window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
+            }
+        }
+
+        // Initialize state from localStorage
+        const savedMode = localStorage.getItem('tags-filter-mode') || 'featured';
+        updateSets(savedMode);
+
+        switcher.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const currentMode = localStorage.getItem('tags-filter-mode') || 'featured';
+            const newMode = currentMode === 'featured' ? 'categories' : 'featured';
+
+            localStorage.setItem('tags-filter-mode', newMode);
+            updateSets(newMode);
+        });
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -1960,6 +2001,7 @@
         initAjaxTagsNavigation();
         initResponsiveTagFilters();
         initTagToggles();
+        initTagSwitcher();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {

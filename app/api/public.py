@@ -96,6 +96,9 @@ async def get_db_context(
     )
     tags = list(tags_result.scalars().all())
 
+    # Get hierarchical tag groups for categories switcher
+    tag_groups = await tag_service.get_hierarchical_tags(include_empty=False)
+
     # Get blog settings if not provided
     if blog_settings is None:
         settings_service = SettingsService(db)
@@ -104,6 +107,7 @@ async def get_db_context(
     context = {
         "tag_cloud": tag_cloud,
         "tags": tags,
+        "tag_groups": tag_groups,
         "blog_settings": blog_settings,
     }
 
