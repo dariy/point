@@ -1369,7 +1369,7 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    renderPosts(data, postsContainer);
+                    renderPosts(data, postsContainer, url);
 
                     window.history.pushState({}, '', url);
                     updateActiveSiteFilters(url, triggerElement);
@@ -1389,7 +1389,7 @@
             }
         }
 
-        function renderPosts(data, container) {
+        function renderPosts(data, container, currentUrl) {
             if (!data.posts || data.posts.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1483,13 +1483,30 @@
 
             // Add pagination if needed
             if (data.pagination && data.pagination.total_pages > 1) {
-                html += renderPagination(data.pagination, data.tag?.slug || data.current_tag);
+                html += renderPagination(data.pagination, data.tag?.slug || data.current_tag, currentUrl);
             }
 
             container.innerHTML = html;
         }
 
-        function renderPagination(pag, tagSlug) {
+        function renderPagination(pag, tagSlug, currentUrl) {
+            // If tagSlug is not provided, try to extract it from the URL being loaded
+            if (!tagSlug && currentUrl) {
+                const urlObj = new URL(currentUrl, window.location.origin);
+                const tagMatch = urlObj.pathname.match(/^\/tag\/([^\/]+)/);
+                if (tagMatch) {
+                    tagSlug = tagMatch[1];
+                }
+            }
+
+            // Fallback to current window location if still not found
+            if (!tagSlug) {
+                const tagMatch = window.location.pathname.match(/^\/tag\/([^\/]+)/);
+                if (tagMatch) {
+                    tagSlug = tagMatch[1];
+                }
+            }
+
             const basePath = tagSlug ? `/tag/${tagSlug}` : '/';
             const ariaLabel = tagSlug ? 'Tag archive pagination' : 'Posts pagination';
 
