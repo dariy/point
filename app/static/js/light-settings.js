@@ -3,7 +3,7 @@
  * Handles blog settings form submission
  */
 
-(function() {
+(function () {
     'use strict';
 
     function initSettingsForm() {
@@ -17,16 +17,16 @@
             const status = document.getElementById('save-status');
 
             saveBtn.disabled = true;
-            status.textContent = 'Saving...';
-            status.className = 'save-status';
+            saveBtn.textContent = 'Saving...';
 
             const formData = new FormData(form);
             const settings = {};
 
             // Handle form data
             for (const [key, value] of formData.entries()) {
-                if (['posts_per_page', 'max_image_width', 'jpeg_quality', 'storage_quota_mb'].includes(key)) {
-                    settings[key] = parseInt(value, 10);
+                if (['posts_per_page', 'max_image_width', 'jpeg_quality', 'storage_quota_mb', 'about_post_id'].includes(key)) {
+                    // Parse as integer, but only if value is not empty
+                    settings[key] = value ? parseInt(value, 10) : null;
                 } else {
                     settings[key] = value;
                 }
@@ -46,21 +46,24 @@
                 });
 
                 if (response.ok) {
-                    status.textContent = 'Settings saved successfully!';
-                    status.classList.add('success');
-                    setTimeout(() => {
-                        status.textContent = '';
-                    }, 3000);
+                    // Use toast notification
+                    if (window.LightUtils && window.LightUtils.showToast) {
+                        window.LightUtils.showToast('Settings saved successfully!', 'success');
+                    }
                 } else {
                     const data = await response.json();
-                    status.textContent = 'Error: ' + (data.detail || 'Failed to save settings');
-                    status.classList.add('error');
+                    const errorMsg = data.detail || 'Failed to save settings';
+                    if (window.LightUtils && window.LightUtils.showToast) {
+                        window.LightUtils.showToast(errorMsg, 'error');
+                    }
                 }
             } catch (error) {
-                status.textContent = 'Error: ' + error.message;
-                status.classList.add('error');
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast('Error: ' + error.message, 'error');
+                }
             } finally {
                 saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Settings';
             }
         });
     }

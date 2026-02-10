@@ -14,7 +14,7 @@ A lightweight, professional-grade personal photo blog engine built with FastAPI,
 - **🛠️ Professional Tools**:
     - Full post management with Markdown support.
     - **Quick Post Creation**: Drag-and-drop images from any page to instantly create new posts.
-    - Tagging system with automatic post counts.
+    - **Meta-tagging**: Hierarchical tag system with recursive post retrieval and counts.
     - Integrated backup/restore system.
     - System health and log monitoring.
 - **🔒 Secure & Private**: Self-hosted, single-user authentication, and security-hardened headers.

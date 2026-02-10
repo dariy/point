@@ -96,7 +96,7 @@ async def test_single_post_immersive_ajax(client, db, test_user):
 
 
 @pytest.fixture
-async def sample_posts(db: AsyncSession) -> list[Post]:
+async def sample_posts(db: AsyncSession, test_user) -> list[Post]:
     """Create sample posts."""
     posts = []
     for i in range(15):
@@ -107,7 +107,7 @@ async def sample_posts(db: AsyncSession) -> list[Post]:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=datetime.now(UTC) - timedelta(hours=i),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         db.add(post)
         posts.append(post)
@@ -115,7 +115,7 @@ async def sample_posts(db: AsyncSession) -> list[Post]:
     return posts
 
 @pytest.fixture
-async def sample_tag_with_posts(db: AsyncSession) -> Tag:
+async def sample_tag_with_posts(db: AsyncSession, test_user) -> Tag:
     """Create a tag and attach to posts."""
     tag = Tag(name="Ajax Tag", slug="ajax-tag", post_count=0)
     db.add(tag)
@@ -130,7 +130,7 @@ async def sample_tag_with_posts(db: AsyncSession) -> Tag:
             status=PostStatus.PUBLISHED,
             formatter=PostFormatter.MARKDOWN,
             published_at=datetime.now(UTC) - timedelta(hours=i),
-            author_id=1,
+            author_id=test_user["user"].id,
         )
         post.tags.append(tag)
         db.add(post)

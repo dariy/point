@@ -114,7 +114,7 @@ class SettingsService:
             "blog_title", "blog_subtitle", "author_name", "author_email",
             "posts_per_page", "default_language", "default_theme",
             "show_view_counts", "enable_analytics", "google_analytics_id",
-            "max_image_width", "jpeg_quality", "storage_quota_mb"
+            "max_image_width", "jpeg_quality", "storage_quota_mb", "about_post_id"
         ]
 
         settings = {}

@@ -4,14 +4,41 @@ Stores tags with support for descriptions, custom URLs, and importance marking.
 """
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+)
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
+if TYPE_CHECKING:
+    from app.models.post import Post
 
-class Tag(Base):
+
+# Association table for tag hierarchical relationships
+tag_relationships = Table(
+    "tag_relationships",
+    Base.metadata,
+    Column(
+        "parent_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
+    ),
+    Column(
+        "child_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
+    ),
+)
+
+
+class Tag(AsyncAttrs, Base):
     """Tag model for categorizing posts.
 
     Attributes:
@@ -51,6 +78,24 @@ class Tag(Base):
         lazy="selectin",
     )
 
+    # Hierarchical relationships (meta-tags)
+    parents: Mapped[list["Tag"]] = relationship(
+        "Tag",
+        secondary="tag_relationships",
+        primaryjoin="Tag.id == tag_relationships.c.child_id",
+        secondaryjoin="Tag.id == tag_relationships.c.parent_id",
+        back_populates="children",
+        lazy="selectin",
+    )
+    children: Mapped[list["Tag"]] = relationship(
+        "Tag",
+        secondary="tag_relationships",
+        primaryjoin="Tag.id == tag_relationships.c.parent_id",
+        secondaryjoin="Tag.id == tag_relationships.c.child_id",
+        back_populates="parents",
+        lazy="selectin",
+    )
+
     def __repr__(self) -> str:
         return f"<Tag(id={self.id}, name='{self.name}', post_count={self.post_count})>"
 
@@ -58,7 +103,3 @@ class Tag(Base):
     def url(self) -> str:
         """Get the URL for this tag."""
         return self.custom_url or f"/tag/{self.slug}"
-
-
-# Import for relationship (avoid circular import)
-from app.models.post import Post  # noqa: E402, F401

@@ -153,13 +153,14 @@ class TestPostCounts:
     """Test post count management."""
 
     @pytest.mark.asyncio
-    async def test_update_all_post_counts(self, tag_service: TagService, db: AsyncSession):
+    async def test_update_all_post_counts(self, tag_service: TagService, db: AsyncSession, test_user):
         """Test recalculating post counts."""
+        user_id = test_user["user"].id
         # Create tag and posts
         tag = Tag(name="Tag", slug="tag", post_count=0)
-        p1 = Post(title="P1", slug="p1", content="C", status=PostStatus.PUBLISHED, author_id=1)
-        p2 = Post(title="P2", slug="p2", content="C", status=PostStatus.DRAFT, author_id=1)
-        p3 = Post(title="P3", slug="p3", content="C", status=PostStatus.PUBLISHED, author_id=1)
+        p1 = Post(title="P1", slug="p1", content="C", status=PostStatus.PUBLISHED, author_id=user_id)
+        p2 = Post(title="P2", slug="p2", content="C", status=PostStatus.DRAFT, author_id=user_id)
+        p3 = Post(title="P3", slug="p3", content="C", status=PostStatus.PUBLISHED, author_id=user_id)
 
         p1.tags.append(tag)
         p2.tags.append(tag)
