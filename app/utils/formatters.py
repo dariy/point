@@ -77,13 +77,13 @@ def preprocess_media_links(content: str) -> str:
 
 def linkify_urls(html_content: str) -> str:
     """Convert plain text URLs to clickable anchor tags.
-    
+
     Detects URLs in HTML content and wraps them with <a> tags.
     Avoids double-linking URLs that are already in anchor tags or image/video src attributes.
-    
+
     Args:
         html_content: HTML string
-        
+
     Returns:
         HTML with URLs converted to links
     """
@@ -94,7 +94,8 @@ def linkify_urls(html_content: str) -> str:
         re.IGNORECASE
     )
 
-    def replace_url(match):
+
+    def replace_url(match: re.Match[str]) -> str:
         url = match.group(1)
         # Strip all trailing whitespace (including \r\n) and punctuation
         url = url.rstrip()
@@ -102,6 +103,7 @@ def linkify_urls(html_content: str) -> str:
         while url and url[-1] in '.,;:!?)':
             url = url[:-1]
         return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>'
+
 
     # Split content by tags to avoid modifying content inside tags
     parts = re.split(r'(<[^>]+>)', html_content)
