@@ -11,6 +11,20 @@ from pathlib import Path
 # Disable caching in tests BEFORE importing app
 os.environ["CACHE_ENABLED"] = "false"
 
+# Build CSS bundles BEFORE importing app (so StaticFiles can see them)
+_project_root = Path(__file__).parent.parent
+_build_script = _project_root / "build" / "build_css.sh"
+if _build_script.exists():
+    _result = subprocess.run(
+        [str(_build_script)],
+        cwd=str(_project_root),
+        capture_output=True,
+        text=True,
+        check=False
+    )
+    if _result.returncode != 0:
+        print(f"CSS build failed: {_result.stderr}")
+
 import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
@@ -30,18 +44,6 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 # Clear cached settings and reload with test environment
 get_settings.cache_clear()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def build_css_bundles():
-    """Build CSS bundles before running tests."""
-    project_root = Path(__file__).parent.parent
-    build_script = project_root / "build" / "build_css.sh"
-
-    if build_script.exists():
-        subprocess.run([str(build_script)], check=True, cwd=str(project_root))
-
-    yield
 
 
 @pytest.fixture
