@@ -57,7 +57,7 @@ async def update_post_counts_recursive(self, tag_ids: list[int]) -> None:
 ```
 
 ### API & UI Integration
-- **Public Archive**: `/tag/{slug}` and `/tags/{slug}` (gallery) use recursive filtering by default.
+- **Public Archive**: `/tag/{slug}` (gallery) use recursive filtering by default.
 - **Light Interface**:
   - Filtering by parent tag in the Tag Manager.
   - Multi-select parent assignment in the Tag Editor.

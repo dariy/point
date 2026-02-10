@@ -36,6 +36,7 @@
         document.getElementById('tag-description').value = '';
         document.getElementById('tag-important').checked = false;
         document.getElementById('tag-featured').checked = false;
+        document.getElementById('tag-show-related').checked = false;
 
         // Clear chip checkboxes in parents picker
         const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
@@ -65,7 +66,7 @@
     /**
      * Open modal for editing existing tag
      */
-    const editTag = async function (id, name, slug, description, isImportant, isFeatured, parentIds, childIds) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isShowRelated, parentIds, childIds) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
@@ -73,6 +74,7 @@
         document.getElementById('tag-description').value = description || '';
         document.getElementById('tag-important').checked = !!isImportant;
         document.getElementById('tag-featured').checked = !!isFeatured;
+        document.getElementById('tag-show-related').checked = !!isShowRelated;
 
         const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
         if (parentChips.length) {
@@ -134,6 +136,7 @@
                 document.getElementById('tag-description').value = tag.description || '';
                 document.getElementById('tag-important').checked = tag.is_important;
                 document.getElementById('tag-featured').checked = tag.is_featured;
+                document.getElementById('tag-show-related').checked = tag.show_related_tags_as_children;
 
                 if (parentChips.length) {
                     const ids = tag.parents ? tag.parents.map(p => parseInt(p.id)) : [];
@@ -291,9 +294,10 @@
             const description = editBtn.dataset.tagDescription;
             const isImportant = editBtn.dataset.tagImportant === 'true';
             const isFeatured = editBtn.dataset.tagFeatured === 'true';
+            const isShowRelated = editBtn.dataset.tagShowRelated === 'true';
             const parentIds = editBtn.dataset.tagParents || '[]';
             const childIds = editBtn.dataset.tagChildren || '[]';
-            editTag(id, name, slug, description, isImportant, isFeatured, parentIds, childIds);
+            editTag(id, name, slug, description, isImportant, isFeatured, isShowRelated, parentIds, childIds);
             return;
         }
 
@@ -320,6 +324,7 @@
             description: document.getElementById('tag-description').value || null,
             is_important: document.getElementById('tag-important').checked,
             is_featured: document.getElementById('tag-featured').checked,
+            show_related_tags_as_children: document.getElementById('tag-show-related').checked,
             parent_ids: Array.from(document.querySelectorAll('#tag-parents-picker input:checked')).map(cb => parseInt(cb.value)),
             child_ids: Array.from(document.querySelectorAll('#tag-children-picker input:checked')).map(cb => parseInt(cb.value))
         };

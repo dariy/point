@@ -38,7 +38,7 @@
 {% if total_pages > 1 %}
 <nav class="pagination tags-pagination" aria-label="Tags pagination">
     {% if current_tag %}
-    {% set pagination_base = '/tags/' + current_tag %}
+    {% set pagination_base = '/tag/' + current_tag %}
     {% else %}
     {% set pagination_base = '/tags' %}
     {% endif %}

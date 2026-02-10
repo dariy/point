@@ -611,7 +611,6 @@ async def tag_archive(
 
 
 @router.get("/tags", response_class=HTMLResponse)
-@router.get("/tags/{tag_slug}", response_class=HTMLResponse)
 async def tags_page(
     request: Request,
     tag_slug: str | None = None,
