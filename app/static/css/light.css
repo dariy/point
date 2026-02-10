@@ -427,6 +427,7 @@ h1 .app-logo {
 .login-card .form-input {
     padding: var(--spacing-md);
     font-size: var(--font-size-base);
+    text-align: center;
 }
 
 .login-card .btn-lg {
@@ -435,7 +436,7 @@ h1 .app-logo {
 
 .login-header {
     text-align: center;
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-sm);
 }
 
 .login-header h1 {
@@ -446,7 +447,7 @@ h1 .app-logo {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
 }
 
 .login-error {
