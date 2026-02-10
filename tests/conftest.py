@@ -4,7 +4,9 @@ Provides common fixtures for testing the Photo Blog application.
 """
 
 import os
+import subprocess
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 # Disable caching in tests BEFORE importing app
 os.environ["CACHE_ENABLED"] = "false"
@@ -28,6 +30,18 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 # Clear cached settings and reload with test environment
 get_settings.cache_clear()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def build_css_bundles():
+    """Build CSS bundles before running tests."""
+    project_root = Path(__file__).parent.parent
+    build_script = project_root / "build" / "build_css.sh"
+
+    if build_script.exists():
+        subprocess.run([str(build_script)], check=True, cwd=str(project_root))
+
+    yield
 
 
 @pytest.fixture
