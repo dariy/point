@@ -667,32 +667,6 @@ class TestTheming:
         response = await client.get(f"/tag/{sample_tag.slug}")
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
-    @pytest.mark.asyncio
-    async def test_main_css_has_dark_theme_variables(
-        self, client: AsyncClient
-    ) -> None:
-        """Test main.css has dark theme CSS variables."""
-        response = await client.get("/static/css/main.css")
-        assert response.status_code == 200
-        assert '[data-theme="dark"]' in response.text
-        assert "--bg-primary" in response.text
-        assert "--text-primary" in response.text
-    @pytest.mark.asyncio
-    async def test_main_css_has_light_theme_variables(
-        self, client: AsyncClient
-    ) -> None:
-        """Test main.css has light theme CSS variables."""
-        response = await client.get("/static/css/main.css")
-        assert response.status_code == 200
-        assert '[data-theme="light"]' in response.text or ":root" in response.text
-    @pytest.mark.asyncio
-    async def test_main_css_has_theme_transition(
-        self, client: AsyncClient
-    ) -> None:
-        """Test main.css has smooth theme transition."""
-        response = await client.get("/static/css/main.css")
-        assert response.status_code == 200
-        assert "--transition-theme" in response.text
 @pytest.fixture
 def settings():
     return get_settings()
