@@ -3,7 +3,7 @@
 {% macro render_tag_group(group, active_tag_slug) %}
 <div class="tag-group">
     <div class="tag-group-header">
-        <a href="/tags/{{ group.tag.slug }}"
+        <a href="/tag/{{ group.tag.slug }}"
             class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %}"
             data-original-name="{{ group.tag.name }}">
             {{ group.tag.name }}
@@ -19,7 +19,7 @@
         {% if child.children %}
         {{ render_tag_group(child, active_tag_slug) }}
         {% else %}
-        <a href="/tags/{{ child.tag.slug }}"
+        <a href="/tag/{{ child.tag.slug }}"
             class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %}">
             {{ child.tag.name }}
         </a>
@@ -39,7 +39,7 @@
     {% if group.children %}
     <div class="tag-group category-tag">
         <div class="tag-group-header">
-            <a href="/tags/{{ group.tag.slug }}"
+            <a href="/tag/{{ group.tag.slug }}"
                 class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %}"
                 data-original-name="{{ group.tag.name }}">
                 {{ group.tag.name }}
@@ -55,7 +55,7 @@
             {% if child.children %}
             {{ render_tag_group(child, active_tag_slug) }}
             {% else %}
-            <a href="/tags/{{ child.tag.slug }}"
+            <a href="/tag/{{ child.tag.slug }}"
                 class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %}">
                 {{ child.tag.name }}
             </a>
@@ -64,7 +64,7 @@
         </div>
     </div>
     {% else %}
-    <a href="/tags/{{ group.tag.slug }}"
+    <a href="/tag/{{ group.tag.slug }}"
         class="filter-btn ajax-link category-tag {% if active_tag_slug == group.tag.slug %}active{% endif %}">
         {{ group.tag.name }}
     </a>

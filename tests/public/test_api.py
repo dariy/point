@@ -326,7 +326,7 @@ class TestGallery:
         self, client: AsyncClient, sample_tag: Tag, published_post: Post
     ) -> None:
         """Test gallery can filter by tag."""
-        response = await client.get(f"/tags/{sample_tag.slug}")
+        response = await client.get(f"/{sample_tag.slug}")
         assert response.status_code == 200
         assert published_post.title in response.text
     @pytest.mark.asyncio
@@ -907,7 +907,7 @@ async def test_tag_archive_not_found(client: AsyncClient):
     assert resp.status_code == 404
 @pytest.mark.asyncio
 async def test_tags_page(client: AsyncClient, db: AsyncSession):
-    """Test tags/gallery page."""
+    """Test tag/gallery page."""
     user = User(username="galleryuser", email="gallery@test.com", password_hash="hash", display_name="Gallery User")
     db.add(user)
     await db.commit()
@@ -945,7 +945,7 @@ async def test_tags_page_with_tag_filter(client: AsyncClient, db: AsyncSession):
     post.tags.append(tag)
     db.add(post)
     await db.commit()
-    resp = await client.get(f"/tags/{tag.slug}")
+    resp = await client.get(f"/tag/{tag.slug}")
     assert resp.status_code == 200
 @pytest.mark.asyncio
 async def test_tags_page_ajax(client: AsyncClient, db: AsyncSession):

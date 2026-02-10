@@ -1261,9 +1261,9 @@
         const urlObj = new URL(url, window.location.origin);
         const pathParts = urlObj.pathname.split('/').filter(p => p);
 
-        // Tag could be at /tag/SLUG or /tags/SLUG
+        // Tag could be at /tag/SLUG
         let tag = null;
-        if (pathParts[0] === 'tag' || pathParts[0] === 'tags') {
+        if (pathParts[0] === 'tag') {
             tag = pathParts.length > 1 ? pathParts[1] : null;
         }
 
@@ -1689,7 +1689,7 @@
 
             // Previous
             if (pag.has_prev) {
-                html += `<a href="/tags${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                html += `<a href="/tag${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M15 18l-6-6 6-6"/>
                     </svg>
@@ -1707,7 +1707,7 @@
                 if (p === pag.page) {
                     html += `<span class="pagination-link active">${p}</span>`;
                 } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="/tags${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+                    html += `<a href="/tag${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
                 } else if (p === pag.page - 2 || p === pag.page + 2) {
                     html += `<span class="pagination-ellipsis">&hellip;</span>`;
                 }
@@ -1715,7 +1715,7 @@
 
             // Next
             if (pag.has_next) {
-                html += `<a href="/tags${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                html += `<a href="/tag${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 18l6-6-6-6"/>
                     </svg>
