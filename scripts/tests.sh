@@ -44,6 +44,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+chmod +x build/build_css.sh && ./build/build_css.sh
+
 # Run pytest with coverage
 if [ "$REPORT_TYPE" = "html" ]; then
     venv/bin/pytest "$TARGET" --cov="$COVERAGE_TARGET" --cov-report=html --cov-report=term $SHOW_MISSING $QUIET
