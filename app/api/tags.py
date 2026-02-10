@@ -43,6 +43,7 @@ def tag_to_response(tag: TagModel) -> dict[str, Any]:
         "custom_url": tag.custom_url,
         "is_important": tag.is_important,
         "is_featured": tag.is_featured,
+        "show_related_tags_as_children": tag.show_related_tags_as_children,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "url": tag.url,

@@ -206,7 +206,7 @@ class TestAjaxRequests:
         """Test tag archive returns JSON for AJAX requests."""
         tag = full_published_post.tags[0]
         response = await client.get(
-            f"/tags/{tag.slug}",
+            f"/tag/{tag.slug}",
             headers={"X-Requested-With": "XMLHttpRequest"}
         )
         assert response.status_code == 200
@@ -253,7 +253,7 @@ class TestPaginationEdgeCases:
     ):
         """Test tag archive with pagination."""
         tag = full_published_post.tags[0]
-        response = await client.get(f"/tags/{tag.slug}?page=1")
+        response = await client.get(f"/tag/{tag.slug}?page=1")
         assert response.status_code == 200
 
 
@@ -419,7 +419,7 @@ class TestGalleryFiltering:
     ):
         """Test gallery can filter by tag."""
         tag = full_published_post.tags[0]
-        response = await client.get(f"/tags/{tag.slug}")
+        response = await client.get(f"/tag/{tag.slug}")
         assert response.status_code == 200
 
     @pytest.mark.asyncio
@@ -428,7 +428,7 @@ class TestGalleryFiltering:
         client: AsyncClient,
     ):
         """Test gallery with invalid tag filter."""
-        response = await client.get("/tags/nonexistent")
+        response = await client.get("/tag/nonexistent")
         # Should still return 200, just empty results (or all posts depending on logic)
         assert response.status_code == 200
 

@@ -90,6 +90,7 @@ class TagService:
             custom_url=tag_data.custom_url,
             is_important=tag_data.is_important,
             is_featured=tag_data.is_featured,
+            show_related_tags_as_children=tag_data.show_related_tags_as_children,
             post_count=0,
         )
 
@@ -217,6 +218,8 @@ class TagService:
             tag.is_important = tag_data.is_important
         if tag_data.is_featured is not None:
             tag.is_featured = tag_data.is_featured
+        if tag_data.show_related_tags_as_children is not None:
+            tag.show_related_tags_as_children = tag_data.show_related_tags_as_children
         if tag_data.parent_ids is not None:
             parents = await self.db.execute(
                 select(Tag).where(Tag.id.in_(tag_data.parent_ids))
@@ -324,6 +327,41 @@ class TagService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def get_related_tags(
+        self, tag_id: int, exclude_ids: set[int] | None = None
+    ) -> list[Tag]:
+        """Get tags that appear on the same posts as the given tag.
+
+        Args:
+            tag_id: Tag ID
+            exclude_ids: Optional set of tag IDs to exclude
+
+        Returns:
+            List of related tags
+        """
+        if exclude_ids is None:
+            exclude_ids = set()
+        exclude_ids.add(tag_id)
+
+        # Get post IDs for this tag
+        post_ids_query = select(post_tags.c.post_id).where(post_tags.c.tag_id == tag_id)
+
+        # Get related tag IDs
+        related_ids_query = (
+            select(post_tags.c.tag_id)
+            .where(post_tags.c.post_id.in_(post_ids_query))
+            .where(post_tags.c.tag_id.notin_(exclude_ids))
+            .distinct()
+        )
+
+        result = await self.db.execute(
+            select(Tag)
+            .where(Tag.id.in_(related_ids_query))
+            .where(Tag.post_count > 0)
+            .order_by(Tag.name)
+        )
+        return list(result.scalars().all())
+
     async def get_hierarchical_tags(
         self,
         include_empty: bool = True,
@@ -339,24 +377,39 @@ class TagService:
 
         # Identify visible tags
         if not include_empty or search:
-            visible_tags = await self.list_tags(include_empty=include_empty, search=search)
+            visible_tags = await self.list_tags(
+                include_empty=include_empty, search=search
+            )
             visible_ids = {t.id for t in visible_tags}
         else:
             visible_ids = {t.id for t in all_tags}
 
-        def build_tree(tag: Tag, visible_ids: set[int]) -> list[dict[str, Any]]:
+        async def build_tree(
+            tag: Tag, visible_ids: set[int], show_related: bool, branch_ids: set[int]
+        ) -> list[dict[str, Any]]:
             children_trees = []
             # Sort children by name for consistent UI
             sorted_children = sorted(tag.children, key=lambda x: x.name)
 
+            new_branch_ids = branch_ids | {tag.id}
+
             for child in sorted_children:
-                child_tree = build_tree(child, visible_ids)
+                child_tree = await build_tree(
+                    child, visible_ids, show_related, new_branch_ids
+                )
                 # Include child if it's visible OR has visible descendants
                 if child.id in visible_ids or child_tree:
-                    children_trees.append({
-                        "tag": child,
-                        "children": child_tree
-                    })
+                    children_trees.append({"tag": child, "children": child_tree})
+
+            # If this is a leaf (no children in hierarchy) and show_related is True,
+            # add related tags as children
+            if not children_trees and show_related:
+                related = await self.get_related_tags(tag.id, exclude_ids=new_branch_ids)
+                for rel in related:
+                    children_trees.append(
+                        {"tag": rel, "children": [], "is_related": True}
+                    )
+
             return children_trees
 
         hierarchy: list[dict[str, Any]] = []
@@ -364,12 +417,11 @@ class TagService:
         # Only start from roots (tags with no parents)
         for tag in all_tags:
             if not tag.parents:
-                tree = build_tree(tag, visible_ids)
+                tree = await build_tree(
+                    tag, visible_ids, tag.show_related_tags_as_children, set()
+                )
                 if tag.id in visible_ids or tree:
-                    hierarchy.append({
-                        "tag": tag,
-                        "children": tree
-                    })
+                    hierarchy.append({"tag": tag, "children": tree})
 
         # Sort top-level by name
         hierarchy.sort(key=lambda x: x["tag"].name)

@@ -16,6 +16,7 @@ class TagBase(BaseModel):
     custom_url: str | None = Field(default=None, max_length=200)
     is_important: bool = Field(default=False)
     is_featured: bool = Field(default=False)
+    show_related_tags_as_children: bool = Field(default=False)
 
 
 class TagCreate(TagBase):
@@ -33,6 +34,7 @@ class TagCreate(TagBase):
                 "description": "Posts about travel and adventures",
                 "is_important": True,
                 "is_featured": False,
+                "show_related_tags_as_children": False,
                 "parent_ids": [],
                 "child_ids": [],
             }
@@ -49,6 +51,7 @@ class TagUpdate(BaseModel):
     custom_url: str | None = Field(default=None, max_length=200)
     is_important: bool | None = Field(default=None)
     is_featured: bool | None = Field(default=None)
+    show_related_tags_as_children: bool | None = Field(default=None)
     parent_ids: list[int] | None = Field(default=None)
     child_ids: list[int] | None = Field(default=None)
 
@@ -73,13 +76,12 @@ class TagResponse(BaseModel):
     custom_url: str | None
     is_important: bool
     is_featured: bool
+    show_related_tags_as_children: bool
     post_count: int
     created_at: datetime
     url: str = Field(description="Computed URL for the tag")
     parents: list[TagListItem] = Field(default_factory=list)
     children: list[TagListItem] = Field(default_factory=list)
-
-    model_config = ConfigDict(from_attributes=True)
 
     model_config = ConfigDict(from_attributes=True)
 
