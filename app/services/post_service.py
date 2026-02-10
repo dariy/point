@@ -14,8 +14,8 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.post import Post, PostStatus
-from app.models.tag import Tag
 from app.models.post_tag import post_tags
+from app.models.tag import Tag
 from app.schemas.post import PostCreate, PostUpdate
 from app.services.cache_service import invalidate_cache_for_post
 from app.utils.formatters import extract_first_image, format_content, generate_excerpt
@@ -291,12 +291,12 @@ class PostService:
         if public_only:
             # Subquery to find post IDs that are linked to tags with is_hidden_posts=True
             # Note: This only handles direct tags. For hierarchy, we'd need more complex logic.
-            # However, for the homepage, if a post has a child tag that is NOT hidden, 
-            # but a parent tag IS hidden, should the post be hidden? 
+            # However, for the homepage, if a post has a child tag that is NOT hidden,
+            # but a parent tag IS hidden, should the post be hidden?
             # The requirement says: "all the posts with this tag or its children are not shown on the site."
             # This means if ANY tag is a hidden-posts tag OR has a hidden-posts ancestor, hide it.
-            
-            # Since TagService already has recursive logic, maybe we can use it, 
+
+            # Since TagService already has recursive logic, maybe we can use it,
             # but PostService shouldn't depend on TagService if possible.
             # Let's use a simpler check for now: if any tag of the post has is_hidden_posts=True.
             hidden_tag_post_ids_subquery = (

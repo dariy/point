@@ -3,6 +3,7 @@
 Provides utility functions for checking tag visibility and hierarchy.
 """
 
+from app.models.post import Post
 from app.models.tag import Tag
 
 
@@ -74,7 +75,7 @@ def tag_has_hidden_posts_parent(tag: Tag, visited: set[int] | None = None) -> bo
     return False
 
 
-def post_has_hidden_posts_tag(post) -> bool:
+def post_has_hidden_posts_tag(post: Post) -> bool:
     """Check if a post has any tag (or parent tag) with is_hidden_posts=True.
 
     Args:

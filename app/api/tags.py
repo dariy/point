@@ -304,6 +304,8 @@ async def get_posts_by_tag(
         "custom_url": tag.custom_url,
         "is_important": tag.is_important,
         "is_featured": tag.is_featured,
+        "is_hidden": tag.is_hidden,
+        "is_hidden_posts": tag.is_hidden_posts,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "posts": [
