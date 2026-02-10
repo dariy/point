@@ -7,130 +7,70 @@
     'use strict';
 
     // ===========================
-    // Modal Dialog System
+    // Modal Dialog System (using LightUtils)
     // ===========================
 
-    let confirmCallback = null;
-    let alertCallback = null;
-
     /**
-     * Create modal dialog elements
+     * Show confirmation dialog (wrapper for LightUtils)
      */
-    function createModals() {
-        // Create confirm modal
-        const confirmOverlay = document.createElement('div');
-        confirmOverlay.id = 'confirm-modal';
-        confirmOverlay.className = 'modal-overlay';
-        confirmOverlay.innerHTML = `
-            <div class="modal">
-                <div class="modal-header">
-                    <h3 id="confirm-title">Confirm Action</h3>
-                </div>
-                <div class="modal-body">
-                    <p id="confirm-message"></p>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-outline" data-action="confirm-cancel">Cancel</button>
-                    <button class="btn btn-primary" id="confirm-btn" data-action="confirm-ok">Confirm</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(confirmOverlay);
-
-        // Create alert modal
-        const alertOverlay = document.createElement('div');
-        alertOverlay.id = 'alert-modal';
-        alertOverlay.className = 'modal-overlay';
-        alertOverlay.innerHTML = `
-            <div class="modal">
-                <div class="modal-header">
-                    <h3 id="alert-title">Notification</h3>
-                </div>
-                <div class="modal-body">
-                    <p id="alert-message"></p>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-primary" data-action="alert-ok">OK</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(alertOverlay);
-
-        // Event listeners for modals
-        confirmOverlay.addEventListener('click', (e) => {
-            if (e.target === confirmOverlay || e.target.closest('[data-action="confirm-cancel"]')) {
-                closeConfirmModal(false);
-            } else if (e.target.closest('[data-action="confirm-ok"]')) {
-                closeConfirmModal(true);
-            }
-        });
-
-        alertOverlay.addEventListener('click', (e) => {
-            if (e.target === alertOverlay || e.target.closest('[data-action="alert-ok"]')) {
-                closeAlertModal();
-            }
-        });
-    }
-
-    /**
-     * Show confirmation dialog
-     */
-    const showConfirm = function (title, message, confirmText = 'Confirm', isDanger = false) {
-        return new Promise((resolve) => {
-            const modal = document.getElementById('confirm-modal');
-            document.getElementById('confirm-title').textContent = title;
-            document.getElementById('confirm-message').textContent = message;
-            const confirmBtn = document.getElementById('confirm-btn');
-            confirmBtn.textContent = confirmText;
-            confirmBtn.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
-            modal.classList.add('active');
-            confirmCallback = resolve;
+    const showConfirm = function (title, message, confirmText = 'Confirm', isDanger = false, cancelText = 'Cancel') {
+        if (!window.LightUtils || !window.LightUtils.confirm) {
+            return Promise.resolve(window.confirm(message));
+        }
+        return window.LightUtils.confirm(message, {
+            title: title,
+            okText: confirmText,
+            okVariant: isDanger ? 'danger' : 'primary',
+            cancelText: cancelText
         });
     };
 
     /**
-     * Close confirmation dialog
-     */
-    const closeConfirmModal = function (result) {
-        const modal = document.getElementById('confirm-modal');
-        modal.classList.add('closing');
-        setTimeout(() => {
-            modal.classList.remove('active');
-            modal.classList.remove('closing');
-            if (confirmCallback) {
-                confirmCallback(result);
-                confirmCallback = null;
-            }
-        }, 300);
-    };
-
-    /**
-     * Show alert dialog
+     * Show alert dialog (wrapper for LightUtils)
      */
     const showAlert = function (title, message) {
-        return new Promise((resolve) => {
-            const modal = document.getElementById('alert-modal');
-            document.getElementById('alert-title').textContent = title;
-            document.getElementById('alert-message').textContent = message;
-            modal.classList.add('active');
-            alertCallback = resolve;
-        });
+        if (!window.LightUtils || !window.LightUtils.alert) {
+            window.alert(message);
+            return Promise.resolve();
+        }
+        return window.LightUtils.alert(message, { title: title });
+    };
+
+    // ===========================
+    // Progress Overlay
+    // ===========================
+
+    /**
+     * Show blocking progress overlay
+     */
+    const showProgress = function (message = 'Processing...') {
+        let overlay = document.getElementById('progress-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'progress-overlay';
+            overlay.className = 'modal-overlay progress-overlay';
+            overlay.innerHTML = `
+                <div class="progress-modal">
+                    <div class="progress-spinner"></div>
+                    <div class="progress-message">${message}</div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        } else {
+            const messageEl = overlay.querySelector('.progress-message');
+            if (messageEl) messageEl.textContent = message;
+        }
+        overlay.classList.add('active');
     };
 
     /**
-     * Close alert dialog
+     * Hide progress overlay
      */
-    const closeAlertModal = function () {
-        const modal = document.getElementById('alert-modal');
-        modal.classList.add('closing');
-        setTimeout(() => {
-            modal.classList.remove('active');
-            modal.classList.remove('closing');
-            if (alertCallback) {
-                alertCallback();
-                alertCallback = null;
-            }
-        }, 300);
+    const hideProgress = function () {
+        const overlay = document.getElementById('progress-overlay');
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
     };
 
     // ===========================
@@ -166,28 +106,33 @@
      * Trigger manual backup
      */
     const triggerBackup = async function (event) {
-        const btn = event ? event.currentTarget : null;
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Backing up...';
-        }
+        // Confirm before starting backup
+        const confirmed = await showConfirm(
+            'Create Backup',
+            'This will create a full backup of your database and media files.\n\nThis may take several minutes depending on the size of your data. Please do not close this page or interrupt the process.',
+            'Create Backup',
+            false
+        );
+
+        if (!confirmed) return;
 
         try {
+            // Show blocking progress overlay
+            showProgress('Creating backup...');
             const response = await fetch('/api/system/backup', { method: 'POST' });
             const data = await response.json();
+
+            // Hide progress overlay
+            hideProgress();
             if (response.ok) {
                 await showAlert('Success', 'Backup created successfully!\nPath: ' + data.path);
-                location.reload();
+                refreshBackups();
             } else {
                 await showAlert('Error', data.detail);
             }
         } catch (error) {
+            hideProgress();
             await showAlert('Error', error.message);
-        } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = 'Backup Now';
-            }
         }
     };
 
@@ -293,16 +238,18 @@
             'Restore Backup - Warning',
             'WARNING: This will overwrite ALL current data!\n\nAre you absolutely sure you want to restore from:\n' + filename + '\n\nThis action cannot be undone!',
             'Continue',
-            true
+            true,
+            'Close'
         );
         if (!confirmed1) return;
 
         // Double confirmation for safety
         const confirmed2 = await showConfirm(
             'Final Confirmation',
-            'This is your last chance!\n\nClick "Restore" to proceed, or "Cancel" to abort.',
+            'This is your last chance!\n\nClick "Restore" to proceed, or "Close" to abort.',
             'Restore',
-            true
+            true,
+            'Close'
         );
         if (!confirmed2) return;
 

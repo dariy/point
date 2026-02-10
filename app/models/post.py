@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from enum import Enum as PyEnum
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,7 +29,7 @@ class PostFormatter(str, PyEnum):
     RAW = "raw"
 
 
-class Post(Base):
+class Post(AsyncAttrs, Base):
     """Blog post model.
 
     Attributes:

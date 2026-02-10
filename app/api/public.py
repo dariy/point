@@ -115,6 +115,21 @@ async def get_db_context(
     if "author_name" in blog_settings:
         context["author_name"] = blog_settings["author_name"]
 
+    # Fetch about post if configured
+    about_post_slug = None
+    if "about_post_id" in blog_settings and blog_settings["about_post_id"]:
+        try:
+            about_post_result = await db.execute(
+                select(Post).where(Post.id == blog_settings["about_post_id"])
+            )
+            about_post = about_post_result.scalar_one_or_none()
+            if about_post:
+                about_post_slug = about_post.slug
+        except Exception as e:
+            logger.warning("Failed to fetch about post: %s", e)
+
+    context["about_post_slug"] = about_post_slug
+
     return context
 
 
@@ -307,7 +322,6 @@ async def single_post(
     # Get post with tags
     query = (
         select(Post)
-        .options(selectinload(Post.tags))
         .where(Post.slug == slug)
         .where(
             or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
@@ -315,16 +329,26 @@ async def single_post(
     )
     result = await db.execute(query)
     post = result.scalar_one_or_none()
-
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found",
         )
 
-    # Always increment view count (even if we return cached content)
+    # Explicitly load relationships using awaitable_attrs to avoid MissingGreenlet
+    try:
+        await post.awaitable_attrs.tags
+        await post.awaitable_attrs.author
+        for tag in post.tags:
+            await tag.awaitable_attrs.parents
+            await tag.awaitable_attrs.children
+    except Exception as e:
+        logger.error("Error loading relationships for post %s: %s", slug, e)
+        # Continue anyway, might still render partially
+
+    # Increment view count
     post.view_count = (post.view_count or 0) + 1
-    await db.commit()
+    await db.flush()
 
     # Check cache if enabled (after incrementing view count)
     # Skip cache if user is logged in
@@ -388,6 +412,10 @@ async def single_post(
         next_result = await db.execute(next_query)
         next_post = next_result.scalar_one_or_none()
 
+    # Get explicitly selected tags for the post
+    tags = await post.awaitable_attrs.tags
+    all_post_tags = sorted(tags, key=lambda x: x.name)
+
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         settings_service = SettingsService(db)
@@ -404,7 +432,7 @@ async def single_post(
                     "view_count": post.view_count,
                     "content_html": content_html,
                     "thumbnail_path": post.thumbnail_path,
-                    "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+                    "tags": [{"name": t.name, "slug": t.slug} for t in all_post_tags],
                 },
                 "has_text_content": has_text_content,
                 "post_media": post_media,
@@ -418,6 +446,7 @@ async def single_post(
                 "blog_title": blog_settings_dict.get("blog_title", settings.app_name),
                 "blog_subtitle": blog_settings_dict.get("blog_subtitle", getattr(settings, "blog_subtitle", "")),
                 "is_logged_in": user is not None,
+                "post_tags_with_parents": [], # Legacy, no longer used
             }
         )
 
@@ -513,13 +542,10 @@ async def tag_archive(
         page=page,
         per_page=per_page,
         published_only=True,
+        recursive=True,
     )
 
     total_pages = ceil(total / per_page)
-
-    # Load tags for each post
-    for post in posts:
-        await db.refresh(post, ["tags"])
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -616,12 +642,19 @@ async def tags_page(
     )
 
     # Filter by tag if provided
+    tag_obj = None
     if tag_slug:
-        tag_result = await db.execute(select(Tag).where(Tag.slug == tag_slug))
-        tag_obj = tag_result.scalar_one_or_none()
+        tag_service = TagService(db)
+        tag_obj = await tag_service.get_tag_by_slug(tag_slug)
 
         if tag_obj:
-            query = query.join(post_tags).where(post_tags.c.tag_id == tag_obj.id)
+            # Always include all children recursively to show a complete collection for any parent tag
+            tag_ids = await tag_service.get_descendant_tag_ids(tag_obj.id)
+            query = (
+                query.join(post_tags, Post.id == post_tags.c.post_id)
+                .where(post_tags.c.tag_id.in_(tag_ids))
+                .distinct()
+            )
 
     query = query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
 
@@ -635,11 +668,9 @@ async def tags_page(
     posts_result = await db.execute(query.offset(offset).limit(per_page))
     posts = list(posts_result.scalars().all())
 
-    # Get all tags with posts for filter
-    tags_result = await db.execute(
-        select(Tag).where(Tag.post_count > 0).order_by(Tag.name)
-    )
-    all_tags = list(tags_result.scalars().all())
+    # Get all tags with posts for filter (hierarchical)
+    tag_service = TagService(db)
+    all_tags = await tag_service.get_hierarchical_tags(include_empty=False)
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -702,7 +733,8 @@ async def tags_page(
             "page": page,
             "total_pages": total_pages,
             "total": total,
-            "tags": all_tags,
+            "tag_groups": all_tags,
+            "tag": tag_obj,
             "current_tag": tag_slug,
             "user": user,
         }
