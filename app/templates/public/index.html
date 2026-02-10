@@ -4,7 +4,6 @@
 
 {% block header_filters %}
 <div class="tags-filters">
-    <a href="/" class="filter-btn active" data-role="all">All</a>
     {% for t in tags %}
     <a href="/tag/{{ t.slug }}" class="filter-btn">{{ t.name }}</a>
     {% endfor %}
