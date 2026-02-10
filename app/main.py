@@ -168,7 +168,7 @@ media_path = Path(settings.storage_path) / "media"
 media_path.mkdir(parents=True, exist_ok=True)
 app.mount(
     "/media",
-    CachedStaticFiles(directory=str(media_path), max_age=604800),  # 7 days
+    CachedStaticFiles(directory=str(media_path.resolve()), max_age=604800),  # 7 days
     name="media",
 )
 
@@ -176,7 +176,7 @@ app.mount(
 static_path = Path(__file__).parent / "static"
 app.mount(
     "/static",
-    CachedStaticFiles(directory=str(static_path), max_age=86400),  # 1 day
+    CachedStaticFiles(directory=str(static_path.resolve()), max_age=86400),  # 1 day
     name="static",
 )
 
