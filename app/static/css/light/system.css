@@ -1,0 +1,223 @@
+/* ===========================
+   System Page Styles
+   =========================== */
+.system-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.system-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    padding: 24px;
+}
+
+.card-title {
+    margin-top: 0;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-primary);
+    font-size: 1.2em;
+}
+
+.stats-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.stat-value {
+    color: var(--text-primary);
+    font-family: monospace;
+}
+
+.ops-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.op-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.op-info h4 {
+    margin: 0 0 5px 0;
+}
+
+.op-info p {
+    margin: 0;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.logs-card {
+    padding: 0;
+}
+
+.logs-card .card-header {
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.logs-card .card-title {
+    margin: 0;
+    border: none;
+    padding: 0;
+}
+
+.log-viewer {
+    background: #000;
+    color: #0f0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    padding: 15px;
+    height: 400px;
+    overflow-y: scroll;
+    border-radius: 0 0 8px 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-line {
+    margin-bottom: 2px;
+}
+
+.log-line.empty,
+.log-line.error {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.log-line.error {
+    color: #ef4444;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.header-actions select {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--surface-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+}
+
+.header-actions select option {
+    background-color: var(--surface-input);
+    color: var(--text-primary);
+}
+
+/* Backup Management Styles */
+.backups-card {
+    padding: 0;
+    margin-bottom: var(--spacing-lg);
+}
+
+.backups-card .card-header {
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.backups-card .card-title {
+    margin: 0;
+    border: none;
+    padding: 0;
+}
+
+.backups-list {
+    padding: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.backup-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: var(--surface-input);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.backup-item:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.backup-item:last-child {
+    margin-bottom: 0;
+}
+
+.backup-info {
+    flex: 1;
+}
+
+.backup-filename {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.backup-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.backup-date::before {
+    content: '\1F4C5 ';
+}
+
+.backup-size::before {
+    content: '\1F4BE ';
+}
+
+.backup-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.loading,
+.empty-state,
+.error-state {
+    padding: 32px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.error-state {
+    color: #ef4444;
+}

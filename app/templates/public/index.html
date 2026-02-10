@@ -3,19 +3,7 @@
 {% block page_title %}Home{% endblock %}
 
 {% block header_filters %}
-<div class="tags-filters">
-    {% for t in tags %}
-    <a href="/tag/{{ t.slug }}" class="filter-btn">{{ t.name }}</a>
-    {% endfor %}
-    <a href="/tags" class="filter-btn" title="All Tags" data-role="more">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
-        </svg>
-    </a>
-</div>
+{% include "public/partials/header_tags.html" %}
 {% endblock %}
 
 {% block content %}
@@ -30,9 +18,17 @@
 
         {% if loop.first and post.is_featured %}
         <div class="featured-post">
-            <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}"
+            <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %} {% if user and post|post_has_hidden_posts_tag %}hidden-post{% endif %}"
                 onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
                 {% if user %}
+                {% if post|post_has_hidden_posts_tag %}
+                <div class="post-hidden-indicator" title="This post has hidden tags">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                </div>
+                {% endif %}
                 <a href="/light/posts/{{ post.id }}" class="post-card-edit-btn" title="Edit Post">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -119,9 +115,17 @@
             </article>
         </div>
         {% else %}
-        <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}"
+        <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %} {% if user and post|post_has_hidden_posts_tag %}hidden-post{% endif %}"
             onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
             {% if user %}
+            {% if post|post_has_hidden_posts_tag %}
+            <div class="post-hidden-indicator" title="This post has hidden tags">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            </div>
+            {% endif %}
             <a href="/light/posts/{{ post.id }}" class="post-card-edit-btn" title="Edit Post">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -318,6 +322,14 @@
                     const hasImage = post.has_image;
                     const isVideo = post.is_video;
 
+                    const hiddenIndicator = (data.is_logged_in && post.has_hidden_posts_tag) ? `
+                            <div class="post-hidden-indicator" title="This post has hidden tags">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                            </div>` : '';
+
                     const editBtn = data.is_logged_in ? `
                             <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -328,7 +340,8 @@
 
                     if (showFeatured) {
                         html += `<div class="featured-post">
-                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'} ${data.is_logged_in && post.has_hidden_posts_tag ? 'hidden-post' : ''}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                            ${hiddenIndicator}
                             ${editBtn}
                             ${hasImage ? `
                                 <div class="post-card-background">
@@ -379,7 +392,8 @@
                         </article>
                     </div>`;
                     } else {
-                        html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'} ${data.is_logged_in && post.has_hidden_posts_tag ? 'hidden-post' : ''}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        ${hiddenIndicator}
                         ${editBtn}
                         ${hasImage ? `
                             <div class="post-card-background">
@@ -445,11 +459,19 @@
 
                 paginationContainer.style.display = 'flex';
 
+                // Extract tag slug from current URL if present
+                let tagSlug = null;
+                const tagMatch = window.location.pathname.match(/^\/tag\/([^\/]+)/);
+                if (tagMatch) {
+                    tagSlug = tagMatch[1];
+                }
+
+                const basePath = tagSlug ? `/tag/${tagSlug}` : '/';
                 let html = '';
 
                 // Previous
                 if (pag.has_prev) {
-                    html += `<a href="/?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                    html += `<a href="${basePath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15 18l-6-6 6-6"/>
                 </svg>
@@ -467,7 +489,7 @@
                     if (p === pag.page) {
                         html += `<span class="pagination-link active">${p}</span>`;
                     } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                        html += `<a href="/?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+                        html += `<a href="${basePath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
                     } else if (p === pag.page - 2 || p === pag.page + 2) {
                         html += `<span class="pagination-ellipsis">&hellip;</span>`;
                     }
@@ -475,7 +497,7 @@
 
                 // Next
                 if (pag.has_next) {
-                    html += `<a href="/?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                    html += `<a href="${basePath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 18l6-6-6-6"/>
                 </svg>

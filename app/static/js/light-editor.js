@@ -121,19 +121,14 @@
             // Add indicator icon if not present
             if (!header.querySelector('.toggle-icon')) {
                 const icon = document.createElement('span');
-                icon.className = 'toggle-icon';
+                icon.className = 'toggle-icon ml-auto';
                 icon.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
-                icon.style.marginLeft = 'auto';
 
                 // If header has flex-between, append to it, otherwise make header flex
                 if (header.classList.contains('flex-between')) {
                     header.appendChild(icon);
                 } else {
-                    header.classList.add('flex-between');
-                    // Add flex styles if not present (handled by CSS class usually, but ensure it)
-                    header.style.display = 'flex';
-                    header.style.alignItems = 'center';
-                    header.style.justifyContent = 'space-between';
+                    header.classList.add('flex-between', 'visible-flex');
                     header.appendChild(icon);
                 }
             }
