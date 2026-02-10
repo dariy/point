@@ -167,6 +167,21 @@
     color: var(--color-primary);
 }
 
+.post-tag.hidden-posts-tag {
+    opacity: 0.7;
+}
+
+.post-tag .hidden-tag-icon {
+    display: inline-block;
+    margin-right: var(--spacing-xs);
+    vertical-align: middle;
+    opacity: 0.6;
+}
+
+.post-tag.hidden-posts-tag:hover .hidden-tag-icon {
+    opacity: 1;
+}
+
 /* Post Navigation */
 .post-navigation {
     display: grid;
