@@ -24,7 +24,7 @@
 
             // Handle form data
             for (const [key, value] of formData.entries()) {
-                if (['posts_per_page', 'max_image_width', 'jpeg_quality', 'storage_quota_mb', 'about_post_id'].includes(key)) {
+                if (['posts_per_page', 'max_image_width', 'jpeg_quality', 'storage_quota_mb', 'about_post_id', 'thumbnail_width', 'thumbnail_height'].includes(key)) {
                     // Parse as integer, but only if value is not empty
                     settings[key] = value ? parseInt(value, 10) : null;
                 } else {
@@ -35,6 +35,7 @@
             // Handle checkboxes (not in FormData if unchecked)
             settings['show_view_counts'] = form.querySelector('input[name="show_view_counts"]').checked;
             settings['enable_analytics'] = form.querySelector('input[name="enable_analytics"]').checked;
+            settings['use_thumbnails'] = form.querySelector('input[name="use_thumbnails"]').checked;
 
             try {
                 const response = await fetch('/api/settings', {

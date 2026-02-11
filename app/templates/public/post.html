@@ -15,8 +15,10 @@ endblock %}
 <meta property="og:url" content="{{ request.url }}" />
 <meta property="og:locale" content="en_US" />
 {% if post.thumbnail_path %}
+{% set og_image = post.thumbnail_path if post.thumbnail_path.startswith('http') or post.thumbnail_path.startswith('/') else '/media/originals/' + post.thumbnail_path %}
+{% set og_image = og_image.replace('/thumbnails/', '/originals/') %}
 <meta property="og:image"
-    content="{{ request.url.scheme }}://{{ request.url.netloc }}/media/originals/{{ post.thumbnail_path }}" />
+    content="{{ request.url.scheme }}://{{ request.url.netloc }}{{ og_image }}" />
 <meta property="og:image:alt" content="{{ post.title }}" />
 {% endif %}
 <meta property="article:published_time"
@@ -165,7 +167,8 @@ endblock %}
             alt="{{ post.title }}" class="immersive-bg-image" />
         {% endif %}
         {% elif post.thumbnail_path %}
-        <img src="{{ post.thumbnail_path if post.thumbnail_path.startswith('http') or post.thumbnail_path.startswith('/') else '/media/originals/' + post.thumbnail_path }}"
+        {% set resolved_post_thumb = post.thumbnail_path if post.thumbnail_path.startswith('http') or post.thumbnail_path.startswith('/') else '/media/originals/' + post.thumbnail_path %}
+        <img src="{{ resolved_post_thumb.replace('/thumbnails/', '/originals/') }}"
             alt="{{ post.title }}" class="immersive-bg-image" />
         {% endif %}
     </div>

@@ -70,6 +70,13 @@
 
         <div class="form-section">
             <h3 class="section-title">Media & Performance</h3>
+            <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="use_thumbnails" {% if blog_settings.use_thumbnails %}checked{%
+                        endif %}>
+                    Use thumbnails for post listings
+                </label>
+            </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="max_image_width">Max Image Width (px)</label>
@@ -81,6 +88,18 @@
                     <label for="jpeg_quality">JPEG Quality (1-100)</label>
                     <input type="number" id="jpeg_quality" name="jpeg_quality" value="{{ blog_settings.jpeg_quality }}"
                         min="1" max="100">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="thumbnail_width">Thumbnail Width (px)</label>
+                    <input type="number" id="thumbnail_width" name="thumbnail_width"
+                        value="{{ blog_settings.thumbnail_width }}" min="50" max="2000">
+                </div>
+                <div class="form-group">
+                    <label for="thumbnail_height">Thumbnail Height (px)</label>
+                    <input type="number" id="thumbnail_height" name="thumbnail_height"
+                        value="{{ blog_settings.thumbnail_height }}" min="50" max="2000">
                 </div>
             </div>
             <div class="form-group">
