@@ -89,6 +89,13 @@ class SystemService:
         backup_count = len(backups)
         last_backup_at = backups[0]["created_at"] if backups else None
 
+        # Settings
+        from app.services.settings_service import SettingsService
+        settings_service = SettingsService(self.db)
+        thumbnail_width = await settings_service.get_setting("thumbnail_width")
+        thumbnail_height = await settings_service.get_setting("thumbnail_height")
+        use_thumbnails = await settings_service.get_setting("use_thumbnails")
+
         return {
             "app_version": self.settings.app_version,
             "database_size_kb": db_size_kb,
@@ -101,6 +108,9 @@ class SystemService:
             "cache_size_kb": cache_size_kb,
             "backup_count": backup_count,
             "last_backup_at": last_backup_at,
+            "thumbnail_width": thumbnail_width,
+            "thumbnail_height": thumbnail_height,
+            "use_thumbnails": use_thumbnails,
         }
 
     def get_logs(self, log_type: str = "app", lines: int = 100) -> list[str]:

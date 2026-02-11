@@ -537,12 +537,19 @@ def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
 
     return "".join(clean_paragraphs)
 
-def determine_thumbnail(content: str, thumbnail_path: str | None) -> tuple[str | None, bool]:
+def determine_thumbnail(
+    content: str, 
+    thumbnail_path: str | None, 
+    storage_path: str | None = None,
+    use_thumbnails: bool = True
+) -> tuple[str | None, bool]:
     """Determine the thumbnail path and type for a post content.
 
     Args:
         content: Post content (markdown or html)
         thumbnail_path: Explicit thumbnail path (or None)
+        storage_path: Optional storage path to check for file existence
+        use_thumbnails: Whether to prefer thumbnails over originals
 
     Returns:
         Tuple of (thumbnail_path, is_video)
@@ -558,6 +565,28 @@ def determine_thumbnail(content: str, thumbnail_path: str | None) -> tuple[str |
 
     if thumb_path:
         is_video_thumb = is_video_url(thumb_path)
+
+    # If use_thumbnails is False, force fallback to original if it's a thumbnail
+    if not use_thumbnails and thumb_path and "/media/thumbnails/" in thumb_path:
+        thumb_path = thumb_path.replace("/thumbnails/", "/originals/")
+        is_video_thumb = is_video_url(thumb_path)
+
+    # If we have a thumbnail path, check if it exists if storage_path is provided
+    if use_thumbnails and thumb_path and storage_path and "/media/thumbnails/" in thumb_path:
+        from pathlib import Path
+        rel_path = thumb_path.split("/media/", 1)[1]
+        full_path = Path(storage_path) / "media" / rel_path
+        if not full_path.exists():
+            # Fallback to original
+            original_path = thumb_path.replace("/thumbnails/", "/originals/")
+            rel_original = original_path.split("/media/", 1)[1]
+            full_original = Path(storage_path) / "media" / rel_original
+            if full_original.exists():
+                thumb_path = original_path
+                is_video_thumb = is_video_url(thumb_path)
+            else:
+                # If original also missing, set to None so we search content
+                thumb_path = None
 
     # If we have no thumb or it's a video, try to find an image in content
     if not thumb_path or is_video_thumb:
