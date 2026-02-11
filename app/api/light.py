@@ -181,6 +181,7 @@ async def posts_list(
     user: User | None = Depends(get_current_user),
     page: int = 1,
     status_filter: str | None = None,
+    search: str | None = None,
 ) -> Response:
     """Render posts list page.
 
@@ -190,6 +191,7 @@ async def posts_list(
         user: Current user
         page: Page number
         status_filter: Optional status filter
+        search: Optional search query
 
     Returns:
         Posts list page HTML
@@ -211,6 +213,7 @@ async def posts_list(
         per_page=per_page,
         status=status_enum,
         include_drafts=True,
+        search=search,
     )
 
     total_pages = (total + per_page - 1) // per_page
@@ -223,6 +226,7 @@ async def posts_list(
             "total_pages": total_pages,
             "total": total,
             "status_filter": status_filter,
+            "search_query": search,
             "statuses": [s.value for s in PostStatus],
         }
     )
