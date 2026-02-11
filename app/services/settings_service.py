@@ -30,7 +30,7 @@ class SettingsService:
         self.db = db
         self.app_settings = get_settings()
 
-    def _convert_to_type(self, value: str, value_type: str) -> Any:
+    def _convert_to_type(self, value: str | None, value_type: str) -> Any:
         """Convert string value from database to target type.
 
         Args:
@@ -40,7 +40,7 @@ class SettingsService:
         Returns:
             Converted value
         """
-        if value is None:
+        if value is None or value == "None":
             return None
 
         try:
@@ -56,7 +56,7 @@ class SettingsService:
             logger.error("Failed to convert setting value '%s' to %s: %s", value, value_type, e)
             return value
 
-    def _convert_from_type(self, value: Any) -> tuple[str, str]:
+    def _convert_from_type(self, value: Any) -> tuple[str | None, str]:
         """Convert value to string for database storage.
 
         Args:
@@ -65,6 +65,8 @@ class SettingsService:
         Returns:
             Tuple of (string_value, value_type)
         """
+        if value is None:
+            return None, "string"
         if isinstance(value, bool):
             return "true" if value else "false", "bool"
         if isinstance(value, int):

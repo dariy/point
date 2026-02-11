@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     show_view_counts: bool = Field(
         default=True, description="Show view counts on posts"
     )
+    about_post_id: int | None = Field(
+        default=None, description="ID of the post to use for the About page link"
+    )
 
     # Backup
     backup_enabled: bool = Field(default=True, description="Enable backups")
