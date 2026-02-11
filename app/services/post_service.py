@@ -258,6 +258,7 @@ class PostService:
         featured_only: bool = False,
         include_drafts: bool = False,
         public_only: bool = False,
+        search: str | None = None,
     ) -> tuple[list[Post], int]:
         """List posts with pagination and filters.
 
@@ -269,6 +270,7 @@ class PostService:
             featured_only: Only featured posts
             include_drafts: Include draft posts
             public_only: Exclude posts with hidden tags
+            search: Optional search query for title
 
         Returns:
             Tuple of (posts, total_count)
@@ -286,6 +288,9 @@ class PostService:
 
         if featured_only:
             query = query.where(Post.is_featured.is_(True))
+
+        if search:
+            query = query.where(Post.title.ilike(f"%{search}%"))
 
         # Add public_only logic
         if public_only:

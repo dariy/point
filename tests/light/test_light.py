@@ -389,6 +389,38 @@ class TestPostsList:
         # (Unless shown in sidebar, but typically not on filtered page)
 
     @pytest.mark.asyncio
+    async def test_posts_list_with_search_filter(
+        self, client: AsyncClient, db: AsyncSession, auth_cookies: dict, test_user: dict
+    ) -> None:
+        """Test posts list with search filter."""
+        assert test_user is not None
+        user = test_user["user"]
+
+        p1 = Post(
+            title="Apple Post",
+            slug="apple-post",
+            content="content",
+            status=PostStatus.PUBLISHED,
+            author_id=user.id,
+            formatter=PostFormatter.MARKDOWN
+        )
+        p2 = Post(
+            title="Banana Post",
+            slug="banana-post",
+            content="content",
+            status=PostStatus.PUBLISHED,
+            author_id=user.id,
+            formatter=PostFormatter.MARKDOWN
+        )
+        db.add_all([p1, p2])
+        await db.commit()
+
+        response = await client.get("/light/posts?search=Apple", cookies=auth_cookies)
+        assert response.status_code == 200
+        assert "Apple Post" in response.text
+        assert "Banana Post" not in response.text
+
+    @pytest.mark.asyncio
     async def test_posts_list_with_invalid_status_filter(
         self, client: AsyncClient, auth_cookies: dict
     ) -> None:
