@@ -95,14 +95,15 @@
         <div class="card-header">
             <h3 class="card-title">System Logs</h3>
             <div class="header-actions">
-                <select id="log-type">
+                <select id="log-type" style="display: none;">
                     <option value="app">App Log</option>
                     <option value="error">Error Log</option>
                 </select>
-                <button class="btn btn-sm" data-action="refresh-logs">Refresh</button>
+                <button class="btn btn-sm" data-action="refresh-logs" style="display: none;">Refresh</button>
+                <button class="btn btn-sm btn-outline" data-action="toggle-logs">Show Logs</button>
             </div>
         </div>
-        <div class="log-viewer" id="log-content">
+        <div class="log-viewer" id="log-content" style="display: none;">
             {% for line in logs %}
             <div class="log-line">{{ line }}</div>
             {% else %}

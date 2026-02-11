@@ -187,6 +187,33 @@
         }
     };
 
+    /**
+     * Toggle system logs visibility
+     */
+    const toggleLogs = function (btn) {
+        const logContent = document.getElementById('log-content');
+        const logTypeSelect = document.getElementById('log-type');
+        const refreshBtn = document.querySelector('[data-action="refresh-logs"]');
+
+        if (!logContent) return;
+
+        const isHidden = logContent.style.display === 'none';
+
+        if (isHidden) {
+            logContent.style.display = 'block';
+            if (logTypeSelect) logTypeSelect.style.display = 'inline-block';
+            if (refreshBtn) refreshBtn.style.display = 'inline-block';
+            btn.textContent = 'Hide Logs';
+            // Scroll to bottom when shown
+            logContent.scrollTop = logContent.scrollHeight;
+        } else {
+            logContent.style.display = 'none';
+            if (logTypeSelect) logTypeSelect.style.display = 'none';
+            if (refreshBtn) refreshBtn.style.display = 'none';
+            btn.textContent = 'Show Logs';
+        }
+    };
+
     // ===========================
     // Backup Management
     // ===========================
@@ -404,6 +431,9 @@
                     break;
                 case 'refresh-logs':
                     refreshLogs();
+                    break;
+                case 'toggle-logs':
+                    toggleLogs(actionBtn);
                     break;
             }
         });
