@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import public
 from app.api.public import serialize_post
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.models.post import Post, PostFormatter, PostStatus
 from app.models.settings import BlogSettings
 from app.models.tag import Tag
@@ -40,7 +40,7 @@ async def sample_tag(db: AsyncSession) -> Tag:
     await db.refresh(tag)
     return tag
 @pytest.fixture
-async def published_post(db: AsyncSession, sample_tag: Tag, test_user) -> Post:
+async def published_post(db: AsyncSession, sample_tag: Tag, test_user: User) -> Post:
     """Create a published post for testing.
     Args:
         db: Database session
@@ -668,10 +668,10 @@ class TestTheming:
         assert response.status_code == 200
         assert 'class="theme-toggle"' in response.text
 @pytest.fixture
-def settings():
+def settings() -> Settings:
     return get_settings()
 @pytest.mark.asyncio
-async def test_homepage_cache(client: AsyncClient, db: AsyncSession, settings):
+async def test_homepage_cache(client: AsyncClient, db: AsyncSession, settings: Settings) -> None:
     """Test homepage cache hit."""
     # Ensure cache is enabled for this test
     original_cache_enabled = settings.cache_enabled
@@ -686,7 +686,7 @@ async def test_homepage_cache(client: AsyncClient, db: AsyncSession, settings):
     finally:
         settings.cache_enabled = original_cache_enabled
 @pytest.mark.asyncio
-async def test_homepage_ajax_json(client: AsyncClient, db: AsyncSession):
+async def test_homepage_ajax_json(client: AsyncClient, db: AsyncSession) -> None:
     """Test homepage AJAX request returns JSON."""
     resp = await client.get("/", headers={"X-Requested-With": "XMLHttpRequest"})
     assert resp.status_code == 200
@@ -694,7 +694,7 @@ async def test_homepage_ajax_json(client: AsyncClient, db: AsyncSession):
     assert "posts" in data
     assert "pagination" in data
 @pytest.mark.asyncio
-async def test_single_post_ajax(client: AsyncClient, db: AsyncSession, test_user):
+async def test_single_post_ajax(client: AsyncClient, db: AsyncSession, test_user: User) -> None:
     """Test single post AJAX request."""
     post = Post(title="Ajax Post", slug="ajax-post", content="Content", status=PostStatus.PUBLISHED, author_id=1, published_at=datetime.now(UTC))
     db.add(post)
