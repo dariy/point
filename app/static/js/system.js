@@ -163,6 +163,44 @@
     };
 
     /**
+     * Rebuild image thumbnails
+     */
+    const rebuildThumbnails = async function (onlyMissing) {
+        const title = onlyMissing ? 'Rebuild Missing Thumbnails' : 'Rebuild All Thumbnails';
+        const message = onlyMissing 
+            ? 'This will generate thumbnails for all images that currently don\'t have one. This may take some time.'
+            : 'This will REGENERATE thumbnails for ALL images, overwriting existing ones. This may take a significant amount of time.';
+        
+        const confirmed = await showConfirm(
+            title,
+            message,
+            'Start Process',
+            !onlyMissing
+        );
+        if (!confirmed) return;
+
+        try {
+            showProgress('Rebuilding thumbnails...');
+            const response = await fetch(`/api/media/thumbnails/rebuild?only_missing=${onlyMissing}`, { 
+                method: 'POST' 
+            });
+            const data = await response.json();
+            hideProgress();
+            
+            if (response.ok) {
+                const stats = data.stats;
+                await showAlert('Success', `Thumbnail rebuild complete!\n\nTotal images: ${stats.total}\nProcessed: ${stats.processed}\nUpdated: ${stats.updated}\nPosts updated: ${stats.posts_updated}\nFailed: ${stats.failed}`);
+                location.reload();
+            } else {
+                await showAlert('Error', data.detail);
+            }
+        } catch (error) {
+            hideProgress();
+            await showAlert('Error', error.message);
+        }
+    };
+
+    /**
      * Refresh system logs
      */
     const refreshLogs = async function () {
@@ -426,6 +464,9 @@
                 case 'cleanup-orphaned':
                     cleanupOrphaned();
                     break;
+                case 'rebuild-thumbnails':
+                    rebuildThumbnails(actionBtn.dataset.onlyMissing === 'true');
+                    break;
                 case 'refresh-backups':
                     refreshBackups();
                     break;
@@ -434,6 +475,59 @@
                     break;
                 case 'toggle-logs':
                     toggleLogs(actionBtn);
+                    break;
+                case 'toggle-thumbnails':
+                    const useThumbnails = actionBtn.checked;
+                    const controls = document.getElementById('thumbnail-controls');
+                    
+                    if (controls) {
+                        if (useThumbnails) {
+                            controls.style.opacity = '1';
+                            controls.style.pointerEvents = 'auto';
+                        } else {
+                            controls.style.opacity = '0.5';
+                            controls.style.pointerEvents = 'none';
+                        }
+                    }
+                    
+                    fetch('/api/settings', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            settings: {
+                                use_thumbnails: useThumbnails
+                            }
+                        })
+                    }).then(res => {
+                        if (res.ok) {
+                            if (window.LightUtils && window.LightUtils.showToast) {
+                                window.LightUtils.showToast('Thumbnail setting updated!', 'success');
+                            }
+                        } else {
+                            showAlert('Error', 'Failed to update setting');
+                        }
+                    });
+                    break;
+                case 'save-thumbnail-settings':
+                    const width = document.getElementById('system_thumbnail_width').value;
+                    const height = document.getElementById('system_thumbnail_height').value;
+                    
+                    fetch('/api/settings', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            settings: {
+                                thumbnail_width: parseInt(width),
+                                thumbnail_height: parseInt(height)
+                            }
+                        })
+                    }).then(res => {
+                        if (res.ok) {
+                            showAlert('Success', 'Thumbnail dimensions saved!');
+                        } else {
+                            showAlert('Error', 'Failed to save settings');
+                        }
+                    });
                     break;
             }
         });
