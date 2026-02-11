@@ -11,7 +11,7 @@ from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_single_post_first_has_no_previous(client: AsyncClient, db: AsyncSession):
+async def test_single_post_first_has_no_previous(client: AsyncClient, db: AsyncSession) -> None:
     """Test that first chronological post has no previous post."""
     user = User(username="navuser", email="nav@test.com", password_hash="hash", display_name="Nav")
     db.add(user)
@@ -40,7 +40,7 @@ async def test_single_post_first_has_no_previous(client: AsyncClient, db: AsyncS
 
 
 @pytest.mark.asyncio
-async def test_single_post_last_has_no_next(client: AsyncClient, db: AsyncSession):
+async def test_single_post_last_has_no_next(client: AsyncClient, db: AsyncSession) -> None:
     """Test that last chronological post has no next post."""
     user = User(username="navuser2", email="nav2@test.com", password_hash="hash", display_name="Nav2")
     db.add(user)
