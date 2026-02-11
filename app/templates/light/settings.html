@@ -28,9 +28,9 @@
             <div class="form-group">
                 <label for="about_post_id">About Post</label>
                 <select id="about_post_id" name="about_post_id">
-                    <option value="">-- None --</option>
+                    <option value="" {% if not blog_settings.about_post_id %}selected{% endif %}>-- None --</option>
                     {% for post in all_posts %}
-                    <option value="{{ post.id }}" {% if blog_settings.about_post_id==post.id %}selected{% endif %}>{{
+                    <option value="{{ post.id }}" {% if blog_settings.about_post_id|string == post.id|string %}selected{% endif %}>{{
                         post.title }}</option>
                     {% endfor %}
                 </select>
