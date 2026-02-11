@@ -55,7 +55,9 @@
         </div>
 
         <div class="tree-tag-meta">
-            <span class="tag-count">{{ node.tag.post_count }}</span>
+            <a href="/light/posts?tag_id={{ node.tag.id }}" class="tag-count-link" title="View posts with this tag">
+                <span class="tag-count">{{ node.tag.post_count }}</span>
+            </a>
             <div class="flex gap-1">
                 {% if node.tag.is_important %}
                 <span class="text-warning" title="Important">★</span>
@@ -221,7 +223,9 @@
                             </a>
                         </td>
                         <td>
-                            <span class="tag-count">{{ tag.post_count }}</span>
+                            <a href="/light/posts?tag_id={{ tag.id }}" class="tag-count-link" title="View posts with this tag">
+                                <span class="tag-count">{{ tag.post_count }}</span>
+                            </a>
                         </td>
                         <td>
                             <button id="toggle-important-{{ tag.id }}" type="button" class="btn btn-sm btn-ghost"
