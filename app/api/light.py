@@ -380,6 +380,7 @@ async def tags_page(
         search=search, parent_id=pid, sort_by=sort_by, sort_order=sort_order
     )
     all_tags = await tag_service.list_tags()
+    hierarchy = await tag_service.get_hierarchical_tags(search=search)
     # For filter dropdown, we want tags that ARЕ parents
     parent_tags = [t for t in all_tags if len(t.children) > 0]
     total = len(tags)
@@ -390,6 +391,7 @@ async def tags_page(
     context.update(
         {
             "tags": tags,
+            "hierarchy": hierarchy,
             "page": page,
             "total_pages": total_pages,
             "total": total,
