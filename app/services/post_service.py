@@ -259,6 +259,7 @@ class PostService:
         include_drafts: bool = False,
         public_only: bool = False,
         search: str | None = None,
+        tag_id: int | None = None,
     ) -> tuple[list[Post], int]:
         """List posts with pagination and filters.
 
@@ -271,6 +272,7 @@ class PostService:
             include_drafts: Include draft posts
             public_only: Exclude posts with hidden tags
             search: Optional search query for title
+            tag_id: Optional tag ID to filter by
 
         Returns:
             Tuple of (posts, total_count)
@@ -285,6 +287,9 @@ class PostService:
 
         if author_id:
             query = query.where(Post.author_id == author_id)
+
+        if tag_id:
+            query = query.join(post_tags).where(post_tags.c.tag_id == tag_id)
 
         if featured_only:
             query = query.where(Post.is_featured.is_(True))
