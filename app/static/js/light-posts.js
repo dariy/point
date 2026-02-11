@@ -11,6 +11,7 @@
      */
     const applyFilters = function () {
         const status = document.querySelector('[data-action="filter-status"]').value;
+        const tag = document.querySelector('[data-action="filter-tag"]').value;
         const search = document.getElementById('search-posts').value;
         
         const url = new URL(window.location);
@@ -19,6 +20,12 @@
             url.searchParams.set('status_filter', status);
         } else {
             url.searchParams.delete('status_filter');
+        }
+
+        if (tag) {
+            url.searchParams.set('tag_id', tag);
+        } else {
+            url.searchParams.delete('tag_id');
         }
         
         if (search) {
@@ -35,6 +42,11 @@
     const statusFilter = document.querySelector('[data-action="filter-status"]');
     if (statusFilter) {
         statusFilter.addEventListener('change', applyFilters);
+    }
+
+    const tagFilter = document.querySelector('[data-action="filter-tag"]');
+    if (tagFilter) {
+        tagFilter.addEventListener('change', applyFilters);
     }
 
     const searchInput = document.getElementById('search-posts');

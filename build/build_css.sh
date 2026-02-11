@@ -34,6 +34,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/light/editor.css \
     "$CSS_DIR"/light/filters.css \
     "$CSS_DIR"/light/system.css \
+    "$CSS_DIR"/light/settings.css \
     "$CSS_DIR"/light/responsive.css \
     > "$CSS_DIR"/light.css
 

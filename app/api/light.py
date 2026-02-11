@@ -182,6 +182,7 @@ async def posts_list(
     page: int = 1,
     status_filter: str | None = None,
     search: str | None = None,
+    tag_id: int | None = None,
 ) -> Response:
     """Render posts list page.
 
@@ -192,6 +193,7 @@ async def posts_list(
         page: Page number
         status_filter: Optional status filter
         search: Optional search query
+        tag_id: Optional tag ID filter
 
     Returns:
         Posts list page HTML
@@ -208,14 +210,18 @@ async def posts_list(
             status_enum = PostStatus(status_filter)
 
     post_service = PostService(db)
+    tag_service = TagService(db)
+    
     posts, total = await post_service.list_posts(
         page=page,
         per_page=per_page,
         status=status_enum,
         include_drafts=True,
         search=search,
+        tag_id=tag_id,
     )
 
+    all_tags = await tag_service.list_tags()
     total_pages = (total + per_page - 1) // per_page
 
     context = await get_base_context(db, request, user)
@@ -227,6 +233,8 @@ async def posts_list(
             "total": total,
             "status_filter": status_filter,
             "search_query": search,
+            "tag_id": tag_id,
+            "all_tags": all_tags,
             "statuses": [s.value for s in PostStatus],
         }
     )
