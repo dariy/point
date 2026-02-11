@@ -11,6 +11,13 @@
 
     if (!modal || !form) return;
 
+    // Restore view preference
+    const savedView = localStorage.getItem('tags-view-preference');
+    if (savedView && savedView !== 'list') {
+        const tabLink = document.querySelector(`.tab-link[data-tab="${savedView}"]`);
+        if (tabLink) tabLink.click();
+    }
+
     // Use LightUtils.Modal if available
     const modalInstance = (window.LightUtils && window.LightUtils.Modal)
         ? new window.LightUtils.Modal(modal)
@@ -299,6 +306,36 @@
 
     // Event Delegation
     document.addEventListener('click', function (e) {
+        // Tab switching
+        const tabLink = e.target.closest('.tab-link');
+        if (tabLink) {
+            const tabName = tabLink.dataset.tab;
+            
+            // Update active tab link
+            document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+            tabLink.classList.add('active');
+            
+            // Update active tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`${tabName}-view`).classList.add('active');
+            
+            // Store preference
+            localStorage.setItem('tags-view-preference', tabName);
+            return;
+        }
+
+        // Tree node toggling
+        const treeToggle = e.target.closest('[data-action="toggle-tree-node"]');
+        if (treeToggle) {
+            const node = treeToggle.closest('.tree-node');
+            const children = node.querySelector('.tree-children');
+            if (children) {
+                const isExpanded = children.classList.toggle('expanded');
+                treeToggle.classList.toggle('expanded', isExpanded);
+            }
+            return;
+        }
+
         // New Tag
         if (e.target.closest('[data-action="new-tag"]')) {
             e.preventDefault();
