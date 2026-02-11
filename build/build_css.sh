@@ -30,6 +30,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/light/tables.css \
     "$CSS_DIR"/light/media.css \
     "$CSS_DIR"/light/tags.css \
+    "$CSS_DIR"/light/tree-view.css \
     "$CSS_DIR"/light/editor.css \
     "$CSS_DIR"/light/filters.css \
     "$CSS_DIR"/light/system.css \
