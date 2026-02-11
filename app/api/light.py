@@ -273,11 +273,13 @@ async def new_post(
     # If media was pre-uploaded via drag-drop, prepare initial content
     initial_content = ""
     initial_thumbnail = None
-    if media_id and media_path:
-        # Create markdown image reference
-        # Note: media_path already includes 'originals/' prefix
-        initial_content = f"![](/media/{media_path})"
-        initial_thumbnail = f"/media/{media_path}"
+    if media_id:
+        media_service = MediaService(db)
+        media = await media_service.get_media_by_id(media_id)
+        if media:
+            # Create markdown image reference
+            initial_content = f"![]({media_service.get_media_url(media)})"
+            initial_thumbnail = media_service.get_thumbnail_url(media) or media_service.get_media_url(media)
 
 
 

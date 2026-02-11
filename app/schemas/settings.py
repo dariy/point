@@ -39,3 +39,6 @@ class SystemStats(BaseModel):
     cache_size_kb: int
     backup_count: int
     last_backup_at: datetime | None = None
+    thumbnail_width: int
+    thumbnail_height: int
+    use_thumbnails: bool

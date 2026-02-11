@@ -470,3 +470,33 @@ async def delete_media(
         "deleted_count": 1,
         "freed_bytes": freed_bytes,
     }
+
+
+@router.post(
+    "/thumbnails/rebuild",
+    summary="Rebuild thumbnails",
+)
+async def rebuild_thumbnails(
+    only_missing: bool = Query(default=True, description="Only rebuild missing thumbnails"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_auth),
+) -> Any:
+    """Rebuild thumbnails for all image media.
+
+    Requires authentication.
+    """
+    service = MediaService(db)
+    stats = await service.rebuild_thumbnails(only_missing=only_missing)
+
+    # Also update posts to use new thumbnails
+    from app.services.post_service import PostService
+    post_service = PostService(db)
+    posts_updated = await post_service.update_all_post_thumbnails()
+    stats["posts_updated"] = posts_updated
+
+    await db.commit()
+
+    return {
+        "message": f"Thumbnail rebuild complete. Processed {stats['processed']} images. Updated {posts_updated} posts.",
+        "stats": stats,
+    }
