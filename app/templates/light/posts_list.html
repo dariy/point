@@ -76,10 +76,20 @@
                 {% for post in posts %}
                 <tr>
                     <td>
-                        <a href="/light/posts/{{ post.id }}" class="post-title">
-                            {{ post.title }}
-                        </a>
-                        <div class="text-muted text-small">/{{ post.slug }}</div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            {% if post.is_affected_by_hidden_tag %}
+                            {% set hiding_tags = post.hidden_tags_affecting | map(attribute='name') | list | join(', ') %}
+                            <span class="text-danger" title="Hidden by: {{ hiding_tags }}">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/>
+                                </svg>
+                            </span>
+                            {% endif %}
+                            <a href="/light/posts/{{ post.id }}" class="post-title">
+                                {{ post.title }}
+                            </a>
+                        </div>
+                        <div class="text-muted text-small" style="margin-left: {% if post.is_affected_by_hidden_tag %}24px{% else %}0{% endif %};">/{{ post.slug }}</div>
                     </td>
                     <td>
                         <span class="badge badge-{{ post.status.value }}">
