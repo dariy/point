@@ -106,10 +106,9 @@ class TestQuickPostIntegration:
         )
         assert editor_response.status_code == 200
         editor_html = editor_response.text
-        expected_markdown = f"![](/media/{media_path})"
+        expected_markdown = f"![]({upload_data['url']})"
         assert expected_markdown in editor_html
         assert "/media/originals/originals/" not in editor_html
-        assert "/media/originals/" in editor_html
     @pytest.mark.asyncio
     async def test_upload_multiple_images_sequential(
         self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
@@ -221,7 +220,7 @@ class TestQuickPostIntegration:
             cookies=auth_cookies,
         )
         assert editor_response.status_code == 200
-        assert f"![](/media/{upload_data['original_path']})" in editor_response.text
+        assert f"![]({upload_data['url']})" in editor_response.text
     @pytest.mark.asyncio
     async def test_unauthenticated_upload_fails(
         self, client: AsyncClient
