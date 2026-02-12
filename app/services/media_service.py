@@ -3,6 +3,7 @@
 Handles file upload, processing, storage, and cleanup operations.
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -30,6 +31,8 @@ from app.utils.validators import (
     validate_mime_type,
     validate_storage_quota,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MediaService:

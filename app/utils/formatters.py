@@ -538,8 +538,8 @@ def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
     return "".join(clean_paragraphs)
 
 def determine_thumbnail(
-    content: str, 
-    thumbnail_path: str | None, 
+    content: str,
+    thumbnail_path: str | None,
     storage_path: str | None = None,
     use_thumbnails: bool = True
 ) -> tuple[str | None, bool]:
