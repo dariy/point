@@ -111,6 +111,12 @@
 
         <div class="form-section">
             <h3 class="section-title">Advanced</h3>
+            <div class="form-group">
+                <label for="genai_api_endpoint">GenAI API Endpoint</label>
+                <input type="url" id="genai_api_endpoint" name="genai_api_endpoint"
+                    value="{{ blog_settings.genai_api_endpoint }}" placeholder="http://localhost:8082/">
+                <p class="form-help">Endpoint for AI image analysis (returns title and tags).</p>
+            </div>
             <div class="form-group checkbox-group">
                 <label class="checkbox-label">
                     <input type="checkbox" name="enable_analytics" {% if blog_settings.enable_analytics %}checked{%
