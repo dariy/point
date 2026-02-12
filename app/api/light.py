@@ -280,7 +280,7 @@ async def new_post(
             # Create markdown image reference
             initial_content = f"![]({media_service.get_media_url(media)})"
             initial_thumbnail = media_service.get_thumbnail_url(media) or media_service.get_media_url(media)
-    
+
     # Fallback to media_path if provided (used in tests and legacy links)
     if not initial_content and media_path:
         # Note: media_path usually includes 'originals/' or 'thumbnails/'
