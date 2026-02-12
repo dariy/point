@@ -117,7 +117,7 @@ class SettingsService:
             "posts_per_page", "default_language", "default_theme",
             "show_view_counts", "enable_analytics", "google_analytics_id",
             "max_image_width", "jpeg_quality", "storage_quota_mb", "about_post_id",
-            "thumbnail_width", "thumbnail_height", "use_thumbnails"
+            "thumbnail_width", "thumbnail_height", "use_thumbnails", "genai_api_endpoint"
         ]
 
         settings = {}
