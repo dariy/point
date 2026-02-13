@@ -98,6 +98,33 @@ class PostService:
         result = await self.db.execute(query)
         return {row[0] for row in result.all()}
 
+    async def _resolve_thumbnail_path(self, path: str | None) -> str | None:
+        """Resolve a thumbnail path for a given image path.
+
+        If path is an original media path, try to find its thumbnail in Media table.
+        """
+        if not path:
+            return None
+
+        # If it's already a thumbnail path, keep it
+        if "/thumbnails/" in path:
+            return path
+
+        # If it's a media path, check if we have a thumbnail for it
+        if "/media/originals/" in path:
+            parts = path.split("/media/", 1)
+            if len(parts) > 1:
+                rel_path = parts[1]
+                from app.models.media import Media
+                result = await self.db.execute(
+                    select(Media).where(Media.original_path == rel_path)
+                )
+                media = result.scalar_one_or_none()
+                if media and media.thumbnail_path:
+                    return f"/media/{media.thumbnail_path}"
+
+        return path
+
     async def _generate_unique_slug(
         self, title: str, exclude_id: int | None = None
     ) -> str:
@@ -160,7 +187,8 @@ class PostService:
             excerpt = generate_excerpt(post_data.content, post_data.formatter.value)
 
         # Extract thumbnail from content
-        thumbnail_path = extract_first_image(post_data.content)
+        raw_thumbnail = extract_first_image(post_data.content)
+        thumbnail_path = await self._resolve_thumbnail_path(raw_thumbnail)
 
         post = Post(
             title=post_data.title,
@@ -258,6 +286,8 @@ class PostService:
         featured_only: bool = False,
         include_drafts: bool = False,
         public_only: bool = False,
+        search: str | None = None,
+        tag_id: int | None = None,
     ) -> tuple[list[Post], int]:
         """List posts with pagination and filters.
 
@@ -269,6 +299,8 @@ class PostService:
             featured_only: Only featured posts
             include_drafts: Include draft posts
             public_only: Exclude posts with hidden tags
+            search: Optional search query for title
+            tag_id: Optional tag ID to filter by
 
         Returns:
             Tuple of (posts, total_count)
@@ -284,8 +316,14 @@ class PostService:
         if author_id:
             query = query.where(Post.author_id == author_id)
 
+        if tag_id:
+            query = query.join(post_tags).where(post_tags.c.tag_id == tag_id)
+
         if featured_only:
             query = query.where(Post.is_featured.is_(True))
+
+        if search:
+            query = query.where(Post.title.ilike(f"%{search}%"))
 
         # Add public_only logic
         if public_only:
@@ -385,7 +423,8 @@ class PostService:
                 post.excerpt = generate_excerpt(post.content, post.formatter)
 
             # Update thumbnail from new content
-            post.thumbnail_path = extract_first_image(post.content)
+            raw_thumbnail = extract_first_image(post.content)
+            post.thumbnail_path = await self._resolve_thumbnail_path(raw_thumbnail)
 
         await self.db.flush()
         await self.db.refresh(post)
@@ -654,3 +693,27 @@ class PostService:
             List of tag names
         """
         return [tag.name for tag in post.tags]
+
+    async def update_all_post_thumbnails(self) -> int:
+        """Update all posts to use thumbnails if available.
+
+        Returns:
+            Number of posts updated
+        """
+        result = await self.db.execute(select(Post))
+        posts = result.scalars().all()
+        count = 0
+
+        for post in posts:
+            # Extract first image URL from content
+            raw_thumbnail = extract_first_image(post.content)
+            new_thumb = await self._resolve_thumbnail_path(raw_thumbnail)
+
+            if post.thumbnail_path != new_thumb:
+                post.thumbnail_path = new_thumb
+                count += 1
+
+        if count > 0:
+            await self.db.flush()
+
+        return count

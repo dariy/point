@@ -3,9 +3,11 @@
 Handles file upload, listing, and management operations.
 """
 
+import logging
 import math
 from typing import Any
 
+import httpx
 from fastapi import (
     APIRouter,
     Depends,
@@ -35,8 +37,10 @@ from app.schemas.media import (
     StorageStatsResponse,
 )
 from app.services.media_service import MediaService
+from app.services.settings_service import SettingsService
 from app.utils.validators import FileValidationError, validate_upload_file
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/media", tags=["Media"])
 
 
@@ -469,4 +473,148 @@ async def delete_media(
         "message": "Media deleted successfully",
         "deleted_count": 1,
         "freed_bytes": freed_bytes,
+    }
+
+
+@router.post(
+    "/analyze",
+    summary="Analyze image with GenAI",
+)
+async def analyze_image(
+    file: UploadFile = File(..., description="Image to analyze"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
+) -> Any:
+    """Analyze an image using the configured GenAI endpoint.
+
+    Returns suggested title and tags.
+    Requires authentication.
+    """
+    logger.info(
+        "Image analysis request from user %s for file: %s (type: %s)",
+        current_user.username,
+        file.filename,
+        file.content_type,
+    )
+
+    settings_service = SettingsService(db)
+    genai_endpoint = await settings_service.get_setting("genai_api_endpoint")
+
+    if not genai_endpoint:
+        logger.error("GenAI API endpoint not configured for user %s", current_user.username)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="GenAI API endpoint not configured. Please configure it in Settings > General > GenAI API Endpoint.",
+        )
+
+    # Validate file is an image
+    if not file.content_type or not file.content_type.startswith("image/"):
+        logger.warning(
+            "Invalid file type for analysis: %s (user: %s)",
+            file.content_type,
+            current_user.username,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image",
+        )
+
+    try:
+        # We need to read the file content to send it
+        content = await file.read()
+        file_size = len(content)
+
+        logger.info(
+            "Sending image to GenAI endpoint: %s (size: %d bytes, user: %s)",
+            genai_endpoint,
+            file_size,
+            current_user.username,
+        )
+
+        # Prepare the files dictionary for multipart upload
+        # The key 'image' matches the curl example: -F "image=@..."
+        files = {"image": (file.filename, content, file.content_type)}
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(genai_endpoint, files=files, timeout=30.0)
+            response.raise_for_status()
+
+            result = response.json()
+            logger.info(
+                "GenAI analysis successful for %s (user: %s): title='%s', tags=%s",
+                file.filename,
+                current_user.username,
+                result.get("title", "N/A"),
+                result.get("tags", []),
+            )
+            return result
+
+    except httpx.RequestError as e:
+        logger.error(
+            "Failed to connect to GenAI service at %s (user: %s): %s",
+            genai_endpoint,
+            current_user.username,
+            str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to connect to GenAI service: {str(e)}. Please check the GenAI endpoint configuration.",
+        )
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            "GenAI service error (status %d) for user %s: %s",
+            e.response.status_code,
+            current_user.username,
+            e.response.text,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"GenAI service error: {e.response.text}",
+        )
+    except Exception as e:
+        logger.error(
+            "Image analysis failed for %s (user: %s): %s",
+            file.filename,
+            current_user.username,
+            str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Analysis failed: {str(e)}",
+        )
+    finally:
+        # Reset cursor in case the file object is reused (though we consumed it)
+        await file.seek(0)
+
+
+@router.post(
+    "/thumbnails/rebuild",
+    summary="Rebuild thumbnails",
+)
+async def rebuild_thumbnails(
+    only_missing: bool = Query(default=True, description="Only rebuild missing thumbnails"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_auth),
+) -> Any:
+    """Rebuild thumbnails for all image media.
+
+    Requires authentication.
+    """
+    service = MediaService(db)
+    stats = await service.rebuild_thumbnails(only_missing=only_missing)
+
+    # Also update posts to use new thumbnails
+    from app.services.post_service import PostService
+    post_service = PostService(db)
+    posts_updated = await post_service.update_all_post_thumbnails()
+    stats["posts_updated"] = posts_updated
+
+    await db.commit()
+
+    return {
+        "message": f"Thumbnail rebuild complete. Processed {stats['processed']} images. Updated {posts_updated} posts.",
+        "stats": stats,
     }

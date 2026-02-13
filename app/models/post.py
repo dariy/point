@@ -122,6 +122,16 @@ class Post(AsyncAttrs, Base):
         return self.status == PostStatus.HIDDEN
 
     @property
+    def is_affected_by_hidden_tag(self) -> bool:
+        """Check if post is affected by a tag with is_hidden_posts=True."""
+        return any(tag.is_hidden_posts for tag in self.tags)
+
+    @property
+    def hidden_tags_affecting(self) -> list["Tag"]:
+        """Get the list of tags with is_hidden_posts=True that affect this post."""
+        return [tag for tag in self.tags if tag.is_hidden_posts]
+
+    @property
     def preview_is_valid(self) -> bool:
         """Check if preview token is still valid."""
         if not self.preview_token or not self.preview_expires_at:

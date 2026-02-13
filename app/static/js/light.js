@@ -63,6 +63,22 @@
         }, 3000);
     }
 
+    /**
+     * Global fetch interceptor for auth handling
+     */
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+        try {
+            const response = await originalFetch(...args);
+            if (response.status === 401 && window.location.pathname.startsWith('/light')) {
+                window.location.href = '/light/login';
+            }
+            return response;
+        } catch (error) {
+            throw error;
+        }
+    };
+
     // ===========================
     // Tags Input Component
     // ===========================
@@ -959,7 +975,7 @@
 
         // Initialize tags inputs
         document.querySelectorAll('.tags-input').forEach(el => {
-            new TagsInput(el);
+            el._tagsInput = new TagsInput(el);
         });
 
         // Initialize file uploaders
