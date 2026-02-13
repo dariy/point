@@ -98,4 +98,4 @@ volumes:
 networks:
   point-shared-network:
     name: point-shared-network
-    driver: bridge
+    external: true
