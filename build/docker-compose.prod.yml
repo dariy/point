@@ -48,12 +48,15 @@ services:
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
+      # AI Service
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-http://point-ai:8080}
+
     volumes:
       # Use named volume for data persistence
       - point-data:/data
 
     networks:
-      - point-network
+      - point-shared-network
 
     # Health check
     healthcheck:
@@ -93,5 +96,6 @@ volumes:
       device: ${DATA_PATH:-../data}
 
 networks:
-  point-network:
+  point-shared-network:
+    name: point-shared-network
     driver: bridge

@@ -206,10 +206,18 @@ jobs:
             sed -i '/^SESSION_SECRET=/d' build/.env || true
             printf '%s\n' "SECRET_KEY=${SECRET_KEY}" >> build/.env
             printf '%s\n' "SESSION_SECRET=${SESSION_SECRET}" >> build/.env
+
+            # Set AI service URL
+            sed -i '/^AI_SERVICE_URL=/d' build/.env || true
+            echo "AI_SERVICE_URL=http://point-ai:8080" >> build/.env
+            
             chmod 600 build/.env
 
             # Login to GitHub Container Registry
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
+
+            # Ensure shared network exists
+            docker network create point-shared-network || true
 
             # Clean up Docker resources to free disk space
             echo "Cleaning up Docker resources..."
