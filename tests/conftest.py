@@ -6,6 +6,7 @@ Provides common fixtures for testing the Photo Blog application.
 import os
 import subprocess
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Disable caching in tests BEFORE importing app
@@ -36,6 +37,8 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.post import Post, PostFormatter, PostStatus  # noqa: E402
+from app.models.tag import Tag  # noqa: E402
 from app.schemas.auth import UserCreate  # noqa: E402
 from app.services.auth_service import AuthService  # noqa: E402
 
@@ -163,3 +166,61 @@ async def auth_cookies(client: AsyncClient, test_user: dict) -> dict:
     )
     assert response.status_code == 200
     return dict(response.cookies)
+
+
+@pytest.fixture
+async def sample_tag(db: AsyncSession) -> Tag:
+    """Create a sample tag for testing."""
+    tag = Tag(
+        name="Test Tag",
+        slug="test-tag",
+        description="A test tag for testing",
+        is_important=True,
+        is_featured=True,
+        post_count=0,
+    )
+    db.add(tag)
+    await db.commit()
+    await db.refresh(tag)
+    return tag
+
+
+@pytest.fixture
+async def sample_post(db: AsyncSession, test_user: dict) -> Post:
+    """Create a sample post in the database."""
+    post = Post(
+        title="Sample Post",
+        slug="sample-post",
+        content="This is sample content.",
+        excerpt="Sample excerpt",
+        formatter=PostFormatter.RAW,
+        status=PostStatus.DRAFT,
+        author_id=test_user["user"].id,
+    )
+    db.add(post)
+    await db.commit()
+    await db.refresh(post)
+    return post
+
+
+@pytest.fixture
+async def published_post(db: AsyncSession, sample_tag: Tag, test_user: dict) -> Post:
+    """Create a published post for testing."""
+    post = Post(
+        title="Published Post",
+        slug="published-post",
+        content="This is published content. ![](/media/test.jpg) <video src='/media/test.mp4'></video>",
+        excerpt="Published excerpt",
+        status=PostStatus.PUBLISHED,
+        formatter=PostFormatter.MARKDOWN,
+        published_at=datetime.now(UTC) - timedelta(hours=1),
+        view_count=10,
+        author_id=test_user["user"].id,
+    )
+    post.tags.append(sample_tag)
+    db.add(post)
+    await db.commit()
+    await db.refresh(post)
+    sample_tag.post_count = 1
+    await db.commit()
+    return post

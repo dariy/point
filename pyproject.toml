@@ -105,6 +105,7 @@ markers = [
 source = ["app"]
 branch = true
 relative_files = true
+concurrency = ["greenlet"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

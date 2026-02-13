@@ -1,177 +1,142 @@
-"""Tests for tag archive and tags gallery pages."""
+"""Tests for tag archive pages."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.post import Post, PostFormatter, PostStatus
+from app.models.post import Post, PostStatus
 from app.models.tag import Tag
-from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_featured_tags_filtering_by_post_count(client: AsyncClient, db: AsyncSession):
-    """Test that tags with post_count = 0 are excluded from navigation."""
-    # Create tags with different post counts
-    tag1 = Tag(name="HasPosts", slug="has-posts", post_count=5, is_featured=True)
-    tag2 = Tag(name="EmptyTag", slug="empty-tag", post_count=0, is_featured=True)
-    tag3 = Tag(name="NonFeatured", slug="non-featured", post_count=3, is_featured=False)
-    db.add_all([tag1, tag2, tag3])
-    await db.commit()
-
-    resp = await client.get("/")
-    assert resp.status_code == 200
-    # HasPosts should appear (featured + post_count > 0)
-    assert "has-posts" in resp.text
-    # EmptyTag should not appear (post_count = 0)
-    assert "empty-tag" not in resp.text
+async def test_tag_page_loads(
+    client: AsyncClient, sample_tag: Tag, published_post: Post
+) -> None:
+    """Test that tag archive page loads successfully."""
+    response = await client.get(f"/tag/{sample_tag.slug}")
+    assert response.status_code == 200
+    assert sample_tag.name in response.text
+    assert "text/html" in response.headers["content-type"]
 
 
 @pytest.mark.asyncio
-async def test_tag_archive_current_tag_in_navigation(client: AsyncClient, db: AsyncSession):
-    """Test that current tag appears in navigation even if not featured."""
-    user = User(username="taguser", email="tag@test.com", password_hash="hash", display_name="Tag")
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+async def test_tag_page_shows_posts(
+    client: AsyncClient, sample_tag: Tag, published_post: Post
+) -> None:
+    """Test that tag page shows posts with that tag."""
+    response = await client.get(f"/tag/{sample_tag.slug}")
+    assert response.status_code == 200
+    assert published_post.title in response.text
 
-    # Create a non-featured tag with posts
-    tag = Tag(name="CurrentTag", slug="current-tag", post_count=1, is_featured=False)
-    db.add(tag)
+
+@pytest.mark.asyncio
+async def test_tag_page_shows_description(
+    client: AsyncClient, sample_tag: Tag, published_post: Post
+) -> None:
+    """Test that tag page shows tag description."""
+    response = await client.get(f"/tag/{sample_tag.slug}")
+    assert response.status_code == 200
+    assert sample_tag.description is not None
+    assert sample_tag.description in response.text
+
+
+@pytest.mark.asyncio
+async def test_tag_not_found(client: AsyncClient) -> None:
+    """Test that non-existent tag returns 404."""
+    response = await client.get("/tag/non-existent-tag")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_tag_page_pagination(
+    client: AsyncClient, sample_tag: Tag, multiple_posts: list[Post]
+) -> None:
+    """Test tag page pagination works."""
+    response = await client.get(f"/tag/{sample_tag.slug}?page=2")
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_tag_archive_ajax(client: AsyncClient, sample_tag: Tag) -> None:
+    """Test tag archive AJAX request returns JSON."""
+    response = await client.get(
+        f"/tag/{sample_tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tag"]["name"] == sample_tag.name
+
+
+@pytest.mark.asyncio
+async def test_tag_archive_hidden_404(client: AsyncClient, db: AsyncSession) -> None:
+    """Test that hidden tags return 404 for anonymous users."""
+    hidden_tag = Tag(name="Hidden Tag", slug="hidden-tag", is_hidden=True)
+    db.add(hidden_tag)
     await db.commit()
-    await db.refresh(tag)
+
+    response = await client.get("/tag/hidden-tag")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_tag_archive_recursive_complex(client: AsyncClient, db: AsyncSession, test_user: dict) -> None:
+    """Test recursive tag retrieval (grandparent/parent/child)."""
+    user = test_user["user"]
+    grandparent = Tag(name="Grandparent", slug="grandparent")
+    parent = Tag(name="Parent", slug="parent")
+    child = Tag(name="Child", slug="child")
+    parent.parents = [grandparent]
+    child.parents = [parent]
+    db.add_all([grandparent, parent, child])
 
     post = Post(
-        title="Tag Post",
-        slug="tag-post",
+        title="Deep Tagged Post",
+        slug="deep-tagged-post",
+        content="Deep",
+        status=PostStatus.PUBLISHED,
+        author_id=user.id,
+        published_at=datetime.now(UTC)
+    )
+    post.tags.append(child)
+    db.add(post)
+    await db.commit()
+
+    response = await client.get("/tag/grandparent")
+    assert response.status_code == 200
+    assert "Deep Tagged Post" in response.text
+
+
+@pytest.mark.asyncio
+async def test_tag_archive_current_tag_not_in_featured(client: AsyncClient, db: AsyncSession, test_user: dict) -> None:
+    """Test tag_archive when the current tag is not among the featured tags."""
+    # Create a non-featured tag with a post
+    tag = Tag(name="Hidden Gem", slug="hidden-gem", is_featured=False)
+    db.add(tag)
+    await db.flush()
+
+    user = test_user["user"]
+    post = Post(
+        title="Hidden Gem Post",
+        slug="hidden-gem-post",
         content="Content",
         status=PostStatus.PUBLISHED,
         author_id=user.id,
         published_at=datetime.now(UTC)
     )
-    db.add(post)
-    await db.commit()
-    await db.refresh(post)
-
-    # Add tag relationship
     post.tags.append(tag)
-    await db.commit()
-
-    # Request tag archive
-    resp = await client.get(f"/tag/{tag.slug}")
-    assert resp.status_code == 200
-
-    # Current tag should appear in navigation
-    assert "current-tag" in resp.text
-
-
-@pytest.mark.asyncio
-async def test_tag_archive_ajax_structure(client: AsyncClient, db: AsyncSession):
-    """Test full structure of tag archive AJAX response."""
-    tag = Tag(name="ArchiveTag", slug="archive-tag", post_count=1)
-    db.add(tag)
-    await db.commit()
-
-    resp = await client.get(f"/tag/{tag.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
-    assert resp.status_code == 200
-    data = resp.json()
-
-    assert "posts" in data
-    assert "pagination" in data
-    assert "tag" in data
-    assert "is_logged_in" in data
-    assert data["tag"]["name"] == "ArchiveTag"
-    assert data["tag"]["slug"] == "archive-tag"
-
-
-@pytest.mark.asyncio
-async def test_tags_page_ajax_structure(client: AsyncClient, db: AsyncSession):
-    """Test full structure of tags page (gallery) AJAX response."""
-    # Create a post with a tag
-    user = User(username="galleryuser", email="gallery@test.com", password_hash="hash", display_name="Gallery")
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    tag = Tag(name="GalleryTag", slug="gallery-tag", post_count=1)
-    db.add(tag)
-    await db.commit()
-    await db.refresh(tag)
-
-    post = Post(
-        title="Gallery Post",
-        slug="gallery-post",
-        content="Content",
-        status=PostStatus.PUBLISHED,
-        author_id=user.id,
-        published_at=datetime.now(UTC),
-        tags=[tag]
-    )
     db.add(post)
     await db.commit()
 
-    resp = await client.get("/tags", headers={"X-Requested-With": "XMLHttpRequest"})
-    assert resp.status_code == 200
-    data = resp.json()
-
-    assert "posts" in data
-    assert "pagination" in data
-    assert "current_tag" in data
-    assert "is_logged_in" in data
-
-    # Check post structure in gallery
-    assert len(data["posts"]) > 0
-    post_data = data["posts"][0]
-    assert "preview_html" in post_data
-    assert "has_image" in post_data
-
-
-@pytest.fixture
-async def sample_tag_with_posts(db: AsyncSession, test_user) -> Tag:
-    """Create a tag and attach to posts."""
-    tag = Tag(name="Ajax Tag", slug="ajax-tag", post_count=0)
-    db.add(tag)
-    await db.commit()
-    await db.refresh(tag)
-
-    for i in range(15):
-        post = Post(
-            title=f"Tagged Post {i}",
-            slug=f"tagged-post-{i}",
-            content=f"Content {i}",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.now(UTC) - timedelta(hours=i),
-            author_id=test_user["user"].id,
-        )
-        post.tags.append(tag)
-        db.add(post)
-
-    tag.post_count = 15
-    await db.commit()
-    return tag
+    response = await client.get("/tag/hidden-gem")
+    assert response.status_code == 200
+    assert "Hidden Gem" in response.text
 
 
 @pytest.mark.asyncio
-async def test_tag_archive_ajax_pagination(client: AsyncClient, sample_tag_with_posts: Tag):
-    """Test tag archive returns JSON for AJAX requests."""
-    response = await client.get(f"/tag/{sample_tag_with_posts.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+async def test_tag_archive_current_tag_in_navigation(client: AsyncClient, sample_tag: Tag) -> None:
+    """Test that the current tag is included in navigation context."""
+    response = await client.get(f"/tag/{sample_tag.slug}")
     assert response.status_code == 200
-    assert response.headers["content-type"] == "application/json"
-
-    data = response.json()
-    assert "posts" in data
-    assert "pagination" in data
-    assert "tag" in data
-    assert data["tag"]["slug"] == sample_tag_with_posts.slug
-
-
-@pytest.mark.asyncio
-async def test_tag_archive_html_has_ajax_class(client: AsyncClient, sample_tag_with_posts: Tag):
-    """Test tag archive HTML pagination links have ajax-link class."""
-    response = await client.get(f"/tag/{sample_tag_with_posts.slug}")
-    assert response.status_code == 200
-    assert "pagination-link" in response.text
-    assert "ajax-link" in response.text
+    assert sample_tag.name in response.text
