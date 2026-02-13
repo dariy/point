@@ -278,8 +278,9 @@ async def new_post(
         media = await media_service.get_media_by_id(media_id)
         if media:
             # Create markdown image reference
-            initial_content = f"![]({media_service.get_media_url(media)})"
-            initial_thumbnail = media_service.get_thumbnail_url(media) or media_service.get_media_url(media)
+            url = media_service.get_media_url(media)
+            initial_content = f"![]({url})"
+            initial_thumbnail = media_service.get_thumbnail_url(media) or url
 
     # Fallback to media_path if provided (used in tests and legacy links)
     if not initial_content and media_path:

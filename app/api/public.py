@@ -328,6 +328,7 @@ async def homepage(
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        logger.info("DEBUG: AJAX branch hit in homepage")
         # Get publicly hidden tag IDs for filtering if not authenticated
         tag_filter_ids = None if user else (await TagService(db).get_publicly_hidden_tag_ids())
         use_thumbs = blog_settings.get("use_thumbnails", True)
