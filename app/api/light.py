@@ -181,6 +181,8 @@ async def posts_list(
     user: User | None = Depends(get_current_user),
     page: int = 1,
     status_filter: str | None = None,
+    search: str | None = None,
+    tag_id: int | None = None,
 ) -> Response:
     """Render posts list page.
 
@@ -190,6 +192,8 @@ async def posts_list(
         user: Current user
         page: Page number
         status_filter: Optional status filter
+        search: Optional search query
+        tag_id: Optional tag ID filter
 
     Returns:
         Posts list page HTML
@@ -206,13 +210,18 @@ async def posts_list(
             status_enum = PostStatus(status_filter)
 
     post_service = PostService(db)
+    tag_service = TagService(db)
+
     posts, total = await post_service.list_posts(
         page=page,
         per_page=per_page,
         status=status_enum,
         include_drafts=True,
+        search=search,
+        tag_id=tag_id,
     )
 
+    all_tags = await tag_service.list_tags()
     total_pages = (total + per_page - 1) // per_page
 
     context = await get_base_context(db, request, user)
@@ -223,6 +232,9 @@ async def posts_list(
             "total_pages": total_pages,
             "total": total,
             "status_filter": status_filter,
+            "search_query": search,
+            "tag_id": tag_id,
+            "all_tags": all_tags,
             "statuses": [s.value for s in PostStatus],
         }
     )
@@ -261,12 +273,21 @@ async def new_post(
     # If media was pre-uploaded via drag-drop, prepare initial content
     initial_content = ""
     initial_thumbnail = None
-    if media_id and media_path:
-        # Create markdown image reference
-        # Note: media_path already includes 'originals/' prefix
+    if media_id:
+        media_service = MediaService(db)
+        media = await media_service.get_media_by_id(media_id)
+        if media:
+            # Create markdown image reference
+            url = media_service.get_media_url(media)
+            initial_content = f"![]({url})"
+            initial_thumbnail = media_service.get_thumbnail_url(media) or url
+
+    # Fallback to media_path if provided (used in tests and legacy links)
+    if not initial_content and media_path:
+        # Note: media_path usually includes 'originals/' or 'thumbnails/'
+        # but the tests seem to expect /media/ prefix to be added
         initial_content = f"![](/media/{media_path})"
         initial_thumbnail = f"/media/{media_path}"
-
 
 
     context = await get_base_context(db, request, user)
@@ -380,6 +401,7 @@ async def tags_page(
         search=search, parent_id=pid, sort_by=sort_by, sort_order=sort_order
     )
     all_tags = await tag_service.list_tags()
+    hierarchy = await tag_service.get_hierarchical_tags(search=search)
     # For filter dropdown, we want tags that ARЕ parents
     parent_tags = [t for t in all_tags if len(t.children) > 0]
     total = len(tags)
@@ -390,6 +412,7 @@ async def tags_page(
     context.update(
         {
             "tags": tags,
+            "hierarchy": hierarchy,
             "page": page,
             "total_pages": total_pages,
             "total": total,

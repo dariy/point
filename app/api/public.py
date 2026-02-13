@@ -75,7 +75,7 @@ def get_common_context(request: Request) -> dict[str, Any]:
         "format_content": format_content,
         "truncate_paragraphs": truncate_paragraphs,
         "generate_excerpt": generate_excerpt,
-        "determine_thumbnail": determine_thumbnail,
+        "determine_thumbnail": lambda c, t: determine_thumbnail(c, t, settings.storage_path, settings.use_thumbnails),
     }
 
 
@@ -162,12 +162,17 @@ async def get_db_context(
     return context
 
 
-def serialize_post(post: Post, publicly_hidden_tag_ids: set[int] | None = None) -> dict[str, Any]:
+def serialize_post(
+    post: Post,
+    publicly_hidden_tag_ids: set[int] | None = None,
+    use_thumbnails: bool = True
+) -> dict[str, Any]:
     """Serialize post for JSON response.
 
     Args:
         post: Post to serialize
         publicly_hidden_tag_ids: Set of tag IDs to exclude from serialization (for non-authenticated users)
+        use_thumbnails: Whether to use thumbnails
     """
     pub_date = post.published_at or post.created_at
 
@@ -188,12 +193,17 @@ def serialize_post(post: Post, publicly_hidden_tag_ids: set[int] | None = None) 
              content_html = format_content(post.content, post.formatter)
              preview_html = truncate_paragraphs(content_html)
 
-    # Selection logic for thumbnail:
+    # logic for thumbnail:
     # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
     # 2. Or use the first image from content
     # 3. Or use the first video as fallback
 
-    thumb_path, is_video_thumb = determine_thumbnail(post.content, post.thumbnail_path)
+    thumb_path, is_video_thumb = determine_thumbnail(
+        post.content,
+        post.thumbnail_path,
+        settings.storage_path,
+        use_thumbnails
+    )
 
     # Filter tags if publicly_hidden_tag_ids is provided
     if publicly_hidden_tag_ids is not None:
@@ -318,9 +328,11 @@ async def homepage(
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        logger.info("DEBUG: AJAX branch hit in homepage")
         # Get publicly hidden tag IDs for filtering if not authenticated
         tag_filter_ids = None if user else (await TagService(db).get_publicly_hidden_tag_ids())
-        posts_data = [serialize_post(p, tag_filter_ids) for p in posts]
+        use_thumbs = blog_settings.get("use_thumbnails", True)
+        posts_data = [serialize_post(p, tag_filter_ids, use_thumbs) for p in posts]
         return JSONResponse(
             {
                 "posts": posts_data,
@@ -481,17 +493,41 @@ async def single_post(
     # Extract all media for carousel
     post_media = extract_all_media(post.content)
 
+    # Function to ensure we have an original URL
+    async def ensure_original_url(url: str | None) -> str | None:
+        if not url:
+            return url
+        if "/media/thumbnails/" in url:
+            # Try to find corresponding media record to get original path
+            rel_thumb_path = url.split("/media/", 1)[1]
+            from app.models.media import Media
+            result = await db.execute(select(Media).where(Media.thumbnail_path == rel_thumb_path))
+            media = result.scalar_one_or_none()
+            if media:
+                return f"/media/{media.original_path}"
+            # Fallback: just swap the directory and hope for the best (might fail if extensions differ)
+            return url.replace("/thumbnails/", "/originals/")
+        return url
+
+    # Clean up post_media to use originals
+    for item in post_media:
+        original_url = await ensure_original_url(item["url"])
+        if original_url:
+            item["url"] = original_url
+
     # If thumbnail exists and is not in content media, add it to the start
     if post.thumbnail_path:
-        thumb_url = post.thumbnail_path
+        thumb_url = await ensure_original_url(post.thumbnail_path)
         # Check if already present
-        if not any(m["url"] == thumb_url for m in post_media):
+        if thumb_url and not any(m["url"] == thumb_url for m in post_media):
             # Also check with full path
-            thumb_path_full = f"/media/originals/{thumb_url}"
+            thumb_path_full = f"/media/originals/{thumb_url}" if not thumb_url.startswith("/") else thumb_url
             if not any(m["url"] == thumb_path_full for m in post_media):
                 post_media.insert(0, {"url": thumb_url, "type": "image"})
     elif not post_media and post.thumbnail_path:
-        post_media = [{"url": post.thumbnail_path, "type": "image"}]
+        final_thumb_url = await ensure_original_url(post.thumbnail_path)
+        if final_thumb_url:
+            post_media = [{"url": final_thumb_url, "type": "image"}]
 
     prev_post = None
     next_post = None
@@ -538,6 +574,9 @@ async def single_post(
         settings_service = SettingsService(db)
         blog_settings_dict = await settings_service.get_all_settings()
 
+        # Ensure thumbnail_path in response is also original
+        resolved_thumb = await ensure_original_url(post.thumbnail_path) if post.thumbnail_path else None
+
         return JSONResponse(
             {
                 "post": {
@@ -548,7 +587,7 @@ async def single_post(
                     "published_iso": (post.published_at or post.created_at).isoformat(),
                     "view_count": post.view_count,
                     "content_html": content_html,
-                    "thumbnail_path": post.thumbnail_path,
+                    "thumbnail_path": resolved_thumb,
                     "tags": [{"name": t.name, "slug": t.slug} for t in all_post_tags],
                 },
                 "has_text_content": has_text_content,
@@ -679,7 +718,8 @@ async def tag_archive(
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         # Get publicly hidden tag IDs for filtering if not authenticated
         tag_filter_ids = None if user else (await tag_service.get_publicly_hidden_tag_ids())
-        posts_data = [serialize_post(p, tag_filter_ids) for p in posts]
+        use_thumbs = blog_settings.get("use_thumbnails", True)
+        posts_data = [serialize_post(p, tag_filter_ids, use_thumbs) for p in posts]
         return JSONResponse(
             {
                 "posts": posts_data,
@@ -820,11 +860,20 @@ async def tags_page(
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         posts_data = []
+        use_thumbs = blog_settings.get("use_thumbnails", True)
+
         for post in posts:
             pub_date = post.published_at or post.created_at
 
             # Calculate preview data
-            has_image = post.thumbnail_path is not None
+            thumb_path, is_video_thumb = determine_thumbnail(
+                post.content,
+                post.thumbnail_path,
+                settings.storage_path,
+                use_thumbs
+            )
+
+            has_image = thumb_path is not None
             excerpt = None
             preview_html = None
 
@@ -842,13 +891,14 @@ async def tags_page(
                     "id": post.id,
                     "title": post.title,
                     "slug": post.slug,
-                    "thumbnail_path": post.thumbnail_path,
+                    "thumbnail_path": thumb_path,
                     "published_date": pub_date.strftime("%B %d, %Y"),
                     "view_count": post.view_count,
                     "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
                     "excerpt": excerpt,
                     "preview_html": preview_html,
                     "has_image": has_image,
+                    "is_video": is_video_thumb,
                 }
             )
 
@@ -952,9 +1002,22 @@ async def rss_feed(
     posts = list(posts_result.scalars().all())
 
     # Format posts for RSS
+    settings_service = SettingsService(db)
+    blog_settings = await settings_service.get_all_settings()
     posts_data: list[dict[str, Any]] = []
+    use_thumbs = blog_settings.get("use_thumbnails", True)
+
     for post in posts:
         pub_date = post.published_at or post.created_at
+
+        # Resolve thumbnail
+        thumb_path, _ = determine_thumbnail(
+            post.content,
+            post.thumbnail_path,
+            settings.storage_path,
+            use_thumbs
+        )
+
         posts_data.append(
             {
                 "title": post.title,
@@ -963,16 +1026,13 @@ async def rss_feed(
                 "content_html": format_content(post.content, post.formatter),
                 "meta_description": None,
                 "excerpt": post.excerpt,
-                "thumbnail_path": post.thumbnail_path,
+                "thumbnail_path": thumb_path,
                 "tags": [],  # Empty for now as tags are filtered for public
             }
         )
 
     build_date = datetime.now(UTC).strftime("%a, %d %b %Y %H:%M:%S GMT")
     base_url = get_base_url(request)
-
-    settings_service = SettingsService(db)
-    blog_settings = await settings_service.get_all_settings()
 
     context = {
         "request": request,
