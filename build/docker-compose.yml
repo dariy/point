@@ -30,5 +30,7 @@ volumes:
     driver: local
 
 networks:
-  point-network:
-    driver: bridge
+  default:
+    external:
+      name: point-network
+    # driver: bridge
