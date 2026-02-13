@@ -242,7 +242,7 @@ jobs:
             cd build
 
             # Backup database before deployment
-            docker exec -T point-prod python -c "
+            docker exec point-prod python -c "
             from app.services.backup_service import BackupService
             service = BackupService()
             backup_path = service.create_backup()
