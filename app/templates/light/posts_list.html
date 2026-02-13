@@ -22,11 +22,35 @@
         <select class="filter-select" data-action="filter-status">
             <option value="">All</option>
             {% for s in statuses %}
-            <option value="{{ s }}" {% if status_filter==s %}selected{% endif %}>
+            <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>
                 {{ s|capitalize }}
             </option>
             {% endfor %}
         </select>
+    </div>
+
+    <div class="filter-group">
+        <label class="filter-label">Tag:</label>
+        <select class="filter-select" data-action="filter-tag">
+            <option value="">All</option>
+            {% for t in all_tags %}
+            <option value="{{ t.id }}" {% if tag_id == t.id %}selected{% endif %}>
+                {{ t.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label class="filter-label">Search:</label>
+        <div class="search-input-wrapper" style="display: flex; gap: 0.5rem;">
+            <input type="text" class="filter-select" id="search-posts" placeholder="Search title..." value="{{ search_query or '' }}" style="width: 200px;">
+            <button class="btn btn-sm btn-outline" id="search-btn" title="Search">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+            </button>
+        </div>
     </div>
 
     <div class="filter-group">
@@ -52,10 +76,20 @@
                 {% for post in posts %}
                 <tr>
                     <td>
-                        <a href="/light/posts/{{ post.id }}" class="post-title">
-                            {{ post.title }}
-                        </a>
-                        <div class="text-muted text-small">/{{ post.slug }}</div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            {% if post.is_affected_by_hidden_tag %}
+                            {% set hiding_tags = post.hidden_tags_affecting | map(attribute='name') | list | join(', ') %}
+                            <span class="text-danger" title="Hidden by: {{ hiding_tags }}">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/>
+                                </svg>
+                            </span>
+                            {% endif %}
+                            <a href="/light/posts/{{ post.id }}" class="post-title">
+                                {{ post.title }}
+                            </a>
+                        </div>
+                        <div class="text-muted text-small" style="margin-left: {% if post.is_affected_by_hidden_tag %}24px{% else %}0{% endif %};">/{{ post.slug }}</div>
                     </td>
                     <td>
                         <span class="badge badge-{{ post.status.value }}">
@@ -105,8 +139,8 @@
                 </svg>
             </div>
             <div class="empty-state-title">No posts found</div>
-            {% if status_filter %}
-            <p>No {{ status_filter }} posts. <a href="/light/posts">View all posts</a></p>
+            {% if status_filter or tag_id or search_query %}
+            <p>No posts match your filters. <a href="/light/posts">View all posts</a></p>
             {% else %}
             <p>Create your first post to get started.</p>
             <a href="/light/posts/new" class="btn btn-primary mt-2">Create Post</a>
@@ -117,7 +151,10 @@
 </div>
 
 <!-- Pagination -->
-{% set extra_params = '&status_filter=' + status_filter if status_filter else '' %}
+{% set extra_params = '' %}
+{% if status_filter %}{% set extra_params = extra_params + '&status_filter=' + status_filter %}{% endif %}
+{% if tag_id %}{% set extra_params = extra_params + '&tag_id=' + tag_id|string %}{% endif %}
+{% if search_query %}{% set extra_params = extra_params + '&search=' + search_query %}{% endif %}
 {{ render_pagination(page, total_pages, '/light/posts', extra_params) }}
 
 {% endblock %}

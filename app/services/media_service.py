@@ -3,6 +3,7 @@
 Handles file upload, processing, storage, and cleanup operations.
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -31,6 +32,8 @@ from app.utils.validators import (
     validate_storage_quota,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class MediaService:
     """Service for managing media files."""
@@ -47,6 +50,14 @@ class MediaService:
         self.originals_path = self.storage_path / "media" / "originals"
         self.thumbnails_path = self.storage_path / "media" / "thumbnails"
         self.image_processor = ImageProcessor()
+
+    async def _get_thumbnail_size(self) -> tuple[int, int]:
+        """Get thumbnail size from settings."""
+        from app.services.settings_service import SettingsService
+        settings_service = SettingsService(self.db)
+        width = await settings_service.get_setting("thumbnail_width")
+        height = await settings_service.get_setting("thumbnail_height")
+        return (width, height)
 
     def _generate_unique_filename(self, original_filename: str) -> str:
         """Generate a unique filename preserving extension.
@@ -184,7 +195,8 @@ class MediaService:
                 await f.write(processed_content)
 
             # Generate thumbnail
-            thumbnail_content, _, _ = self.image_processor.generate_thumbnail(content)
+            thumb_size = await self._get_thumbnail_size()
+            thumbnail_content, _, _ = self.image_processor.generate_thumbnail(content, size=thumb_size)
             thumbnail_jpg_name = Path(unique_filename).stem + ".jpg"
             thumbnail_path = thumbnail_path.parent / thumbnail_jpg_name
             thumbnail_rel_final = (
@@ -630,3 +642,78 @@ class MediaService:
         if media.thumbnail_path:
             return f"/media/{media.thumbnail_path}"
         return None
+
+    async def rebuild_thumbnails(self, only_missing: bool = True) -> dict[str, int]:
+        """Rebuild thumbnails for all image media.
+
+        Args:
+            only_missing: If True, only generate thumbnails that are missing on disk.
+
+        Returns:
+            Dictionary with results (total, processed, updated, failed)
+        """
+        result = await self.db.execute(
+            select(Media).where(Media.file_type == FileType.IMAGE)
+        )
+        images = result.scalars().all()
+
+        stats = {"total": 0, "processed": 0, "updated": 0, "failed": 0}
+        thumb_size = await self._get_thumbnail_size()
+
+        for media in images:
+            stats["total"] += 1
+            original_full = self.storage_path / "media" / media.original_path
+
+            if not original_full.exists():
+                logger.warning(f"Original file missing for media {media.id}: {original_full}")
+                stats["failed"] += 1
+                continue
+
+            # Check if thumbnail exists
+            thumbnail_exists = False
+            if media.thumbnail_path:
+                thumbnail_full = self.storage_path / "media" / media.thumbnail_path
+                if thumbnail_full.exists():
+                    thumbnail_exists = True
+
+            if only_missing and thumbnail_exists:
+                continue
+
+            # Need to rebuild
+            try:
+                # Read original
+                async with aiofiles.open(original_full, "rb") as f:
+                    content = await f.read()
+
+                # Generate thumbnail
+                thumbnail_content, _, _ = self.image_processor.generate_thumbnail(content, size=thumb_size)
+
+                # Determine paths
+                now = media.uploaded_at or datetime.now(UTC)
+                date_path = f"{now.year}/{now.month:02d}"
+                thumbnail_dir = self.thumbnails_path / date_path
+                ensure_directory(thumbnail_dir)
+
+                thumbnail_jpg_name = Path(media.original_path).stem + ".jpg"
+                thumbnail_full_path = thumbnail_dir / thumbnail_jpg_name
+                thumbnail_rel = f"thumbnails/{date_path}/{thumbnail_jpg_name}"
+
+                # Save thumbnail
+                async with aiofiles.open(thumbnail_full_path, "wb") as f:
+                    await f.write(thumbnail_content)
+
+                # Update media record if changed
+                if media.thumbnail_path != thumbnail_rel:
+                    media.thumbnail_path = thumbnail_rel
+                    stats["updated"] += 1
+
+                stats["processed"] += 1
+
+            except Exception as e:
+                logger.error(f"Failed to rebuild thumbnail for media {media.id}: {e}")
+                stats["failed"] += 1
+
+        if stats["updated"] > 0:
+            await self.db.flush()
+
+        return stats

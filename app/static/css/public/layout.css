@@ -21,7 +21,7 @@ body {
 
 .site-main {
     /*flex: 1;*/
-    padding: var(--spacing-sm) 0;
+    padding: var(--spacing-lg) 0;
 }
 
 .main-container {

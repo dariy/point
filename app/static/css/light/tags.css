@@ -127,3 +127,15 @@
     background-color: var(--surface-hover);
     color: var(--color-primary);
 }
+
+.tag-count-link {
+    text-decoration: none;
+    color: inherit;
+    display: inline-block;
+}
+
+.tag-count-link:hover .tag-count {
+    background-color: var(--color-primary);
+    color: white;
+}
+
