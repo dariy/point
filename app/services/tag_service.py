@@ -20,6 +20,9 @@ from app.utils.slugify import make_unique_slug, slugify
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_PARENT_TAG = "other"
+
+
 class TagService:
     """Service for managing tags."""
 
@@ -101,6 +104,10 @@ class TagService:
                 select(Tag).where(Tag.id.in_(tag_data.parent_ids))
             )
             tag.parents = list(parents.scalars().all())
+        elif tag_data.name.lower() != DEFAULT_PARENT_TAG:
+            # All newly created tags should be children of `other` by default.
+            other_tag = await self.get_or_create_tag(DEFAULT_PARENT_TAG)
+            tag.parents = [other_tag]
 
         if tag_data.child_ids:
             children = await self.db.execute(

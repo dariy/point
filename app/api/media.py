@@ -5,6 +5,7 @@ Handles file upload, listing, and management operations.
 
 import logging
 import math
+import re
 from typing import Any
 
 import httpx
@@ -540,6 +541,18 @@ async def analyze_image(
             response.raise_for_status()
 
             result = response.json()
+
+            # Detect year tag from filename (starts with 20##)
+            if file.filename:
+                match = re.match(r"^(20\d{2})", file.filename)
+                if match:
+                    year_tag = match.group(1)
+                    tags = result.get("tags", [])
+                    if year_tag not in tags:
+                        # Insert at the beginning to make it more prominent
+                        tags.insert(0, year_tag)
+                    result["tags"] = tags
+
             logger.info(
                 "GenAI analysis successful for %s (user: %s): title='%s', tags=%s",
                 file.filename,
