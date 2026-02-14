@@ -57,5 +57,6 @@ def setup_logging() -> None:
     # Set levels for some noisy loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
     logging.info("Logging initialized. Writing to %s", log_file)
