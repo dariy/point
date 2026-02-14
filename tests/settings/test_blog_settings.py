@@ -1,7 +1,8 @@
 """Tests for blog settings management functionality."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +54,146 @@ class TestSettingsAPI:
         for method, url in [("GET", "/api/settings"), ("PUT", "/api/settings")]:
             response = await client.request(method, url)
             assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_test_genai_connection_success(
+        self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
+    ) -> None:
+        """Test successful GenAI connection test."""
+        # Set up a GenAI endpoint in settings
+        settings_service = SettingsService(db)
+        await settings_service.update_setting("genai_api_endpoint", "http://localhost:8082/")
+
+        # Mock httpx client to return success
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"status": "healthy"}'
+        mock_response.json.return_value = {"status": "healthy"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client_instance = AsyncMock()
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = None
+            mock_client_instance.get.return_value = mock_response
+            mock_client.return_value = mock_client_instance
+
+            response = await client.post(
+                "/api/settings/test-genai-connection",
+                cookies=auth_cookies
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "success"
+            assert "Connection successful" in data["message"]
+            assert data["endpoint"] == "http://localhost:8082/"
+            assert data["response_data"] == {"status": "healthy"}
+
+    @pytest.mark.asyncio
+    async def test_test_genai_connection_not_configured(
+        self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
+    ) -> None:
+        """Test GenAI connection test when endpoint not configured."""
+        # Clear any existing endpoint
+        settings_service = SettingsService(db)
+        await settings_service.update_setting("genai_api_endpoint", None)
+
+        response = await client.post(
+            "/api/settings/test-genai-connection",
+            cookies=auth_cookies
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "not configured" in data["detail"]
+
+    @pytest.mark.asyncio
+    async def test_test_genai_connection_server_error(
+        self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
+    ) -> None:
+        """Test GenAI connection test when server returns error."""
+        settings_service = SettingsService(db)
+        await settings_service.update_setting("genai_api_endpoint", "http://localhost:8082")
+
+        # Mock httpx client to return error status
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client_instance = AsyncMock()
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = None
+            mock_client_instance.get.return_value = mock_response
+            mock_client.return_value = mock_client_instance
+
+            response = await client.post(
+                "/api/settings/test-genai-connection",
+                cookies=auth_cookies
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "error"
+            assert "status 500" in data["message"]
+
+    @pytest.mark.asyncio
+    async def test_test_genai_connection_timeout(
+        self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
+    ) -> None:
+        """Test GenAI connection test when connection times out."""
+        settings_service = SettingsService(db)
+        await settings_service.update_setting("genai_api_endpoint", "http://localhost:8082/")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client_instance = AsyncMock()
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = None
+            mock_client_instance.get.side_effect = httpx.TimeoutException("Timeout")
+            mock_client.return_value = mock_client_instance
+
+            response = await client.post(
+                "/api/settings/test-genai-connection",
+                cookies=auth_cookies
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "error"
+            assert "timeout" in data["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_test_genai_connection_refused(
+        self, client: AsyncClient, auth_cookies: dict, db: AsyncSession
+    ) -> None:
+        """Test GenAI connection test when connection is refused."""
+        settings_service = SettingsService(db)
+        await settings_service.update_setting("genai_api_endpoint", "http://localhost:8082/")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client_instance = AsyncMock()
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = None
+            mock_client_instance.get.side_effect = httpx.ConnectError("Connection refused")
+            mock_client.return_value = mock_client_instance
+
+            response = await client.post(
+                "/api/settings/test-genai-connection",
+                cookies=auth_cookies
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "error"
+            assert "refused" in data["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_test_genai_connection_unauthorized(
+        self, client: AsyncClient
+    ) -> None:
+        """Test that GenAI connection test requires authentication."""
+        response = await client.post("/api/settings/test-genai-connection")
+        assert response.status_code == 401
 
 
 class TestSettingsService:

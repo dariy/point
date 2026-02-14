@@ -26,6 +26,7 @@ from app.dependencies import require_auth
 from app.models.media import Media as MediaModel
 from app.models.user import User
 from app.schemas.media import (
+    AnalysisResponse,
     BulkDeleteResponse,
     MediaDeleteResponse,
     MediaListResponse,
@@ -479,6 +480,7 @@ async def delete_media(
 
 @router.post(
     "/analyze",
+    response_model=AnalysisResponse,
     summary="Analyze image with GenAI",
 )
 async def analyze_image(
@@ -537,30 +539,77 @@ async def analyze_image(
         files = {"image": (file.filename, content, file.content_type)}
 
         async with httpx.AsyncClient() as client:
+            logger.info("Endpoint: %s", genai_endpoint)
             response = await client.post(genai_endpoint, files=files, timeout=30.0)
             response.raise_for_status()
 
             result = response.json()
+
+            # Log raw result to diagnose missing fields
+            logger.info("Raw GenAI result for %s: %s", file.filename, result)
+            logger.info("Raw result type: %s", type(result))
+            if isinstance(result, dict):
+                logger.info("Raw result keys: %s", list(result.keys()))
+                logger.info("Raw result excerpt value: %r", result.get("excerpt"))
+
+            # Handle list responses
+            if isinstance(result, list) and len(result) > 0:
+                result = result[0]
+
+            if not isinstance(result, dict):
+                logger.warning("GenAI result is not a dictionary/list: %s", type(result))
+                return {"title": None, "tags": [], "excerpt": None}
+
+            # Handle common wrappers (data, result, output, response)
+            for wrapper in ["data", "result", "output", "response"]:
+                if wrapper in result and isinstance(result[wrapper], dict):
+                    # Only unwrap if the wrapper contains likely keys
+                    inner = result[wrapper]
+                    if any(k in inner for k in ["title", "excerpt", "tags", "summary", "description", "content"]):
+                        result = inner
+                        break
+
+            # Extract and normalize fields before any modifications
+            title = result.get("title")
+            tags = result.get("tags", [])
+            excerpt = result.get("excerpt")
+
+            logger.info("After extraction - title: %r, excerpt: %r, tags: %r", title, excerpt, tags)
+
+            # Map alternative keys to excerpt if missing
+            if not excerpt:
+                for key in ["summary", "description", "caption", "text", "content"]:
+                    if result.get(key):
+                        excerpt = result[key]
+                        break
+
+            # Ensure excerpt is a string if it's something else
+            if excerpt and not isinstance(excerpt, str):
+                excerpt = str(excerpt)
 
             # Detect year tag from filename (starts with 20##)
             if file.filename:
                 match = re.match(r"^(20\d{2})", file.filename)
                 if match:
                     year_tag = match.group(1)
-                    tags = result.get("tags", [])
                     if year_tag not in tags:
                         # Insert at the beginning to make it more prominent
                         tags.insert(0, year_tag)
-                    result["tags"] = tags
 
             logger.info(
-                "GenAI analysis successful for %s (user: %s): title='%s', tags=%s",
+                "GenAI analysis successful for %s (user: %s): title='%s', excerpt='%s', tags=%s",
                 file.filename,
                 current_user.username,
-                result.get("title", "N/A"),
-                result.get("tags", []),
+                title or "N/A",
+                excerpt or "N/A",
+                tags,
             )
-            return result
+
+            return {
+                "title": title,
+                "tags": tags,
+                "excerpt": excerpt,
+            }
 
     except httpx.RequestError as e:
         logger.error(

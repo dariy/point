@@ -40,6 +40,14 @@ class MediaRename(BaseModel):
     new_filename: str = Field(..., min_length=1, max_length=255)
 
 
+class AnalysisResponse(BaseModel):
+    """Schema for GenAI analysis response."""
+
+    title: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    excerpt: str | None = None
+
+
 class MediaResponse(BaseModel):
     """Schema for media response."""
 

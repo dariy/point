@@ -6,6 +6,58 @@
 (function () {
     'use strict';
 
+    function initTestGenAIConnection() {
+        const testBtn = document.getElementById('test-genai-connection');
+        const endpointInput = document.getElementById('genai_api_endpoint');
+        const resultDiv = document.getElementById('genai-test-result');
+
+        if (!testBtn || !endpointInput || !resultDiv) return;
+
+        testBtn.addEventListener('click', async () => {
+            const endpoint = endpointInput.value.trim();
+
+            if (!endpoint) {
+                resultDiv.className = 'connection-test-result error';
+                resultDiv.textContent = 'Please enter a GenAI API endpoint first';
+                return;
+            }
+
+            // Disable button and show testing state
+            testBtn.disabled = true;
+            testBtn.textContent = 'Testing...';
+            resultDiv.className = 'connection-test-result info';
+            resultDiv.textContent = 'Testing connection...';
+
+            try {
+                const response = await fetch('/api/settings/test-genai-connection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    resultDiv.className = 'connection-test-result success';
+                    resultDiv.textContent = `✓ ${data.message}`;
+                    if (data.response_data) {
+                        resultDiv.textContent += ` (Response: ${JSON.stringify(data.response_data)})`;
+                    }
+                } else {
+                    resultDiv.className = 'connection-test-result error';
+                    resultDiv.textContent = `✗ ${data.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'connection-test-result error';
+                resultDiv.textContent = `✗ Error: ${error.message}`;
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = 'Test Connection';
+            }
+        });
+    }
+
     function initSettingsForm() {
         const settingsForm = document.getElementById('settings-form');
         if (!settingsForm) return;
@@ -71,9 +123,13 @@
 
     // Initialize on DOM ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSettingsForm);
+        document.addEventListener('DOMContentLoaded', () => {
+            initSettingsForm();
+            initTestGenAIConnection();
+        });
     } else {
         initSettingsForm();
+        initTestGenAIConnection();
     }
 
 })();
