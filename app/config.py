@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     about_post_id: int | None = Field(
         default=None, description="ID of the post to use for the About page link"
     )
-    ai_service_url: str = Field(
+    genai_api_endpoint: str = Field(
         default="http://point-ai:8080", description="URL of the AI service"
     )
 

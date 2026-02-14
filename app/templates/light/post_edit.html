@@ -64,7 +64,7 @@
                     <div class="form-group">
                         <div class="flex-between mb-1" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                             <label for="title" class="form-label" style="margin-bottom: 0;">Title <span class="required">*</span></label>
-                            <button type="button" class="btn btn-sm btn-outline" id="btn-analyze-image" title="Auto-fill title and tags from image" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">
+                            <button type="button" class="btn btn-sm btn-outline" id="btn-analyze-image" title="Auto-fill title, excerpt and tags from image" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: text-bottom;">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                                     <circle cx="8.5" cy="8.5" r="1.5"></circle>
@@ -217,6 +217,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const analyzeInput = document.getElementById('analyze-image-input');
     const titleInput = document.getElementById('title');
     const contentInput = document.getElementById('content');
+    const excerptInput = document.getElementById('excerpt');
     const tagsContainer = document.querySelector('.tags-input');
     const form = document.getElementById('post-form');
 
@@ -290,6 +291,18 @@ document.addEventListener('DOMContentLoaded', function() {
                      }
                 });
             }
+
+            // Update Excerpt
+            if (data.excerpt && excerptInput && excerptInput.value === '') {
+                excerptInput.value = data.excerpt;
+                
+                // Expand the card if it was filled
+                const excerptCard = excerptInput.closest('.card');
+                if (excerptCard) {
+                    excerptCard.classList.remove('collapsed');
+                }
+            }
+
 
             if (window.LightUtils && window.LightUtils.showToast) {
                 window.LightUtils.showToast('Metadata generated successfully!');
