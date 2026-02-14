@@ -113,9 +113,13 @@
             <h3 class="section-title">Advanced</h3>
             <div class="form-group">
                 <label for="genai_api_endpoint">GenAI API Endpoint</label>
-                <input type="url" id="genai_api_endpoint" name="genai_api_endpoint"
-                    value="{{ blog_settings.genai_api_endpoint }}" placeholder="http://localhost:8082/">
+                <div class="input-with-button">
+                    <input type="url" id="genai_api_endpoint" name="genai_api_endpoint"
+                        value="{{ blog_settings.genai_api_endpoint }}" placeholder="http://localhost:8082/">
+                    <button type="button" id="test-genai-connection" class="btn btn-secondary btn-sm">Test Connection</button>
+                </div>
                 <p class="form-help">Endpoint for AI image analysis (returns title and tags).</p>
+                <div id="genai-test-result" class="connection-test-result"></div>
             </div>
             <div class="form-group checkbox-group">
                 <label class="checkbox-label">
