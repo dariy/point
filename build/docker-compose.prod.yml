@@ -49,7 +49,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
       # AI Service
-      - AI_SERVICE_URL=${AI_SERVICE_URL:-http://point-ai:8080}
+      - GENAI_API_ENDPOINT=${GENAI_API_ENDPOINT:-http://point-ai:8080}
 
     volumes:
       # Use named volume for data persistence

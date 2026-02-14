@@ -136,6 +136,186 @@ class TestImageAnalysis:
             assert "sunset" in data["tags"]
             assert "ocean" in data["tags"]
 
+    @pytest.mark.asyncio
+    async def test_analyze_image_with_excerpt(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict[str, str],
+        sample_image: bytes,
+    ) -> None:
+        """Test that excerpt is properly returned when provided by GenAI API."""
+        # Configure GenAI endpoint
+        settings_service = SettingsService(db)
+        await settings_service.update_setting(
+            "genai_api_endpoint", "http://localhost:8080/analyze"
+        )
+        await db.commit()
+
+        # Mock GenAI response with excerpt directly
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "title": "Curated Sonic Shelf",
+            "tags": ["music", "analog", "shelf", "cozy", "light"],
+            "excerpt": "Dive into the warm glow of this curated collection, where analog beats meet urban chic on a sun-kissed shelf. Pure sonic vibes!"
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.api.media.httpx.AsyncClient", return_value=mock_client):
+            files = {"file": ("20240803160046_IMG_4106.jpg", sample_image, "image/jpeg")}
+            response = await client.post(
+                "/api/media/analyze",
+                files=files,
+                cookies=auth_cookies,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["title"] == "Curated Sonic Shelf"
+            assert data["excerpt"] == "Dive into the warm glow of this curated collection, where analog beats meet urban chic on a sun-kissed shelf. Pure sonic vibes!"
+            assert "2024" in data["tags"]  # Year tag should be added
+            assert "music" in data["tags"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_image_excerpt_mapping(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict[str, str],
+        sample_image: bytes,
+    ) -> None:
+        """Test that alternative keys are mapped to excerpt."""
+        # Configure GenAI endpoint
+        settings_service = SettingsService(db)
+        await settings_service.update_setting(
+            "genai_api_endpoint", "http://localhost:8080/analyze"
+        )
+        await db.commit()
+
+        # Mock GenAI response with 'description' instead of 'excerpt'
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "title": "Test Image",
+            "tags": ["test"],
+            "description": "This is a test description that should be mapped to excerpt."
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.api.media.httpx.AsyncClient", return_value=mock_client):
+            files = {"file": ("test.jpg", sample_image, "image/jpeg")}
+            response = await client.post(
+                "/api/media/analyze",
+                files=files,
+                cookies=auth_cookies,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["excerpt"] == "This is a test description that should be mapped to excerpt."
+
+    @pytest.mark.asyncio
+    async def test_analyze_image_wrapped_response(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict[str, str],
+        sample_image: bytes,
+    ) -> None:
+        """Test that wrapped responses (e.g., inside 'data') are handled."""
+        # Configure GenAI endpoint
+        settings_service = SettingsService(db)
+        await settings_service.update_setting(
+            "genai_api_endpoint", "http://localhost:8080/analyze"
+        )
+        await db.commit()
+
+        # Mock GenAI response wrapped in 'data'
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "status": "success",
+            "data": {
+                "title": "Wrapped Title",
+                "tags": ["wrapped"],
+                "excerpt": "Wrapped excerpt text."
+            }
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.api.media.httpx.AsyncClient", return_value=mock_client):
+            files = {"file": ("test.jpg", sample_image, "image/jpeg")}
+            response = await client.post(
+                "/api/media/analyze",
+                files=files,
+                cookies=auth_cookies,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["title"] == "Wrapped Title"
+            assert data["excerpt"] == "Wrapped excerpt text."
+            assert data["tags"] == ["wrapped"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_image_content_mapping(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        auth_cookies: dict[str, str],
+        sample_image: bytes,
+    ) -> None:
+        """Test that 'content' key is mapped to excerpt if excerpt is missing."""
+        # Configure GenAI endpoint
+        settings_service = SettingsService(db)
+        await settings_service.update_setting(
+            "genai_api_endpoint", "http://localhost:8080/analyze"
+        )
+        await db.commit()
+
+        # Mock GenAI response with 'content' instead of 'excerpt'
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "title": "Test Image",
+            "tags": ["test"],
+            "content": "This is content that should be mapped to excerpt."
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.api.media.httpx.AsyncClient", return_value=mock_client):
+            files = {"file": ("test.jpg", sample_image, "image/jpeg")}
+            response = await client.post(
+                "/api/media/analyze",
+                files=files,
+                cookies=auth_cookies,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["excerpt"] == "This is content that should be mapped to excerpt."
+
             # Verify the mock was called with correct endpoint
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
