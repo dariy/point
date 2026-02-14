@@ -17,8 +17,6 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:////data/point.db
       - STORAGE_PATH=/data
     command: sh -c "python scripts/init_db.py --create-admin && uvicorn app.main:app --host 0.0.0.0 --port 8000"
-    networks:
-      - point-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -31,5 +29,6 @@ volumes:
     driver: local
 
 networks:
-  point-network:
-    driver: bridge
+  default:
+    name: point-network
+    external: true
