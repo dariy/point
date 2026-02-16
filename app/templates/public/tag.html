@@ -120,7 +120,7 @@
                                     `}
                                     ${post.tags && post.tags.length > 0 ? `
                                     <div class="post-card-tags">
-                                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}">${tag.name}</a>`).join('')}
+                                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
                                     </div>
                                     ` : ''}
                                 </div>
@@ -156,7 +156,7 @@
                             `}
                             ${post.tags && post.tags.length > 0 ? `
                             <div class="post-card-tags">
-                                ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}">${tag.name}</a>`).join('')}
+                                ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
                             </div>
                             ` : ''}
                         </div>
@@ -368,7 +368,7 @@
                         {% if post.tags %}
                         <div class="post-card-tags">
                             {% for t in post.tags[:3] %}
-                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                                 t.name }}</a>
                             {% endfor %}
                         </div>
@@ -400,7 +400,7 @@
                         {% if post.tags %}
                         <div class="post-card-tags">
                             {% for t in post.tags[:3] %}
-                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                                 t.name }}</a>
                             {% endfor %}
                         </div>
@@ -452,7 +452,7 @@
                     {% if post.tags %}
                     <div class="post-card-tags">
                         {% for t in post.tags[:3] %}
-                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                             t.name }}</a>
                         {% endfor %}
                     </div>
@@ -477,7 +477,7 @@
                     {% if post.tags %}
                     <div class="post-card-tags">
                         {% for t in post.tags[:3] %}
-                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                             t.name }}</a>
                         {% endfor %}
                     </div>
