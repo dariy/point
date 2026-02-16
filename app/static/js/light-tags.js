@@ -11,13 +11,6 @@
 
     if (!modal || !form) return;
 
-    // Restore view preference
-    const savedView = localStorage.getItem('tags-view-preference');
-    if (savedView && savedView !== 'list') {
-        const tabLink = document.querySelector(`.tab-link[data-tab="${savedView}"]`);
-        if (tabLink) tabLink.click();
-    }
-
     // Use LightUtils.Modal if available
     const modalInstance = (window.LightUtils && window.LightUtils.Modal)
         ? new window.LightUtils.Modal(modal)
@@ -304,6 +297,166 @@
         }
     };
 
+    /**
+     * Initialize drag and drop for tree view
+     */
+    const initDragAndDrop = function () {
+        const treeView = document.querySelector('.tree-view');
+        if (!treeView) return;
+
+        let draggedTagId = null;
+
+        treeView.addEventListener('dragstart', function (e) {
+            const row = e.target.closest('.tree-row');
+            if (!row) return;
+
+            draggedTagId = row.dataset.tagId;
+            row.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', draggedTagId);
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        treeView.addEventListener('dragend', function (e) {
+            const row = e.target.closest('.tree-row');
+            if (row) row.classList.remove('dragging');
+            
+            // Remove all drag-over classes
+            document.querySelectorAll('.tree-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+            document.querySelectorAll('.tree-view.drag-over').forEach(el => el.classList.remove('drag-over'));
+        });
+
+        treeView.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // Remove existing drag-overs
+            document.querySelectorAll('.tree-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+            treeView.classList.remove('drag-over');
+
+            const row = e.target.closest('.tree-row');
+            if (row) {
+                const targetId = row.dataset.tagId;
+                
+                // Prevent dropping on self
+                if (targetId === draggedTagId) return;
+
+                // Prevent dropping on descendants
+                const draggedRow = document.getElementById(`tree-tag-${draggedTagId}`);
+                const draggedNode = draggedRow ? draggedRow.closest('.tree-node') : null;
+                if (draggedNode && draggedNode.contains(row)) return;
+
+                row.classList.add('drag-over');
+            } else if (e.target.closest('.tree-view')) {
+                treeView.classList.add('drag-over');
+            }
+        });
+
+        treeView.addEventListener('dragleave', function (e) {
+            const row = e.target.closest('.tree-row');
+            if (row) {
+                const relatedTarget = e.relatedTarget;
+                if (!relatedTarget || !row.contains(relatedTarget)) {
+                    row.classList.remove('drag-over');
+                }
+            }
+            
+            if (e.target === treeView) {
+                const relatedTarget = e.relatedTarget;
+                if (!relatedTarget || !treeView.contains(relatedTarget)) {
+                    treeView.classList.remove('drag-over');
+                }
+            }
+        });
+
+        treeView.addEventListener('drop', async function (e) {
+            e.preventDefault();
+            const targetRow = e.target.closest('.tree-row');
+            const targetTreeView = e.target.closest('.tree-view');
+            
+            const sourceId = e.dataTransfer.getData('text/plain');
+            let targetId = targetRow ? targetRow.dataset.tagId : null;
+
+            if (sourceId === targetId) return;
+
+            // If dropped on tree view but not on a row, it means move to root
+            // But we need to be sure it's not dropped inside a row's children
+            if (!targetRow && targetTreeView) {
+                targetId = null;
+            }
+
+            const confirmed = window.LightUtils && window.LightUtils.confirm
+                ? await window.LightUtils.confirm(`Move this tag under ${targetRow ? 'the selected tag' : 'root'}?`, { okVariant: 'primary' })
+                : confirm(`Move this tag under ${targetRow ? 'the selected tag' : 'root'}?`);
+
+            if (confirmed) {
+                await moveTag(sourceId, targetId);
+            }
+        });
+    };
+
+    /**
+     * Move tag to a new parent
+     */
+    const moveTag = async function (tagId, newParentId) {
+        try {
+            const parentIds = newParentId ? [parseInt(newParentId)] : [];
+            
+            const response = await fetch(`/api/tags/${tagId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    parent_ids: parentIds
+                }),
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                // Instead of full reload, fetch the updated tree HTML
+                const refreshResponse = await fetch(window.location.href);
+                if (refreshResponse.ok) {
+                    const html = await refreshResponse.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    // Update tree view
+                    const newTreeView = doc.querySelector('.tree-view');
+                    const currentTreeView = document.querySelector('.tree-view');
+                    if (newTreeView && currentTreeView) {
+                        currentTreeView.innerHTML = newTreeView.innerHTML;
+                        // Re-initialize drag and drop for the new content if needed
+                        // (Actually we use event delegation on treeView so it should work)
+                    }
+
+                    // Also update list view table if it exists
+                    const newListTable = doc.querySelector('#list-view .table');
+                    const currentListTable = document.querySelector('#list-view .table');
+                    if (newListTable && currentListTable) {
+                        currentListTable.innerHTML = newListTable.innerHTML;
+                    }
+
+                    if (window.LightUtils && window.LightUtils.showToast) {
+                        window.LightUtils.showToast('Moved successfully');
+                    }
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                const msg = errorData.detail || 'Failed to move tag';
+                if (window.LightUtils && window.LightUtils.showToast) {
+                    window.LightUtils.showToast(msg, 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Move error:', error);
+            if (window.LightUtils && window.LightUtils.showToast) {
+                window.LightUtils.showToast('An error occurred', 'error');
+            }
+        }
+    };
+
     // Event Delegation
     document.addEventListener('click', function (e) {
         // Tab switching
@@ -444,5 +597,15 @@
             }
         }
     });
+
+    // Initialize drag and drop
+    initDragAndDrop();
+
+    // Restore view preference
+    const savedView = localStorage.getItem('tags-view-preference');
+    if (savedView && savedView !== 'list') {
+        const tabLink = document.querySelector(`.tab-link[data-tab="${savedView}"]`);
+        if (tabLink) tabLink.click();
+    }
 
 })();
