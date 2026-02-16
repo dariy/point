@@ -592,7 +592,7 @@
             }
 
             // Remove element or reload
-            const row = btn.closest('tr, .media-item, .card');
+            const row = btn.closest('tr, .media-item, .tree-node');
             if (row) {
                 row.classList.add('opacity-0');
                 row.classList.add('transition-all');

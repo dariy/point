@@ -229,7 +229,7 @@ def serialize_post(
         "published_date": pub_date.strftime('%B %d, %Y'),
         "published_iso": pub_date.isoformat(),
         "view_count": post.view_count,
-        "tags": [{"name": t.name, "slug": t.slug} for t in visible_tags],
+        "tags": [{"name": t.name, "slug": t.slug, "post_count": t.post_count} for t in visible_tags],
         "excerpt": excerpt,
         "preview_html": preview_html,
         "has_image": has_media, # Keep key name for frontend layout compatibility
@@ -277,7 +277,6 @@ async def homepage(
     blog_settings = await settings_service.get_all_settings()
 
     per_page = blog_settings.get("posts_per_page", 10)
-    offset = (page - 1) * per_page
 
     # Get hidden tags for posts
     tag_service = TagService(db)
@@ -296,6 +295,26 @@ async def homepage(
         query = query.where(
             ~Post.tags.any(Tag.id.in_(hidden_posts_tag_ids))
         )
+
+    # Find the latest featured post for the homepage
+    featured_query = query.where(Post.is_featured.is_(True)).limit(1)
+    featured_result = await db.execute(featured_query)
+    featured_post = featured_result.scalar_one_or_none()
+    first_post_is_featured = featured_post is not None
+
+    # Adjust per_page and offset
+    actual_per_page = per_page
+    actual_offset = (page - 1) * per_page
+
+    if featured_post:
+        # Exclude the featured post from the main list
+        query = query.where(Post.id != featured_post.id)
+        # On page 1, we show featured + per_page posts.
+        # On subsequent pages, we show per_page posts starting after (page-1)*per_page posts.
+        # This is already handled by the default actual_offset and actual_per_page
+        # but let's be explicit.
+        actual_per_page = per_page
+        actual_offset = (page - 1) * per_page
 
     # Count query - use a more explicit approach for many-to-many filtering
     if hidden_posts_tag_ids:
@@ -320,11 +339,19 @@ async def homepage(
 
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
-    total_pages = ceil(total / per_page)
+
+    # Adjust total_pages calculation
+    if first_post_is_featured and total > 0:
+        total_pages = 1 + max(0, ceil((total - 1 - per_page) / per_page))
+    else:
+        total_pages = ceil(total / per_page)
 
     # Get paginated posts
-    posts_result = await db.execute(query.offset(offset).limit(per_page))
+    posts_result = await db.execute(query.offset(actual_offset).limit(actual_per_page))
     posts = list(posts_result.scalars().all())
+
+    if page == 1 and featured_post:
+        posts = [featured_post] + posts
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -588,7 +615,7 @@ async def single_post(
                     "view_count": post.view_count,
                     "content_html": content_html,
                     "thumbnail_path": resolved_thumb,
-                    "tags": [{"name": t.name, "slug": t.slug} for t in all_post_tags],
+                    "tags": [{"name": t.name, "slug": t.slug, "post_count": t.post_count} for t in all_post_tags],
                 },
                 "has_text_content": has_text_content,
                 "post_media": post_media,
@@ -701,18 +728,45 @@ async def tag_archive(
 
     per_page = blog_settings.get("posts_per_page", 12)
 
-    # Get posts with this tag
+    # Find the latest featured post for this tag
     tag_service = TagService(db)
-    posts, total = await tag_service.get_posts_by_tag(
+    featured_posts, _ = await tag_service.get_posts_by_tag(
         tag_id=tag.id,
-        page=page,
-        per_page=per_page,
+        per_page=1,
         published_only=True,
         recursive=True,
-        public_only=not user,  # Filter hidden posts for non-authenticated users
+        public_only=not user,
+        featured_only=True,
+    )
+    featured_post = featured_posts[0] if featured_posts else None
+
+    # Adjust per_page and offset
+    # If featured, we want 1 featured + per_page plain posts on the first page
+    actual_per_page = per_page
+    actual_offset = (page - 1) * per_page
+
+    # Get posts with this tag, excluding the main featured post if it exists
+    posts, total = await tag_service.get_posts_by_tag(
+        tag_id=tag.id,
+        per_page=actual_per_page,
+        offset=actual_offset,
+        published_only=True,
+        recursive=True,
+        public_only=not user,
+        exclude_id=featured_post.id if featured_post else None,
     )
 
-    total_pages = ceil(total / per_page)
+    # Adjust total_pages calculation
+    # 'total' here is the count of posts excluding the featured post
+    if featured_post:
+        total_pages = 1 + ceil(max(0, total - per_page) / per_page)
+        if page == 1:
+            posts = [featured_post] + posts
+        # Restore total count for display in templates
+        total = total + 1
+    else:
+        total_pages = ceil(total / per_page)
+
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -731,7 +785,7 @@ async def tag_archive(
                     "next_page": page + 1,
                     "prev_page": page - 1,
                 },
-                "tag": {"name": tag.name, "slug": tag.slug},
+                "tag": {"name": tag.name, "slug": tag.slug, "post_count": tag.post_count},
                 "is_logged_in": user is not None,
             }
         )
@@ -841,17 +895,37 @@ async def tags_page(
                 .distinct()
             )
 
+    # Find the latest featured post in this context
+    featured_query = query.where(Post.is_featured.is_(True)).limit(1)
+    featured_result = await db.execute(featured_query)
+    featured_post = featured_result.scalar_one_or_none()
+    first_post_is_featured = featured_post is not None
+
+    if featured_post:
+        # Exclude the featured post from the main list
+        query = query.where(Post.id != featured_post.id)
+
     query = query.order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
 
-    # Get total count
+    # Get total count of other posts
     count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-    total_pages = ceil(total / per_page)
+    total_others = total_result.scalar() or 0
+
+    # Adjust total_pages calculation
+    if first_post_is_featured:
+        total_pages = 1 + ceil(max(0, total_others - per_page) / per_page)
+        total = total_others + 1
+    else:
+        total_pages = ceil(total_others / per_page)
+        total = total_others
 
     # Get paginated posts
     posts_result = await db.execute(query.offset(offset).limit(per_page))
     posts = list(posts_result.scalars().all())
+
+    if featured_post and page == 1:
+        posts = [featured_post] + posts
 
     # Get all tags with posts for filter (hierarchical)
     tag_service = TagService(db)
@@ -893,12 +967,14 @@ async def tags_page(
                     "slug": post.slug,
                     "thumbnail_path": thumb_path,
                     "published_date": pub_date.strftime("%B %d, %Y"),
+                    "published_iso": pub_date.isoformat(),
                     "view_count": post.view_count,
-                    "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+                    "tags": [{"name": t.name, "slug": t.slug, "post_count": t.post_count} for t in post.tags],
                     "excerpt": excerpt,
                     "preview_html": preview_html,
                     "has_image": has_image,
                     "is_video": is_video_thumb,
+                    "is_featured": post.is_featured,
                 }
             )
 
