@@ -139,3 +139,26 @@
     color: white;
 }
 
+/* Drag and Drop Styles */
+.tree-row[draggable="true"] {
+    cursor: grab;
+}
+
+.tree-row.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+    background-color: var(--bg-secondary);
+}
+
+.tree-row.drag-over {
+    background-color: rgba(37, 99, 235, 0.15) !important;
+    outline: 2px dashed var(--color-primary, #2563eb);
+    outline-offset: -2px;
+}
+
+.tree-view.drag-over {
+    outline: 2px dashed var(--color-primary, #2563eb);
+    outline-offset: 4px;
+    background-color: rgba(37, 99, 235, 0.05);
+}
+
