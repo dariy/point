@@ -93,13 +93,12 @@
                                 </div>
                                 <div class="post-card-content overlay">
                             ` : `<div class="post-card-content">`}
-                                    <span class="featured-badge">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                                        </svg>
-                                        Featured
-                                    </span>
                                     <div class="post-card-meta">
+                                        <span class="featured-badge">
+                                          <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
+                                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                            </svg>
+                                        </span>
                                         <time datetime="${post.published_iso}">
                                             ${post.published_date}
                                         </time>
@@ -120,7 +119,7 @@
                                     `}
                                     ${post.tags && post.tags.length > 0 ? `
                                     <div class="post-card-tags">
-                                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}">${tag.name}</a>`).join('')}
+                                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
                                     </div>
                                     ` : ''}
                                 </div>
@@ -156,7 +155,7 @@
                             `}
                             ${post.tags && post.tags.length > 0 ? `
                             <div class="post-card-tags">
-                                ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}">${tag.name}</a>`).join('')}
+                                ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
                             </div>
                             ` : ''}
                         </div>
@@ -317,7 +316,7 @@
             {% set is_video = thumb_info[1] %}
             {% set has_image = display_thumb is not none %}
 
-            {% if loop.first and post.is_featured %}
+            {% if loop.first and page == 1 and post.is_featured %}
             <div class="featured-post">
                 <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}"
                     onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
@@ -344,14 +343,13 @@
                         {% endif %}
                     </div>
                     <div class="post-card-content overlay">
-                        <span class="featured-badge">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path
-                                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                            </svg>
-                            Featured
-                        </span>
                         <div class="post-card-meta">
+                            <span class="featured-badge">
+                                <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
+                                    <path
+                                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                </svg>
+                            </span>
                             <time
                                 datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
@@ -368,7 +366,7 @@
                         {% if post.tags %}
                         <div class="post-card-tags">
                             {% for t in post.tags[:3] %}
-                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                                 t.name }}</a>
                             {% endfor %}
                         </div>
@@ -376,14 +374,13 @@
                     </div>
                     {% else %}
                     <div class="post-card-content">
-                        <span class="featured-badge">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path
-                                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                            </svg>
-                            Featured
-                        </span>
                         <div class="post-card-meta">
+                            <span class="featured-badge">
+                                <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
+                                    <path
+                                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                </svg>
+                            </span>
                             <time
                                 datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
@@ -400,7 +397,7 @@
                         {% if post.tags %}
                         <div class="post-card-tags">
                             {% for t in post.tags[:3] %}
-                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                                 t.name }}</a>
                             {% endfor %}
                         </div>
@@ -452,7 +449,7 @@
                     {% if post.tags %}
                     <div class="post-card-tags">
                         {% for t in post.tags[:3] %}
-                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                             t.name }}</a>
                         {% endfor %}
                     </div>
@@ -477,7 +474,7 @@
                     {% if post.tags %}
                     <div class="post-card-tags">
                         {% for t in post.tags[:3] %}
-                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}">{{
+                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
                             t.name }}</a>
                         {% endfor %}
                     </div>

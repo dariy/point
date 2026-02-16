@@ -20,10 +20,10 @@
 
 {% macro render_tree_node(node) %}
 <div class="tree-node">
-    <div class="tree-row" id="tree-tag-{{ node.tag.id }}">
+    <div class="tree-row" id="tree-tag-{{ node.tag.id }}" draggable="true" data-tag-id="{{ node.tag.id }}">
         {% if node.children %}
-        <button type="button" class="tree-toggle" data-action="toggle-tree-node">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <button type="button" class="tree-toggle" data-action="toggle-tree-node" draggable="false">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" draggable="false">
                 <path d="M10 17l5-5-5-5v10z" />
             </svg>
         </button>
@@ -43,7 +43,7 @@
                 data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
                 data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}'
                 class="tag {% if node.tag.is_important %}tag-important{% endif %}"
-                title="Edit tag">
+                title="Edit tag" draggable="false">
                 {{ node.tag.name }}
             </a>
             {% if node.is_related %}
@@ -81,15 +81,16 @@
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
                 data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
-                data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}' title="Edit">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}' title="Edit"
+                draggable="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" draggable="false">
                     <path
                         d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
                 </svg>
             </button>
             <button type="button" class="btn btn-sm btn-danger" data-delete-url="/api/tags/{{ node.tag.id }}"
-                data-delete-name="{{ node.tag.name }}" title="Delete">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                data-delete-name="{{ node.tag.name }}" data-redirect-url="{{ request.url }}" title="Delete" draggable="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" draggable="false">
                     <path
                         d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
                 </svg>
@@ -302,7 +303,7 @@
                                 </svg>
                             </button>
                             <button type="button" class="btn btn-sm btn-danger" data-delete-url="/api/tags/{{ tag.id }}"
-                                data-delete-name="{{ tag.name }}" title="Delete">
+                                data-delete-name="{{ tag.name }}" data-redirect-url="{{ request.url }}" title="Delete">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                                     <path
                                         d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
