@@ -543,6 +543,8 @@ class TagService:
         recursive: bool = True,
         public_only: bool = False,
         offset: int | None = None,
+        featured_only: bool = False,
+        exclude_id: int | None = None,
     ) -> tuple[list[Post], int]:
         """Get posts with a specific tag (and its descendants)."""
         if recursive:
@@ -559,6 +561,12 @@ class TagService:
 
         if published_only:
             query = query.where(Post.status == PostStatus.PUBLISHED)
+
+        if featured_only:
+            query = query.where(Post.is_featured.is_(True))
+
+        if exclude_id:
+            query = query.where(Post.id != exclude_id)
 
         if public_only:
             hidden_posts_tag_ids = await self.get_hidden_posts_tag_ids()
