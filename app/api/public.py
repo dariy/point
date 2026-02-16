@@ -229,7 +229,7 @@ def serialize_post(
         "published_date": pub_date.strftime('%B %d, %Y'),
         "published_iso": pub_date.isoformat(),
         "view_count": post.view_count,
-        "tags": [{"name": t.name, "slug": t.slug} for t in visible_tags],
+        "tags": [{"name": t.name, "slug": t.slug, "post_count": t.post_count} for t in visible_tags],
         "excerpt": excerpt,
         "preview_html": preview_html,
         "has_image": has_media, # Keep key name for frontend layout compatibility
@@ -588,7 +588,7 @@ async def single_post(
                     "view_count": post.view_count,
                     "content_html": content_html,
                     "thumbnail_path": resolved_thumb,
-                    "tags": [{"name": t.name, "slug": t.slug} for t in all_post_tags],
+                    "tags": [{"name": t.name, "slug": t.slug, "post_count": t.post_count} for t in all_post_tags],
                 },
                 "has_text_content": has_text_content,
                 "post_media": post_media,
@@ -731,7 +731,7 @@ async def tag_archive(
                     "next_page": page + 1,
                     "prev_page": page - 1,
                 },
-                "tag": {"name": tag.name, "slug": tag.slug},
+                "tag": {"name": tag.name, "slug": tag.slug, "post_count": tag.post_count},
                 "is_logged_in": user is not None,
             }
         )
@@ -894,7 +894,7 @@ async def tags_page(
                     "thumbnail_path": thumb_path,
                     "published_date": pub_date.strftime("%B %d, %Y"),
                     "view_count": post.view_count,
-                    "tags": [{"name": t.name, "slug": t.slug} for t in post.tags],
+                    "tags": [{"name": t.name, "slug": t.slug, "post_count": t.post_count} for t in post.tags],
                     "excerpt": excerpt,
                     "preview_html": preview_html,
                     "has_image": has_image,
