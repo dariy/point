@@ -277,7 +277,6 @@ async def homepage(
     blog_settings = await settings_service.get_all_settings()
 
     per_page = blog_settings.get("posts_per_page", 10)
-    offset = (page - 1) * per_page
 
     # Get hidden tags for posts
     tag_service = TagService(db)
@@ -296,6 +295,23 @@ async def homepage(
         query = query.where(
             ~Post.tags.any(Tag.id.in_(hidden_posts_tag_ids))
         )
+
+    # Check if the first post is featured
+    # We need this to adjust pagination
+    first_post_query = query.limit(1)
+    first_post_result = await db.execute(first_post_query)
+    first_post = first_post_result.scalar_one_or_none()
+    first_post_is_featured = bool(first_post and first_post.is_featured)
+
+    # Adjust per_page and offset if the first post is featured
+    actual_per_page = per_page
+    actual_offset = (page - 1) * per_page
+
+    if first_post_is_featured:
+        if page == 1:
+            actual_per_page = per_page + 1
+        else:
+            actual_offset = (page - 1) * per_page + 1
 
     # Count query - use a more explicit approach for many-to-many filtering
     if hidden_posts_tag_ids:
@@ -320,11 +336,17 @@ async def homepage(
 
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
-    total_pages = ceil(total / per_page)
+
+    # Adjust total_pages calculation
+    if first_post_is_featured and total > 0:
+        total_pages = 1 + max(0, ceil((total - 1 - per_page) / per_page))
+    else:
+        total_pages = ceil(total / per_page)
 
     # Get paginated posts
-    posts_result = await db.execute(query.offset(offset).limit(per_page))
+    posts_result = await db.execute(query.offset(actual_offset).limit(actual_per_page))
     posts = list(posts_result.scalars().all())
+
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -701,18 +723,48 @@ async def tag_archive(
 
     per_page = blog_settings.get("posts_per_page", 12)
 
-    # Get posts with this tag
+    # Check if the first post for this tag is featured
     tag_service = TagService(db)
-    posts, total = await tag_service.get_posts_by_tag(
+
+    # We need to know if the first post of the entire tag is featured to adjust pagination
+    # This is only needed for page 1 to decide if we fetch more, and for subsequent pages to set the correct offset
+    first_posts, _ = await tag_service.get_posts_by_tag(
         tag_id=tag.id,
-        page=page,
-        per_page=per_page,
+        page=1,
+        per_page=1,
         published_only=True,
         recursive=True,
-        public_only=not user,  # Filter hidden posts for non-authenticated users
+        public_only=not user,
+    )
+    first_post_is_featured = bool(first_posts and first_posts[0].is_featured)
+
+    # Adjust per_page and offset if the first post is featured
+    # If featured, we want 1 featured + per_page plain posts on the first page
+    actual_per_page = per_page
+    actual_offset = (page - 1) * per_page
+
+    if first_post_is_featured:
+        if page == 1:
+            actual_per_page = per_page + 1
+        else:
+            actual_offset = (page - 1) * per_page + 1
+
+    # Get posts with this tag
+    posts, total = await tag_service.get_posts_by_tag(
+        tag_id=tag.id,
+        per_page=actual_per_page,
+        offset=actual_offset,
+        published_only=True,
+        recursive=True,
+        public_only=not user,
     )
 
-    total_pages = ceil(total / per_page)
+    # Adjust total_pages calculation
+    if first_post_is_featured and total > 0:
+        total_pages = 1 + max(0, ceil((total - 1 - per_page) / per_page))
+    else:
+        total_pages = ceil(total / per_page)
+
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
