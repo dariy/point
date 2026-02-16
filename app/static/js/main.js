@@ -1464,10 +1464,9 @@
 
                 const featuredBadge = showFeatured ? `
                     <span class="featured-badge">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
                             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                         </svg>
-                        Featured
                     </span>` : '';
 
                 const postMeta = `
@@ -1677,7 +1676,10 @@
             }
 
             let html = '<div class="posts-grid">';
-            data.posts.forEach(post => {
+            data.posts.forEach((post, index) => {
+                const isFirst = index === 0;
+                const isPageOne = data.pagination.page === 1;
+                const showFeatured = isFirst && isPageOne && post.is_featured;
                 const hasImage = post.has_image;
                 const isVideo = post.is_video;
 
@@ -1689,12 +1691,19 @@
                         </svg>
                     </a>` : '';
 
+                const featuredBadge = showFeatured ? `
+                    <span class="featured-badge">
+                        <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                    </span>` : '';
+
                 const contentHtml = hasImage ? `
                     <div class="post-card-background">
                         ${isVideo ? `
                             <video src="${post.thumbnail_path}" muted loop playsinline></video>
                             <div class="video-play-indicator">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                <svg width="${showFeatured ? '48' : '32'}" height="${showFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
                                     <path d="M8 5v14l11-7z"/>
                                 </svg>
                             </div>` : `
@@ -1708,17 +1717,25 @@
                         ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
                     </div>` : '';
 
-                html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                    ${editBtn}${contentHtml}
-                        <div class="post-card-meta">
-                            <time datetime="${post.published_iso}">${post.published_date}</time>
-                            ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
+                const articleHtml = `
+                    <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
+                        ${editBtn}${contentHtml}
+                            <div class="post-card-meta">
+                                ${featuredBadge}
+                                <time datetime="${post.published_iso}">${post.published_date}</time>
+                                ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
+                            </div>
+                            <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
+                            ${hasImage ? `<div class="post-card-excerpt">${post.excerpt || ''}</div>` : `<div class="post-card-text-preview">${post.preview_html || ''}</div>`}
+                            ${postTags}
                         </div>
-                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                        ${hasImage ? `<div class="post-card-excerpt">${post.excerpt || ''}</div>` : `<div class="post-card-text-preview">${post.preview_html || ''}</div>`}
-                        ${postTags}
-                    </div>
-                </article>`;
+                    </article>`;
+
+                if (showFeatured) {
+                    html += `<div class="featured-post">${articleHtml}</div>`;
+                } else {
+                    html += articleHtml;
+                }
             });
             html += '</div>';
 
