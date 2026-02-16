@@ -75,7 +75,7 @@
                     {% if post.tags %}
                     <div class="post-card-tags">
                         {% for tag in post.tags[:3] %}
-                        <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
+                        <a href="/tag/{{ tag.slug }}" class="tag-link" title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">{{ tag.name }}</a>
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -106,7 +106,7 @@
                     {% if post.tags %}
                     <div class="post-card-tags">
                         {% for tag in post.tags[:3] %}
-                        <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
+                        <a href="/tag/{{ tag.slug }}" class="tag-link" title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">{{ tag.name }}</a>
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -165,7 +165,7 @@
                 {% if post.tags %}
                 <div class="post-card-tags">
                     {% for tag in post.tags[:3] %}
-                    <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
+                    <a href="/tag/{{ tag.slug }}" class="tag-link" title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">{{ tag.name }}</a>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -189,7 +189,7 @@
                 {% if post.tags %}
                 <div class="post-card-tags">
                     {% for tag in post.tags[:3] %}
-                    <a href="/tag/{{ tag.slug }}" class="tag-link">{{ tag.name }}</a>
+                    <a href="/tag/{{ tag.slug }}" class="tag-link" title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">{{ tag.name }}</a>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -385,7 +385,7 @@
                                     `}
                                     ${post.tags && post.tags.length > 0 ? `
                                     <div class="post-card-tags">
-                                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link">${tag.name}</a>`).join('')}
+                                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
                                     </div>
                                     ` : ''}
                                 </div>
@@ -431,7 +431,7 @@
                                 `}
                                 ${post.tags && post.tags.length > 0 ? `
                                 <div class="post-card-tags">
-                                    ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link">${tag.name}</a>`).join('')}
+                                    ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
                                 </div>
                                 ` : ''}
                             </div>
