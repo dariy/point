@@ -542,6 +542,9 @@ class TagService:
         published_only: bool = True,
         recursive: bool = True,
         public_only: bool = False,
+        offset: int | None = None,
+        featured_only: bool = False,
+        exclude_id: int | None = None,
     ) -> tuple[list[Post], int]:
         """Get posts with a specific tag (and its descendants)."""
         if recursive:
@@ -559,6 +562,12 @@ class TagService:
         if published_only:
             query = query.where(Post.status == PostStatus.PUBLISHED)
 
+        if featured_only:
+            query = query.where(Post.is_featured.is_(True))
+
+        if exclude_id:
+            query = query.where(Post.id != exclude_id)
+
         if public_only:
             hidden_posts_tag_ids = await self.get_hidden_posts_tag_ids()
             if hidden_posts_tag_ids:
@@ -568,7 +577,9 @@ class TagService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0
 
-        offset = (page - 1) * per_page
+        if offset is None:
+            offset = (page - 1) * per_page
+
         query = (
             query.options(selectinload(Post.tags).selectinload(Tag.parents))
             .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
