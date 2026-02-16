@@ -542,6 +542,7 @@ class TagService:
         published_only: bool = True,
         recursive: bool = True,
         public_only: bool = False,
+        offset: int | None = None,
     ) -> tuple[list[Post], int]:
         """Get posts with a specific tag (and its descendants)."""
         if recursive:
@@ -568,7 +569,9 @@ class TagService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0
 
-        offset = (page - 1) * per_page
+        if offset is None:
+            offset = (page - 1) * per_page
+
         query = (
             query.options(selectinload(Post.tags).selectinload(Tag.parents))
             .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
