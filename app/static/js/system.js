@@ -291,6 +291,51 @@
     // ===========================
 
     /**
+     * Refresh migration list
+     */
+    const refreshMigrations = async function () {
+        const migrationsList = document.getElementById('migrations-list');
+        if (!migrationsList) return;
+        
+        migrationsList.innerHTML = '<div class="loading">Loading migrations...</div>';
+
+        try {
+            const response = await fetch('/api/system/migrations');
+            if (response.ok) {
+                const migrations = await response.json();
+                if (migrations.length === 0) {
+                    migrationsList.innerHTML = '<div class="empty-state">No migrations found.</div>';
+                } else {
+                    migrationsList.innerHTML = `
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Migration Name</th>
+                                    <th>Applied At</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${migrations.map(m => `
+                                    <tr>
+                                        <td>${m.id}</td>
+                                        <td><code>${m.name}</code></td>
+                                        <td class="text-muted text-small">${formatDate(m.applied_at)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                }
+            } else {
+                migrationsList.innerHTML = '<div class="error-state">Failed to load migrations.</div>';
+            }
+        } catch (error) {
+            migrationsList.innerHTML = '<div class="error-state">Error: ' + error.message + '</div>';
+        }
+    };
+
+    /**
      * Refresh backup list
      */
     const refreshBackups = async function () {
@@ -467,6 +512,7 @@
             logContent.scrollTop = logContent.scrollHeight;
         }
         refreshBackups();
+        refreshMigrations();
 
         // Event delegation for dynamic components
         document.addEventListener('click', (e) => {
@@ -489,6 +535,9 @@
 
             const action = actionBtn.dataset.action;
             switch (action) {
+                case 'refresh-migrations':
+                    refreshMigrations();
+                    break;
                 case 'clear-cache':
                     clearCache(actionBtn.dataset.pattern || 'all');
                     break;
