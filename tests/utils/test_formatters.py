@@ -1,6 +1,5 @@
 """Tests for formatter utilities."""
 
-
 from app.utils.formatters import (
     determine_thumbnail,
     extract_all_images,
@@ -24,14 +23,12 @@ def test_markdown_to_html_basic():
     assert "<h1" in result  # May have attributes like id
     assert "Hello</h1>" in result
 
-
 def test_markdown_to_html_fenced_code():
     """Test fenced code blocks."""
     content = "```python\nprint('hello')\n```"
     result = markdown_to_html(content)
     assert "<code" in result  # May have class attribute
     assert "print('hello')" in result
-
 
 def test_markdown_to_html_tables():
     """Test table rendering."""
@@ -40,7 +37,6 @@ def test_markdown_to_html_tables():
     assert "<table>" in result
     assert "<th>A</th>" in result
 
-
 # format_content tests
 def test_format_content_markdown():
     """Test markdown formatter."""
@@ -48,13 +44,11 @@ def test_format_content_markdown():
     assert "<h1" in result  # May have attributes
     assert "Title</h1>" in result
 
-
 def test_format_content_html():
     """Test HTML passthrough."""
     html = "<p>Hello</p>"
     result = format_content(html, "html")
     assert result == html
-
 
 def test_format_content_raw():
     """Test raw text escaping."""
@@ -62,38 +56,32 @@ def test_format_content_raw():
     assert "&lt;script&gt;" in result
     assert "<pre>" in result
 
-
 # strip_html tests
 def test_strip_html_basic():
     """Test stripping HTML tags."""
     result = strip_html("<p>Hello <strong>world</strong></p>")
     assert result == "Hello world"
 
-
 def test_strip_html_with_entities():
     """Test HTML entity decoding."""
     result = strip_html("<p>&lt;tag&gt; &amp; entities</p>")
     assert result == "<tag> & entities"
-
 
 def test_strip_html_whitespace():
     """Test whitespace normalization."""
     result = strip_html("<p>Multiple   \n  spaces</p>")
     assert result == "Multiple spaces"
 
-
 def test_strip_html_empty():
     """Test empty content."""
     assert strip_html("") == ""
     assert strip_html("   ") == ""
-
 
 # generate_excerpt tests
 def test_generate_excerpt_short_content():
     """Test excerpt when content is shorter than max_length."""
     result = generate_excerpt("Short text", "markdown", 50)
     assert result == "Short text"
-
 
 def test_generate_excerpt_long_content():
     """Test excerpt truncation with ellipsis."""
@@ -102,13 +90,11 @@ def test_generate_excerpt_long_content():
     assert len(result) <= 53  # max_length + "..."
     assert result.endswith("...")
 
-
 def test_generate_excerpt_word_boundary():
     """Test truncation at word boundary."""
     result = generate_excerpt("Hello world this is a test", "markdown", 15)
     assert result.endswith("...")
     assert not result.startswith("Hello world thi")  # Should break at word
-
 
 def test_generate_excerpt_markdown_strips_formatting():
     """Test that markdown is stripped in excerpt."""
@@ -117,7 +103,6 @@ def test_generate_excerpt_markdown_strips_formatting():
     assert "**" not in result
     assert "Title" in result
     assert "Bold" in result
-
 
 # sanitize_html tests
 def test_sanitize_html_allowed_tags():
@@ -128,7 +113,6 @@ def test_sanitize_html_allowed_tags():
     assert "<strong>" in result
     assert "<em>" in result
 
-
 def test_sanitize_html_dangerous_tags():
     """Test that dangerous tags are removed."""
     html = "<script>alert('xss')</script><p>Safe</p>"
@@ -138,7 +122,6 @@ def test_sanitize_html_dangerous_tags():
     assert "<p>Safe</p>" in result
     # Note: Text content inside removed tags is kept (e.g., "alert('xss')")
 
-
 def test_sanitize_html_allowed_attributes():
     """Test allowed attributes on links and images."""
     html = '<a href="http://example.com" title="Link">Click</a>'
@@ -146,14 +129,12 @@ def test_sanitize_html_allowed_attributes():
     assert 'href="http://example.com"' in result
     assert 'title="Link"' in result
 
-
 def test_sanitize_html_dangerous_attributes():
     """Test removal of dangerous attributes."""
     html = '<a href="http://example.com" onclick="alert()">Click</a>'
     result = sanitize_html(html)
     assert "onclick" not in result
     assert 'href="http://example.com"' in result
-
 
 def test_sanitize_html_safe_protocols():
     """Test that only safe protocols are allowed."""
@@ -166,7 +147,6 @@ def test_sanitize_html_safe_protocols():
     result = sanitize_html(html_unsafe)
     assert "javascript:" not in result
 
-
 def test_sanitize_html_self_closing_tags():
     """Test self-closing tags."""
     html = '<img src="/image.jpg" /><br />'
@@ -175,14 +155,12 @@ def test_sanitize_html_self_closing_tags():
     assert 'src="/image.jpg"' in result
     assert "<br />" in result
 
-
 def test_sanitize_html_closing_tags():
     """Test closing tags."""
     html = "<p>Text</p><script>Bad</script>"
     result = sanitize_html(html)
     assert "</p>" in result
     assert "</script>" not in result
-
 
 def test_sanitize_html_video_tags():
     """Test video tag support."""
@@ -191,13 +169,11 @@ def test_sanitize_html_video_tags():
     assert "<video" in result
     assert 'src="/video.mp4"' in result
 
-
 # truncate_text tests
 def test_truncate_text_short():
     """Test that short text is not truncated."""
     result = truncate_text("Short", 50)
     assert result == "Short"
-
 
 def test_truncate_text_long():
     """Test truncation with default suffix."""
@@ -205,19 +181,16 @@ def test_truncate_text_long():
     assert len(result) <= 13  # 10 + "..."
     assert result.endswith("...")
 
-
 def test_truncate_text_custom_suffix():
     """Test custom suffix."""
     result = truncate_text("Long text here", 8, " [more]")
     assert result.endswith(" [more]")
-
 
 def test_truncate_text_word_boundary():
     """Test word boundary truncation."""
     result = truncate_text("Hello world test", 10)
     assert "Hello" in result
     # Should break at word, not mid-word
-
 
 # extract_first_image tests
 def test_extract_first_image_markdown():
@@ -226,26 +199,22 @@ def test_extract_first_image_markdown():
     result = extract_first_image(content)
     assert result == "first.jpg"
 
-
 def test_extract_first_image_html():
     """Test extracting first image from HTML."""
     content = 'Text <img src="first.jpg"> more <img src="second.jpg">'
     result = extract_first_image(content)
     assert result == "first.jpg"
 
-
 def test_extract_first_image_none():
     """Test when no image exists."""
     result = extract_first_image("Just text")
     assert result is None
-
 
 def test_extract_first_image_with_title():
     """Test markdown image with title."""
     content = '![Alt](image.jpg "Title")'
     result = extract_first_image(content)
     assert result == "image.jpg"
-
 
 # extract_all_images tests
 def test_extract_all_images_markdown():
@@ -264,7 +233,6 @@ def test_extract_all_images_markdown():
     assert "image1.jpg" in images
     assert "/path/to/image2.png" in images
 
-
 def test_extract_all_images_html():
     """Test extracting images from HTML."""
     content = """
@@ -280,7 +248,6 @@ def test_extract_all_images_html():
     assert "image1.jpg" in images
     assert "/path/to/image2.png" in images
 
-
 def test_extract_all_images_mixed():
     """Test extracting images from mixed content."""
     content = """
@@ -292,7 +259,6 @@ def test_extract_all_images_mixed():
     assert "md.jpg" in images
     assert "html.jpg" in images
 
-
 def test_extract_all_images_duplicates():
     """Test that duplicates are removed."""
     content = """
@@ -303,12 +269,10 @@ def test_extract_all_images_duplicates():
     assert len(images) == 1
     assert images[0] == "image.jpg"
 
-
 def test_extract_all_images_empty():
     """Test extracting from empty or text-only content."""
     assert extract_all_images("") == []
     assert extract_all_images("Just text") == []
-
 
 # extract_all_media tests
 def test_extract_all_media_images():
@@ -319,7 +283,6 @@ def test_extract_all_media_images():
     assert result[0] == {"url": "image.jpg", "type": "image"}
     assert result[1] == {"url": "photo.png", "type": "image"}
 
-
 def test_extract_all_media_videos():
     """Test extracting video media."""
     content = '<video src="video.mp4"></video>'
@@ -328,7 +291,6 @@ def test_extract_all_media_videos():
     assert result[0]["type"] == "video"
     assert result[0]["url"] == "video.mp4"
 
-
 def test_extract_all_media_video_by_extension():
     """Test video detection by file extension."""
     content = '![Video](movie.mp4)'
@@ -336,14 +298,12 @@ def test_extract_all_media_video_by_extension():
     assert len(result) == 1
     assert result[0]["type"] == "video"
 
-
 def test_extract_all_media_source_tags():
     """Test extracting from source tags."""
     content = '<source src="video.webm">'
     result = extract_all_media(content)
     assert len(result) == 1
     assert result[0]["type"] == "video"
-
 
 def test_extract_all_media_mixed():
     """Test mixed images and videos."""
@@ -354,19 +314,16 @@ def test_extract_all_media_mixed():
     assert result[1]["type"] == "video"
     assert result[2]["type"] == "video"
 
-
 def test_extract_all_media_duplicates():
     """Test duplicate removal."""
     content = '![A](image.jpg) <img src="image.jpg">'
     result = extract_all_media(content)
     assert len(result) == 1
 
-
 def test_extract_all_media_empty():
     """Test empty content."""
     assert extract_all_media("") == []
     assert extract_all_media("Just text") == []
-
 
 # truncate_paragraphs tests
 def test_truncate_paragraphs_basic():
@@ -377,7 +334,6 @@ def test_truncate_paragraphs_basic():
     assert "<p>Second paragraph</p>" in result
     assert "Third paragraph" not in result
 
-
 def test_truncate_paragraphs_with_images():
     """Test that paragraphs with only images are skipped."""
     html = '<p><img src="image.jpg"></p><p>Text paragraph</p>'
@@ -385,11 +341,9 @@ def test_truncate_paragraphs_with_images():
     assert "Text paragraph" in result
     assert "image.jpg" not in result
 
-
 def test_truncate_paragraphs_empty():
     """Test empty content."""
     assert truncate_paragraphs("", 2) == ""
-
 
 def test_truncate_paragraphs_no_p_tags():
     """Test fallback when no <p> tags exist."""
@@ -398,20 +352,17 @@ def test_truncate_paragraphs_no_p_tags():
     # Should create paragraphs from double newlines
     assert "<p>" in result
 
-
 def test_truncate_paragraphs_strips_tags():
     """Test that HTML tags inside paragraphs are stripped."""
     html = "<p>Text with <strong>bold</strong> and <em>italic</em></p>"
     result = truncate_paragraphs(html, 1)
     assert "<p>Text with bold and italic</p>" in result
 
-
 # determine_thumbnail tests
 def test_determine_thumbnail_explicit_image():
     """Test with explicit image thumbnail."""
     result = determine_thumbnail("Content", "/thumb.jpg")
     assert result == ("/thumb.jpg", False)
-
 
 def test_determine_thumbnail_explicit_video():
     """Test with explicit video thumbnail."""
@@ -420,14 +371,12 @@ def test_determine_thumbnail_explicit_video():
     # If thumbnail is video, should try to find image in content or fallback
     assert is_video or thumb == "/thumb.mp4"
 
-
 def test_determine_thumbnail_from_content():
     """Test extracting thumbnail from content."""
     content = '![Image](photo.jpg)'
     result = determine_thumbnail(content, None)
     assert result[0] == "photo.jpg"
     assert result[1] is False
-
 
 def test_determine_thumbnail_video_fallback():
     """Test video fallback when no image."""
@@ -443,12 +392,10 @@ def test_determine_thumbnail_prefer_image_over_video():
     # Should prefer the image
     assert "photo.jpg" in result[0] or result[0] == "photo.jpg"
 
-
 def test_determine_thumbnail_empty_content():
     """Test with no content and no thumbnail."""
     result = determine_thumbnail("", None)
     assert result == (None, False)
-
 
 # preprocess_media_links tests
 def test_preprocess_media_links_image():
@@ -457,13 +404,11 @@ def test_preprocess_media_links_image():
     result = preprocess_media_links(content)
     assert "![test.jpg](/2024/08/test.jpg)" in result
 
-
 def test_preprocess_media_links_video():
     """Test preprocessing simplified video link."""
     content = "/2024/08/test.mp4"
     result = preprocess_media_links(content)
     assert '<video src="/2024/08/test.mp4"' in result
-
 
 def test_preprocess_media_links_not_at_start():
     """Test that simplified links not on their own line are ignored."""
@@ -471,13 +416,11 @@ def test_preprocess_media_links_not_at_start():
     result = preprocess_media_links(content)
     assert result == content
 
-
 def test_preprocess_media_links_no_extension():
     """Test that links without extensions are ignored."""
     content = "/2024/08/test"
     result = preprocess_media_links(content)
     assert result == content
-
 
 def test_format_content_with_simplified_links():
     """Test format_content handles simplified links via preprocessing."""
