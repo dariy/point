@@ -1,9 +1,13 @@
 {% extends "public/base.html" %}
+{% from "macros/posts.html" import post_card %}
+{% from "macros/pagination.html" import render_pagination %}
+{% from "macros/common.html" import icon %}
 
 {% block page_title %}Posts tagged "{{ tag.name }}"{% endblock %}
 
-{% block meta_description %}{% if tag.description %}{{ tag.description }}{% else %}Browse {{ total }} posts tagged with
-"{{ tag.name }}"{% endif %}{% endblock %}
+{% block meta_description %}
+{% if tag.description %}{{ tag.description }}{% else %}Browse {{ total }} posts tagged with "{{ tag.name }}"{% endif %}
+{% endblock %}
 
 {% block og_meta %}
 <meta property="og:site_name" content="{{ blog_title }}">
@@ -15,305 +19,13 @@
 <meta property="og:locale" content="en_US">
 {% endblock %}
 
-{% block extra_js %}
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const postsContainer = document.getElementById('tag-posts-container');
-
-        async function loadPosts(url) {
-            try {
-                // Store the current list URL in sessionStorage
-                sessionStorage.setItem('lastListUrl', url);
-
-                postsContainer.style.opacity = '0.5';
-
-                const response = await fetch(url, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    renderPosts(data);
-
-                    window.history.pushState({}, '', url);
-                    attachListeners();
-                    window.scrollTo(0, 0);
-                } else {
-                    window.location.href = url;
-                }
-            } catch (error) {
-                console.error('Error loading posts:', error);
-                window.location.href = url;
-            } finally {
-                postsContainer.style.opacity = '1';
-            }
-        }
-
-        function renderPosts(data) {
-            if (!data.posts || data.posts.length === 0) {
-                postsContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
-                            <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
-                            <path d="M21 15l-5-5L5 21"/>
-                        </svg>
-                    </div>
-                    <h2 class="empty-state-title">No posts with this tag</h2>
-                    <p class="empty-state-text">Check back later for new content.</p>
-                    <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Home</a>
-                </div>`;
-                renderPagination(null);
-                return;
-            }
-
-            let html = '<div class="posts-grid">';
-
-            data.posts.forEach((post, index) => {
-                const isFirst = index === 0;
-                const isPageOne = data.pagination.page === 1;
-                const showFeatured = isFirst && isPageOne && post.is_featured;
-                const hasImage = post.has_image;
-
-                const editBtn = data.is_logged_in ? `
-            <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-            </a>` : '';
-
-                if (showFeatured) {
-                    html += `<div class="featured-post">
-                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                            ${editBtn}
-                            ${hasImage ? `
-                                <div class="post-card-background">
-                                    <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
-                                </div>
-                                <div class="post-card-content overlay">
-                            ` : `<div class="post-card-content">`}
-                                    <div class="post-card-meta">
-                                        <span class="featured-badge">
-                                          <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
-                                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                                            </svg>
-                                        </span>
-                                        <time datetime="${post.published_iso}">
-                                            ${post.published_date}
-                                        </time>
-                                        ${post.view_count ? `
-                                        <span>&bull;</span>
-                                        <span>${post.view_count} views</span>
-                                        ` : ''}
-                                    </div>
-                                    <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                                    ${hasImage ? `
-                                    <div class="post-card-excerpt">
-                                        ${post.excerpt || ''}
-                                    </div>
-                                    ` : `
-                                    <div class="post-card-text-preview">
-                                        ${post.preview_html || ''}
-                                    </div>
-                                    `}
-                                    ${post.tags && post.tags.length > 0 ? `
-                                    <div class="post-card-tags">
-                                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
-                                    </div>
-                                    ` : ''}
-                                </div>
-                        </article>
-                    </div>`;
-                } else {
-                    html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                    ${editBtn}
-                    ${hasImage ? `
-                        <div class="post-card-background">
-                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">
-                        </div>
-                        <div class="post-card-content overlay">
-                    ` : `<div class="post-card-content">`}
-                            <div class="post-card-meta">
-                                <time datetime="${post.published_iso}">
-                                    ${post.published_date}
-                                </time>
-                                ${post.view_count ? `
-                                <span>&bull;</span>
-                                <span>${post.view_count} views</span>
-                                ` : ''}
-                            </div>
-                            <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                            ${hasImage ? `
-                            <div class="post-card-excerpt">
-                                ${post.excerpt || ''}
-                            </div>
-                            ` : `
-                            <div class="post-card-text-preview">
-                                ${post.preview_html || ''}
-                            </div>
-                            `}
-                            ${post.tags && post.tags.length > 0 ? `
-                            <div class="post-card-tags">
-                                ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug ? 'active' : ''}" title="${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}">${tag.name}</a>`).join('')}
-                            </div>
-                            ` : ''}
-                        </div>
-                </article>`;
-                }
-            });
-
-            html += '</div>';
-
-            postsContainer.innerHTML = html;
-            renderPagination(data.pagination, data.tag);
-        }
-
-        function renderPagination(pag, tag) {
-            const paginationContainer = document.querySelector('.footer-content .pagination');
-
-            if (!paginationContainer) {
-                return;
-            }
-
-            if (!pag || pag.total_pages <= 1) {
-                paginationContainer.style.display = 'none';
-                return;
-            }
-
-            paginationContainer.style.display = 'flex';
-
-            // Extract tag slug from tag object or current URL
-            let tagSlug = tag ? tag.slug : '';
-            if (!tagSlug) {
-                const urlPath = window.location.pathname;
-                const tagMatch = urlPath.match(/^\/tag\/([^\/]+)/);
-                if (tagMatch) {
-                    tagSlug = tagMatch[1];
-                }
-            }
-
-            let html = '';
-
-            // Previous
-            if (pag.has_prev) {
-                html += `<a href="/tag/${tagSlug}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 18l-6-6 6-6"/>
-                </svg>
-            </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 18l-6-6 6-6"/>
-                </svg>
-            </span>`;
-            }
-
-            // Pages
-            for (let p = 1; p <= pag.total_pages; p++) {
-                if (p === pag.page) {
-                    html += `<span class="pagination-link active">${p}</span>`;
-                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="/tag/${tagSlug}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
-                } else if (p === pag.page - 2 || p === pag.page + 2) {
-                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
-                }
-            }
-
-            // Next
-            if (pag.has_next) {
-                html += `<a href="/tag/${tagSlug}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6"/>
-                </svg>
-            </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6"/>
-                </svg>
-            </span>`;
-            }
-
-            paginationContainer.innerHTML = html;
-        }
-
-        function attachListeners() {
-            const links = document.querySelectorAll('.ajax-link');
-            links.forEach(link => {
-                link.removeEventListener('click', handleLinkClick);
-                link.addEventListener('click', handleLinkClick);
-            });
-        }
-
-        function handleLinkClick(e) {
-            e.preventDefault();
-            const url = this.getAttribute('href');
-
-            // If navigating to map, use full view replacement
-            if (url === '/map' || url.includes('/map?')) {
-                if (typeof loadPost === 'function') {
-                    loadPost(url);
-                } else {
-                    window.location.href = url;
-                }
-                return;
-            }
-
-            loadPosts(url);
-        }
-
-        // Keyboard navigation
-        document.addEventListener('keydown', function (e) {
-            // Ignore if focus is in an input, textarea, or contenteditable
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-                return;
-            }
-
-            if (e.key === 'ArrowDown') {
-                // Next page (older posts)
-                const nextLink = document.querySelector('.pagination-link[aria-label="Next page"]');
-                if (nextLink && !nextLink.parentElement.classList.contains('disabled')) {
-                    e.preventDefault();
-                    nextLink.click();
-                }
-            } else if (e.key === 'ArrowUp') {
-                // Previous page (newer posts)
-                const prevLink = document.querySelector('.pagination-link[aria-label="Previous page"]');
-                if (prevLink && !prevLink.parentElement.classList.contains('disabled')) {
-                    e.preventDefault();
-                    prevLink.click();
-                }
-            }
-        });
-
-        // Initial attachment
-        attachListeners();
-
-        // Handle back/forward browser buttons
-        window.addEventListener('popstate', function () {
-            loadPosts(window.location.href);
-        });
-    });
-</script>
-{% endblock %}
-
 {% block header_nav_extra %}
 {% if user %}
 <a href="/light/tags?search={{ tag.name | urlencode }}" class="create-post" title="Edit Tag" aria-label="Edit Tag">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-        stroke-linejoin="round">
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-    </svg>
+    {{ icon('edit', size=24) }}
 </a>
 {% endif %}
 {% endblock %}
-
 
 {% block header_breadcrumb %}
 <span class="breadcrumb-separator">/</span>
@@ -330,192 +42,28 @@
 
 {% block content %}
 <div class="tag-archive">
+    {% if tag.description %}
+    <div class="tag-description">
+        <p>{{ tag.description }}</p>
+    </div>
+    {% endif %}
     <div id="tag-posts-container">
         {% if posts %}
         <div class="posts-grid">
             {% for post in posts %}
-            {% set thumb_info = determine_thumbnail(post.content, post.thumbnail_path) %}
-            {% set display_thumb = thumb_info[0] %}
-            {% set is_video = thumb_info[1] %}
-            {% set has_image = display_thumb is not none %}
-
-            {% if loop.first and page == 1 and post.is_featured %}
-            <div class="featured-post">
-                <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}"
-                    onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
-                    {% if user %}
-                    <a href="/light/posts/{{ post.id }}" class="post-card-edit-btn" title="Edit Post">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </a>
-                    {% endif %}
-                    {% if has_image %}
-                    <div class="post-card-background">
-                        {% if is_video %}
-                        <video src="{{ display_thumb }}" muted loop playsinline></video>
-                        <div class="video-play-indicator">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
-                                <path d="M8 5v14l11-7z" />
-                            </svg>
-                        </div>
-                        {% else %}
-                        <img src="{{ display_thumb }}" alt="{{ post.title }}" loading="lazy">
-                        {% endif %}
-                    </div>
-                    <div class="post-card-content overlay">
-                        <div class="post-card-meta">
-                            <span class="featured-badge">
-                                <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
-                                    <path
-                                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                                </svg>
-                            </span>
-                            <time
-                                datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
-                                {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
-                            </time>
-                            {% if blog_settings.show_view_counts and post.view_count %}
-                            <span>&bull;</span>
-                            <span>{{ post.view_count }} views</span>
-                            {% endif %}
-                        </div>
-                        <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
-                        <div class="post-card-excerpt">
-                            {{ post.excerpt or generate_excerpt(post.content, post.formatter.value, 200) }}
-                        </div>
-                        {% if post.tags %}
-                        <div class="post-card-tags">
-                            {% for t in post.tags[:3] %}
-                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
-                                t.name }}</a>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% else %}
-                    <div class="post-card-content">
-                        <div class="post-card-meta">
-                            <span class="featured-badge">
-                                <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
-                                    <path
-                                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                                </svg>
-                            </span>
-                            <time
-                                datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
-                                {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
-                            </time>
-                            {% if blog_settings.show_view_counts and post.view_count %}
-                            <span>&bull;</span>
-                            <span>{{ post.view_count }} views</span>
-                            {% endif %}
-                        </div>
-                        <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
-                        <div class="post-card-text-preview">
-                            {{ truncate_paragraphs(format_content(post.content, post.formatter.value)) | safe }}
-                        </div>
-                        {% if post.tags %}
-                        <div class="post-card-tags">
-                            {% for t in post.tags[:3] %}
-                            <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
-                                t.name }}</a>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                </article>
-            </div>
-            {% else %}
-            <article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %}"
-                onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
-                {% if user %}
-                <a href="/light/posts/{{ post.id }}" class="post-card-edit-btn" title="Edit Post">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                </a>
-                {% endif %}
-                {% if has_image %}
-                <div class="post-card-background">
-                    {% if is_video %}
-                    <video src="{{ display_thumb }}" muted loop playsinline></video>
-                    <div class="video-play-indicator">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-                            <path d="M8 5v14l11-7z" />
-                        </svg>
-                    </div>
-                    {% else %}
-                    <img src="{{ display_thumb }}" alt="{{ post.title }}" loading="lazy">
-                    {% endif %}
-                </div>
-                <div class="post-card-content overlay">
-                    <div class="post-card-meta">
-                        <time
-                            datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
-                            {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
-                        </time>
-                        {% if blog_settings.show_view_counts and post.view_count %}
-                        <span>&bull;</span>
-                        <span>{{ post.view_count }} views</span>
-                        {% endif %}
-                    </div>
-                    <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
-                    <div class="post-card-excerpt">
-                        {{ post.excerpt or generate_excerpt(post.content, post.formatter.value, 150) }}
-                    </div>
-                    {% if post.tags %}
-                    <div class="post-card-tags">
-                        {% for t in post.tags[:3] %}
-                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
-                            t.name }}</a>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                {% if loop.first and page == 1 and post.is_featured %}
+                <div class="featured-post">
+                    {{ post_card(post, user, is_featured=true, page=page, blog_settings=blog_settings) }}
                 </div>
                 {% else %}
-                <div class="post-card-content">
-                    <div class="post-card-meta">
-                        <time
-                            datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
-                            {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
-                        </time>
-                        {% if blog_settings.show_view_counts and post.view_count %}
-                        <span>&bull;</span>
-                        <span>{{ post.view_count }} views</span>
-                        {% endif %}
-                    </div>
-                    <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
-                    <div class="post-card-text-preview">
-                        {{ truncate_paragraphs(format_content(post.content, post.formatter.value)) | safe }}
-                    </div>
-                    {% if post.tags %}
-                    <div class="post-card-tags">
-                        {% for t in post.tags[:3] %}
-                        <a href="/tag/{{ t.slug }}" class="tag-link {% if t.slug == tag.slug %}active{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{
-                            t.name }}</a>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
+                    {{ post_card(post, user, is_featured=false, page=page, blog_settings=blog_settings) }}
                 {% endif %}
-            </article>
-            {% endif %}
             {% endfor %}
         </div>
         {% else %}
         <div class="empty-state">
             <div class="empty-state-icon">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
-                    <path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
-                    <path d="M21 15l-5-5L5 21" />
-                </svg>
+                {{ icon('empty-posts', size=64) }}
             </div>
             <h2 class="empty-state-title">No posts with this tag</h2>
             <p class="empty-state-text">Check back later for new content.</p>
@@ -527,45 +75,5 @@
 {% endblock %}
 
 {% block footer_pagination %}
-{% if total_pages > 1 %}
-<nav class="pagination" aria-label="Tag archive pagination">
-    {% if page > 1 %}
-    <a href="/tag/{{ tag.slug }}?page={{ page - 1 }}" class="pagination-link ajax-link" aria-label="Previous page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 18l-6-6 6-6" />
-        </svg>
-    </a>
-    {% else %}
-    <span class="pagination-link disabled">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 18l-6-6 6-6" />
-        </svg>
-    </span>
-    {% endif %}
-
-    {% for p in range(1, total_pages + 1) %}
-    {% if p == page %}
-    <span class="pagination-link active">{{ p }}</span>
-    {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %} <a
-        href="/tag/{{ tag.slug }}?page={{ p }}" class="pagination-link ajax-link">{{ p }}</a>
-        {% elif p == page - 2 or p == page + 2 %}
-        <span class="pagination-ellipsis">&hellip;</span>
-        {% endif %}
-        {% endfor %}
-
-        {% if page < total_pages %} <a href="/tag/{{ tag.slug }}?page={{ page + 1 }}" class="pagination-link ajax-link"
-            aria-label="Next page">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 18l6-6-6-6" />
-            </svg>
-            </a>
-            {% else %}
-            <span class="pagination-link disabled">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6" />
-                </svg>
-            </span>
-            {% endif %}
-</nav>
-{% endif %}
+{{ render_pagination(page, total_pages, '/tag/' + tag.slug, aria_label='Tag archive pagination') }}
 {% endblock %}

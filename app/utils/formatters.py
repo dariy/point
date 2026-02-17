@@ -34,7 +34,6 @@ def markdown_to_html(content: str) -> str:
     )
     return md.convert(content)
 
-
 def preprocess_media_links(content: str) -> str:
     """Convert simplified media paths to standard Markdown or HTML.
 
@@ -74,7 +73,6 @@ def preprocess_media_links(content: str) -> str:
 
     return "\n".join(new_lines)
 
-
 def linkify_urls(html_content: str) -> str:
     """Convert plain text URLs to clickable anchor tags.
 
@@ -94,7 +92,6 @@ def linkify_urls(html_content: str) -> str:
         re.IGNORECASE
     )
 
-
     def replace_url(match: re.Match[str]) -> str:
         url = match.group(1)
         # Strip all trailing whitespace (including \r\n) and punctuation
@@ -103,7 +100,6 @@ def linkify_urls(html_content: str) -> str:
         while url and url[-1] in '.,;:!?)':
             url = url[:-1]
         return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>'
-
 
     # Split content by tags to avoid modifying content inside tags
     parts = re.split(r'(<[^>]+>)', html_content)
@@ -125,7 +121,6 @@ def linkify_urls(html_content: str) -> str:
         result.append(part)
 
     return ''.join(result)
-
 
 def format_content(content: str, formatter: str) -> str:
     """Format content based on formatter type.
@@ -159,7 +154,6 @@ def format_content(content: str, formatter: str) -> str:
 
     return html_output
 
-
 def strip_html(html_content: str) -> str:
     """Remove HTML tags from content.
 
@@ -180,7 +174,6 @@ def strip_html(html_content: str) -> str:
     # Normalize whitespace (including \r\n and multiple spaces)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
-
 
 def generate_excerpt(
     content: str,
@@ -221,7 +214,6 @@ def generate_excerpt(
         truncated = truncated[:last_space]
 
     return truncated.rstrip() + "..."
-
 
 def sanitize_html(html_content: str) -> str:
     """Sanitize HTML content to prevent XSS.
@@ -343,7 +335,6 @@ def sanitize_html(html_content: str) -> str:
 
     return sanitized
 
-
 def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
     """Truncate text to a maximum length at word boundary.
 
@@ -369,7 +360,6 @@ def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
 
     return truncated.rstrip() + suffix
 
-
 def extract_first_image(content: str) -> str | None:
     """Extract the first image URL from content.
 
@@ -394,7 +384,6 @@ def extract_first_image(content: str) -> str | None:
         return html_match.group(2).strip()
 
     return None
-
 
 def extract_all_images(content: str) -> list[str]:
     """Extract all image URLs from content.
@@ -430,7 +419,6 @@ def extract_all_images(content: str) -> list[str]:
             seen.add(img)
 
     return unique_images
-
 
 def extract_all_media(content: str) -> list[dict[str, str]]:
     """Extract all image and video URLs from content.
@@ -494,7 +482,6 @@ def extract_all_media(content: str) -> list[dict[str, str]]:
             seen.add(item["url"])
 
     return unique_media
-
 
 def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
     """Extract and truncate text from the first N paragraphs of HTML content.
