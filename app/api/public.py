@@ -1057,7 +1057,7 @@ async def map_page(
         select(Tag).where(func.lower(Tag.name).in_(base_names))
     )
     base_tags = {bt.name.lower(): bt.id for bt in base_result.scalars().all()}
-    
+
     country_ids = {base_tags.get("country"), base_tags.get("countries")} - {None}
     city_ids = {base_tags.get("city"), base_tags.get("cities")} - {None}
 
@@ -1067,7 +1067,7 @@ async def map_page(
         # Determine tag type - Prioritize city over country so cities inside countries get markers
         tag_type = "other"
         ancestors = await tag_service.get_ancestor_tag_ids(t.id)
-        
+
         if any(cid in ancestors for cid in city_ids):
             tag_type = "city"
         elif any(cid in ancestors for cid in country_ids):
