@@ -75,6 +75,14 @@ class Tag(AsyncAttrs, Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
+    # Relationship to locations
+    locations: Mapped[list["TagLocation"]] = relationship(
+        "TagLocation",
+        back_populates="tag",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     # Relationship to posts through association table
     posts: Mapped[list["Post"]] = relationship(
         "Post",

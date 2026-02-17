@@ -21,12 +21,28 @@ class TagBase(BaseModel):
     is_hidden_posts: bool = Field(default=False)
 
 
+class TagLocationBase(BaseModel):
+    """Base schema for tag locations."""
+
+    latitude: float
+    longitude: float
+
+
+class TagLocationResponse(TagLocationBase):
+    """Schema for tag location response."""
+
+    id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TagCreate(TagBase):
     """Schema for creating a tag."""
 
     slug: str | None = Field(default=None, min_length=1, max_length=100)
     parent_ids: list[int] = Field(default_factory=list)
     child_ids: list[int] = Field(default_factory=list)
+    locations: list[TagLocationBase] = Field(default_factory=list)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -60,6 +76,7 @@ class TagUpdate(BaseModel):
     is_hidden_posts: bool | None = Field(default=None)
     parent_ids: list[int] | None = Field(default=None)
     child_ids: list[int] | None = Field(default=None)
+    locations: list[TagLocationBase] | None = Field(default=None)
 
 
 class TagListItem(BaseModel):
@@ -72,6 +89,7 @@ class TagListItem(BaseModel):
     is_hidden: bool
     is_hidden_posts: bool
     post_count: int
+    locations: list[TagLocationResponse] = Field(default_factory=list)
 
 
 class TagResponse(BaseModel):
@@ -92,6 +110,7 @@ class TagResponse(BaseModel):
     url: str = Field(description="Computed URL for the tag")
     parents: list[TagListItem] = Field(default_factory=list)
     children: list[TagListItem] = Field(default_factory=list)
+    locations: list[TagLocationResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
