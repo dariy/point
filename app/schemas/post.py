@@ -15,6 +15,7 @@ class PostStatus(str, Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     HIDDEN = "hidden"
+    PAGE = "page"
 
 
 class PostFormatter(str, Enum):
