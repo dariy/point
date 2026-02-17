@@ -96,6 +96,7 @@ class TagService:
             is_featured=tag_data.is_featured,
             is_hidden=tag_data.is_hidden,
             is_hidden_posts=tag_data.is_hidden_posts,
+            include_in_breadcrumbs=tag_data.include_in_breadcrumbs,
             show_related_tags_as_children=tag_data.show_related_tags_as_children,
             post_count=0,
         )
@@ -238,6 +239,8 @@ class TagService:
             tag.is_hidden = tag_data.is_hidden
         if tag_data.is_hidden_posts is not None:
             tag.is_hidden_posts = tag_data.is_hidden_posts
+        if tag_data.include_in_breadcrumbs is not None:
+            tag.include_in_breadcrumbs = tag_data.include_in_breadcrumbs
         if tag_data.show_related_tags_as_children is not None:
             tag.show_related_tags_as_children = tag_data.show_related_tags_as_children
 
@@ -606,6 +609,26 @@ class TagService:
         posts = list(result.scalars().all())
 
         return posts, total
+
+    async def get_tag_hierarchy(self, tag_id: int) -> list[Tag]:
+        """Get ordered list of ancestor tags (from root to self)."""
+        result = await self.db.execute(
+            select(Tag).options(selectinload(Tag.parents))
+        )
+        all_tags = {t.id: t for t in result.scalars().all()}
+
+        if tag_id not in all_tags:
+            return []
+
+        path = []
+        curr = all_tags.get(tag_id)
+        while curr:
+            if curr.include_in_breadcrumbs:
+                path.append(curr)
+            # Just take the first parent if multiple exist (simple breadcrumb)
+            curr = all_tags.get(curr.parents[0].id) if curr.parents else None
+
+        return list(reversed(path))
 
     async def get_descendant_tag_ids(self, tag_id: int) -> set[int]:
         """Get all descendant tag IDs recursively."""

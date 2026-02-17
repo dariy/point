@@ -45,6 +45,7 @@ def tag_to_response(tag: TagModel) -> dict[str, Any]:
         "is_featured": tag.is_featured,
         "is_hidden": tag.is_hidden,
         "is_hidden_posts": tag.is_hidden_posts,
+        "include_in_breadcrumbs": tag.include_in_breadcrumbs,
         "show_related_tags_as_children": tag.show_related_tags_as_children,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
@@ -70,6 +71,7 @@ def tag_to_list_item(tag: TagModel) -> dict[str, Any]:
         "is_important": tag.is_important,
         "is_hidden": tag.is_hidden,
         "is_hidden_posts": tag.is_hidden_posts,
+        "include_in_breadcrumbs": tag.include_in_breadcrumbs,
         "post_count": tag.post_count,
     }
 
@@ -306,6 +308,7 @@ async def get_posts_by_tag(
         "is_featured": tag.is_featured,
         "is_hidden": tag.is_hidden,
         "is_hidden_posts": tag.is_hidden_posts,
+        "include_in_breadcrumbs": tag.include_in_breadcrumbs,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "posts": [

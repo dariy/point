@@ -774,14 +774,53 @@
 
         const clone = template.content.cloneNode(true);
         const post = data.post;
+        const tagHierarchy = data.tag_hierarchy || [];
 
         // 1. Update Title and Metadata
-        const breadcrumbCurrent = clone.querySelector('.breadcrumb-current');
-        if (breadcrumbCurrent) {
-            breadcrumbCurrent.textContent = post.title;
+        if (hasText) {
+            const breadcrumb = clone.querySelector('.post-header .post-title');
+            if (breadcrumb) {
+                // Clear existing and rebuild with hierarchy
+                breadcrumb.innerHTML = `<a href="/" class="breadcrumb-link">${data.blog_title}</a>`;
+                tagHierarchy.forEach(t => {
+                    breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><a href="/tag/${t.slug}" class="breadcrumb-link">${t.name}</a>`;
+                });
+                breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><span class="breadcrumb-current">${post.title}</span>`;
+            }
+            
+            // Also update the site-header if it has a breadcrumb (standard layout)
+            const headerBreadcrumb = headerClone.querySelector('.site-breadcrumb');
+            if (headerBreadcrumb) {
+                // Keep only the core elements (logo, site title, subtitle)
+                headerBreadcrumb.querySelectorAll('.breadcrumb-separator, .breadcrumb-current, .breadcrumb-link').forEach(el => el.remove());
+                
+                // Add the hierarchy
+                tagHierarchy.forEach(t => {
+                    const sep = document.createElement('span');
+                    sep.className = 'breadcrumb-separator';
+                    sep.textContent = '/';
+                    headerBreadcrumb.appendChild(sep);
+                    
+                    const link = document.createElement('a');
+                    link.className = 'breadcrumb-link';
+                    link.href = '/tag/' + t.slug;
+                    link.textContent = t.name;
+                    headerBreadcrumb.appendChild(link);
+                });
+                
+                const sep = document.createElement('span');
+                sep.className = 'breadcrumb-separator';
+                sep.textContent = '/';
+                headerBreadcrumb.appendChild(sep);
+                
+                const current = document.createElement('span');
+                current.className = 'breadcrumb-current';
+                current.textContent = post.title;
+                headerBreadcrumb.appendChild(current);
+            }
         } else {
-            const titleEl = clone.querySelector('.post-title') || clone.querySelector('.site-title');
-            if (titleEl) titleEl.textContent = post.title;
+            const breadcrumbCurrent = clone.querySelector('.breadcrumb-current');
+            if (breadcrumbCurrent) breadcrumbCurrent.textContent = post.title;
         }
 
         const dateEl = clone.querySelector('.post-date');
@@ -936,12 +975,14 @@
                 }
             }
         } else {
-            const breadcrumbCurrent = headerClone.querySelector('.breadcrumb-current');
-            if (breadcrumbCurrent) {
-                breadcrumbCurrent.textContent = post.title;
-            } else {
-                const title = headerClone.querySelector('.site-title');
-                if (title) title.textContent = post.title;
+            const breadcrumb = headerClone.querySelector('.site-title.breadcrumbs');
+            if (breadcrumb) {
+                // Clear existing and rebuild with hierarchy
+                breadcrumb.innerHTML = `<a href="/" class="breadcrumb-link">${data.blog_title}</a>`;
+                tagHierarchy.forEach(t => {
+                    breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><a href="/tag/${t.slug}" class="breadcrumb-link">${t.name}</a>`;
+                });
+                breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><span class="breadcrumb-current title-text">${post.title}</span>`;
             }
 
             const date = headerClone.querySelector('.post-date');
@@ -1050,11 +1091,11 @@
             const footerContent = document.querySelector('.footer-content');
             if (footerContent) {
                 const tagsDiv = document.createElement('div');
-                tagsDiv.className = 'immersive-tags';
+                tagsDiv.className = 'post-card-tags immersive-tags';
                 post.tags.forEach(tag => {
                     const a = document.createElement('a');
                     a.href = '/tag/' + tag.slug;
-                    a.className = 'post-tag';
+                    a.className = 'tag-link';
                     a.textContent = tag.name;
                     tagsDiv.appendChild(a);
                 });
@@ -1357,8 +1398,9 @@
             }
         }
 
-        // Update header breadcrumb using the resolved tag name
-        updateHeaderBreadcrumb(urlObj.pathname, resolvedTagName);
+        // Update header breadcrumb using the resolved tag name and hierarchy if available
+        // Note: window.lastTagHierarchy is set by the calling navigation function
+        updateHeaderBreadcrumb(urlObj.pathname, resolvedTagName, window.lastTagHierarchy);
 
         // Trigger responsive filter update
         window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
@@ -1368,8 +1410,9 @@
      * Update the header breadcrumb based on current path
      * @param {string} pathname
      * @param {string|null} tagName - resolved tag name (from filter buttons); falls back to slug
+     * @param {Array|null} hierarchy - optional array of {name, slug} objects representing tag hierarchy
      */
-    function updateHeaderBreadcrumb(pathname, tagName = null) {
+    function updateHeaderBreadcrumb(pathname, tagName = null, hierarchy = null) {
         const breadcrumb = document.querySelector('.site-breadcrumb');
         if (!breadcrumb) return;
 
@@ -1387,7 +1430,7 @@
 
         if (parts.length === 0 || (parts.length === 1 && parts[0] === '')) {
             // Home — just logo
-        } else if (parts[0] === 'tags') {
+        } else if (parts[0] === 'tags' || (parts[0] === 'tag' && !parts[1])) {
             addSep();
             const el = document.createElement('a');
             el.className = 'breadcrumb-current';
@@ -1396,17 +1439,36 @@
             el.textContent = 'tags';
             breadcrumb.appendChild(el);
         } else if (parts[0] === 'tag' && parts[1]) {
-            addSep();
-            const tagsLink = document.createElement('a');
-            tagsLink.className = 'breadcrumb-link';
-            tagsLink.href = '/tags';
-            tagsLink.textContent = 'tags';
-            breadcrumb.appendChild(tagsLink);
-            addSep();
-            const tagEl = document.createElement('span');
-            tagEl.className = 'breadcrumb-current';
-            tagEl.textContent = tagName || decodeURIComponent(parts[1]);
-            breadcrumb.appendChild(tagEl);
+            if (hierarchy && hierarchy.length > 0) {
+                hierarchy.forEach((t, index) => {
+                    addSep();
+                    if (index < hierarchy.length - 1) {
+                        const link = document.createElement('a');
+                        link.className = 'breadcrumb-link';
+                        link.href = '/tag/' + t.slug;
+                        link.textContent = t.name;
+                        breadcrumb.appendChild(link);
+                    } else {
+                        const el = document.createElement('span');
+                        el.className = 'breadcrumb-current';
+                        el.textContent = t.name;
+                        breadcrumb.appendChild(el);
+                    }
+                });
+            } else {
+                // Fallback to legacy single tag behavior
+                addSep();
+                const tagsLink = document.createElement('a');
+                tagsLink.className = 'breadcrumb-link';
+                tagsLink.href = '/tags';
+                tagsLink.textContent = 'tags';
+                breadcrumb.appendChild(tagsLink);
+                addSep();
+                const tagEl = document.createElement('span');
+                tagEl.className = 'breadcrumb-current';
+                tagEl.textContent = tagName || decodeURIComponent(parts[1]);
+                breadcrumb.appendChild(tagEl);
+            }
         } else if (parts[0] === 'map') {
             addSep();
             const el = document.createElement('span');
@@ -1505,6 +1567,10 @@
                     window.history.pushState({}, '', url);
                     const tagsBar = document.querySelector('.header-tags-bar');
                     if (tagsBar) tagsBar.style.display = '';
+                    
+                    // Store hierarchy for breadcrumbs
+                    window.lastTagHierarchy = data.tag_hierarchy || null;
+                    
                     updateActiveSiteFilters(url, triggerElement);
                     attachAjaxListeners();
                     if (typeof initPostCardVideos === 'function') {
@@ -1622,6 +1688,10 @@
                     const data = await response.json();
                     renderTags(data);
                     const paginationBase = data.current_tag ? `/tag/${data.current_tag}` : '/tags';
+                    
+                    // Store hierarchy for breadcrumbs
+                    window.lastTagHierarchy = data.tag_hierarchy || null;
+
                     updatePagination(data.pagination, null, paginationBase, handleTagsClick);
 
                     window.history.pushState({}, '', url);
@@ -1730,16 +1800,8 @@
             // Use getBoundingClientRect for more sub-pixel accuracy
             const containerWidth = container.getBoundingClientRect().width;
 
-            const mode = container.dataset.mode || 'featured';
             const allItems = Array.from(container.children);
-
-            // Step 0: Filter items that belong to current mode
-            const items = allItems.filter(el => {
-                if (el.id === 'tags-switcher') return true;
-                if (mode === 'featured') return el.classList.contains('featured-tag');
-                if (mode === 'categories') return el.classList.contains('category-tag');
-                return false;
-            });
+            const items = allItems; // Show all items, no more mode filtering
 
             // Hide everything initially
             allItems.forEach(item => {
@@ -1774,7 +1836,6 @@
                 const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
                 return b && (b.dataset.role === 'all' || b.getAttribute('href') === '/');
             });
-            const moreBtn = document.getElementById('tags-switcher');
             const activeItem = items.find(el => {
                 if (el.classList.contains('active')) return true;
                 if (el.querySelector('.filter-btn.active')) return true;
@@ -1788,7 +1849,6 @@
             const essentials = [];
             if (allBtn) essentials.push(allBtn);
             if (activeItem && !essentials.includes(activeItem)) essentials.push(activeItem);
-            if (moreBtn && !essentials.includes(moreBtn)) essentials.push(moreBtn);
 
             // Step 3: Show as many essential items as fit
             for (const item of essentials) {
@@ -1922,43 +1982,6 @@
     }
 
     /**
-     * Switcher between Featured Tags and Categories in Header
-     */
-    function initTagSwitcher() {
-        const switcher = document.getElementById('tags-switcher');
-        const container = document.getElementById('header-tags-filters');
-
-        if (!switcher || !container) return;
-
-        function updateSets(mode) {
-            container.dataset.mode = mode;
-            if (mode === 'categories') {
-                switcher.classList.add('active');
-            } else {
-                switcher.classList.remove('active');
-            }
-            // Trigger responsive update
-            if (window.dispatchEvent) {
-                window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
-            }
-        }
-
-        // Initialize state from localStorage
-        const savedMode = localStorage.getItem('tags-filter-mode') || 'featured';
-        updateSets(savedMode);
-
-        switcher.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const currentMode = localStorage.getItem('tags-filter-mode') || 'featured';
-            const newMode = currentMode === 'featured' ? 'categories' : 'featured';
-
-            localStorage.setItem('tags-filter-mode', newMode);
-            updateSets(newMode);
-        });
-    }
-
-    /**
      * Initialize Map (if present)
      */
     function initMap() {
@@ -1988,7 +2011,6 @@
         initAjaxTagsNavigation();
         initResponsiveTagFilters();
         initTagToggles();
-        initTagSwitcher();
         initMap();
 
         // Only init lightbox on gallery page

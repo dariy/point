@@ -28,10 +28,14 @@
 {% endblock %}
 
 {% block header_breadcrumb %}
+{% for t in tag_hierarchy %}
 <span class="breadcrumb-separator">/</span>
-<a href="/tags" class="breadcrumb-link">tags</a>
-<span class="breadcrumb-separator">/</span>
-<span class="breadcrumb-current">{{ tag.name }}</span>
+{% if not loop.last %}
+<a href="/tag/{{ t.slug }}" class="breadcrumb-link">{{ t.name }}</a>
+{% else %}
+<span class="breadcrumb-current">{{ t.name }}</span>
+{% endif %}
+{% endfor %}
 {% endblock %}
 
 {% block header_filters %}

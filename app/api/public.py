@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -98,40 +98,18 @@ async def get_db_context(
     tag_service = TagService(db)
     tag_cloud = await tag_service.get_tag_cloud(limit=15)
 
-    # Get hidden tags to exclude (only for non-authenticated users)
-    hidden_ids = set()
-    if not user:
-        hidden_ids = await tag_service.get_publicly_hidden_tag_ids()
+    # Get hierarchical tag groups for header filters (always show full hierarchy)
+    tag_groups = await tag_service.get_hierarchical_tags(include_empty=True, public_only=(not user))
 
-    tags_query = (
-        select(Tag)
-        .where(Tag.is_featured)
-        .where(Tag.post_count > 0)
-    )
-    if hidden_ids:
-        tags_query = tags_query.where(Tag.id.notin_(hidden_ids))
-
-    tags_result = await db.execute(tags_query.order_by(Tag.name).limit(20))
-    tags = list(tags_result.scalars().all())
-
-    # Force load attributes while in async context to avoid lazy loading issues
-    for tag in tags:
-        _ = tag.id
-        _ = tag.name
-        _ = tag.slug
-        _ = tag.is_hidden
-        _ = tag.is_featured
-        _ = tag.post_count
-
-    # Get hierarchical tag groups for categories switcher
-    tag_groups = await tag_service.get_hierarchical_tags(include_empty=False, public_only=(not user))
+    # Redundant but needed for some templates/tests
+    tags: list[Tag] = []
 
     # Get blog settings if not provided
     if blog_settings is None:
         settings_service = SettingsService(db)
         blog_settings = await settings_service.get_all_settings()
 
-    context = {
+    context: dict[str, Any] = {
         "tag_cloud": tag_cloud,
         "tags": tags,
         "tag_groups": tag_groups,
@@ -452,12 +430,16 @@ async def single_post(
         HTTPException: If post not found
     """
     # Get post with tags
+    # Publicly accessible statuses: PUBLISHED and PAGE
+    # HIDDEN and DRAFT are only for authenticated users
+    allowed_statuses = [PostStatus.PUBLISHED, PostStatus.PAGE]
+    if user:
+        allowed_statuses.extend([PostStatus.HIDDEN, PostStatus.DRAFT])
+
     query = (
         select(Post)
         .where(Post.slug == slug)
-        .where(
-            or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
-        )
+        .where(Post.status.in_(allowed_statuses))
     )
     result = await db.execute(query)
     post = result.scalar_one_or_none()
@@ -561,11 +543,17 @@ async def single_post(
     prev_post = None
     next_post = None
 
-    if post.status == PostStatus.PUBLISHED and post.published_at:
+    # Navigation logic: guests can navigate between PUBLISHED and PAGE
+    # Admin can also see HIDDEN and DRAFT
+    nav_statuses = [PostStatus.PUBLISHED, PostStatus.PAGE]
+    if user:
+        nav_statuses.extend([PostStatus.HIDDEN, PostStatus.DRAFT])
+
+    if post.status in nav_statuses and post.published_at:
         # Get previous post
         prev_query = (
             select(Post)
-            .where(Post.status == PostStatus.PUBLISHED)
+            .where(Post.status.in_(nav_statuses))
             .where(Post.published_at < post.published_at)
             .order_by(Post.published_at.desc().nulls_last(), Post.created_at.desc())
             .limit(1)
@@ -576,7 +564,7 @@ async def single_post(
         # Get next post
         next_query = (
             select(Post)
-            .where(Post.status == PostStatus.PUBLISHED)
+            .where(Post.status.in_(nav_statuses))
             .where(Post.published_at > post.published_at)
             .order_by(Post.published_at.asc().nulls_last(), Post.created_at.asc())
             .limit(1)
@@ -588,8 +576,8 @@ async def single_post(
     tags = await post.awaitable_attrs.tags
 
     # Filter out hidden tags for non-authenticated users
+    tag_service = TagService(db)
     if not user:
-        tag_service = TagService(db)
         publicly_hidden_tag_ids = await tag_service.get_publicly_hidden_tag_ids()
         all_post_tags = sorted(
             [t for t in tags if t.id not in publicly_hidden_tag_ids],
@@ -597,6 +585,11 @@ async def single_post(
         )
     else:
         all_post_tags = sorted(tags, key=lambda x: x.name)
+
+    # Get tag hierarchy from the first tag if available
+    tag_hierarchy = []
+    if all_post_tags:
+        tag_hierarchy = await tag_service.get_tag_hierarchy(all_post_tags[0].id)
 
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -623,6 +616,7 @@ async def single_post(
                 "post_media": post_media,
                 "prev_post": {"title": prev_post.title, "slug": prev_post.slug} if prev_post else None,
                 "next_post": {"title": next_post.title, "slug": next_post.slug} if next_post else None,
+                "tag_hierarchy": [{"name": t.name, "slug": t.slug} for t in tag_hierarchy],
                 "blog_settings": {
                     "show_view_counts": blog_settings_dict.get("show_view_counts", True),
                     "enable_analytics": blog_settings_dict.get("enable_analytics", False),
@@ -647,6 +641,7 @@ async def single_post(
             "post_media": post_media,
             "prev_post": prev_post,
             "next_post": next_post,
+            "tag_hierarchy": tag_hierarchy,
             "user": user,
         }
     )
@@ -748,6 +743,7 @@ async def tag_archive(
     actual_offset = (page - 1) * per_page
 
     # Get posts with this tag, excluding the main featured post if it exists
+    # Only PUBLISHED posts should be in the list
     posts, total = await tag_service.get_posts_by_tag(
         tag_id=tag.id,
         per_page=actual_per_page,
@@ -770,6 +766,9 @@ async def tag_archive(
         total_pages = ceil(total / per_page)
 
 
+    # Get tag hierarchy for breadcrumbs
+    tag_hierarchy = await tag_service.get_tag_hierarchy(tag.id)
+
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         # Get publicly hidden tag IDs for filtering if not authenticated
@@ -788,6 +787,7 @@ async def tag_archive(
                     "prev_page": page - 1,
                 },
                 "tag": {"name": tag.name, "slug": tag.slug, "post_count": tag.post_count},
+                "tag_hierarchy": [{"name": t.name, "slug": t.slug} for t in tag_hierarchy],
                 "is_logged_in": user is not None,
             }
         )
@@ -813,6 +813,7 @@ async def tag_archive(
     context.update(
         {
             "tag": tag,
+            "tag_hierarchy": tag_hierarchy,
             "posts": posts,
             "page": page,
             "total_pages": total_pages,
