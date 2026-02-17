@@ -315,8 +315,17 @@
 {% endblock %}
 
 
+{% block header_breadcrumb %}
+<span class="breadcrumb-separator">/</span>
+<a href="/tags" class="breadcrumb-link">tags</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">{{ tag.name }}</span>
+{% endblock %}
+
 {% block header_filters %}
-{% include "public/partials/header_tags.html" %}
+<div class="header-tags-bar">
+    {% include "public/partials/header_tags.html" %}
+</div>
 {% endblock %}
 
 {% block content %}

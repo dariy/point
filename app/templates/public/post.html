@@ -33,18 +33,20 @@ endblock %}
 {% endblock %}
 
 {% block header_filters %}
-<div class="tags-filters">
-    {% for t in tags %}
-    <a href="/tag/{{ t.slug }}" class="filter-btn" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{ t.name }}</a>
-    {% endfor %}
-    <a href="/tags" class="filter-btn" title="All Tags" data-role="more">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
-        </svg>
-    </a>
+<div class="header-tags-bar">
+    <div class="tags-filters">
+        {% for t in tags %}
+        <a href="/tag/{{ t.slug }}" class="filter-btn" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{ t.name }}</a>
+        {% endfor %}
+        <a href="/tags" class="filter-btn" title="All Tags" data-role="more">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="1"></circle>
+                <circle cx="19" cy="12" r="1"></circle>
+                <circle cx="5" cy="12" r="1"></circle>
+            </svg>
+        </a>
+    </div>
 </div>
 {% endblock %}
 
@@ -59,7 +61,11 @@ endblock %}
         </a>
     </div>
     <div class="header-center">
-        <h1 class="site-title">{{ post.title }}</h1>
+        <h1 class="site-title breadcrumbs centered">
+            <a href="/" class="breadcrumb-link">{{ blog_title }}</a>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-current">{{ post.title }}</span>
+        </h1>
         <div class="post-meta">
             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
@@ -204,7 +210,11 @@ endblock %}
             <span>{{ post.view_count }} views</span>
             {% endif %}
         </div>
-        <h1 class="post-title">{{ post.title }}</h1>
+        <h1 class="post-title breadcrumbs centered">
+            <a href="/" class="breadcrumb-link">{{ blog_title }}</a>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-current">{{ post.title }}</span>
+        </h1>
     </header>
 
     <div class="post-content">
