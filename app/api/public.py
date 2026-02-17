@@ -1014,6 +1014,71 @@ async def tags_page(
     return templates.TemplateResponse("public/tags.html", context)
 
 
+@router.get("/map", response_class=HTMLResponse)
+async def map_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_current_user),
+) -> Response:
+    """Render the global map page.
+
+    Args:
+        request: The current request
+        db: Database session
+        user: Current user (optional)
+
+    Returns:
+        Rendered map HTML
+    """
+    # Get all tags with coordinates and posts
+    tag_service = TagService(db)
+    
+    # Join with TagLocation to find tags that have at least one location
+    from app.models.tag_location import TagLocation
+    query = (
+        select(Tag)
+        .join(Tag.locations)
+        .where(Tag.post_count > 0)
+        .options(selectinload(Tag.locations))
+    )
+    
+    if not user:
+        hidden_ids = await tag_service.get_publicly_hidden_tag_ids()
+        if hidden_ids:
+            query = query.where(Tag.id.notin_(hidden_ids))
+            
+    result = await db.execute(query.order_by(Tag.name))
+    map_tags = list(result.scalars().unique().all())
+
+    # Check for AJAX request
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        tags_data = []
+        for t in map_tags:
+            for loc in t.locations:
+                tags_data.append({
+                    "name": t.name,
+                    "slug": t.slug,
+                    "post_count": t.post_count,
+                    "lat": loc.latitude,
+                    "lng": loc.longitude,
+                    "url": t.url
+                })
+        return JSONResponse({"tags": tags_data})
+
+    context = get_common_context(request)
+    db_context = await get_db_context(db, user=user)
+    context.update(db_context)
+
+    context.update(
+        {
+            "map_tags": map_tags,
+            "user": user,
+        }
+    )
+
+    return templates.TemplateResponse("public/map.html", context)
+
+
 def get_base_url(request: Request) -> str:
     """Get the base URL from the request.
 

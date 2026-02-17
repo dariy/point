@@ -10,6 +10,7 @@
     function registerCleanup(fn) {
         cleanupFunctions.push(fn);
     }
+    window.addCleanup = registerCleanup;
 
     function cleanupPage() {
         cleanupFunctions.forEach(fn => fn());
@@ -2075,6 +2076,21 @@
     }
 
     /**
+     * Initialize Map (if present)
+     */
+    function initMap() {
+        const mapEl = document.getElementById('map');
+        if (mapEl && window.initGlobalMap) {
+            try {
+                const mapTags = JSON.parse(mapEl.dataset.mapTags || '[]');
+                window.initGlobalMap(mapTags);
+            } catch (e) {
+                console.error("[Map] Failed to parse map tags:", e);
+            }
+        }
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -2090,6 +2106,7 @@
         initResponsiveTagFilters();
         initTagToggles();
         initTagSwitcher();
+        initMap();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {

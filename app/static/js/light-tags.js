@@ -8,8 +8,39 @@
 
     const modal = document.getElementById('tag-modal');
     const form = document.getElementById('tag-form');
+    const locationsContainer = document.getElementById('tag-locations-container');
+    const addLocationBtn = document.getElementById('add-location-btn');
 
     if (!modal || !form) return;
+
+    /**
+     * Create location input row
+     */
+    const createLocationRow = function (lat = '', lng = '') {
+        const row = document.createElement('div');
+        row.className = 'flex gap-2 items-center mb-2';
+        row.innerHTML = `
+            <input type="number" step="any" class="form-input flex-1 location-lat" placeholder="Latitude" value="${lat}">
+            <input type="number" step="any" class="form-input flex-1 location-lng" placeholder="Longitude" value="${lng}">
+            <button type="button" class="btn btn-sm btn-danger remove-location-btn" title="Remove location">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M19 13H5v-2h14v2z" />
+                </svg>
+            </button>
+        `;
+        
+        row.querySelector('.remove-location-btn').addEventListener('click', () => {
+            row.remove();
+        });
+        
+        return row;
+    };
+
+    if (addLocationBtn) {
+        addLocationBtn.addEventListener('click', () => {
+            locationsContainer.appendChild(createLocationRow());
+        });
+    }
 
     // Use LightUtils.Modal if available
     const modalInstance = (window.LightUtils && window.LightUtils.Modal)
@@ -39,6 +70,7 @@
         document.getElementById('tag-hidden').checked = false;
         document.getElementById('tag-hidden-posts').checked = false;
         document.getElementById('tag-show-related').checked = false;
+        locationsContainer.innerHTML = '';
 
         // Clear chip checkboxes in parents picker
         const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
@@ -68,7 +100,7 @@
     /**
      * Open modal for editing existing tag
      */
-    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, parentIds, childIds) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
@@ -79,6 +111,17 @@
         document.getElementById('tag-hidden').checked = !!isHidden;
         document.getElementById('tag-hidden-posts').checked = !!isHiddenPosts;
         document.getElementById('tag-show-related').checked = !!isShowRelated;
+        
+        locationsContainer.innerHTML = '';
+        let locs = [];
+        try {
+            locs = typeof locations === 'string' ? JSON.parse(locations) : (locations || []);
+        } catch (e) {
+            console.warn('Failed to parse locations:', e);
+        }
+        locs.forEach(loc => {
+            locationsContainer.appendChild(createLocationRow(loc.latitude, loc.longitude));
+        });
 
         const parentChips = document.querySelectorAll('#tag-parents-picker input[type="checkbox"]');
         if (parentChips.length) {
@@ -143,6 +186,13 @@
                 document.getElementById('tag-hidden').checked = tag.is_hidden;
                 document.getElementById('tag-hidden-posts').checked = tag.is_hidden_posts;
                 document.getElementById('tag-show-related').checked = tag.show_related_tags_as_children;
+                
+                locationsContainer.innerHTML = '';
+                if (tag.locations) {
+                    tag.locations.forEach(loc => {
+                        locationsContainer.appendChild(createLocationRow(loc.latitude, loc.longitude));
+                    });
+                }
 
                 if (parentChips.length) {
                     const ids = tag.parents ? tag.parents.map(p => parseInt(p.id)) : [];
@@ -516,9 +566,10 @@
             const isHidden = editBtn.dataset.tagHidden === 'true';
             const isHiddenPosts = editBtn.dataset.tagHiddenPosts === 'true';
             const isShowRelated = editBtn.dataset.tagShowRelated === 'true';
+            const locations = editBtn.dataset.tagLocations || '[]';
             const parentIds = editBtn.dataset.tagParents || '[]';
             const childIds = editBtn.dataset.tagChildren || '[]';
-            editTag(id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, parentIds, childIds);
+            editTag(id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds);
             return;
         }
 
@@ -548,6 +599,10 @@
             is_hidden: document.getElementById('tag-hidden').checked,
             is_hidden_posts: document.getElementById('tag-hidden-posts').checked,
             show_related_tags_as_children: document.getElementById('tag-show-related').checked,
+            locations: Array.from(locationsContainer.querySelectorAll('.flex')).map(row => ({
+                latitude: parseFloat(row.querySelector('.location-lat').value),
+                longitude: parseFloat(row.querySelector('.location-lng').value)
+            })).filter(loc => !isNaN(loc.latitude) && !isNaN(loc.longitude)),
             parent_ids: Array.from(document.querySelectorAll('#tag-parents-picker input:checked')).map(cb => parseInt(cb.value)),
             child_ids: Array.from(document.querySelectorAll('#tag-children-picker input:checked')).map(cb => parseInt(cb.value))
         };
