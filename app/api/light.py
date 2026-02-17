@@ -26,12 +26,16 @@ from app.services.post_service import PostService
 from app.services.settings_service import SettingsService
 from app.services.system_service import SystemService
 from app.services.tag_service import TagService
+from app.utils.template_helpers import locations_to_json
 
 router = APIRouter(prefix="/light", tags=["Light"])
 
 # Set up templates
 templates_dir = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+
+# Register template filters
+templates.env.filters["locations_to_json"] = locations_to_json
 
 settings = get_settings()
 
