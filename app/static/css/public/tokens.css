@@ -15,6 +15,7 @@
     --bg-tertiary: #f1f5f9;
     --bg-elevated: #ffffff;
     --bg-overlay: rgba(0, 0, 0, 0.5);
+    --bg-overlay-hover: rgba(37, 99, 235, 0.7);
 
     /* Semantic Colors - Text */
     --text-primary: #0f172a;
