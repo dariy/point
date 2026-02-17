@@ -95,7 +95,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "img-src 'self' data: https://www.googletagmanager.com https://www.google-analytics.com; "
+            "img-src 'self' data: https://*.basemaps.cartocdn.com https://www.googletagmanager.com https://www.google-analytics.com; "
             "media-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; "
             "style-src 'self' 'unsafe-inline'; "

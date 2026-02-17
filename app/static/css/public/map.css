@@ -1,0 +1,94 @@
+/**
+ * Global Map Styles
+ */
+
+.map-container {
+    height: calc(100vh - 200px);
+    min-height: 500px;
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 2rem;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .map-container {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    background: var(--bg-secondary, #f8fafc);
+}
+
+.map-header {
+    margin-bottom: 1.5rem;
+}
+
+.map-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.map-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+}
+
+/* Custom Leaflet Marker Styling */
+.custom-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-primary, #3b82f6);
+    color: white;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    font-weight: bold;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.custom-marker:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    z-index: 1000 !important;
+}
+
+/* Leaflet Popup Styling */
+.leaflet-popup-content-wrapper {
+    background: var(--bg-primary, white);
+    color: var(--text-primary, black);
+    border-radius: 8px;
+    padding: 5px;
+}
+
+.leaflet-popup-tip {
+    background: var(--bg-primary, white);
+}
+
+.tag-popup-title {
+    font-weight: bold;
+    font-size: 1rem;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.tag-popup-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.leaflet-container {
+    background-color: var(--bg-secondary) !important;
+}
+
+/* Tooltip styling */
+.tag-tooltip {
+    padding: 2px 4px;
+}
