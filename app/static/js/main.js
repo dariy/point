@@ -459,6 +459,34 @@
     }
 
     /**
+     * Immersive header: shrink title on mobile to fit header-center.
+     * Step 1: hide breadcrumb-link + separator; step 2: truncate with ellipsis.
+     */
+    function initImmersiveHeaderOverflow() {
+        const headerCenter = document.querySelector('.post-header-bar .header-center');
+        if (!headerCenter) return;
+        const titleEl = headerCenter.querySelector('.site-title.breadcrumbs');
+        if (!titleEl) return;
+
+        function adjust() {
+            headerCenter.classList.remove('header-compact', 'header-truncate');
+            if (window.innerWidth > 768) return;
+
+            const centerWidth = headerCenter.getBoundingClientRect().width;
+            if (titleEl.getBoundingClientRect().width > centerWidth) {
+                headerCenter.classList.add('header-compact');
+                if (titleEl.getBoundingClientRect().width > centerWidth) {
+                    headerCenter.classList.add('header-truncate');
+                }
+            }
+        }
+
+        adjust();
+        window.addEventListener('resize', adjust);
+        registerCleanup(() => window.removeEventListener('resize', adjust));
+    }
+
+    /**
      * Carousel Logic
      */
     function initCarousel() {
@@ -2001,6 +2029,7 @@
      */
     function initPage() {
         initImmersiveMode();
+        initImmersiveHeaderOverflow();
         initCarousel();
         initPostCardVideos();
         initLazyLoading();

@@ -45,13 +45,11 @@
 {% endmacro %}
 
 <div class="tags-filters" id="header-tags-filters">
-    <a href="/" class="filter-btn ajax-link" data-role="all">All</a>
-
     {% for group in tag_groups %}
-    {% if group.children %}
-    {{ render_tag_group(group) }}
-    {% else %}
-    {{ render_filter_btn(group.tag) }}
-    {% endif %}
+        {% if group.children %}
+            {{ render_tag_group(group) }}
+        {% else %}
+            {{ render_filter_btn(group.tag) }}
+        {% endif %}
     {% endfor %}
 </div>
