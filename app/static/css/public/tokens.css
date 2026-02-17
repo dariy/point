@@ -43,8 +43,8 @@
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
     /* Component-specific */
-    --header-bg: rgba(255, 255, 255, 0.8);
-    --footer-bg: rgba(255, 255, 255, 0.8);
+    --header-bg: rgba(255, 255, 255, 0.9);
+    --footer-bg: rgba(255, 255, 255, 0.9);
     --footer-text: rgba(0, 0, 0, 0.95);  /*#94a3b8;*/
     --code-bg: #1e293b;
     --code-text: #f1f5f9;

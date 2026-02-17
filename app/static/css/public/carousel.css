@@ -9,6 +9,7 @@
     align-items: center;
     justify-content: center;
     background-color: var(--bg-carouselle);
+    transition: background-color var(--transition-theme);
 }
 
 .carousel-slide {
@@ -46,7 +47,8 @@
     align-items: center;
     justify-content: center;
     transition:
-        background-color 0.2s ease,
+        background-color var(--transition-theme),
+        color var(--transition-theme),
         transform 0.2s ease;
     backdrop-filter: blur(4px);
 }
@@ -77,6 +79,7 @@
     padding: 8px 12px;
     border-radius: 20px;
     backdrop-filter: blur(4px);
+    transition: background-color var(--transition-theme);
 }
 
 .carousel-dot {
@@ -87,7 +90,7 @@
     border: none;
     cursor: pointer;
     transition:
-        background-color 0.2s ease,
+        background-color var(--transition-theme),
         transform 0.2s ease;
     padding: 0;
 }
