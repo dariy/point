@@ -1,10 +1,9 @@
 {# Recursive macro to render tag groups #}
-{% set active_tag_slug = current_tag or (tag.slug if tag else None) %}
-{% macro render_tag_group(group, active_tag_slug) %}
+{% macro render_tag_group(group) %}
 <div class="tag-group">
     <div class="tag-group-header">
         <a href="/tag/{{ group.tag.slug }}"
-            class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
+            class="filter-btn ajax-link {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
             data-original-name="{{ group.tag.name }}" title="{{ group.tag.post_count }} post{{ 's' if group.tag.post_count != 1 else '' }}">
             {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
             <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -24,10 +23,10 @@
     <div class="tag-children">
         {% for child in group.children %}
         {% if child.children %}
-        {{ render_tag_group(child, active_tag_slug) }}
+        {{ render_tag_group(child) }}
         {% else %}
         <a href="/tag/{{ child.tag.slug }}"
-            class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ child.tag.post_count }} post{{ 's' if child.tag.post_count != 1 else '' }}">
+            class="filter-btn ajax-link {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ child.tag.post_count }} post{{ 's' if child.tag.post_count != 1 else '' }}">
             {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}
             <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2">
@@ -46,7 +45,7 @@
 <div class="tags-filters" id="header-tags-filters" data-mode="featured">
     {% for t in tags %}
     <a href="/tag/{{ t.slug }}"
-        class="filter-btn ajax-link featured-tag {% if active_tag_slug == t.slug %}active{% endif %} {% if user and t.is_hidden %}hidden-tag{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">
+        class="filter-btn ajax-link featured-tag {% if user and t.is_hidden %}hidden-tag{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">
         {% if user and t.is_hidden %}
         <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2">
@@ -63,7 +62,7 @@
     <div class="tag-group category-tag">
         <div class="tag-group-header">
             <a href="/tag/{{ group.tag.slug }}"
-                class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
+                class="filter-btn ajax-link {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
                 data-original-name="{{ group.tag.name }}" title="{{ group.tag.post_count }} post{{ 's' if group.tag.post_count != 1 else '' }}">
                 {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
                 <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -83,10 +82,10 @@
         <div class="tag-children">
             {% for child in group.children %}
             {% if child.children %}
-            {{ render_tag_group(child, active_tag_slug) }}
+            {{ render_tag_group(child) }}
             {% else %}
             <a href="/tag/{{ child.tag.slug }}"
-                class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ child.tag.post_count }} post{{ 's' if child.tag.post_count != 1 else '' }}">
+                class="filter-btn ajax-link {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ child.tag.post_count }} post{{ 's' if child.tag.post_count != 1 else '' }}">
                 {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}
                 <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2">
@@ -102,7 +101,7 @@
     </div>
     {% else %}
     <a href="/tag/{{ group.tag.slug }}"
-        class="filter-btn ajax-link category-tag {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ group.tag.post_count }} post{{ 's' if group.tag.post_count != 1 else '' }}">
+        class="filter-btn ajax-link category-tag {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ group.tag.post_count }} post{{ 's' if group.tag.post_count != 1 else '' }}">
         {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
         <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2">
