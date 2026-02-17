@@ -1391,6 +1391,7 @@
             addSep();
             const el = document.createElement('a');
             el.className = 'breadcrumb-current';
+            el.classList.add('breadcrumb-link');
             el.href = '/tags';
             el.textContent = 'tags';
             breadcrumb.appendChild(el);
@@ -1634,7 +1635,7 @@
         function handleAjaxClick(e) {
             e.preventDefault();
             let url = this.getAttribute('href');
-            
+
             // If this is the "Back to Home" button in immersive mode, try to go back to last list
             if (this.classList.contains('nav-link') && this.title === 'Back to Home') {
                 const backUrl = sessionStorage.getItem('lastListUrl');
@@ -1653,7 +1654,7 @@
                 }
                 return;
             }
-            
+
             loadPosts(url, this);
         }
 
