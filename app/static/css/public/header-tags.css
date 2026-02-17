@@ -1,11 +1,22 @@
 /* ===========================
-   Header Tags Filters
+   Header Tags Bar
    =========================== */
-.site-header .tags-filters {
-    flex: 1;
-    min-width: 0;
-    margin: 0 var(--spacing-md);
-    padding: 4px 0 0;
+.header-tags-bar {
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--header-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition:
+        background-color var(--transition-theme),
+        border-color var(--transition-theme);
+    overflow: visible;
+    z-index: 100;
+}
+
+.header-tags-bar .tags-filters {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: var(--spacing-xs) var(--spacing-md);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -16,12 +27,12 @@
     transition: opacity 0.2s ease;
 }
 
-.site-header .tags-filters.is-ready {
+.header-tags-bar .tags-filters.is-ready {
     opacity: 1;
 }
 
 /* Header Dropdown Tags */
-.site-header .tag-group {
+.header-tags-bar .tag-group {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -34,7 +45,7 @@
 }
 
 /* Filter buttons - both standalone and within lists */
-.site-header .filter-btn {
+.header-tags-bar .filter-btn {
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
@@ -52,17 +63,17 @@
     text-rendering: optimizeLegibility;
 }
 
-.site-header .filter-btn:hover,
-.site-header .filter-btn.active {
+.header-tags-bar .filter-btn:hover,
+.header-tags-bar .filter-btn.active {
     border-color: var(--color-primary);
 }
 
-.site-header .filter-btn.active {
+.header-tags-bar .filter-btn.active {
     background-color: var(--color-primary);
     color: var(--text-inverted);
 }
 
-.site-header .tag-group-header {
+.header-tags-bar .tag-group-header {
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
@@ -73,18 +84,18 @@
     box-sizing: border-box;
 }
 
-.site-header .tag-group-header:hover,
-.site-header .tag-group-header:has(.filter-btn.active),
-.site-header .tag-group.is-open>.tag-group-header {
+.header-tags-bar .tag-group-header:hover,
+.header-tags-bar .tag-group-header:has(.filter-btn.active),
+.header-tags-bar .tag-group.is-open>.tag-group-header {
     border-color: var(--color-primary);
 }
 
-.site-header .tag-group-header:has(.filter-btn.active) {
+.header-tags-bar .tag-group-header:has(.filter-btn.active) {
     background-color: var(--color-primary);
 }
 
 /* Override filter-btn styles when inside tag-group-header - use higher specificity */
-.site-header .tag-group-header>.filter-btn {
+.header-tags-bar .tag-group-header>.filter-btn {
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -98,16 +109,11 @@
     box-shadow: none;
 }
 
-/* .site-header .tag-group-header:hover > .filter-btn,
-.site-header .tag-group.is-open > .tag-group-header > .filter-btn {
-    color: var(--color-primary);
-} */
-
-.site-header .tag-group-header:has(.active)>.filter-btn {
+.header-tags-bar .tag-group-header:has(.active)>.filter-btn {
     color: var(--text-inverted);
 }
 
-.site-header .tag-group-header .toggle-children {
+.header-tags-bar .tag-group-header .toggle-children {
     background: transparent;
     border: none;
     color: var(--text-secondary);
@@ -120,29 +126,29 @@
     align-self: stretch;
 }
 
-.site-header .tag-group-header .toggle-children svg {
+.header-tags-bar .tag-group-header .toggle-children svg {
     transition: transform var(--transition-fast);
     transform-origin: center;
 }
 
-.site-header .tag-group:hover>.tag-group-header .toggle-children,
-.site-header .tag-group.is-open>.tag-group-header .toggle-children,
-.site-header .tag-group-header:has(.active) .toggle-children {
+.header-tags-bar .tag-group:hover>.tag-group-header .toggle-children,
+.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children,
+.header-tags-bar .tag-group-header:has(.active) .toggle-children {
     color: var(--color-primary);
 }
 
-.site-header .tag-group:hover>.tag-group-header .toggle-children svg,
-.site-header .tag-group.is-open>.tag-group-header .toggle-children svg,
-.site-header .tag-group-header:has(.active) .toggle-children svg {
+.header-tags-bar .tag-group:hover>.tag-group-header .toggle-children svg,
+.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children svg,
+.header-tags-bar .tag-group-header:has(.active) .toggle-children svg {
     transform: rotate(180deg);
 }
 
-.site-header .tag-group-header:has(.active) .toggle-children {
+.header-tags-bar .tag-group-header:has(.active) .toggle-children {
     color: var(--text-inverted);
 }
 
 /* Dropdown container - default hidden */
-.site-header .tag-children {
+.header-tags-bar .tag-children {
     position: absolute;
     top: calc(100% + var(--spacing-xs));
     left: 50%;
@@ -166,7 +172,7 @@
     opacity: 0;
 }
 
-.site-header .tag-children::before {
+.header-tags-bar .tag-children::before {
     content: '';
     position: absolute;
     top: -8px;
@@ -177,8 +183,8 @@
 }
 
 /* Show dropdown on hover or when opened */
-.site-header .tag-group:hover>.tag-children,
-.site-header .tag-group.is-open>.tag-children {
+.header-tags-bar .tag-group:hover>.tag-children,
+.header-tags-bar .tag-group.is-open>.tag-children {
     display: flex;
     visibility: visible;
     opacity: 1;
@@ -186,8 +192,8 @@
 }
 
 /* Temporary class for measuring hidden dropdowns - needs higher specificity */
-.site-header .tag-group .tag-children.visible-flex,
-.site-header .tag-group .tag-children.is-measuring {
+.header-tags-bar .tag-group .tag-children.visible-flex,
+.header-tags-bar .tag-group .tag-children.is-measuring {
     display: flex;
     visibility: hidden;
 }
@@ -205,33 +211,33 @@
 }
 
 /* Ensure children in dropdowns have consistent sizing - use child combinator for specificity */
-.site-header .tag-children>.filter-btn,
-.site-header .tag-children>.tag-group .filter-btn {
+.header-tags-bar .tag-children>.filter-btn,
+.header-tags-bar .tag-children>.tag-group .filter-btn {
     height: 2rem;
     font-size: var(--font-size-sm);
 }
 
-.site-header .tag-children>.filter-btn {
+.header-tags-bar .tag-children>.filter-btn {
     padding: 0 var(--spacing-md);
 }
 
-.site-header .tag-children>.tag-group>.tag-group-header {
+.header-tags-bar .tag-children>.tag-group>.tag-group-header {
     height: 2rem;
     font-size: var(--font-size-sm);
 }
 
 /* Tag Switcher Logic - keep these with high specificity to prevent display override */
-.site-header .tags-filters[data-mode="featured"]>.category-tag,
-.site-header .tags-filters[data-mode="featured"]>.tag-group.category-tag {
+.header-tags-bar .tags-filters[data-mode="featured"]>.category-tag,
+.header-tags-bar .tags-filters[data-mode="featured"]>.tag-group.category-tag {
     display: none;
 }
 
-.site-header .tags-filters[data-mode="categories"]>.featured-tag,
-.site-header .tags-filters[data-mode="categories"]>.tag-group.featured-tag {
+.header-tags-bar .tags-filters[data-mode="categories"]>.featured-tag,
+.header-tags-bar .tags-filters[data-mode="categories"]>.tag-group.featured-tag {
     display: none;
 }
 
-.site-header .switcher-btn.active {
+.header-tags-bar .switcher-btn.active {
     background-color: var(--color-primary);
     color: var(--text-inverted);
 }
@@ -239,17 +245,17 @@
 /* ===========================
    Hidden Tag Indicator
    =========================== */
-.site-header .hidden-tag {
+.header-tags-bar .hidden-tag {
     opacity: 0.7;
 }
 
-.site-header .hidden-tag-icon {
+.header-tags-bar .hidden-tag-icon {
     display: inline-block;
     margin-right: var(--spacing-xs);
     vertical-align: middle;
     opacity: 0.6;
 }
 
-.site-header .hidden-tag:hover .hidden-tag-icon {
+.header-tags-bar .hidden-tag:hover .hidden-tag-icon {
     opacity: 1;
 }
