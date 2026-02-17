@@ -109,11 +109,16 @@ endblock %}
 <article class="post-single">
     <header class="post-header">
         <div class="post-meta">
+            {% if not post.is_page %}
+            [not is_post]
             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
             </time>
             {% if blog_settings.show_view_counts and post.view_count %}
             <span class="post-meta-divider">·</span>
+            <span>{{ post.view_count }} views</span>
+            {% endif %}
+            {% elif blog_settings.show_view_counts and post.view_count %}
             <span>{{ post.view_count }} views</span>
             {% endif %}
         </div>
@@ -124,6 +129,7 @@ endblock %}
         {{ content_html | safe }}
     </div>
 
+    {% if not post.is_page %}
     <footer class="post-footer">
         {% if post.tags %}
         <div class="post-tags">
@@ -151,6 +157,7 @@ endblock %}
         </div>
         {% endif %}
     </footer>
+    {% endif %}
 </article>
 {% endif %}
 
