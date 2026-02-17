@@ -6,12 +6,13 @@
 {{ super() }}
 {% endblock %}
 
+{% block header_breadcrumb %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">map</span>
+{% endblock %}
+
 {% block content %}
 <div class="map-page">
-    <header class="map-header">
-        <h1 class="map-title">Post Map</h1>
-    </header>
-
     <div class="map-container">
         <div id="map" data-map-tags="{{ map_tags_list | tojson | forceescape }}"></div>
     </div>
