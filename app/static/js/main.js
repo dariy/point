@@ -597,6 +597,12 @@
     async function loadPost(url, pushState = true) {
         if (isNavigating) return;
 
+        // Store the last visited list URL if this is a list page
+        const isListUrl = !url.includes('/posts/') && !url.includes('/light/') && url !== '/map';
+        if (isListUrl) {
+            sessionStorage.setItem('lastListUrl', url);
+        }
+
         console.log("[Navigation] Starting navigation to:", url);
         isNavigating = true;
         document.body.classList.add("cursor-wait");
@@ -1109,8 +1115,9 @@
         const postNavData = document.getElementById('post-nav-data');
         if (postNavData) {
             if (direction === "escape") {
-                console.log("[Navigation] Escape pressed, returning to home");
-                loadPost('/');
+                const backUrl = sessionStorage.getItem('lastListUrl') || '/';
+                console.log("[Navigation] Escape pressed, returning to:", backUrl);
+                loadPost(backUrl);
                 handled = true;
             } else if (direction === "down") {
                 const prevUrl = postNavData.dataset.prevUrl;
@@ -1606,7 +1613,27 @@
 
         function handleAjaxClick(e) {
             e.preventDefault();
-            const url = this.getAttribute('href');
+            let url = this.getAttribute('href');
+            
+            // If this is the "Back to Home" button in immersive mode, try to go back to last list
+            if (this.classList.contains('nav-link') && this.title === 'Back to Home') {
+                const backUrl = sessionStorage.getItem('lastListUrl');
+                if (backUrl) {
+                    console.log("[Navigation] Overriding 'Back to Home' with:", backUrl);
+                    url = backUrl;
+                }
+            }
+
+            // If navigating to map, use full view replacement instead of grid update
+            if (url === '/map' || url.includes('/map?')) {
+                if (typeof loadPost === 'function') {
+                    loadPost(url);
+                } else {
+                    window.location.href = url;
+                }
+                return;
+            }
+            
             loadPosts(url, this);
         }
 
@@ -1818,6 +1845,17 @@
         function handleTagsClick(e) {
             e.preventDefault();
             const url = this.getAttribute('href');
+
+            // If navigating to map, use full view replacement instead of tags content update
+            if (url === '/map' || url.includes('/map?')) {
+                if (typeof loadPost === 'function') {
+                    loadPost(url);
+                } else {
+                    window.location.href = url;
+                }
+                return;
+            }
+
             loadTagsContent(url, this);
         }
 
