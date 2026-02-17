@@ -133,12 +133,12 @@ async def test_single_post_hidden_404(client: AsyncClient, db: AsyncSession, tes
 
 @pytest.mark.asyncio
 async def test_single_post_status_hidden(client: AsyncClient, db: AsyncSession, test_user: dict) -> None:
-    """Test accessing a post with HIDDEN status (should be accessible)."""
+    """Test that hidden posts are 404 for guests but accessible to admin."""
     user = test_user["user"]
     post = Post(
         title="Hidden Status Post",
         slug="hidden-status-post",
-        content="Hidden but accessible",
+        content="Hidden content",
         status=PostStatus.HIDDEN,
         author_id=user.id,
         published_at=datetime.now(UTC)
@@ -146,9 +146,47 @@ async def test_single_post_status_hidden(client: AsyncClient, db: AsyncSession, 
     db.add(post)
     await db.commit()
 
+    # Guest should get 404
+    response = await client.get(f"/posts/{post.slug}")
+    assert response.status_code == 404
+
+    # Admin should get 200 (Login first)
+    login_resp = await client.post(
+        "/api/auth/login",
+        json={
+            "username": test_user["username"],
+            "name": test_user["password"]
+        }
+    )
+    assert login_resp.status_code == 200
+
     response = await client.get(f"/posts/{post.slug}")
     assert response.status_code == 200
-    assert "Hidden but accessible" in response.text
+    assert "Hidden content" in response.text
+
+@pytest.mark.asyncio
+async def test_single_post_status_page(client: AsyncClient, db: AsyncSession, test_user: dict) -> None:
+    """Test that 'page' status posts are accessible to guests but not in lists."""
+    user = test_user["user"]
+    post = Post(
+        title="Page Status Post",
+        slug="page-status-post",
+        content="Page content",
+        status=PostStatus.PAGE,
+        author_id=user.id,
+        published_at=datetime.now(UTC)
+    )
+    db.add(post)
+    await db.commit()
+
+    # Guest should get 200 (direct access)
+    response = await client.get(f"/posts/{post.slug}")
+    assert response.status_code == 200
+    assert "Page content" in response.text
+
+    # Should NOT be in homepage list
+    response = await client.get("/")
+    assert "Page Status Post" not in response.text
 
 
 @pytest.mark.asyncio

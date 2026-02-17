@@ -123,6 +123,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """
     # Startup
     await create_tables()
+
+    # Run migrations
+    from app.migrations.runner import run_migrations
+    await run_migrations()
+
     ensure_media_directories()
 
     # Initialize and start scheduler

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tag import Tag
 
+
 @pytest.mark.asyncio
 
 async def test_map_page_status(client: AsyncClient) -> None:

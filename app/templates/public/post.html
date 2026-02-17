@@ -35,6 +35,10 @@ endblock %}
 {% endblock %}
 
 {% block header_breadcrumb %}
+{% for t in tag_hierarchy %}
+<span class="breadcrumb-separator">/</span>
+<a href="/tag/{{ t.slug }}" class="breadcrumb-link">{{ t.name }}</a>
+{% endfor %}
 {% if has_text_content %}
 <span class="breadcrumb-separator">/</span>
 <span class="breadcrumb-current">{{ post.title }}</span>
@@ -157,7 +161,7 @@ endblock %}
 
 {% block footer_pagination %}
 {% if not has_text_content and post.tags %}
-<div class="immersive-tags">
+<div class="post-card-tags immersive-tags">
     {% for tag in post.tags %}
     {{ tag_link(tag, user) }}
     {% endfor %}

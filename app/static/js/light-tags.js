@@ -69,6 +69,7 @@
         document.getElementById('tag-featured').checked = false;
         document.getElementById('tag-hidden').checked = false;
         document.getElementById('tag-hidden-posts').checked = false;
+        document.getElementById('tag-breadcrumbs').checked = true;
         document.getElementById('tag-show-related').checked = false;
         locationsContainer.innerHTML = '';
 
@@ -100,7 +101,7 @@
     /**
      * Open modal for editing existing tag
      */
-    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds, includeInBreadcrumbs) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
@@ -110,6 +111,7 @@
         document.getElementById('tag-featured').checked = !!isFeatured;
         document.getElementById('tag-hidden').checked = !!isHidden;
         document.getElementById('tag-hidden-posts').checked = !!isHiddenPosts;
+        document.getElementById('tag-breadcrumbs').checked = includeInBreadcrumbs !== undefined ? !!includeInBreadcrumbs : true;
         document.getElementById('tag-show-related').checked = !!isShowRelated;
         
         locationsContainer.innerHTML = '';
@@ -185,6 +187,7 @@
                 document.getElementById('tag-featured').checked = tag.is_featured;
                 document.getElementById('tag-hidden').checked = tag.is_hidden;
                 document.getElementById('tag-hidden-posts').checked = tag.is_hidden_posts;
+                document.getElementById('tag-breadcrumbs').checked = tag.include_in_breadcrumbs !== undefined ? tag.include_in_breadcrumbs : true;
                 document.getElementById('tag-show-related').checked = tag.show_related_tags_as_children;
                 
                 locationsContainer.innerHTML = '';
@@ -566,10 +569,11 @@
             const isHidden = editBtn.dataset.tagHidden === 'true';
             const isHiddenPosts = editBtn.dataset.tagHiddenPosts === 'true';
             const isShowRelated = editBtn.dataset.tagShowRelated === 'true';
+            const includeInBreadcrumbs = editBtn.dataset.tagBreadcrumbs === 'true';
             const locations = editBtn.dataset.tagLocations || '[]';
             const parentIds = editBtn.dataset.tagParents || '[]';
             const childIds = editBtn.dataset.tagChildren || '[]';
-            editTag(id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds);
+            editTag(id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds, includeInBreadcrumbs);
             return;
         }
 
@@ -598,6 +602,7 @@
             is_featured: document.getElementById('tag-featured').checked,
             is_hidden: document.getElementById('tag-hidden').checked,
             is_hidden_posts: document.getElementById('tag-hidden-posts').checked,
+            include_in_breadcrumbs: document.getElementById('tag-breadcrumbs').checked,
             show_related_tags_as_children: document.getElementById('tag-show-related').checked,
             locations: Array.from(locationsContainer.querySelectorAll('.flex')).map(row => ({
                 latitude: parseFloat(row.querySelector('.location-lat').value),
