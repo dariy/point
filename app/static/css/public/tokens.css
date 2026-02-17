@@ -10,7 +10,7 @@
 
     /* Semantic Colors - Background */
     --bg-primary: #ffffff;
-    --bg-carouselle: white;
+    --bg-carouselle: rgba(255,255,255,0.6);
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
     --bg-elevated: #ffffff;
@@ -45,7 +45,7 @@
     /* Component-specific */
     --header-bg: rgba(255, 255, 255, 0.8);
     --footer-bg: rgba(255, 255, 255, 0.8);
-    --footer-text: #94a3b8;
+    --footer-text: rgba(0, 0, 0, 0.95);  /*#94a3b8;*/
     --code-bg: #1e293b;
     --code-text: #f1f5f9;
     --inline-code-bg: #f1f5f9;
