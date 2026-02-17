@@ -221,14 +221,14 @@
 }
 
 .post-header-bar .header-left {
-    flex: 1;
+    flex: 0;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
 }
 
 .post-header-bar .header-center {
-    flex: 2;
+    flex: 100%;
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -236,7 +236,7 @@
 }
 
 .post-header-bar .header-right {
-    flex: 1;
+    flex: 0;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -320,4 +320,20 @@
 .logo.theme-toggle svg {
     width: 1rem;
     height: 1rem;
+}
+
+/* Immersive header: mobile title overflow handling */
+/* Step 1 — compact: hide blog title link and separator */
+.post-header-bar .header-center.header-compact .breadcrumb-link,
+.post-header-bar .header-center.header-compact .breadcrumb-separator {
+    display: none;
+}
+
+/* Step 2 — truncate: still overflows even after compact, clip with ellipsis */
+.post-header-bar .header-center.header-truncate .site-title {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
