@@ -35,6 +35,7 @@ from app.utils.formatters import (
     truncate_paragraphs,
 )
 from app.utils.template_helpers import (
+    locations_to_json,
     post_has_hidden_posts_tag,
     tag_has_hidden_parent,
     tag_has_hidden_posts_parent,
@@ -52,6 +53,7 @@ templates = Jinja2Templates(directory=str(templates_dir))
 templates.env.filters["tag_has_hidden_parent"] = tag_has_hidden_parent
 templates.env.filters["tag_has_hidden_posts_parent"] = tag_has_hidden_posts_parent
 templates.env.filters["post_has_hidden_posts_tag"] = post_has_hidden_posts_tag
+templates.env.filters["locations_to_json"] = locations_to_json
 
 router = APIRouter(tags=["Public"])
 
@@ -1090,11 +1092,10 @@ async def map_page(
     db_context = await get_db_context(db, user=user)
     context.update(db_context)
 
-    import json
     context.update(
         {
             "map_tags": map_tags,
-            "map_tags_json": json.dumps(tags_data),
+            "map_tags_list": tags_data,
             "user": user,
         }
     )

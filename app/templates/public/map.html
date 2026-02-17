@@ -9,12 +9,11 @@
 {% block content %}
 <div class="map-page">
     <header class="map-header">
-        <h1 class="map-title">Global Map</h1>
-        <p class="map-subtitle">Explore posts by their location tags</p>
+        <h1 class="map-title">Post Map</h1>
     </header>
 
     <div class="map-container">
-        <div id="map" data-map-tags='{{ map_tags_json | safe }}'></div>
+        <div id="map" data-map-tags="{{ map_tags_list | tojson | forceescape }}"></div>
     </div>
 </div>
 {% endblock %}

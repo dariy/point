@@ -40,9 +40,9 @@
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
-                data-tag-locations='{{ node.tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
-                data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
-                data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}'
+                data-tag-locations="{{ node.tag.locations | locations_to_json | forceescape }}"
+                data-tag-parents="{{ node.tag.parents | map(attribute="id") | list | tojson | forceescape }}"
+                data-tag-children="{{ node.tag.children | map(attribute="id") | list | tojson | forceescape }}"
                 class="tag {% if node.tag.is_important %}tag-important{% endif %}"
                 title="Edit tag" draggable="false">
                 {{ node.tag.name }}
@@ -81,9 +81,9 @@
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
-                data-tag-locations='{{ node.tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
-                data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
-                data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}' title="Edit"
+                data-tag-locations="{{ node.tag.locations | locations_to_json | forceescape }}"
+                data-tag-parents="{{ node.tag.parents | map(attribute="id") | list | tojson | forceescape }}"
+                data-tag-children="{{ node.tag.children | map(attribute="id") | list | tojson | forceescape }}" title="Edit"
                 draggable="false">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" draggable="false">
                     <path
@@ -209,9 +209,9 @@
                                     data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                     data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                     data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
-                                    data-tag-locations='{{ tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
-                                    data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}'
-                                    data-tag-children='{{ tag.children | map(attribute="id") | list | tojson }}'
+                                    data-tag-locations="{{ tag.locations | locations_to_json | forceescape }}"
+                                    data-tag-parents="{{ tag.parents | map(attribute="id") | list | tojson | forceescape }}"
+                                    data-tag-children="{{ tag.children | map(attribute="id") | list | tojson | forceescape }}"
                                     class="tag {% if tag.is_important %}tag-important{% endif %}"
                                     style="width: fit-content;" title="Edit tag">
                                     {{ tag.name }}
@@ -298,9 +298,9 @@
                                 data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                 data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                 data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
-                                data-tag-locations='{{ tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
-                                data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}'
-                                data-tag-children='{{ tag.children | map(attribute="id") | list | tojson }}' title="Edit">
+                                data-tag-locations="{{ tag.locations | locations_to_json | forceescape }}"
+                                data-tag-parents="{{ tag.parents | map(attribute="id") | list | tojson | forceescape }}"
+                                data-tag-children="{{ tag.children | map(attribute="id") | list | tojson | forceescape }}" title="Edit">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                                     <path
                                         d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
