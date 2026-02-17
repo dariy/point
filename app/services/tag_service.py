@@ -240,7 +240,7 @@ class TagService:
             tag.is_hidden_posts = tag_data.is_hidden_posts
         if tag_data.show_related_tags_as_children is not None:
             tag.show_related_tags_as_children = tag_data.show_related_tags_as_children
-        
+
         if tag_data.locations is not None:
             # Replace existing locations
             tag.locations = [
@@ -747,3 +747,103 @@ class TagService:
         post.tags = [tag for tag in post.tags if tag.id not in tag_ids]
         await self.db.flush()
         await self.update_post_counts_recursive(tag_ids)
+
+    async def update_missing_coords(self) -> dict[str, Any]:
+        """Update missing coordinates for city/country tags using geocoding."""
+        import asyncio
+
+        import httpx
+
+        # 1. Identify base tags for cities and countries
+        base_names = ["city", "cities", "country", "countries"]
+        result = await self.db.execute(
+            select(Tag).where(func.lower(Tag.name).in_(base_names))
+        )
+        base_tags = result.scalars().all()
+
+        if not base_tags:
+            return {"status": "success", "updated_count": 0, "message": "No base tags (city/country) found."}
+
+        # 2. Get all descendants recursively
+        all_descendant_ids = set()
+        for bt in base_tags:
+            descendants = await self.get_descendant_tag_ids(bt.id)
+            all_descendant_ids.update(descendants)
+
+        # Exclude the base tags themselves if they are in the list
+        base_ids = {bt.id for bt in base_tags}
+        target_ids = all_descendant_ids - base_ids
+
+        if not target_ids:
+            return {"status": "success", "updated_count": 0, "message": "No sub-tags found for city/country."}
+
+        # 3. Filter those that don't have locations already
+        query = (
+            select(Tag)
+            .where(Tag.id.in_(target_ids))
+            .outerjoin(TagLocation)
+            .where(TagLocation.id.is_(None))
+        )
+        result = await self.db.execute(query)
+        tags_to_geocode = result.scalars().all()
+
+        if not tags_to_geocode:
+            return {"status": "success", "updated_count": 0, "message": "All city/country tags already have coordinates."}
+
+        updated_count = 0
+        errors = []
+
+        # 4. Geocode using Nominatim (OpenStreetMap)
+        # We should use a proper User-Agent as per Nominatim usage policy
+        headers = {"User-Agent": "Point/0.1.0"}
+
+        async with httpx.AsyncClient(headers=headers, timeout=10.0) as client:
+            for tag in tags_to_geocode:
+                try:
+                    # Nominatim search
+                    # We use 'q' for general search, or we could try to be more specific
+                    response = await client.get(
+                        "https://nominatim.openstreetmap.org/search",
+                        params={
+                            "q": tag.name,
+                            "format": "json",
+                            "limit": 1
+                        }
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data:
+                            lat = float(data[0]["lat"])
+                            lon = float(data[0]["lon"])
+
+                            # Save to database
+                            new_location = TagLocation(
+                                tag_id=tag.id,
+                                latitude=lat,
+                                longitude=lon
+                            )
+                            self.db.add(new_location)
+                            updated_count += 1
+                            logger.info(f"Geocoded tag '{tag.name}' to {lat}, {lon}")
+                        else:
+                            logger.warning(f"No geocoding results for tag '{tag.name}'")
+                    else:
+                        logger.error(f"Geocoding API error for '{tag.name}': {response.status_code}")
+                        errors.append(f"API error for {tag.name}")
+
+                    # Respect Nominatim's rate limit (max 1 request per second)
+                    await asyncio.sleep(1.1)
+
+                except Exception as e:
+                    logger.error(f"Failed to geocode tag '{tag.name}': {e}")
+                    errors.append(f"Failed to geocode {tag.name}: {str(e)}")
+
+        await self.db.commit()
+
+        return {
+            "status": "success",
+            "updated_count": updated_count,
+            "errors": errors if errors else None,
+            "message": f"Updated coordinates for {updated_count} tags."
+        }
