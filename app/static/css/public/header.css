@@ -63,6 +63,7 @@
     color: var(--text-tertiary);
     font-weight: 400;
     user-select: none;
+    transition: color var(--transition-theme);
 }
 
 .site-breadcrumb .breadcrumb-current {
@@ -73,7 +74,7 @@
 .site-breadcrumb .breadcrumb-link {
     color: var(--text-secondary);
     text-decoration: none;
-    transition: color var(--transition-fast);
+    transition: color var(--transition-theme);
 }
 
 .site-breadcrumb .breadcrumb-link:hover {
