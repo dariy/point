@@ -1373,7 +1373,7 @@
         const breadcrumb = document.querySelector('.site-breadcrumb');
         if (!breadcrumb) return;
 
-        // Remove any existing dynamic breadcrumb parts (keep only the logo)
+        // Remove any existing dynamic breadcrumb parts (keep only the logo/title/subtitle)
         breadcrumb.querySelectorAll('.breadcrumb-separator, .breadcrumb-current, .breadcrumb-link').forEach(el => el.remove());
 
         const parts = pathname.split('/').filter(p => p);
@@ -1417,6 +1417,70 @@
     }
 
     /**
+     * Shared pagination update helper
+     */
+    function updatePagination(pag, tagSlug, basePath, clickHandler) {
+        const paginationContainer = document.querySelector('.footer-content nav.pagination');
+        if (!paginationContainer) return;
+
+        if (!pag || pag.total_pages <= 1) {
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        paginationContainer.style.display = '';
+        
+        const effectiveBasePath = tagSlug ? `/tag/${tagSlug}` : basePath;
+        let html = '';
+
+        // Previous
+        if (pag.has_prev) {
+            html += `<a href="${effectiveBasePath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </a>`;
+        } else {
+            html += `<span class="pagination-link disabled">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </span>`;
+        }
+
+        // Pages
+        for (let p = 1; p <= pag.total_pages; p++) {
+            if (p === pag.page) {
+                html += `<span class="pagination-link active">${p}</span>`;
+            } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
+                html += `<a href="${effectiveBasePath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+            } else if (p === pag.page - 2 || p === pag.page + 2) {
+                html += `<span class="pagination-ellipsis">&hellip;</span>`;
+            }
+        }
+
+        // Next
+        if (pag.has_next) {
+            html += `<a href="${effectiveBasePath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </a>`;
+        } else {
+            html += `<span class="pagination-link disabled">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </span>`;
+        }
+
+        paginationContainer.innerHTML = html;
+        paginationContainer.querySelectorAll('.ajax-link').forEach(link => {
+            link.addEventListener('click', clickHandler);
+        });
+    }
+
+    /**
      * AJAX Navigation for Post Lists (Homepage and Tag Archives)
      */
     function initAjaxPostsNavigation() {
@@ -1435,7 +1499,8 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    renderPosts(data, postsContainer, url);
+                    renderPosts(data, postsContainer);
+                    updatePagination(data.pagination, data.tag?.slug || data.current_tag, '/', handleAjaxClick);
 
                     window.history.pushState({}, '', url);
                     const tagsBar = document.querySelector('.header-tags-bar');
@@ -1457,7 +1522,7 @@
             }
         }
 
-        function renderPosts(data, container, currentUrl) {
+        function renderPosts(data, container) {
             if (!data.posts || data.posts.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1474,154 +1539,28 @@
                 return;
             }
 
-            let html = '<div class="posts-grid">';
+            const grid = document.createElement('div');
+            grid.className = 'posts-grid';
 
             data.posts.forEach((post, index) => {
                 const isFirst = index === 0;
                 const isPageOne = data.pagination.page === 1;
                 const showFeatured = isFirst && isPageOne && post.is_featured;
-                const hasImage = post.has_image;
-                const isVideo = post.is_video;
 
-                const editBtn = data.is_logged_in ? `
-                    <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </a>` : '';
-
-                const featuredBadge = showFeatured ? `
-                    <span class="featured-badge">
-                        <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                    </span>` : '';
-
-                const postMeta = `
-                    <div class="post-card-meta">
-                        <time datetime="${post.published_iso}">${post.published_date}</time>
-                        ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
-                    </div>`;
-
-                const postTags = post.tags && post.tags.length > 0 ? `
-                    <div class="post-card-tags">
-                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug || tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
-                    </div>` : '';
-
-                const contentHtml = hasImage ? `
-                    <div class="post-card-background">
-                        ${isVideo ? `
-                            <video src="${post.thumbnail_path}" muted loop playsinline></video>
-                            <div class="video-play-indicator">
-                                <svg width="${showFeatured ? '48' : '32'}" height="${showFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            </div>` : `
-                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`}
-                    </div>
-                    <div class="post-card-content overlay">
-                        ${featuredBadge}${postMeta}
-                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                        <div class="post-card-excerpt">${post.excerpt || ''}</div>
-                        ${postTags}
-                    </div>` : `
-                    <div class="post-card-content">
-                        ${featuredBadge}${postMeta}
-                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                        <div class="post-card-text-preview">${post.preview_html || ''}</div>
-                        ${postTags}
-                    </div>`;
-
+                const postCardClone = window.BlogNavigation.renderPostCard(post, data.is_logged_in, showFeatured);
+                
                 if (showFeatured) {
-                    html += `<div class="featured-post">
-                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                            ${editBtn}${contentHtml}
-                        </article>
-                    </div>`;
+                    const featuredWrapper = document.createElement('div');
+                    featuredWrapper.className = 'featured-post';
+                    featuredWrapper.appendChild(postCardClone);
+                    grid.appendChild(featuredWrapper);
                 } else {
-                    html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                        ${editBtn}${contentHtml}
-                    </article>`;
+                    grid.appendChild(postCardClone);
                 }
             });
 
-            html += '</div>';
-
-            // Add pagination if needed
-            if (data.pagination && data.pagination.total_pages > 1) {
-                html += renderPagination(data.pagination, data.tag?.slug || data.current_tag, currentUrl);
-            }
-
-            container.innerHTML = html;
-        }
-
-        function renderPagination(pag, tagSlug, currentUrl) {
-            // If tagSlug is not provided, try to extract it from the URL being loaded
-            if (!tagSlug && currentUrl) {
-                const urlObj = new URL(currentUrl, window.location.origin);
-                const tagMatch = urlObj.pathname.match(/^\/tag\/([^\/]+)/);
-                if (tagMatch) {
-                    tagSlug = tagMatch[1];
-                }
-            }
-
-            // Fallback to current window location if still not found
-            if (!tagSlug) {
-                const tagMatch = window.location.pathname.match(/^\/tag\/([^\/]+)/);
-                if (tagMatch) {
-                    tagSlug = tagMatch[1];
-                }
-            }
-
-            const basePath = tagSlug ? `/tag/${tagSlug}` : '/';
-            const ariaLabel = tagSlug ? 'Tag archive pagination' : 'Posts pagination';
-
-            let html = `<nav class="pagination" aria-label="${ariaLabel}">`;
-
-            // Previous
-            if (pag.has_prev) {
-                html += `<a href="${basePath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            // Pages
-            for (let p = 1; p <= pag.total_pages; p++) {
-                if (p === pag.page) {
-                    html += `<span class="pagination-link active">${p}</span>`;
-                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="${basePath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
-                } else if (p === pag.page - 2 || p === pag.page + 2) {
-                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
-                }
-            }
-
-            // Next
-            if (pag.has_next) {
-                html += `<a href="${basePath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            html += '</nav>';
-            return html;
+            container.innerHTML = '';
+            container.appendChild(grid);
         }
 
         function attachAjaxListeners() {
@@ -1636,16 +1575,13 @@
             e.preventDefault();
             let url = this.getAttribute('href');
 
-            // If this is the "Back to Home" button in immersive mode, try to go back to last list
             if (this.classList.contains('nav-link') && this.title === 'Back to Home') {
                 const backUrl = sessionStorage.getItem('lastListUrl');
                 if (backUrl) {
-                    console.log("[Navigation] Overriding 'Back to Home' with:", backUrl);
                     url = backUrl;
                 }
             }
 
-            // If navigating to map, use full view replacement instead of grid update
             if (url === '/map' || url.includes('/map?')) {
                 if (typeof loadPost === 'function') {
                     loadPost(url);
@@ -1658,10 +1594,8 @@
             loadPosts(url, this);
         }
 
-        // Initial setup
         attachAjaxListeners();
 
-        // Handle back/forward buttons
         window.addEventListener('popstate', function () {
             loadPosts(window.location.href);
         });
@@ -1672,7 +1606,6 @@
      */
     function initAjaxTagsNavigation() {
         const tagsContent = document.getElementById('tags-content');
-        const filtersContainer = document.getElementById('tags-filters');
         if (!tagsContent) return;
 
         async function loadTagsContent(url, triggerElement = null) {
@@ -1688,6 +1621,8 @@
                 if (response.ok) {
                     const data = await response.json();
                     renderTags(data);
+                    const paginationBase = data.current_tag ? `/tag/${data.current_tag}` : '/tags';
+                    updatePagination(data.pagination, null, paginationBase, handleTagsClick);
 
                     window.history.pushState({}, '', url);
                     updateActiveSiteFilters(url, triggerElement);
@@ -1724,136 +1659,29 @@
                 return;
             }
 
-            let html = '<div class="posts-grid">';
+            const grid = document.createElement('div');
+            grid.className = 'posts-grid';
+
             data.posts.forEach((post, index) => {
                 const isFirst = index === 0;
                 const isPageOne = data.pagination.page === 1;
                 const showFeatured = isFirst && isPageOne && post.is_featured;
-                const hasImage = post.has_image;
-                const isVideo = post.is_video;
 
-                const editBtn = data.is_logged_in ? `
-                    <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </a>` : '';
-
-                const featuredBadge = showFeatured ? `
-                    <span class="featured-badge">
-                        <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                    </span>` : '';
-
-                const contentHtml = hasImage ? `
-                    <div class="post-card-background">
-                        ${isVideo ? `
-                            <video src="${post.thumbnail_path}" muted loop playsinline></video>
-                            <div class="video-play-indicator">
-                                <svg width="${showFeatured ? '48' : '32'}" height="${showFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            </div>` : `
-                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`}
-                    </div>
-                    <div class="post-card-content overlay">` : `
-                    <div class="post-card-content">`;
-
-                const postTags = post.tags && post.tags.length > 0 ? `
-                    <div class="post-card-tags">
-                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
-                    </div>` : '';
-
-                const articleHtml = `
-                    <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                        ${editBtn}${contentHtml}
-                            <div class="post-card-meta">
-                                ${featuredBadge}
-                                <time datetime="${post.published_iso}">${post.published_date}</time>
-                                ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
-                            </div>
-                            <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                            ${hasImage ? `<div class="post-card-excerpt">${post.excerpt || ''}</div>` : `<div class="post-card-text-preview">${post.preview_html || ''}</div>`}
-                            ${postTags}
-                        </div>
-                    </article>`;
+                const postCardClone = window.BlogNavigation.renderPostCard(post, data.is_logged_in, showFeatured);
 
                 if (showFeatured) {
-                    html += `<div class="featured-post">${articleHtml}</div>`;
+                    const featuredWrapper = document.createElement('div');
+                    featuredWrapper.className = 'featured-post';
+                    featuredWrapper.appendChild(postCardClone);
+                    grid.appendChild(featuredWrapper);
                 } else {
-                    html += articleHtml;
+                    grid.appendChild(postCardClone);
                 }
             });
-            html += '</div>';
 
-            tagsContent.innerHTML = html;
-            renderTagsPagination(data.pagination, data.current_tag);
+            tagsContent.innerHTML = '';
+            tagsContent.appendChild(grid);
         }
-
-        function renderTagsPagination(pag, currentTag) {
-            const paginationContainer = document.querySelector('.footer-content .pagination');
-
-            if (!paginationContainer) {
-                return;
-            }
-
-            if (!pag || pag.total_pages <= 1) {
-                paginationContainer.classList.add('hidden');
-                return;
-            }
-
-            paginationContainer.classList.remove('hidden');
-            paginationContainer.classList.add('visible-flex');
-            const tagPath = currentTag ? `/${currentTag}` : '';
-            let html = '';
-
-            // Previous
-            if (pag.has_prev) {
-                html += `<a href="/tag${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            // Pages
-            for (let p = 1; p <= pag.total_pages; p++) {
-                if (p === pag.page) {
-                    html += `<span class="pagination-link active">${p}</span>`;
-                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="/tag${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
-                } else if (p === pag.page - 2 || p === pag.page + 2) {
-                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
-                }
-            }
-
-            // Next
-            if (pag.has_next) {
-                html += `<a href="/tag${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            paginationContainer.innerHTML = html;
-        }
-
-
 
         function attachTagsListeners() {
             const links = document.querySelectorAll('.ajax-link');
@@ -1867,7 +1695,6 @@
             e.preventDefault();
             const url = this.getAttribute('href');
 
-            // If navigating to map, use full view replacement instead of tags content update
             if (url === '/map' || url.includes('/map?')) {
                 if (typeof loadPost === 'function') {
                     loadPost(url);
@@ -1880,10 +1707,8 @@
             loadTagsContent(url, this);
         }
 
-        // Initial setup
         attachTagsListeners();
 
-        // Handle back/forward buttons
         window.addEventListener('popstate', function () {
             loadTagsContent(window.location.href);
         });
@@ -2015,7 +1840,6 @@
         // Initial run
         updateActiveSiteFilters(window.location.href);
         updateFilters();
-
 
         registerCleanup(() => {
             observer.disconnect();
