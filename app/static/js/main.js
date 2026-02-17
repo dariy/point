@@ -1298,48 +1298,8 @@
 
         const buttons = filtersContainer.querySelectorAll('.filter-btn');
 
-        // Helper function to update button text while preserving the lock icon SVG
-        function updateButtonText(btn, newText) {
-            // Find the text node with actual content (not just whitespace)
-            const textNode = Array.from(btn.childNodes).find(
-                node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== ''
-            );
-
-            if (textNode) {
-                // Update the existing text node
-                textNode.textContent = newText;
-            } else {
-                // No meaningful text node exists, create one
-                const svg = btn.querySelector('.hidden-tag-icon');
-
-                // Remove all existing text nodes (including whitespace)
-                Array.from(btn.childNodes).forEach(node => {
-                    if (node.nodeType === Node.TEXT_NODE) {
-                        btn.removeChild(node);
-                    }
-                });
-
-                // Create new text node and insert in correct position
-                const newTextNode = document.createTextNode(newText);
-
-                if (svg) {
-                    // Insert text BEFORE the SVG icon
-                    btn.insertBefore(newTextNode, svg);
-                } else {
-                    // No SVG, just prepend the text
-                    btn.insertBefore(newTextNode, btn.firstChild);
-                }
-            }
-        }
-
-        // First, reset all buttons to inactive and restore original names for parent buttons
-        buttons.forEach(btn => {
-            btn.classList.remove('active');
-            const originalName = btn.getAttribute('data-original-name');
-            if (originalName) {
-                updateButtonText(btn, originalName);
-            }
-        });
+        // Reset all buttons to inactive
+        buttons.forEach(btn => btn.classList.remove('active'));
 
         // Identify all buttons that match the current tag
         const matchingButtons = [];
@@ -1352,21 +1312,20 @@
             }
         });
 
+        // Track the resolved tag name for the breadcrumb
+        let resolvedTagName = null;
+
         // If no matches by tag, handle "All"
         if (matchingButtons.length === 0 && !tag) {
             const allBtn = Array.from(buttons).find(btn => btn.dataset.role === 'all' || btn.getAttribute('href') === '/');
             if (allBtn) allBtn.classList.add('active');
         } else if (matchingButtons.length > 0) {
-            // If multiple exist, pick the "best" one
-            let bestMatch = null;
-            if (triggerElement) {
-                // If the click happened on one of these specific buttons, that's our winner
-                bestMatch = matchingButtons.find(btn => btn === triggerElement);
-                // If the trigger was a secondary element (like a tag in a post card), it won't be found here.
-            }
+            // If multiple exist, pick the "best" one (deepest nesting)
+            let bestMatch = triggerElement
+                ? (matchingButtons.find(btn => btn === triggerElement) ?? null)
+                : null;
 
             if (!bestMatch) {
-                // Fresh run or external trigger: pick the one with deepest nesting
                 let maxDepth = -1;
                 matchingButtons.forEach(btn => {
                     let depth = 0;
@@ -1375,47 +1334,31 @@
                         if (p.classList.contains('tag-group')) depth++;
                         p = p.parentElement;
                     }
-                    if (depth > maxDepth) {
-                        maxDepth = depth;
-                        bestMatch = btn;
-                    }
+                    if (depth > maxDepth) { maxDepth = depth; bestMatch = btn; }
                 });
             }
 
             if (bestMatch) {
                 bestMatch.classList.add('active');
 
-                // Propagate active state and name swapping up the chosen hierarchy
-                let currentGroup = bestMatch.closest('.tag-group');
+                // Extract tag name for the breadcrumb
+                resolvedTagName = Array.from(bestMatch.childNodes)
+                    .filter(node => node.nodeType === Node.TEXT_NODE)
+                    .map(node => node.textContent)
+                    .join('').trim();
 
+                // Propagate active class up to parent group headers (for layout priority)
+                let currentGroup = bestMatch.closest('.tag-group');
                 while (currentGroup) {
                     const headerBtn = currentGroup.querySelector('.tag-group-header .filter-btn');
-                    const parentElement = currentGroup.parentElement;
-                    const nextGroup = parentElement ? parentElement.closest('.tag-group') : null;
-
-                    if (headerBtn) {
-                        headerBtn.classList.add('active');
-                        // Rule: The top-most group header button always swaps its text with the selected sub-tag
-                        // to show the current filter status prominently.
-                        // Intermediate groups keep their original names to provide hierarchical context.
-                        if (!nextGroup) {
-                            // Get the text content of bestMatch without the SVG icon
-                            const bestMatchText = Array.from(bestMatch.childNodes)
-                                .filter(node => node.nodeType === Node.TEXT_NODE)
-                                .map(node => node.textContent)
-                                .join('').trim();
-                            updateButtonText(headerBtn, bestMatchText);
-                        }
-                    }
-                    currentGroup = nextGroup;
+                    if (headerBtn) headerBtn.classList.add('active');
+                    currentGroup = currentGroup.parentElement?.closest('.tag-group') ?? null;
                 }
-
-
             }
         }
 
-        // Update header breadcrumb
-        updateHeaderBreadcrumb(urlObj.pathname);
+        // Update header breadcrumb using the resolved tag name
+        updateHeaderBreadcrumb(urlObj.pathname, resolvedTagName);
 
         // Trigger responsive filter update
         window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
@@ -1423,8 +1366,10 @@
 
     /**
      * Update the header breadcrumb based on current path
+     * @param {string} pathname
+     * @param {string|null} tagName - resolved tag name (from filter buttons); falls back to slug
      */
-    function updateHeaderBreadcrumb(pathname) {
+    function updateHeaderBreadcrumb(pathname, tagName = null) {
         const breadcrumb = document.querySelector('.site-breadcrumb');
         if (!breadcrumb) return;
 
@@ -1459,7 +1404,7 @@
             addSep();
             const tagEl = document.createElement('span');
             tagEl.className = 'breadcrumb-current';
-            tagEl.textContent = decodeURIComponent(parts[1]);
+            tagEl.textContent = tagName || decodeURIComponent(parts[1]);
             breadcrumb.appendChild(tagEl);
         } else if (parts[0] === 'map') {
             addSep();

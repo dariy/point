@@ -63,14 +63,8 @@
     text-rendering: optimizeLegibility;
 }
 
-.header-tags-bar .filter-btn:hover,
-.header-tags-bar .filter-btn.active {
+.header-tags-bar .filter-btn:hover {
     border-color: var(--color-primary);
-}
-
-.header-tags-bar .filter-btn.active {
-    background-color: var(--color-primary);
-    color: var(--text-inverted);
 }
 
 .header-tags-bar .tag-group-header {
@@ -85,13 +79,8 @@
 }
 
 .header-tags-bar .tag-group-header:hover,
-.header-tags-bar .tag-group-header:has(.filter-btn.active),
 .header-tags-bar .tag-group.is-open>.tag-group-header {
     border-color: var(--color-primary);
-}
-
-.header-tags-bar .tag-group-header:has(.filter-btn.active) {
-    background-color: var(--color-primary);
 }
 
 /* Override filter-btn styles when inside tag-group-header - use higher specificity */
@@ -109,9 +98,6 @@
     box-shadow: none;
 }
 
-.header-tags-bar .tag-group-header:has(.active)>.filter-btn {
-    color: var(--text-inverted);
-}
 
 .header-tags-bar .tag-group-header .toggle-children {
     background: transparent;
@@ -132,19 +118,13 @@
 }
 
 .header-tags-bar .tag-group:hover>.tag-group-header .toggle-children,
-.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children,
-.header-tags-bar .tag-group-header:has(.active) .toggle-children {
+.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children {
     color: var(--color-primary);
 }
 
 .header-tags-bar .tag-group:hover>.tag-group-header .toggle-children svg,
-.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children svg,
-.header-tags-bar .tag-group-header:has(.active) .toggle-children svg {
+.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children svg {
     transform: rotate(180deg);
-}
-
-.header-tags-bar .tag-group-header:has(.active) .toggle-children {
-    color: var(--text-inverted);
 }
 
 /* Dropdown container - default hidden */
@@ -237,10 +217,10 @@
     display: none;
 }
 
-.header-tags-bar .switcher-btn.active {
+/*.header-tags-bar .switcher-btn.active {
     background-color: var(--color-primary);
     color: var(--text-inverted);
-}
+}*/
 
 /* ===========================
    Hidden Tag Indicator
