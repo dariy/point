@@ -209,36 +209,37 @@ async def test_update_map_coords_endpoint(client: AsyncClient, db: AsyncSession,
 @pytest.mark.asyncio
 async def test_map_categorization(client: AsyncClient, db: AsyncSession):
     """Test that tags are correctly categorized as city or country."""
-    from app.models.tag_location import TagLocation
-    from app.models.tag import tag_relationships
     from sqlalchemy import insert
-    
+
+    from app.models.tag import tag_relationships
+    from app.models.tag_location import TagLocation
+
     # Setup hierarchy
     countries_tag = Tag(name="countries", slug="countries")
     germany_tag = Tag(name="Germany", slug="germany", post_count=1)
     cities_tag = Tag(name="cities", slug="cities")
     berlin_tag = Tag(name="Berlin", slug="berlin", post_count=1)
-    
+
     db.add_all([countries_tag, germany_tag, cities_tag, berlin_tag])
     await db.flush()
-    
+
     await db.execute(insert(tag_relationships).values([
         {"parent_id": countries_tag.id, "child_id": germany_tag.id},
         {"parent_id": cities_tag.id, "child_id": berlin_tag.id}
     ]))
-    
+
     # Add locations
     db.add_all([
         TagLocation(tag_id=germany_tag.id, latitude=51.0, longitude=10.0),
         TagLocation(tag_id=berlin_tag.id, latitude=52.5, longitude=13.4)
     ])
     await db.commit()
-    
+
     response = await client.get("/map", headers={"X-Requested-With": "XMLHttpRequest"})
     data = response.json()
-    
+
     germany = next(t for t in data["tags"] if t["name"] == "Germany")
     berlin = next(t for t in data["tags"] if t["name"] == "Berlin")
-    
+
     assert germany["type"] == "country"
     assert berlin["type"] == "city"

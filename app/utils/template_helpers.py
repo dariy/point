@@ -4,7 +4,7 @@ Provides utility functions for checking tag visibility and hierarchy.
 """
 
 import json
-from typing import Any
+
 from app.models.post import Post
 from app.models.tag import Tag
 from app.models.tag_location import TagLocation
