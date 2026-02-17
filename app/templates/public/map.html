@@ -14,20 +14,7 @@
     </header>
 
     <div class="map-container">
-        <div id="map" data-map-tags='[
-            {% for tag in map_tags %}
-                {% for loc in tag.locations %}
-                {
-                    "name": "{{ tag.name }}",
-                    "slug": "{{ tag.slug }}",
-                    "post_count": {{ tag.post_count }},
-                    "lat": {{ loc.latitude }},
-                    "lng": {{ loc.longitude }},
-                    "url": "{{ tag.url }}"
-                }{% if not loop.last or not loop.parent.last %},{% endif %}
-                {% endfor %}
-            {% endfor %}
-        ]'></div>
+        <div id="map" data-map-tags='{{ map_tags_json | safe }}'></div>
     </div>
 </div>
 {% endblock %}

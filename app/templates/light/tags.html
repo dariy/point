@@ -40,7 +40,7 @@
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
-                data-tag-locations='[{% for loc in node.tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
+                data-tag-locations='{{ node.tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
                 data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
                 data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}'
                 class="tag {% if node.tag.is_important %}tag-important{% endif %}"
@@ -81,7 +81,7 @@
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
-                data-tag-locations='[{% for loc in node.tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
+                data-tag-locations='{{ node.tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
                 data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
                 data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}' title="Edit"
                 draggable="false">
@@ -209,7 +209,7 @@
                                     data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                     data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                     data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
-                                    data-tag-locations='[{% for loc in tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
+                                    data-tag-locations='{{ tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
                                     data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}'
                                     data-tag-children='{{ tag.children | map(attribute="id") | list | tojson }}'
                                     class="tag {% if tag.is_important %}tag-important{% endif %}"
@@ -298,7 +298,7 @@
                                 data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                 data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                 data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
-                                data-tag-locations='[{% for loc in tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
+                                data-tag-locations='{{ tag.locations | map(attribute="latitude", longitude="longitude") | list | tojson }}'
                                 data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}'
                                 data-tag-children='{{ tag.children | map(attribute="id") | list | tojson }}' title="Edit">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
