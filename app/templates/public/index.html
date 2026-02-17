@@ -264,6 +264,9 @@
             // Function to handle AJAX navigation
             async function loadPosts(url) {
                 try {
+                    // Store the current list URL in sessionStorage
+                    sessionStorage.setItem('lastListUrl', url);
+                    
                     postsMain.style.opacity = '0.5';
 
                     const response = await fetch(url, {
@@ -521,6 +524,17 @@
             function handleLinkClick(e) {
                 e.preventDefault();
                 const url = this.getAttribute('href');
+                
+                // If navigating to map, use full view replacement
+                if (url === '/map' || url.includes('/map?')) {
+                    if (typeof loadPost === 'function') {
+                        loadPost(url);
+                    } else {
+                        window.location.href = url;
+                    }
+                    return;
+                }
+                
                 loadPosts(url);
             }
 
