@@ -201,6 +201,40 @@
     };
 
     /**
+     * Update missing map coordinates
+     */
+    const updateMapCoords = async function () {
+        const confirmed = await showConfirm(
+            'Update Map Coordinates',
+            'This will fetch missing coordinates for all city and country tags using the Nominatim geocoding service.\n\nThe process may take some time due to rate limiting (1 request per second).',
+            'Start Update'
+        );
+        if (!confirmed) return;
+
+        try {
+            showProgress('Updating coordinates...');
+            const response = await fetch('/api/system/map/update-coords', { method: 'POST' });
+            const data = await response.json();
+            hideProgress();
+            
+            if (response.ok) {
+                let message = data.message;
+                if (data.errors && data.errors.length > 0) {
+                    message += '\n\nErrors encountered:\n' + data.errors.slice(0, 5).join('\n');
+                    if (data.errors.length > 5) message += '\n...and ' + (data.errors.length - 5) + ' more.';
+                }
+                await showAlert('Update Complete', message);
+                location.reload();
+            } else {
+                await showAlert('Error', data.detail);
+            }
+        } catch (error) {
+            hideProgress();
+            await showAlert('Error', error.message);
+        }
+    };
+
+    /**
      * Refresh system logs
      */
     const refreshLogs = async function () {
@@ -463,6 +497,9 @@
                     break;
                 case 'cleanup-orphaned':
                     cleanupOrphaned();
+                    break;
+                case 'update-map-coords':
+                    updateMapCoords();
                     break;
                 case 'rebuild-thumbnails':
                     rebuildThumbnails(actionBtn.dataset.onlyMissing === 'true');

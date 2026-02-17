@@ -41,6 +41,13 @@
 }
 
 /* Custom Leaflet Marker Styling */
+.custom-marker-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .custom-marker {
     display: flex;
     align-items: center;
@@ -52,6 +59,35 @@
     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
     font-weight: bold;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    z-index: 2;
+}
+
+.marker-label {
+    position: absolute;
+    left: 100%;
+    margin-left: 8px;
+    white-space: nowrap;
+    background: var(--bg-primary, white);
+    color: var(--text-primary, black);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    pointer-events: none;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    z-index: 1;
+}
+
+[data-theme="dark"] .marker-label {
+    background: var(--bg-secondary, #1e293b);
+    border: 1px solid var(--border-primary, #334155);
+}
+
+.custom-marker-wrapper:hover .marker-label {
+    opacity: 1;
+    z-index: 1001;
 }
 
 .custom-marker:hover {
