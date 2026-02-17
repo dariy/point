@@ -1032,46 +1032,69 @@ async def map_page(
     """
     # Get all tags with coordinates and posts
     tag_service = TagService(db)
-    
+
     # Join with TagLocation to find tags that have at least one location
-    from app.models.tag_location import TagLocation
     query = (
         select(Tag)
         .join(Tag.locations)
         .where(Tag.post_count > 0)
         .options(selectinload(Tag.locations))
     )
-    
+
     if not user:
         hidden_ids = await tag_service.get_publicly_hidden_tag_ids()
         if hidden_ids:
             query = query.where(Tag.id.notin_(hidden_ids))
-            
+
     result = await db.execute(query.order_by(Tag.name))
     map_tags = list(result.scalars().unique().all())
 
+    # Identify base tags for categorization
+    base_names = ["city", "cities", "country", "countries"]
+    base_result = await db.execute(
+        select(Tag).where(func.lower(Tag.name).in_(base_names))
+    )
+    base_tags = {bt.name.lower(): bt.id for bt in base_result.scalars().all()}
+    
+    country_ids = {base_tags.get("country"), base_tags.get("countries")} - {None}
+    city_ids = {base_tags.get("city"), base_tags.get("cities")} - {None}
+
+    # Prepare tags data for both AJAX and initial page load
+    tags_data = []
+    for t in map_tags:
+        # Determine tag type - Prioritize city over country so cities inside countries get markers
+        tag_type = "other"
+        ancestors = await tag_service.get_ancestor_tag_ids(t.id)
+        
+        if any(cid in ancestors for cid in city_ids):
+            tag_type = "city"
+        elif any(cid in ancestors for cid in country_ids):
+            tag_type = "country"
+
+        for loc in t.locations:
+            tags_data.append({
+                "name": t.name,
+                "slug": t.slug,
+                "post_count": t.post_count,
+                "lat": loc.latitude,
+                "lng": loc.longitude,
+                "url": t.url,
+                "type": tag_type
+            })
+
     # Check for AJAX request
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        tags_data = []
-        for t in map_tags:
-            for loc in t.locations:
-                tags_data.append({
-                    "name": t.name,
-                    "slug": t.slug,
-                    "post_count": t.post_count,
-                    "lat": loc.latitude,
-                    "lng": loc.longitude,
-                    "url": t.url
-                })
         return JSONResponse({"tags": tags_data})
 
     context = get_common_context(request)
     db_context = await get_db_context(db, user=user)
     context.update(db_context)
 
+    import json
     context.update(
         {
             "map_tags": map_tags,
+            "map_tags_json": json.dumps(tags_data),
             "user": user,
         }
     )

@@ -23,6 +23,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.post import Post
+    from app.models.tag_location import TagLocation
 
 
 # Association table for tag hierarchical relationships
