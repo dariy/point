@@ -40,6 +40,7 @@
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
+                data-tag-locations='[{% for loc in node.tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
                 data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
                 data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}'
                 class="tag {% if node.tag.is_important %}tag-important{% endif %}"
@@ -80,6 +81,7 @@
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
+                data-tag-locations='[{% for loc in node.tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
                 data-tag-parents='{{ node.tag.parents | map(attribute="id") | list | tojson }}'
                 data-tag-children='{{ node.tag.children | map(attribute="id") | list | tojson }}' title="Edit"
                 draggable="false">
@@ -207,6 +209,7 @@
                                     data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                     data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                     data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
+                                    data-tag-locations='[{% for loc in tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
                                     data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}'
                                     data-tag-children='{{ tag.children | map(attribute="id") | list | tojson }}'
                                     class="tag {% if tag.is_important %}tag-important{% endif %}"
@@ -295,6 +298,7 @@
                                 data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                 data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                 data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
+                                data-tag-locations='[{% for loc in tag.locations %}{"latitude": {{ loc.latitude }}, "longitude": {{ loc.longitude }}}{% if not loop.last %},{% endif %}{% endfor %}]'
                                 data-tag-parents='{{ tag.parents | map(attribute="id") | list | tojson }}'
                                 data-tag-children='{{ tag.children | map(attribute="id") | list | tojson }}' title="Edit">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -425,6 +429,19 @@
                         <input type="checkbox" id="tag-hidden-posts" name="is_hidden_posts" class="form-checkbox-input">
                         <span class="checkbox-text">Hide Posts (Hide tag and all related posts)</span>
                     </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Locations</label>
+                    <div id="tag-locations-container" class="flex flex-col gap-2 mb-2">
+                        <!-- Dynamic locations will be added here -->
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline" id="add-location-btn">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                        </svg>
+                        Add Location
+                    </button>
                 </div>
 
                 <div class="form-group">

@@ -36,6 +36,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/main.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <script src="/static/js/theme.js"></script>
 {% endblock %}
 
@@ -117,6 +118,8 @@ blog_settings.google_analytics_id }}"{% endif %}
 </div>
 
 <script src="/static/js/main.js"></script>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/js/map.js"></script>
 
 <!-- Client-side Templates for AJAX Navigation -->
 <template id="tmpl-header-default">

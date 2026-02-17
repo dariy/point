@@ -1,0 +1,37 @@
+{% extends "public/base.html" %}
+
+{% block page_title %}Map{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+{% endblock %}
+
+{% block content %}
+<div class="map-page">
+    <header class="map-header">
+        <h1 class="map-title">Global Map</h1>
+        <p class="map-subtitle">Explore posts by their location tags</p>
+    </header>
+
+    <div class="map-container">
+        <div id="map" data-map-tags='[
+            {% for tag in map_tags %}
+                {% for loc in tag.locations %}
+                {
+                    "name": "{{ tag.name }}",
+                    "slug": "{{ tag.slug }}",
+                    "post_count": {{ tag.post_count }},
+                    "lat": {{ loc.latitude }},
+                    "lng": {{ loc.longitude }},
+                    "url": "{{ tag.url }}"
+                }{% if not loop.last or not loop.parent.last %},{% endif %}
+                {% endfor %}
+            {% endfor %}
+        ]'></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+{% endblock %}

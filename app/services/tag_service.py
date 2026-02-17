@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.models.post import Post, PostStatus
 from app.models.post_tag import post_tags
 from app.models.tag import Tag
+from app.models.tag_location import TagLocation
 from app.schemas.tag import TagCreate, TagUpdate
 from app.services.cache_service import invalidate_cache_for_tag
 from app.utils.slugify import make_unique_slug, slugify
@@ -98,6 +99,12 @@ class TagService:
             show_related_tags_as_children=tag_data.show_related_tags_as_children,
             post_count=0,
         )
+
+        if tag_data.locations:
+            tag.locations = [
+                TagLocation(latitude=loc.latitude, longitude=loc.longitude)
+                for loc in tag_data.locations
+            ]
 
         if tag_data.parent_ids:
             parents = await self.db.execute(
@@ -233,6 +240,14 @@ class TagService:
             tag.is_hidden_posts = tag_data.is_hidden_posts
         if tag_data.show_related_tags_as_children is not None:
             tag.show_related_tags_as_children = tag_data.show_related_tags_as_children
+        
+        if tag_data.locations is not None:
+            # Replace existing locations
+            tag.locations = [
+                TagLocation(latitude=loc.latitude, longitude=loc.longitude)
+                for loc in tag_data.locations
+            ]
+
         if tag_data.parent_ids is not None:
             parents = await self.db.execute(
                 select(Tag).where(Tag.id.in_(tag_data.parent_ids))
