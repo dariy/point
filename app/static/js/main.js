@@ -683,6 +683,18 @@
                     });
                 }
 
+                // Update tags bar (between header and main)
+                const newTagsBar = doc.querySelector('.header-tags-bar');
+                const currentTagsBar = document.querySelector('.header-tags-bar');
+                if (newTagsBar && currentTagsBar) {
+                    currentTagsBar.replaceWith(newTagsBar);
+                } else if (currentTagsBar && !newTagsBar) {
+                    currentTagsBar.style.display = 'none';
+                } else if (newTagsBar && !currentTagsBar) {
+                    const siteHeader = document.querySelector('header.site-header');
+                    if (siteHeader) siteHeader.after(newTagsBar);
+                }
+
                 // Update Footer (pagination, tags)
                 const newFooterContent = doc.querySelector('.footer-content');
                 const currentFooterContent = document.querySelector('.footer-content');
@@ -764,8 +776,13 @@
         const post = data.post;
 
         // 1. Update Title and Metadata
-        const titleEl = clone.querySelector('.post-title') || clone.querySelector('.site-title');
-        if (titleEl) titleEl.textContent = post.title;
+        const breadcrumbCurrent = clone.querySelector('.breadcrumb-current');
+        if (breadcrumbCurrent) {
+            breadcrumbCurrent.textContent = post.title;
+        } else {
+            const titleEl = clone.querySelector('.post-title') || clone.querySelector('.site-title');
+            if (titleEl) titleEl.textContent = post.title;
+        }
 
         const dateEl = clone.querySelector('.post-date');
         if (dateEl) {
@@ -898,13 +915,8 @@
         const headerClone = headerTemplate.content.cloneNode(true);
 
         if (hasText) {
-            const titleLink = headerClone.querySelector('.site-title');
-            if (titleLink) {
-                titleLink.textContent = data.blog_title;
-                titleLink.href = '/';
-            }
             const subtitle = headerClone.querySelector('.site-subtitle');
-            if (subtitle) subtitle.textContent = data.blog_subtitle;
+            if (subtitle) subtitle.textContent = data.blog_subtitle || '';
 
             // Show create-post and light-link buttons if logged in
             if (data.is_logged_in) {
@@ -918,14 +930,19 @@
                     lightLink.classList.remove('hidden');
                     lightLink.classList.add('visible-flex');
                 }
-                const titleLink = headerClone.querySelector('.site-title');
-                if (titleLink) {
-                    titleLink.classList.add('authenticated');
+                const logoLink = headerClone.querySelector('.logo.theme-toggle');
+                if (logoLink) {
+                    logoLink.classList.add('authenticated');
                 }
             }
         } else {
-            const title = headerClone.querySelector('.site-title');
-            if (title) title.textContent = post.title;
+            const breadcrumbCurrent = headerClone.querySelector('.breadcrumb-current');
+            if (breadcrumbCurrent) {
+                breadcrumbCurrent.textContent = post.title;
+            } else {
+                const title = headerClone.querySelector('.site-title');
+                if (title) title.textContent = post.title;
+            }
 
             const date = headerClone.querySelector('.post-date');
             if (date) {
@@ -1014,6 +1031,10 @@
         const headerContainer = header.querySelector('.header-container');
         headerContainer.innerHTML = '';
         headerContainer.appendChild(headerClone);
+
+        // Hide the tags bar when viewing a post
+        const tagsBar = document.querySelector('.header-tags-bar');
+        if (tagsBar) tagsBar.style.display = 'none';
 
         // Update Body Class
         document.body.className = hasText ? 'public-layout post-single-page' : 'immersive-layout';
@@ -1263,7 +1284,7 @@
      * Syncs active states and handles hierarchical tag name swapping.
      */
     function updateActiveSiteFilters(url, triggerElement = null) {
-        const filtersContainer = document.querySelector('.site-header .tags-filters');
+        const filtersContainer = document.querySelector('.header-tags-bar .tags-filters');
         if (!filtersContainer) return;
 
         const urlObj = new URL(url, window.location.origin);
@@ -1393,8 +1414,60 @@
             }
         }
 
+        // Update header breadcrumb
+        updateHeaderBreadcrumb(urlObj.pathname);
+
         // Trigger responsive filter update
         window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
+    }
+
+    /**
+     * Update the header breadcrumb based on current path
+     */
+    function updateHeaderBreadcrumb(pathname) {
+        const breadcrumb = document.querySelector('.site-breadcrumb');
+        if (!breadcrumb) return;
+
+        // Remove any existing dynamic breadcrumb parts (keep only the logo)
+        breadcrumb.querySelectorAll('.breadcrumb-separator, .breadcrumb-current, .breadcrumb-link').forEach(el => el.remove());
+
+        const parts = pathname.split('/').filter(p => p);
+
+        function addSep() {
+            const sep = document.createElement('span');
+            sep.className = 'breadcrumb-separator';
+            sep.textContent = '/';
+            breadcrumb.appendChild(sep);
+        }
+
+        if (parts.length === 0 || (parts.length === 1 && parts[0] === '')) {
+            // Home — just logo
+        } else if (parts[0] === 'tags') {
+            addSep();
+            const el = document.createElement('a');
+            el.className = 'breadcrumb-current';
+            el.href = '/tags';
+            el.textContent = 'tags';
+            breadcrumb.appendChild(el);
+        } else if (parts[0] === 'tag' && parts[1]) {
+            addSep();
+            const tagsLink = document.createElement('a');
+            tagsLink.className = 'breadcrumb-link';
+            tagsLink.href = '/tags';
+            tagsLink.textContent = 'tags';
+            breadcrumb.appendChild(tagsLink);
+            addSep();
+            const tagEl = document.createElement('span');
+            tagEl.className = 'breadcrumb-current';
+            tagEl.textContent = decodeURIComponent(parts[1]);
+            breadcrumb.appendChild(tagEl);
+        } else if (parts[0] === 'map') {
+            addSep();
+            const el = document.createElement('span');
+            el.className = 'breadcrumb-current';
+            el.textContent = 'map';
+            breadcrumb.appendChild(el);
+        }
     }
 
     /**
@@ -1419,6 +1492,8 @@
                     renderPosts(data, postsContainer, url);
 
                     window.history.pushState({}, '', url);
+                    const tagsBar = document.querySelector('.header-tags-bar');
+                    if (tagsBar) tagsBar.style.display = '';
                     updateActiveSiteFilters(url, triggerElement);
                     attachAjaxListeners();
                     if (typeof initPostCardVideos === 'function') {
@@ -1874,7 +1949,7 @@
      * Preserves the active tag and ensures All/More are always visible.
      */
     function initResponsiveTagFilters() {
-        const container = document.querySelector('.site-header .tags-filters');
+        const container = document.querySelector('.header-tags-bar .tags-filters');
         if (!container) return;
 
         function updateFilters() {

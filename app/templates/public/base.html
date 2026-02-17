@@ -69,7 +69,7 @@ blog_settings.google_analytics_id }}"{% endif %}
         <div class="header-container">
             {% block header_content %}
             <div class="header-left-group">
-                <div class="site-branding">
+                <nav class="site-breadcrumb">
                     <a href="#" class="logo theme-toggle{% if user %} authenticated{% endif %}">
                         {% include "shared/logo.html" %}
                     </a>
@@ -79,11 +79,18 @@ blog_settings.google_analytics_id }}"{% endif %}
                     {% if blog_subtitle %}
                     <p class="site-subtitle">{{ blog_subtitle }}</p>
                     {% endif %}
-                </div>
+                    {% block header_breadcrumb %}{% endblock %}
+                </nav>
             </div>
-            {% block header_filters %}{% endblock %}
             <nav class="site-nav">
                 {% block header_nav_extra %}{% endblock %}
+                <a href="/map" class="header-action-btn ajax-link" title="Map" aria-label="Map">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                </a>
                 {% if user %}
                 <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -93,11 +100,11 @@ blog_settings.google_analytics_id }}"{% endif %}
                 </a>
                 {% endif %}
             </nav>
-
-
             {% endblock %}
         </div>
     </header>
+
+    {% block header_filters %}{% endblock %}
 
     <main class="site-main">
         <div class="main-container">
@@ -111,14 +118,6 @@ blog_settings.google_analytics_id }}"{% endif %}
                 <p class="footer-copyright"><a href="/light">&copy;</a> {% if about_post_slug %}<a
                         href="/posts/{{ about_post_slug }}">{{ author_name }}</a>{% else %}{{ author_name }}{% endif %}
                 </p>
-                <div class="footer-actions">
-                    <a href="/map" class="footer-action-btn ajax-link" title="Global Map" aria-label="Global Map">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                            <circle cx="12" cy="10" r="3"></circle>
-                        </svg>
-                    </a>
-                </div>
                 {% block footer_pagination %}{% endblock %}
             </div>
         </div>
@@ -140,13 +139,17 @@ blog_settings.google_analytics_id }}"{% endif %}
                 <path d="M2 12l10 5 10-5"></path>
             </svg>
         </a>
-        <div class="site-branding">
-            <a href="/" class="site-title">
+        <nav class="site-breadcrumb">
+            <a href="/" class="logo theme-toggle">
                 {% include "shared/logo.html" %}
-                <span class="title-text"></span>
             </a>
-            <p class="site-subtitle"></p>
-        </div>
+            <a href="/" class="site-title{% if user %} authenticated{% endif %}">
+                <span>{{ blog_title }}</span>
+            </a>
+            {% if blog_subtitle %}
+            <p class="site-subtitle">{{ blog_subtitle }}</p>
+            {% endif %}
+        </nav>
     </div>
     <nav class="site-nav">
         <a href="#" class="create-post edit-tag-btn" title="Edit Tag" aria-label="Edit Tag" style="display: none;">
@@ -154,6 +157,13 @@ blog_settings.google_analytics_id }}"{% endif %}
                 stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+        </a>
+        <a href="/map" class="header-action-btn ajax-link" title="Map" aria-label="Map">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
             </svg>
         </a>
         <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post"
@@ -203,9 +213,10 @@ blog_settings.google_analytics_id }}"{% endif %}
             </a>
         </div>
         <div class="header-center">
-            <h1 class="site-title">
-                {% include "shared/logo.html" %}
-                <span class="title-text"></span>
+            <h1 class="site-title breadcrumbs centered">
+                <a href="/" class="breadcrumb-link">{{ blog_title }}</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-current title-text"></span>
             </h1>
             <div class="post-meta">
                 <time class="post-date"></time>
@@ -251,7 +262,11 @@ blog_settings.google_analytics_id }}"{% endif %}
                 <span class="post-meta-divider">·</span>
                 <span class="post-views"></span>
             </div>
-            <h1 class="post-title"></h1>
+            <h1 class="post-title breadcrumbs centered">
+                <a href="/" class="breadcrumb-link">{{ blog_title }}</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-current"></span>
+            </h1>
         </header>
 
         <div class="post-content">
