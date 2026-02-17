@@ -39,6 +39,7 @@
                 data-tag-featured="{{ 'true' if node.tag.is_featured else 'false' }}"
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
+                data-tag-breadcrumbs="{{ 'true' if node.tag.include_in_breadcrumbs else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
                 data-tag-locations="{{ node.tag.locations | locations_to_json | forceescape }}"
                 data-tag-parents="{{ node.tag.parents | map(attribute="id") | list | tojson | forceescape }}"
@@ -80,6 +81,7 @@
                 data-tag-featured="{{ 'true' if node.tag.is_featured else 'false' }}"
                 data-tag-hidden="{{ 'true' if node.tag.is_hidden else 'false' }}"
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
+                data-tag-breadcrumbs="{{ 'true' if node.tag.include_in_breadcrumbs else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
                 data-tag-locations="{{ node.tag.locations | locations_to_json | forceescape }}"
                 data-tag-parents="{{ node.tag.parents | map(attribute="id") | list | tojson | forceescape }}"
@@ -428,6 +430,13 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="tag-hidden-posts" name="is_hidden_posts" class="form-checkbox-input">
                         <span class="checkbox-text">Hide Posts (Hide tag and all related posts)</span>
+                    </label>
+                </div>
+
+                <div class="form-group form-checkbox">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="tag-breadcrumbs" name="include_in_breadcrumbs" class="form-checkbox-input">
+                        <span class="checkbox-text">Include in Breadcrumbs</span>
                     </label>
                 </div>
 

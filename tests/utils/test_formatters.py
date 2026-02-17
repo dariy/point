@@ -402,7 +402,7 @@ def test_preprocess_media_links_image():
     """Test preprocessing simplified image link."""
     content = "/2024/08/test.jpg"
     result = preprocess_media_links(content)
-    assert "![test.jpg](/2024/08/test.jpg)" in result
+    assert '<img src="/2024/08/test.jpg" alt="test.jpg"' in result
 
 def test_preprocess_media_links_video():
     """Test preprocessing simplified video link."""

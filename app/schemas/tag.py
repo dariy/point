@@ -19,6 +19,7 @@ class TagBase(BaseModel):
     show_related_tags_as_children: bool = Field(default=False)
     is_hidden: bool = Field(default=False)
     is_hidden_posts: bool = Field(default=False)
+    include_in_breadcrumbs: bool = Field(default=True)
 
 
 class TagLocationBase(BaseModel):
@@ -74,6 +75,7 @@ class TagUpdate(BaseModel):
     show_related_tags_as_children: bool | None = Field(default=None)
     is_hidden: bool | None = Field(default=None)
     is_hidden_posts: bool | None = Field(default=None)
+    include_in_breadcrumbs: bool | None = Field(default=None)
     parent_ids: list[int] | None = Field(default=None)
     child_ids: list[int] | None = Field(default=None)
     locations: list[TagLocationBase] | None = Field(default=None)
@@ -88,6 +90,7 @@ class TagListItem(BaseModel):
     is_important: bool
     is_hidden: bool
     is_hidden_posts: bool
+    include_in_breadcrumbs: bool
     post_count: int
     locations: list[TagLocationResponse] = Field(default_factory=list)
 
@@ -104,6 +107,7 @@ class TagResponse(BaseModel):
     is_featured: bool
     is_hidden: bool
     is_hidden_posts: bool
+    include_in_breadcrumbs: bool
     show_related_tags_as_children: bool
     post_count: int
     created_at: datetime
@@ -163,6 +167,7 @@ class TagWithPostsResponse(BaseModel):
     is_featured: bool
     is_hidden: bool
     is_hidden_posts: bool
+    include_in_breadcrumbs: bool
     post_count: int
     created_at: datetime
     posts: list[PostInTag]

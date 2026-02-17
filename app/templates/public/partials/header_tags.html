@@ -44,25 +44,14 @@
 </div>
 {% endmacro %}
 
-<div class="tags-filters" id="header-tags-filters" data-mode="featured">
-    {% for t in tags %}
-    {{ render_filter_btn(t, extra_classes='featured-tag') }}
-    {% endfor %}
+<div class="tags-filters" id="header-tags-filters">
+    <a href="/" class="filter-btn ajax-link" data-role="all">All</a>
 
     {% for group in tag_groups %}
     {% if group.children %}
-    {{ render_tag_group(group, extra_classes='category-tag') }}
+    {{ render_tag_group(group) }}
     {% else %}
-    {{ render_filter_btn(group.tag, extra_classes='category-tag') }}
+    {{ render_filter_btn(group.tag) }}
     {% endif %}
     {% endfor %}
-
-    <button class="filter-btn switcher-btn" id="tags-switcher" title="Switch between featured and categories">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
-        </svg>
-    </button>
 </div>
