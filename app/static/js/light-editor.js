@@ -76,15 +76,15 @@
                     if (!postId) {
                         window.location.href = `/light/posts/${result.id}`;
                     } else {
-                        window.LightUtils.showToast('Post saved successfully');
+                        if (window.LightUtils) window.LightUtils.showToast('Post saved successfully');
                     }
                 } else {
                     const error = await response.json();
-                    window.LightUtils.showToast(error.detail || 'Failed to save post', 'error');
+                    if (window.LightUtils) window.LightUtils.showToast(error.detail || 'Failed to save post', 'error');
                 }
             } catch (error) {
                 console.error('Save error:', error);
-                window.LightUtils.showToast('An error occurred while saving', 'error');
+                if (window.LightUtils) window.LightUtils.showToast('An error occurred while saving', 'error');
             }
         });
     }
