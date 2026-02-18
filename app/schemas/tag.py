@@ -19,6 +19,23 @@ class TagBase(BaseModel):
     show_related_tags_as_children: bool = Field(default=False)
     is_hidden: bool = Field(default=False)
     is_hidden_posts: bool = Field(default=False)
+    include_in_breadcrumbs: bool = Field(default=True)
+    sort_order: int | None = Field(default=None, description="Display order in header (lower = first; None = alphabetical fallback)")
+
+
+class TagLocationBase(BaseModel):
+    """Base schema for tag locations."""
+
+    latitude: float
+    longitude: float
+
+
+class TagLocationResponse(TagLocationBase):
+    """Schema for tag location response."""
+
+    id: int
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TagCreate(TagBase):
@@ -27,6 +44,7 @@ class TagCreate(TagBase):
     slug: str | None = Field(default=None, min_length=1, max_length=100)
     parent_ids: list[int] = Field(default_factory=list)
     child_ids: list[int] = Field(default_factory=list)
+    locations: list[TagLocationBase] = Field(default_factory=list)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -58,8 +76,19 @@ class TagUpdate(BaseModel):
     show_related_tags_as_children: bool | None = Field(default=None)
     is_hidden: bool | None = Field(default=None)
     is_hidden_posts: bool | None = Field(default=None)
+    include_in_breadcrumbs: bool | None = Field(default=None)
+    sort_order: int | None = Field(default=None, description="Display order in header (lower = first; None = alphabetical fallback)")
     parent_ids: list[int] | None = Field(default=None)
     child_ids: list[int] | None = Field(default=None)
+    locations: list[TagLocationBase] | None = Field(default=None)
+
+
+class TagReorder(BaseModel):
+    """Schema for reordering a tag."""
+
+    target_id: int | None = Field(default=None, description="ID of the target tag")
+    position: str = Field(..., pattern="^(before|after|inside)$", description="Position relative to target")
+    current_parent_id: int | None = Field(default=None, description="ID of the parent in the branch being dropped to")
 
 
 class TagListItem(BaseModel):
@@ -71,7 +100,10 @@ class TagListItem(BaseModel):
     is_important: bool
     is_hidden: bool
     is_hidden_posts: bool
+    include_in_breadcrumbs: bool
+    sort_order: int | None = None
     post_count: int
+    locations: list[TagLocationResponse] = Field(default_factory=list)
 
 
 class TagResponse(BaseModel):
@@ -86,12 +118,15 @@ class TagResponse(BaseModel):
     is_featured: bool
     is_hidden: bool
     is_hidden_posts: bool
+    include_in_breadcrumbs: bool
     show_related_tags_as_children: bool
+    sort_order: int | None = None
     post_count: int
     created_at: datetime
     url: str = Field(description="Computed URL for the tag")
     parents: list[TagListItem] = Field(default_factory=list)
     children: list[TagListItem] = Field(default_factory=list)
+    locations: list[TagLocationResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,6 +179,7 @@ class TagWithPostsResponse(BaseModel):
     is_featured: bool
     is_hidden: bool
     is_hidden_posts: bool
+    include_in_breadcrumbs: bool
     post_count: int
     created_at: datetime
     posts: list[PostInTag]

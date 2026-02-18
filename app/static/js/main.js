@@ -10,6 +10,7 @@
     function registerCleanup(fn) {
         cleanupFunctions.push(fn);
     }
+    window.addCleanup = registerCleanup;
 
     function cleanupPage() {
         cleanupFunctions.forEach(fn => fn());
@@ -458,6 +459,68 @@
     }
 
     /**
+     * Immersive header: shrink title on mobile to fit header-center.
+     * Step 1: hide breadcrumb-link + separator; step 2: truncate with ellipsis.
+     */
+    function initImmersiveHeaderOverflow() {
+        const headerCenter = document.querySelector('.post-header-bar .header-center');
+        if (!headerCenter) return;
+        const titleEl = headerCenter.querySelector('.site-title.breadcrumbs');
+        if (!titleEl) return;
+
+        function adjust() {
+            headerCenter.classList.remove('header-compact', 'header-truncate');
+            if (window.innerWidth > 768) return;
+
+            const centerWidth = headerCenter.getBoundingClientRect().width;
+            if (titleEl.getBoundingClientRect().width > centerWidth) {
+                headerCenter.classList.add('header-compact');
+                if (titleEl.getBoundingClientRect().width > centerWidth) {
+                    headerCenter.classList.add('header-truncate');
+                }
+            }
+        }
+
+        adjust();
+        window.addEventListener('resize', adjust);
+        registerCleanup(() => window.removeEventListener('resize', adjust));
+    }
+
+    /**
+     * Inline tags-bar layout: keep tags on the same row as the header until
+     * their natural content width would collide with header or nav, then stack.
+     * Uses ResizeObserver instead of a fixed breakpoint.
+     */
+    function initTagsBarLayout() {
+        const group = document.querySelector('.site-header-group');
+        const tagsBar = group && group.querySelector('.header-tags-bar');
+        if (!group || !tagsBar) return;
+
+        const siteHeader = group.querySelector('.site-header');
+        const siteNav = document.querySelector('.site-header-group > .site-nav');
+
+        // Measure the tags bar's natural content width by briefly taking it
+        // out of the flex flow (position:absolute) so flex can't constrain it.
+        const prev = { position: tagsBar.style.position, visibility: tagsBar.style.visibility, flex: tagsBar.style.flex, width: tagsBar.style.width };
+        Object.assign(tagsBar.style, { position: 'absolute', visibility: 'hidden', flex: 'none', width: 'auto' });
+        const naturalTagsWidth = tagsBar.getBoundingClientRect().width;
+        Object.assign(tagsBar.style, prev);
+
+        function update() {
+            const groupWidth = group.getBoundingClientRect().width;
+            const headerWidth = siteHeader ? siteHeader.getBoundingClientRect().width : 0;
+            const navWidth = siteNav ? siteNav.getBoundingClientRect().width : 0;
+            const available = groupWidth - headerWidth - navWidth;
+            group.classList.toggle('tags-stacked', naturalTagsWidth > available);
+        }
+
+        const ro = new ResizeObserver(update);
+        ro.observe(group);
+        update();
+        registerCleanup(() => ro.disconnect());
+    }
+
+    /**
      * Carousel Logic
      */
     function initCarousel() {
@@ -596,6 +659,12 @@
     async function loadPost(url, pushState = true) {
         if (isNavigating) return;
 
+        // Store the last visited list URL if this is a list page
+        const isListUrl = !url.includes('/posts/') && !url.includes('/light/') && url !== '/map';
+        if (isListUrl) {
+            sessionStorage.setItem('lastListUrl', url);
+        }
+
         console.log("[Navigation] Starting navigation to:", url);
         isNavigating = true;
         document.body.classList.add("cursor-wait");
@@ -645,8 +714,8 @@
                 }
 
                 // Update Header (Title, Date, Navigation)
-                const newHeader = doc.querySelector('header.site-header');
-                const currentHeader = document.querySelector('header.site-header');
+                const newHeader = doc.querySelector('.site-header');
+                const currentHeader = document.querySelector('.site-header');
                 if (newHeader && currentHeader) {
                     console.log("[Navigation] Updating site-header...");
                     currentHeader.replaceWith(newHeader);
@@ -674,6 +743,18 @@
                             }
                         });
                     });
+                }
+
+                // Update tags bar (between header and main)
+                const newTagsBar = doc.querySelector('.header-tags-bar');
+                const currentTagsBar = document.querySelector('.header-tags-bar');
+                if (newTagsBar && currentTagsBar) {
+                    currentTagsBar.replaceWith(newTagsBar);
+                } else if (currentTagsBar && !newTagsBar) {
+                    currentTagsBar.style.display = 'none';
+                } else if (newTagsBar && !currentTagsBar) {
+                    const headerGroup = document.querySelector('.site-header-group');
+                    if (headerGroup) headerGroup.appendChild(newTagsBar);
                 }
 
                 // Update Footer (pagination, tags)
@@ -755,10 +836,54 @@
 
         const clone = template.content.cloneNode(true);
         const post = data.post;
+        const tagHierarchy = data.tag_hierarchy || [];
 
         // 1. Update Title and Metadata
-        const titleEl = clone.querySelector('.post-title') || clone.querySelector('.site-title');
-        if (titleEl) titleEl.textContent = post.title;
+        if (hasText) {
+            const breadcrumb = clone.querySelector('.post-header .post-title');
+            if (breadcrumb) {
+                // Clear existing and rebuild with hierarchy
+                breadcrumb.innerHTML = `<a href="/" class="breadcrumb-link">${data.blog_title}</a>`;
+                tagHierarchy.forEach(t => {
+                    breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><a href="/tag/${t.slug}" class="breadcrumb-link">${t.name}</a>`;
+                });
+                breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><span class="breadcrumb-current">${post.title}</span>`;
+            }
+            
+            // Also update the site-header if it has a breadcrumb (standard layout)
+            const headerBreadcrumb = headerClone.querySelector('.site-breadcrumb');
+            if (headerBreadcrumb) {
+                // Keep only the core elements (logo, site title, subtitle)
+                headerBreadcrumb.querySelectorAll('.breadcrumb-separator, .breadcrumb-current, .breadcrumb-link').forEach(el => el.remove());
+                
+                // Add the hierarchy
+                tagHierarchy.forEach(t => {
+                    const sep = document.createElement('span');
+                    sep.className = 'breadcrumb-separator';
+                    sep.textContent = '/';
+                    headerBreadcrumb.appendChild(sep);
+                    
+                    const link = document.createElement('a');
+                    link.className = 'breadcrumb-link';
+                    link.href = '/tag/' + t.slug;
+                    link.textContent = t.name;
+                    headerBreadcrumb.appendChild(link);
+                });
+                
+                const sep = document.createElement('span');
+                sep.className = 'breadcrumb-separator';
+                sep.textContent = '/';
+                headerBreadcrumb.appendChild(sep);
+                
+                const current = document.createElement('span');
+                current.className = 'breadcrumb-current';
+                current.textContent = post.title;
+                headerBreadcrumb.appendChild(current);
+            }
+        } else {
+            const breadcrumbCurrent = clone.querySelector('.breadcrumb-current');
+            if (breadcrumbCurrent) breadcrumbCurrent.textContent = post.title;
+        }
 
         const dateEl = clone.querySelector('.post-date');
         if (dateEl) {
@@ -891,13 +1016,8 @@
         const headerClone = headerTemplate.content.cloneNode(true);
 
         if (hasText) {
-            const titleLink = headerClone.querySelector('.site-title');
-            if (titleLink) {
-                titleLink.textContent = data.blog_title;
-                titleLink.href = '/';
-            }
             const subtitle = headerClone.querySelector('.site-subtitle');
-            if (subtitle) subtitle.textContent = data.blog_subtitle;
+            if (subtitle) subtitle.textContent = data.blog_subtitle || '';
 
             // Show create-post and light-link buttons if logged in
             if (data.is_logged_in) {
@@ -911,14 +1031,21 @@
                     lightLink.classList.remove('hidden');
                     lightLink.classList.add('visible-flex');
                 }
-                const titleLink = headerClone.querySelector('.site-title');
-                if (titleLink) {
-                    titleLink.classList.add('authenticated');
+                const logoLink = headerClone.querySelector('.logo.theme-toggle');
+                if (logoLink) {
+                    logoLink.classList.add('authenticated');
                 }
             }
         } else {
-            const title = headerClone.querySelector('.site-title');
-            if (title) title.textContent = post.title;
+            const breadcrumb = headerClone.querySelector('.site-title.breadcrumbs');
+            if (breadcrumb) {
+                // Clear existing and rebuild with hierarchy
+                breadcrumb.innerHTML = `<a href="/" class="breadcrumb-link">${data.blog_title}</a>`;
+                tagHierarchy.forEach(t => {
+                    breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><a href="/tag/${t.slug}" class="breadcrumb-link">${t.name}</a>`;
+                });
+                breadcrumb.innerHTML += `<span class="breadcrumb-separator">/</span><span class="breadcrumb-current title-text">${post.title}</span>`;
+            }
 
             const date = headerClone.querySelector('.post-date');
             if (date) {
@@ -1003,10 +1130,14 @@
         }
 
         // Replace Header Content
-        const header = document.querySelector('header.site-header');
+        const header = document.querySelector('.site-header');
         const headerContainer = header.querySelector('.header-container');
         headerContainer.innerHTML = '';
         headerContainer.appendChild(headerClone);
+
+        // Hide the tags bar when viewing a post
+        const tagsBar = document.querySelector('.header-tags-bar');
+        if (tagsBar) tagsBar.style.display = 'none';
 
         // Update Body Class
         document.body.className = hasText ? 'public-layout post-single-page' : 'immersive-layout';
@@ -1022,11 +1153,11 @@
             const footerContent = document.querySelector('.footer-content');
             if (footerContent) {
                 const tagsDiv = document.createElement('div');
-                tagsDiv.className = 'immersive-tags';
+                tagsDiv.className = 'post-card-tags immersive-tags';
                 post.tags.forEach(tag => {
                     const a = document.createElement('a');
                     a.href = '/tag/' + tag.slug;
-                    a.className = 'post-tag';
+                    a.className = 'tag-link';
                     a.textContent = tag.name;
                     tagsDiv.appendChild(a);
                 });
@@ -1108,8 +1239,9 @@
         const postNavData = document.getElementById('post-nav-data');
         if (postNavData) {
             if (direction === "escape") {
-                console.log("[Navigation] Escape pressed, returning to home");
-                loadPost('/');
+                const backUrl = sessionStorage.getItem('lastListUrl') || '/';
+                console.log("[Navigation] Escape pressed, returning to:", backUrl);
+                loadPost(backUrl);
                 handled = true;
             } else if (direction === "down") {
                 const prevUrl = postNavData.dataset.prevUrl;
@@ -1255,7 +1387,7 @@
      * Syncs active states and handles hierarchical tag name swapping.
      */
     function updateActiveSiteFilters(url, triggerElement = null) {
-        const filtersContainer = document.querySelector('.site-header .tags-filters');
+        const filtersContainer = document.querySelector('.header-tags-bar .tags-filters');
         if (!filtersContainer) return;
 
         const urlObj = new URL(url, window.location.origin);
@@ -1269,48 +1401,8 @@
 
         const buttons = filtersContainer.querySelectorAll('.filter-btn');
 
-        // Helper function to update button text while preserving the lock icon SVG
-        function updateButtonText(btn, newText) {
-            // Find the text node with actual content (not just whitespace)
-            const textNode = Array.from(btn.childNodes).find(
-                node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== ''
-            );
-
-            if (textNode) {
-                // Update the existing text node
-                textNode.textContent = newText;
-            } else {
-                // No meaningful text node exists, create one
-                const svg = btn.querySelector('.hidden-tag-icon');
-
-                // Remove all existing text nodes (including whitespace)
-                Array.from(btn.childNodes).forEach(node => {
-                    if (node.nodeType === Node.TEXT_NODE) {
-                        btn.removeChild(node);
-                    }
-                });
-
-                // Create new text node and insert in correct position
-                const newTextNode = document.createTextNode(newText);
-
-                if (svg) {
-                    // Insert text BEFORE the SVG icon
-                    btn.insertBefore(newTextNode, svg);
-                } else {
-                    // No SVG, just prepend the text
-                    btn.insertBefore(newTextNode, btn.firstChild);
-                }
-            }
-        }
-
-        // First, reset all buttons to inactive and restore original names for parent buttons
-        buttons.forEach(btn => {
-            btn.classList.remove('active');
-            const originalName = btn.getAttribute('data-original-name');
-            if (originalName) {
-                updateButtonText(btn, originalName);
-            }
-        });
+        // Reset all buttons to inactive
+        buttons.forEach(btn => btn.classList.remove('active'));
 
         // Identify all buttons that match the current tag
         const matchingButtons = [];
@@ -1323,21 +1415,20 @@
             }
         });
 
+        // Track the resolved tag name for the breadcrumb
+        let resolvedTagName = null;
+
         // If no matches by tag, handle "All"
         if (matchingButtons.length === 0 && !tag) {
             const allBtn = Array.from(buttons).find(btn => btn.dataset.role === 'all' || btn.getAttribute('href') === '/');
             if (allBtn) allBtn.classList.add('active');
         } else if (matchingButtons.length > 0) {
-            // If multiple exist, pick the "best" one
-            let bestMatch = null;
-            if (triggerElement) {
-                // If the click happened on one of these specific buttons, that's our winner
-                bestMatch = matchingButtons.find(btn => btn === triggerElement);
-                // If the trigger was a secondary element (like a tag in a post card), it won't be found here.
-            }
+            // If multiple exist, pick the "best" one (deepest nesting)
+            let bestMatch = triggerElement
+                ? (matchingButtons.find(btn => btn === triggerElement) ?? null)
+                : null;
 
             if (!bestMatch) {
-                // Fresh run or external trigger: pick the one with deepest nesting
                 let maxDepth = -1;
                 matchingButtons.forEach(btn => {
                     let depth = 0;
@@ -1346,47 +1437,171 @@
                         if (p.classList.contains('tag-group')) depth++;
                         p = p.parentElement;
                     }
-                    if (depth > maxDepth) {
-                        maxDepth = depth;
-                        bestMatch = btn;
-                    }
+                    if (depth > maxDepth) { maxDepth = depth; bestMatch = btn; }
                 });
             }
 
             if (bestMatch) {
                 bestMatch.classList.add('active');
 
-                // Propagate active state and name swapping up the chosen hierarchy
-                let currentGroup = bestMatch.closest('.tag-group');
+                // Extract tag name for the breadcrumb
+                resolvedTagName = Array.from(bestMatch.childNodes)
+                    .filter(node => node.nodeType === Node.TEXT_NODE)
+                    .map(node => node.textContent)
+                    .join('').trim();
 
+                // Propagate active class up to parent group headers (for layout priority)
+                let currentGroup = bestMatch.closest('.tag-group');
                 while (currentGroup) {
                     const headerBtn = currentGroup.querySelector('.tag-group-header .filter-btn');
-                    const parentElement = currentGroup.parentElement;
-                    const nextGroup = parentElement ? parentElement.closest('.tag-group') : null;
-
-                    if (headerBtn) {
-                        headerBtn.classList.add('active');
-                        // Rule: The top-most group header button always swaps its text with the selected sub-tag
-                        // to show the current filter status prominently.
-                        // Intermediate groups keep their original names to provide hierarchical context.
-                        if (!nextGroup) {
-                            // Get the text content of bestMatch without the SVG icon
-                            const bestMatchText = Array.from(bestMatch.childNodes)
-                                .filter(node => node.nodeType === Node.TEXT_NODE)
-                                .map(node => node.textContent)
-                                .join('').trim();
-                            updateButtonText(headerBtn, bestMatchText);
-                        }
-                    }
-                    currentGroup = nextGroup;
+                    if (headerBtn) headerBtn.classList.add('active');
+                    currentGroup = currentGroup.parentElement?.closest('.tag-group') ?? null;
                 }
-
-
             }
         }
 
+        // Update header breadcrumb using the resolved tag name and hierarchy if available
+        // Note: window.lastTagHierarchy is set by the calling navigation function
+        updateHeaderBreadcrumb(urlObj.pathname, resolvedTagName, window.lastTagHierarchy);
+
         // Trigger responsive filter update
         window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
+    }
+
+    /**
+     * Update the header breadcrumb based on current path
+     * @param {string} pathname
+     * @param {string|null} tagName - resolved tag name (from filter buttons); falls back to slug
+     * @param {Array|null} hierarchy - optional array of {name, slug} objects representing tag hierarchy
+     */
+    function updateHeaderBreadcrumb(pathname, tagName = null, hierarchy = null) {
+        const breadcrumb = document.querySelector('.site-breadcrumb');
+        if (!breadcrumb) return;
+
+        // Remove any existing dynamic breadcrumb parts (keep only the logo/title/subtitle)
+        breadcrumb.querySelectorAll('.breadcrumb-separator, .breadcrumb-current, .breadcrumb-link').forEach(el => el.remove());
+
+        const parts = pathname.split('/').filter(p => p);
+
+        function addSep() {
+            const sep = document.createElement('span');
+            sep.className = 'breadcrumb-separator';
+            sep.textContent = '/';
+            breadcrumb.appendChild(sep);
+        }
+
+        if (parts.length === 0 || (parts.length === 1 && parts[0] === '')) {
+            // Home — just logo
+        } else if (parts[0] === 'tags' || (parts[0] === 'tag' && !parts[1])) {
+            addSep();
+            const el = document.createElement('a');
+            el.className = 'breadcrumb-current';
+            el.classList.add('breadcrumb-link');
+            el.href = '/tags';
+            el.textContent = 'tags';
+            breadcrumb.appendChild(el);
+        } else if (parts[0] === 'tag' && parts[1]) {
+            if (hierarchy && hierarchy.length > 0) {
+                hierarchy.forEach((t, index) => {
+                    addSep();
+                    if (index < hierarchy.length - 1) {
+                        const link = document.createElement('a');
+                        link.className = 'breadcrumb-link';
+                        link.href = '/tag/' + t.slug;
+                        link.textContent = t.name;
+                        breadcrumb.appendChild(link);
+                    } else {
+                        const el = document.createElement('span');
+                        el.className = 'breadcrumb-current';
+                        el.textContent = t.name;
+                        breadcrumb.appendChild(el);
+                    }
+                });
+            } else {
+                // Fallback to legacy single tag behavior
+                addSep();
+                const tagsLink = document.createElement('a');
+                tagsLink.className = 'breadcrumb-link';
+                tagsLink.href = '/tags';
+                tagsLink.textContent = 'tags';
+                breadcrumb.appendChild(tagsLink);
+                addSep();
+                const tagEl = document.createElement('span');
+                tagEl.className = 'breadcrumb-current';
+                tagEl.textContent = tagName || decodeURIComponent(parts[1]);
+                breadcrumb.appendChild(tagEl);
+            }
+        } else if (parts[0] === 'map') {
+            addSep();
+            const el = document.createElement('span');
+            el.className = 'breadcrumb-current';
+            el.textContent = 'map';
+            breadcrumb.appendChild(el);
+        }
+    }
+
+    /**
+     * Shared pagination update helper
+     */
+    function updatePagination(pag, tagSlug, basePath, clickHandler) {
+        const paginationContainer = document.querySelector('.footer-content nav.pagination');
+        if (!paginationContainer) return;
+
+        if (!pag || pag.total_pages <= 1) {
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        paginationContainer.style.display = '';
+        
+        const effectiveBasePath = tagSlug ? `/tag/${tagSlug}` : basePath;
+        let html = '';
+
+        // Previous
+        if (pag.has_prev) {
+            html += `<a href="${effectiveBasePath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </a>`;
+        } else {
+            html += `<span class="pagination-link disabled">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </span>`;
+        }
+
+        // Pages
+        for (let p = 1; p <= pag.total_pages; p++) {
+            if (p === pag.page) {
+                html += `<span class="pagination-link active">${p}</span>`;
+            } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
+                html += `<a href="${effectiveBasePath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
+            } else if (p === pag.page - 2 || p === pag.page + 2) {
+                html += `<span class="pagination-ellipsis">&hellip;</span>`;
+            }
+        }
+
+        // Next
+        if (pag.has_next) {
+            html += `<a href="${effectiveBasePath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </a>`;
+        } else {
+            html += `<span class="pagination-link disabled">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </span>`;
+        }
+
+        paginationContainer.innerHTML = html;
+        paginationContainer.querySelectorAll('.ajax-link').forEach(link => {
+            link.addEventListener('click', clickHandler);
+        });
     }
 
     /**
@@ -1408,9 +1623,16 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    renderPosts(data, postsContainer, url);
+                    renderPosts(data, postsContainer);
+                    updatePagination(data.pagination, data.tag?.slug || data.current_tag, '/', handleAjaxClick);
 
                     window.history.pushState({}, '', url);
+                    const tagsBar = document.querySelector('.header-tags-bar');
+                    if (tagsBar) tagsBar.style.display = '';
+                    
+                    // Store hierarchy for breadcrumbs
+                    window.lastTagHierarchy = data.tag_hierarchy || null;
+                    
                     updateActiveSiteFilters(url, triggerElement);
                     attachAjaxListeners();
                     if (typeof initPostCardVideos === 'function') {
@@ -1428,7 +1650,7 @@
             }
         }
 
-        function renderPosts(data, container, currentUrl) {
+        function renderPosts(data, container) {
             if (!data.posts || data.posts.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1445,154 +1667,28 @@
                 return;
             }
 
-            let html = '<div class="posts-grid">';
+            const grid = document.createElement('div');
+            grid.className = 'posts-grid';
 
             data.posts.forEach((post, index) => {
                 const isFirst = index === 0;
                 const isPageOne = data.pagination.page === 1;
                 const showFeatured = isFirst && isPageOne && post.is_featured;
-                const hasImage = post.has_image;
-                const isVideo = post.is_video;
 
-                const editBtn = data.is_logged_in ? `
-                    <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </a>` : '';
-
-                const featuredBadge = showFeatured ? `
-                    <span class="featured-badge">
-                        <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                    </span>` : '';
-
-                const postMeta = `
-                    <div class="post-card-meta">
-                        <time datetime="${post.published_iso}">${post.published_date}</time>
-                        ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
-                    </div>`;
-
-                const postTags = post.tags && post.tags.length > 0 ? `
-                    <div class="post-card-tags">
-                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.tag?.slug || tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
-                    </div>` : '';
-
-                const contentHtml = hasImage ? `
-                    <div class="post-card-background">
-                        ${isVideo ? `
-                            <video src="${post.thumbnail_path}" muted loop playsinline></video>
-                            <div class="video-play-indicator">
-                                <svg width="${showFeatured ? '48' : '32'}" height="${showFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            </div>` : `
-                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`}
-                    </div>
-                    <div class="post-card-content overlay">
-                        ${featuredBadge}${postMeta}
-                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                        <div class="post-card-excerpt">${post.excerpt || ''}</div>
-                        ${postTags}
-                    </div>` : `
-                    <div class="post-card-content">
-                        ${featuredBadge}${postMeta}
-                        <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                        <div class="post-card-text-preview">${post.preview_html || ''}</div>
-                        ${postTags}
-                    </div>`;
-
+                const postCardClone = window.BlogNavigation.renderPostCard(post, data.is_logged_in, showFeatured);
+                
                 if (showFeatured) {
-                    html += `<div class="featured-post">
-                        <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                            ${editBtn}${contentHtml}
-                        </article>
-                    </div>`;
+                    const featuredWrapper = document.createElement('div');
+                    featuredWrapper.className = 'featured-post';
+                    featuredWrapper.appendChild(postCardClone);
+                    grid.appendChild(featuredWrapper);
                 } else {
-                    html += `<article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                        ${editBtn}${contentHtml}
-                    </article>`;
+                    grid.appendChild(postCardClone);
                 }
             });
 
-            html += '</div>';
-
-            // Add pagination if needed
-            if (data.pagination && data.pagination.total_pages > 1) {
-                html += renderPagination(data.pagination, data.tag?.slug || data.current_tag, currentUrl);
-            }
-
-            container.innerHTML = html;
-        }
-
-        function renderPagination(pag, tagSlug, currentUrl) {
-            // If tagSlug is not provided, try to extract it from the URL being loaded
-            if (!tagSlug && currentUrl) {
-                const urlObj = new URL(currentUrl, window.location.origin);
-                const tagMatch = urlObj.pathname.match(/^\/tag\/([^\/]+)/);
-                if (tagMatch) {
-                    tagSlug = tagMatch[1];
-                }
-            }
-
-            // Fallback to current window location if still not found
-            if (!tagSlug) {
-                const tagMatch = window.location.pathname.match(/^\/tag\/([^\/]+)/);
-                if (tagMatch) {
-                    tagSlug = tagMatch[1];
-                }
-            }
-
-            const basePath = tagSlug ? `/tag/${tagSlug}` : '/';
-            const ariaLabel = tagSlug ? 'Tag archive pagination' : 'Posts pagination';
-
-            let html = `<nav class="pagination" aria-label="${ariaLabel}">`;
-
-            // Previous
-            if (pag.has_prev) {
-                html += `<a href="${basePath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            // Pages
-            for (let p = 1; p <= pag.total_pages; p++) {
-                if (p === pag.page) {
-                    html += `<span class="pagination-link active">${p}</span>`;
-                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="${basePath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
-                } else if (p === pag.page - 2 || p === pag.page + 2) {
-                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
-                }
-            }
-
-            // Next
-            if (pag.has_next) {
-                html += `<a href="${basePath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            html += '</nav>';
-            return html;
+            container.innerHTML = '';
+            container.appendChild(grid);
         }
 
         function attachAjaxListeners() {
@@ -1605,14 +1701,29 @@
 
         function handleAjaxClick(e) {
             e.preventDefault();
-            const url = this.getAttribute('href');
+            let url = this.getAttribute('href');
+
+            if (this.classList.contains('nav-link') && this.title === 'Back to Home') {
+                const backUrl = sessionStorage.getItem('lastListUrl');
+                if (backUrl) {
+                    url = backUrl;
+                }
+            }
+
+            if (url === '/map' || url.includes('/map?')) {
+                if (typeof loadPost === 'function') {
+                    loadPost(url);
+                } else {
+                    window.location.href = url;
+                }
+                return;
+            }
+
             loadPosts(url, this);
         }
 
-        // Initial setup
         attachAjaxListeners();
 
-        // Handle back/forward buttons
         window.addEventListener('popstate', function () {
             loadPosts(window.location.href);
         });
@@ -1623,7 +1734,6 @@
      */
     function initAjaxTagsNavigation() {
         const tagsContent = document.getElementById('tags-content');
-        const filtersContainer = document.getElementById('tags-filters');
         if (!tagsContent) return;
 
         async function loadTagsContent(url, triggerElement = null) {
@@ -1639,6 +1749,12 @@
                 if (response.ok) {
                     const data = await response.json();
                     renderTags(data);
+                    const paginationBase = data.current_tag ? `/tag/${data.current_tag}` : '/tags';
+                    
+                    // Store hierarchy for breadcrumbs
+                    window.lastTagHierarchy = data.tag_hierarchy || null;
+
+                    updatePagination(data.pagination, null, paginationBase, handleTagsClick);
 
                     window.history.pushState({}, '', url);
                     updateActiveSiteFilters(url, triggerElement);
@@ -1675,136 +1791,29 @@
                 return;
             }
 
-            let html = '<div class="posts-grid">';
+            const grid = document.createElement('div');
+            grid.className = 'posts-grid';
+
             data.posts.forEach((post, index) => {
                 const isFirst = index === 0;
                 const isPageOne = data.pagination.page === 1;
                 const showFeatured = isFirst && isPageOne && post.is_featured;
-                const hasImage = post.has_image;
-                const isVideo = post.is_video;
 
-                const editBtn = data.is_logged_in ? `
-                    <a href="/light/posts/${post.id}" class="post-card-edit-btn" title="Edit Post">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </a>` : '';
-
-                const featuredBadge = showFeatured ? `
-                    <span class="featured-badge">
-                        <svg width="16" height="16" viewBox="0 -2 24 22" fill="currentColor">
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                    </span>` : '';
-
-                const contentHtml = hasImage ? `
-                    <div class="post-card-background">
-                        ${isVideo ? `
-                            <video src="${post.thumbnail_path}" muted loop playsinline></video>
-                            <div class="video-play-indicator">
-                                <svg width="${showFeatured ? '48' : '32'}" height="${showFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            </div>` : `
-                            <img src="${post.thumbnail_path}" alt="${post.title}" loading="lazy">`}
-                    </div>
-                    <div class="post-card-content overlay">` : `
-                    <div class="post-card-content">`;
-
-                const postTags = post.tags && post.tags.length > 0 ? `
-                    <div class="post-card-tags">
-                        ${post.tags.slice(0, 3).map(tag => `<a href="/tag/${tag.slug}" class="tag-link ${tag.slug === data.current_tag ? 'active' : ''}">${tag.name}</a>`).join('')}
-                    </div>` : '';
-
-                const articleHtml = `
-                    <article class="post-card ${hasImage ? 'has-image' : 'text-only'}" onclick="if(!event.target.closest('a')){ window.location.href='/posts/${post.slug}'; }">
-                        ${editBtn}${contentHtml}
-                            <div class="post-card-meta">
-                                ${featuredBadge}
-                                <time datetime="${post.published_iso}">${post.published_date}</time>
-                                ${post.view_count ? `<span>&bull;</span><span>${post.view_count} views</span>` : ''}
-                            </div>
-                            <h2 class="post-card-title"><a href="/posts/${post.slug}">${post.title}</a></h2>
-                            ${hasImage ? `<div class="post-card-excerpt">${post.excerpt || ''}</div>` : `<div class="post-card-text-preview">${post.preview_html || ''}</div>`}
-                            ${postTags}
-                        </div>
-                    </article>`;
+                const postCardClone = window.BlogNavigation.renderPostCard(post, data.is_logged_in, showFeatured);
 
                 if (showFeatured) {
-                    html += `<div class="featured-post">${articleHtml}</div>`;
+                    const featuredWrapper = document.createElement('div');
+                    featuredWrapper.className = 'featured-post';
+                    featuredWrapper.appendChild(postCardClone);
+                    grid.appendChild(featuredWrapper);
                 } else {
-                    html += articleHtml;
+                    grid.appendChild(postCardClone);
                 }
             });
-            html += '</div>';
 
-            tagsContent.innerHTML = html;
-            renderTagsPagination(data.pagination, data.current_tag);
+            tagsContent.innerHTML = '';
+            tagsContent.appendChild(grid);
         }
-
-        function renderTagsPagination(pag, currentTag) {
-            const paginationContainer = document.querySelector('.footer-content .pagination');
-
-            if (!paginationContainer) {
-                return;
-            }
-
-            if (!pag || pag.total_pages <= 1) {
-                paginationContainer.classList.add('hidden');
-                return;
-            }
-
-            paginationContainer.classList.remove('hidden');
-            paginationContainer.classList.add('visible-flex');
-            const tagPath = currentTag ? `/${currentTag}` : '';
-            let html = '';
-
-            // Previous
-            if (pag.has_prev) {
-                html += `<a href="/tag${tagPath}?page=${pag.prev_page}" class="pagination-link ajax-link" aria-label="Previous page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M15 18l-6-6 6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            // Pages
-            for (let p = 1; p <= pag.total_pages; p++) {
-                if (p === pag.page) {
-                    html += `<span class="pagination-link active">${p}</span>`;
-                } else if (p === 1 || p === pag.total_pages || (p >= pag.page - 1 && p <= pag.page + 1)) {
-                    html += `<a href="/tag${tagPath}?page=${p}" class="pagination-link ajax-link">${p}</a>`;
-                } else if (p === pag.page - 2 || p === pag.page + 2) {
-                    html += `<span class="pagination-ellipsis">&hellip;</span>`;
-                }
-            }
-
-            // Next
-            if (pag.has_next) {
-                html += `<a href="/tag${tagPath}?page=${pag.next_page}" class="pagination-link ajax-link" aria-label="Next page">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </a>`;
-            } else {
-                html += `<span class="pagination-link disabled">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </span>`;
-            }
-
-            paginationContainer.innerHTML = html;
-        }
-
-
 
         function attachTagsListeners() {
             const links = document.querySelectorAll('.ajax-link');
@@ -1817,13 +1826,21 @@
         function handleTagsClick(e) {
             e.preventDefault();
             const url = this.getAttribute('href');
+
+            if (url === '/map' || url.includes('/map?')) {
+                if (typeof loadPost === 'function') {
+                    loadPost(url);
+                } else {
+                    window.location.href = url;
+                }
+                return;
+            }
+
             loadTagsContent(url, this);
         }
 
-        // Initial setup
         attachTagsListeners();
 
-        // Handle back/forward buttons
         window.addEventListener('popstate', function () {
             loadTagsContent(window.location.href);
         });
@@ -1835,7 +1852,7 @@
      * Preserves the active tag and ensures All/More are always visible.
      */
     function initResponsiveTagFilters() {
-        const container = document.querySelector('.site-header .tags-filters');
+        const container = document.querySelector('.header-tags-bar .tags-filters');
         if (!container) return;
 
         function updateFilters() {
@@ -1845,16 +1862,8 @@
             // Use getBoundingClientRect for more sub-pixel accuracy
             const containerWidth = container.getBoundingClientRect().width;
 
-            const mode = container.dataset.mode || 'featured';
             const allItems = Array.from(container.children);
-
-            // Step 0: Filter items that belong to current mode
-            const items = allItems.filter(el => {
-                if (el.id === 'tags-switcher') return true;
-                if (mode === 'featured') return el.classList.contains('featured-tag');
-                if (mode === 'categories') return el.classList.contains('category-tag');
-                return false;
-            });
+            const items = allItems; // Show all items, no more mode filtering
 
             // Hide everything initially
             allItems.forEach(item => {
@@ -1889,7 +1898,6 @@
                 const b = el.classList.contains('filter-btn') ? el : el.querySelector('.filter-btn');
                 return b && (b.dataset.role === 'all' || b.getAttribute('href') === '/');
             });
-            const moreBtn = document.getElementById('tags-switcher');
             const activeItem = items.find(el => {
                 if (el.classList.contains('active')) return true;
                 if (el.querySelector('.filter-btn.active')) return true;
@@ -1903,7 +1911,6 @@
             const essentials = [];
             if (allBtn) essentials.push(allBtn);
             if (activeItem && !essentials.includes(activeItem)) essentials.push(activeItem);
-            if (moreBtn && !essentials.includes(moreBtn)) essentials.push(moreBtn);
 
             // Step 3: Show as many essential items as fit
             for (const item of essentials) {
@@ -1955,7 +1962,6 @@
         // Initial run
         updateActiveSiteFilters(window.location.href);
         updateFilters();
-
 
         registerCleanup(() => {
             observer.disconnect();
@@ -2038,40 +2044,18 @@
     }
 
     /**
-     * Switcher between Featured Tags and Categories in Header
+     * Initialize Map (if present)
      */
-    function initTagSwitcher() {
-        const switcher = document.getElementById('tags-switcher');
-        const container = document.getElementById('header-tags-filters');
-
-        if (!switcher || !container) return;
-
-        function updateSets(mode) {
-            container.dataset.mode = mode;
-            if (mode === 'categories') {
-                switcher.classList.add('active');
-            } else {
-                switcher.classList.remove('active');
-            }
-            // Trigger responsive update
-            if (window.dispatchEvent) {
-                window.dispatchEvent(new CustomEvent('siteFiltersUpdated'));
+    function initMap() {
+        const mapEl = document.getElementById('map');
+        if (mapEl && window.initGlobalMap) {
+            try {
+                const mapTags = JSON.parse(mapEl.dataset.mapTags || '[]');
+                window.initGlobalMap(mapTags);
+            } catch (e) {
+                console.error("[Map] Failed to parse map tags:", e);
             }
         }
-
-        // Initialize state from localStorage
-        const savedMode = localStorage.getItem('tags-filter-mode') || 'featured';
-        updateSets(savedMode);
-
-        switcher.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const currentMode = localStorage.getItem('tags-filter-mode') || 'featured';
-            const newMode = currentMode === 'featured' ? 'categories' : 'featured';
-
-            localStorage.setItem('tags-filter-mode', newMode);
-            updateSets(newMode);
-        });
     }
 
     /**
@@ -2079,6 +2063,8 @@
      */
     function initPage() {
         initImmersiveMode();
+        initImmersiveHeaderOverflow();
+        initTagsBarLayout();
         initCarousel();
         initPostCardVideos();
         initLazyLoading();
@@ -2089,7 +2075,7 @@
         initAjaxTagsNavigation();
         initResponsiveTagFilters();
         initTagToggles();
-        initTagSwitcher();
+        initMap();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {

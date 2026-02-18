@@ -1,126 +1,55 @@
+{# Macro to render a single tag filter button #}
+{% macro render_filter_btn(tag, extra_classes='', show_original_name=false) %}
+{% set is_effectively_hidden = user and (tag.is_hidden or tag|tag_has_hidden_parent) %}
+<a href="/tag/{{ tag.slug }}"
+    class="filter-btn ajax-link {{ extra_classes }} {% if is_effectively_hidden %}hidden-tag{% endif %}"
+    {% if show_original_name %}data-original-name="{{ tag.name }}"{% endif %}
+    title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">
+    {% if is_effectively_hidden %}
+    <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+    </svg>
+    {% endif %}
+    {{ tag.name }}
+</a>
+{% endmacro %}
+
+{# Macro to render the toggle children button #}
+{% macro render_toggle_btn() %}
+<button class="toggle-children" aria-label="Toggle children">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 9l-7 7-7-7" />
+    </svg>
+</button>
+{% endmacro %}
+
 {# Recursive macro to render tag groups #}
-{% set active_tag_slug = current_tag or (tag.slug if tag else None) %}
-{% macro render_tag_group(group, active_tag_slug) %}
-<div class="tag-group">
+{% macro render_tag_group(group, extra_classes='') %}
+<div class="tag-group {{ extra_classes }}">
     <div class="tag-group-header">
-        <a href="/tag/{{ group.tag.slug }}"
-            class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
-            data-original-name="{{ group.tag.name }}" title="{{ group.tag.post_count }} post{{ 's' if group.tag.post_count != 1 else '' }}">
-            {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
-            <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-            {% endif %}
-            {{ group.tag.name }}
-        </a>
-        <button class="toggle-children" aria-label="Toggle children">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 9l-7 7-7-7" />
-            </svg>
-        </button>
+        {{ render_filter_btn(group.tag, show_original_name=true) }}
+        {{ render_toggle_btn() }}
     </div>
     <div class="tag-children">
         {% for child in group.children %}
         {% if child.children %}
-        {{ render_tag_group(child, active_tag_slug) }}
+        {{ render_tag_group(child) }}
         {% else %}
-        <a href="/tag/{{ child.tag.slug }}"
-            class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ child.tag.post_count }} post{{ 's' if child.tag.post_count != 1 else '' }}">
-            {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}
-            <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-            {% endif %}
-            {{ child.tag.name }}
-        </a>
+        {{ render_filter_btn(child.tag) }}
         {% endif %}
         {% endfor %}
     </div>
 </div>
 {% endmacro %}
 
-<div class="tags-filters" id="header-tags-filters" data-mode="featured">
-    {% for t in tags %}
-    <a href="/tag/{{ t.slug }}"
-        class="filter-btn ajax-link featured-tag {% if active_tag_slug == t.slug %}active{% endif %} {% if user and t.is_hidden %}hidden-tag{% endif %}" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">
-        {% if user and t.is_hidden %}
-        <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
-        {% endif %}
-        {{ t.name }}
-    </a>
-    {% endfor %}
-
+<div class="tags-filters" id="header-tags-filters">
     {% for group in tag_groups %}
-    {% if group.children %}
-    <div class="tag-group category-tag">
-        <div class="tag-group-header">
-            <a href="/tag/{{ group.tag.slug }}"
-                class="filter-btn ajax-link {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}"
-                data-original-name="{{ group.tag.name }}" title="{{ group.tag.post_count }} post{{ 's' if group.tag.post_count != 1 else '' }}">
-                {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
-                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                {% endif %}
-                {{ group.tag.name }}
-            </a>
-            <button class="toggle-children" aria-label="Toggle children">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-        </div>
-        <div class="tag-children">
-            {% for child in group.children %}
-            {% if child.children %}
-            {{ render_tag_group(child, active_tag_slug) }}
-            {% else %}
-            <a href="/tag/{{ child.tag.slug }}"
-                class="filter-btn ajax-link {% if active_tag_slug == child.tag.slug %}active{% endif %} {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ child.tag.post_count }} post{{ 's' if child.tag.post_count != 1 else '' }}">
-                {% if user and (child.tag.is_hidden or child.tag|tag_has_hidden_parent) %}
-                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                {% endif %}
-                {{ child.tag.name }}
-            </a>
-            {% endif %}
-            {% endfor %}
-        </div>
-    </div>
-    {% else %}
-    <a href="/tag/{{ group.tag.slug }}"
-        class="filter-btn ajax-link category-tag {% if active_tag_slug == group.tag.slug %}active{% endif %} {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}hidden-tag{% endif %}" title="{{ group.tag.post_count }} post{{ 's' if group.tag.post_count != 1 else '' }}">
-        {% if user and (group.tag.is_hidden or group.tag|tag_has_hidden_parent) %}
-        <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
+        {% if group.children %}
+            {{ render_tag_group(group) }}
+        {% else %}
+            {{ render_filter_btn(group.tag) }}
         {% endif %}
-        {{ group.tag.name }}
-    </a>
-    {% endif %}
     {% endfor %}
-
-    <button class="filter-btn switcher-btn" id="tags-switcher" title="Switch between featured and categories">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
-        </svg>
-    </button>
 </div>

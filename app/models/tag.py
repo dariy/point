@@ -23,6 +23,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.post import Post
+    from app.models.tag_location import TagLocation
 
 
 # Association table for tag hierarchical relationships
@@ -67,12 +68,24 @@ class Tag(AsyncAttrs, Base):
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_hidden_posts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    include_in_breadcrumbs: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
     show_related_tags_as_children: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
     post_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+
+    # Relationship to locations
+    locations: Mapped[list["TagLocation"]] = relationship(
+        "TagLocation",
+        back_populates="tag",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     # Relationship to posts through association table

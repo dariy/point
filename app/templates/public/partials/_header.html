@@ -1,0 +1,74 @@
+{% from "macros/common.html" import icon %}
+
+<header class="site-header {% block header_class %}{% if not has_text_content and post %}immersive{% endif %}{% endblock %}">
+    <div class="header-container">
+        {% block header_content %}
+            {% if not has_text_content and post %}
+                <div class="post-header-bar">
+                    <div class="header-left">
+                        <a href="/" class="header-action-btn" title="Back to Home">
+                            {{ icon('chevron-left', size=24) }}
+                        </a>
+                    </div>
+                    <div class="header-center">
+                        <h1 class="site-title breadcrumbs centered">
+                            <a href="/" class="breadcrumb-link">{{ blog_title }}</a>
+                            <span class="breadcrumb-separator">/</span>
+                            <span class="breadcrumb-current">{{ post.title }}</span>
+                        </h1>
+                        <div class="post-meta">
+                            <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
+                                {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
+                            </time>
+                            {% if blog_settings.show_view_counts and post.view_count %}
+                            <span class="post-meta-divider">·</span>
+                            <span>{{ post.view_count }} views</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="header-right">
+                        <nav class="site-nav">
+                            {% if user %}
+                            <a href="/light/posts/{{ post.id }}" class="header-action-btn edit-post-btn" title="Edit Post">
+                                {{ icon('edit', size=20) }}
+                            </a>
+                            {% endif %}
+                            <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
+                                {{ icon('sun', class='icon-sun') }}
+                                {{ icon('moon', class='icon-moon') }}
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+            {% else %}
+                <div class="header-left-group">
+                    <nav class="site-breadcrumb">
+                        <a href="#" class="logo theme-toggle{% if user %} authenticated{% endif %}">
+                            {% include "shared/logo.html" %}
+                        </a>
+                        <a href="/" class="site-title{% if user %} authenticated{% endif %}">
+                            <span>{{ blog_title }}</span>
+                        </a>
+                        {% if blog_subtitle %}
+                        <p class="site-subtitle">{{ blog_subtitle }}</p>
+                        {% endif %}
+                        {% block header_breadcrumb %}{% endblock %}
+                    </nav>
+                </div>
+            {% endif %}
+        {% endblock %}
+    </div>
+</header>
+{% if has_text_content or not post %}
+<nav class="site-nav">
+    {% block header_nav_extra %}{% endblock %}
+    <a href="/map" class="header-action-btn ajax-link" title="Map" aria-label="Map">
+        {{ icon('map', size=20) }}
+    </a>
+    {% if user %}
+    <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
+        {{ icon('plus') }}
+    </a>
+    {% endif %}
+</nav>
+{% endif %}
