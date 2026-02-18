@@ -505,13 +505,16 @@ async def single_post(
     # strip_html removes all tags including <img>, <video>, <audio>, so we just check if any text remains
     text_content = strip_html(content_html)
     
-    # We want to use immersive mode if there is media (image/video/audio) and VERY LITTLE text
-    # Or specifically if it's mostly a media post.
-    # Current logic: if strip_html results in empty string, it's immersive.
-    has_text_content = bool(text_content and text_content.strip())
-
-    # Extract all media for carousel
+    # Clean up whitespace and non-breaking spaces
+    text_content = text_content.replace("&nbsp;", " ").strip()
+    
+    # Extract all media for carousel and check for audio
     post_media = extract_all_media(post.content)
+
+    # We want to use immersive mode if there is media (image/video/audio) and VERY LITTLE text
+    # Current logic: if strip_html results in empty string, it's immersive.
+    # Exception: we do not use immersive mode for audio files (per user request).
+    has_text_content = len(text_content) > 0 or any(m["type"] == "audio" for m in post_media)
 
     # Function to ensure we have an original URL
     async def ensure_original_url(url: str | None) -> str | None:
@@ -552,9 +555,10 @@ async def single_post(
     prev_post = None
     next_post = None
 
-    # Navigation logic: guests can navigate between PUBLISHED and PAGE
+    # Navigation logic: guests can navigate between PUBLISHED posts
     # Admin can also see HIDDEN and DRAFT
-    nav_statuses = [PostStatus.PUBLISHED, PostStatus.PAGE]
+    # PAGE status is excluded from chronological navigation
+    nav_statuses = [PostStatus.PUBLISHED]
     if user:
         nav_statuses.extend([PostStatus.HIDDEN, PostStatus.DRAFT])
 

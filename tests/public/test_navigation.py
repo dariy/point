@@ -104,3 +104,53 @@ async def test_prev_next_post_navigation_full(client: AsyncClient, db: AsyncSess
     data = resp.json()
     assert data["prev_post"]["slug"] == p1.slug
     assert data["next_post"]["slug"] == p3.slug
+
+
+@pytest.mark.asyncio
+async def test_pages_excluded_from_navigation(client: AsyncClient, db: AsyncSession, test_user: dict) -> None:
+    """Test that posts with status PAGE are excluded from navigation."""
+    user = test_user["user"]
+    now = datetime.now(UTC)
+
+    # Create a published post
+    p1 = Post(
+        title="Post 1", slug="p1-nav", content="c",
+        status=PostStatus.PUBLISHED, published_at=now - timedelta(days=2),
+        formatter=PostFormatter.MARKDOWN, author_id=user.id
+    )
+
+    # Create a page
+    page = Post(
+        title="Page", slug="page-nav", content="c",
+        status=PostStatus.PAGE, published_at=now - timedelta(days=1),
+        formatter=PostFormatter.MARKDOWN, author_id=user.id
+    )
+
+    # Create another published post
+    p2 = Post(
+        title="Post 2", slug="p2-nav", content="c",
+        status=PostStatus.PUBLISHED, published_at=now,
+        formatter=PostFormatter.MARKDOWN, author_id=user.id
+    )
+
+    db.add_all([p1, page, p2])
+    await db.commit()
+
+    # Get P1 as AJAX to check next_post (should skip the page and go to p2)
+    resp = await client.get(f"/posts/{p1.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["next_post"]["slug"] == p2.slug
+
+    # Get P2 as AJAX to check prev_post (should skip the page and go to p1)
+    resp = await client.get(f"/posts/{p2.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["prev_post"]["slug"] == p1.slug
+
+    # Get Page as AJAX, it should have NO navigation
+    resp = await client.get(f"/posts/{page.slug}", headers={"X-Requested-With": "XMLHttpRequest"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["prev_post"] is None
+    assert data["next_post"] is None
