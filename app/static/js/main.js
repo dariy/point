@@ -487,6 +487,40 @@
     }
 
     /**
+     * Inline tags-bar layout: keep tags on the same row as the header until
+     * their natural content width would collide with header or nav, then stack.
+     * Uses ResizeObserver instead of a fixed breakpoint.
+     */
+    function initTagsBarLayout() {
+        const group = document.querySelector('.site-header-group');
+        const tagsBar = group && group.querySelector('.header-tags-bar');
+        if (!group || !tagsBar) return;
+
+        const siteHeader = group.querySelector('.site-header');
+        const siteNav = document.querySelector('.site-header-group > .site-nav');
+
+        // Measure the tags bar's natural content width by briefly taking it
+        // out of the flex flow (position:absolute) so flex can't constrain it.
+        const prev = { position: tagsBar.style.position, visibility: tagsBar.style.visibility, flex: tagsBar.style.flex, width: tagsBar.style.width };
+        Object.assign(tagsBar.style, { position: 'absolute', visibility: 'hidden', flex: 'none', width: 'auto' });
+        const naturalTagsWidth = tagsBar.getBoundingClientRect().width;
+        Object.assign(tagsBar.style, prev);
+
+        function update() {
+            const groupWidth = group.getBoundingClientRect().width;
+            const headerWidth = siteHeader ? siteHeader.getBoundingClientRect().width : 0;
+            const navWidth = siteNav ? siteNav.getBoundingClientRect().width : 0;
+            const available = groupWidth - headerWidth - navWidth;
+            group.classList.toggle('tags-stacked', naturalTagsWidth > available);
+        }
+
+        const ro = new ResizeObserver(update);
+        ro.observe(group);
+        update();
+        registerCleanup(() => ro.disconnect());
+    }
+
+    /**
      * Carousel Logic
      */
     function initCarousel() {
@@ -680,8 +714,8 @@
                 }
 
                 // Update Header (Title, Date, Navigation)
-                const newHeader = doc.querySelector('header.site-header');
-                const currentHeader = document.querySelector('header.site-header');
+                const newHeader = doc.querySelector('.site-header');
+                const currentHeader = document.querySelector('.site-header');
                 if (newHeader && currentHeader) {
                     console.log("[Navigation] Updating site-header...");
                     currentHeader.replaceWith(newHeader);
@@ -719,8 +753,8 @@
                 } else if (currentTagsBar && !newTagsBar) {
                     currentTagsBar.style.display = 'none';
                 } else if (newTagsBar && !currentTagsBar) {
-                    const siteHeader = document.querySelector('header.site-header');
-                    if (siteHeader) siteHeader.after(newTagsBar);
+                    const headerGroup = document.querySelector('.site-header-group');
+                    if (headerGroup) headerGroup.appendChild(newTagsBar);
                 }
 
                 // Update Footer (pagination, tags)
@@ -1096,7 +1130,7 @@
         }
 
         // Replace Header Content
-        const header = document.querySelector('header.site-header');
+        const header = document.querySelector('.site-header');
         const headerContainer = header.querySelector('.header-container');
         headerContainer.innerHTML = '';
         headerContainer.appendChild(headerClone);
@@ -2030,6 +2064,7 @@
     function initPage() {
         initImmersiveMode();
         initImmersiveHeaderOverflow();
+        initTagsBarLayout();
         initCarousel();
         initPostCardVideos();
         initLazyLoading();

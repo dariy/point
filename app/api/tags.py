@@ -17,6 +17,7 @@ from app.schemas.tag import (
     TagCloudResponse,
     TagCreate,
     TagListResponse,
+    TagReorder,
     TagResponse,
     TagUpdate,
     TagWithPostsResponse,
@@ -47,6 +48,7 @@ def tag_to_response(tag: TagModel) -> dict[str, Any]:
         "is_hidden_posts": tag.is_hidden_posts,
         "include_in_breadcrumbs": tag.include_in_breadcrumbs,
         "show_related_tags_as_children": tag.show_related_tags_as_children,
+        "sort_order": tag.sort_order,
         "post_count": tag.post_count,
         "created_at": tag.created_at,
         "url": tag.url,
@@ -72,6 +74,7 @@ def tag_to_list_item(tag: TagModel) -> dict[str, Any]:
         "is_hidden": tag.is_hidden,
         "is_hidden_posts": tag.is_hidden_posts,
         "include_in_breadcrumbs": tag.include_in_breadcrumbs,
+        "sort_order": tag.sort_order,
         "post_count": tag.post_count,
     }
 
@@ -232,6 +235,40 @@ async def update_tag(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e),
         )
+
+
+@router.post(
+    "/{tag_id}/reorder",
+    response_model=TagResponse,
+    summary="Reorder a tag",
+)
+async def reorder_tag(
+    tag_id: int,
+    reorder_data: TagReorder,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_auth),
+) -> dict[str, Any]:
+    """Reorder a tag relative to another tag.
+
+    Requires authentication.
+    """
+    service = TagService(db)
+
+    tag = await service.reorder_tag(
+        tag_id=tag_id,
+        target_id=reorder_data.target_id,
+        position=reorder_data.position,
+        current_parent_id=reorder_data.current_parent_id,
+    )
+
+    if not tag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tag not found",
+        )
+
+    await db.commit()
+    return tag_to_response(tag)
 
 
 @router.delete(
