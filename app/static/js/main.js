@@ -834,11 +834,7 @@
         const hasText = data.has_text_content;
         const post = data.post;
         
-        // If post has no text but has audio, it should probably be treated as immersive
-        // but if it has audio AND text, it's standard.
-        // data.has_text_content is calculated on server by stripping HTML tags.
-        // Audio tags are also stripped by strip_html.
-        
+        // Use standard layout if we have text OR audio (server ensures has_text_content is true if audio exists)
         const templateId = hasText ? 'tmpl-post-standard' : 'tmpl-post-immersive';
         const template = document.getElementById(templateId);
 
@@ -850,6 +846,11 @@
 
         const clone = template.content.cloneNode(true);
         const tagHierarchy = data.tag_hierarchy || [];
+
+        // Pre-create header clone as it's used in metadata updates
+        const headerTemplateId = hasText ? 'tmpl-header-default' : 'tmpl-header-immersive';
+        const headerTemplate = document.getElementById(headerTemplateId);
+        const headerClone = headerTemplate.content.cloneNode(true);
 
         // 1. Update Title and Metadata
         if (hasText) {
@@ -1028,10 +1029,6 @@
         if (data.next_post) navData.dataset.nextUrl = '/posts/' + data.next_post.slug;
 
         // 5. Header
-        const headerTemplateId = hasText ? 'tmpl-header-default' : 'tmpl-header-immersive';
-        const headerTemplate = document.getElementById(headerTemplateId);
-        const headerClone = headerTemplate.content.cloneNode(true);
-
         if (hasText) {
             const subtitle = headerClone.querySelector('.site-subtitle');
             if (subtitle) subtitle.textContent = data.blog_subtitle || '';
