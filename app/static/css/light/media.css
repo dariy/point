@@ -67,6 +67,39 @@
     transition: opacity var(--transition-fast);
 }
 
+/* Media item action buttons - square and elevated like public edit buttons */
+.media-item-actions .btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.media-item-actions .btn:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow);
+}
+
+.media-item-actions .btn-danger:hover {
+    background-color: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger);
+}
+
+.media-item-actions .btn svg {
+    width: 18px;
+    height: 18px;
+}
+
 .media-item:hover .media-item-actions {
     opacity: 1;
 }
