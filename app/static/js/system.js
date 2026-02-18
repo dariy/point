@@ -201,6 +201,40 @@
     };
 
     /**
+     * Update missing map coordinates
+     */
+    const updateMapCoords = async function () {
+        const confirmed = await showConfirm(
+            'Update Map Coordinates',
+            'This will fetch missing coordinates for all city and country tags using the Nominatim geocoding service.\n\nThe process may take some time due to rate limiting (1 request per second).',
+            'Start Update'
+        );
+        if (!confirmed) return;
+
+        try {
+            showProgress('Updating coordinates...');
+            const response = await fetch('/api/system/map/update-coords', { method: 'POST' });
+            const data = await response.json();
+            hideProgress();
+            
+            if (response.ok) {
+                let message = data.message;
+                if (data.errors && data.errors.length > 0) {
+                    message += '\n\nErrors encountered:\n' + data.errors.slice(0, 5).join('\n');
+                    if (data.errors.length > 5) message += '\n...and ' + (data.errors.length - 5) + ' more.';
+                }
+                await showAlert('Update Complete', message);
+                location.reload();
+            } else {
+                await showAlert('Error', data.detail);
+            }
+        } catch (error) {
+            hideProgress();
+            await showAlert('Error', error.message);
+        }
+    };
+
+    /**
      * Refresh system logs
      */
     const refreshLogs = async function () {
@@ -255,6 +289,51 @@
     // ===========================
     // Backup Management
     // ===========================
+
+    /**
+     * Refresh migration list
+     */
+    const refreshMigrations = async function () {
+        const migrationsList = document.getElementById('migrations-list');
+        if (!migrationsList) return;
+        
+        migrationsList.innerHTML = '<div class="loading">Loading migrations...</div>';
+
+        try {
+            const response = await fetch('/api/system/migrations');
+            if (response.ok) {
+                const migrations = await response.json();
+                if (migrations.length === 0) {
+                    migrationsList.innerHTML = '<div class="empty-state">No migrations found.</div>';
+                } else {
+                    migrationsList.innerHTML = `
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Migration Name</th>
+                                    <th>Applied At</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${migrations.map(m => `
+                                    <tr>
+                                        <td>${m.id}</td>
+                                        <td><code>${m.name}</code></td>
+                                        <td class="text-muted text-small">${formatDate(m.applied_at)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                }
+            } else {
+                migrationsList.innerHTML = '<div class="error-state">Failed to load migrations.</div>';
+            }
+        } catch (error) {
+            migrationsList.innerHTML = '<div class="error-state">Error: ' + error.message + '</div>';
+        }
+    };
 
     /**
      * Refresh backup list
@@ -433,6 +512,7 @@
             logContent.scrollTop = logContent.scrollHeight;
         }
         refreshBackups();
+        refreshMigrations();
 
         // Event delegation for dynamic components
         document.addEventListener('click', (e) => {
@@ -455,6 +535,9 @@
 
             const action = actionBtn.dataset.action;
             switch (action) {
+                case 'refresh-migrations':
+                    refreshMigrations();
+                    break;
                 case 'clear-cache':
                     clearCache(actionBtn.dataset.pattern || 'all');
                     break;
@@ -463,6 +546,9 @@
                     break;
                 case 'cleanup-orphaned':
                     cleanupOrphaned();
+                    break;
+                case 'update-map-coords':
+                    updateMapCoords();
                     break;
                 case 'rebuild-thumbnails':
                     rebuildThumbnails(actionBtn.dataset.onlyMissing === 'true');

@@ -26,6 +26,7 @@ from app.services.post_service import PostService
 from app.services.settings_service import SettingsService
 from app.services.system_service import SystemService
 from app.services.tag_service import TagService
+from app.utils.template_helpers import locations_to_json
 
 router = APIRouter(prefix="/light", tags=["Light"])
 
@@ -33,8 +34,10 @@ router = APIRouter(prefix="/light", tags=["Light"])
 templates_dir = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
-settings = get_settings()
+# Register template filters
+templates.env.filters["locations_to_json"] = locations_to_json
 
+settings = get_settings()
 
 async def get_base_context(db: AsyncSession, request: Request, user: User | None = None) -> dict[str, Any]:
     """Get base context for all light templates.
@@ -49,15 +52,18 @@ async def get_base_context(db: AsyncSession, request: Request, user: User | None
     """
     settings_service = SettingsService(db)
     blog_title = await settings_service.get_setting("blog_title")
+    blog_subtitle = await settings_service.get_setting("blog_subtitle")
     return {
         "request": request,
         "user": user,
         "settings": settings,
         "app_name": blog_title or settings.app_name,
+        "blog_title": blog_title or settings.app_name,
+        "blog_subtitle": blog_subtitle or "",
         "app_version": settings.app_version,
         "public_url": "/",
+        "author_name": await settings_service.get_setting("author_name") or "Light",
     }
-
 
 async def require_auth(
     user: User | None = Depends(get_current_user),
@@ -79,7 +85,6 @@ async def require_auth(
             headers={"Location": "/light/login"},
         )
     return user
-
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(
@@ -103,7 +108,6 @@ async def login_page(
     context = await get_base_context(db, request)
     context["error"] = request.query_params.get("error")
     return templates.TemplateResponse("light/login.html", context)
-
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(
@@ -173,7 +177,6 @@ async def dashboard(
     )
     return templates.TemplateResponse("light/dashboard.html", context)
 
-
 @router.get("/posts", response_class=HTMLResponse)
 async def posts_list(
     request: Request,
@@ -240,7 +243,6 @@ async def posts_list(
     )
     return templates.TemplateResponse("light/posts_list.html", context)
 
-
 @router.get("/posts/new", response_class=HTMLResponse)
 async def new_post(
     request: Request,
@@ -289,7 +291,6 @@ async def new_post(
         initial_content = f"![](/media/{media_path})"
         initial_thumbnail = f"/media/{media_path}"
 
-
     context = await get_base_context(db, request, user)
     context.update(
         {
@@ -304,7 +305,6 @@ async def new_post(
         }
     )
     return templates.TemplateResponse("light/post_edit.html", context)
-
 
 @router.get("/posts/{post_id}", response_class=HTMLResponse)
 async def edit_post(
@@ -341,7 +341,6 @@ async def edit_post(
     tag_service = TagService(db)
     tags = await tag_service.list_tags()
 
-
     # Get post's current tags
     post_tags = [t.name for t in post.tags]
 
@@ -358,7 +357,6 @@ async def edit_post(
         }
     )
     return templates.TemplateResponse("light/post_edit.html", context)
-
 
 @router.get("/tags", response_class=HTMLResponse)
 async def tags_page(
@@ -407,7 +405,6 @@ async def tags_page(
     total = len(tags)
     total_pages = 1
 
-
     context = await get_base_context(db, request, user)
     context.update(
         {
@@ -427,7 +424,6 @@ async def tags_page(
         }
     )
     return templates.TemplateResponse("light/tags.html", context)
-
 
 @router.get("/media", response_class=HTMLResponse)
 async def media_page(
@@ -481,7 +477,6 @@ async def media_page(
     )
     return templates.TemplateResponse("light/media.html", context)
 
-
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(
     request: Request,
@@ -521,7 +516,6 @@ async def settings_page(
     )
     return templates.TemplateResponse("light/settings.html", context)
 
-
 @router.get("/security", response_class=HTMLResponse)
 async def security_page(
     request: Request,
@@ -545,7 +539,6 @@ async def security_page(
 
     context = await get_base_context(db, request, user)
     return templates.TemplateResponse("light/security.html", context)
-
 
 @router.get("/system", response_class=HTMLResponse)
 async def system_page(
@@ -580,7 +573,6 @@ async def system_page(
         }
     )
     return templates.TemplateResponse("light/system.html", context)
-
 
 @router.get("/logout")
 async def logout() -> RedirectResponse:

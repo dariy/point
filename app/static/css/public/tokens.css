@@ -10,11 +10,12 @@
 
     /* Semantic Colors - Background */
     --bg-primary: #ffffff;
-    --bg-carouselle: white;
+    --bg-carouselle: rgba(255,255,255,0.6);
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
     --bg-elevated: #ffffff;
     --bg-overlay: rgba(0, 0, 0, 0.5);
+    --bg-overlay-hover: rgba(37, 99, 235, 0.7);
 
     /* Semantic Colors - Text */
     --text-primary: #0f172a;
@@ -43,9 +44,9 @@
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
     /* Component-specific */
-    --header-bg: rgba(255, 255, 255, 0.8);
-    --footer-bg: rgba(255, 255, 255, 0.8);
-    --footer-text: #94a3b8;
+    --header-bg: rgba(255, 255, 255, 0.9);
+    --footer-bg: rgba(255, 255, 255, 0.9);
+    --footer-text: rgba(0, 0, 0, 0.95);  /*#94a3b8;*/
     --code-bg: #1e293b;
     --code-text: #f1f5f9;
     --inline-code-bg: #f1f5f9;

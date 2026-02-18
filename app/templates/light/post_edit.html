@@ -165,7 +165,7 @@
                             {% for s in statuses %}
                             <option value="{{ s }}" {% if post and post.status.value==s %}selected{% elif not post and
                                 s=='published' %}selected{% endif %}>
-                                {{ s|capitalize }}
+                                {{ 'Page' if s == 'page' else s|capitalize }}
                             </option>
                             {% endfor %}
                         </select>
