@@ -98,6 +98,7 @@ class TagService:
             is_hidden_posts=tag_data.is_hidden_posts,
             include_in_breadcrumbs=tag_data.include_in_breadcrumbs,
             show_related_tags_as_children=tag_data.show_related_tags_as_children,
+            sort_order=tag_data.sort_order,
             post_count=0,
         )
 
@@ -243,6 +244,9 @@ class TagService:
             tag.include_in_breadcrumbs = tag_data.include_in_breadcrumbs
         if tag_data.show_related_tags_as_children is not None:
             tag.show_related_tags_as_children = tag_data.show_related_tags_as_children
+        # sort_order can be explicitly set to None (to clear it), so check fields_set
+        if "sort_order" in tag_data.model_fields_set:
+            tag.sort_order = tag_data.sort_order
 
         if tag_data.locations is not None:
             # Replace existing locations
@@ -275,6 +279,111 @@ class TagService:
         try:
             await invalidate_cache_for_tag()
             logger.debug("Cache invalidated after tag update")
+        except Exception as e:
+            logger.warning("Failed to invalidate cache: %s", e)
+
+        return tag
+
+    async def reorder_tag(
+        self, tag_id: int, target_id: int | None, position: str, current_parent_id: int | None = None
+    ) -> Tag | None:
+        """Reorder a tag relative to a target tag.
+
+        Args:
+            tag_id: ID of the tag to move
+            target_id: ID of the target tag (None for root if position is 'inside')
+            position: 'before', 'after', or 'inside'
+            current_parent_id: Optional ID of the parent in the branch being dropped to
+
+        Returns:
+            Updated tag or None if not found
+        """
+        tag = await self.get_tag_by_id(tag_id)
+        if not tag:
+            return None
+
+        # 1. Determine new parents
+        if position == "inside":
+            if target_id:
+                target = await self.get_tag_by_id(target_id)
+                if not target:
+                    return None
+                tag.parents = [target]
+                target_parent_id = target.id
+            else:
+                tag.parents = []
+                target_parent_id = None
+        else:  # before/after
+            if not target_id:
+                return None
+            target = await self.get_tag_by_id(target_id)
+            if not target:
+                return None
+
+            # Target's parent in the branch being dropped to
+            if current_parent_id is not None:
+                if current_parent_id == 0:  # root
+                    tag.parents = []
+                    target_parent_id = None
+                else:
+                    parent = await self.get_tag_by_id(current_parent_id)
+                    if parent:
+                        tag.parents = [parent]
+                        target_parent_id = parent.id
+                    else:
+                        tag.parents = list(target.parents)
+                        target_parent_id = target.parents[0].id if target.parents else None
+            else:
+                tag.parents = list(target.parents)
+                target_parent_id = target.parents[0].id if target.parents else None
+
+        # 2. Get all siblings and re-sort
+        if target_parent_id:
+            siblings_query = select(Tag).where(Tag.parents.any(Tag.id == target_parent_id))
+        else:
+            siblings_query = select(Tag).where(~Tag.parents.any())
+
+        result = await self.db.execute(siblings_query)
+        siblings = list(result.scalars().all())
+
+        # Sort current siblings by sort_order or name
+        siblings.sort(key=lambda x: (x.sort_order is None, x.sort_order or 0, x.name))
+
+        # Remove moving tag from siblings if present
+        siblings = [s for s in siblings if s.id != tag.id]
+
+        if position == "inside":
+            siblings.append(tag)
+        else:
+            # Find target index
+            target_idx = -1
+            # target is guaranteed to be not None here because of the before/after logic above
+            # but we use an assert to satisfy mypy
+            assert target is not None
+            for i, s in enumerate(siblings):
+                if s.id == target.id:
+                    target_idx = i
+                    break
+
+            if target_idx != -1:
+                if position == "before":
+                    siblings.insert(target_idx, tag)
+                else:
+                    siblings.insert(target_idx + 1, tag)
+            else:
+                siblings.append(tag)
+
+        # 3. Assign new sort_order values (10, 20, 30...)
+        for i, s in enumerate(siblings):
+            s.sort_order = (i + 1) * 10
+
+        await self.db.flush()
+        # Update counts for ancestors
+        await self.update_post_counts_recursive([tag.id])
+
+        # Invalidate cache
+        try:
+            await invalidate_cache_for_tag()
         except Exception as e:
             logger.warning("Failed to invalidate cache: %s", e)
 
@@ -447,7 +556,10 @@ class TagService:
                 child for child in tag.children
                 if child.id in visible_ids
             ]
-            sorted_children = sorted(filtered_children, key=lambda x: x.name)
+            sorted_children = sorted(
+                filtered_children,
+                key=lambda x: (x.sort_order is None, x.sort_order or 0, x.name),
+            )
 
             new_branch_ids = branch_ids | {tag.id}
 
@@ -482,8 +594,10 @@ class TagService:
                 if tag.id in visible_ids or tree:
                     hierarchy.append({"tag": tag, "children": tree})
 
-        # Sort top-level by name
-        hierarchy.sort(key=lambda x: x["tag"].name)
+        # Sort top-level: explicit sort_order first (ascending), then alphabetically
+        hierarchy.sort(
+            key=lambda x: (x["tag"].sort_order is None, x["tag"].sort_order or 0, x["tag"].name)
+        )
         return hierarchy
 
     async def get_important_tags(self, limit: int = 10) -> list[Tag]:

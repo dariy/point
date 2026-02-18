@@ -150,6 +150,7 @@
     background-color: var(--bg-secondary);
 }
 
+/* Make-child drop target */
 .tree-row.drag-over {
     background-color: rgba(37, 99, 235, 0.15) !important;
     outline: 2px dashed var(--color-primary, #2563eb);
@@ -160,5 +161,31 @@
     outline: 2px dashed var(--color-primary, #2563eb);
     outline-offset: 4px;
     background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* Reorder drop indicators */
+.tree-row {
+    position: relative;
+}
+
+.tree-row.drop-before::before,
+.tree-row.drop-after::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--color-primary, #2563eb);
+    border-radius: 1px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.tree-row.drop-before::before {
+    top: -1px;
+}
+
+.tree-row.drop-after::after {
+    bottom: -1px;
 }
 

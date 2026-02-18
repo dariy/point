@@ -74,6 +74,7 @@ class Tag(AsyncAttrs, Base):
     show_related_tags_as_children: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
     post_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
