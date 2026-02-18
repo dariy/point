@@ -6,14 +6,24 @@
     align-items: center;
     justify-content: center;
     gap: var(--spacing-xs);
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-lg);
     font-size: var(--font-size-sm);
     font-weight: 500;
     border: none;
     border-radius: var(--border-radius);
     cursor: pointer;
+    box-shadow: var(--shadow-sm);
     transition: all var(--transition-fast);
     text-decoration: none;
+}
+
+.btn:hover:not(:disabled) {
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 .btn:disabled {
@@ -84,7 +94,7 @@
 }
 
 .btn-sm {
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
     font-size: var(--font-size-xs);
 }
 
