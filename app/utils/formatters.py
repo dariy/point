@@ -34,7 +34,6 @@ def markdown_to_html(content: str) -> str:
     )
     return md.convert(content)
 
-
 def preprocess_media_links(content: str) -> str:
     """Convert simplified media paths to standard Markdown or HTML.
 
@@ -54,26 +53,26 @@ def preprocess_media_links(content: str) -> str:
 
     # regex for /YYYY/MM/filename.ext
     pattern = re.compile(
-        r"^/(\d{4})/(\d{2})/([^ \n]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|mov|webm))$"
+        r"^\s*/(\d{4})/(\d{2})/([^ \n\r]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|mov|webm))\s*$",
+        re.IGNORECASE
     )
 
     for line in lines:
-        stripped = line.strip()
-        match = pattern.match(stripped)
+        match = pattern.match(line)
         if match:
+            path = f"/{match.group(1)}/{match.group(2)}/{match.group(3)}"
             filename = match.group(3)
             ext = Path(filename).suffix.lower()
             if ext in (".mp4", ".mov", ".webm"):
                 new_lines.append(
-                    f'<video src="{stripped}" controls muted loop playsinline style="max-width: 100%;"></video>'
+                    f'<video src="{path}" controls muted loop playsinline style="max-width: 100%;"></video>'
                 )
             else:
-                new_lines.append(f"![{filename}]({stripped})")
+                new_lines.append(f'<img src="{path}" alt="{filename}" style="max-width: 100%;">')
         else:
             new_lines.append(line)
 
     return "\n".join(new_lines)
-
 
 def linkify_urls(html_content: str) -> str:
     """Convert plain text URLs to clickable anchor tags.
@@ -94,7 +93,6 @@ def linkify_urls(html_content: str) -> str:
         re.IGNORECASE
     )
 
-
     def replace_url(match: re.Match[str]) -> str:
         url = match.group(1)
         # Strip all trailing whitespace (including \r\n) and punctuation
@@ -103,7 +101,6 @@ def linkify_urls(html_content: str) -> str:
         while url and url[-1] in '.,;:!?)':
             url = url[:-1]
         return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>'
-
 
     # Split content by tags to avoid modifying content inside tags
     parts = re.split(r'(<[^>]+>)', html_content)
@@ -126,7 +123,6 @@ def linkify_urls(html_content: str) -> str:
 
     return ''.join(result)
 
-
 def format_content(content: str, formatter: str) -> str:
     """Format content based on formatter type.
 
@@ -137,8 +133,8 @@ def format_content(content: str, formatter: str) -> str:
     Returns:
         Formatted HTML content
     """
-    # Normalize line endings - remove both actual CRLF and literal \r\n strings
-    content = content.replace("\\r\\n", "")
+    # Normalize line endings - remove actual CRLF and convert literal \r\n strings to actual newlines
+    content = content.replace("\r\n", "\n").replace("\\r\\n", "\n")
 
     html_output = ""
 
@@ -158,7 +154,6 @@ def format_content(content: str, formatter: str) -> str:
     html_output = linkify_urls(html_output)
 
     return html_output
-
 
 def strip_html(html_content: str) -> str:
     """Remove HTML tags from content.
@@ -180,7 +175,6 @@ def strip_html(html_content: str) -> str:
     # Normalize whitespace (including \r\n and multiple spaces)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
-
 
 def generate_excerpt(
     content: str,
@@ -221,7 +215,6 @@ def generate_excerpt(
         truncated = truncated[:last_space]
 
     return truncated.rstrip() + "..."
-
 
 def sanitize_html(html_content: str) -> str:
     """Sanitize HTML content to prevent XSS.
@@ -343,7 +336,6 @@ def sanitize_html(html_content: str) -> str:
 
     return sanitized
 
-
 def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
     """Truncate text to a maximum length at word boundary.
 
@@ -369,7 +361,6 @@ def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
 
     return truncated.rstrip() + suffix
 
-
 def extract_first_image(content: str) -> str | None:
     """Extract the first image URL from content.
 
@@ -381,6 +372,9 @@ def extract_first_image(content: str) -> str | None:
     Returns:
         URL of the first image found, or None if no image exists.
     """
+    # Preprocess simplified media links
+    content = preprocess_media_links(content)
+
     # Try Markdown image first: ![alt](url "title") or ![alt](url)
     # This regex captures the URL in group 1
     markdown_match = re.search(r'!\[.*?\]\((.*?)(?:\s+".*?")?\)', content)
@@ -395,7 +389,6 @@ def extract_first_image(content: str) -> str | None:
 
     return None
 
-
 def extract_all_images(content: str) -> list[str]:
     """Extract all image URLs from content.
 
@@ -407,6 +400,9 @@ def extract_all_images(content: str) -> list[str]:
     Returns:
         List of image URLs found.
     """
+    # Preprocess simplified media links
+    content = preprocess_media_links(content)
+
     images = []
 
     # Try Markdown image first: ![alt](url "title") or ![alt](url)
@@ -430,7 +426,6 @@ def extract_all_images(content: str) -> list[str]:
             seen.add(img)
 
     return unique_images
-
 
 def extract_all_media(content: str) -> list[dict[str, str]]:
     """Extract all image and video URLs from content.
@@ -494,7 +489,6 @@ def extract_all_media(content: str) -> list[dict[str, str]]:
             seen.add(item["url"])
 
     return unique_media
-
 
 def truncate_paragraphs(html_content: str, num_paragraphs: int = 2) -> str:
     """Extract and truncate text from the first N paragraphs of HTML content.

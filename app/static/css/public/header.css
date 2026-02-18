@@ -1,19 +1,57 @@
 /* ===========================
    Header
    =========================== */
-.site-header {
+/* Sticky wrapper for header + tags bar */
+.site-header-group {
+    position: sticky;
+    top: 0;
+    z-index: 101;
     background: var(--header-bg);
     border-bottom: 1px solid var(--border-primary);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    position: sticky;
-    top: 0;
-    z-index: 100;
     transition:
         background-color var(--transition-theme),
         border-color var(--transition-theme);
     overflow: visible;
-    /* Prevent clipping of dropdowns */
+    /* Three-part layout: [site-header] [tags-bar] [site-nav] */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* site-header: content size only, always in row 1 */
+.site-header {
+    flex: 0 0 auto;
+    order: 1;
+    overflow: visible;
+}
+
+/* site-nav (direct child): content size, always right-aligned */
+.site-header-group > .site-nav {
+    flex: 0 0 auto;
+    order: 3;
+    margin-left: auto;
+    padding-right: var(--spacing-md);
+    height: var(--header-height);
+}
+
+/* tags-bar: inline by default, fills the middle space */
+.header-tags-bar {
+    flex: 1;
+    order: 2;
+    transition: border-color var(--transition-theme);
+}
+
+/* JS toggles this class when tags collide with header/nav */
+.site-header-group.tags-stacked > .header-tags-bar {
+    flex: 0 0 100%;
+    order: 3;
+    border-top: 1px solid var(--border-primary);
+}
+
+.site-header-group.tags-stacked > .site-nav {
+    order: 2;
 }
 
 .header-container {
@@ -46,6 +84,47 @@
 
 .header-left-group>* {
     height: 2rem;
+}
+
+/* Breadcrumb nav in the header */
+.site-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+
+.site-breadcrumb .breadcrumb-separator {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    user-select: none;
+    transition: color var(--transition-theme);
+}
+
+.site-breadcrumb .breadcrumb-current {
+    /*color: var(--text-primary);*/
+    transition: color var(--transition-theme);
+}
+
+.site-breadcrumb .breadcrumb-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-theme);
+}
+
+.site-breadcrumb .breadcrumb-link:hover {
+    color: var(--color-primary);
+}
+
+.site-breadcrumb .site-subtitle {
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    color: var(--text-tertiary);
+    letter-spacing: 0;
+    transition: color var(--transition-theme);
 }
 
 .site-title {
@@ -115,11 +194,11 @@
     cursor: pointer;
 }
 
-.nav-link:hover,
+/*.nav-link:hover,
 .nav-link.active {
     color: var(--text-primary);
     background-color: var(--surface-hover);
-}
+}*/
 
 .nav-dropdown {
     position: relative;
@@ -180,14 +259,14 @@
 }
 
 .post-header-bar .header-left {
-    flex: 1;
+    flex: 0;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
 }
 
 .post-header-bar .header-center {
-    flex: 2;
+    flex: 100%;
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -195,7 +274,7 @@
 }
 
 .post-header-bar .header-right {
-    flex: 1;
+    flex: 0;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -279,4 +358,20 @@
 .logo.theme-toggle svg {
     width: 1rem;
     height: 1rem;
+}
+
+/* Immersive header: mobile title overflow handling */
+/* Step 1 — compact: hide blog title link and separator */
+.post-header-bar .header-center.header-compact .breadcrumb-link,
+.post-header-bar .header-center.header-compact .breadcrumb-separator {
+    display: none;
+}
+
+/* Step 2 — truncate: still overflows even after compact, clip with ellipsis */
+.post-header-bar .header-center.header-truncate .site-title {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }

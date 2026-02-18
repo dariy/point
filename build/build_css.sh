@@ -62,6 +62,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/public/immersive.css \
     "$CSS_DIR"/public/carousel.css \
     "$CSS_DIR"/public/lightbox.css \
+    "$CSS_DIR"/public/map.css \
     "$CSS_DIR"/public/drop-zone.css \
     "$CSS_DIR"/public/responsive.css \
     > "$CSS_DIR"/main.css

@@ -10,7 +10,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.post import Post, PostStatus
@@ -201,7 +201,7 @@ class PostService:
             thumbnail_path=thumbnail_path,
             meta_description=post_data.meta_description,
             author_id=author_id,
-            published_at=datetime.now(UTC) if post_data.status.value == PostStatus.PUBLISHED.value else None,
+            published_at=datetime.now(UTC) if post_data.status.value in [PostStatus.PUBLISHED.value, PostStatus.PAGE.value] else None,
         )
 
         self.db.add(post)
@@ -209,7 +209,7 @@ class PostService:
         await self.db.refresh(post)
 
         # Invalidate cache when a new post is created (affects homepage, feeds)
-        if post.status == PostStatus.PUBLISHED:
+        if post.status in [PostStatus.PUBLISHED, PostStatus.PAGE]:
             try:
                 await invalidate_cache_for_post()
                 logger.debug("Cache invalidated after post creation")
@@ -254,7 +254,7 @@ class PostService:
 
         if not include_drafts:
             query = query.where(
-                or_(Post.status == PostStatus.PUBLISHED, Post.status == PostStatus.HIDDEN)
+                Post.status.in_([PostStatus.PUBLISHED, PostStatus.PAGE])
             )
 
         result = await self.db.execute(query)
@@ -411,8 +411,8 @@ class PostService:
             if hasattr(value, "value"):
                 value = value.value
 
-            # Set published_at if status changed to published and not already set
-            if field == "status" and value == PostStatus.PUBLISHED and not post.published_at:
+            # Set published_at if status changed to published/page and not already set
+            if field == "status" and value in [PostStatus.PUBLISHED, PostStatus.PAGE] and not post.published_at:
                 post.published_at = datetime.now(UTC)
 
             setattr(post, field, value)
