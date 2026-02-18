@@ -5,6 +5,7 @@ Handles Markdown to HTML conversion, excerpt generation, and HTML sanitization.
 
 import html
 import re
+from pathlib import Path
 
 import markdown
 
@@ -45,9 +46,6 @@ def preprocess_media_links(content: str) -> str:
     Returns:
         Content with simplified links converted
     """
-    import re
-    from pathlib import Path
-
     lines = content.split("\n")
     new_lines = []
 
@@ -447,7 +445,8 @@ def extract_all_images(content: str) -> list[str]:
 def extract_all_media(content: str) -> list[dict[str, str]]:
     """Extract all image, video, and audio URLs from content.
 
-    Supports Markdown images, HTML img tags, video tags, audio tags, and source tags.
+    Supports Markdown images, HTML tags (img, video, audio, source),
+    and simplified media paths (/YYYY/MM/filename.ext).
 
     Args:
         content: Raw content (markdown or html)
@@ -458,55 +457,44 @@ def extract_all_media(content: str) -> list[dict[str, str]]:
     media = []
 
     # Common extensions
-    video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
-    audio_extensions = (".mp3", ".wav", ".ogg", ".m4a")
+    video_extensions = {".mp4", ".webm", ".mov", ".m4v", ".ogv"}
+    audio_extensions = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac", ".oga"}
 
     def get_type(url_str: str, default_type: str = "image") -> str:
-        url_lower = url_str.lower().split("?")[0]  # Ignore query params for extension check
-        if any(url_lower.endswith(ext) for ext in video_extensions):
+        url_lower = url_str.lower().split("?")[0]
+        ext = Path(url_lower).suffix
+        if ext in video_extensions:
             return "video"
-        if any(url_lower.endswith(ext) for ext in audio_extensions):
+        if ext in audio_extensions:
             return "audio"
         return default_type
 
-    # Preprocess simplified media links
-    content = preprocess_media_links(content)
+    # 1. Simplified media paths: /YYYY/MM/filename.ext
+    # We look for these before any other processing, ensuring they aren't part of a longer path
+    simplified_pattern = re.compile(
+        r"(?<![\w/])/(?P<year>\d{4})/(?P<month>\d{2})/(?P<file>[^ \n\r\t\"'<>)]+\.(?P<ext>jpg|jpeg|png|gif|webp|svg|mp4|mov|webm|mp3|wav|ogg|m4a))",
+        re.IGNORECASE
+    )
+    for match in simplified_pattern.finditer(content):
+        url = match.group(0)
+        media.append({"url": url, "type": get_type(url)})
 
-    # 1. Markdown images: ![alt](url)
+    # 2. Markdown images: ![alt](url)
     markdown_matches = re.findall(r"!\[.*?\]\((.*?)(?:\s+\".*?\")?\)", content)
     for url in markdown_matches:
         url = url.strip()
         media.append({"url": url, "type": get_type(url)})
 
-    # 2. HTML img tags: <img src="url">
-    html_img_matches = re.findall(r"<img[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE)
-    for match in html_img_matches:
-        url = match[1].strip()
-        media.append({"url": url, "type": "image"})
-
-    # 3. HTML video tags: <video src="url">
-    html_video_matches = re.findall(
-        r"<video[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
+    # 3. HTML tags: img, video, audio, source
+    # Flexible regex to catch src in various positions
+    tag_pattern = re.compile(
+        r"<(?:img|video|audio|source)[^>]+src=(?:\"(?P<src1>[^\"]+)\"|'(?P<src2>[^']+)')",
+        re.IGNORECASE
     )
-    for match in html_video_matches:
-        url = match[1].strip()
-        media.append({"url": url, "type": "video"})
-
-    # 4. HTML audio tags: <audio src="url">
-    html_audio_matches = re.findall(
-        r"<audio[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
-    )
-    for match in html_audio_matches:
-        url = match[1].strip()
-        media.append({"url": url, "type": "audio"})
-
-    # 5. HTML source tags: <source src="url">
-    html_source_matches = re.findall(
-        r"<source[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
-    )
-    for match in html_source_matches:
-        url = match[1].strip()
-        media.append({"url": url, "type": get_type(url, "video")})
+    for match in tag_pattern.finditer(content):
+        url = match.group("src1") or match.group("src2")
+        if url:
+            media.append({"url": url.strip(), "type": get_type(url)})
 
     # Remove duplicates while preserving order
     seen = set()
@@ -602,7 +590,6 @@ def determine_thumbnail(
 
     # If we have a thumbnail path, check if it exists if storage_path is provided
     if use_thumbnails and thumb_path and storage_path and "/media/thumbnails/" in thumb_path:
-        from pathlib import Path
         rel_path = thumb_path.split("/media/", 1)[1]
         full_path = Path(storage_path) / "media" / rel_path
         if not full_path.exists():
