@@ -7,7 +7,7 @@
 
 {% block header_actions %}
 <button type="button" class="btn btn-primary" data-action="open-upload-modal">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
     </svg>
     Upload
@@ -74,23 +74,23 @@
             </div>
         </div>
         <div class="media-item-actions">
-            <button type="button" class="btn btn-sm btn-outline" data-action="rename-media"
+            <button type="button" class="btn btn-outline" data-action="rename-media"
                 data-media-id="{{ item.id }}" data-filename="{{ item.filename }}" title="Rename">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <svg viewBox="0 0 24 24" fill="currentColor">
                     <path
                         d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
                 </svg>
             </button>
-            <button type="button" class="btn btn-sm btn-outline" data-copy-url="{{ item.url }}"
+            <button type="button" class="btn btn-outline" data-copy-url="{{ item.url }}"
                 data-copy-markdown="{{ item.url }}" title="Copy Simple Link">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <svg viewBox="0 0 24 24" fill="currentColor">
                     <path
                         d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
                 </svg>
             </button>
-            <button type="button" class="btn btn-sm btn-danger" data-delete-url="/api/media/{{ item.id }}"
+            <button type="button" class="btn btn-danger" data-delete-url="/api/media/{{ item.id }}"
                 data-delete-name="{{ item.filename }}" title="Delete">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
                 </svg>
             </button>
