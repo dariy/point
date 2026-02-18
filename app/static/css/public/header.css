@@ -1,19 +1,57 @@
 /* ===========================
    Header
    =========================== */
-.site-header {
+/* Sticky wrapper for header + tags bar */
+.site-header-group {
+    position: sticky;
+    top: 0;
+    z-index: 101;
     background: var(--header-bg);
     border-bottom: 1px solid var(--border-primary);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    position: sticky;
-    top: 0;
-    z-index: 101;
     transition:
         background-color var(--transition-theme),
         border-color var(--transition-theme);
     overflow: visible;
-    /* Prevent clipping of dropdowns */
+    /* Three-part layout: [site-header] [tags-bar] [site-nav] */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* site-header: content size only, always in row 1 */
+.site-header {
+    flex: 0 0 auto;
+    order: 1;
+    overflow: visible;
+}
+
+/* site-nav (direct child): content size, always right-aligned */
+.site-header-group > .site-nav {
+    flex: 0 0 auto;
+    order: 3;
+    margin-left: auto;
+    padding-right: var(--spacing-md);
+    height: var(--header-height);
+}
+
+/* tags-bar: inline by default, fills the middle space */
+.header-tags-bar {
+    flex: 1;
+    order: 2;
+    transition: border-color var(--transition-theme);
+}
+
+/* JS toggles this class when tags collide with header/nav */
+.site-header-group.tags-stacked > .header-tags-bar {
+    flex: 0 0 100%;
+    order: 3;
+    border-top: 1px solid var(--border-primary);
+}
+
+.site-header-group.tags-stacked > .site-nav {
+    order: 2;
 }
 
 .header-container {
