@@ -160,7 +160,8 @@ def serialize_post(
     media_list = extract_all_media(post.content)
     has_image = post.thumbnail_path is not None or any(m["type"] == "image" for m in media_list)
     has_video = any(m["type"] == "video" for m in media_list)
-    has_media = has_image or has_video
+    has_audio = any(m["type"] == "audio" for m in media_list)
+    has_media = has_image or has_video or has_audio
 
     excerpt = post.excerpt
     preview_html = None
@@ -174,11 +175,12 @@ def serialize_post(
              preview_html = truncate_paragraphs(content_html)
 
     # logic for thumbnail:
-    # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
+    # 1. Use explicit post.thumbnail_path if it's not a video or audio (by extension)
     # 2. Or use the first image from content
     # 3. Or use the first video as fallback
+    # 4. Or use audio as fallback (though no thumbnail for it)
 
-    thumb_path, is_video_thumb = determine_thumbnail(
+    thumb_path, media_type = determine_thumbnail(
         post.content,
         post.thumbnail_path,
         settings.storage_path,
@@ -213,8 +215,11 @@ def serialize_post(
         "excerpt": excerpt,
         "preview_html": preview_html,
         "has_image": has_media, # Keep key name for frontend layout compatibility
-        "is_video": is_video_thumb, # This specific thumbnail is a video
+        "media_type": media_type, # NEW: explicit media type
+        "is_video": media_type == "video", 
+        "is_audio": media_type == "audio",
         "has_video": has_video, # The post contains at least one video
+        "has_audio": has_audio, # The post contains at least one audio
         "is_featured": post.is_featured,
         "has_hidden_posts_tag": has_hidden_posts_tag,
     }
@@ -496,9 +501,13 @@ async def single_post(
     # Format content
     content_html = format_content(post.content, post.formatter)
 
-    # Check if post has text content (ignoring images and whitespace)
-    # strip_html removes all tags including <img>, so we just check if any text remains
+    # Check if post has text content (ignoring images, videos, audio and whitespace)
+    # strip_html removes all tags including <img>, <video>, <audio>, so we just check if any text remains
     text_content = strip_html(content_html)
+    
+    # We want to use immersive mode if there is media (image/video/audio) and VERY LITTLE text
+    # Or specifically if it's mostly a media post.
+    # Current logic: if strip_html results in empty string, it's immersive.
     has_text_content = bool(text_content and text_content.strip())
 
     # Extract all media for carousel

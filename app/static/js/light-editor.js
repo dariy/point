@@ -179,13 +179,14 @@
             const postId = postForm ? postForm.dataset.postId : null;
 
             for (const file of files) {
-                // Check if image or video
+                // Check if image, video, or audio
                 const isImage = file.type.startsWith('image/');
                 const isVideo = file.type.startsWith('video/');
+                const isAudio = file.type.startsWith('audio/');
 
-                if (!isImage && !isVideo) {
+                if (!isImage && !isVideo && !isAudio) {
                     if (window.LightUtils && window.LightUtils.showToast) {
-                        window.LightUtils.showToast(`Skipped ${file.name}: Not an image or video`, 'warning');
+                        window.LightUtils.showToast(`Skipped ${file.name}: Not an image, video, or audio file`, 'warning');
                     }
                     continue;
                 }
