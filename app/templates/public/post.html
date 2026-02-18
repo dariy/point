@@ -1,4 +1,6 @@
 {% extends "public/base.html" %}
+{% from "macros/common.html" import icon %}
+{% from "macros/posts.html" import tag_link %}
 
 {% block body_class %}{% if not has_text_content %}immersive-layout{% else %}public-layout post-single-page{% endif %}{%
 endblock %}
@@ -32,92 +34,27 @@ endblock %}
 {% endfor %}
 {% endblock %}
 
+{% block header_breadcrumb %}
+{% for t in tag_hierarchy %}
+<span class="breadcrumb-separator">/</span>
+<a href="/tag/{{ t.slug }}" class="breadcrumb-link">{{ t.name }}</a>
+{% endfor %}
+{% if has_text_content %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">{{ post.title }}</span>
+{% endif %}
+{% endblock %}
+
 {% block header_filters %}
-<div class="tags-filters">
-    {% for t in tags %}
-    <a href="/tag/{{ t.slug }}" class="filter-btn" title="{{ t.post_count }} post{{ 's' if t.post_count != 1 else '' }}">{{ t.name }}</a>
-    {% endfor %}
-    <a href="/tags" class="filter-btn" title="All Tags" data-role="more">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
-        </svg>
-    </a>
+{% if has_text_content %}
+<div class="header-tags-bar">
+    {% include "public/partials/header_tags.html" %}
 </div>
-{% endblock %}
-
-{% block header_content %}
-{% if not has_text_content %}
-<div class="post-header-bar">
-    <div class="header-left">
-        <a href="/" class="nav-link" title="Back to Home">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-        </a>
-    </div>
-    <div class="header-center">
-        <h1 class="site-title">{{ post.title }}</h1>
-        <div class="post-meta">
-            <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
-                {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
-            </time>
-            {% if blog_settings.show_view_counts and post.view_count %}
-            <span class="post-meta-divider">·</span>
-            <span>{{ post.view_count }} views</span>
-            {% endif %}
-        </div>
-    </div>
-    <div class="header-right">
-        <nav class="site-nav">
-            {% if user %}
-            <a href="/light/posts/{{ post.id }}" class="header-action-btn edit-post-btn" title="Edit Post">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-            </a>
-            {% endif %}
-            <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle theme">
-                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="5"></circle>
-                    <line x1="12" y1="1" x2="12" y2="3"></line>
-                    <line x1="12" y1="21" x2="12" y2="23"></line>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                    <line x1="1" y1="12" x2="3" y2="12"></line>
-                    <line x1="21" y1="12" x2="23" y2="12"></line>
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                </svg>
-                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                </svg>
-            </button>
-        </nav>
-    </div>
-</div>
-{% else %}
-{{ super() }}
 {% endif %}
 {% endblock %}
 
-{% block header_nav_extra %}
-{% if user %}
-<a href="/light/posts/{{ post.id }}" class="create-post edit-post-btn" title="Edit Post" aria-label="Edit Post">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-        stroke-linejoin="round">
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-    </svg>
-</a>
-{% endif %}
-{% endblock %}
+{# Standard header content logic is already in _header.html partial included by public/base.html #}
+{# We only need to override header_content if we need specific breadcrumbs or icons #}
 
 {% block content %}
 {% if not has_text_content %}
@@ -139,16 +76,10 @@ endblock %}
             </div>
             {% endfor %}
             <button class="carousel-prev" aria-label="Previous media">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                </svg>
+                {{ icon('chevron-left', size=24) }}
             </button>
             <button class="carousel-next" aria-label="Next media">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
+                {{ icon('chevron-right', size=24) }}
             </button>
             <div class="carousel-indicators">
                 {% for item in post_media %}
@@ -172,35 +103,22 @@ endblock %}
             alt="{{ post.title }}" class="immersive-bg-image" />
         {% endif %}
     </div>
-
-    {% if post.tags %}
-    <div class="immersive-tags-wrapper">
-        <div class="immersive-tags">
-            {% for tag in post.tags %}
-            <a href="/tag/{{ tag.slug }}" class="post-tag {% if user and (tag.is_hidden_posts or tag|tag_has_hidden_posts_parent) %}hidden-posts-tag{% endif %}" title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">
-                {% if user and (tag.is_hidden_posts or tag|tag_has_hidden_posts_parent) %}
-                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                {% endif %}
-                {{ tag.name }}
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
 </div>
 {% else %}
 <!-- Standard Blog Post Layout -->
 <article class="post-single">
     <header class="post-header">
         <div class="post-meta">
+            {% if not post.is_page %}
+            [not is_post]
             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
             </time>
             {% if blog_settings.show_view_counts and post.view_count %}
             <span class="post-meta-divider">·</span>
+            <span>{{ post.view_count }} views</span>
+            {% endif %}
+            {% elif blog_settings.show_view_counts and post.view_count %}
             <span>{{ post.view_count }} views</span>
             {% endif %}
         </div>
@@ -211,19 +129,12 @@ endblock %}
         {{ content_html | safe }}
     </div>
 
+    {% if not post.is_page %}
     <footer class="post-footer">
         {% if post.tags %}
         <div class="post-tags">
             {% for tag in post.tags %}
-            <a href="/tag/{{ tag.slug }}" class="post-tag {% if user and (tag.is_hidden_posts or tag|tag_has_hidden_posts_parent) %}hidden-posts-tag{% endif %}" title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">
-                {% if user and (tag.is_hidden_posts or tag|tag_has_hidden_posts_parent) %}
-                <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                {% endif %}
-                {{ tag.name }}
-            </a>
+            {{ tag_link(tag, user) }}
             {% endfor %}
         </div>
         {% endif %}
@@ -246,6 +157,7 @@ endblock %}
         </div>
         {% endif %}
     </footer>
+    {% endif %}
 </article>
 {% endif %}
 
@@ -256,17 +168,9 @@ endblock %}
 
 {% block footer_pagination %}
 {% if not has_text_content and post.tags %}
-<div class="immersive-tags">
+<div class="post-card-tags immersive-tags">
     {% for tag in post.tags %}
-    <a href="/tag/{{ tag.slug }}" class="post-tag {% if user and (tag.is_hidden_posts or tag|tag_has_hidden_posts_parent) %}hidden-posts-tag{% endif %}" title="{{ tag.post_count }} post{{ 's' if tag.post_count != 1 else '' }}">
-        {% if user and (tag.is_hidden_posts or tag|tag_has_hidden_posts_parent) %}
-        <svg class="hidden-tag-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
-        {% endif %}
-        {{ tag.name }}
-    </a>
+    {{ tag_link(tag, user) }}
     {% endfor %}
 </div>
 {% endif %}

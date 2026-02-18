@@ -3,8 +3,26 @@
 Provides utility functions for checking tag visibility and hierarchy.
 """
 
+import json
+
 from app.models.post import Post
 from app.models.tag import Tag
+from app.models.tag_location import TagLocation
+
+
+def locations_to_json(locations: list[TagLocation]) -> str:
+    """Convert a list of TagLocation objects to a JSON string.
+
+    Args:
+        locations: List of TagLocation objects
+
+    Returns:
+        JSON string representing the locations
+    """
+    return json.dumps([
+        {"latitude": loc.latitude, "longitude": loc.longitude}
+        for loc in locations
+    ])
 
 
 def tag_has_hidden_parent(tag: Tag, visited: set[int] | None = None) -> bool:

@@ -7,10 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_auth
+from app.models.migration_history import MigrationHistory
 from app.models.user import User
 from app.schemas.settings import SystemStats
 from app.services.backup_service import BackupService
 from app.services.system_service import SystemService
+from app.services.tag_service import TagService
 
 router = APIRouter(prefix="/api/system", tags=["System"])
 logger = logging.getLogger(__name__)
@@ -177,3 +179,40 @@ async def delete_backup(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete backup: {str(e)}",
         )
+
+
+@router.post("/map/update-coords")
+async def update_map_coords(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_auth),
+) -> dict[str, Any]:
+    """Update missing coordinates for city/country tags.
+
+    Returns:
+        Update results
+    """
+    tag_service = TagService(db)
+    return await tag_service.update_missing_coords()
+
+
+@router.get("/migrations")
+async def get_migrations(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_auth),
+) -> list[dict[str, Any]]:
+    """List applied database migrations.
+
+    Returns:
+        List of applied migrations
+    """
+    from sqlalchemy import select
+    result = await db.execute(select(MigrationHistory).order_by(MigrationHistory.applied_at.desc()))
+    migrations = result.scalars().all()
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "applied_at": m.applied_at.isoformat()
+        }
+        for m in migrations
+    ]

@@ -76,15 +76,15 @@
                     if (!postId) {
                         window.location.href = `/light/posts/${result.id}`;
                     } else {
-                        window.LightUtils.showToast('Post saved successfully');
+                        if (window.LightUtils) window.LightUtils.showToast('Post saved successfully');
                     }
                 } else {
                     const error = await response.json();
-                    window.LightUtils.showToast(error.detail || 'Failed to save post', 'error');
+                    if (window.LightUtils) window.LightUtils.showToast(error.detail || 'Failed to save post', 'error');
                 }
             } catch (error) {
                 console.error('Save error:', error);
-                window.LightUtils.showToast('An error occurred while saving', 'error');
+                if (window.LightUtils) window.LightUtils.showToast('An error occurred while saving', 'error');
             }
         });
     }
@@ -114,17 +114,16 @@
         const cardHeaders = document.querySelectorAll('.card-header');
 
         cardHeaders.forEach(header => {
-            // Check if card should be foldable (all cards with headers in editor)
             const card = header.closest('.card');
             if (!card) return;
 
-            // Add indicator icon if not present
+            // Only add toggle icon if it's meant to be foldable 
+            // (all sidebar cards have headers and are meant to be foldable)
             if (!header.querySelector('.toggle-icon')) {
                 const icon = document.createElement('span');
                 icon.className = 'toggle-icon ml-auto';
                 icon.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 
-                // If header has flex-between, append to it, otherwise make header flex
                 if (header.classList.contains('flex-between')) {
                     header.appendChild(icon);
                 } else {

@@ -19,6 +19,7 @@ class PostStatus(str, PyEnum):
     DRAFT = "draft"
     PUBLISHED = "published"
     HIDDEN = "hidden"
+    PAGE = "page"
 
 
 class PostFormatter(str, PyEnum):
@@ -120,6 +121,11 @@ class Post(AsyncAttrs, Base):
     def is_hidden(self) -> bool:
         """Check if post is hidden."""
         return self.status == PostStatus.HIDDEN
+
+    @property
+    def is_page(self) -> bool:
+        """Check if post is a page."""
+        return self.status == PostStatus.PAGE
 
     @property
     def is_affected_by_hidden_tag(self) -> bool:

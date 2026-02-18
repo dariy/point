@@ -1,8 +1,10 @@
 {% extends "public/base.html" %}
+{% from "macros/pagination.html" import render_pagination %}
+{% from "macros/common.html" import icon %}
 
 {% block page_title %}Tags{% endblock %}
 
-{% block extra_css %}
+{% block meta_tags %}
 {{ super() }}
 <meta property="og:title" content="Tags">
 <meta property="og:type" content="website">
@@ -13,17 +15,20 @@
 {% block header_nav_extra %}
 {% if user and tag %}
 <a href="/light/tags?search={{ tag.name | urlencode }}" class="create-post" title="Edit Tag" aria-label="Edit Tag">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-        stroke-linejoin="round">
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-    </svg>
+    {{ icon('edit', size=24) }}
 </a>
 {% endif %}
 {% endblock %}
 
+{% block header_breadcrumb %}
+<span class="breadcrumb-separator">/</span>
+<a href="/tags" class="breadcrumb-link breadcrumb-current">tags</a>
+{% endblock %}
+
 {% block header_filters %}
-{% include "public/partials/header_tags.html" %}
+<div class="header-tags-bar">
+    {% include "public/partials/header_tags.html" %}
+</div>
 {% endblock %}
 
 {% block content %}
@@ -35,51 +40,6 @@
 {% endblock %}
 
 {% block footer_pagination %}
-{% if total_pages > 1 %}
-<nav class="pagination tags-pagination" aria-label="Tags pagination">
-    {% if current_tag %}
-    {% set pagination_base = '/tag/' + current_tag %}
-    {% else %}
-    {% set pagination_base = '/tags' %}
-    {% endif %}
-
-    {% if page > 1 %}
-    <a href="{{ pagination_base }}?page={{ page - 1 }}" class="pagination-link ajax-link" aria-label="Previous page">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 18l-6-6 6-6" />
-        </svg>
-    </a>
-    {% else %}
-    <span class="pagination-link disabled">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 18l-6-6 6-6" />
-        </svg>
-    </span>
-    {% endif %}
-
-    {% for p in range(1, total_pages + 1) %}
-    {% if p == page %}
-    <span class="pagination-link active">{{ p }}</span>
-    {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %} <a
-        href="{{ pagination_base }}?page={{ p }}" class="pagination-link ajax-link">{{ p }}</a>
-        {% elif p == page - 2 or p == page + 2 %}
-        <span class="pagination-ellipsis">&hellip;</span>
-        {% endif %}
-        {% endfor %}
-
-        {% if page < total_pages %} <a href="{{ pagination_base }}?page={{ page + 1 }}"
-            class="pagination-link ajax-link" aria-label="Next page">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 18l6-6-6-6" />
-            </svg>
-            </a>
-            {% else %}
-            <span class="pagination-link disabled">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6" />
-                </svg>
-            </span>
-            {% endif %}
-</nav>
-{% endif %}
+{% set pagination_base = '/tag/' + current_tag if current_tag else '/tags' %}
+{{ render_pagination(page, total_pages, pagination_base, aria_label='Tags pagination') }}
 {% endblock %}
