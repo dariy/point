@@ -37,7 +37,7 @@
     {% if has_image %}
         <div class="post-card-background">
             {% if is_video %}
-            <video src="{{ display_thumb }}" muted loop playsinline poster=""></video>
+            <video src="{{ display_thumb }}" muted loop playsinline autoplay poster=""></video>
             <div class="video-play-indicator">
                 {{ icon('play', size=48 if is_featured else 32) }}
             </div>
@@ -69,7 +69,7 @@
             {% if has_image %}
             <div class="post-card-excerpt">
                 {% if post.excerpt %}
-                    {{ post.excerpt }}
+                    {{ post.excerpt | safe }}
                 {% elif generate_excerpt is defined %}
                     {{ generate_excerpt(post.content, post.formatter.value, 200 if is_featured else 150) }}
                 {% else %}
