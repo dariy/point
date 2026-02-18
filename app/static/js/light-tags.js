@@ -71,6 +71,7 @@
         document.getElementById('tag-hidden-posts').checked = false;
         document.getElementById('tag-breadcrumbs').checked = true;
         document.getElementById('tag-show-related').checked = false;
+        document.getElementById('tag-sort-order').value = '';
         locationsContainer.innerHTML = '';
 
         // Clear chip checkboxes in parents picker
@@ -101,7 +102,7 @@
     /**
      * Open modal for editing existing tag
      */
-    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds, includeInBreadcrumbs) {
+    const editTag = async function (id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds, includeInBreadcrumbs, sortOrder) {
         document.getElementById('modal-title').textContent = 'Edit Tag';
         document.getElementById('tag-id').value = id;
         document.getElementById('tag-name').value = name;
@@ -113,7 +114,8 @@
         document.getElementById('tag-hidden-posts').checked = !!isHiddenPosts;
         document.getElementById('tag-breadcrumbs').checked = includeInBreadcrumbs !== undefined ? !!includeInBreadcrumbs : true;
         document.getElementById('tag-show-related').checked = !!isShowRelated;
-        
+        document.getElementById('tag-sort-order').value = (sortOrder !== undefined && sortOrder !== null && sortOrder !== '') ? sortOrder : '';
+
         locationsContainer.innerHTML = '';
         let locs = [];
         try {
@@ -189,6 +191,7 @@
                 document.getElementById('tag-hidden-posts').checked = tag.is_hidden_posts;
                 document.getElementById('tag-breadcrumbs').checked = tag.include_in_breadcrumbs !== undefined ? tag.include_in_breadcrumbs : true;
                 document.getElementById('tag-show-related').checked = tag.show_related_tags_as_children;
+                document.getElementById('tag-sort-order').value = (tag.sort_order !== undefined && tag.sort_order !== null) ? tag.sort_order : '';
                 
                 locationsContainer.innerHTML = '';
                 if (tag.locations) {
@@ -374,7 +377,9 @@
             if (row) row.classList.remove('dragging');
             
             // Remove all drag-over classes
-            document.querySelectorAll('.tree-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+            document.querySelectorAll('.tree-row.drag-over, .tree-row.drop-before, .tree-row.drop-after').forEach(el => {
+                el.classList.remove('drag-over', 'drop-before', 'drop-after');
+            });
             document.querySelectorAll('.tree-view.drag-over').forEach(el => el.classList.remove('drag-over'));
         });
 
@@ -383,7 +388,9 @@
             e.dataTransfer.dropEffect = 'move';
             
             // Remove existing drag-overs
-            document.querySelectorAll('.tree-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+            document.querySelectorAll('.tree-row.drag-over, .tree-row.drop-before, .tree-row.drop-after').forEach(el => {
+                el.classList.remove('drag-over', 'drop-before', 'drop-after');
+            });
             treeView.classList.remove('drag-over');
 
             const row = e.target.closest('.tree-row');
@@ -398,7 +405,16 @@
                 const draggedNode = draggedRow ? draggedRow.closest('.tree-node') : null;
                 if (draggedNode && draggedNode.contains(row)) return;
 
-                row.classList.add('drag-over');
+                // Determine position
+                const rect = row.getBoundingClientRect();
+                const offset = e.clientY - rect.top;
+                if (offset < rect.height / 3) {
+                    row.classList.add('drop-before');
+                } else if (offset > rect.height * 2 / 3) {
+                    row.classList.add('drop-after');
+                } else {
+                    row.classList.add('drag-over');
+                }
             } else if (e.target.closest('.tree-view')) {
                 treeView.classList.add('drag-over');
             }
@@ -409,7 +425,7 @@
             if (row) {
                 const relatedTarget = e.relatedTarget;
                 if (!relatedTarget || !row.contains(relatedTarget)) {
-                    row.classList.remove('drag-over');
+                    row.classList.remove('drag-over', 'drop-before', 'drop-after');
                 }
             }
             
@@ -427,40 +443,118 @@
             const targetTreeView = e.target.closest('.tree-view');
             
             const sourceId = e.dataTransfer.getData('text/plain');
-            let targetId = targetRow ? targetRow.dataset.tagId : null;
+            
+            // Find which position was selected
+            let position = 'inside';
+            let targetId = null;
+            let currentParentId = null;
 
-            if (sourceId === targetId) return;
-
-            // If dropped on tree view but not on a row, it means move to root
-            // But we need to be sure it's not dropped inside a row's children
-            if (!targetRow && targetTreeView) {
+            if (targetRow) {
+                targetId = targetRow.dataset.tagId;
+                currentParentId = targetRow.dataset.parentId;
+                
+                if (targetRow.classList.contains('drop-before')) {
+                    position = 'before';
+                } else if (targetRow.classList.contains('drop-after')) {
+                    position = 'after';
+                } else {
+                    position = 'inside';
+                    currentParentId = targetId; // Dropping inside means target is the new parent
+                }
+            } else if (targetTreeView) {
+                position = 'inside';
                 targetId = null;
+                currentParentId = 0;
             }
 
-            const confirmed = window.LightUtils && window.LightUtils.confirm
-                ? await window.LightUtils.confirm(`Move this tag under ${targetRow ? 'the selected tag' : 'root'}?`, { okVariant: 'primary' })
-                : confirm(`Move this tag under ${targetRow ? 'the selected tag' : 'root'}?`);
+            if (sourceId === targetId && position === 'inside') return;
 
-            if (confirmed) {
-                await moveTag(sourceId, targetId);
+            // Clear indicators immediately
+            document.querySelectorAll('.tree-row.drag-over, .tree-row.drop-before, .tree-row.drop-after').forEach(el => {
+                el.classList.remove('drag-over', 'drop-before', 'drop-after');
+            });
+            treeView.classList.remove('drag-over');
+
+            // Optimistic UI move
+            const draggedRow = document.getElementById(`tree-tag-${sourceId}`);
+            const draggedNode = draggedRow ? draggedRow.closest('.tree-node') : null;
+            
+            let rollback = null;
+            if (draggedNode) {
+                const originalParent = draggedNode.parentNode;
+                const originalNextSibling = draggedNode.nextSibling;
+                const originalParentId = draggedRow.dataset.parentId;
+                const originalToggleReplacement = targetRow ? targetRow.querySelector('.tree-indent') : null;
+
+                rollback = () => {
+                    originalParent.insertBefore(draggedNode, originalNextSibling);
+                    draggedRow.dataset.parentId = originalParentId;
+                    // If we added a toggle button, it's hard to revert perfectly without a full refresh
+                    // but most failures will trigger a refresh or at least keep the UI usable.
+                };
+
+                try {
+                    if (position === 'inside') {
+                        let container;
+                        if (targetRow) {
+                            const targetNode = targetRow.closest('.tree-node');
+                            container = targetNode.querySelector('.tree-children');
+                            if (!container) {
+                                container = document.createElement('div');
+                                container.className = 'tree-children expanded';
+                                targetNode.appendChild(container);
+                                
+                                // Replace indent with toggle
+                                const indent = targetRow.querySelector('.tree-indent');
+                                if (indent) {
+                                    const toggle = document.createElement('button');
+                                    toggle.type = 'button';
+                                    toggle.className = 'tree-toggle expanded';
+                                    toggle.dataset.action = 'toggle-tree-node';
+                                    toggle.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 17l5-5-5-5v10z" /></svg>';
+                                    indent.replaceWith(toggle);
+                                }
+                            } else {
+                                container.classList.add('expanded');
+                                const toggle = targetRow.querySelector('.tree-toggle');
+                                if (toggle) toggle.classList.add('expanded');
+                            }
+                            container.appendChild(draggedNode);
+                        } else {
+                            treeView.appendChild(draggedNode);
+                        }
+                    } else {
+                        const targetNode = targetRow.closest('.tree-node');
+                        if (position === 'before') {
+                            targetNode.parentNode.insertBefore(draggedNode, targetNode);
+                        } else {
+                            targetNode.parentNode.insertBefore(draggedNode, targetNode.nextSibling);
+                        }
+                    }
+                    draggedRow.dataset.parentId = currentParentId;
+                } catch (err) {
+                    console.error('Optimistic move failed:', err);
+                }
             }
+
+            await reorderTag(sourceId, targetId, position, currentParentId, rollback);
         });
     };
 
     /**
-     * Move tag to a new parent
+     * Reorder tag relative to a target
      */
-    const moveTag = async function (tagId, newParentId) {
+    const reorderTag = async function (tagId, targetId, position, currentParentId, rollback) {
         try {
-            const parentIds = newParentId ? [parseInt(newParentId)] : [];
-            
-            const response = await fetch(`/api/tags/${tagId}`, {
-                method: 'PUT',
+            const response = await fetch(`/api/tags/${tagId}/reorder`, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    parent_ids: parentIds
+                    target_id: targetId ? parseInt(targetId) : null,
+                    position: position,
+                    current_parent_id: currentParentId ? parseInt(currentParentId) : 0
                 }),
                 credentials: 'include'
             });
@@ -478,8 +572,6 @@
                     const currentTreeView = document.querySelector('.tree-view');
                     if (newTreeView && currentTreeView) {
                         currentTreeView.innerHTML = newTreeView.innerHTML;
-                        // Re-initialize drag and drop for the new content if needed
-                        // (Actually we use event delegation on treeView so it should work)
                     }
 
                     // Also update list view table if it exists
@@ -490,20 +582,22 @@
                     }
 
                     if (window.LightUtils && window.LightUtils.showToast) {
-                        window.LightUtils.showToast('Moved successfully');
+                        window.LightUtils.showToast('Reordered successfully');
                     }
                 } else {
                     window.location.reload();
                 }
             } else {
+                if (rollback) rollback();
                 const errorData = await response.json().catch(() => ({}));
-                const msg = errorData.detail || 'Failed to move tag';
+                const msg = errorData.detail || 'Failed to reorder tag';
                 if (window.LightUtils && window.LightUtils.showToast) {
                     window.LightUtils.showToast(msg, 'error');
                 }
             }
         } catch (error) {
-            console.error('Move error:', error);
+            if (rollback) rollback();
+            console.error('Reorder error:', error);
             if (window.LightUtils && window.LightUtils.showToast) {
                 window.LightUtils.showToast('An error occurred', 'error');
             }
@@ -570,10 +664,11 @@
             const isHiddenPosts = editBtn.dataset.tagHiddenPosts === 'true';
             const isShowRelated = editBtn.dataset.tagShowRelated === 'true';
             const includeInBreadcrumbs = editBtn.dataset.tagBreadcrumbs === 'true';
+            const sortOrder = editBtn.dataset.tagSortOrder;
             const locations = editBtn.dataset.tagLocations || '[]';
             const parentIds = editBtn.dataset.tagParents || '[]';
             const childIds = editBtn.dataset.tagChildren || '[]';
-            editTag(id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds, includeInBreadcrumbs);
+            editTag(id, name, slug, description, isImportant, isFeatured, isHidden, isHiddenPosts, isShowRelated, locations, parentIds, childIds, includeInBreadcrumbs, sortOrder);
             return;
         }
 
@@ -604,6 +699,7 @@
             is_hidden_posts: document.getElementById('tag-hidden-posts').checked,
             include_in_breadcrumbs: document.getElementById('tag-breadcrumbs').checked,
             show_related_tags_as_children: document.getElementById('tag-show-related').checked,
+            sort_order: document.getElementById('tag-sort-order').value !== '' ? parseInt(document.getElementById('tag-sort-order').value) : null,
             locations: Array.from(locationsContainer.querySelectorAll('.flex')).map(row => ({
                 latitude: parseFloat(row.querySelector('.location-lat').value),
                 longitude: parseFloat(row.querySelector('.location-lng').value)

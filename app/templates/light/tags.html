@@ -18,9 +18,12 @@
 {{ super() }}
 {% endblock %}
 
-{% macro render_tree_node(node) %}
+{% macro render_tree_node(node, parent_id=0) %}
 <div class="tree-node">
-    <div class="tree-row" id="tree-tag-{{ node.tag.id }}" draggable="true" data-tag-id="{{ node.tag.id }}">
+    <div class="tree-row" id="tree-tag-{{ node.tag.id }}" draggable="true" 
+        data-tag-id="{{ node.tag.id }}" 
+        data-parent-id="{{ parent_id }}"
+        data-sort-order="{{ node.tag.sort_order if node.tag.sort_order is not none else '' }}">
         {% if node.children %}
         <button type="button" class="tree-toggle" data-action="toggle-tree-node" draggable="false">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" draggable="false">
@@ -41,6 +44,7 @@
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-breadcrumbs="{{ 'true' if node.tag.include_in_breadcrumbs else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
+                data-tag-sort-order="{{ node.tag.sort_order if node.tag.sort_order is not none else '' }}"
                 data-tag-locations="{{ node.tag.locations | locations_to_json | forceescape }}"
                 data-tag-parents="{{ node.tag.parents | map(attribute="id") | list | tojson | forceescape }}"
                 data-tag-children="{{ node.tag.children | map(attribute="id") | list | tojson | forceescape }}"
@@ -83,6 +87,7 @@
                 data-tag-hidden-posts="{{ 'true' if node.tag.is_hidden_posts else 'false' }}"
                 data-tag-breadcrumbs="{{ 'true' if node.tag.include_in_breadcrumbs else 'false' }}"
                 data-tag-show-related="{{ 'true' if node.tag.show_related_tags_as_children else 'false' }}"
+                data-tag-sort-order="{{ node.tag.sort_order if node.tag.sort_order is not none else '' }}"
                 data-tag-locations="{{ node.tag.locations | locations_to_json | forceescape }}"
                 data-tag-parents="{{ node.tag.parents | map(attribute="id") | list | tojson | forceescape }}"
                 data-tag-children="{{ node.tag.children | map(attribute="id") | list | tojson | forceescape }}" title="Edit"
@@ -105,7 +110,7 @@
     {% if node.children %}
     <div class="tree-children">
         {% for child_node in node.children %}
-        {{ render_tree_node(child_node) }}
+        {{ render_tree_node(child_node, node.tag.id) }}
         {% endfor %}
     </div>
     {% endif %}
@@ -211,6 +216,7 @@
                                     data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                     data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                     data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
+                                    data-tag-sort-order="{{ tag.sort_order if tag.sort_order is not none else '' }}"
                                     data-tag-locations="{{ tag.locations | locations_to_json | forceescape }}"
                                     data-tag-parents="{{ tag.parents | map(attribute="id") | list | tojson | forceescape }}"
                                     data-tag-children="{{ tag.children | map(attribute="id") | list | tojson | forceescape }}"
@@ -300,6 +306,7 @@
                                 data-tag-hidden="{{ 'true' if tag.is_hidden else 'false' }}"
                                 data-tag-hidden-posts="{{ 'true' if tag.is_hidden_posts else 'false' }}"
                                 data-tag-show-related="{{ 'true' if tag.show_related_tags_as_children else 'false' }}"
+                                data-tag-sort-order="{{ tag.sort_order if tag.sort_order is not none else '' }}"
                                 data-tag-locations="{{ tag.locations | locations_to_json | forceescape }}"
                                 data-tag-parents="{{ tag.parents | map(attribute="id") | list | tojson | forceescape }}"
                                 data-tag-children="{{ tag.children | map(attribute="id") | list | tojson | forceescape }}" title="Edit">
@@ -353,7 +360,7 @@
             {% if hierarchy %}
             <div class="tree-view">
                 {% for node in hierarchy %}
-                {{ render_tree_node(node) }}
+                {{ render_tree_node(node, 0) }}
                 {% endfor %}
             </div>
             {% else %}
@@ -395,6 +402,13 @@
                 <div class="form-group">
                     <label for="tag-description" class="form-label">Description</label>
                     <textarea id="tag-description" name="description" class="form-textarea" rows="2"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="tag-sort-order" class="form-label">Sort Order</label>
+                    <input type="number" id="tag-sort-order" name="sort_order" class="form-input" style="width: 120px;"
+                        placeholder="e.g. 1, 2, 3…" min="0">
+                    <small class="form-hint">Lower numbers appear first in the header bar. Leave empty for alphabetical ordering.</small>
                 </div>
 
                 <div class="form-group form-checkbox">

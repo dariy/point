@@ -55,18 +55,20 @@
                         {% block header_breadcrumb %}{% endblock %}
                     </nav>
                 </div>
-                <nav class="site-nav">
-                    {% block header_nav_extra %}{% endblock %}
-                    <a href="/map" class="header-action-btn ajax-link" title="Map" aria-label="Map">
-                        {{ icon('map', size=20) }}
-                    </a>
-                    {% if user %}
-                    <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
-                        {{ icon('plus') }}
-                    </a>
-                    {% endif %}
-                </nav>
             {% endif %}
         {% endblock %}
     </div>
 </header>
+{% if has_text_content or not post %}
+<nav class="site-nav">
+    {% block header_nav_extra %}{% endblock %}
+    <a href="/map" class="header-action-btn ajax-link" title="Map" aria-label="Map">
+        {{ icon('map', size=20) }}
+    </a>
+    {% if user %}
+    <a href="/light/posts/new" class="create-post" title="Create new post" aria-label="Create new post">
+        {{ icon('plus') }}
+    </a>
+    {% endif %}
+</nav>
+{% endif %}

@@ -2,13 +2,6 @@
    Header Tags Bar
    =========================== */
 .header-tags-bar {
-    border-bottom: 1px solid var(--border-primary);
-    background: var(--header-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition:
-        background-color var(--transition-theme),
-        border-color var(--transition-theme);
     overflow: visible;
     z-index: 100;
 }
