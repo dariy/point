@@ -182,6 +182,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
     padding: 16px;
     margin-bottom: 12px;
     background: var(--surface-input);
@@ -201,6 +203,7 @@
 
 .backup-info {
     flex: 1;
+    min-width: 250px;
 }
 
 .backup-filename {
@@ -209,6 +212,9 @@
     font-size: 0.95em;
     color: var(--text-primary);
     margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .backup-meta {
