@@ -45,7 +45,10 @@
     .backup-item {
         flex-direction: column;
         align-items: stretch;
-        gap: 12px;
+    }
+
+    .backup-info {
+        min-width: 0;
     }
 
     .backup-actions {
