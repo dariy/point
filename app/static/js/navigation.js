@@ -46,7 +46,7 @@
             
             if (post.is_video) {
                 visualWrapper.innerHTML = `
-                    <video src="${post.thumbnail_path}" muted loop playsinline></video>
+                    <video src="${post.thumbnail_path}" muted loop playsinline autoplay></video>
                     <div class="video-play-indicator">
                         <svg width="${isFeatured ? '48' : '32'}" height="${isFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
                             <path d="M8 5v14l11-7z"/>
@@ -81,7 +81,7 @@
         const previewWrapper = clone.querySelector('.post-card-preview-wrapper');
         if (post.has_image) {
             previewWrapper.className = 'post-card-excerpt';
-            previewWrapper.textContent = post.excerpt || '';
+            previewWrapper.innerHTML = post.excerpt || '';
         } else {
             previewWrapper.className = 'post-card-text-preview';
             previewWrapper.innerHTML = post.preview_html || '';

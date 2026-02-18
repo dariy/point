@@ -493,11 +493,12 @@
      */
     function initTagsBarLayout() {
         const group = document.querySelector('.site-header-group');
-        const tagsBar = group && group.querySelector('.header-tags-bar');
+        const inner = document.querySelector('.site-header-inner') || group;
+        const tagsBar = inner && inner.querySelector('.header-tags-bar');
         if (!group || !tagsBar) return;
 
-        const siteHeader = group.querySelector('.site-header');
-        const siteNav = document.querySelector('.site-header-group > .site-nav');
+        const siteHeader = inner.querySelector('.site-header');
+        const siteNav = document.querySelector('.site-header-inner > .site-nav');
 
         // Measure the tags bar's natural content width by briefly taking it
         // out of the flex flow (position:absolute) so flex can't constrain it.
@@ -507,15 +508,15 @@
         Object.assign(tagsBar.style, prev);
 
         function update() {
-            const groupWidth = group.getBoundingClientRect().width;
+            const innerWidth = inner.getBoundingClientRect().width;
             const headerWidth = siteHeader ? siteHeader.getBoundingClientRect().width : 0;
             const navWidth = siteNav ? siteNav.getBoundingClientRect().width : 0;
-            const available = groupWidth - headerWidth - navWidth;
+            const available = innerWidth - headerWidth - navWidth;
             group.classList.toggle('tags-stacked', naturalTagsWidth > available);
         }
 
         const ro = new ResizeObserver(update);
-        ro.observe(group);
+        ro.observe(inner);
         update();
         registerCleanup(() => ro.disconnect());
     }
@@ -753,8 +754,8 @@
                 } else if (currentTagsBar && !newTagsBar) {
                     currentTagsBar.style.display = 'none';
                 } else if (newTagsBar && !currentTagsBar) {
-                    const headerGroup = document.querySelector('.site-header-group');
-                    if (headerGroup) headerGroup.appendChild(newTagsBar);
+                    const headerInner = document.querySelector('.site-header-inner') || document.querySelector('.site-header-group');
+                    if (headerInner) headerInner.appendChild(newTagsBar);
                 }
 
                 // Update Footer (pagination, tags)

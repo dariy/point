@@ -43,7 +43,7 @@
             {% else %}
                 <div class="header-left-group">
                     <nav class="site-breadcrumb">
-                        <a href="#" class="logo theme-toggle{% if user %} authenticated{% endif %}">
+                        <a href="#" class="logo theme-toggle{% if user %} authenticated{% endif %}" aria-label="Toggle theme">
                             {% include "shared/logo.html" %}
                         </a>
                         <a href="/" class="site-title{% if user %} authenticated{% endif %}">

@@ -168,11 +168,24 @@ def strip_html(html_content: str) -> str:
         >>> strip_html("<p>Hello <strong>world</strong></p>")
         'Hello world'
     """
-    # Remove HTML tags
-    text = re.sub(r"<[^>]+>", "", html_content)
-    # Decode HTML entities
-    text = html.unescape(text)
-    # Normalize whitespace (including \r\n and multiple spaces)
+    if not html_content:
+        return ""
+
+    # 1. Unescape HTML entities first to catch tags hidden in entities (like &lt;video&gt;)
+    # This prevents these from being returned as unescaped tags that then get escaped again by Jinja.
+    text = html.unescape(html_content)
+
+    # 2. Remove style and script tags content completely
+    text = re.sub(r"<(style|script)[^>]*>.*?</\1>", "", text, flags=re.DOTALL | re.IGNORECASE)
+
+    # 3. Replace <br> and </p> with newlines to preserve spacing
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+
+    # 4. Strip all other tags
+    text = re.sub(r"<[^>]+>", "", text)
+
+    # 5. Normalize whitespace (including \r\n and multiple spaces)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
