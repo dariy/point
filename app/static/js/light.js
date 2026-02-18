@@ -777,11 +777,15 @@
             try {
                 // Simple markdown preview (basic)
                 let html = content
-                    // Standalone image URLs (on their own line) - convert to img tags
-                    .replace(/^(\/\d{4}\/\d{2}\/[^\s]+\.(jpg|jpeg|png|gif|webp|mp4|webm))$/gm, (match) => {
+                    // Standalone media URLs (on their own line) - convert to proper tags
+                    .replace(/^(\/\d{4}\/\d{2}\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|wav|ogg|m4a))$/gm, (match) => {
                         const isVideo = match.match(/\.(mp4|webm)$/i);
+                        const isAudio = match.match(/\.(mp3|wav|ogg|m4a)$/i);
                         if (isVideo) {
                             return `<video src="${match}" controls class="img-fluid visible-block"></video>`;
+                        }
+                        if (isAudio) {
+                            return `<audio src="${match}" controls class="visible-block w-100 my-2"></audio>`;
                         }
                         return `<img src="${match}" alt="" class="img-fluid visible-block">`;
                     })
@@ -877,12 +881,13 @@
             const postId = this.form ? this.form.dataset.postId : null;
 
             for (const file of files) {
-                // Check if image or video
+                // Check if image, video, or audio
                 const isImage = file.type.startsWith('image/');
                 const isVideo = file.type.startsWith('video/');
+                const isAudio = file.type.startsWith('audio/');
 
-                if (!isImage && !isVideo) {
-                    showToast(`Skipped ${file.name}: Not an image or video`, 'warning');
+                if (!isImage && !isVideo && !isAudio) {
+                    showToast(`Skipped ${file.name}: Not an image, video, or audio file`, 'warning');
                     continue;
                 }
 

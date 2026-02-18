@@ -157,7 +157,7 @@ window.LightUtils.showToast(`Uploaded: ${file.name}`, 'success');
 window.LightUtils.showToast(`Failed to upload: ${file.name}`, 'error');
 
 // Warning
-window.LightUtils.showToast(`Skipped ${file.name}: Not an image or video`, 'warning');
+window.LightUtils.showToast(`Skipped ${file.name}: Not an image, video, or audio file`, 'warning');
 ```
 
 ### Delete Operations

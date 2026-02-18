@@ -4,9 +4,20 @@ Handles CRUD operations for blog posts.
 """
 
 import math
+import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -24,8 +35,10 @@ from app.schemas.post import (
     PreviewLinkResponse,
 )
 from app.schemas.post import PostStatus as PostStatusSchema
+from app.services.media_service import MediaService
 from app.services.post_service import PostService
 from app.services.tag_service import TagService
+from app.utils.validators import FileValidationError, validate_upload_file
 
 settings = get_settings()
 
@@ -143,6 +156,96 @@ async def create_post(
     await db.commit()
 
     return PostResponse(**post_to_response(post, service))
+
+
+@router.post(
+    "/audio",
+    response_model=PostResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload audio file as post",
+)
+async def create_audio_post(
+    file: UploadFile = File(..., description="Audio file to upload"),
+    title: str | None = Form(default=None, description="Optional title"),
+    tags: str | None = Form(default=None, description="Comma-separated tags"),
+    post_status: PostStatusSchema = Form(default=PostStatusSchema.PUBLISHED),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
+) -> PostResponse:
+    """Upload an audio file and create a blog post for it.
+
+    Supports MP3, WAV, OGG, M4A.
+    If title is not provided, the filename (without extension) will be used.
+    Requires authentication.
+    """
+    # 1. Validate and upload file
+    try:
+        content, filename, mime_type, file_size = await validate_upload_file(file)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    # Ensure it's audio
+    if not mime_type.startswith("audio/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Uploaded file is not an audio file (type: {mime_type})",
+        )
+
+    media_service = MediaService(db)
+    post_service = PostService(db)
+    tag_service = TagService(db)
+
+    try:
+        # Create media record
+        media = await media_service.upload_file(
+            content=content,
+            filename=filename,
+            mime_type=mime_type,
+        )
+
+        # 2. Create post
+        # Generate title from filename if not provided
+        post_title = title or re.sub(r"\.[^.]+$", "", filename).replace("_", " ").title()
+
+        # Create audio player line
+        # This uses the simplified media path format: /YYYY/MM/filename
+        # which is handled by preprocess_media_links
+        # Media.url returns /YYYY/MM/filename
+        audio_url = media_service.get_media_url(media)
+        post_content = f"{audio_url}\n"
+
+        # Prepare tags list
+        tags_list = []
+        if tags:
+            tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+
+        post_data = PostCreate(
+            title=post_title,
+            content=post_content,
+            status=post_status,
+            tags=tags_list,
+        )
+
+        post = await post_service.create_post_with_tags(post_data, current_user.id, tag_service)
+
+        # Link media to post
+        await media_service.update_media(media.id, post_id=post.id)
+
+        await db.commit()
+        await db.refresh(post)
+
+        return PostResponse(**post_to_response(post, post_service))
+
+    except FileValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": e.message, "field": e.field},
+        )
 
 
 @router.get(
