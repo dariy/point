@@ -24,8 +24,8 @@
 
 .footer-copyright {
     font-size: var(--font-size-sm);
-    grid-column: 3;
-    justify-self: end;
+    grid-column: 1;
+    justify-self: start;
 }
 
 .footer-copyright a {
