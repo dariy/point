@@ -132,3 +132,43 @@
     max-width: 100% !important;
     height: auto !important;
 }
+
+/* ===========================
+   Loading Spinner
+   =========================== */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+    display: block;
+    width: 40px;
+    height: 40px;
+    margin: var(--spacing-2xl) auto;
+    border: 3px solid var(--border-primary);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.loading-spinner-sm {
+    width: 20px;
+    height: 20px;
+    margin: var(--spacing-md) auto;
+    border-width: 2px;
+}
+
+/* ===========================
+   Error Message
+   =========================== */
+.error-message {
+    display: block;
+    padding: var(--spacing-md) var(--spacing-lg);
+    margin: var(--spacing-lg) auto;
+    max-width: 600px;
+    text-align: center;
+    color: var(--color-danger);
+    background-color: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: var(--border-radius);
+}

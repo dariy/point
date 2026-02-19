@@ -19,20 +19,26 @@ export class PostGrid extends Component {
       return `<p class="empty-state">${escapeHtml(emptyMessage)}</p>`;
     }
 
-    // One slot per post; PostCard components mounted in afterRender.
-    const slots = posts.map((_, i) =>
-      `<div class="post-card-slot" data-index="${i}"></div>`
-    ).join('');
+    // Only the first featured post gets the hero slot (grid-column: 1/-1).
+    // Subsequent featured posts render as regular cards.
+    const heroIndex = posts.findIndex((p) => p.is_featured);
+
+    const slots = posts.map((_, i) => {
+      const cls = i === heroIndex ? ' featured-post' : '';
+      return `<div class="post-card-slot${cls}" data-index="${i}"></div>`;
+    }).join('');
 
     return `<div class="posts-grid">${slots}</div>`;
   }
 
   afterRender() {
     const { posts = [], showViewCount = false } = this.props;
+    const heroIndex = posts.findIndex((p) => p.is_featured);
+
     posts.forEach((post, i) => {
       const slot = this.container.querySelector(`[data-index="${i}"]`);
       if (slot) {
-        this.mountChild(PostCard, slot, { post, showViewCount });
+        this.mountChild(PostCard, slot, { post, showViewCount, isHero: i === heroIndex });
       }
     });
   }

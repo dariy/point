@@ -1,12 +1,6 @@
 /* ===========================
    Post Grid (Homepage)
    =========================== */
-.posts-layout {
-    display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: var(--spacing-2xl);
-}
-
 .posts-main {
     min-width: 0;
 }
@@ -63,6 +57,9 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
 .post-card-background img {

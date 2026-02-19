@@ -5,7 +5,55 @@ Handles CRUD operations for blog posts.
 
 import math
 import re
+from pathlib import PurePosixPath
 from typing import Any
+
+_VIDEO_EXT = frozenset({'.mp4', '.webm', '.mov', '.m4v', '.ogv'})
+_AUDIO_EXT = frozenset({'.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.oga'})
+
+
+def _media_type(url: str) -> str:
+    ext = PurePosixPath(url.lower()).suffix
+    if ext in _VIDEO_EXT:
+        return 'video'
+    if ext in _AUDIO_EXT:
+        return 'audio'
+    return 'image'
+
+
+def _extract_media(content: str) -> list[dict[str, str]]:
+    """Return ordered list of unique media items found in post content."""
+    seen: set[str] = set()
+    items: list[dict[str, str]] = []
+
+    def add(url: str, alt: str = '') -> None:
+        if url and url not in seen:
+            seen.add(url)
+            item: dict[str, str] = {'url': url, 'type': _media_type(url)}
+            if alt:
+                item['alt'] = alt
+            items.append(item)
+
+    # /YYYY/MM/filename.ext  (simplified upload paths)
+    for m in re.finditer(
+        r'/\d{4}/\d{2}/[^\s"\'<>)\]]+\.(?:jpe?g|png|gif|webp|svg|mp4|mov|webm|mp3|wav|ogg|m4a)',
+        content, re.IGNORECASE,
+    ):
+        add(m.group(0))
+
+    # Markdown images: ![alt](url)
+    for m in re.finditer(r'!\[([^\]]*)\]\(([^)\s]+)\)', content):
+        add(m.group(2), m.group(1))
+
+    # HTML <img src="...">
+    for m in re.finditer(r'<img\b[^>]+\bsrc="([^"]+)"(?:[^>]+\balt="([^"]*)")?', content, re.IGNORECASE):
+        add(m.group(1), m.group(2) or '')
+
+    # HTML <video|audio|source src="...">
+    for m in re.finditer(r'<(?:video|audio|source)\b[^>]+\bsrc="([^"]+)"', content, re.IGNORECASE):
+        add(m.group(1))
+
+    return items
 
 from fastapi import (
     APIRouter,
@@ -84,6 +132,7 @@ def post_to_response(
         data["content_html"] = service.render_content(post)
         data["formatter"] = post.formatter
         data["meta_description"] = post.meta_description
+        data["media"] = _extract_media(post.content or '')
 
     return data
 

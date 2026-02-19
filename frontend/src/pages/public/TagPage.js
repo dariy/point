@@ -45,30 +45,14 @@ export default class TagPage extends Component {
         </div>`;
     }
 
-    const { tag = {}, breadcrumbs = [] } = data || {};
-
-    const crumbs = breadcrumbs.map((bc, i) => {
-      const isLast = i === breadcrumbs.length - 1;
-      if (isLast) {
-        return `<span class="breadcrumb-current" aria-current="page">${escapeHtml(bc.name)}</span>`;
-      }
-      return `<a href="/tag/${escapeHtml(bc.slug)}" class="breadcrumb-link">${escapeHtml(bc.name)}</a>
-              <span class="breadcrumb-separator" aria-hidden="true">/</span>`;
-    }).join('');
+    const { tag = {}, nav_tags = [] } = data || {};
 
     return `
-      <div class="site-wrapper">
+      <div class="site-wrapper tags-page">
         <div id="header-mount"></div>
         <main class="site-main">
           <div class="main-container">
-            ${crumbs ? `<nav class="site-breadcrumb" aria-label="Breadcrumb">${crumbs}</nav>` : ''}
-            <header class="tag-header">
-              <h1 class="tag-name">${escapeHtml(tag.name || '')}</h1>
-              ${tag.description ? `<p class="tag-description">${escapeHtml(tag.description)}</p>` : ''}
-              <p class="tag-count">${escapeHtml(String(tag.post_count || 0))} posts</p>
-            </header>
             <div id="grid-mount"></div>
-            <div id="pagination-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
@@ -76,14 +60,29 @@ export default class TagPage extends Component {
   }
 
   afterRender() {
-    const settings = store.get('settings') || {};
-    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '' });
+    const settings  = store.get('settings') || {};
+    const navTags   = this.state.data?.nav_tags || store.get('navTags') || [];
+    const slug      = this.props.params?.slug || '';
+
+    // Build breadcrumb from API data and pass it to the header
+    const breadcrumbs = this.state.data?.breadcrumbs || [];
+    const breadcrumb = breadcrumbs.map((bc, i) => ({
+      name: bc.name,
+      slug: i < breadcrumbs.length - 1 ? bc.slug : undefined,
+    }));
+
+    this.mountChild(PublicHeader, '#header-mount', {
+      settings,
+      navTags,
+      currentTagSlug: slug,
+      breadcrumb,
+      currentPath: '',
+    });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
     if (this.state.loading || !this.state.data) return;
 
     const { posts = [], pagination = {} } = this.state.data;
-    const slug = this.props.params?.slug || '';
 
     this.mountChild(PostGrid, '#grid-mount', {
       posts,
