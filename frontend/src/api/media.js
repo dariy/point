@@ -8,8 +8,8 @@ import { api } from './client.js';
 
 /**
  * List media items.
- * @param {{ page?: number, per_page?: number, type?: string, q?: string }} [params]
- * @returns {Promise<{ items: object[], total: number, page: number, per_page: number, pages: number }>}
+ * @param {{ page?, per_page?, file_type?, orphaned_only? }} [params]
+ * @returns {Promise<{ media: object[], total, page, per_page, pages }>}
  */
 export function listMedia(params = {}) {
   return api.get('/api/media', params);
@@ -25,35 +25,72 @@ export function getMedia(id) {
 }
 
 /**
- * Upload a file. The `file` argument must be a File object from an <input>.
- * An optional `caption` string may be attached.
- *
- * @param {File}   file
- * @param {string} [caption]
+ * Upload a single file.
+ * @param {File}    file
+ * @param {{ alt_text?, caption?, post_id? }} [meta]
  * @returns {Promise<object>}
  */
-export function uploadMedia(file, caption = '') {
+export function uploadMedia(file, meta = {}) {
   const form = new FormData();
   form.append('file', file);
-  if (caption) form.append('caption', caption);
-  return api.upload('/api/media', form);
+  if (meta.alt_text) form.append('alt_text', meta.alt_text);
+  if (meta.caption)  form.append('caption', meta.caption);
+  if (meta.post_id)  form.append('post_id', String(meta.post_id));
+  return api.upload('/api/media/upload', form);
 }
 
 /**
- * Update media metadata (caption, alt_text).
+ * Upload multiple files.
+ * @param {File[]} files
+ * @param {number} [postId]
+ * @returns {Promise<{ uploaded: object[], failed: object[], total_uploaded, total_failed }>}
+ */
+export function uploadMultiple(files, postId) {
+  const form = new FormData();
+  files.forEach((f) => form.append('files', f));
+  if (postId) form.append('post_id', String(postId));
+  return api.upload('/api/media/upload/multiple', form);
+}
+
+/**
+ * Update media metadata (alt_text, caption, post_id).
  * @param {number} id
- * @param {{ caption?: string, alt_text?: string }} data
+ * @param {{ alt_text?, caption?, post_id? }} data
  * @returns {Promise<object>}
  */
 export function updateMedia(id, data) {
-  return api.put(`/api/media/${id}`, data);
+  return api.patch(`/api/media/${id}`, data);
 }
 
 /**
  * Delete a media item.
  * @param {number} id
- * @returns {Promise<null>}
+ * @returns {Promise<object>}
  */
 export function deleteMedia(id) {
   return api.delete(`/api/media/${id}`);
+}
+
+/**
+ * Get storage statistics.
+ * @returns {Promise<object>}
+ */
+export function getMediaStats() {
+  return api.get('/api/media/stats');
+}
+
+/**
+ * List orphaned media files.
+ * @returns {Promise<{ media: object[], total, total_size_bytes }>}
+ */
+export function getOrphanedMedia() {
+  return api.get('/api/media/orphaned');
+}
+
+/**
+ * Delete all orphaned media files.
+ * @returns {Promise<object>}
+ */
+export function deleteOrphanedMedia() {
+  return api.delete('/api/media/orphaned');
 }
