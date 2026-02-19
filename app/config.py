@@ -102,6 +102,12 @@ class Settings(BaseSettings):
         default="http://point-ai:8080", description="URL of the AI service"
     )
 
+    # CORS
+    cors_origins: list[str] = Field(
+        default=["http://localhost:3000", "http://localhost:8000"],
+        description="Allowed CORS origins for the JSON API. Use ['*'] only behind a trusted reverse proxy.",
+    )
+
     # Backup
     backup_enabled: bool = Field(default=True, description="Enable backups")
     backup_retention_days: int = Field(
