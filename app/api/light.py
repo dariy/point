@@ -281,7 +281,7 @@ async def new_post(
         if media:
             # Create markdown/simplified reference
             url = media_service.get_media_url(media)
-            
+
             if media.file_type.value == "audio":
                 initial_content = f"{url}\n"
                 initial_thumbnail = None # Audio has no thumbnail
