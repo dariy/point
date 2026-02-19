@@ -30,8 +30,10 @@
 
 <div class="site-wrapper">
     <div class="site-header-group">
-        {% include "public/partials/_header.html" %}
-        {% block header_filters %}{% endblock %}
+        <div class="site-header-inner">
+            {% include "public/partials/_header.html" %}
+            {% block header_filters %}{% endblock %}
+        </div>
     </div>
 
     <main class="site-main">

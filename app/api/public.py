@@ -160,7 +160,8 @@ def serialize_post(
     media_list = extract_all_media(post.content)
     has_image = post.thumbnail_path is not None or any(m["type"] == "image" for m in media_list)
     has_video = any(m["type"] == "video" for m in media_list)
-    has_media = has_image or has_video
+    has_audio = any(m["type"] == "audio" for m in media_list)
+    has_media = has_image or has_video or has_audio
 
     excerpt = post.excerpt
     preview_html = None
@@ -174,11 +175,12 @@ def serialize_post(
              preview_html = truncate_paragraphs(content_html)
 
     # logic for thumbnail:
-    # 1. Use explicit post.thumbnail_path if it's not a video (by extension)
+    # 1. Use explicit post.thumbnail_path if it's not a video or audio (by extension)
     # 2. Or use the first image from content
     # 3. Or use the first video as fallback
+    # 4. Or use audio as fallback (though no thumbnail for it)
 
-    thumb_path, is_video_thumb = determine_thumbnail(
+    thumb_path, media_type = determine_thumbnail(
         post.content,
         post.thumbnail_path,
         settings.storage_path,
@@ -213,8 +215,11 @@ def serialize_post(
         "excerpt": excerpt,
         "preview_html": preview_html,
         "has_image": has_media, # Keep key name for frontend layout compatibility
-        "is_video": is_video_thumb, # This specific thumbnail is a video
+        "media_type": media_type, # NEW: explicit media type
+        "is_video": media_type == "video",
+        "is_audio": media_type == "audio",
         "has_video": has_video, # The post contains at least one video
+        "has_audio": has_audio, # The post contains at least one audio
         "is_featured": post.is_featured,
         "has_hidden_posts_tag": has_hidden_posts_tag,
     }
@@ -496,13 +501,20 @@ async def single_post(
     # Format content
     content_html = format_content(post.content, post.formatter)
 
-    # Check if post has text content (ignoring images and whitespace)
-    # strip_html removes all tags including <img>, so we just check if any text remains
+    # Check if post has text content (ignoring images, videos, audio and whitespace)
+    # strip_html removes all tags including <img>, <video>, <audio>, so we just check if any text remains
     text_content = strip_html(content_html)
-    has_text_content = bool(text_content and text_content.strip())
 
-    # Extract all media for carousel
+    # Clean up whitespace and non-breaking spaces
+    text_content = text_content.replace("&nbsp;", " ").strip()
+
+    # Extract all media for carousel and check for audio
     post_media = extract_all_media(post.content)
+
+    # We want to use immersive mode if there is media (image/video/audio) and VERY LITTLE text
+    # Current logic: if strip_html results in empty string, it's immersive.
+    # Exception: we do not use immersive mode for audio files (per user request).
+    has_text_content = len(text_content) > 0 or any(m["type"] == "audio" for m in post_media)
 
     # Function to ensure we have an original URL
     async def ensure_original_url(url: str | None) -> str | None:
@@ -543,9 +555,10 @@ async def single_post(
     prev_post = None
     next_post = None
 
-    # Navigation logic: guests can navigate between PUBLISHED and PAGE
+    # Navigation logic: guests can navigate between PUBLISHED posts
     # Admin can also see HIDDEN and DRAFT
-    nav_statuses = [PostStatus.PUBLISHED, PostStatus.PAGE]
+    # PAGE status is excluded from chronological navigation
+    nav_statuses = [PostStatus.PUBLISHED]
     if user:
         nav_statuses.extend([PostStatus.HIDDEN, PostStatus.DRAFT])
 
@@ -943,7 +956,7 @@ async def tags_page(
             pub_date = post.published_at or post.created_at
 
             # Calculate preview data
-            thumb_path, is_video_thumb = determine_thumbnail(
+            thumb_path, media_type = determine_thumbnail(
                 post.content,
                 post.thumbnail_path,
                 settings.storage_path,
@@ -976,7 +989,9 @@ async def tags_page(
                     "excerpt": excerpt,
                     "preview_html": preview_html,
                     "has_image": has_image,
-                    "is_video": is_video_thumb,
+                    "media_type": media_type,
+                    "is_video": media_type == "video",
+                    "is_audio": media_type == "audio",
                     "is_featured": post.is_featured,
                 }
             )

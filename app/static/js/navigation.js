@@ -39,17 +39,26 @@
                 </a>`;
         }
 
-        // Visuals (Image/Video)
-        if (post.has_image) {
+        // Visuals (Image/Video/Audio)
+        if (post.has_image || post.has_video || post.has_audio) {
             const visualWrapper = clone.querySelector('.post-card-visual-wrapper');
             visualWrapper.className = 'post-card-background';
             
             if (post.is_video) {
                 visualWrapper.innerHTML = `
-                    <video src="${post.thumbnail_path}" muted loop playsinline></video>
+                    <video src="${post.thumbnail_path}" muted loop playsinline autoplay></video>
                     <div class="video-play-indicator">
                         <svg width="${isFeatured ? '48' : '32'}" height="${isFeatured ? '48' : '32'}" viewBox="0 0 24 24" fill="white">
                             <path d="M8 5v14l11-7z"/>
+                        </svg>
+                    </div>`;
+            } else if (post.is_audio) {
+                visualWrapper.innerHTML = `
+                    <div class="audio-placeholder">
+                        <svg width="${isFeatured ? '64' : '48'}" height="${isFeatured ? '64' : '48'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 18V5l12-2v13"></path>
+                            <circle cx="6" cy="18" r="3"></circle>
+                            <circle cx="18" cy="16" r="3"></circle>
                         </svg>
                     </div>`;
             } else {
@@ -81,7 +90,7 @@
         const previewWrapper = clone.querySelector('.post-card-preview-wrapper');
         if (post.has_image) {
             previewWrapper.className = 'post-card-excerpt';
-            previewWrapper.textContent = post.excerpt || '';
+            previewWrapper.innerHTML = post.excerpt || '';
         } else {
             previewWrapper.className = 'post-card-text-preview';
             previewWrapper.innerHTML = post.preview_html || '';

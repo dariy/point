@@ -69,6 +69,12 @@ endblock %}
                 <video
                     src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
                     class="immersive-bg-image" {% if loop.first %}autoplay{% endif %} muted loop playsinline></video>
+                {% elif item.type == 'audio' %}
+                <div class="immersive-audio-container">
+                    <audio
+                        src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
+                        controls class="immersive-audio-player"></audio>
+                </div>
                 {% else %}
                 <img src="{{ item.url if item.url.startswith('http') or item.url.startswith('/') else '/media/originals/' + item.url }}"
                     alt="{{ post.title }} - Media {{ loop.index }}" class="immersive-bg-image" />
@@ -93,6 +99,12 @@ endblock %}
         <video
             src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
             class="immersive-bg-image" autoplay muted loop playsinline controls></video>
+        {% elif post_media[0].type == 'audio' %}
+        <div class="immersive-audio-container single-audio">
+            <audio
+                src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
+                controls class="immersive-audio-player"></audio>
+        </div>
         {% else %}
         <img src="{{ post_media[0].url if post_media[0].url.startswith('http') or post_media[0].url.startswith('/') else '/media/originals/' + post_media[0].url }}"
             alt="{{ post.title }}" class="immersive-bg-image" />
@@ -110,7 +122,6 @@ endblock %}
     <header class="post-header">
         <div class="post-meta">
             {% if not post.is_page %}
-            [not is_post]
             <time datetime="{{ post.published_at.isoformat() if post.published_at else post.created_at.isoformat() }}">
                 {{ (post.published_at or post.created_at).strftime('%B %d, %Y') }}
             </time>

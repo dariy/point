@@ -12,14 +12,22 @@
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
     border-radius: 8px;
-    padding: 24px;
+    padding: 0;
+    margin-bottom: var(--spacing-lg);
+}
+
+.card-header {
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .card-title {
-    margin-top: 0;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-primary);
+    margin: 0;
+    border: none;
+    padding: 0;
     font-size: 1.2em;
 }
 
@@ -27,6 +35,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    padding: 24px;
 }
 
 .stat-item {
@@ -48,6 +57,7 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
+    padding: 24px;
 }
 
 .op-item {
@@ -65,24 +75,6 @@
     margin: 0;
     font-size: 0.85em;
     color: var(--text-secondary);
-}
-
-.logs-card {
-    padding: 0;
-}
-
-.logs-card .card-header {
-    padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--border-primary);
-}
-
-.logs-card .card-title {
-    margin: 0;
-    border: none;
-    padding: 0;
 }
 
 .log-viewer {
@@ -118,11 +110,33 @@
 }
 
 .header-actions select {
-    padding: 4px 8px;
-    border-radius: 4px;
-    background: var(--surface-input);
-    color: var(--text-primary);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-fast);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--spacing-md) center;
+    background-size: 16px;
+    padding-right: var(--spacing-2xl);
+}
+
+.header-actions select:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+    border-color: var(--border-secondary);
+}
+
+.header-actions select:focus {
+    outline: none;
+    border-color: var(--border-focus);
 }
 
 .header-actions select option {
@@ -131,35 +145,24 @@
 }
 
 /* Backup Management Styles */
-.backups-card {
-    padding: 0;
-    margin-bottom: var(--spacing-lg);
-}
-
-.backups-card .card-header {
+.backups-list,
+.migrations-list {
     padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--border-primary);
-}
-
-.backups-card .card-title {
-    margin: 0;
-    border: none;
-    padding: 0;
-}
-
-.backups-list {
-    padding: 16px;
     max-height: 400px;
     overflow-y: auto;
+}
+
+.backups-card .ops-list {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .backup-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
     padding: 16px;
     margin-bottom: 12px;
     background: var(--surface-input);
@@ -179,6 +182,7 @@
 
 .backup-info {
     flex: 1;
+    min-width: 250px;
 }
 
 .backup-filename {
@@ -187,6 +191,9 @@
     font-size: 0.95em;
     color: var(--text-primary);
     margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .backup-meta {
@@ -220,4 +227,81 @@
 
 .error-state {
     color: #ef4444;
+}
+
+/* Card Toggles */
+.btn-toggle {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    margin-right: 8px;
+}
+
+.btn-toggle .arrow {
+    display: inline-block;
+    font-family: monospace;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.system-card.collapsed .btn-toggle .arrow {
+    transform: rotate(0deg);
+}
+
+.system-card:not(.collapsed) .btn-toggle .arrow {
+    transform: rotate(90deg);
+}
+
+.system-card.collapsed .migrations-list,
+.system-card.collapsed .log-viewer,
+.system-card.collapsed .header-actions {
+    display: none !important;
+}
+
+.card-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Thumbnail Controls */
+#thumbnail-controls {
+    transition: opacity 0.2s ease-in-out;
+}
+
+#thumbnail-controls.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.thumbnail-settings-row {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-end;
+}
+
+.thumbnail-settings-row .form-group {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.thumbnail-settings-row .form-group label {
+    margin-bottom: var(--spacing-xs);
+}
+
+.thumbnail-settings-row .form-input {
+    width: 80px;
+    height: 32px; /* Set a specific height for inputs and buttons to match */
+    padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.thumbnail-settings-row .btn {
+    height: 32px;
 }
