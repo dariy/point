@@ -44,23 +44,28 @@
             <img src="/media/{{ item.thumbnail_path }}" alt="{{ item.alt_text or item.filename }}" loading="lazy">
             {% elif item.file_type.value == 'image' %}
             <img src="/media/{{ item.original_path }}" alt="{{ item.alt_text or item.filename }}" loading="lazy">
+            {% elif item.file_type.value == 'video' %}
+            <div class="media-video-preview">
+                <video src="/media/{{ item.original_path }}" preload="metadata" playsinline muted loop></video>
+                <div class="media-play-overlay">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                </div>
+            </div>
+            {% elif item.file_type.value == 'audio' %}
+            <div class="media-audio-preview">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                    <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z" />
+                </svg>
+                <audio src="/media/{{ item.original_path }}" preload="metadata" controls></audio>
+            </div>
             {% else %}
             <div class="file-icon">
-                {% if item.file_type.value == 'video' %}
-                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                    <path
-                        d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
-                </svg>
-                {% elif item.file_type.value == 'document' %}
                 <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
                     <path
                         d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
                 </svg>
-                {% else %}
-                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-                    <path d="M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6z" />
-                </svg>
-                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -130,7 +135,7 @@
         </div>
         <div class="modal-body">
             <div class="upload-area" data-upload-url="/api/media/upload">
-                <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" style="display: none;">
+                <input type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx" style="display: none;">
                 <div class="upload-area-icon">
                     <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
                         <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
@@ -138,7 +143,7 @@
                 </div>
                 <div class="upload-area-text">
                     <strong>Click to upload</strong> or drag and drop<br>
-                    <span class="text-small text-muted">Images, videos, or documents</span>
+                    <span class="text-small text-muted">Images, videos, audio, or documents</span>
                 </div>
             </div>
             <div id="upload-progress" style="display: none; margin-top: 1rem;">

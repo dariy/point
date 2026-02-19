@@ -260,29 +260,45 @@
     };
 
     /**
-     * Toggle system logs visibility
+     * Toggle system card visibility
      */
-    const toggleLogs = function (btn) {
-        const logContent = document.getElementById('log-content');
-        const logTypeSelect = document.getElementById('log-type');
-        const refreshBtn = document.querySelector('[data-action="refresh-logs"]');
+    const toggleCard = function (header) {
+        const card = header.closest('.system-card');
+        if (!card) return;
 
-        if (!logContent) return;
-
-        const isHidden = logContent.style.display === 'none';
-
-        if (isHidden) {
-            logContent.style.display = 'block';
-            if (logTypeSelect) logTypeSelect.style.display = 'inline-block';
-            if (refreshBtn) refreshBtn.style.display = 'inline-block';
-            btn.textContent = 'Hide Logs';
-            // Scroll to bottom when shown
-            logContent.scrollTop = logContent.scrollHeight;
+        card.classList.toggle('collapsed');
+        const content = card.querySelector('.migrations-list, .log-viewer');
+        const actions = card.querySelector('.header-actions');
+        
+        if (!card.classList.contains('collapsed')) {
+            if (content) content.style.display = 'block';
+            if (actions) {
+                actions.style.display = 'flex';
+                // Also ensure children that might have inline display:none are shown
+                actions.querySelectorAll('select, button').forEach(el => {
+                    el.style.display = 'inline-block';
+                });
+            }
+            
+            // Special handling for logs
+            if (card.classList.contains('logs-card')) {
+                refreshLogs();
+                // Scroll to bottom
+                const logContent = document.getElementById('log-content');
+                if (logContent) {
+                    setTimeout(() => {
+                        logContent.scrollTop = logContent.scrollHeight;
+                    }, 50);
+                }
+            }
         } else {
-            logContent.style.display = 'none';
-            if (logTypeSelect) logTypeSelect.style.display = 'none';
-            if (refreshBtn) refreshBtn.style.display = 'none';
-            btn.textContent = 'Show Logs';
+            if (content) content.style.display = 'none';
+            if (actions) {
+                const select = actions.querySelector('select');
+                const refreshBtn = actions.querySelector('[data-action="refresh-logs"]');
+                if (select) select.style.display = 'none';
+                if (refreshBtn) refreshBtn.style.display = 'none';
+            }
         }
     };
 
@@ -559,8 +575,8 @@
                 case 'refresh-logs':
                     refreshLogs();
                     break;
-                case 'toggle-logs':
-                    toggleLogs(actionBtn);
+                case 'toggle-card':
+                    toggleCard(actionBtn);
                     break;
                 case 'toggle-thumbnails':
                     const useThumbnails = actionBtn.checked;
@@ -568,11 +584,9 @@
                     
                     if (controls) {
                         if (useThumbnails) {
-                            controls.style.opacity = '1';
-                            controls.style.pointerEvents = 'auto';
+                            controls.classList.remove('disabled');
                         } else {
-                            controls.style.opacity = '0.5';
-                            controls.style.pointerEvents = 'none';
+                            controls.classList.add('disabled');
                         }
                     }
                     
