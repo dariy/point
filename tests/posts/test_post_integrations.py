@@ -40,9 +40,9 @@ async def test_quick_post_flow(
     assert response.status_code == 201
     media_id = response.json()["id"]
 
-    # 2. Access new post page with media_id (HTML route)
+    # 2. Verify the uploaded media can be retrieved via API
     response = await client.get(
-        f"/light/posts/new?media_id={media_id}", cookies=auth_cookies
+        f"/api/media/{media_id}", cookies=auth_cookies
     )
     assert response.status_code == 200
 
