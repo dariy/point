@@ -15,6 +15,36 @@ from app.services.settings_service import SettingsService
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
+# Keys exposed to the public frontend without authentication
+_PUBLIC_SETTING_KEYS = frozenset({
+    "blog_title",
+    "blog_subtitle",
+    "author_name",
+    "posts_per_page",
+    "default_language",
+    "default_theme",
+    "show_view_counts",
+    "enable_analytics",
+    "google_analytics_id",
+    "use_thumbnails",
+    "about_post_id",
+})
+
+
+@router.get(
+    "/public",
+    tags=["Settings", "Public"],
+    summary="Get public blog settings",
+    description="Returns non-sensitive blog settings needed by the public frontend. No authentication required.",
+)
+async def get_public_settings(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get public-facing blog settings (no auth required)."""
+    settings_service = SettingsService(db)
+    all_settings = await settings_service.get_all_settings()
+    return {k: v for k, v in all_settings.items() if k in _PUBLIC_SETTING_KEYS}
+
 
 @router.get("")
 async def get_all_settings(
