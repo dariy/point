@@ -1,0 +1,112 @@
+/* ===========================
+   Admin Semantic Tokens
+   =========================== */
+:root,
+[data-theme="light"] {
+    /* Admin Layout */
+    --sidebar-width: 240px;
+    --header-height: 64px;
+    --content-max-width: 1400px;
+
+    /* Semantic Colors */
+    --bg-primary: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --text-inverted: #ffffff;
+    --border-primary: #e2e8f0;
+    --border-focus: #2563eb;
+    --surface-input: #ffffff;
+    --surface-hover: #f1f5f9;
+    --surface-card: #ffffff;
+
+    /* Admin-specific */
+    --sidebar-bg: #0f172a;
+    --sidebar-text: #94a3b8;
+    --sidebar-text-hover: #ffffff;
+    --sidebar-active-bg: #1e293b;
+    --sidebar-border: #334155;
+    --header-bg: rgba(255, 255, 255, 0.8);
+    --header-border: #e2e8f0;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+    /* Grays for compatibility */
+    --color-gray-50: #f8fafc;
+    --color-gray-100: #f1f5f9;
+    --color-gray-200: #e2e8f0;
+    --color-gray-300: #cbd5e1;
+    --color-gray-400: #94a3b8;
+    --color-gray-500: #64748b;
+    --color-gray-600: #475569;
+    --color-gray-700: #334155;
+    --color-gray-800: #1e293b;
+    --color-gray-900: #0f172a;
+
+    --logo-fill: #000000;
+
+    color-scheme: light;
+}
+
+/* ===========================
+   Dark Theme
+   =========================== */
+[data-theme="dark"] {
+    /* Semantic Colors */
+    --bg-primary: #121212;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+    --text-inverted: #ffffff;
+    --border-primary: #2d2d2d;
+    --border-focus: #3b82f6;
+    --surface-input: #1e1e1e;
+    --surface-hover: #2d2d2d;
+    --surface-card: #1e1e1e;
+
+    /* Admin-specific */
+    --sidebar-bg: #181818;
+    --sidebar-text: #94a3b8;
+    --sidebar-text-hover: #ffffff;
+    --sidebar-active-bg: #2d2d2d;
+    --sidebar-border: #333333;
+    --header-bg: rgba(30, 30, 30, 0.8);
+    --header-border: #2d2d2d;
+
+    /* Brand adjustments */
+    --color-primary: #3b82f6;
+    --color-primary-hover: #60a5fa;
+    --color-primary-light: rgba(59, 130, 246, 0.2);
+    --color-success-light: rgba(16, 185, 129, 0.2);
+    --color-warning-light: rgba(245, 158, 11, 0.2);
+    --color-danger-light: rgba(239, 68, 68, 0.2);
+
+    --color-success: rgba(255, 255, 255, 0.8);
+    --color-warning: var(--text-inverted);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+
+    /* Grays inverted for dark theme */
+    --color-gray-50: #121212;
+    --color-gray-100: #1e1e1e;
+    --color-gray-200: #2d2d2d;
+    --color-gray-300: #404040;
+    --color-gray-400: #64748b;
+    --color-gray-500: #94a3b8;
+    --color-gray-600: #cbd5e1;
+    --color-gray-700: #e2e8f0;
+    --color-gray-800: #f1f5f9;
+    --color-gray-900: #f8fafc;
+
+    --logo-fill: #f1f5f9;
+
+    color-scheme: dark;
+}
