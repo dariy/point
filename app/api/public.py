@@ -216,7 +216,7 @@ def serialize_post(
         "preview_html": preview_html,
         "has_image": has_media, # Keep key name for frontend layout compatibility
         "media_type": media_type, # NEW: explicit media type
-        "is_video": media_type == "video", 
+        "is_video": media_type == "video",
         "is_audio": media_type == "audio",
         "has_video": has_video, # The post contains at least one video
         "has_audio": has_audio, # The post contains at least one audio
@@ -504,10 +504,10 @@ async def single_post(
     # Check if post has text content (ignoring images, videos, audio and whitespace)
     # strip_html removes all tags including <img>, <video>, <audio>, so we just check if any text remains
     text_content = strip_html(content_html)
-    
+
     # Clean up whitespace and non-breaking spaces
     text_content = text_content.replace("&nbsp;", " ").strip()
-    
+
     # Extract all media for carousel and check for audio
     post_media = extract_all_media(post.content)
 
