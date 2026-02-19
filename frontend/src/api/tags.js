@@ -7,34 +7,32 @@
 import { api } from './client.js';
 
 /**
- * List all tags.
- * @param {{ q?: string, with_counts?: boolean }} [params]
- * @returns {Promise<object[]>}
+ * @param {{ include_empty?: boolean, important_only?: boolean }} [params]
+ * @returns {Promise<{ tags: object[], total: number }>}
  */
 export function listTags(params = {}) {
   return api.get('/api/tags', params);
 }
 
 /**
- * Get a tag by ID.
- * @param {number} id
- * @returns {Promise<object>}
+ * @param {number} limit
+ * @returns {Promise<{ tags: object[] }>}
  */
+export function getTagCloud(limit = 20) {
+  return api.get('/api/tags/cloud', { limit });
+}
+
+/** @param {number} id */
 export function getTag(id) {
   return api.get(`/api/tags/${id}`);
 }
 
-/**
- * Get a tag by slug (public).
- * @param {string} slug
- * @returns {Promise<object>}
- */
+/** @param {string} slug */
 export function getTagBySlug(slug) {
-  return api.get(`/api/tags/slug/${slug}`);
+  return api.get(`/api/tags/slug/${encodeURIComponent(slug)}`);
 }
 
 /**
- * Create a tag.
  * @param {object} data  TagCreate payload
  * @returns {Promise<object>}
  */
@@ -43,9 +41,8 @@ export function createTag(data) {
 }
 
 /**
- * Update a tag.
  * @param {number} id
- * @param {object} data  TagUpdate payload
+ * @param {object} data  TagUpdate payload (all optional)
  * @returns {Promise<object>}
  */
 export function updateTag(id, data) {
@@ -53,7 +50,6 @@ export function updateTag(id, data) {
 }
 
 /**
- * Delete a tag.
  * @param {number} id
  * @returns {Promise<null>}
  */
@@ -62,10 +58,16 @@ export function deleteTag(id) {
 }
 
 /**
- * Reorder tags (update display_order).
- * @param {Array<{ id: number, display_order: number }>} items
- * @returns {Promise<null>}
+ * Reorder a tag relative to another.
+ * @param {number} tagId
+ * @param {{ target_id: number|null, position: 'before'|'after'|'inside', current_parent_id: number|null }} data
+ * @returns {Promise<object>}
  */
-export function reorderTags(items) {
-  return api.put('/api/tags/reorder', { items });
+export function reorderTag(tagId, data) {
+  return api.post(`/api/tags/${tagId}/reorder`, data);
+}
+
+/** Recalculate all tag post counts. */
+export function recalculateCounts() {
+  return api.post('/api/tags/recalculate-counts');
 }
