@@ -362,7 +362,7 @@ def test_truncate_paragraphs_strips_tags():
 def test_determine_thumbnail_explicit_image():
     """Test with explicit image thumbnail."""
     result = determine_thumbnail("Content", "/thumb.jpg")
-    assert result == ("/thumb.jpg", False)
+    assert result == ("/thumb.jpg", "image")
 
 def test_determine_thumbnail_explicit_video():
     """Test with explicit video thumbnail."""
@@ -376,14 +376,14 @@ def test_determine_thumbnail_from_content():
     content = '![Image](photo.jpg)'
     result = determine_thumbnail(content, None)
     assert result[0] == "photo.jpg"
-    assert result[1] is False
+    assert result[1] == "image"
 
 def test_determine_thumbnail_video_fallback():
     """Test video fallback when no image."""
     content = '<video src="video.mp4"></video>'
     result = determine_thumbnail(content, None)
     assert result[0] == "video.mp4"
-    assert result[1] is True
+    assert result[1] == "video"
 
 def test_determine_thumbnail_prefer_image_over_video():
     """Test that image is preferred over video."""
@@ -395,7 +395,7 @@ def test_determine_thumbnail_prefer_image_over_video():
 def test_determine_thumbnail_empty_content():
     """Test with no content and no thumbnail."""
     result = determine_thumbnail("", None)
-    assert result == (None, False)
+    assert result == (None, "image")
 
 # preprocess_media_links tests
 def test_preprocess_media_links_image():
