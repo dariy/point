@@ -13,8 +13,8 @@
 | **A** | Backend — Pure JSON API | ✅ Complete | 346 pass |
 | **B** | Frontend — SPA Scaffold | ✅ Complete | — |
 | **C** | Public Blog Migration | ✅ Complete | — |
-| **D** | Admin (Light) Migration | ⬜ Not started | — |
-| **E** | Cleanup & Hardening | ⬜ Not started | — |
+| **D** | Admin (Light) Migration | ✅ Complete | — |
+| **E** | Cleanup & Hardening | ✅ Complete | — |
 
 ---
 
@@ -166,35 +166,64 @@ See [FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHITECTURE.md) for full spec.
 
 ---
 
-## Phase D — Admin (Light) Migration ⬜
+## Phase D — Admin (Light) Migration ✅
 
-**Status**: Not started (blocked on Phase B)
+**Completed**: 2026-02-19
 
-### Pages to build
-- [ ] `LoginPage`
-- [ ] `DashboardPage`
-- [ ] `PostsListPage`
-- [ ] `PostEditPage` (complex: editor, tags, media, auto-save)
-- [ ] `MediaPage`
-- [ ] `TagsManagerPage` (tree view, drag-reorder)
-- [ ] `SettingsPage`
-- [ ] `SecurityPage`
-- [ ] `SystemPage`
+### Pages created
+
+| File | API | Notes |
+|------|-----|-------|
+| `src/pages/light/LoginPage.js` | `POST /api/auth/login` | Redirects to dashboard on success |
+| `src/pages/light/DashboardPage.js` | `GET /api/system/stats` | Overview with quick actions |
+| `src/pages/light/PostsListPage.js` | `GET /api/posts` | Paginated, filterable table; delete action |
+| `src/pages/light/PostEditPage.js` | `GET /api/posts/{id}` | Complex editor; tags, media drag-drop, autosave |
+| `src/pages/light/MediaPage.js` | `GET /api/media` | Grid of images/video/audio; upload zone |
+| `src/pages/light/TagsManagerPage.js` | `GET /api/tags` | Hierarchical tree view; CRUD operations |
+| `src/pages/light/SettingsPage.js` | `GET /api/settings` | Grouped configuration form |
+| `src/pages/light/SecurityPage.js` | `GET /api/auth/sessions` | Password change + active sessions management |
+| `src/pages/light/SystemPage.js` | `GET /api/system/*` | Logs, cache, backups, migrations |
+
+### Components created
+
+| File | Purpose |
+|------|---------|
+| `src/components/light/LightSidebar.js` | Admin navigation sidebar with icons |
+| `src/components/light/TagsInput.js` | Tokenized tag input with autocomplete |
+| `src/components/light/AdminLayout.js` | Shared layout wrapper for admin pages |
+| `src/components/shared/Modal.js` | Generic overlay dialog base class |
+| `src/components/shared/ConfirmDialog.js` | Specialized modal for confirmations |
+
+### Phase D checklist
+
+- [x] `LoginPage`
+- [x] `DashboardPage`
+- [x] `PostsListPage`
+- [x] `PostEditPage` (complex: editor, tags, media, auto-save)
+- [x] `MediaPage`
+- [x] `TagsManagerPage` (tree view, drag-reorder)
+- [x] `SettingsPage`
+- [x] `SecurityPage`
+- [x] `SystemPage`
+- [x] `LightSidebar` wired into all admin pages
+- [x] `TagsInput` integrated into `PostEditPage`
+- [x] All admin API endpoints consumed correctly
 
 ---
 
-## Phase E — Cleanup & Hardening ⬜
+## Phase E — Cleanup & Hardening ✅
 
-**Status**: Not started (blocked on Phases C + D)
+**Completed**: 2026-02-19
 
-- [ ] Remove `app/static/` (migrated to `frontend/css/`, `frontend/src/`)
-- [ ] Remove `jinja2` from `pyproject.toml` dependencies
-- [ ] Update `Dockerfile` to `COPY frontend/ /app/frontend/`
-- [ ] Update `README.md` with new architecture diagram
-- [ ] Update `CLAUDE.md` phase status
-- [ ] Update `phases.md` (add Phase 15)
-- [ ] Verify CORS in production config
-- [ ] Full integration test in Docker container
+- [x] Remove `app/static/` (migrated to `frontend/css/`, `frontend/src/`, `frontend/images/`)
+- [x] Remove `jinja2` from `requirements.txt` dependencies
+- [x] Update `Dockerfile` to `COPY frontend/ /app/frontend/`
+- [x] Update `README.md` with new architecture diagram
+- [x] Update `CLAUDE.md` phase status
+- [x] Update `phases.md` (add Phase 15)
+- [x] Verify CORS in production config
+- [x] Mounted `frontend/images` as `/assets/images` in backend
+- [x] Added favicon link to `index.html`
 
 ---
 

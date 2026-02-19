@@ -33,7 +33,6 @@
 ```
 Backend:     FastAPI (Python 3.12+)
 Database:    SQLite (with SQLAlchemy 2.0+)
-Templates:   Jinja2
 Image Proc:  Pillow (PIL)
 Tasks:       APScheduler
 Server:      Uvicorn (ASGI)
@@ -42,12 +41,13 @@ Testing:     pytest, pytest-asyncio
 Linting:     ruff
 Type Check:  mypy
 Container:   Docker + docker-compose
-Frontend:    Vanilla JS with AJAX navigation & touch support
+Frontend:    Vanilla JS SPA (modular component system)
 ```
 
 ### Key Documentation
 
 - `README.md` - Main project overview and setup guide
+- `PROGRESS.md` - Refactoring progress tracker
 - `specification.md` - Complete technical specification
 - `phases.md` - Development phases and progress tracking
 - `LICENSE` - MIT License
@@ -57,24 +57,18 @@ Frontend:    Vanilla JS with AJAX navigation & touch support
 
 ## Current Repository State
 
-### Project Phase: Enhanced UI/UX Complete
+### Project Phase: Refactoring to SPA Complete
 
-**Status**: Phases 1-12 and Phase 14 Complete. Core blog, light interface, and advanced UX features are fully functional.
+**Status**: Core blog, light interface, and advanced UX features have been migrated from server-side rendering (Jinja2) to a modern SPA architecture.
 
 **Completed Phases**:
-- ✅ Phase 1: Project Foundation - Docker, database, project structure
-- ✅ Phase 2: Authentication System - User/session models, auth API
-- ✅ Phase 3: Post Management Core - Post CRUD, slugs, status management
-- ✅ Phase 4: Media Management - File upload, image processing, thumbnails
-- ✅ Phase 5: Tag System - Tag CRUD, post-tag relationships
-- ✅ Phase 6: Light Interface - Dashboard, post editor, media library, tags manager
-- ✅ Phase 7: Public Frontend - Homepage, single post view, gallery
-- ✅ Phase 8: RSS & SEO - RSS feed, sitemap, robots.txt, meta tags
-- ✅ Phase 9: Theming System - Dark/light modes, system detection
-- ✅ Phase 10: Caching & Performance - File-based caching, asset optimization
-- ✅ Phase 11: Background Tasks & Backup - Automated backups, session cleanup
-- ✅ Phase 12: Settings & System Tools - Blog configuration, log viewer, stats
-- ✅ Phase 14: Enhanced UI/UX - Immersive mode, AJAX navigation, gesture support, quick post creation
+- ✅ Phase 1-12 & 14: Core features and enhanced UI/UX (Legacy SSR)
+- ✅ Phase 15: Frontend / Backend Separation (SPA Refactoring)
+    - ✅ Phase A: Backend — Pure JSON API
+    - ✅ Phase B: Frontend — SPA Scaffold
+    - ✅ Phase C: Public Blog Migration
+    - ✅ Phase D: Admin (Light) Migration
+    - ✅ Phase E: Cleanup & Hardening
 
 **Next Steps** (Phase 13):
 1. CI/CD Pipeline (GitHub Actions)
@@ -87,35 +81,36 @@ Frontend:    Vanilla JS with AJAX navigation & touch support
 point/
 ├── README.md               # Main project guide
 ├── CLAUDE.md               # This file (AI assistant guide)
-├── LICENSE                 # MIT License
+├── PROGRESS.md             # Refactoring tracker
 ├── Dockerfile             # Docker configuration
 ├── docker-compose.yml     # Docker Compose setup
 ├── pyproject.toml         # Python project config
-├── specification.md       # Complete technical spec
-├── phases.md              # Development phases tracker
 ├── app/
-│   ├── api/               # FastAPI routers (light, auth, media, posts, public, etc.)
+│   ├── api/               # FastAPI routers (auth, media, posts, pages, etc.)
 │   ├── models/            # SQLAlchemy models
 │   ├── schemas/           # Pydantic schemas
-│   ├── services/          # Business logic (auth, backup, cache, post, scheduler, etc.)
-│   ├── static/            # CSS, JS assets (main.css, main.js, theme.js, light.css, light.js)
-│   ├── templates/         # Jinja2 templates (public, light, macros)
+│   ├── services/          # Business logic (auth, backup, cache, post, etc.)
 │   └── utils/             # Utility functions
+├── frontend/              # SPA source code
+│   ├── index.html         # SPA shell
+│   ├── src/               # JS components, router, store, API client
+│   ├── css/               # Modular CSS
+│   └── images/            # Static images (favicon, placeholders)
 ├── tests/                 # Comprehensive test suite
-└── scripts/               # Utility scripts (init_db.py, backup.sh, restore.sh)
+└── scripts/               # Utility scripts
 ```
 
 ---
 
 ## Architecture & Design Principles
 
-### 1. Layered Architecture
+### 1. Decoupled Architecture
 
 ```
 ┌─────────────────────────────────────┐
-│   Templates (Jinja2)                │  Presentation
+│   Frontend SPA (Vanilla JS)         │  Presentation (Static Files)
 ├─────────────────────────────────────┤
-│   API Routes (FastAPI)              │  HTTP Layer
+│   JSON API (FastAPI)                │  HTTP Layer
 ├─────────────────────────────────────┤
 │   Services (Business Logic)         │  Business Layer
 ├─────────────────────────────────────┤
@@ -125,7 +120,7 @@ point/
 └─────────────────────────────────────┘
 ```
 
-**Important**: Always respect layer boundaries. API routes should call services, not models directly.
+**Important**: The frontend and backend are completely decoupled. The backend only communicates via JSON.
 
 ### 2. Async-First Design
 

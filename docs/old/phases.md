@@ -34,6 +34,7 @@ Each phase is designed to be:
 | 12 | Settings & System Tools | ✅ Completed | Phase 6 |
 | 13 | CI/CD & Deployment | ✅ Completed | All Phases |
 | 14 | Enhanced UI/UX | ✅ Completed | Phase 7 |
+| 15 | SPA Refactoring | ✅ Completed | All Phases |
 
 **Legend**: ⬜ Not Started | 🔄 In Progress | ✅ Complete | ⏸️ Blocked
 
@@ -1342,3 +1343,67 @@ Phase 4 (Media)    Phase 5 (Tags) │
 ---
 
 **Last Updated**: 2026-01-22
+
+---
+
+## Phase 15: SPA Refactoring
+
+**Goal**: Transform the application into a decoupled JSON API and Vanilla JS SPA
+
+**Status**: ✅ Complete
+
+**Depends on**: All previous phases
+
+### Tasks
+
+- [x] **15.1 Backend: Pure JSON API**
+  - [x] Remove Jinja2 and server-side template rendering
+  - [x] Add CORS middleware for frontend/backend separation
+  - [x] Update OpenAPI metadata and documentation
+  - [x] Create compound page-data endpoints (home, tag, tags)
+  - [x] Implement SPA fallback route in FastAPI
+
+- [x] **15.2 Frontend: SPA Scaffold**
+  - [x] Implement modular Component base class with lifecycle
+  - [x] Build client-side History API router with auth guards
+  - [x] Create reactive global state store
+  - [x] Build unified API client with fetch wrapper
+
+- [x] **15.3 Public Blog Migration**
+  - [x] Build HomePage, PostPage, TagPage, TagsPage, MapPage
+  - [x] Migrate all public styles to modular CSS
+  - [x] Implement Lightbox and Immersive mode in the SPA
+
+- [x] **15.4 Admin (Light) Migration**
+  - [x] Build LoginPage, Dashboard, PostsList, PostEdit
+  - [x] Build MediaPage, TagsManager, SettingsPage, SecurityPage, SystemPage
+  - [x] Create reusable admin components (Sidebar, TagsInput, Modal)
+
+- [x] **15.5 Cleanup & Hardening**
+  - [x] Remove redundant app/static directory
+  - [x] Remove jinja2 dependency from project
+  - [x] Update Dockerfile to include frontend assets
+  - [x] Update README and documentation for the new architecture
+
+### Deliverables
+
+1. Pure JSON API with OpenAPI documentation
+2. Fully functional Vanilla JS SPA for public blog and admin
+3. Decoupled architecture with no server-side rendering
+4. Updated production-ready Docker image
+
+### Validation Criteria
+
+```bash
+# Backend starts without Jinja2 errors
+uvicorn app.main:app
+
+# API returns JSON for all routes
+curl -H "Accept: application/json" http://localhost:8000/api/posts
+
+# SPA fallback works (returns index.html)
+curl http://localhost:8000/any-route
+
+# Full integration test in container
+docker-compose up --build
+```

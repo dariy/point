@@ -4,16 +4,16 @@ A lightweight, professional-grade personal photo blog engine built with FastAPI,
 
 ## ✨ Key Features
 
-- **🚀 Performance-First**: Fast server-side rendering with Jinja2 and file-based caching.
+- **🚀 Modern Architecture**: Pure JSON REST API (FastAPI) and a modular Vanilla JS Single-Page Application (SPA).
 - **🖼️ Media-Centric**: Automatic thumbnail generation, image resizing, and video support.
 - **📱 Modern UX**:
     - **Immersive Mode**: Full-screen, distraction-free viewing for photo-heavy posts.
-    - **AJAX Navigation**: Seamless transitions between pages without full reloads.
+    - **SPA Navigation**: Instant page transitions via client-side routing.
     - **Gesture Support**: Swipe navigation for touch devices and carousels.
 - **🌓 Dual Themes**: Beautiful dark and light modes with system preference detection.
 - **🛠️ Professional Tools**:
     - Full post management with Markdown support.
-    - **Quick Post Creation**: Drag-and-drop images from any page to instantly create new posts.
+    - **Quick Post Creation**: Drag-and-drop images into the editor or onto the page.
     - **Meta-tagging**: Hierarchical tag system with recursive post retrieval and counts.
     - Integrated backup/restore system.
     - System health and log monitoring.
@@ -368,7 +368,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 Built with:
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
 - [SQLAlchemy](https://www.sqlalchemy.org/) - SQL toolkit and ORM
-- [Jinja2](https://jinja.palletsprojects.com/) - Template engine
+- [Vanilla JS](https://developer.mozilla.org/en-US/docs/Web/JavaScript) - Framework-free component system
 - [Pillow](https://python-pillow.org/) - Image processing
 - [Docker](https://www.docker.com/) - Containerization
 
