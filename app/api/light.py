@@ -279,10 +279,15 @@ async def new_post(
         media_service = MediaService(db)
         media = await media_service.get_media_by_id(media_id)
         if media:
-            # Create markdown image reference
+            # Create markdown/simplified reference
             url = media_service.get_media_url(media)
-            initial_content = f"![]({url})"
-            initial_thumbnail = media_service.get_thumbnail_url(media) or url
+
+            if media.file_type.value == "audio":
+                initial_content = f"{url}\n"
+                initial_thumbnail = None # Audio has no thumbnail
+            else:
+                initial_content = f"![]({url})"
+                initial_thumbnail = media_service.get_thumbnail_url(media) or url
 
     # Fallback to media_path if provided (used in tests and legacy links)
     if not initial_content and media_path:

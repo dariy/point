@@ -142,6 +142,44 @@
     function init() {
         uploadModal = document.getElementById('upload-modal');
 
+        // Video playback handling
+        const videoPreviews = document.querySelectorAll('.media-video-preview');
+        videoPreviews.forEach(container => {
+            const video = container.querySelector('video');
+            
+            // Hover to play (muted)
+            container.addEventListener('mouseenter', () => {
+                if (video.paused) {
+                    video.play().catch(() => {});
+                }
+            });
+
+            container.addEventListener('mouseleave', () => {
+                if (!container.classList.contains('is-playing')) {
+                    video.pause();
+                }
+            });
+
+            // Click to toggle full play (with sound if user wants)
+            container.addEventListener('click', (e) => {
+                // If clicking an action button, don't toggle video
+                if (e.target.closest('.media-item-actions')) return;
+
+                if (video.paused || video.muted) {
+                    video.muted = false;
+                    video.play().catch(() => {});
+                    container.classList.add('is-playing');
+                } else {
+                    video.pause();
+                    container.classList.remove('is-playing');
+                }
+            });
+
+            video.addEventListener('ended', () => {
+                container.classList.remove('is-playing');
+            });
+        });
+
         // Main action listeners
         document.addEventListener('click', function (e) {
             const uploadOpenBtn = e.target.closest('[data-action="open-upload-modal"]');

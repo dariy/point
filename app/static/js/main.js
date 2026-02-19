@@ -493,11 +493,12 @@
      */
     function initTagsBarLayout() {
         const group = document.querySelector('.site-header-group');
-        const tagsBar = group && group.querySelector('.header-tags-bar');
+        const inner = document.querySelector('.site-header-inner') || group;
+        const tagsBar = inner && inner.querySelector('.header-tags-bar');
         if (!group || !tagsBar) return;
 
-        const siteHeader = group.querySelector('.site-header');
-        const siteNav = document.querySelector('.site-header-group > .site-nav');
+        const siteHeader = inner.querySelector('.site-header');
+        const siteNav = document.querySelector('.site-header-inner > .site-nav');
 
         // Measure the tags bar's natural content width by briefly taking it
         // out of the flex flow (position:absolute) so flex can't constrain it.
@@ -507,15 +508,15 @@
         Object.assign(tagsBar.style, prev);
 
         function update() {
-            const groupWidth = group.getBoundingClientRect().width;
+            const innerWidth = inner.getBoundingClientRect().width;
             const headerWidth = siteHeader ? siteHeader.getBoundingClientRect().width : 0;
             const navWidth = siteNav ? siteNav.getBoundingClientRect().width : 0;
-            const available = groupWidth - headerWidth - navWidth;
+            const available = innerWidth - headerWidth - navWidth;
             group.classList.toggle('tags-stacked', naturalTagsWidth > available);
         }
 
         const ro = new ResizeObserver(update);
-        ro.observe(group);
+        ro.observe(inner);
         update();
         registerCleanup(() => ro.disconnect());
     }
@@ -540,12 +541,12 @@
             if (index < 0) index = slides.length - 1;
             if (index >= slides.length) index = 0;
 
-            // Pause current video if any
+            // Pause current video/audio if any
             const currentSlide = slides[currentIndex];
             const currentVideo = currentSlide.querySelector("video");
-            if (currentVideo) {
-                currentVideo.pause();
-            }
+            const currentAudio = currentSlide.querySelector("audio");
+            if (currentVideo) currentVideo.pause();
+            if (currentAudio) currentAudio.pause();
 
             slides.forEach((slide) => slide.classList.remove("active"));
             dots.forEach((dot) => dot.classList.remove("active"));
@@ -554,12 +555,18 @@
             nextSlide.classList.add("active");
             dots[index].classList.add("active");
 
-            // Play next video if any
+            // Play next video/audio if any
             const nextVideo = nextSlide.querySelector("video");
+            const nextAudio = nextSlide.querySelector("audio");
             if (nextVideo) {
                 nextVideo
                     .play()
-                    .catch((e) => console.log("Autoplay blocked:", e));
+                    .catch((e) => console.log("Autoplay blocked (video):", e));
+            }
+            if (nextAudio) {
+                nextAudio
+                    .play()
+                    .catch((e) => console.log("Autoplay blocked (audio):", e));
             }
 
             currentIndex = index;
@@ -753,8 +760,8 @@
                 } else if (currentTagsBar && !newTagsBar) {
                     currentTagsBar.style.display = 'none';
                 } else if (newTagsBar && !currentTagsBar) {
-                    const headerGroup = document.querySelector('.site-header-group');
-                    if (headerGroup) headerGroup.appendChild(newTagsBar);
+                    const headerInner = document.querySelector('.site-header-inner') || document.querySelector('.site-header-group');
+                    if (headerInner) headerInner.appendChild(newTagsBar);
                 }
 
                 // Update Footer (pagination, tags)
@@ -825,6 +832,9 @@
         }
 
         const hasText = data.has_text_content;
+        const post = data.post;
+        
+        // Use standard layout if we have text OR audio (server ensures has_text_content is true if audio exists)
         const templateId = hasText ? 'tmpl-post-standard' : 'tmpl-post-immersive';
         const template = document.getElementById(templateId);
 
@@ -835,8 +845,12 @@
         }
 
         const clone = template.content.cloneNode(true);
-        const post = data.post;
         const tagHierarchy = data.tag_hierarchy || [];
+
+        // Pre-create header clone as it's used in metadata updates
+        const headerTemplateId = hasText ? 'tmpl-header-default' : 'tmpl-header-immersive';
+        const headerTemplate = document.getElementById(headerTemplateId);
+        const headerClone = headerTemplate.content.cloneNode(true);
 
         // 1. Update Title and Metadata
         if (hasText) {
@@ -933,6 +947,10 @@
                         mediaEl.muted = true;
                         mediaEl.loop = true;
                         mediaEl.playsInline = true;
+                    } else if (item.type === 'audio') {
+                        mediaEl = document.createElement('div');
+                        mediaEl.className = 'immersive-audio-container';
+                        mediaEl.innerHTML = `<audio src="${url}" controls class="immersive-audio-player"></audio>`;
                     } else {
                         mediaEl = document.createElement('img');
                         mediaEl.src = url;
@@ -1011,10 +1029,6 @@
         if (data.next_post) navData.dataset.nextUrl = '/posts/' + data.next_post.slug;
 
         // 5. Header
-        const headerTemplateId = hasText ? 'tmpl-header-default' : 'tmpl-header-immersive';
-        const headerTemplate = document.getElementById(headerTemplateId);
-        const headerClone = headerTemplate.content.cloneNode(true);
-
         if (hasText) {
             const subtitle = headerClone.querySelector('.site-subtitle');
             if (subtitle) subtitle.textContent = data.blog_subtitle || '';
@@ -2059,6 +2073,42 @@
     }
 
     /**
+     * Sequential Audio Playback
+     * Automatically starts the next audio file in a post when the current one ends.
+     */
+    function initSequentialAudio() {
+        const audioPlayers = Array.from(document.querySelectorAll('audio'));
+        if (audioPlayers.length < 2) return;
+
+        audioPlayers.forEach((player, index) => {
+            player._audioIndex = index;
+            player.onended = handleAudioEnded;
+        });
+
+        function handleAudioEnded(e) {
+            const index = e.target._audioIndex;
+            const nextPlayer = audioPlayers[index + 1];
+            
+            if (nextPlayer) {
+                // If in carousel (immersive mode), move to the next slide
+                const carouselContainer = e.target.closest('.carousel-container');
+                if (carouselContainer) {
+                    const nextBtn = carouselContainer.querySelector('.carousel-next');
+                    if (nextBtn) {
+                        nextBtn.click(); // advance slide, which will play next audio via goToSlide
+                        return;
+                    }
+                }
+
+                // If not in carousel, play manually
+                nextPlayer.play().catch(err => {
+                    console.warn("[Audio] Auto-play next audio blocked or failed:", err);
+                });
+            }
+        }
+    }
+
+    /**
      * Initialize Page specific components
      */
     function initPage() {
@@ -2076,6 +2126,7 @@
         initResponsiveTagFilters();
         initTagToggles();
         initMap();
+        initSequentialAudio();
 
         // Only init lightbox on gallery page
         if (document.querySelector(".gallery-grid")) {
@@ -2113,7 +2164,7 @@
         document.addEventListener('dragenter', (e) => {
             dragCounter++;
 
-            // Check if dragging files (images)
+            // Check if dragging files (images or audio)
             if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
                 overlay.classList.add('active');
                 document.body.classList.add('drag-over');
@@ -2149,10 +2200,13 @@
             // Get the first file
             const file = files[0];
 
-            // Check if it's an image
-            if (!file.type.startsWith('image/')) {
+            // Check if it's an image or audio
+            const isImage = file.type.startsWith('image/');
+            const isAudio = file.type.startsWith('audio/');
+
+            if (!isImage && !isAudio) {
                 overlay.classList.remove('active');
-                alert('Please drop an image file (JPG, PNG, GIF, WebP)');
+                alert('Please drop an image or audio file (MP3, WAV, OGG, M4A, JPG, PNG, GIF, WebP)');
                 return;
             }
 
