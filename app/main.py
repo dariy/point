@@ -12,15 +12,14 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import Receive, Scope, Send
 
 from app.api.auth import router as auth_router
-from app.api.light import router as light_router
+from app.api.feeds import router as feeds_router
 from app.api.media import router as media_router
+from app.api.pages import router as pages_router
 from app.api.posts import router as posts_router
-from app.api.public import router as public_router
 from app.api.settings import router as settings_router
 from app.api.system import router as system_router
 from app.api.tags import router as tags_router
@@ -33,6 +32,10 @@ from app.services.scheduler_service import SchedulerService
 setup_logging()
 
 settings = get_settings()
+
+# Path to the frontend SPA directory
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_INDEX = FRONTEND_DIR / "index.html"
 
 
 class CachedStaticFiles(StaticFiles):
@@ -54,31 +57,20 @@ class CachedStaticFiles(StaticFiles):
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Handle request with cache headers."""
 
-        # Create a custom send that adds cache headers
         async def send_with_cache_headers(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.start":
-                # Add cache control header
                 if self.immutable:
                     cache_value = f"public, max-age={self.max_age}, immutable"
                 else:
                     cache_value = f"public, max-age={self.max_age}"
 
-                # Create a new headers list with the cache control header
                 headers = list(message.get("headers", []))
                 headers.append((b"cache-control", cache_value.encode()))
-
-                # Send modified message with new headers
                 await send({**message, "headers": headers})
             else:
-                # Pass through other message types unchanged
                 await send(message)
 
         await super().__call__(scope, receive, send_with_cache_headers)
-
-
-# Set up Jinja2 templates
-templates_dir = Path(__file__).parent / "templates"
-templates = Jinja2Templates(directory=str(templates_dir))
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -95,8 +87,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "img-src 'self' data: https://*.basemaps.cartocdn.com https://www.googletagmanager.com https://www.google-analytics.com; "
-            "media-src 'self'; "
+            "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://www.googletagmanager.com https://www.google-analytics.com; "
+            "media-src 'self' blob:; "
             "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; "
             "style-src 'self' 'unsafe-inline'; "
             "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com"
@@ -124,13 +116,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     await create_tables()
 
-    # Run migrations
     from app.migrations.runner import run_migrations
     await run_migrations()
 
     ensure_media_directories()
 
-    # Initialize and start scheduler
     scheduler = SchedulerService()
     scheduler.start()
 
@@ -141,18 +131,50 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(
-    title=settings.app_name,
-    description="A lightweight, personal photo blog engine",
-    version="0.1.0",
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
+    title="Photo Blog API",
+    description="""
+## Photo Blog Engine API
+
+A pure JSON REST API for the Photo Blog Engine. All write operations require
+an authenticated session (HTTP-only cookie from `POST /api/auth/login`).
+Read endpoints for published content are public and require no authentication.
+
+### Authentication
+
+1. `POST /api/auth/login` with username + password
+2. The server sets an HTTP-only `session_token` cookie
+3. All subsequent requests automatically include the cookie
+
+### Conventions
+
+- Dates are ISO 8601 strings in UTC
+- Pagination: `page` (1-indexed) and `per_page` query parameters
+- Errors: `{"detail": "human-readable message"}` format
+- File uploads use `multipart/form-data`
+""",
+    version="2.0.0",
+    contact={"name": "Photo Blog Engine"},
+    license_info={"name": "MIT"},
+    openapi_tags=[
+        {"name": "Authentication", "description": "Login, logout, session management"},
+        {"name": "Posts", "description": "Blog post CRUD and publishing workflow"},
+        {"name": "Media", "description": "File upload and media management"},
+        {"name": "Tags", "description": "Tag CRUD and hierarchy management"},
+        {"name": "Settings", "description": "Blog configuration settings"},
+        {"name": "System", "description": "System stats, logs, cache, backups"},
+        {"name": "Pages", "description": "Compound page data endpoints for the SPA frontend"},
+        {"name": "Public", "description": "Public read-only endpoints — no auth required"},
+    ],
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS — config-driven, supports dev cross-origin and production same-origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else [],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -161,17 +183,17 @@ app.add_middleware(
 # Security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
 
-# Include routers
-app.include_router(light_router)
+# ── API routers ───────────────────────────────────────────────────────────────
 app.include_router(auth_router)
-app.include_router(media_router)
+app.include_router(feeds_router)
 app.include_router(posts_router)
-app.include_router(public_router)
+app.include_router(media_router)
+app.include_router(tags_router)
 app.include_router(settings_router)
 app.include_router(system_router)
-app.include_router(tags_router)
+app.include_router(pages_router)
 
-# Mount static files for media serving (images cached for 7 days)
+# ── Media file serving ────────────────────────────────────────────────────────
 media_path = Path(settings.storage_path) / "media"
 media_path.mkdir(parents=True, exist_ok=True)
 app.mount(
@@ -180,21 +202,39 @@ app.mount(
     name="media",
 )
 
-# Mount static files for light assets (CSS, JS) - cached for 1 day
-static_path = Path(__file__).parent / "static"
-app.mount(
-    "/static",
-    StaticFiles(directory=str(static_path.resolve())),
-    name="static",
-)
+# ── Frontend static files ─────────────────────────────────────────────────────
+# Only mount if the frontend directory exists (may be absent during early dev)
+_frontend_css = FRONTEND_DIR / "css"
+_frontend_src = FRONTEND_DIR / "src"
+
+if _frontend_css.is_dir():
+    app.mount(
+        "/assets/css",
+        CachedStaticFiles(directory=str(_frontend_css.resolve()), max_age=3600),
+        name="frontend-css",
+    )
+
+if _frontend_src.is_dir():
+    app.mount(
+        "/assets/js",
+        StaticFiles(directory=str(_frontend_src.resolve())),
+        name="frontend-js",
+    )
+
+# Vendor libs (Leaflet, etc.) if present
+_frontend_vendor = FRONTEND_DIR / "vendor"
+if _frontend_vendor.is_dir():
+    app.mount(
+        "/assets/vendor",
+        CachedStaticFiles(directory=str(_frontend_vendor.resolve()), max_age=86400, immutable=True),
+        name="frontend-vendor",
+    )
 
 
+# ── Exception handlers ────────────────────────────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
-    """Handle uncaught exceptions.
-
-    Returns a generic error response to avoid leaking internal details.
-    """
+    """Handle uncaught exceptions."""
     if settings.debug:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -206,6 +246,7 @@ async def global_exception_handler(_request: Request, exc: Exception) -> JSONRes
     )
 
 
+# ── Standalone API routes ─────────────────────────────────────────────────────
 @app.get("/health", tags=["System"])
 async def health_check(
     db: Any = Depends(get_db),
@@ -213,12 +254,6 @@ async def health_check(
     """Health check endpoint.
 
     Verifies the application is running and the database is accessible.
-
-    Args:
-        db: Database session
-
-    Returns:
-        Status indicating the application is running and DB is reachable
     """
     from sqlalchemy import text
 
@@ -226,18 +261,9 @@ async def health_check(
     return {"status": "healthy"}
 
 
-@app.get("/{year:int}/{month:int}/{filename}", tags=["Media"])
+@app.get("/{year:int}/{month:int}/{filename}", tags=["Public"])
 async def serve_simplified_media(year: int, month: int, filename: str) -> FileResponse:
-    """Serve media files using the simplified path /YYYY/MM/filename.
-
-    Args:
-        year: Year directory
-        month: Month directory
-        filename: Filename
-
-    Returns:
-        File response
-    """
+    """Serve media files using the simplified path /YYYY/MM/filename."""
     file_path = (
         Path(settings.storage_path) / "media" / "originals" / str(year) / f"{month:02d}" / filename
     )
@@ -254,20 +280,10 @@ async def preview_post(
     token: str,
     db: Any = Depends(get_db),
 ) -> dict[str, Any]:
-    """Preview a draft post using a preview token.
+    """Preview a draft post using a shareable preview token.
 
-    This endpoint allows viewing draft posts without authentication
-    if the viewer has a valid preview token.
-
-    Args:
-        token: The preview token from the preview link
-        db: Database session
-
-    Returns:
-        Post data if token is valid
-
-    Raises:
-        HTTPException: If token is invalid or expired
+    Allows viewing draft posts without authentication when the viewer
+    holds a valid, non-expired preview token.
     """
     from datetime import UTC, datetime
 
@@ -285,12 +301,9 @@ async def preview_post(
             detail="Invalid preview token",
         )
 
-    # Handle timezone-naive and timezone-aware datetime comparison
     if post.preview_expires_at:
-        # Make comparison timezone-aware safe
         expires_at = post.preview_expires_at
         if expires_at.tzinfo is None:
-            # If naive, treat as UTC
             expires_at = expires_at.replace(tzinfo=UTC)
         if expires_at < datetime.now(UTC):
             raise HTTPException(
@@ -315,3 +328,20 @@ async def preview_post(
         "meta_description": post.meta_description,
         "preview_mode": True,
     }
+
+
+# ── SPA fallback — MUST be the last route registered ─────────────────────────
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str) -> FileResponse:
+    """Serve the SPA shell (index.html) for all non-API, non-media routes.
+
+    This enables client-side routing: the browser loads the SPA once and
+    the JavaScript router handles all subsequent navigation.
+    """
+    if FRONTEND_INDEX.is_file():
+        return FileResponse(FRONTEND_INDEX)
+    # Graceful degradation while the frontend has not been built yet
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Frontend not available — build the frontend first (see frontend/README.md)",
+    )

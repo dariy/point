@@ -159,324 +159,38 @@ async def full_published_post(db: AsyncSession, test_user) -> Post:
     return post
 
 
-class TestAjaxRequests:
-    """Test AJAX request handling for JSON responses."""
+class TestSPAFallback:
+    """Test that the SPA fallback route handles non-API paths correctly."""
 
     @pytest.mark.asyncio
-    async def test_homepage_ajax_json_response(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test homepage returns JSON for AJAX requests."""
-        response = await client.get(
-            "/",
-            headers={"X-Requested-With": "XMLHttpRequest"}
-        )
+    async def test_spa_fallback_returns_non_api_path(self, client: AsyncClient):
+        """SPA fallback serves index.html (or 503 if frontend not built) for unknown paths."""
+        response = await client.get("/some/unknown/path")
+        # Either 200 (frontend built) or 503 (frontend not yet built)
+        assert response.status_code in (200, 503)
+
+    @pytest.mark.asyncio
+    async def test_spa_fallback_for_light_routes(self, client: AsyncClient):
+        """Admin SPA routes (/light/*) are handled by the SPA fallback."""
+        response = await client.get("/light/dashboard")
+        assert response.status_code in (200, 503)
+
+    @pytest.mark.asyncio
+    async def test_api_routes_not_intercepted_by_spa(self, client: AsyncClient):
+        """API routes must return JSON, not fall through to the SPA fallback."""
+        response = await client.get("/api/posts")
+        assert response.headers["content-type"].startswith("application/json")
+
+    @pytest.mark.asyncio
+    async def test_health_route_not_intercepted_by_spa(self, client: AsyncClient):
+        """The /health route must still return JSON."""
+        response = await client.get("/health")
         assert response.status_code == 200
-        data = response.json()
-        assert "posts" in data
-        assert "pagination" in data
-        assert isinstance(data["posts"], list)
-
-    @pytest.mark.asyncio
-    async def test_single_post_ajax_json_response(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test single post returns JSON for AJAX requests."""
-        response = await client.get(
-            f"/posts/{full_published_post.slug}",
-            headers={"X-Requested-With": "XMLHttpRequest"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert "post" in data
-        assert data["post"]["title"] == full_published_post.title
-        assert "post_media" in data
-        assert "has_text_content" in data
-
-    @pytest.mark.asyncio
-    async def test_tag_archive_ajax_json_response(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test tag archive returns JSON for AJAX requests."""
-        tag = full_published_post.tags[0]
-        response = await client.get(
-            f"/tag/{tag.slug}",
-            headers={"X-Requested-With": "XMLHttpRequest"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert "posts" in data
-        assert "pagination" in data
-
-    @pytest.mark.asyncio
-    async def test_gallery_ajax_json_response(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test gallery returns JSON for AJAX requests."""
-        response = await client.get(
-            "/tags",
-            headers={"X-Requested-With": "XMLHttpRequest"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert "posts" in data
-        assert "pagination" in data
+        assert response.json()["status"] == "healthy"
 
 
-class TestPaginationEdgeCases:
-    """Test pagination edge cases."""
-
-    @pytest.mark.asyncio
-    async def test_homepage_page_beyond_total(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test requesting page number beyond total pages."""
-        response = await client.get("/?page=999")
-        # Should still return 200 with empty results
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_tag_archive_pagination(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test tag archive with pagination."""
-        tag = full_published_post.tags[0]
-        response = await client.get(f"/tag/{tag.slug}?page=1")
-        assert response.status_code == 200
-
-
-class TestPostMediaExtraction:
-    """Test media extraction from post content."""
-
-    @pytest.mark.asyncio
-    async def test_post_with_multiple_images(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        test_user,
-    ):
-        """Test post with multiple images extracts media correctly."""
-        post = Post(
-            title="Multi Image Post",
-            slug="multi-image-post",
-            content="![Img1](img1.jpg) Some text ![Img2](img2.jpg) More text <img src='img3.jpg'>",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.now(UTC),
-            author_id=test_user["user"].id,
-        )
-        db.add(post)
-        await db.commit()
-
-        response = await client.get(f"/posts/{post.slug}")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_post_without_media(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        test_user,
-    ):
-        """Test post without any media."""
-        post = Post(
-            title="Text Only Post",
-            slug="text-only-post",
-            content="This is just plain text with no images or videos.",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.now(UTC),
-            author_id=test_user["user"].id,
-        )
-        db.add(post)
-        await db.commit()
-
-        response = await client.get(f"/posts/{post.slug}")
-        assert response.status_code == 200
-
-
-class TestPostNavigation:
-    """Test prev/next post navigation."""
-
-    @pytest.mark.asyncio
-    async def test_post_with_navigation_links(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        test_user,
-    ):
-        """Test that post page includes prev/next navigation."""
-        # Create three posts in sequence
-        post1 = Post(
-            title="First Post",
-            slug="first-post",
-            content="Content 1",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.now(UTC) - timedelta(days=2),
-            author_id=test_user["user"].id,
-        )
-        post2 = Post(
-            title="Second Post",
-            slug="second-post",
-            content="Content 2",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.now(UTC) - timedelta(days=1),
-            author_id=test_user["user"].id,
-        )
-        post3 = Post(
-            title="Third Post",
-            slug="third-post",
-            content="Content 3",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.MARKDOWN,
-            published_at=datetime.now(UTC),
-            author_id=test_user["user"].id,
-        )
-        db.add_all([post1, post2, post3])
-        await db.commit()
-
-        # Middle post should have both prev and next
-        response = await client.get("/posts/second-post")
-        assert response.status_code == 200
-
-
-class TestRawFormatter:
-    """Test HTML formatter handling."""
-
-    @pytest.mark.asyncio
-    async def test_post_with_html_formatter(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        test_user,
-    ):
-        """Test post with HTML formatter."""
-        post = Post(
-            title="HTML Post",
-            slug="html-post",
-            content="<div><p>This is <strong>raw</strong> HTML</p></div>",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.HTML,
-            published_at=datetime.now(UTC),
-            author_id=test_user["user"].id,
-        )
-        db.add(post)
-        await db.commit()
-
-        response = await client.get(f"/posts/{post.slug}")
-        assert response.status_code == 200
-        # HTML should be preserved
-        assert "<strong>raw</strong>" in response.text
-
-
-class TestTagsPage:
-    """Test tags listing page."""
-
-    @pytest.mark.asyncio
-    async def test_tags_page_with_tags(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test tags page displays all tags."""
-        response = await client.get("/tags")
-        assert response.status_code == 200
-        # Should list tags
-        assert "photography" in response.text.lower() or "travel" in response.text.lower()
-
-    @pytest.mark.asyncio
-    async def test_tags_page_empty(
-        self,
-        client: AsyncClient,
-    ):
-        """Test tags page when no tags exist."""
-        response = await client.get("/tags")
-        assert response.status_code == 200
-
-
-class TestGalleryFiltering:
-    """Test gallery tag filtering."""
-
-    @pytest.mark.asyncio
-    async def test_gallery_filter_by_tag(
-        self,
-        client: AsyncClient,
-        full_published_post: Post,
-    ):
-        """Test gallery can filter by tag."""
-        tag = full_published_post.tags[0]
-        response = await client.get(f"/tag/{tag.slug}")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_gallery_filter_invalid_tag(
-        self,
-        client: AsyncClient,
-    ):
-        """Test gallery with invalid tag filter."""
-        response = await client.get("/tag/nonexistent")
-        # Returns 404 for nonexistent tag
-        assert response.status_code == 404
-
-
-class TestPostWithoutPublishedDate:
-    """Test posts without published_at."""
-
-    @pytest.mark.asyncio
-    async def test_post_without_published_at(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        test_user,
-    ):
-        """Test post that has no published_at uses created_at."""
-        post = Post(
-            title="No Publish Date",
-            slug="no-publish-date",
-            content="Content",
-            status=PostStatus.PUBLISHED,
-            formatter=PostFormatter.MARKDOWN,
-            published_at=None,  # Explicitly no publish date
-            author_id=test_user["user"].id,
-        )
-        db.add(post)
-        await db.commit()
-
-        response = await client.get(f"/posts/{post.slug}")
-        assert response.status_code == 200
-
-
-class TestHomepageEmpty:
-    """Test homepage with no posts."""
-
-    @pytest.mark.asyncio
-    async def test_homepage_no_published_posts(
-        self,
-        client: AsyncClient,
-    ):
-        """Test homepage when no published posts exist."""
-        response = await client.get("/")
-        assert response.status_code == 200
-        # Should show "no posts" message
-        assert "no posts" in response.text.lower() or "yet" in response.text.lower()
-
-
-class TestSitemapEdgeCases:
-    """Test sitemap edge cases."""
+class TestFeedsEndpoints:
+    """Test RSS feed, sitemap, and robots.txt — backend-rendered feed routes."""
 
     @pytest.mark.asyncio
     async def test_sitemap_with_posts(
@@ -484,15 +198,11 @@ class TestSitemapEdgeCases:
         client: AsyncClient,
         full_published_post: Post,
     ):
-        """Test sitemap includes published posts."""
+        """Sitemap includes published posts."""
         response = await client.get("/sitemap.xml")
         assert response.status_code == 200
         assert "<?xml" in response.text
         assert full_published_post.slug in response.text
-
-
-class TestRSSEdgeCases:
-    """Test RSS feed edge cases."""
 
     @pytest.mark.asyncio
     async def test_rss_with_posts(
@@ -500,8 +210,36 @@ class TestRSSEdgeCases:
         client: AsyncClient,
         full_published_post: Post,
     ):
-        """Test RSS feed includes published posts."""
+        """RSS feed includes published posts."""
         response = await client.get("/feed.xml")
         assert response.status_code == 200
         assert "<?xml" in response.text
         assert full_published_post.title in response.text
+
+    @pytest.mark.asyncio
+    async def test_robots_txt(self, client: AsyncClient):
+        """robots.txt is served as plain text."""
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+        assert "User-agent" in response.text
+        assert "Disallow: /api/" in response.text
+
+    @pytest.mark.asyncio
+    async def test_sitemap_content_type(self, client: AsyncClient):
+        """Sitemap returns correct XML content type."""
+        response = await client.get("/sitemap.xml")
+        assert "xml" in response.headers["content-type"]
+
+    @pytest.mark.asyncio
+    async def test_rss_content_type(self, client: AsyncClient):
+        """RSS feed returns correct content type."""
+        response = await client.get("/feed.xml")
+        assert "rss+xml" in response.headers["content-type"]
+
+
+# ── Legacy placeholder — intentionally removed ────────────────────────────────
+# The following test classes tested server-rendered HTML routes (public.py /
+# light.py) that no longer exist. The frontend is now a SPA served as static
+# files. Equivalent functionality is tested via the /api/pages/* endpoints.
+# See tests/pages/ for the replacement test suite (Phase B).
+
