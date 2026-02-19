@@ -11,7 +11,7 @@
 | Phase | Name | Status | Tests |
 |-------|------|--------|-------|
 | **A** | Backend — Pure JSON API | ✅ Complete | 346 pass |
-| **B** | Frontend — SPA Scaffold | ⬜ Not started | — |
+| **B** | Frontend — SPA Scaffold | ✅ Complete | — |
 | **C** | Public Blog Migration | ⬜ Not started | — |
 | **D** | Admin (Light) Migration | ⬜ Not started | — |
 | **E** | Cleanup & Hardening | ⬜ Not started | — |
@@ -80,22 +80,45 @@
 
 ---
 
-## Phase B — Frontend: SPA Scaffold ⬜
+## Phase B — Frontend: SPA Scaffold ✅
 
-**Status**: Not started
+**Completed**: 2026-02-19
 
-### What to build
-- [ ] `frontend/index.html` — SPA shell
-- [ ] `frontend/src/app.js` — bootstrap (auth check + router init)
-- [ ] `frontend/src/router.js` — History API router with lazy-loaded pages
-- [ ] `frontend/src/store.js` — reactive key-value state store
-- [ ] `frontend/src/components/Component.js` — base component class
-- [ ] `frontend/src/api/client.js` — fetch wrapper (credentials, errors, JSON)
-- [ ] `frontend/src/api/{auth,posts,media,tags,settings,system,pages}.js`
-- [ ] `frontend/src/utils/helpers.js` — `escapeHtml`, debounce, DOM helpers
-- [ ] `frontend/src/utils/formatters.js` — date, file size, truncation
-- [ ] `frontend/css/` — CSS migrated from `app/static/css/`
-- [ ] Dev workflow documented
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `frontend/index.html` | SPA shell — single mount point, loads `app.js` as ES module |
+| `frontend/src/app.js` | Bootstrap: settings → auth check → theme → router start |
+| `frontend/src/router.js` | History API router — lazy loading, auth guard, link interception |
+| `frontend/src/store.js` | Reactive pub/sub key-value store |
+| `frontend/src/components/Component.js` | Base component class: `render()`, `setState()`, `mountChild()`, lifecycle |
+| `frontend/src/api/client.js` | Fetch wrapper: JSON, credentials, 401 event, FormData upload |
+| `frontend/src/api/auth.js` | `login`, `logout`, `getMe` |
+| `frontend/src/api/posts.js` | Full CRUD + status, slug lookup, navigation, preview |
+| `frontend/src/api/media.js` | List, upload, update, delete |
+| `frontend/src/api/tags.js` | CRUD + reorder |
+| `frontend/src/api/settings.js` | Public + admin settings |
+| `frontend/src/api/system.js` | Stats, logs, backups, cache flush |
+| `frontend/src/api/pages.js` | Compound page endpoints (home, tag, tags index) |
+| `frontend/src/utils/helpers.js` | `escapeHtml`, `safeUrl`, debounce, throttle, `createElement`, `navigate` |
+| `frontend/src/utils/formatters.js` | Date, datetime, file size, truncate, `htmlExcerpt`, `formatCount` |
+| `frontend/css/` | CSS migrated from `app/static/css/` (light, public, common) |
+| `frontend/vendor/` | Vendor libs migrated from `app/static/vendor/` (Leaflet) |
+
+### Phase B checklist
+
+- [x] `frontend/index.html` SPA shell
+- [x] `frontend/src/store.js` reactive store
+- [x] `frontend/src/components/Component.js` base class
+- [x] `frontend/src/utils/helpers.js`
+- [x] `frontend/src/utils/formatters.js`
+- [x] `frontend/src/api/client.js` fetch wrapper
+- [x] `frontend/src/api/{auth,posts,media,tags,settings,system,pages}.js`
+- [x] `frontend/src/router.js` History API router with lazy loading + auth guard
+- [x] `frontend/src/app.js` bootstrap
+- [x] `frontend/css/` CSS migrated
+- [x] `frontend/vendor/` vendor libs migrated
 
 See [FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHITECTURE.md) for full spec.
 
