@@ -12,7 +12,7 @@
 |-------|------|--------|-------|
 | **A** | Backend — Pure JSON API | ✅ Complete | 346 pass |
 | **B** | Frontend — SPA Scaffold | ✅ Complete | — |
-| **C** | Public Blog Migration | ⬜ Not started | — |
+| **C** | Public Blog Migration | ✅ Complete | — |
 | **D** | Admin (Light) Migration | ⬜ Not started | — |
 | **E** | Cleanup & Hardening | ⬜ Not started | — |
 
@@ -124,17 +124,45 @@ See [FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHITECTURE.md) for full spec.
 
 ---
 
-## Phase C — Public Blog Migration ⬜
+## Phase C — Public Blog Migration ✅
 
-**Status**: Not started (blocked on Phase B)
+**Completed**: 2026-02-19
 
-### Pages to build
-- [ ] `HomePage` → `GET /api/pages/home`
-- [ ] `PostPage` → `GET /api/posts/slug/:slug` (with lightbox, immersive mode)
-- [ ] `TagPage` → `GET /api/pages/tag/:slug`
-- [ ] `TagsPage` → `GET /api/pages/tags`
-- [ ] `MapPage` → Leaflet + `GET /api/tags` (with locations)
-- [ ] `PreviewPage` → `GET /preview/:token`
+### Components created
+
+| File | Purpose |
+|------|---------|
+| `src/components/shared/Pagination.js` | Compact page nav with ellipsis gaps; `onPage` callback |
+| `src/components/shared/Toast.js` | `ToastContainer` — subscribes to `store('toast')`, auto-dismiss |
+| `src/components/public/PublicHeader.js` | Blog title, nav (Home/Tags/Map), theme toggle |
+| `src/components/public/PublicFooter.js` | Copyright, RSS, Sitemap, Admin links |
+| `src/components/public/PostCard.js` | Card with thumbnail, title, excerpt, tags, date, view count |
+| `src/components/public/PostGrid.js` | Responsive grid of `PostCard` children |
+| `src/components/public/TagCloud.js` | Weighted tag cloud sidebar widget |
+| `src/components/public/PostContent.js` | Full post: header, body (with lightbox/media), tags, prev/next nav |
+| `src/components/public/MediaLightbox.js` | Full-screen image viewer; keyboard (Esc/←/→) + click-outside |
+
+### Pages created
+
+| File | API | Notes |
+|------|-----|-------|
+| `src/pages/public/HomePage.js` | `GET /api/pages/home` | Grid + tag cloud sidebar + pagination |
+| `src/pages/public/PostPage.js` | `GET /api/posts/slug/:slug` | Sets document.title, meta description |
+| `src/pages/public/TagPage.js` | `GET /api/pages/tag/:slug` | Breadcrumb navigation + post grid |
+| `src/pages/public/TagsPage.js` | `GET /api/pages/tags` | Recursive tag tree with hierarchy |
+| `src/pages/public/MapPage.js` | `GET /api/tags` | Leaflet map, lazy-loads vendor library |
+| `src/pages/public/PreviewPage.js` | `GET /preview/:token` | Draft preview with notice banner |
+
+### Phase C checklist
+
+- [x] `HomePage` — posts + tag cloud + pagination
+- [x] `PostPage` — full post with lightbox, prev/next navigation
+- [x] `TagPage` — breadcrumb + post grid + pagination
+- [x] `TagsPage` — hierarchical tag tree
+- [x] `MapPage` — Leaflet map with tag location markers
+- [x] `PreviewPage` — draft preview via token
+- [x] `ToastContainer` wired into app bootstrap
+- [x] PreviewPage route added to router table
 
 ---
 
