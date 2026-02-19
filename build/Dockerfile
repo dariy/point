@@ -34,6 +34,7 @@ RUN pip install --no-cache-dir --no-deps /wheels/* && rm -rf /wheels
 # Copy application
 COPY app/ /app/app/
 COPY scripts/ /app/scripts/
+COPY frontend/ /app/frontend/
 
 # Create data directory structure
 RUN mkdir -p /data/media/originals \
