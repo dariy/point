@@ -40,7 +40,8 @@
 }
 
 .tags-page .tags-filters {
-    margin-bottom: var(--spacing-md);
+    margin-top: 5px;
+    /*margin-bottom: var(--spacing-md); */
 }
 
 .filter-btn {
@@ -130,4 +131,64 @@
 
 .toggle-children.active svg {
     transform: rotate(180deg);
+}
+
+/* ===========================
+   Tags Tree (TagsPage hierarchy)
+   =========================== */
+.tags-tree {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tags-tree-item {
+    margin-bottom: var(--spacing-xs);
+}
+
+.tags-tree-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: var(--font-size-base);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.tags-tree-link:hover {
+    color: var(--color-primary);
+    background-color: var(--surface-hover);
+}
+
+.tags-tree-link .tag-count {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.tags-tree-desc {
+    margin: 2px 0 var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.tags-tree-children {
+    list-style: none;
+    padding-left: var(--spacing-lg);
+    margin: var(--spacing-xs) 0 var(--spacing-xs) var(--spacing-sm);
+    border-left: 2px solid var(--border-primary);
+}
+
+/* Important tag highlight in public context */
+.tags-tree-item.tag-important > .tags-tree-link {
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+.tag-important {
+    background-color: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    color: var(--color-primary);
+    border-radius: var(--border-radius-sm);
 }

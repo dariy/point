@@ -111,3 +111,11 @@ input[type="password"] {
     height: 18px;
     cursor: pointer;
 }
+
+/* Small input variant */
+.form-input-sm {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    height: auto;
+    width: auto;
+}
