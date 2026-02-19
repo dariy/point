@@ -53,8 +53,8 @@ export class PublicHeader extends Component {
             <div class="site-branding">
               <a href="/" class="site-title-link">
                 <h1 class="site-title">
-                  <svg class="app-logo" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <circle class="logo-shape" cx="8" cy="8" r="8"/>
+                  <svg class="app-logo" viewBox="0 0 128 128" version="1.1" xmlns="http://www.w3.org/2000/svg">
+                      <path class="logo-shape" d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
                   </svg>
                   ${title}
                 </h1>
