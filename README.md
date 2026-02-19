@@ -31,8 +31,8 @@ A lightweight, professional-grade personal photo blog engine built with FastAPI,
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/username/photo-blog.git
-   cd photo-blog
+   git clone https://github.com/dariy/point.git
+   cd point
    ```
 
 2. **Configure environment**:
