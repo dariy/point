@@ -16,6 +16,7 @@ import { store } from './store.js';
 import { router } from './router.js';
 import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
+import { ToastContainer } from './components/shared/Toast.js';
 
 // ── Theme ─────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,14 @@ async function bootstrap() {
   const user = await getMe(); // returns null if not logged in
   store.set('user', user);
 
-  // 4. Start the router.
+  // 4. Mount toast container.
+  const toastsEl = document.getElementById('toasts');
+  if (toastsEl) {
+    const toastContainer = new ToastContainer(toastsEl);
+    toastContainer.mount();
+  }
+
+  // 5. Start the router.
   router.init(routes, {
     mountPoint: document.getElementById('app'),
     authGuard: () => !!store.get('user'),
@@ -79,6 +87,7 @@ const routes = [
   { path: '/tag/:slug',   load: () => import('./pages/public/TagPage.js'),    public: true },
   { path: '/tags',        load: () => import('./pages/public/TagsPage.js'),   public: true },
   { path: '/map',         load: () => import('./pages/public/MapPage.js'),    public: true },
+  { path: '/preview/:token', load: () => import('./pages/public/PreviewPage.js'), public: true },
 
   // Admin (Light) — protected
   { path: '/light/login', load: () => import('./pages/light/LoginPage.js'),   public: true },
