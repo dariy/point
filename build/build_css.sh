@@ -5,7 +5,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-CSS_DIR="$ROOT_DIR/app/static/css"
+CSS_DIR="$ROOT_DIR/frontend/css"
 
 echo "Building CSS bundles in $CSS_DIR..."
 

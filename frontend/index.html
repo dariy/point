@@ -6,8 +6,11 @@
   <meta name="description" content="" />
   <title>Loading…</title>
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="/assets/css/main.css" />
+  <!-- CSS — public and admin bundles both preloaded; the active one is set via
+       media="all" and the inactive one via media="not all". The section is
+       switched synchronously by app.js before any page component mounts. -->
+  <link id="css-public" rel="stylesheet" href="/assets/css/main.css" />
+  <link id="css-light"  rel="stylesheet" href="/assets/css/light.css" media="not all" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />

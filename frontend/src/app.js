@@ -18,6 +18,30 @@ import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
 import { ToastContainer } from './components/shared/Toast.js';
 
+// ── CSS section switching ─────────────────────────────────────────────────
+//
+// The SPA uses two CSS bundles with incompatible :root token sets:
+//   main.css  — public blog
+//   light.css — admin interface
+//
+// Both <link> elements are present in index.html. The inactive one uses
+// media="not all" so the browser downloads it eagerly (no flash on switch)
+// but the browser does not apply its rules. We swap media attributes
+// synchronously on every route change, before any page component mounts.
+
+const _cssPublic = document.getElementById('css-public');
+const _cssLight  = document.getElementById('css-light');
+
+function _applySection(pathname) {
+  const isLight = pathname.startsWith('/light');
+  if (_cssPublic) _cssPublic.media = isLight ? 'not all' : 'all';
+  if (_cssLight)  _cssLight.media  = isLight ? 'all' : 'not all';
+  document.documentElement.dataset.section = isLight ? 'light' : 'public';
+}
+
+// Apply immediately so the initial paint uses the correct bundle.
+_applySection(location.pathname);
+
 // ── Theme ─────────────────────────────────────────────────────────────────
 
 function applyTheme(theme) {
@@ -64,7 +88,10 @@ async function bootstrap() {
     toastContainer.mount();
   }
 
-  // 5. Start the router.
+  // 5. Subscribe to route changes to swap CSS bundles before each page mounts.
+  store.subscribe('route', ({ pathname }) => _applySection(pathname));
+
+  // 6. Start the router.
   router.init(routes, {
     mountPoint: document.getElementById('app'),
     authGuard: () => !!store.get('user'),
