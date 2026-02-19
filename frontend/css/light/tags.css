@@ -1,0 +1,191 @@
+/* ===========================
+   Tags (Admin)
+   =========================== */
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    background-color: var(--surface-hover);
+    color: var(--text-secondary);
+    border-radius: var(--border-radius-sm);
+}
+
+.tag-important {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.tag-count {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    background-color: var(--border-primary);
+    padding: 2px 6px;
+    border-radius: 9999px;
+}
+
+.slug-link {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    transition: color var(--transition-fast);
+}
+
+.slug-link:hover {
+    color: var(--color-primary);
+}
+
+.sort-link {
+    color: inherit;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sort-link:hover {
+    color: var(--color-primary);
+}
+
+.sort-link.active {
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.tags-input {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-input);
+    min-height: 42px;
+}
+
+.tags-input:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.tags-input .tag {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    font-weight: 500;
+}
+
+.tags-input .tag-remove {
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.tags-input .tag-remove:hover {
+    opacity: 1;
+}
+
+.tags-input input {
+    flex: 1;
+    min-width: 100px;
+    border: none;
+    outline: none;
+    padding: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    background: transparent;
+    color: var(--text-primary);
+}
+
+.tags-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    display: none;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 4px;
+}
+
+.suggestion-item {
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    transition: background-color var(--transition-fast);
+}
+
+.suggestion-item:hover {
+    background-color: var(--surface-hover);
+    color: var(--color-primary);
+}
+
+.tag-count-link {
+    text-decoration: none;
+    color: inherit;
+    display: inline-block;
+}
+
+.tag-count-link:hover .tag-count {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+/* Drag and Drop Styles */
+.tree-row[draggable="true"] {
+    cursor: grab;
+}
+
+.tree-row.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+    background-color: var(--bg-secondary);
+}
+
+/* Make-child drop target */
+.tree-row.drag-over {
+    background-color: rgba(37, 99, 235, 0.15) !important;
+    outline: 2px dashed var(--color-primary, #2563eb);
+    outline-offset: -2px;
+}
+
+.tree-view.drag-over {
+    outline: 2px dashed var(--color-primary, #2563eb);
+    outline-offset: 4px;
+    background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* Reorder drop indicators */
+.tree-row {
+    position: relative;
+}
+
+.tree-row.drop-before::before,
+.tree-row.drop-after::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--color-primary, #2563eb);
+    border-radius: 1px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.tree-row.drop-before::before {
+    top: -1px;
+}
+
+.tree-row.drop-after::after {
+    bottom: -1px;
+}
+
