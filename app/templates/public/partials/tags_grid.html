@@ -3,7 +3,7 @@
     {% for post in posts %}
     {% set thumb_info = determine_thumbnail(post.content, post.thumbnail_path) %}
     {% set display_thumb = thumb_info[0] %}
-    {% set is_video = thumb_info[1] %}
+    {% set media_type = thumb_info[1] %}
     {% set has_image = display_thumb is not none %}
 
     {% if loop.first and page == 1 and post.is_featured %}
@@ -21,11 +21,17 @@
             {% endif %}
             {% if has_image %}
             <div class="post-card-background">
-                {% if is_video %}
+                {% if media_type == 'video' %}
                 <video src="{{ display_thumb }}" muted loop playsinline></video>
                 <div class="video-play-indicator">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
                         <path d="M8 5v14l11-7z" />
+                    </svg>
+                </div>
+                {% elif media_type == 'audio' %}
+                <div class="audio-placeholder">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="white">
+                        <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z" />
                     </svg>
                 </div>
                 {% else %}
@@ -108,11 +114,17 @@
         {% endif %}
         {% if has_image %}
         <div class="post-card-background">
-            {% if is_video %}
+            {% if media_type == 'video' %}
             <video src="{{ display_thumb }}" muted loop playsinline></video>
             <div class="video-play-indicator">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
                     <path d="M8 5v14l11-7z" />
+                </svg>
+            </div>
+            {% elif media_type == 'audio' %}
+            <div class="audio-placeholder">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z" />
                 </svg>
             </div>
             {% else %}
