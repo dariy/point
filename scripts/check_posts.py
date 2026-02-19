@@ -6,8 +6,10 @@ import sys
 sys.path.append(os.getcwd())
 
 from sqlalchemy import select
+
 from app.database import SessionLocal
 from app.models.post import Post
+
 
 async def check():
     async with SessionLocal() as db:
