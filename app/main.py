@@ -206,6 +206,7 @@ app.mount(
 # Only mount if the frontend directory exists (may be absent during early dev)
 _frontend_css = FRONTEND_DIR / "css"
 _frontend_src = FRONTEND_DIR / "src"
+_frontend_images = FRONTEND_DIR / "images"
 
 if _frontend_css.is_dir():
     app.mount(
@@ -219,6 +220,13 @@ if _frontend_src.is_dir():
         "/assets/js",
         StaticFiles(directory=str(_frontend_src.resolve())),
         name="frontend-js",
+    )
+
+if _frontend_images.is_dir():
+    app.mount(
+        "/assets/images",
+        CachedStaticFiles(directory=str(_frontend_images.resolve()), max_age=86400),
+        name="frontend-images",
     )
 
 # Vendor libs (Leaflet, etc.) if present
