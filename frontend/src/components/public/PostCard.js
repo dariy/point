@@ -1,26 +1,26 @@
 /**
  * PostCard — a single post entry in the grid.
  *
+ * The entire card is clickable (navigates to the post) except tag links,
+ * which navigate to their respective tag pages.
+ *
  * Props:
  *   post           {object}   Post list item from the API
  *   showViewCount  {boolean}  Show view count if true (from settings.show_view_counts)
+ *   isHero         {boolean}  True for the first featured post (hero slot)
  */
 
 import { Component } from '../Component.js';
-import { escapeHtml, safeUrl } from '../../utils/helpers.js';
+import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
 
 export class PostCard extends Component {
   render() {
-    const { post, showViewCount = false } = this.props;
+    const { post, showViewCount = false, isHero = false } = this.props;
     if (!post) return '';
 
     const hasThumbnail = !!post.thumbnail_path;
-    const cardClass = [
-      'post-card',
-      hasThumbnail ? 'has-image' : 'text-only',
-      post.is_featured ? 'featured-post' : '',
-    ].filter(Boolean).join(' ');
+    const cardClass = ['post-card', hasThumbnail ? 'has-image' : 'text-only'].join(' ');
 
     const thumbnailStyle = hasThumbnail
       ? ` style="background-image: url('${safeUrl(post.thumbnail_path)}')"` : '';
@@ -30,24 +30,18 @@ export class PostCard extends Component {
     ).join('');
 
     const viewCount = showViewCount && post.view_count != null
-      ? `<span class="view-count" aria-label="${escapeHtml(String(post.view_count))} views">
-           ${escapeHtml(String(post.view_count))} views
-         </span>`
-      : '';
+      ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
 
-    const featured = post.is_featured
+    const featured = isHero
       ? `<span class="featured-badge" aria-label="Featured">Featured</span>` : '';
 
     return `
-      <article class="${cardClass}">
-        <a href="/post/${escapeHtml(post.slug)}" class="post-card-link" tabindex="-1" aria-hidden="true">
-          <div class="post-card-background"${thumbnailStyle}></div>
-        </a>
+      <article class="${cardClass}" role="button" tabindex="0"
+               data-post-slug="${escapeHtml(post.slug)}" style="cursor:pointer">
+        <div class="post-card-background"${thumbnailStyle}></div>
         <div class="post-card-content${hasThumbnail ? ' overlay' : ''}">
           ${featured}
-          <h2 class="post-card-title">
-            <a href="/post/${escapeHtml(post.slug)}">${escapeHtml(post.title)}</a>
-          </h2>
+          <h2 class="post-card-title">${escapeHtml(post.title)}</h2>
           ${post.excerpt ? `<p class="post-card-excerpt">${escapeHtml(post.excerpt)}</p>` : ''}
           <div class="post-card-meta">
             <time datetime="${escapeHtml(post.published_at || post.created_at || '')}"
@@ -59,5 +53,21 @@ export class PostCard extends Component {
           ${tags ? `<div class="post-card-tags" aria-label="Tags">${tags}</div>` : ''}
         </div>
       </article>`;
+  }
+
+  afterRender() {
+    const { post } = this.props;
+    if (!post) return;
+    const card = this.$('.post-card');
+    if (!card) return;
+
+    const go = () => navigate(`/post/${post.slug}`);
+
+    card.addEventListener('click', (e) => {
+      if (!e.target.closest('a')) go();
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    });
   }
 }

@@ -7,14 +7,13 @@
     overflow: hidden;
 }
 
-.immersive-layout .site-header {
+.immersive-layout .site-header-group {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 50;
     background: var(--header-bg);
-    /* Default dark for contrast */
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border-bottom: none;
@@ -54,7 +53,7 @@
         fill var(--transition-theme);
 }
 
-[data-theme="light"].immersive-layout .site-header {
+[data-theme="light"].immersive-layout .site-header-group {
     background: rgba(255, 255, 255, 0.75);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -100,6 +99,12 @@
     margin: 0;
     height: 100%;
     padding: 0;
+}
+
+/* Ensure the component mount point stretches to fill the container */
+.immersive-layout #content-mount {
+    display: block;
+    height: 100%;
 }
 
 .immersive-layout .site-footer {
@@ -376,7 +381,7 @@ video.immersive-bg-image {
 }
 
 /* UI Hidden State (toggled by JS) */
-.immersive-layout.ui-hidden .site-header {
+.immersive-layout.ui-hidden .site-header-group {
     transform: translateY(-100%);
     opacity: 0;
     pointer-events: none;

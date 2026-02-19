@@ -5,6 +5,7 @@ Defines Pydantic models for post CRUD operations.
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -104,6 +105,7 @@ class PostResponse(BaseModel):
     thumbnail_path: str | None
     meta_description: str | None
     tags: list[str] = Field(default_factory=list)
+    media: list[Any] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

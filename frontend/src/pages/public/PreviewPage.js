@@ -63,7 +63,8 @@ export default class PreviewPage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '' });
+    const navTags = store.get('navTags') || [];
+    this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '' });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
     if (this.state.post) {

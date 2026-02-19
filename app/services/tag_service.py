@@ -514,6 +514,7 @@ class TagService:
         include_empty: bool = True,
         search: str | None = None,
         public_only: bool = False,
+        root_id: int | None = None,
     ) -> list[dict[str, Any]]:
         """Get tags grouped recursively by parents (meta-tags)."""
         # Fetch all tags with their relationships
@@ -547,7 +548,7 @@ class TagService:
         visible_ids = {tag.id for tag in all_tags}
 
         async def build_tree(
-            tag: Tag, visible_ids: set[int], show_related: bool, branch_ids: set[int]
+            tag: Tag, visible_ids: set[int], branch_ids: set[int]
         ) -> list[dict[str, Any]]:
             children_trees = []
             # Sort children by name for consistent UI
@@ -565,14 +566,14 @@ class TagService:
 
             for child in sorted_children:
                 child_tree = await build_tree(
-                    child, visible_ids, show_related, new_branch_ids
+                    child, visible_ids, new_branch_ids
                 )
                 # At this point, child is already known to be visible
                 # Include child with its tree (which might be empty)
                 children_trees.append({"tag": child, "children": child_tree})
 
-            # If this is a leaf and show_related is True, add related tags
-            if not children_trees and show_related:
+            # If this tag wants to show related tags as children, add them
+            if tag.show_related_tags_as_children:
                 related = await self.get_related_tags(tag.id, exclude_ids=new_branch_ids)
                 for rel in related:
                     # Filter related tags by visible_ids
@@ -585,14 +586,21 @@ class TagService:
 
         hierarchy: list[dict[str, Any]] = []
 
-        # Only start from roots (tags with no parents)
-        for tag in all_tags:
-            if not tag.parents:
-                tree = await build_tree(
-                    tag, visible_ids, tag.show_related_tags_as_children, set()
-                )
-                if tag.id in visible_ids or tree:
-                    hierarchy.append({"tag": tag, "children": tree})
+        if root_id:
+            # Start from specific tag
+            root_tag = next((t for t in all_tags if t.id == root_id), None)
+            if root_tag:
+                tree = await build_tree(root_tag, visible_ids, set())
+                hierarchy.append({"tag": root_tag, "children": tree})
+        else:
+            # Only start from roots (tags with no parents)
+            for tag in all_tags:
+                if not tag.parents:
+                    tree = await build_tree(
+                        tag, visible_ids, set()
+                    )
+                    if tag.id in visible_ids or tree:
+                        hierarchy.append({"tag": tag, "children": tree})
 
         # Sort top-level: explicit sort_order first (ascending), then alphabetically
         hierarchy.sort(
