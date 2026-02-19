@@ -62,7 +62,7 @@
                         <h4>Application Cache</h4>
                         <p>Clear rendered pages and RSS feed cache.</p>
                     </div>
-                    <button class="btn btn-outline" data-action="clear-cache" data-pattern="all">Clear All
+                    <button class="btn btn-sm btn-primary" data-action="clear-cache" data-pattern="all">Clear All
                         Cache</button>
                 </div>
                 <div class="op-item">
@@ -70,14 +70,14 @@
                         <h4>Orphaned Media</h4>
                         <p>Cleanup files not linked to any post.</p>
                     </div>
-                    <button class="btn btn-outline" data-action="cleanup-orphaned">Cleanup</button>
+                    <button class="btn btn-sm btn-primary" data-action="cleanup-orphaned">Cleanup</button>
                 </div>
                 <div class="op-item">
                     <div class="op-info">
                         <h4>Map Coordinates</h4>
                         <p>Fetch missing coordinates for city and country tags.</p>
                     </div>
-                    <button class="btn btn-outline" data-action="update-map-coords">Update Coordinates</button>
+                    <button class="btn btn-sm btn-primary" data-action="update-map-coords">Update Coordinates</button>
                 </div>
             </div>
         </div>
@@ -98,26 +98,28 @@
                         </div>
                         <p class="text-small text-muted">If disabled, original high-resolution photos will be used everywhere.</p>
 
-                        <div id="thumbnail-controls" {% if not stats.use_thumbnails %}style="opacity: 0.5; pointer-events: none;"{% endif %}>
-                            <div class="form-row mt-3" style="display: flex; gap: 1rem;">
-                                <div class="form-group mb-0">
+                        <div id="thumbnail-controls" class="{% if not stats.use_thumbnails %}disabled{% endif %}">
+                            <div class="thumbnail-settings-row mt-3">
+                                <div class="form-group">
                                     <label class="text-small">Width (px)</label>
-                                    <input type="number" id="system_thumbnail_width" class="form-input" style="width: 80px;" value="{{ stats.thumbnail_width|default(400) }}">
+                                    <input type="number" id="system_thumbnail_width" class="form-input" value="{{ stats.thumbnail_width|default(400) }}">
                                 </div>
-                                <div class="form-group mb-0">
+                                <div class="form-group">
                                     <label class="text-small">Height (px)</label>
-                                    <input type="number" id="system_thumbnail_height" class="form-input" style="width: 80px;" value="{{ stats.thumbnail_height|default(300) }}">
+                                    <input type="number" id="system_thumbnail_height" class="form-input" value="{{ stats.thumbnail_height|default(300) }}">
                                 </div>
-                                <div class="form-group mb-0" style="display: flex; align-items: flex-end;">
-                                    <button class="btn btn-sm btn-outline" data-action="save-thumbnail-settings">Save</button>
+                                <div class="form-group">
+                                    <button class="btn btn-sm btn-primary" data-action="save-thumbnail-settings">Save</button>
                                 </div>
                             </div>
 
                             <div class="mt-3">
-                                <p class="text-small mb-2">Rebuild image thumbnails:</p>
+                                <div class="op-info">
+                                    <p>Rebuild image thumbnails:</p>
+                                </div>
                                 <div class="btn-group">
-                                    <button class="btn btn-outline" data-action="rebuild-thumbnails" data-only-missing="true">Missing Only</button>
-                                    <button class="btn btn-outline" data-action="rebuild-thumbnails" data-only-missing="false">Rebuild All</button>
+                                    <button class="btn btn-primary" data-action="rebuild-thumbnails" data-only-missing="true">Missing Only</button>
+                                    <button class="btn btn-primary" data-action="rebuild-thumbnails" data-only-missing="false">Rebuild All</button>
                                 </div>
                             </div>
                         </div>
@@ -130,7 +132,7 @@
         <div class="system-card backups-card">
             <div class="card-header">
                 <h3 class="card-title">Backup Archives</h3>
-                <button class="btn btn-sm btn-primary" data-action="refresh-backups">Refresh</button>
+                <button class="btn btn-sm" data-action="refresh-backups">Refresh</button>
             </div>
             <div class="ops-list">
                 <div class="op-item">
@@ -138,7 +140,7 @@
                         <h4>System Backup</h4>
                         <p>Trigger a manual database and media backup.</p>
                     </div>
-                    <button class="btn btn-primary" data-action="trigger-backup">Backup Now</button>
+                    <button class="btn btn-sm btn-primary" data-action="trigger-backup">Backup Now</button>
                 </div>
             </div>
             <div id="backups-list" class="backups-list">
@@ -148,27 +150,34 @@
     </div>
 
     <!-- Database Migrations Section -->
-    <div class="system-card migrations-card">
-        <div class="card-header">
-            <h3 class="card-title">Database Migrations</h3>
-            <button class="btn btn-sm btn-outline" data-action="refresh-migrations">Refresh</button>
+    <div class="system-card migrations-card collapsed">
+        <div class="card-header" data-action="toggle-card">
+            <div style="display: flex; align-items: center;">
+                <span class="btn-toggle"><span class="arrow">></span></span>
+                <h3 class="card-title">Database Migrations</h3>
+            </div>
+            <div class="header-actions" style="display: none;">
+                <button class="btn btn-sm" data-action="refresh-migrations">Refresh</button>
+            </div>
         </div>
-        <div id="migrations-list" class="migrations-list">
+        <div id="migrations-list" class="migrations-list" style="display: none;">
             <div class="loading">Loading migrations...</div>
         </div>
     </div>
 
     <!-- Logs Section -->
-    <div class="system-card logs-card">
-        <div class="card-header">
-            <h3 class="card-title">System Logs</h3>
+    <div class="system-card logs-card collapsed">
+        <div class="card-header" data-action="toggle-card">
+            <div style="display: flex; align-items: center;">
+                <span class="btn-toggle"><span class="arrow">></span></span>
+                <h3 class="card-title">System Logs</h3>
+            </div>
             <div class="header-actions">
                 <select id="log-type" style="display: none;">
                     <option value="app">App Log</option>
                     <option value="error">Error Log</option>
                 </select>
                 <button class="btn btn-sm" data-action="refresh-logs" style="display: none;">Refresh</button>
-                <button class="btn btn-sm btn-outline" data-action="toggle-logs">Show Logs</button>
             </div>
         </div>
         <div class="log-viewer" id="log-content" style="display: none;">

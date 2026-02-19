@@ -956,7 +956,7 @@ async def tags_page(
             pub_date = post.published_at or post.created_at
 
             # Calculate preview data
-            thumb_path, is_video_thumb = determine_thumbnail(
+            thumb_path, media_type = determine_thumbnail(
                 post.content,
                 post.thumbnail_path,
                 settings.storage_path,
@@ -989,7 +989,9 @@ async def tags_page(
                     "excerpt": excerpt,
                     "preview_html": preview_html,
                     "has_image": has_image,
-                    "is_video": is_video_thumb,
+                    "media_type": media_type,
+                    "is_video": media_type == "video",
+                    "is_audio": media_type == "audio",
                     "is_featured": post.is_featured,
                 }
             )
