@@ -228,3 +228,80 @@
 .error-state {
     color: #ef4444;
 }
+
+/* Card Toggles */
+.btn-toggle {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    margin-right: 8px;
+}
+
+.btn-toggle .arrow {
+    display: inline-block;
+    font-family: monospace;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.system-card.collapsed .btn-toggle .arrow {
+    transform: rotate(0deg);
+}
+
+.system-card:not(.collapsed) .btn-toggle .arrow {
+    transform: rotate(90deg);
+}
+
+.system-card.collapsed .migrations-list,
+.system-card.collapsed .log-viewer,
+.system-card.collapsed .header-actions {
+    display: none !important;
+}
+
+.card-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Thumbnail Controls */
+#thumbnail-controls {
+    transition: opacity 0.2s ease-in-out;
+}
+
+#thumbnail-controls.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.thumbnail-settings-row {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-end;
+}
+
+.thumbnail-settings-row .form-group {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.thumbnail-settings-row .form-group label {
+    margin-bottom: var(--spacing-xs);
+}
+
+.thumbnail-settings-row .form-input {
+    width: 80px;
+    height: 32px; /* Set a specific height for inputs and buttons to match */
+    padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.thumbnail-settings-row .btn {
+    height: 32px;
+}
