@@ -7,6 +7,7 @@ ENV APP_VERSION=${BUILD_VERSION}
 # Copy application with ownership
 COPY --chown=appuser:appuser app/ /app/app/
 COPY --chown=appuser:appuser scripts/ /app/scripts/
+COPY --chown=appuser:appuser frontend/ /app/frontend/
 
 USER appuser
 

@@ -98,8 +98,7 @@ export default class SystemPage extends Component {
               <div class="card-body log-viewer">
                 ${loadingLogs
                   ? `<div class="loading-spinner loading-spinner-sm"></div>`
-                  : `<pre class="log-content">${escapeHtml(logs.join('
-') || 'No log entries found.')}</pre>`
+                  : `<pre class="log-content">${escapeHtml(logs.join('\n') || 'No log entries found.')}</pre>`
                 }
               </div>
             </div>

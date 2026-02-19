@@ -11,6 +11,3 @@ echo "Building with version: $DEV_BUILD_VERSION"
 podman compose -f docker-compose.dev.yml build --build-arg BUILD_VERSION=$DEV_BUILD_VERSION
 podman compose -f docker-compose.dev.yml down -t 0
 podman compose -f docker-compose.dev.yml up -d
-
-rm ../app/static/css/main.css
-rm ../app/static/css/light.css

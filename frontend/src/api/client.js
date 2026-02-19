@@ -66,7 +66,7 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      if (response.status === 401) {
+      if (response.status === 401 && !path.includes('/api/auth/login')) {
         window.dispatchEvent(new CustomEvent('api:unauthorized'));
       }
       const message =

@@ -104,7 +104,7 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:8000"],
+        default=["http://localhost:3000", "http://localhost:8000", "http://lab:8000"],
         description="Allowed CORS origins for the JSON API. Use ['*'] only behind a trusted reverse proxy.",
     )
 
