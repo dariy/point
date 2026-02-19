@@ -11,7 +11,6 @@ import { Component } from '../../components/Component.js';
 import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
-import { TagCloud } from '../../components/public/TagCloud.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
@@ -49,20 +48,12 @@ export default class HomePage extends Component {
         </div>`;
     }
 
-    const { posts = [], tag_cloud = [] } = data || {};
-
     return `
       <div class="site-wrapper">
         <div id="header-mount"></div>
         <main class="site-main">
           <div class="main-container">
-            <div class="posts-layout">
-              <section class="posts-main" aria-label="Posts">
-                <div id="grid-mount"></div>
-                <div id="pagination-mount"></div>
-              </section>
-              ${tag_cloud.length ? '<aside class="posts-sidebar"><div id="tagcloud-mount"></div></aside>' : ''}
-            </div>
+            <div id="grid-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
@@ -71,12 +62,14 @@ export default class HomePage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '/' });
+    const navTags = (this.state.data?.nav_tags) || store.get('navTags') || [];
+    if (navTags.length) store.set('navTags', navTags);
+    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '/', navTags });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
     if (this.state.loading || !this.state.data) return;
 
-    const { posts = [], pagination = {}, tag_cloud = [] } = this.state.data;
+    const { posts = [], pagination = {} } = this.state.data;
     const showViewCount = !!settings.show_view_counts;
 
     this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount });
@@ -88,11 +81,6 @@ export default class HomePage extends Component {
         total: pagination.total,
         onPage: (p) => navigate(`/?page=${p}`),
       });
-    }
-
-    const tagcloudMount = this.$('#tagcloud-mount');
-    if (tagcloudMount && tag_cloud.length) {
-      this.mountChild(TagCloud, '#tagcloud-mount', { tags: tag_cloud });
     }
   }
 

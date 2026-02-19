@@ -65,7 +65,8 @@ export default class TagsPage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '/tags' });
+    const navTags = store.get('navTags') || [];
+    this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '/tags' });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
   }
 

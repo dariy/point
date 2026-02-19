@@ -4,7 +4,7 @@ Handles CRUD operations for tags and tag-post relationships.
 """
 
 import math
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,7 @@ from app.schemas.tag import (
     TagUpdate,
     TagWithPostsResponse,
 )
+from app.services.settings_service import SettingsService
 from app.services.tag_service import TagService
 
 router = APIRouter(prefix="/api/tags", tags=["Tags"])
@@ -306,7 +307,7 @@ async def delete_tag(
 async def get_posts_by_tag(
     slug: str,
     page: int = Query(default=1, ge=1, description="Page number"),
-    per_page: int = Query(default=10, ge=1, le=100, description="Items per page"),
+    per_page: Optional[int] = Query(default=None, ge=1, le=100, description="Items per page (defaults to posts_per_page setting)"),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -316,6 +317,7 @@ async def get_posts_by_tag(
     Authenticated users see all posts.
     """
     service = TagService(db)
+    settings_service = SettingsService(db)
     tag = await service.get_tag_by_slug(slug)
 
     if not tag:
@@ -324,16 +326,19 @@ async def get_posts_by_tag(
             detail="Tag not found",
         )
 
+    all_settings = await settings_service.get_all_settings()
+    effective_per_page = per_page or int(all_settings.get("posts_per_page", 10))
+
     published_only = current_user is None
     posts, total = await service.get_posts_by_tag(
         tag_id=tag.id,
         page=page,
-        per_page=per_page,
+        per_page=effective_per_page,
         published_only=published_only,
         recursive=True,
     )
 
-    pages = math.ceil(total / per_page) if total > 0 else 1
+    pages = math.ceil(total / effective_per_page) if total > 0 else 1
 
     return {
         "id": tag.id,
@@ -361,7 +366,7 @@ async def get_posts_by_tag(
         ],
         "total_posts": total,
         "page": page,
-        "per_page": per_page,
+        "per_page": effective_per_page,
         "pages": pages,
     }
 

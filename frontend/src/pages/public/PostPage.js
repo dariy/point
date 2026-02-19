@@ -8,7 +8,7 @@
 import { Component } from '../../components/Component.js';
 import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
-import { PostContent } from '../../components/public/PostContent.js';
+import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
@@ -20,8 +20,7 @@ export default class PostPage extends Component {
   }
 
   render() {
-    const { loading, post, error } = this.state;
-    const settings = store.get('settings') || {};
+    const { loading, error } = this.state;
 
     if (loading) {
       return `
@@ -49,7 +48,7 @@ export default class PostPage extends Component {
       <div class="site-wrapper">
         <div id="header-mount"></div>
         <main class="site-main">
-          <div class="main-container content-narrow">
+          <div class="main-container">
             <div id="content-mount"></div>
           </div>
         </main>
@@ -59,12 +58,28 @@ export default class PostPage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '' });
-    this.mountChild(PublicFooter, '#footer-mount', { settings });
-
-    if (!this.state.post) return;
-
+    const navTags  = store.get('navTags') || [];
     const { post, nav } = this.state;
+
+    const immersive = shouldUseImmersive(post);
+
+    // Breadcrumb: show post title in header branding area
+    const breadcrumb = post ? [{ name: post.title }] : [];
+
+    // In immersive mode suppress the tag filter bar; tags go in the footer instead
+    this.mountChild(PublicHeader, '#header-mount', {
+      settings,
+      navTags: immersive ? [] : navTags,
+      breadcrumb,
+      currentPath: '',
+    });
+
+    // Immersive footer shows post tags; normal footer shows pagination slot
+    const immersiveTags = immersive ? (post.tags || []) : [];
+    this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags });
+
+    if (!post) return;
+
     this.mountChild(PostContent, '#content-mount', {
       post,
       showViewCount: !!settings.show_view_counts,
@@ -86,30 +101,18 @@ export default class PostPage extends Component {
     }
 
     try {
-      const [post, nav] = await Promise.all([
-        getPostBySlug(slug),
-        null, // navigation fetched after post ID is known
-      ]);
+      const post = await getPostBySlug(slug);
 
-      // Update page title and meta description.
       document.title = post.title;
       const metaDesc = document.querySelector('meta[name="description"]');
       if (metaDesc) metaDesc.setAttribute('content', post.meta_description || post.excerpt || '');
 
-      // Fetch navigation using post ID.
       let postNav = null;
-      try {
-        postNav = await getPostNavigation(post.id);
-      } catch {
-        // Navigation is optional — ignore errors.
-      }
+      try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }
 
       this.setState({ loading: false, post, nav: postNav, error: null });
     } catch (err) {
-      const status = err.status;
-      const msg = status === 404
-        ? 'Post not found.'
-        : (err.message || 'Failed to load post.');
+      const msg = err.status === 404 ? 'Post not found.' : (err.message || 'Failed to load post.');
       this.setState({ loading: false, post: null, nav: null, error: msg });
     }
   }

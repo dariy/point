@@ -51,7 +51,6 @@ export class LightSidebar extends Component {
         </nav>
         <div class="sidebar-footer">
           <div class="user-info">
-            <span class="user-name">${displayName}</span>
             <button class="logout-btn" id="logout-btn" type="button">Logout</button>
           </div>
         </div>

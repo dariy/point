@@ -288,6 +288,7 @@ class PostService:
         public_only: bool = False,
         search: str | None = None,
         tag_id: int | None = None,
+        exclude_post_id: int | None = None,
     ) -> tuple[list[Post], int]:
         """List posts with pagination and filters.
 
@@ -321,6 +322,9 @@ class PostService:
 
         if featured_only:
             query = query.where(Post.is_featured.is_(True))
+
+        if exclude_post_id is not None:
+            query = query.where(Post.id != exclude_post_id)
 
         if search:
             query = query.where(Post.title.ilike(f"%{search}%"))

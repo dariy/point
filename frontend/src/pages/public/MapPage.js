@@ -86,7 +86,8 @@ export default class MapPage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '/map' });
+    const navTags = store.get('navTags') || [];
+    this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '/map' });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
     if (!this.state.loading && !this.state.error) {
