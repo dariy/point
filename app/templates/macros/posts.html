@@ -14,13 +14,13 @@
     {% set thumb_info = determine_thumbnail(post.content, post.thumbnail_path) %}
 {% else %}
     {# Fallback logic if function not in context #}
-    {% set thumb_info = [post.thumbnail_path, false] %}
+    {% set thumb_info = [post.thumbnail_path, "image"] %}
 {% endif %}
 {% set display_thumb = thumb_info[0] %}
-{% set is_video = thumb_info[1] %}
-{% set has_image = display_thumb is not none %}
+{% set media_type = thumb_info[1] %}
+{% set has_visual = display_thumb is not none %}
 
-<article class="post-card {% if has_image %}has-image{% else %}text-only{% endif %} {% if user and post|post_has_hidden_posts_tag %}hidden-post{% endif %}"
+<article class="post-card {% if has_visual %}has-visual type-{{ media_type }}{% else %}text-only{% endif %} {% if user and post|post_has_hidden_posts_tag %}hidden-post{% endif %}"
     onclick="if(!event.target.closest('a')){ window.location.href='/posts/{{ post.slug }}'; }">
     
     {% if user %}
@@ -34,12 +34,16 @@
         </a>
     {% endif %}
 
-    {% if has_image %}
+    {% if has_visual %}
         <div class="post-card-background">
-            {% if is_video %}
-            <video src="{{ display_thumb }}" muted loop playsinline poster=""></video>
+            {% if media_type == 'video' %}
+            <video src="{{ display_thumb }}" muted loop playsinline autoplay poster=""></video>
             <div class="video-play-indicator">
                 {{ icon('play', size=48 if is_featured else 32) }}
+            </div>
+            {% elif media_type == 'audio' %}
+            <div class="audio-placeholder">
+                {{ icon('music', size=64 if is_featured else 48) }}
             </div>
             {% else %}
             <img src="{{ display_thumb }}" alt="{{ post.title }}" loading="lazy">
@@ -66,10 +70,10 @@
             
             <h2 class="post-card-title"><a href="/posts/{{ post.slug }}">{{ post.title }}</a></h2>
             
-            {% if has_image %}
+            {% if has_visual %}
             <div class="post-card-excerpt">
                 {% if post.excerpt %}
-                    {{ post.excerpt }}
+                    {{ post.excerpt | safe }}
                 {% elif generate_excerpt is defined %}
                     {{ generate_excerpt(post.content, post.formatter.value, 200 if is_featured else 150) }}
                 {% else %}

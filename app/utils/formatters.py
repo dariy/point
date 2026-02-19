@@ -5,6 +5,7 @@ Handles Markdown to HTML conversion, excerpt generation, and HTML sanitization.
 
 import html
 import re
+from pathlib import Path
 
 import markdown
 
@@ -45,15 +46,12 @@ def preprocess_media_links(content: str) -> str:
     Returns:
         Content with simplified links converted
     """
-    import re
-    from pathlib import Path
-
     lines = content.split("\n")
     new_lines = []
 
     # regex for /YYYY/MM/filename.ext
     pattern = re.compile(
-        r"^\s*/(\d{4})/(\d{2})/([^ \n\r]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|mov|webm))\s*$",
+        r"^\s*/(\d{4})/(\d{2})/([^ \n\r]+\.(?:jpg|jpeg|png|gif|webp|svg|mp4|mov|webm|mp3|wav|ogg|m4a))\s*$",
         re.IGNORECASE
     )
 
@@ -66,6 +64,10 @@ def preprocess_media_links(content: str) -> str:
             if ext in (".mp4", ".mov", ".webm"):
                 new_lines.append(
                     f'<video src="{path}" controls muted loop playsinline style="max-width: 100%;"></video>'
+                )
+            elif ext in (".mp3", ".wav", ".ogg", ".m4a"):
+                new_lines.append(
+                    f'<audio src="{path}" controls style="width: 100%; margin: 10px 0;"></audio>'
                 )
             else:
                 new_lines.append(f'<img src="{path}" alt="{filename}" style="max-width: 100%;">')
@@ -168,11 +170,23 @@ def strip_html(html_content: str) -> str:
         >>> strip_html("<p>Hello <strong>world</strong></p>")
         'Hello world'
     """
-    # Remove HTML tags
-    text = re.sub(r"<[^>]+>", "", html_content)
-    # Decode HTML entities
+    if not html_content:
+        return ""
+
+    # 1. Remove style and script tags content completely
+    text = re.sub(r"<(style|script)[^>]*>.*?</\1>", "", html_content, flags=re.DOTALL | re.IGNORECASE)
+
+    # 2. Replace <br> and </p> with newlines to preserve spacing
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+
+    # 3. Strip all other tags
+    text = re.sub(r"<[^>]+>", "", text)
+
+    # 4. Decode HTML entities (e.g. &lt;tag&gt; → <tag>, &amp; → &)
     text = html.unescape(text)
-    # Normalize whitespace (including \r\n and multiple spaces)
+
+    # 5. Normalize whitespace (including \r\n and multiple spaces)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -428,57 +442,58 @@ def extract_all_images(content: str) -> list[str]:
     return unique_images
 
 def extract_all_media(content: str) -> list[dict[str, str]]:
-    """Extract all image and video URLs from content.
+    """Extract all image, video, and audio URLs from content.
 
-    Supports Markdown images, HTML img tags, video tags, and source tags.
+    Supports Markdown images, HTML tags (img, video, audio, source),
+    and simplified media paths (/YYYY/MM/filename.ext).
 
     Args:
         content: Raw content (markdown or html)
 
     Returns:
-        List of dictionaries with 'url' and 'type' ('image' or 'video').
+        List of dictionaries with 'url' and 'type' ('image', 'video', or 'audio').
     """
     media = []
 
-    # Common video extensions
-    video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
+    # Common extensions
+    video_extensions = {".mp4", ".webm", ".mov", ".m4v", ".ogv"}
+    audio_extensions = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac", ".oga"}
 
     def get_type(url_str: str, default_type: str = "image") -> str:
-        url_lower = url_str.lower().split("?")[0]  # Ignore query params for extension check
-        if any(url_lower.endswith(ext) for ext in video_extensions):
+        url_lower = url_str.lower().split("?")[0]
+        ext = Path(url_lower).suffix
+        if ext in video_extensions:
             return "video"
+        if ext in audio_extensions:
+            return "audio"
         return default_type
 
-    # Preprocess simplified media links
-    content = preprocess_media_links(content)
+    # 1. Simplified media paths: /YYYY/MM/filename.ext
+    # We look for these before any other processing, ensuring they aren't part of a longer path
+    simplified_pattern = re.compile(
+        r"(?<![\w/])/(?P<year>\d{4})/(?P<month>\d{2})/(?P<file>[^ \n\r\t\"'<>)]+\.(?P<ext>jpg|jpeg|png|gif|webp|svg|mp4|mov|webm|mp3|wav|ogg|m4a))",
+        re.IGNORECASE
+    )
+    for match in simplified_pattern.finditer(content):
+        url = match.group(0)
+        media.append({"url": url, "type": get_type(url)})
 
-    # 1. Markdown images: ![alt](url)
+    # 2. Markdown images: ![alt](url)
     markdown_matches = re.findall(r"!\[.*?\]\((.*?)(?:\s+\".*?\")?\)", content)
     for url in markdown_matches:
         url = url.strip()
         media.append({"url": url, "type": get_type(url)})
 
-    # 2. HTML img tags: <img src="url">
-    html_img_matches = re.findall(r"<img[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE)
-    for match in html_img_matches:
-        url = match[1].strip()
-        media.append({"url": url, "type": "image"})
-
-    # 3. HTML video tags: <video src="url">
-    html_video_matches = re.findall(
-        r"<video[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
+    # 3. HTML tags: img, video, audio, source
+    # Flexible regex to catch src in various positions
+    tag_pattern = re.compile(
+        r"<(?:img|video|audio|source)[^>]+src=(?:\"(?P<src1>[^\"]+)\"|'(?P<src2>[^']+)')",
+        re.IGNORECASE
     )
-    for match in html_video_matches:
-        url = match[1].strip()
-        media.append({"url": url, "type": "video"})
-
-    # 4. HTML source tags: <source src="url">
-    html_source_matches = re.findall(
-        r"<source[^>]+src=([\"'])(.*?)\1", content, re.IGNORECASE
-    )
-    for match in html_source_matches:
-        url = match[1].strip()
-        media.append({"url": url, "type": get_type(url, "video")})
+    for match in tag_pattern.finditer(content):
+        url = match.group("src1") or match.group("src2")
+        if url:
+            media.append({"url": url.strip(), "type": get_type(url)})
 
     # Remove duplicates while preserving order
     seen = set()
@@ -536,7 +551,7 @@ def determine_thumbnail(
     thumbnail_path: str | None,
     storage_path: str | None = None,
     use_thumbnails: bool = True
-) -> tuple[str | None, bool]:
+) -> tuple[str | None, str]:
     """Determine the thumbnail path and type for a post content.
 
     Args:
@@ -546,28 +561,34 @@ def determine_thumbnail(
         use_thumbnails: Whether to prefer thumbnails over originals
 
     Returns:
-        Tuple of (thumbnail_path, is_video)
+        Tuple of (thumbnail_path, type) where type is 'image', 'video', or 'audio'
     """
     media_list = extract_all_media(content)
 
     video_extensions = (".mp4", ".webm", ".ogg", ".mov", ".m4v")
-    def is_video_url(url: str) -> bool:
-        return any(url.lower().split("?")[0].endswith(ext) for ext in video_extensions)
+    audio_extensions = (".mp3", ".wav", ".ogg", ".m4a")
+
+    def get_media_type(url: str) -> str:
+        url_lower = url.lower().split("?")[0]
+        if any(url_lower.endswith(ext) for ext in video_extensions):
+            return "video"
+        if any(url_lower.endswith(ext) for ext in audio_extensions):
+            return "audio"
+        return "image"
 
     thumb_path = thumbnail_path
-    is_video_thumb = False
+    media_type = "image"
 
     if thumb_path:
-        is_video_thumb = is_video_url(thumb_path)
+        media_type = get_media_type(thumb_path)
 
     # If use_thumbnails is False, force fallback to original if it's a thumbnail
     if not use_thumbnails and thumb_path and "/media/thumbnails/" in thumb_path:
         thumb_path = thumb_path.replace("/thumbnails/", "/originals/")
-        is_video_thumb = is_video_url(thumb_path)
+        media_type = get_media_type(thumb_path)
 
     # If we have a thumbnail path, check if it exists if storage_path is provided
     if use_thumbnails and thumb_path and storage_path and "/media/thumbnails/" in thumb_path:
-        from pathlib import Path
         rel_path = thumb_path.split("/media/", 1)[1]
         full_path = Path(storage_path) / "media" / rel_path
         if not full_path.exists():
@@ -577,20 +598,20 @@ def determine_thumbnail(
             full_original = Path(storage_path) / "media" / rel_original
             if full_original.exists():
                 thumb_path = original_path
-                is_video_thumb = is_video_url(thumb_path)
+                media_type = get_media_type(thumb_path)
             else:
                 # If original also missing, set to None so we search content
                 thumb_path = None
 
-    # If we have no thumb or it's a video, try to find an image in content
-    if not thumb_path or is_video_thumb:
+    # If we have no thumb or it's a video/audio without a real thumbnail, try to find an image in content
+    if not thumb_path or media_type in ("video", "audio"):
         first_image = next((m["url"] for m in media_list if m["type"] == "image"), None)
         if first_image:
             thumb_path = first_image
-            is_video_thumb = False
+            media_type = "image"
         elif not thumb_path and media_list:
-            # Fallback to first video if no image at all
+            # Fallback to first video or audio if no image at all
             thumb_path = media_list[0]["url"]
-            is_video_thumb = media_list[0]["type"] == "video"
+            media_type = media_list[0]["type"]
 
-    return thumb_path, is_video_thumb
+    return thumb_path, media_type

@@ -292,3 +292,66 @@ async def test_single_post_prev_next_navigation(client: AsyncClient, db: AsyncSe
     assert response.status_code == 200
     assert "New Post" in response.text
     assert "Old Post" in response.text
+
+
+@pytest.mark.asyncio
+async def test_audio_post_uses_standard_layout(client: AsyncClient, db: AsyncSession, test_user: dict) -> None:
+    """Test that a post with audio but no text uses standard layout (has_text_content=True)."""
+    user = test_user["user"]
+    post = Post(
+        title="Audio Post",
+        slug="audio-post",
+        content="/2026/02/audio.mp3",  # Simplified audio link
+        status=PostStatus.PUBLISHED,
+        formatter=PostFormatter.MARKDOWN,
+        published_at=datetime.now(UTC),
+        author_id=user.id,
+    )
+    db.add(post)
+    await db.commit()
+
+    # Check SSR
+    response = await client.get(f"/posts/{post.slug}")
+    assert response.status_code == 200
+    # Standard layout has 'public-layout post-single-page' class, immersive has 'immersive-layout'
+    assert "public-layout post-single-page" in response.text
+    assert "immersive-layout" not in response.text
+
+    # Check AJAX
+    response = await client.get(
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_text_content"] is True
+
+
+@pytest.mark.asyncio
+async def test_image_only_post_uses_immersive_layout(client: AsyncClient, db: AsyncSession, test_user: dict) -> None:
+    """Test that a post with only an image and no text uses immersive layout."""
+    user = test_user["user"]
+    post = Post(
+        title="Image Post",
+        slug="image-post",
+        content="![Image](/2026/02/image.jpg)",
+        status=PostStatus.PUBLISHED,
+        formatter=PostFormatter.MARKDOWN,
+        published_at=datetime.now(UTC),
+        author_id=user.id,
+    )
+    db.add(post)
+    await db.commit()
+
+    # Check SSR
+    response = await client.get(f"/posts/{post.slug}")
+    assert response.status_code == 200
+    assert "immersive-layout" in response.text
+    assert "public-layout post-single-page" not in response.text
+
+    # Check AJAX
+    response = await client.get(
+        f"/posts/{post.slug}", headers={"X-Requested-With": "XMLHttpRequest"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_text_content"] is False
