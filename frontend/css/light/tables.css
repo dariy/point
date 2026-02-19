@@ -1,0 +1,69 @@
+/* ===========================
+   Tables
+   =========================== */
+.table-container {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid var(--border-primary);
+    vertical-align: middle;
+}
+
+.table th {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+    background-color: var(--surface-hover);
+}
+
+.table tbody tr:hover {
+    background-color: var(--surface-hover);
+}
+
+.table .actions {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+/* Table action buttons - square and elevated */
+.table .actions .btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.table .actions .btn:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+}
+
+.table .actions .btn-danger:hover {
+    background-color: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger);
+}
+
+.table .actions .btn svg {
+    width: 16px;
+    height: 16px;
+}

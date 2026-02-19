@@ -1,0 +1,140 @@
+/* ===========================
+   Public Semantic Tokens
+   =========================== */
+:root,
+[data-theme="light"] {
+    /* Layout */
+    --content-max-width: 1200px;
+    --content-narrow: 800px;
+    --header-height: 72px;
+
+    /* Semantic Colors - Background */
+    --bg-primary: #ffffff;
+    --bg-carouselle: rgba(255,255,255,0.6);
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --bg-elevated: #ffffff;
+    --bg-overlay: rgba(0, 0, 0, 0.5);
+    --bg-overlay-hover: rgba(37, 99, 235, 0.7);
+
+    /* Semantic Colors - Text */
+    --text-primary: #0f172a;
+    --text-primary-hover: black;
+    --text-secondary: #475569;
+    --text-tertiary: #64748b;
+    --text-immersive: #ffffff;
+    --text-muted: #94a3b8;
+    --text-inverted: #ffffff;
+
+    /* Semantic Colors - Borders */
+    --border-primary: #e2e8f0;
+    --border-secondary: #cbd5e1;
+    --border-focus: #2563eb;
+
+    /* Semantic Colors - Surfaces */
+    --surface-card: #ffffff;
+    --surface-input: #ffffff;
+    --surface-hover: #f1f5f9;
+    --surface-active: #e2e8f0;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+    /* Component-specific */
+    --header-bg: rgba(255, 255, 255, 0.9);
+    --footer-bg: rgba(255, 255, 255, 0.9);
+    --footer-text: rgba(0, 0, 0, 0.95);  /*#94a3b8;*/
+    --code-bg: #1e293b;
+    --code-text: #f1f5f9;
+    --inline-code-bg: #f1f5f9;
+    --inline-code-text: #0f172a;
+
+    /* Grays (for backward compatibility) */
+    --color-gray-50: #f8fafc;
+    --color-gray-100: #f1f5f9;
+    --color-gray-200: #e2e8f0;
+    --color-gray-300: #cbd5e1;
+    --color-gray-400: #94a3b8;
+    --color-gray-500: #64748b;
+    --color-gray-600: #475569;
+    --color-gray-700: #334155;
+    --color-gray-800: #1e293b;
+    --color-gray-900: #0f172a;
+
+    --logo-fill: #000000;
+
+    color-scheme: light;
+}
+
+/* ===========================
+   Dark Theme
+   =========================== */
+[data-theme="dark"] {
+    /* Semantic Colors - Background */
+    --bg-primary: #121212;
+    --bg-carouselle: #121212;
+    --bg-secondary: #1e1e1e;
+    --bg-tertiary: #2d2d2d;
+    --bg-elevated: #1e1e1e;
+    --bg-overlay: rgba(0, 0, 0, 0.7);
+
+    /* Semantic Colors - Text */
+    --text-primary: #f1f5f9;
+    --text-primary-hover: #ffffff;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #cbd5e1;
+    /* #94a3b8; */
+    --text-immersive: #cbd5e1;
+    --text-muted: #64748b;
+    --text-inverted: #121212;
+
+    /* Semantic Colors - Borders */
+    --border-primary: #2d2d2d;
+    --border-secondary: #404040;
+    --border-focus: #3b82f6;
+
+    /* Semantic Colors - Surfaces */
+    --surface-card: #1e1e1e;
+    --surface-input: #1e1e1e;
+    --surface-hover: #2d2d2d;
+    --surface-active: #404040;
+
+    /* Shadows (darker for dark theme) */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+
+    /* Component-specific */
+    --header-bg: rgba(30, 30, 30, 0.8);
+    --footer-bg: rgba(30, 30, 30, 0.8);
+    --footer-text: #94a3b8;
+    --code-bg: #121212;
+    --code-text: #e2e8f0;
+    --inline-code-bg: #2d2d2d;
+    --inline-code-text: #e2e8f0;
+
+    /* Brand adjustments for dark theme */
+    --color-primary: #3b82f6;
+    --color-primary-hover: #60a5fa;
+    --color-primary-light: rgba(59, 130, 246, 0.2);
+
+    /* Grays (inverted for dark theme) */
+    --color-gray-50: #121212;
+    --color-gray-100: #1e1e1e;
+    --color-gray-200: #2d2d2d;
+    --color-gray-300: #404040;
+    --color-gray-400: #64748b;
+    --color-gray-500: #94a3b8;
+    --color-gray-600: #cbd5e1;
+    --color-gray-700: #e2e8f0;
+    --color-gray-800: #f1f5f9;
+    --color-gray-900: #f8fafc;
+
+    --logo-fill: #ffffff;
+
+    color-scheme: dark;
+}

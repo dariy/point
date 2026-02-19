@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="" />
+  <title>Loading…</title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/assets/css/main.css" />
+
+  <!-- Favicon (served from backend static) -->
+  <link rel="alternate" type="application/rss+xml" title="RSS Feed" href="/feed.xml" />
+</head>
+<body>
+
+  <!-- SPA mount point — all content rendered here by JavaScript -->
+  <div id="app" role="main"></div>
+
+  <!-- Toast container — rendered by ToastContainer component -->
+  <div id="toasts" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- App bootstrap — type=module enables ES module imports -->
+  <script type="module" src="/assets/js/app.js"></script>
+
+</body>
+</html>
