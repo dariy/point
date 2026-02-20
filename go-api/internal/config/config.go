@@ -68,6 +68,8 @@ func LoadConfig(path string) (config Config, err error) {
 		config.DatabaseURL = strings.Replace(config.DatabaseURL, "sqlite+aiosqlite:///", "", 1)
 	} else if strings.Contains(config.DatabaseURL, "sqlite:///") {
 		config.DatabaseURL = strings.Replace(config.DatabaseURL, "sqlite:///", "", 1)
+	} else if strings.HasPrefix(config.DatabaseURL, "sqlite:") {
+		config.DatabaseURL = strings.Replace(config.DatabaseURL, "sqlite:", "", 1)
 	}
 
 	return
