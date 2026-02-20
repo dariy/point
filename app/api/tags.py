@@ -4,7 +4,7 @@ Handles CRUD operations for tags and tag-post relationships.
 """
 
 import math
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -307,7 +307,7 @@ async def delete_tag(
 async def get_posts_by_tag(
     slug: str,
     page: int = Query(default=1, ge=1, description="Page number"),
-    per_page: Optional[int] = Query(default=None, ge=1, le=100, description="Items per page (defaults to posts_per_page setting)"),
+    per_page: int | None = Query(default=None, ge=1, le=100, description="Items per page (defaults to posts_per_page setting)"),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ) -> dict[str, Any]:
