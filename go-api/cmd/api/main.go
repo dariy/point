@@ -46,15 +46,15 @@ func main() {
 	authService := services.NewAuthService(repo)
 	tagService := services.NewTagService(repo)
 	postService := services.NewPostService(repo)
-	mediaService := services.NewMediaService(repo, &cfg)
+	mediaService := services.NewMediaService(repo, &cfg, settingsService)
 
 	// Handlers
 	authHandler := api.NewAuthHandler(authService, &cfg)
 	tagHandler := api.NewTagHandler(tagService, settingsService)
 	postHandler := api.NewPostHandler(postService, settingsService, mediaService)
-	mediaHandler := api.NewMediaHandler(mediaService)
+	mediaHandler := api.NewMediaHandler(mediaService, settingsService)
 	settingsHandler := api.NewSettingsHandler(settingsService)
-	systemHandler := api.NewSystemHandler(repo, mediaService, settingsService, cfg.StoragePath)
+	systemHandler := api.NewSystemHandler(repo, mediaService, settingsService, tagService, cfg.StoragePath)
 	feedsHandler := api.NewFeedsHandler(repo, postService, settingsService)
 	pagesHandler := api.NewPagesHandler(repo, postService, tagService, settingsService)
 
@@ -132,6 +132,7 @@ func main() {
 	mediaGroup.GET("", mediaHandler.ListMedia, api.AuthMiddleware(authService))
 	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(authService))
 	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(authService))
+	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(authService))
 	mediaGroup.GET("/stats", mediaHandler.GetStorageStats, api.AuthMiddleware(authService))
 	mediaGroup.GET("/orphaned", mediaHandler.ListOrphanedMedia, api.AuthMiddleware(authService))
 	mediaGroup.DELETE("/orphaned", mediaHandler.DeleteOrphanedMedia, api.AuthMiddleware(authService))
