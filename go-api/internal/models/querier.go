@@ -6,23 +6,73 @@ package models
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	AddTagRelationship(ctx context.Context, arg AddTagRelationshipParams) error
+	AddTagToPost(ctx context.Context, arg AddTagToPostParams) error
+	ClearPostTags(ctx context.Context, postID int64) error
+	ClearTagRelationships(ctx context.Context, arg ClearTagRelationshipsParams) error
+	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
+	CountPosts(ctx context.Context, arg CountPostsParams) (int64, error)
+	CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error)
+	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
+	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteExpiredSessions(ctx context.Context) error
+	DeleteMedia(ctx context.Context, id int64) error
+	DeletePost(ctx context.Context, arg DeletePostParams) error
 	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
+	DeleteSetting(ctx context.Context, key string) error
+	DeleteTag(ctx context.Context, id int64) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
 	GetFirstUser(ctx context.Context) (User, error)
+	// MEDIA
+	GetMedia(ctx context.Context, id int64) (Medium, error)
+	GetMediaByChecksum(ctx context.Context, checksum string) (Medium, error)
+	GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([]Medium, error)
+	// POSTS
+	GetPost(ctx context.Context, id int64) (GetPostRow, error)
+	GetPostBySlug(ctx context.Context, slug string) (GetPostBySlugRow, error)
+	GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]GetPostsByTagRow, error)
 	GetSessionByToken(ctx context.Context, token string) (GetSessionByTokenRow, error)
+	// SETTINGS
+	GetSetting(ctx context.Context, key string) (BlogSetting, error)
+	GetStorageUsage(ctx context.Context) (sql.NullFloat64, error)
+	// TAGS
+	GetTag(ctx context.Context, id int64) (Tag, error)
+	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
+	GetTagChildren(ctx context.Context, parentID int64) ([]Tag, error)
+	// HIERARCHY
+	GetTagParents(ctx context.Context, childID int64) ([]Tag, error)
+	GetTagsForPost(ctx context.Context, postID int64) ([]Tag, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserSessions(ctx context.Context, userID int64) ([]Session, error)
+	IncrementPostViewCount(ctx context.Context, id int64) error
+	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
+	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
+	ListSettings(ctx context.Context) ([]BlogSetting, error)
+	ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, error)
+	PublishPost(ctx context.Context, id int64) (Post, error)
+	RemoveTagFromPost(ctx context.Context, arg RemoveTagFromPostParams) error
+	RemoveTagRelationship(ctx context.Context, arg RemoveTagRelationshipParams) error
+	SetPostPreviewToken(ctx context.Context, arg SetPostPreviewTokenParams) error
+	UpdateAllTagPostCounts(ctx context.Context) error
+	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
+	UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilenameParams) (Medium, error)
+	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdateSessionActivity(ctx context.Context, id int64) error
+	UpdateSetting(ctx context.Context, arg UpdateSettingParams) (BlogSetting, error)
+	UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error)
+	UpdateTagPostCount(ctx context.Context, id int64) error
 	UpdateUserLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	WithdrawPost(ctx context.Context, id int64) (Post, error)
 }
 
 var _ Querier = (*Queries)(nil)

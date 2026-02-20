@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -25,8 +26,7 @@ func NewAuthHandler(authService *services.AuthService, cfg *config.Config) *Auth
 
 type LoginRequest struct {
 	Username   string `json:"username"`
-	Password   string `json:"name"` // Following Python schema where 'name' is password? 
-	// Wait, let me check the Python schema again.
+	Password   string `json:"password"`
 	RememberMe bool   `json:"remember_me"`
 }
 
@@ -48,7 +48,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	token := GenerateToken()
-	
+
 	expiryHours := h.cfg.SessionExpiryPublicHours
 	if req.RememberMe {
 		expiryHours = h.cfg.SessionExpiryHours
@@ -75,11 +75,11 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	}
-	
+
 	if h.cfg.AppEnv == "production" {
 		cookie.Secure = true
 	}
-	
+
 	c.SetCookie(cookie)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -96,7 +96,6 @@ func (h *AuthHandler) Login(c echo.Context) error {
 func (h *AuthHandler) Logout(c echo.Context) error {
 	cookie, err := c.Cookie("session")
 	if err == nil {
-		// Valid session cookie found, we could validate it and terminate it in DB
 		session, err := h.authService.ValidateSession(c.Request().Context(), cookie.Value)
 		if err == nil {
 			_ = h.authService.TerminateSession(c.Request().Context(), session.ID, session.UserID)
@@ -116,10 +115,97 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 }
 
 func (h *AuthHandler) Me(c echo.Context) error {
-	// This would normally be handled by a middleware that sets the user in the context
-	user := c.Get("user")
-	if user == nil {
+	session := c.Get("user")
+	if session == nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "not authenticated")
 	}
-	return c.JSON(http.StatusOK, user)
+	return c.JSON(http.StatusOK, session)
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+func (h *AuthHandler) ChangePassword(c echo.Context) error {
+	userID := extractUserID(c.Get("user"))
+
+	var req ChangePasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if req.NewPassword == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "new password is required")
+	}
+
+	if err := h.authService.ChangePassword(c.Request().Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Password changed successfully"})
+}
+
+func (h *AuthHandler) ListSessions(c echo.Context) error {
+	userID := extractUserID(c.Get("user"))
+	currentSessionID := extractSessionID(c.Get("user"))
+
+	sessions, err := h.authService.ListSessions(c.Request().Context(), userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	type sessionItem struct {
+		ID           int64     `json:"id"`
+		IPAddress    string    `json:"ip_address"`
+		UserAgent    string    `json:"user_agent"`
+		CreatedAt    time.Time `json:"created_at"`
+		LastActivity time.Time `json:"last_activity"`
+		ExpiresAt    time.Time `json:"expires_at"`
+		IsCurrent    bool      `json:"is_current"`
+	}
+
+	result := make([]sessionItem, len(sessions))
+	for i, s := range sessions {
+		result[i] = sessionItem{
+			ID:           s.ID,
+			IPAddress:    s.IpAddress,
+			UserAgent:    s.UserAgent,
+			CreatedAt:    s.CreatedAt,
+			LastActivity: s.LastActivity,
+			ExpiresAt:    s.ExpiresAt,
+			IsCurrent:    s.ID == currentSessionID,
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"sessions": result,
+		"total":    len(result),
+	})
+}
+
+func (h *AuthHandler) DeleteSession(c echo.Context) error {
+	sessionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid session id")
+	}
+
+	userID := extractUserID(c.Get("user"))
+
+	if err := h.authService.TerminateSession(c.Request().Context(), sessionID, userID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "session not found")
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *AuthHandler) DeleteOtherSessions(c echo.Context) error {
+	userID := extractUserID(c.Get("user"))
+	currentSessionID := extractSessionID(c.Get("user"))
+
+	if err := h.authService.TerminateOtherSessions(c.Request().Context(), userID, currentSessionID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Other sessions terminated"})
 }
