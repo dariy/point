@@ -59,7 +59,7 @@ func main() {
 	pagesHandler := api.NewPagesHandler(repo, postService, tagService, settingsService)
 
 	// Global middleware
-	e.Use(middleware.Logger())
+	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{"*"},
