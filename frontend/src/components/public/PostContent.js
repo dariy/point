@@ -13,7 +13,7 @@
  */
 
 import { Component } from '../Component.js';
-import { escapeHtml, safeUrl } from '../../utils/helpers.js';
+import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDate, isoDatetime } from '../../utils/formatters.js'; // used in _renderNormal
 import { MediaLightbox } from './MediaLightbox.js';
 
@@ -123,17 +123,37 @@ export class PostContent extends Component {
 
   _initImmersive() {
     let index = 0;
+    const { prevPost = null, nextPost = null } = this.props;
 
     // ── Carousel helpers ──
     const carousel = this.$('#immersive-carousel');
     const slides = carousel ? Array.from(carousel.querySelectorAll('.carousel-slide')) : [];
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
 
+    const goToPost = (post) => {
+      if (post) navigate(`/post/${post.slug}`);
+    };
+
     const goTo = (i) => {
       const n = slides.length;
-      if (!n) return;
+      if (!n) {
+        // Single image: arrow keys navigate between posts
+        if (i < 0) goToPost(prevPost);
+        else if (i > 0) goToPost(nextPost);
+        return;
+      }
+      const newIndex = ((i % n) + n) % n;
+      // At boundaries with no wrap intended: navigate to adjacent post
+      if (i < 0 && newIndex === n - 1 && slides.length > 1) {
+        goToPost(prevPost);
+        return;
+      }
+      if (i >= n && newIndex === 0 && slides.length > 1) {
+        goToPost(nextPost);
+        return;
+      }
       slides[index]?.querySelector('video')?.pause();
-      index = ((i % n) + n) % n;
+      index = newIndex;
       slides.forEach((s, j) => s.classList.toggle('active', j === index));
       dots.forEach((d, j)   => d.classList.toggle('active', j === index));
       slides[index]?.querySelector('video')?.play().catch(() => {});
@@ -150,15 +170,19 @@ export class PostContent extends Component {
 
     // ── Touch swipe ──
     const wrapper = this.$('.immersive-wrapper');
-    let tx = 0, ty = 0;
+    let tx = 0, ty = 0, didSwipe = false;
     this._on(wrapper, 'touchstart', (e) => {
       tx = e.changedTouches[0].clientX;
       ty = e.changedTouches[0].clientY;
+      didSwipe = false;
     }, { passive: true });
     this._on(wrapper, 'touchend', (e) => {
       const dx = e.changedTouches[0].clientX - tx;
       const dy = e.changedTouches[0].clientY - ty;
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) goTo(index + (dx < 0 ? 1 : -1));
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+        didSwipe = true;
+        goTo(index + (dx < 0 ? 1 : -1));
+      }
     }, { passive: true });
 
     // ── UI show / hide ──
@@ -171,22 +195,29 @@ export class PostContent extends Component {
     const hideUI = () => document.body.classList.add('ui-hidden');
 
     const resetIdle = (e) => {
-      if (e?.type === 'keydown' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
-      if (e?.type === 'touchstart' && document.body.classList.contains('ui-hidden')) return;
+      const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
+      if (e?.type === 'keydown' && navKeys.includes(e.key)) return;
       showUI();
     };
 
     this._on(document, 'mousemove',  resetIdle, { passive: true });
     this._on(document, 'mousedown',  resetIdle, { passive: true });
-    this._on(document, 'touchstart', resetIdle, { passive: true });
     this._on(document, 'keydown',    resetIdle, { passive: true });
 
     // ── Keyboard ──
     this._on(document, 'keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.key === 'ArrowLeft')  { e.preventDefault(); goTo(index - 1); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); goTo(index + 1); }
-      else if (e.key === ' ' || e.code === 'Space') {
+      const n = slides.length;
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault(); goTo(index - 1);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault(); goTo(index + 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault(); goTo(0);
+      } else if (e.key === 'End') {
+        e.preventDefault(); goTo(n > 0 ? n - 1 : 0);
+      } else if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
         if (document.body.classList.contains('ui-hidden')) {
           showUI();
@@ -197,14 +228,27 @@ export class PostContent extends Component {
       }
     });
 
-    // ── Click / tap to toggle UI ──
+    // ── Click / tap on image or wrapper to navigate or toggle UI ──
     this._on(wrapper, 'click', (e) => {
+      if (didSwipe) { didSwipe = false; return; }
       if (e.target.closest('a, button, input')) return;
-      if (document.body.classList.contains('ui-hidden')) {
-        showUI();
-      } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
-        hideUI();
-        clearTimeout(this._idleTimer);
+
+      const x = e.clientX;
+      const width = window.innerWidth;
+
+      // Click on left/right 30% of screen to navigate
+      if (x < width * 0.3) {
+        goTo(index - 1);
+      } else if (x > width * 0.7) {
+        goTo(index + 1);
+      } else {
+        // Center click: toggle UI
+        if (document.body.classList.contains('ui-hidden')) {
+          showUI();
+        } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
+          hideUI();
+          clearTimeout(this._idleTimer);
+        }
       }
     });
 
