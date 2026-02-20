@@ -100,6 +100,10 @@ func (s *AuthService) TerminateOtherSessions(ctx context.Context, userID, curren
 	return s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: currentSessionID})
 }
 
+func (s *AuthService) ListSessions(ctx context.Context, userID int64) ([]models.Session, error) {
+	return s.repo.GetUserSessions(ctx, userID)
+}
+
 func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {

@@ -24,8 +24,9 @@ type Config struct {
 	ThumbnailHeight int `mapstructure:"THUMBNAIL_HEIGHT"`
 	AvatarSize      int `mapstructure:"AVATAR_SIZE"`
 
-	SessionExpiryHours       int `mapstructure:"SESSION_EXPIRY_HOURS"`
-	SessionExpiryPublicHours int `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
+	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
+	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
+	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -43,6 +44,14 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("PORT", 8000)
 	viper.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
 	viper.SetDefault("STORAGE_PATH", "./data")
+	viper.SetDefault("FRONTEND_DIR", "../frontend")
+	viper.SetDefault("APP_VERSION", "1.0.0")
+	viper.SetDefault("SESSION_EXPIRY_HOURS", 720)
+	viper.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
+	viper.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
+	viper.SetDefault("THUMBNAIL_WIDTH", 400)
+	viper.SetDefault("THUMBNAIL_HEIGHT", 300)
+	viper.SetDefault("JPEG_QUALITY", 85)
 
 	err = viper.ReadInConfig()
 	if err != nil {
