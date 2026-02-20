@@ -713,10 +713,10 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
 FROM posts p
 JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
-WHERE pt.tag_id = ?3
-AND (CASE WHEN ?4 THEN p.status = 'published' ELSE 1=1 END)
+WHERE pt.tag_id = ?1
+AND (CASE WHEN ?2 THEN p.status = 'published' ELSE 1=1 END)
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?
+LIMIT ?3 OFFSET ?4
 `
 
 type GetPostsByTagParams struct {
@@ -1174,9 +1174,9 @@ func (q *Queries) IncrementPostViewCount(ctx context.Context, id int64) error {
 
 const listMedia = `-- name: ListMedia :many
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
-WHERE (CASE WHEN ?3 THEN file_type = ?4 ELSE 1=1 END)
+WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
 ORDER BY uploaded_at DESC
-LIMIT ? OFFSET ?
+LIMIT ?3 OFFSET ?4
 `
 
 type ListMediaParams struct {
@@ -1234,11 +1234,11 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
 FROM posts p
 JOIN users u ON p.author_id = u.id
 WHERE 
-    (CASE WHEN ?3 THEN p.status = ?4 ELSE 1=1 END)
-    AND (CASE WHEN ?5 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE WHEN ?6 THEN 1=1 ELSE p.status = 'published' END)
+    (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
+    AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE WHEN ?4 THEN 1=1 ELSE p.status = 'published' END)
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?
+LIMIT ?5 OFFSET ?6
 `
 
 type ListPostsParams struct {
