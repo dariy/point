@@ -66,7 +66,7 @@ CREATE TABLE post_tags (
 -- TagLocations
 CREATE TABLE tag_locations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    tag_id INTEGER NOT NULL UNIQUE REFERENCES tags(id) ON DELETE CASCADE,
     latitude FLOAT NOT NULL,
     longitude FLOAT NOT NULL
 );
