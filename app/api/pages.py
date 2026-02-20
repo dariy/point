@@ -8,7 +8,7 @@ published, non-hidden content.
 """
 
 import math
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,7 +69,7 @@ _PUBLIC_SETTING_KEYS = frozenset({
 )
 async def get_home_page(
     page: int = Query(default=1, ge=1, description="Page number"),
-    per_page: Optional[int] = Query(default=None, ge=1, le=100, description="Posts per page (defaults to posts_per_page setting)"),
+    per_page: int | None = Query(default=None, ge=1, le=100, description="Posts per page (defaults to posts_per_page setting)"),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Get homepage data: published posts + tag cloud + public settings."""
@@ -136,7 +136,7 @@ async def get_home_page(
 async def get_tag_page(
     slug: str,
     page: int = Query(default=1, ge=1, description="Page number"),
-    per_page: Optional[int] = Query(default=None, ge=1, le=100, description="Posts per page (defaults to posts_per_page setting)"),
+    per_page: int | None = Query(default=None, ge=1, le=100, description="Posts per page (defaults to posts_per_page setting)"),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Get tag archive page data: tag + ancestor breadcrumbs + posts."""

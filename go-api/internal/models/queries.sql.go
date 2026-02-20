@@ -11,6 +11,243 @@ import (
 	"time"
 )
 
+const addTagRelationship = `-- name: AddTagRelationship :exec
+INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+VALUES (?, ?)
+`
+
+type AddTagRelationshipParams struct {
+	ParentID int64 `json:"parent_id"`
+	ChildID  int64 `json:"child_id"`
+}
+
+func (q *Queries) AddTagRelationship(ctx context.Context, arg AddTagRelationshipParams) error {
+	_, err := q.db.ExecContext(ctx, addTagRelationship, arg.ParentID, arg.ChildID)
+	return err
+}
+
+const addTagToPost = `-- name: AddTagToPost :exec
+INSERT OR IGNORE INTO post_tags (post_id, tag_id)
+VALUES (?, ?)
+`
+
+type AddTagToPostParams struct {
+	PostID int64 `json:"post_id"`
+	TagID  int64 `json:"tag_id"`
+}
+
+func (q *Queries) AddTagToPost(ctx context.Context, arg AddTagToPostParams) error {
+	_, err := q.db.ExecContext(ctx, addTagToPost, arg.PostID, arg.TagID)
+	return err
+}
+
+const clearPostTags = `-- name: ClearPostTags :exec
+DELETE FROM post_tags
+WHERE post_id = ?
+`
+
+func (q *Queries) ClearPostTags(ctx context.Context, postID int64) error {
+	_, err := q.db.ExecContext(ctx, clearPostTags, postID)
+	return err
+}
+
+const clearTagRelationships = `-- name: ClearTagRelationships :exec
+DELETE FROM tag_relationships
+WHERE parent_id = ? OR child_id = ?
+`
+
+type ClearTagRelationshipsParams struct {
+	ParentID int64 `json:"parent_id"`
+	ChildID  int64 `json:"child_id"`
+}
+
+func (q *Queries) ClearTagRelationships(ctx context.Context, arg ClearTagRelationshipsParams) error {
+	_, err := q.db.ExecContext(ctx, clearTagRelationships, arg.ParentID, arg.ChildID)
+	return err
+}
+
+const countMedia = `-- name: CountMedia :one
+SELECT COUNT(*) FROM media
+WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
+`
+
+type CountMediaParams struct {
+	TypeFilter interface{} `json:"type_filter"`
+	FileType   string      `json:"file_type"`
+}
+
+func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMedia, arg.TypeFilter, arg.FileType)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPosts = `-- name: CountPosts :one
+SELECT COUNT(*) FROM posts p
+WHERE 
+    (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
+    AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE WHEN ?4 THEN 1=1 ELSE p.status = 'published' END)
+`
+
+type CountPostsParams struct {
+	StatusFilter   interface{} `json:"status_filter"`
+	Status         string      `json:"status"`
+	FeaturedFilter interface{} `json:"featured_filter"`
+	IncludeDrafts  interface{} `json:"include_drafts"`
+}
+
+func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPosts,
+		arg.StatusFilter,
+		arg.Status,
+		arg.FeaturedFilter,
+		arg.IncludeDrafts,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPostsByTag = `-- name: CountPostsByTag :one
+SELECT COUNT(*) FROM posts p
+JOIN post_tags pt ON p.id = pt.post_id
+WHERE pt.tag_id = ?1
+AND (CASE WHEN ?2 THEN p.status = 'published' ELSE 1=1 END)
+`
+
+type CountPostsByTagParams struct {
+	TagID               int64       `json:"tag_id"`
+	PublishedOnlyFilter interface{} `json:"published_only_filter"`
+}
+
+func (q *Queries) CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPostsByTag, arg.TagID, arg.PublishedOnlyFilter)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createMedia = `-- name: CreateMedia :one
+INSERT INTO media (
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, uploaded_at
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+)
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+`
+
+type CreateMediaParams struct {
+	Filename      string         `json:"filename"`
+	OriginalPath  string         `json:"original_path"`
+	ThumbnailPath sql.NullString `json:"thumbnail_path"`
+	FileType      string         `json:"file_type"`
+	MimeType      string         `json:"mime_type"`
+	FileSize      int64          `json:"file_size"`
+	Width         sql.NullInt64  `json:"width"`
+	Height        sql.NullInt64  `json:"height"`
+	PostID        sql.NullInt64  `json:"post_id"`
+	Checksum      string         `json:"checksum"`
+	AltText       sql.NullString `json:"alt_text"`
+	Caption       sql.NullString `json:"caption"`
+	UploadedAt    time.Time      `json:"uploaded_at"`
+}
+
+func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, createMedia,
+		arg.Filename,
+		arg.OriginalPath,
+		arg.ThumbnailPath,
+		arg.FileType,
+		arg.MimeType,
+		arg.FileSize,
+		arg.Width,
+		arg.Height,
+		arg.PostID,
+		arg.Checksum,
+		arg.AltText,
+		arg.Caption,
+		arg.UploadedAt,
+	)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.OriginalPath,
+		&i.ThumbnailPath,
+		&i.FileType,
+		&i.MimeType,
+		&i.FileSize,
+		&i.Width,
+		&i.Height,
+		&i.PostID,
+		&i.UploadedAt,
+		&i.Checksum,
+		&i.AltText,
+		&i.Caption,
+	)
+	return i, err
+}
+
+const createPost = `-- name: CreatePost :one
+INSERT INTO posts (
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+)
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+`
+
+type CreatePostParams struct {
+	Title           string         `json:"title"`
+	Slug            string         `json:"slug"`
+	Content         string         `json:"content"`
+	Excerpt         sql.NullString `json:"excerpt"`
+	Formatter       string         `json:"formatter"`
+	Status          string         `json:"status"`
+	IsFeatured      bool           `json:"is_featured"`
+	AuthorID        int64          `json:"author_id"`
+	ThumbnailPath   sql.NullString `json:"thumbnail_path"`
+	MetaDescription sql.NullString `json:"meta_description"`
+}
+
+func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, createPost,
+		arg.Title,
+		arg.Slug,
+		arg.Content,
+		arg.Excerpt,
+		arg.Formatter,
+		arg.Status,
+		arg.IsFeatured,
+		arg.AuthorID,
+		arg.ThumbnailPath,
+		arg.MetaDescription,
+	)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Content,
+		&i.Excerpt,
+		&i.Formatter,
+		&i.Status,
+		&i.IsFeatured,
+		&i.ViewCount,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorID,
+		&i.ThumbnailPath,
+		&i.MetaDescription,
+		&i.PreviewToken,
+		&i.PreviewExpiresAt,
+	)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (
     user_id, token, ip_address, user_agent, expires_at
@@ -47,6 +284,63 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.LastActivity,
+	)
+	return i, err
+}
+
+const createTag = `-- name: CreateTag :one
+INSERT INTO tags (
+    name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+)
+RETURNING id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at
+`
+
+type CreateTagParams struct {
+	Name                      string         `json:"name"`
+	Slug                      string         `json:"slug"`
+	Description               sql.NullString `json:"description"`
+	CustomUrl                 sql.NullString `json:"custom_url"`
+	IsImportant               bool           `json:"is_important"`
+	IsFeatured                bool           `json:"is_featured"`
+	IsHidden                  bool           `json:"is_hidden"`
+	IsHiddenPosts             bool           `json:"is_hidden_posts"`
+	IncludeInBreadcrumbs      bool           `json:"include_in_breadcrumbs"`
+	ShowRelatedTagsAsChildren bool           `json:"show_related_tags_as_children"`
+	SortOrder                 sql.NullInt64  `json:"sort_order"`
+}
+
+func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, createTag,
+		arg.Name,
+		arg.Slug,
+		arg.Description,
+		arg.CustomUrl,
+		arg.IsImportant,
+		arg.IsFeatured,
+		arg.IsHidden,
+		arg.IsHiddenPosts,
+		arg.IncludeInBreadcrumbs,
+		arg.ShowRelatedTagsAsChildren,
+		arg.SortOrder,
+	)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.CustomUrl,
+		&i.IsImportant,
+		&i.IsFeatured,
+		&i.IsHidden,
+		&i.IsHiddenPosts,
+		&i.IncludeInBreadcrumbs,
+		&i.ShowRelatedTagsAsChildren,
+		&i.SortOrder,
+		&i.PostCount,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -100,6 +394,31 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 	return err
 }
 
+const deleteMedia = `-- name: DeleteMedia :exec
+DELETE FROM media
+WHERE id = ?
+`
+
+func (q *Queries) DeleteMedia(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMedia, id)
+	return err
+}
+
+const deletePost = `-- name: DeletePost :exec
+DELETE FROM posts
+WHERE id = ? AND author_id = ?
+`
+
+type DeletePostParams struct {
+	ID       int64 `json:"id"`
+	AuthorID int64 `json:"author_id"`
+}
+
+func (q *Queries) DeletePost(ctx context.Context, arg DeletePostParams) error {
+	_, err := q.db.ExecContext(ctx, deletePost, arg.ID, arg.AuthorID)
+	return err
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions
 WHERE id = ? AND user_id = ?
@@ -112,6 +431,26 @@ type DeleteSessionParams struct {
 
 func (q *Queries) DeleteSession(ctx context.Context, arg DeleteSessionParams) error {
 	_, err := q.db.ExecContext(ctx, deleteSession, arg.ID, arg.UserID)
+	return err
+}
+
+const deleteSetting = `-- name: DeleteSetting :exec
+DELETE FROM blog_settings
+WHERE key = ?
+`
+
+func (q *Queries) DeleteSetting(ctx context.Context, key string) error {
+	_, err := q.db.ExecContext(ctx, deleteSetting, key)
+	return err
+}
+
+const deleteTag = `-- name: DeleteTag :exec
+DELETE FROM tags
+WHERE id = ?
+`
+
+func (q *Queries) DeleteTag(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteTag, id)
 	return err
 }
 
@@ -149,6 +488,314 @@ func (q *Queries) GetFirstUser(ctx context.Context) (User, error) {
 		&i.LastLogin,
 	)
 	return i, err
+}
+
+const getMedia = `-- name: GetMedia :one
+
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+WHERE id = ? LIMIT 1
+`
+
+// MEDIA
+func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, getMedia, id)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.OriginalPath,
+		&i.ThumbnailPath,
+		&i.FileType,
+		&i.MimeType,
+		&i.FileSize,
+		&i.Width,
+		&i.Height,
+		&i.PostID,
+		&i.UploadedAt,
+		&i.Checksum,
+		&i.AltText,
+		&i.Caption,
+	)
+	return i, err
+}
+
+const getMediaByChecksum = `-- name: GetMediaByChecksum :one
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+WHERE checksum = ? LIMIT 1
+`
+
+func (q *Queries) GetMediaByChecksum(ctx context.Context, checksum string) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, getMediaByChecksum, checksum)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.OriginalPath,
+		&i.ThumbnailPath,
+		&i.FileType,
+		&i.MimeType,
+		&i.FileSize,
+		&i.Width,
+		&i.Height,
+		&i.PostID,
+		&i.UploadedAt,
+		&i.Checksum,
+		&i.AltText,
+		&i.Caption,
+	)
+	return i, err
+}
+
+const getMediaByPostID = `-- name: GetMediaByPostID :many
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+WHERE post_id = ?
+ORDER BY uploaded_at ASC
+`
+
+func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([]Medium, error) {
+	rows, err := q.db.QueryContext(ctx, getMediaByPostID, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Medium
+	for rows.Next() {
+		var i Medium
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.OriginalPath,
+			&i.ThumbnailPath,
+			&i.FileType,
+			&i.MimeType,
+			&i.FileSize,
+			&i.Width,
+			&i.Height,
+			&i.PostID,
+			&i.UploadedAt,
+			&i.Checksum,
+			&i.AltText,
+			&i.Caption,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPost = `-- name: GetPost :one
+
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+FROM posts p
+JOIN users u ON p.author_id = u.id
+WHERE p.id = ? LIMIT 1
+`
+
+type GetPostRow struct {
+	ID                int64          `json:"id"`
+	Title             string         `json:"title"`
+	Slug              string         `json:"slug"`
+	Content           string         `json:"content"`
+	Excerpt           sql.NullString `json:"excerpt"`
+	Formatter         string         `json:"formatter"`
+	Status            string         `json:"status"`
+	IsFeatured        bool           `json:"is_featured"`
+	ViewCount         int64          `json:"view_count"`
+	PublishedAt       sql.NullTime   `json:"published_at"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	AuthorID          int64          `json:"author_id"`
+	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
+	MetaDescription   sql.NullString `json:"meta_description"`
+	PreviewToken      sql.NullString `json:"preview_token"`
+	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
+	AuthorUsername    string         `json:"author_username"`
+	AuthorDisplayName string         `json:"author_display_name"`
+	AuthorAvatar      sql.NullString `json:"author_avatar"`
+}
+
+// POSTS
+func (q *Queries) GetPost(ctx context.Context, id int64) (GetPostRow, error) {
+	row := q.db.QueryRowContext(ctx, getPost, id)
+	var i GetPostRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Content,
+		&i.Excerpt,
+		&i.Formatter,
+		&i.Status,
+		&i.IsFeatured,
+		&i.ViewCount,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorID,
+		&i.ThumbnailPath,
+		&i.MetaDescription,
+		&i.PreviewToken,
+		&i.PreviewExpiresAt,
+		&i.AuthorUsername,
+		&i.AuthorDisplayName,
+		&i.AuthorAvatar,
+	)
+	return i, err
+}
+
+const getPostBySlug = `-- name: GetPostBySlug :one
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+FROM posts p
+JOIN users u ON p.author_id = u.id
+WHERE p.slug = ? LIMIT 1
+`
+
+type GetPostBySlugRow struct {
+	ID                int64          `json:"id"`
+	Title             string         `json:"title"`
+	Slug              string         `json:"slug"`
+	Content           string         `json:"content"`
+	Excerpt           sql.NullString `json:"excerpt"`
+	Formatter         string         `json:"formatter"`
+	Status            string         `json:"status"`
+	IsFeatured        bool           `json:"is_featured"`
+	ViewCount         int64          `json:"view_count"`
+	PublishedAt       sql.NullTime   `json:"published_at"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	AuthorID          int64          `json:"author_id"`
+	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
+	MetaDescription   sql.NullString `json:"meta_description"`
+	PreviewToken      sql.NullString `json:"preview_token"`
+	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
+	AuthorUsername    string         `json:"author_username"`
+	AuthorDisplayName string         `json:"author_display_name"`
+	AuthorAvatar      sql.NullString `json:"author_avatar"`
+}
+
+func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (GetPostBySlugRow, error) {
+	row := q.db.QueryRowContext(ctx, getPostBySlug, slug)
+	var i GetPostBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Content,
+		&i.Excerpt,
+		&i.Formatter,
+		&i.Status,
+		&i.IsFeatured,
+		&i.ViewCount,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorID,
+		&i.ThumbnailPath,
+		&i.MetaDescription,
+		&i.PreviewToken,
+		&i.PreviewExpiresAt,
+		&i.AuthorUsername,
+		&i.AuthorDisplayName,
+		&i.AuthorAvatar,
+	)
+	return i, err
+}
+
+const getPostsByTag = `-- name: GetPostsByTag :many
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+FROM posts p
+JOIN users u ON p.author_id = u.id
+JOIN post_tags pt ON p.id = pt.post_id
+WHERE pt.tag_id = ?3
+AND (CASE WHEN ?4 THEN p.status = 'published' ELSE 1=1 END)
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type GetPostsByTagParams struct {
+	TagID               int64       `json:"tag_id"`
+	PublishedOnlyFilter interface{} `json:"published_only_filter"`
+	Limit               int64       `json:"limit"`
+	Offset              int64       `json:"offset"`
+}
+
+type GetPostsByTagRow struct {
+	ID                int64          `json:"id"`
+	Title             string         `json:"title"`
+	Slug              string         `json:"slug"`
+	Content           string         `json:"content"`
+	Excerpt           sql.NullString `json:"excerpt"`
+	Formatter         string         `json:"formatter"`
+	Status            string         `json:"status"`
+	IsFeatured        bool           `json:"is_featured"`
+	ViewCount         int64          `json:"view_count"`
+	PublishedAt       sql.NullTime   `json:"published_at"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	AuthorID          int64          `json:"author_id"`
+	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
+	MetaDescription   sql.NullString `json:"meta_description"`
+	PreviewToken      sql.NullString `json:"preview_token"`
+	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
+	AuthorUsername    string         `json:"author_username"`
+	AuthorDisplayName string         `json:"author_display_name"`
+	AuthorAvatar      sql.NullString `json:"author_avatar"`
+}
+
+func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]GetPostsByTagRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPostsByTag,
+		arg.TagID,
+		arg.PublishedOnlyFilter,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPostsByTagRow
+	for rows.Next() {
+		var i GetPostsByTagRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Content,
+			&i.Excerpt,
+			&i.Formatter,
+			&i.Status,
+			&i.IsFeatured,
+			&i.ViewCount,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorID,
+			&i.ThumbnailPath,
+			&i.MetaDescription,
+			&i.PreviewToken,
+			&i.PreviewExpiresAt,
+			&i.AuthorUsername,
+			&i.AuthorDisplayName,
+			&i.AuthorAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getSessionByToken = `-- name: GetSessionByToken :one
@@ -189,6 +836,227 @@ func (q *Queries) GetSessionByToken(ctx context.Context, token string) (GetSessi
 		&i.DisplayName,
 	)
 	return i, err
+}
+
+const getSetting = `-- name: GetSetting :one
+
+SELECT "key", value, value_type, updated_at FROM blog_settings
+WHERE key = ? LIMIT 1
+`
+
+// SETTINGS
+func (q *Queries) GetSetting(ctx context.Context, key string) (BlogSetting, error) {
+	row := q.db.QueryRowContext(ctx, getSetting, key)
+	var i BlogSetting
+	err := row.Scan(
+		&i.Key,
+		&i.Value,
+		&i.ValueType,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getStorageUsage = `-- name: GetStorageUsage :one
+SELECT SUM(file_size) FROM media
+`
+
+func (q *Queries) GetStorageUsage(ctx context.Context) (sql.NullFloat64, error) {
+	row := q.db.QueryRowContext(ctx, getStorageUsage)
+	var sum sql.NullFloat64
+	err := row.Scan(&sum)
+	return sum, err
+}
+
+const getTag = `-- name: GetTag :one
+
+SELECT id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at FROM tags
+WHERE id = ? LIMIT 1
+`
+
+// TAGS
+func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, getTag, id)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.CustomUrl,
+		&i.IsImportant,
+		&i.IsFeatured,
+		&i.IsHidden,
+		&i.IsHiddenPosts,
+		&i.IncludeInBreadcrumbs,
+		&i.ShowRelatedTagsAsChildren,
+		&i.SortOrder,
+		&i.PostCount,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTagBySlug = `-- name: GetTagBySlug :one
+SELECT id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at FROM tags
+WHERE slug = ? LIMIT 1
+`
+
+func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, getTagBySlug, slug)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.CustomUrl,
+		&i.IsImportant,
+		&i.IsFeatured,
+		&i.IsHidden,
+		&i.IsHiddenPosts,
+		&i.IncludeInBreadcrumbs,
+		&i.ShowRelatedTagsAsChildren,
+		&i.SortOrder,
+		&i.PostCount,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTagChildren = `-- name: GetTagChildren :many
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important, t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs, t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at FROM tags t
+JOIN tag_relationships tr ON t.id = tr.child_id
+WHERE tr.parent_id = ?
+`
+
+func (q *Queries) GetTagChildren(ctx context.Context, parentID int64) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, getTagChildren, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.CustomUrl,
+			&i.IsImportant,
+			&i.IsFeatured,
+			&i.IsHidden,
+			&i.IsHiddenPosts,
+			&i.IncludeInBreadcrumbs,
+			&i.ShowRelatedTagsAsChildren,
+			&i.SortOrder,
+			&i.PostCount,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTagParents = `-- name: GetTagParents :many
+
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important, t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs, t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at FROM tags t
+JOIN tag_relationships tr ON t.id = tr.parent_id
+WHERE tr.child_id = ?
+`
+
+// HIERARCHY
+func (q *Queries) GetTagParents(ctx context.Context, childID int64) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, getTagParents, childID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.CustomUrl,
+			&i.IsImportant,
+			&i.IsFeatured,
+			&i.IsHidden,
+			&i.IsHiddenPosts,
+			&i.IncludeInBreadcrumbs,
+			&i.ShowRelatedTagsAsChildren,
+			&i.SortOrder,
+			&i.PostCount,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTagsForPost = `-- name: GetTagsForPost :many
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important, t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs, t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at FROM tags t
+JOIN post_tags pt ON t.id = pt.tag_id
+WHERE pt.post_id = ?
+ORDER BY t.name ASC
+`
+
+func (q *Queries) GetTagsForPost(ctx context.Context, postID int64) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, getTagsForPost, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.CustomUrl,
+			&i.IsImportant,
+			&i.IsFeatured,
+			&i.IsHidden,
+			&i.IsHiddenPosts,
+			&i.IncludeInBreadcrumbs,
+			&i.ShowRelatedTagsAsChildren,
+			&i.SortOrder,
+			&i.PostCount,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUser = `-- name: GetUser :one
@@ -293,6 +1161,483 @@ func (q *Queries) GetUserSessions(ctx context.Context, userID int64) ([]Session,
 	return items, nil
 }
 
+const incrementPostViewCount = `-- name: IncrementPostViewCount :exec
+UPDATE posts
+SET view_count = view_count + 1
+WHERE id = ?
+`
+
+func (q *Queries) IncrementPostViewCount(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, incrementPostViewCount, id)
+	return err
+}
+
+const listMedia = `-- name: ListMedia :many
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+WHERE (CASE WHEN ?3 THEN file_type = ?4 ELSE 1=1 END)
+ORDER BY uploaded_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListMediaParams struct {
+	TypeFilter interface{} `json:"type_filter"`
+	FileType   string      `json:"file_type"`
+	Limit      int64       `json:"limit"`
+	Offset     int64       `json:"offset"`
+}
+
+func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error) {
+	rows, err := q.db.QueryContext(ctx, listMedia,
+		arg.TypeFilter,
+		arg.FileType,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Medium
+	for rows.Next() {
+		var i Medium
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.OriginalPath,
+			&i.ThumbnailPath,
+			&i.FileType,
+			&i.MimeType,
+			&i.FileSize,
+			&i.Width,
+			&i.Height,
+			&i.PostID,
+			&i.UploadedAt,
+			&i.Checksum,
+			&i.AltText,
+			&i.Caption,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPosts = `-- name: ListPosts :many
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+FROM posts p
+JOIN users u ON p.author_id = u.id
+WHERE 
+    (CASE WHEN ?3 THEN p.status = ?4 ELSE 1=1 END)
+    AND (CASE WHEN ?5 THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE WHEN ?6 THEN 1=1 ELSE p.status = 'published' END)
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListPostsParams struct {
+	StatusFilter   interface{} `json:"status_filter"`
+	Status         string      `json:"status"`
+	FeaturedFilter interface{} `json:"featured_filter"`
+	IncludeDrafts  interface{} `json:"include_drafts"`
+	Limit          int64       `json:"limit"`
+	Offset         int64       `json:"offset"`
+}
+
+type ListPostsRow struct {
+	ID                int64          `json:"id"`
+	Title             string         `json:"title"`
+	Slug              string         `json:"slug"`
+	Content           string         `json:"content"`
+	Excerpt           sql.NullString `json:"excerpt"`
+	Formatter         string         `json:"formatter"`
+	Status            string         `json:"status"`
+	IsFeatured        bool           `json:"is_featured"`
+	ViewCount         int64          `json:"view_count"`
+	PublishedAt       sql.NullTime   `json:"published_at"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	AuthorID          int64          `json:"author_id"`
+	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
+	MetaDescription   sql.NullString `json:"meta_description"`
+	PreviewToken      sql.NullString `json:"preview_token"`
+	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
+	AuthorUsername    string         `json:"author_username"`
+	AuthorDisplayName string         `json:"author_display_name"`
+	AuthorAvatar      sql.NullString `json:"author_avatar"`
+}
+
+func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPosts,
+		arg.StatusFilter,
+		arg.Status,
+		arg.FeaturedFilter,
+		arg.IncludeDrafts,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPostsRow
+	for rows.Next() {
+		var i ListPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Content,
+			&i.Excerpt,
+			&i.Formatter,
+			&i.Status,
+			&i.IsFeatured,
+			&i.ViewCount,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorID,
+			&i.ThumbnailPath,
+			&i.MetaDescription,
+			&i.PreviewToken,
+			&i.PreviewExpiresAt,
+			&i.AuthorUsername,
+			&i.AuthorDisplayName,
+			&i.AuthorAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSettings = `-- name: ListSettings :many
+SELECT "key", value, value_type, updated_at FROM blog_settings
+`
+
+func (q *Queries) ListSettings(ctx context.Context) ([]BlogSetting, error) {
+	rows, err := q.db.QueryContext(ctx, listSettings)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BlogSetting
+	for rows.Next() {
+		var i BlogSetting
+		if err := rows.Scan(
+			&i.Key,
+			&i.Value,
+			&i.ValueType,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTags = `-- name: ListTags :many
+SELECT id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at FROM tags
+WHERE (CASE WHEN ?1 THEN is_important = 1 ELSE 1=1 END)
+AND (CASE WHEN ?2 THEN 1=1 ELSE post_count > 0 END)
+ORDER BY sort_order ASC, name ASC
+`
+
+type ListTagsParams struct {
+	ImportantOnlyFilter interface{} `json:"important_only_filter"`
+	IncludeEmptyFilter  interface{} `json:"include_empty_filter"`
+}
+
+func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, listTags, arg.ImportantOnlyFilter, arg.IncludeEmptyFilter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.CustomUrl,
+			&i.IsImportant,
+			&i.IsFeatured,
+			&i.IsHidden,
+			&i.IsHiddenPosts,
+			&i.IncludeInBreadcrumbs,
+			&i.ShowRelatedTagsAsChildren,
+			&i.SortOrder,
+			&i.PostCount,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const publishPost = `-- name: PublishPost :one
+UPDATE posts
+SET status = 'published', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+`
+
+func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
+	row := q.db.QueryRowContext(ctx, publishPost, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Content,
+		&i.Excerpt,
+		&i.Formatter,
+		&i.Status,
+		&i.IsFeatured,
+		&i.ViewCount,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorID,
+		&i.ThumbnailPath,
+		&i.MetaDescription,
+		&i.PreviewToken,
+		&i.PreviewExpiresAt,
+	)
+	return i, err
+}
+
+const removeTagFromPost = `-- name: RemoveTagFromPost :exec
+DELETE FROM post_tags
+WHERE post_id = ? AND tag_id = ?
+`
+
+type RemoveTagFromPostParams struct {
+	PostID int64 `json:"post_id"`
+	TagID  int64 `json:"tag_id"`
+}
+
+func (q *Queries) RemoveTagFromPost(ctx context.Context, arg RemoveTagFromPostParams) error {
+	_, err := q.db.ExecContext(ctx, removeTagFromPost, arg.PostID, arg.TagID)
+	return err
+}
+
+const removeTagRelationship = `-- name: RemoveTagRelationship :exec
+DELETE FROM tag_relationships
+WHERE parent_id = ? AND child_id = ?
+`
+
+type RemoveTagRelationshipParams struct {
+	ParentID int64 `json:"parent_id"`
+	ChildID  int64 `json:"child_id"`
+}
+
+func (q *Queries) RemoveTagRelationship(ctx context.Context, arg RemoveTagRelationshipParams) error {
+	_, err := q.db.ExecContext(ctx, removeTagRelationship, arg.ParentID, arg.ChildID)
+	return err
+}
+
+const setPostPreviewToken = `-- name: SetPostPreviewToken :exec
+UPDATE posts
+SET preview_token = ?, preview_expires_at = ?
+WHERE id = ?
+`
+
+type SetPostPreviewTokenParams struct {
+	PreviewToken     sql.NullString `json:"preview_token"`
+	PreviewExpiresAt sql.NullTime   `json:"preview_expires_at"`
+	ID               int64          `json:"id"`
+}
+
+func (q *Queries) SetPostPreviewToken(ctx context.Context, arg SetPostPreviewTokenParams) error {
+	_, err := q.db.ExecContext(ctx, setPostPreviewToken, arg.PreviewToken, arg.PreviewExpiresAt, arg.ID)
+	return err
+}
+
+const updateAllTagPostCounts = `-- name: UpdateAllTagPostCounts :exec
+UPDATE tags
+SET post_count = (
+    SELECT COUNT(*) FROM post_tags
+    WHERE tag_id = tags.id
+)
+`
+
+func (q *Queries) UpdateAllTagPostCounts(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, updateAllTagPostCounts)
+	return err
+}
+
+const updateMedia = `-- name: UpdateMedia :one
+UPDATE media
+SET alt_text = ?, caption = ?, post_id = ?
+WHERE id = ?
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+`
+
+type UpdateMediaParams struct {
+	AltText sql.NullString `json:"alt_text"`
+	Caption sql.NullString `json:"caption"`
+	PostID  sql.NullInt64  `json:"post_id"`
+	ID      int64          `json:"id"`
+}
+
+func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, updateMedia,
+		arg.AltText,
+		arg.Caption,
+		arg.PostID,
+		arg.ID,
+	)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.OriginalPath,
+		&i.ThumbnailPath,
+		&i.FileType,
+		&i.MimeType,
+		&i.FileSize,
+		&i.Width,
+		&i.Height,
+		&i.PostID,
+		&i.UploadedAt,
+		&i.Checksum,
+		&i.AltText,
+		&i.Caption,
+	)
+	return i, err
+}
+
+const updateMediaFilename = `-- name: UpdateMediaFilename :one
+UPDATE media
+SET filename = ?, original_path = ?, thumbnail_path = ?
+WHERE id = ?
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+`
+
+type UpdateMediaFilenameParams struct {
+	Filename      string         `json:"filename"`
+	OriginalPath  string         `json:"original_path"`
+	ThumbnailPath sql.NullString `json:"thumbnail_path"`
+	ID            int64          `json:"id"`
+}
+
+func (q *Queries) UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilenameParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, updateMediaFilename,
+		arg.Filename,
+		arg.OriginalPath,
+		arg.ThumbnailPath,
+		arg.ID,
+	)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.OriginalPath,
+		&i.ThumbnailPath,
+		&i.FileType,
+		&i.MimeType,
+		&i.FileSize,
+		&i.Width,
+		&i.Height,
+		&i.PostID,
+		&i.UploadedAt,
+		&i.Checksum,
+		&i.AltText,
+		&i.Caption,
+	)
+	return i, err
+}
+
+const updatePost = `-- name: UpdatePost :one
+UPDATE posts
+SET title = ?, slug = ?, content = ?, excerpt = ?, formatter = ?, status = ?, is_featured = ?, thumbnail_path = ?, meta_description = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND author_id = ?
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+`
+
+type UpdatePostParams struct {
+	Title           string         `json:"title"`
+	Slug            string         `json:"slug"`
+	Content         string         `json:"content"`
+	Excerpt         sql.NullString `json:"excerpt"`
+	Formatter       string         `json:"formatter"`
+	Status          string         `json:"status"`
+	IsFeatured      bool           `json:"is_featured"`
+	ThumbnailPath   sql.NullString `json:"thumbnail_path"`
+	MetaDescription sql.NullString `json:"meta_description"`
+	ID              int64          `json:"id"`
+	AuthorID        int64          `json:"author_id"`
+}
+
+func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, updatePost,
+		arg.Title,
+		arg.Slug,
+		arg.Content,
+		arg.Excerpt,
+		arg.Formatter,
+		arg.Status,
+		arg.IsFeatured,
+		arg.ThumbnailPath,
+		arg.MetaDescription,
+		arg.ID,
+		arg.AuthorID,
+	)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Content,
+		&i.Excerpt,
+		&i.Formatter,
+		&i.Status,
+		&i.IsFeatured,
+		&i.ViewCount,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorID,
+		&i.ThumbnailPath,
+		&i.MetaDescription,
+		&i.PreviewToken,
+		&i.PreviewExpiresAt,
+	)
+	return i, err
+}
+
 const updateSessionActivity = `-- name: UpdateSessionActivity :exec
 UPDATE sessions
 SET last_activity = CURRENT_TIMESTAMP
@@ -301,6 +1646,105 @@ WHERE id = ?
 
 func (q *Queries) UpdateSessionActivity(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, updateSessionActivity, id)
+	return err
+}
+
+const updateSetting = `-- name: UpdateSetting :one
+INSERT INTO blog_settings (key, value, value_type, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(key) DO UPDATE SET
+    value = excluded.value,
+    value_type = excluded.value_type,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING "key", value, value_type, updated_at
+`
+
+type UpdateSettingParams struct {
+	Key       string         `json:"key"`
+	Value     sql.NullString `json:"value"`
+	ValueType string         `json:"value_type"`
+}
+
+func (q *Queries) UpdateSetting(ctx context.Context, arg UpdateSettingParams) (BlogSetting, error) {
+	row := q.db.QueryRowContext(ctx, updateSetting, arg.Key, arg.Value, arg.ValueType)
+	var i BlogSetting
+	err := row.Scan(
+		&i.Key,
+		&i.Value,
+		&i.ValueType,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateTag = `-- name: UpdateTag :one
+UPDATE tags
+SET name = ?, slug = ?, description = ?, custom_url = ?, is_important = ?, is_featured = ?, is_hidden = ?, is_hidden_posts = ?, include_in_breadcrumbs = ?, show_related_tags_as_children = ?, sort_order = ?
+WHERE id = ?
+RETURNING id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at
+`
+
+type UpdateTagParams struct {
+	Name                      string         `json:"name"`
+	Slug                      string         `json:"slug"`
+	Description               sql.NullString `json:"description"`
+	CustomUrl                 sql.NullString `json:"custom_url"`
+	IsImportant               bool           `json:"is_important"`
+	IsFeatured                bool           `json:"is_featured"`
+	IsHidden                  bool           `json:"is_hidden"`
+	IsHiddenPosts             bool           `json:"is_hidden_posts"`
+	IncludeInBreadcrumbs      bool           `json:"include_in_breadcrumbs"`
+	ShowRelatedTagsAsChildren bool           `json:"show_related_tags_as_children"`
+	SortOrder                 sql.NullInt64  `json:"sort_order"`
+	ID                        int64          `json:"id"`
+}
+
+func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, updateTag,
+		arg.Name,
+		arg.Slug,
+		arg.Description,
+		arg.CustomUrl,
+		arg.IsImportant,
+		arg.IsFeatured,
+		arg.IsHidden,
+		arg.IsHiddenPosts,
+		arg.IncludeInBreadcrumbs,
+		arg.ShowRelatedTagsAsChildren,
+		arg.SortOrder,
+		arg.ID,
+	)
+	var i Tag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.CustomUrl,
+		&i.IsImportant,
+		&i.IsFeatured,
+		&i.IsHidden,
+		&i.IsHiddenPosts,
+		&i.IncludeInBreadcrumbs,
+		&i.ShowRelatedTagsAsChildren,
+		&i.SortOrder,
+		&i.PostCount,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateTagPostCount = `-- name: UpdateTagPostCount :exec
+UPDATE tags
+SET post_count = (
+    SELECT COUNT(*) FROM post_tags
+    WHERE tag_id = tags.id
+)
+WHERE id = ?
+`
+
+func (q *Queries) UpdateTagPostCount(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, updateTagPostCount, id)
 	return err
 }
 
@@ -329,4 +1773,36 @@ type UpdateUserPasswordParams struct {
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
 	return err
+}
+
+const withdrawPost = `-- name: WithdrawPost :one
+UPDATE posts
+SET status = 'draft', updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+`
+
+func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
+	row := q.db.QueryRowContext(ctx, withdrawPost, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Slug,
+		&i.Content,
+		&i.Excerpt,
+		&i.Formatter,
+		&i.Status,
+		&i.IsFeatured,
+		&i.ViewCount,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorID,
+		&i.ThumbnailPath,
+		&i.MetaDescription,
+		&i.PreviewToken,
+		&i.PreviewExpiresAt,
+	)
+	return i, err
 }
