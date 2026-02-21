@@ -8,16 +8,24 @@
 
 .header-tags-bar .tags-filters {
     max-width: var(--content-max-width);
+    width: 100%;
     margin: 0 auto;
     padding: var(--spacing-xs) var(--spacing-md);
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: safe center;
     flex-wrap: nowrap;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     /* Allow dropdowns */
     opacity: 0;
     transition: opacity 0.2s ease;
+}
+
+.header-tags-bar .tags-filters::-webkit-scrollbar {
+    display: none;
 }
 
 .header-tags-bar .tags-filters.is-ready {
