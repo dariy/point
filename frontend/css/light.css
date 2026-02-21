@@ -2406,6 +2406,88 @@ h1 .app-logo {
     line-height: 1.3;
 }
 
+/* ===========================
+   Tag-badge toggle checkboxes
+   (parent / child selectors)
+   =========================== */
+.tag-toggles-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0 4px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.tag-toggles-empty {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    padding: 6px 0;
+}
+
+.tag-toggle {
+    display: inline-flex;
+    cursor: pointer;
+    user-select: none;
+}
+
+.tag-toggle input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.tag-toggle span {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1;
+    border-radius: 9999px;
+    border: 1px solid var(--border-primary);
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.tag-toggle:hover span {
+    border-color: var(--color-primary);
+    color: var(--text-primary);
+}
+
+.tag-toggle input[type="checkbox"]:checked + span {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
+
+/* ===========================
+   Multi-parent & relation badges
+   =========================== */
+.tm-multi-parent {
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.75;
+    flex-shrink: 0;
+    cursor: default;
+}
+
+.tm-rel-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
 /* Tree View Styles */
 .tree-view {
     display: flex;

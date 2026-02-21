@@ -26,6 +26,7 @@ export default class TagsManagerPage extends Component {
     };
     this._modal = null;
     this._modalKeyHandler = null;
+    this._didPushUrl = false;
   }
 
   render() {
@@ -68,7 +69,7 @@ export default class TagsManagerPage extends Component {
       </div>`;
   }
 
-  // \u2500\u2500 List view \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // === List view ===
 
   _renderList(tags) {
     if (!tags.length) return '<p class="empty-state">No tags found.</p>';
@@ -265,7 +266,7 @@ export default class TagsManagerPage extends Component {
 
   // \u2500\u2500 Modal \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-  _openModal(tag = null, parentId = null) {
+  _openModal(tag = null, parentId = null, { fromUrl = false } = {}) {
     this._closeModal();
 
     const isEdit      = !!tag;
@@ -359,6 +360,14 @@ export default class TagsManagerPage extends Component {
     document.body.appendChild(modal);
     this._modal = modal;
 
+    // Reflect the open tag in the browser URL.
+    const urlSlug = isEdit ? f.slug : 'new';
+    const targetPath = `/light/tags/${urlSlug}`;
+    if (!fromUrl && location.pathname !== targetPath) {
+      history.pushState(null, '', targetPath);
+      this._didPushUrl = true;
+    }
+
     // Auto-generate slug from name.
     const nameInput = modal.querySelector('[name="name"]');
     const slugInput = modal.querySelector('#modal-slug');
@@ -419,6 +428,11 @@ export default class TagsManagerPage extends Component {
       document.removeEventListener('keydown', this._modalKeyHandler);
       this._modalKeyHandler = null;
     }
+    // Restore URL to the tags list — only if we're still on a tag-detail URL.
+    if (location.pathname.startsWith('/light/tags/')) {
+      history.replaceState(null, '', '/light/tags');
+    }
+    this._didPushUrl = false;
   }
 
   _slugify(text) {
@@ -434,7 +448,17 @@ export default class TagsManagerPage extends Component {
     this.setState({ loading: true, error: null });
     try {
       const data = await listTags({ include_empty: true });
-      this.setState({ loading: false, tags: data.tags || [] });
+      const tags = data.tags || [];
+      this.setState({ loading: false, tags });
+
+      // Auto-open editor when navigated directly to /light/tags/:slug
+      const slug = this.props?.params?.slug;
+      if (slug) {
+        const tag = slug === 'new' ? null : tags.find(t => t.slug === slug);
+        if (slug === 'new' || tag) {
+          this._openModal(tag, null, { fromUrl: true });
+        }
+      }
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Failed to load tags.' });
     }

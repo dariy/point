@@ -180,9 +180,9 @@ ORDER BY sort_order ASC, name ASC;
 
 -- name: CreateTag :one
 INSERT INTO tags (
-    name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order
+    name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
 )
 RETURNING *;
 
