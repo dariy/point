@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"point-api/internal/models"
@@ -343,6 +344,122 @@ func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interf
 	}
 	if len(errors) > 0 {
 		result["errors"] = errors
+	}
+	return result, nil
+}
+
+// NavTagNode is a tag node in the public navigation hierarchy with nested children.
+type NavTagNode struct {
+	ID        int64        `json:"id"`
+	Name      string       `json:"name"`
+	Slug      string       `json:"slug"`
+	IsHidden  bool         `json:"is_hidden"`
+	PostCount int64        `json:"post_count"`
+	IsRelated bool         `json:"is_related"`
+	Children  []NavTagNode `json:"children"`
+}
+
+// GetHierarchicalNavTags builds a recursive tag tree for the public navigation bar.
+// If rootID is nil, returns root-level tags (no parents) and their descendants (for homepage).
+// If rootID is non-nil, returns children of that tag and their descendants (for tag pages).
+// Hidden and empty tags are excluded.
+func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) ([]NavTagNode, error) {
+	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
+		IncludeEmptyFilter:  false,
+		ImportantOnlyFilter: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	tagByID := make(map[int64]models.Tag, len(allTags))
+	for _, t := range allTags {
+		tagByID[t.ID] = t
+	}
+
+	relationships, err := s.repo.GetAllTagRelationships(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	childrenOf := make(map[int64][]int64)
+	parentsOf := make(map[int64][]int64)
+	for _, rel := range relationships {
+		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
+		parentsOf[rel.ChildID] = append(parentsOf[rel.ChildID], rel.ParentID)
+	}
+
+	tagLess := func(a, b models.Tag) bool {
+		if a.SortOrder.Valid && b.SortOrder.Valid {
+			if a.SortOrder.Int64 != b.SortOrder.Int64 {
+				return a.SortOrder.Int64 < b.SortOrder.Int64
+			}
+		} else if a.SortOrder.Valid {
+			return true
+		} else if b.SortOrder.Valid {
+			return false
+		}
+		return a.Name < b.Name
+	}
+
+	var build func(id int64, visited map[int64]bool) NavTagNode
+	build = func(id int64, visited map[int64]bool) NavTagNode {
+		t := tagByID[id]
+		node := NavTagNode{
+			ID:        t.ID,
+			Name:      t.Name,
+			Slug:      t.Slug,
+			IsHidden:  t.IsHidden,
+			PostCount: t.PostCount,
+			IsRelated: t.ShowRelatedTagsAsChildren,
+			Children:  []NavTagNode{},
+		}
+		childIDs := childrenOf[id]
+		sortedIDs := make([]int64, 0, len(childIDs))
+		for _, cid := range childIDs {
+			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && ch.PostCount > 0 && !visited[cid] {
+				sortedIDs = append(sortedIDs, cid)
+			}
+		}
+		sort.Slice(sortedIDs, func(i, j int) bool {
+			return tagLess(tagByID[sortedIDs[i]], tagByID[sortedIDs[j]])
+		})
+		for _, cid := range sortedIDs {
+			childVisited := make(map[int64]bool, len(visited)+1)
+			for k := range visited {
+				childVisited[k] = true
+			}
+			childVisited[cid] = true
+			node.Children = append(node.Children, build(cid, childVisited))
+		}
+		return node
+	}
+
+	var rootIDs []int64
+	if rootID == nil {
+		for _, t := range allTags {
+			if t.IsHidden || t.PostCount == 0 {
+				continue
+			}
+			if len(parentsOf[t.ID]) == 0 {
+				rootIDs = append(rootIDs, t.ID)
+			}
+		}
+	} else {
+		for _, cid := range childrenOf[*rootID] {
+			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && ch.PostCount > 0 {
+				rootIDs = append(rootIDs, cid)
+			}
+		}
+	}
+
+	sort.Slice(rootIDs, func(i, j int) bool {
+		return tagLess(tagByID[rootIDs[i]], tagByID[rootIDs[j]])
+	})
+
+	result := make([]NavTagNode, 0, len(rootIDs))
+	for _, id := range rootIDs {
+		result = append(result, build(id, map[int64]bool{id: true}))
 	}
 	return result, nil
 }
