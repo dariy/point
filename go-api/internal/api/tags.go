@@ -41,15 +41,23 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		tagMap[t.ID] = t
 	}
 
-	// Fetch all relationships to build parent info for each tag.
+	// Fetch all relationships; build parent and children maps for each tag.
 	rels, _ := h.tagService.GetAllTagRelationships(c.Request().Context())
 	childParents := make(map[int64][]map[string]interface{})
+	parentChildren := make(map[int64][]map[string]interface{})
 	for _, rel := range rels {
 		if parent, ok := tagMap[rel.ParentID]; ok {
 			childParents[rel.ChildID] = append(childParents[rel.ChildID], map[string]interface{}{
 				"id":   parent.ID,
 				"name": parent.Name,
 				"slug": parent.Slug,
+			})
+		}
+		if child, ok := tagMap[rel.ChildID]; ok {
+			parentChildren[rel.ParentID] = append(parentChildren[rel.ParentID], map[string]interface{}{
+				"id":   child.ID,
+				"name": child.Name,
+				"slug": child.Slug,
 			})
 		}
 	}
@@ -59,6 +67,10 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		parents := childParents[t.ID]
 		if parents == nil {
 			parents = []map[string]interface{}{}
+		}
+		children := parentChildren[t.ID]
+		if children == nil {
+			children = []map[string]interface{}{}
 		}
 		tagItems[i] = map[string]interface{}{
 			"id":                            t.ID,
@@ -75,6 +87,7 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 			"sort_order":                    nullInt64(t.SortOrder),
 			"post_count":                    t.PostCount,
 			"parents":                       parents,
+			"children":                      children,
 		}
 	}
 
@@ -142,6 +155,7 @@ type CreateTagRequest struct {
 	ShowRelatedTagsAsChildren bool    `json:"show_related_tags_as_children"`
 	SortOrder                 *int32  `json:"sort_order"`
 	ParentIDs                 []int64 `json:"parent_ids"`
+	ChildIDs                  []int64 `json:"child_ids"`
 }
 
 func (h *TagHandler) CreateTag(c echo.Context) error {
@@ -167,9 +181,8 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, err.Error())
 	}
 
-	if len(req.ParentIDs) > 0 {
-		_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
-	}
+	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
+	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
@@ -206,8 +219,9 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
-	// Always update parent relationships (empty slice = remove all parents).
+	// Always update parent and child relationships (empty slice = remove all).
 	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
+	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
