@@ -79,14 +79,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	// Tag cloud (non-empty tags)
 	cloud, _ := h.tagService.GetTagCloud(ctx, 20)
 
-	// Top-level tags for nav (non-hidden, non-empty)
-	allTags, _ := h.tagService.ListTags(ctx, false, false)
-	navTags := make([]map[string]interface{}, 0)
-	for _, t := range allTags {
-		if !t.IsHidden {
-			navTags = append(navTags, tagToListItem(t))
-		}
-	}
+	// Hierarchical tags for nav (root tags with nested children)
+	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil)
 
 	// Public settings subset
 	publicSettings := make(map[string]string)
@@ -138,14 +132,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
 
-	// Direct children for sub-nav
+	// Direct children for tag detail response
 	children, _ := h.tagService.GetTagChildren(ctx, tag.ID)
-	childItems := make([]map[string]interface{}, 0, len(children))
-	for _, ch := range children {
-		if !ch.IsHidden {
-			childItems = append(childItems, tagToListItem(ch))
-		}
-	}
+
+	// Hierarchical children for sub-nav
+	childItems, _ := h.tagService.GetHierarchicalNavTags(ctx, &tag.ID)
 
 	// Posts for this tag (published only)
 	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), true)
