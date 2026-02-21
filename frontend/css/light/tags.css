@@ -189,3 +189,300 @@
     bottom: -1px;
 }
 
+/* ===========================
+   Tags Manager — view toggle
+   =========================== */
+.tm-view-toggle {
+    display: flex;
+    gap: 0;
+}
+
+.tm-view-toggle .btn {
+    border-radius: 0;
+}
+
+.tm-view-toggle .btn:first-child {
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.tm-view-toggle .btn:last-child {
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    border-left: none;
+}
+
+/* ===========================
+   Tags Manager — list view extras
+   =========================== */
+.tm-tag-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.tm-slug {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
+    border: none;
+}
+
+.tm-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    background: var(--border-primary);
+    color: var(--text-secondary);
+}
+
+.tm-parent-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+.tm-flags-inline {
+    margin-left: 6px;
+}
+
+.tm-flag {
+    font-size: 12px;
+    margin: 0 1px;
+    opacity: 0.85;
+}
+
+.tm-flag-important { color: #f59e0b; }
+.tm-flag-featured  { color: var(--color-primary); }
+.tm-flag-hidden    { color: var(--text-muted); }
+.tm-flag-hidden-posts { color: var(--color-danger); }
+
+/* ===========================
+   Tags Manager — tree view
+   =========================== */
+.tags-tree-container {
+    padding: 4px 0;
+}
+
+.tm-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tm-tree.level-1,
+.tm-tree.level-2,
+.tm-tree.level-3 {
+    padding-left: 20px;
+    border-left: 1px dashed var(--border-primary);
+    margin-left: 11px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+.tm-node {
+    display: flex;
+    flex-direction: column;
+}
+
+.tm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-fast);
+    min-height: 36px;
+}
+
+.tm-row:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-toggle {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 9px;
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-toggle:hover {
+    background: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.tm-toggle-spacer {
+    flex-shrink: 0;
+    width: 22px;
+}
+
+.tm-row .tm-tag-name {
+    flex: 1;
+    font-size: var(--font-size-sm);
+}
+
+.tm-row-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.tm-actions {
+    display: flex;
+    gap: 3px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.tm-row:hover .tm-actions {
+    opacity: 1;
+}
+
+/* ===========================
+   Tag editor modal — wider
+   =========================== */
+.tag-editor-modal {
+    width: 700px;
+}
+
+/* Form input styles for modal (textarea & select[multiple] not in settings.css) */
+.tag-editor-modal .form-group textarea,
+.tag-editor-modal .form-group select {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-input);
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.tag-editor-modal .form-group textarea:focus,
+.tag-editor-modal .form-group select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+/* Remove dropdown arrow from multi-select */
+.tag-parents-select {
+    appearance: auto;
+    -webkit-appearance: auto;
+    background-image: none !important;
+    padding-right: var(--spacing-md) !important;
+}
+
+.required-mark {
+    color: var(--color-danger);
+}
+
+.font-mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+}
+
+.form-help {
+    margin-top: 4px;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+/* ===========================
+   Tag editor modal — flags
+   =========================== */
+.tag-flags-section {
+    border-top: 1px solid var(--border-primary);
+    padding-top: 16px;
+    margin-top: 8px;
+}
+
+.tag-flags-title {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+}
+
+.tag-flags-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.flag-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    user-select: none;
+}
+
+.flag-item:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--color-primary);
+}
+
+.flag-item input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+.flag-item-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.flag-item-icon {
+    font-size: 15px;
+    line-height: 1.3;
+    flex-shrink: 0;
+}
+
+.flag-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.flag-item-text strong {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.flag-item-text small {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
