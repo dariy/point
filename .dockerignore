@@ -19,5 +19,11 @@ __pycache__
 app/static/css/common/
 app/static/css/light/
 app/static/css/public/
-build/
+
+# Build directory exclusions
+build/*
+!build/api-bin
+!build/go.Dockerfile
+!build/docker-compose.dev.yml
+
 # We want to keep app/static/css/light.css and app/static/css/main.css

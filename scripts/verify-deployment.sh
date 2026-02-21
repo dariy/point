@@ -72,7 +72,7 @@ if [ "$HEALTH" = "healthy" ] || [ "$HEALTH" = "no healthcheck" ]; then
     # Try to call the application's version endpoint if it exists
     echo ""
     echo "🌐 Application Status:"
-    if docker exec $CONTAINER_NAME curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
+    if docker exec $CONTAINER_NAME wget -qO- http://localhost:8000/health > /dev/null 2>&1; then
         echo "   ✅ Health endpoint responding"
     else
         echo "   ❌ Health endpoint not responding"
