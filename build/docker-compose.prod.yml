@@ -23,7 +23,7 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
 
       # Database
-      - DATABASE_URL=sqlite+aiosqlite:////data/point.db
+      - DATABASE_URL=/data/point.db
       - STORAGE_PATH=/data
 
       # Blog settings
@@ -49,18 +49,18 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
       # AI Service
-      - GENAI_API_ENDPOINT=${GENAI_API_ENDPOINT:-http://point-ai:8080}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
 
     volumes:
       # Use named volume for data persistence
       - point-data:/data
 
     networks:
-      - point-shared-network
+      - point-network
 
     # Health check
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -96,6 +96,5 @@ volumes:
       device: ${DATA_PATH:-../data}
 
 networks:
-  point-shared-network:
-    name: point-shared-network
-    external: true
+  point-network:
+    driver: bridge
