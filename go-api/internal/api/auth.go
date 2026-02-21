@@ -26,7 +26,7 @@ func NewAuthHandler(authService *services.AuthService, cfg *config.Config) *Auth
 
 type LoginRequest struct {
 	Username   string `json:"username"`
-	Password   string `json:"password"`
+	Password   string `json:"name"`
 	RememberMe bool   `json:"remember_me"`
 }
 
@@ -123,8 +123,8 @@ func (h *AuthHandler) Me(c echo.Context) error {
 }
 
 type ChangePasswordRequest struct {
-	CurrentPassword string `json:"current_password"`
-	NewPassword     string `json:"new_password"`
+	CurrentPassword string `json:"current_name"`
+	NewPassword     string `json:"new_name"`
 }
 
 func (h *AuthHandler) ChangePassword(c echo.Context) error {
