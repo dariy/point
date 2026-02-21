@@ -106,6 +106,22 @@ func (s *TagService) SetTagParents(ctx context.Context, tagID int64, parentIDs [
 	return nil
 }
 
+// SetTagChildren replaces all child relationships for a tag.
+func (s *TagService) SetTagChildren(ctx context.Context, tagID int64, childIDs []int64) error {
+	if err := s.repo.ClearTagChildren(ctx, tagID); err != nil {
+		return err
+	}
+	for _, childID := range childIDs {
+		if err := s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
+			ParentID: tagID,
+			ChildID:  childID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetAllTagRelationships returns all parent-child tag pairs.
 func (s *TagService) GetAllTagRelationships(ctx context.Context) ([]repository.TagRelationship, error) {
 	return s.repo.GetAllTagRelationships(ctx)
