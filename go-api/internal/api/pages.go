@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
@@ -38,49 +37,6 @@ var pagePublicSettingKeys = map[string]bool{
 	"about_post_id":    true,
 }
 
-func tagToListItem(t models.Tag) map[string]interface{} {
-	return map[string]interface{}{
-		"id":                     t.ID,
-		"name":                   t.Name,
-		"slug":                   t.Slug,
-		"is_important":           t.IsImportant,
-		"is_hidden":              t.IsHidden,
-		"is_hidden_posts":        t.IsHiddenPosts,
-		"include_in_breadcrumbs": t.IncludeInBreadcrumbs,
-		"sort_order":             t.SortOrder,
-		"post_count":             t.PostCount,
-	}
-}
-
-func tagToFullResponse(t models.Tag, parents, children []models.Tag) map[string]interface{} {
-	parentItems := make([]map[string]interface{}, len(parents))
-	for i, p := range parents {
-		parentItems[i] = tagToListItem(p)
-	}
-	childItems := make([]map[string]interface{}, len(children))
-	for i, ch := range children {
-		childItems[i] = tagToListItem(ch)
-	}
-	return map[string]interface{}{
-		"id":                           t.ID,
-		"name":                         t.Name,
-		"slug":                         t.Slug,
-		"description":                  t.Description,
-		"custom_url":                   t.CustomUrl,
-		"is_important":                 t.IsImportant,
-		"is_featured":                  t.IsFeatured,
-		"is_hidden":                    t.IsHidden,
-		"is_hidden_posts":              t.IsHiddenPosts,
-		"include_in_breadcrumbs":       t.IncludeInBreadcrumbs,
-		"show_related_tags_as_children": t.ShowRelatedTagsAsChildren,
-		"sort_order":                   t.SortOrder,
-		"post_count":                   t.PostCount,
-		"created_at":                   t.CreatedAt,
-		"parents":                      parentItems,
-		"children":                     childItems,
-	}
-}
-
 // GetHomePage returns all data needed to render the public homepage.
 func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -110,6 +66,11 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	postResponses := make([]map[string]interface{}, len(posts))
+	for i, p := range posts {
+		postResponses[i] = postToResponse(p)
+	}
+
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
 	if pages == 0 {
 		pages = 1
@@ -136,7 +97,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"posts": posts,
+		"posts": postResponses,
 		"pagination": map[string]interface{}{
 			"page":     page,
 			"per_page": perPage,
@@ -192,6 +153,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	postResponses := make([]map[string]interface{}, len(posts))
+	for i, p := range posts {
+		postResponses[i] = postByTagToResponse(p)
+	}
+
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
 	if pages == 0 {
 		pages = 1
@@ -206,7 +172,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"tag":         tagToFullResponse(tag, parents, children),
 		"breadcrumbs": breadcrumbs,
-		"posts":       posts,
+		"posts":       postResponses,
 		"pagination": map[string]interface{}{
 			"page":     page,
 			"per_page": perPage,

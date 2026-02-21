@@ -86,9 +86,9 @@ func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, 
 const countPosts = `-- name: CountPosts :one
 SELECT COUNT(*) FROM posts p
 WHERE 
-    (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
+    (CASE WHEN ?1 THEN LOWER(p.status) = LOWER(?2) ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE WHEN ?4 THEN 1=1 ELSE p.status = 'published' END)
+    AND (CASE WHEN ?4 THEN 1=1 ELSE LOWER(p.status) = 'published' END)
 `
 
 type CountPostsParams struct {
@@ -114,7 +114,7 @@ const countPostsByTag = `-- name: CountPostsByTag :one
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE WHEN ?2 THEN p.status = 'published' ELSE 1=1 END)
+AND (CASE WHEN ?2 THEN LOWER(p.status) = 'published' ELSE 1=1 END)
 `
 
 type CountPostsByTagParams struct {
@@ -250,9 +250,9 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (
-    user_id, token, ip_address, user_agent, expires_at
+    user_id, token, ip_address, user_agent, expires_at, created_at, last_activity
 ) VALUES (
-    ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 RETURNING id, user_id, token, ip_address, user_agent, location, created_at, expires_at, last_activity
 `
@@ -714,7 +714,7 @@ FROM posts p
 JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE WHEN ?2 THEN p.status = 'published' ELSE 1=1 END)
+AND (CASE WHEN ?2 THEN LOWER(p.status) = 'published' ELSE 1=1 END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?3 OFFSET ?4
 `
@@ -1234,9 +1234,9 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
 FROM posts p
 JOIN users u ON p.author_id = u.id
 WHERE 
-    (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
+    (CASE WHEN ?1 THEN LOWER(p.status) = LOWER(?2) ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE WHEN ?4 THEN 1=1 ELSE p.status = 'published' END)
+    AND (CASE WHEN ?4 THEN 1=1 ELSE LOWER(p.status) = 'published' END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?5 OFFSET ?6
 `

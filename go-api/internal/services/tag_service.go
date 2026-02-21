@@ -15,6 +15,7 @@ import (
 	"point-api/internal/utils"
 )
 
+
 type TagService struct {
 	repo *repository.Repository
 }
@@ -87,6 +88,27 @@ func (s *TagService) GetTagParents(ctx context.Context, id int64) ([]models.Tag,
 
 func (s *TagService) GetTagChildren(ctx context.Context, id int64) ([]models.Tag, error) {
 	return s.repo.GetTagChildren(ctx, id)
+}
+
+// SetTagParents replaces all parent relationships for a tag.
+func (s *TagService) SetTagParents(ctx context.Context, tagID int64, parentIDs []int64) error {
+	if err := s.repo.ClearTagParents(ctx, tagID); err != nil {
+		return err
+	}
+	for _, parentID := range parentIDs {
+		if err := s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
+			ParentID: parentID,
+			ChildID:  tagID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetAllTagRelationships returns all parent-child tag pairs.
+func (s *TagService) GetAllTagRelationships(ctx context.Context) ([]repository.TagRelationship, error) {
+	return s.repo.GetAllTagRelationships(ctx)
 }
 
 type UpdateTagParams struct {
@@ -319,6 +341,10 @@ func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPa
 	})
 	if err != nil {
 		return nil, 0, err
+	}
+
+	if posts == nil {
+		posts = []models.GetPostsByTagRow{}
 	}
 
 	total, err := s.repo.CountPostsByTag(ctx, models.CountPostsByTagParams{

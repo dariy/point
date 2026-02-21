@@ -18,6 +18,9 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/genai"
+	"gopkg.in/yaml.v3"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
@@ -27,14 +30,47 @@ type MediaService struct {
 	repo            *repository.Repository
 	cfg             *config.Config
 	settingsService *SettingsService
+	genaiClient     *genai.Client
+	genaiConfig     GenAIConfig
+}
+
+type GenAIConfig struct {
+	Prompt string   `yaml:"prompt"`
+	Models []string `yaml:"models"`
 }
 
 func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsService *SettingsService) *MediaService {
-	return &MediaService{
+	s := &MediaService{
 		repo:            repo,
 		cfg:             cfg,
 		settingsService: settingsService,
 	}
+
+	// Initialize GenAI if key is present
+	apiKey := cfg.GeminiAPIKey
+	if apiKey != "" {
+		ctx := context.Background()
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		})
+		if err == nil {
+			s.genaiClient = client
+			
+			// Try to load data.yml
+			configPath := filepath.Join(cfg.StoragePath, "data.yml")
+			// Try current dir if storage path failed
+			if _, err := os.Stat(configPath); os.IsNotExist(err) {
+				configPath = "data.yml"
+			}
+			
+			if configBytes, err := os.ReadFile(configPath); err == nil {
+				_ = yaml.Unmarshal(configBytes, &s.genaiConfig)
+			}
+		}
+	}
+
+	return s
 }
 
 func CalculateChecksum(data []byte) string {
@@ -422,11 +458,78 @@ type AnalysisResponse struct {
 }
 
 func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
-	endpoint, err := s.settingsService.GetSetting(ctx, "genai_api_endpoint", "")
-	if err != nil || endpoint == "" {
-		return nil, fmt.Errorf("GenAI API endpoint not configured")
+	// If GenAI client is initialized, use it directly
+	if s.genaiClient != nil && len(s.genaiConfig.Models) > 0 {
+		return s.analyzeImageDirectly(ctx, content, filename, mimeType)
 	}
 
+	endpoint, err := s.settingsService.GetSetting(ctx, "genai_api_endpoint", "")
+	if err != nil || endpoint == "" {
+		return nil, fmt.Errorf("GenAI API not configured")
+	}
+
+	// Legacy HTTP endpoint fallback
+	return s.analyzeImageViaHTTP(ctx, content, filename, mimeType, endpoint)
+}
+
+func (s *MediaService) analyzeImageDirectly(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
+	parts := []*genai.Part{
+		{Text: s.genaiConfig.Prompt},
+		{InlineData: &genai.Blob{
+			Data:     content,
+			MIMEType: mimeType,
+		}},
+	}
+	contents := []*genai.Content{{Parts: parts}}
+
+	var genResp *genai.GenerateContentResponse
+	var genErr error
+
+	for _, model := range s.genaiConfig.Models {
+		genResp, genErr = s.genaiClient.Models.GenerateContent(ctx,
+			model,
+			contents,
+			&genai.GenerateContentConfig{
+				ResponseMIMEType: "application/json",
+			},
+		)
+
+		if genErr == nil {
+			break
+		}
+
+		// Check if this is a 429 error (quota exceeded)
+		if apiErr, ok := genErr.(*googleapi.Error); ok && apiErr.Code == 429 {
+			continue
+		}
+
+		// For non-429 errors, stop trying and return the error
+		break
+	}
+
+	if genErr != nil {
+		return nil, fmt.Errorf("all models failed: last error: %v", genErr)
+	}
+
+	if len(genResp.Candidates) == 0 || len(genResp.Candidates[0].Content.Parts) == 0 {
+		return nil, fmt.Errorf("no content generated")
+	}
+
+	// Extract text from response
+	var respText strings.Builder
+	for _, part := range genResp.Candidates[0].Content.Parts {
+		respText.WriteString(part.Text)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(respText.String()), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse API response: %v", err)
+	}
+
+	return s.parseAnalysisResult(result, filename)
+}
+
+func (s *MediaService) analyzeImageViaHTTP(ctx context.Context, content []byte, filename, mimeType, endpoint string) (*AnalysisResponse, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("image", filename)
@@ -455,13 +558,12 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 		return nil, fmt.Errorf("GenAI service error: status %d", resp.StatusCode)
 	}
 
-	var raw map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
 	// Handle common wrappers
-	result := raw
 	for _, wrapper := range []string{"data", "result", "output", "response"} {
 		if inner, ok := result[wrapper].(map[string]interface{}); ok {
 			result = inner
@@ -469,6 +571,10 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 		}
 	}
 
+	return s.parseAnalysisResult(result, filename)
+}
+
+func (s *MediaService) parseAnalysisResult(result map[string]interface{}, filename string) (*AnalysisResponse, error) {
 	analysis := &AnalysisResponse{Tags: []string{}}
 
 	if t, ok := result["title"].(string); ok {
@@ -477,8 +583,8 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 
 	if tags, ok := result["tags"].([]interface{}); ok {
 		for _, t := range tags {
-			if s, ok := t.(string); ok {
-				analysis.Tags = append(analysis.Tags, s)
+			if str, ok := t.(string); ok {
+				analysis.Tags = append(analysis.Tags, str)
 			}
 		}
 	}
