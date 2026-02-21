@@ -34,9 +34,18 @@
 .tags-filters {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: var(--spacing-sm);
-    justify-content: center;
+    justify-content: safe center;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.tags-filters::-webkit-scrollbar {
+    display: none;
 }
 
 .tags-page .tags-filters {
