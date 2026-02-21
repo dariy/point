@@ -23,47 +23,7 @@ func NewTagHandler(tagService *services.TagService, settingsService *services.Se
 }
 
 func tagResponse(tag models.Tag, parents, children []models.Tag) map[string]interface{} {
-	toItem := func(t models.Tag) map[string]interface{} {
-		return map[string]interface{}{
-			"id":                     t.ID,
-			"name":                   t.Name,
-			"slug":                   t.Slug,
-			"is_important":           t.IsImportant,
-			"is_hidden":              t.IsHidden,
-			"is_hidden_posts":        t.IsHiddenPosts,
-			"include_in_breadcrumbs": t.IncludeInBreadcrumbs,
-			"sort_order":             t.SortOrder,
-			"post_count":             t.PostCount,
-		}
-	}
-
-	parentItems := make([]map[string]interface{}, len(parents))
-	for i, p := range parents {
-		parentItems[i] = toItem(p)
-	}
-	childItems := make([]map[string]interface{}, len(children))
-	for i, ch := range children {
-		childItems[i] = toItem(ch)
-	}
-
-	return map[string]interface{}{
-		"id":                           tag.ID,
-		"name":                         tag.Name,
-		"slug":                         tag.Slug,
-		"description":                  tag.Description,
-		"custom_url":                   tag.CustomUrl,
-		"is_important":                 tag.IsImportant,
-		"is_featured":                  tag.IsFeatured,
-		"is_hidden":                    tag.IsHidden,
-		"is_hidden_posts":              tag.IsHiddenPosts,
-		"include_in_breadcrumbs":       tag.IncludeInBreadcrumbs,
-		"show_related_tags_as_children": tag.ShowRelatedTagsAsChildren,
-		"sort_order":                   tag.SortOrder,
-		"post_count":                   tag.PostCount,
-		"created_at":                   tag.CreatedAt,
-		"parents":                      parentItems,
-		"children":                     childItems,
-	}
+	return tagToFullResponse(tag, parents, children)
 }
 
 func (h *TagHandler) ListTags(c echo.Context) error {
@@ -75,9 +35,52 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	// Build tag map for parent lookups.
+	tagMap := make(map[int64]models.Tag, len(tags))
+	for _, t := range tags {
+		tagMap[t.ID] = t
+	}
+
+	// Fetch all relationships to build parent info for each tag.
+	rels, _ := h.tagService.GetAllTagRelationships(c.Request().Context())
+	childParents := make(map[int64][]map[string]interface{})
+	for _, rel := range rels {
+		if parent, ok := tagMap[rel.ParentID]; ok {
+			childParents[rel.ChildID] = append(childParents[rel.ChildID], map[string]interface{}{
+				"id":   parent.ID,
+				"name": parent.Name,
+				"slug": parent.Slug,
+			})
+		}
+	}
+
+	tagItems := make([]map[string]interface{}, len(tags))
+	for i, t := range tags {
+		parents := childParents[t.ID]
+		if parents == nil {
+			parents = []map[string]interface{}{}
+		}
+		tagItems[i] = map[string]interface{}{
+			"id":                            t.ID,
+			"name":                          t.Name,
+			"slug":                          t.Slug,
+			"description":                   nullString(t.Description),
+			"custom_url":                    nullString(t.CustomUrl),
+			"is_important":                  t.IsImportant,
+			"is_featured":                   t.IsFeatured,
+			"is_hidden":                     t.IsHidden,
+			"is_hidden_posts":               t.IsHiddenPosts,
+			"include_in_breadcrumbs":        t.IncludeInBreadcrumbs,
+			"show_related_tags_as_children": t.ShowRelatedTagsAsChildren,
+			"sort_order":                    nullInt64(t.SortOrder),
+			"post_count":                    t.PostCount,
+			"parents":                       parents,
+		}
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"tags":  tags,
-		"total": len(tags),
+		"tags":  tagItems,
+		"total": len(tagItems),
 	})
 }
 
@@ -127,17 +130,18 @@ func (h *TagHandler) GetTagBySlug(c echo.Context) error {
 }
 
 type CreateTagRequest struct {
-	Name                      string `json:"name"`
-	Slug                      string `json:"slug"`
-	Description               string `json:"description"`
-	CustomURL                 string `json:"custom_url"`
-	IsImportant               bool   `json:"is_important"`
-	IsFeatured                bool   `json:"is_featured"`
-	IsHidden                  bool   `json:"is_hidden"`
-	IsHiddenPosts             bool   `json:"is_hidden_posts"`
-	IncludeInBreadcrumbs      bool   `json:"include_in_breadcrumbs"`
-	ShowRelatedTagsAsChildren bool   `json:"show_related_tags_as_children"`
-	SortOrder                 *int32 `json:"sort_order"`
+	Name                      string  `json:"name"`
+	Slug                      string  `json:"slug"`
+	Description               string  `json:"description"`
+	CustomURL                 string  `json:"custom_url"`
+	IsImportant               bool    `json:"is_important"`
+	IsFeatured                bool    `json:"is_featured"`
+	IsHidden                  bool    `json:"is_hidden"`
+	IsHiddenPosts             bool    `json:"is_hidden_posts"`
+	IncludeInBreadcrumbs      bool    `json:"include_in_breadcrumbs"`
+	ShowRelatedTagsAsChildren bool    `json:"show_related_tags_as_children"`
+	SortOrder                 *int32  `json:"sort_order"`
+	ParentIDs                 []int64 `json:"parent_ids"`
 }
 
 func (h *TagHandler) CreateTag(c echo.Context) error {
@@ -163,7 +167,14 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, err.Error())
 	}
 
-	return c.JSON(http.StatusCreated, tagResponse(tag, nil, nil))
+	if len(req.ParentIDs) > 0 {
+		_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
+	}
+
+	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
+	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
+
+	return c.JSON(http.StatusCreated, tagResponse(tag, parents, children))
 }
 
 func (h *TagHandler) UpdateTag(c echo.Context) error {
@@ -194,6 +205,9 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
+
+	// Always update parent relationships (empty slice = remove all parents).
+	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
@@ -246,13 +260,18 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	postResponses := make([]map[string]interface{}, len(posts))
+	for i, p := range posts {
+		postResponses[i] = postByTagToResponse(p)
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"id":          tag.ID,
 		"name":        tag.Name,
 		"slug":        tag.Slug,
-		"description": tag.Description,
+		"description": nullString(tag.Description),
 		"post_count":  tag.PostCount,
-		"posts":       posts,
+		"posts":       postResponses,
 		"total_posts": total,
 		"page":        page,
 		"per_page":    perPage,

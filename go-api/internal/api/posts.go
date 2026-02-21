@@ -38,22 +38,22 @@ func buildPostResponse(post models.GetPostRow, tags []models.Tag, htmlContent st
 		"slug":             post.Slug,
 		"content":          post.Content,
 		"content_html":     htmlContent,
-		"excerpt":          post.Excerpt,
+		"excerpt":          nullString(post.Excerpt),
 		"status":           post.Status,
 		"is_featured":      post.IsFeatured,
 		"view_count":       post.ViewCount,
-		"published_at":     post.PublishedAt,
+		"published_at":     nullTime(post.PublishedAt),
 		"created_at":       post.CreatedAt,
 		"updated_at":       post.UpdatedAt,
-		"thumbnail_path":   post.ThumbnailPath,
-		"meta_description": post.MetaDescription,
+		"thumbnail_path":   nullString(post.ThumbnailPath),
+		"meta_description": nullString(post.MetaDescription),
 		"formatter":        post.Formatter,
 		"tags":             tagNames,
 		"author": map[string]interface{}{
 			"id":           post.AuthorID,
 			"username":     post.AuthorUsername,
 			"display_name": post.AuthorDisplayName,
-			"avatar_path":  post.AuthorAvatar,
+			"avatar_path":  nullString(post.AuthorAvatar),
 		},
 	}
 }
@@ -69,22 +69,22 @@ func buildPostBySlugResponse(post models.GetPostBySlugRow, tags []models.Tag, ht
 		"slug":             post.Slug,
 		"content":          post.Content,
 		"content_html":     htmlContent,
-		"excerpt":          post.Excerpt,
+		"excerpt":          nullString(post.Excerpt),
 		"status":           post.Status,
 		"is_featured":      post.IsFeatured,
 		"view_count":       post.ViewCount,
-		"published_at":     post.PublishedAt,
+		"published_at":     nullTime(post.PublishedAt),
 		"created_at":       post.CreatedAt,
 		"updated_at":       post.UpdatedAt,
-		"thumbnail_path":   post.ThumbnailPath,
-		"meta_description": post.MetaDescription,
+		"thumbnail_path":   nullString(post.ThumbnailPath),
+		"meta_description": nullString(post.MetaDescription),
 		"formatter":        post.Formatter,
 		"tags":             tagNames,
 		"author": map[string]interface{}{
 			"id":           post.AuthorID,
 			"username":     post.AuthorUsername,
 			"display_name": post.AuthorDisplayName,
-			"avatar_path":  post.AuthorAvatar,
+			"avatar_path":  nullString(post.AuthorAvatar),
 		},
 	}
 }
@@ -127,13 +127,18 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	postResponses := make([]map[string]interface{}, len(posts))
+	for i, p := range posts {
+		postResponses[i] = postToResponse(p)
+	}
+
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
 	if pages == 0 {
 		pages = 1
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"posts":    posts,
+		"posts":    postResponses,
 		"total":    total,
 		"page":     page,
 		"per_page": perPage,
