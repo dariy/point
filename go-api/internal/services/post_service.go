@@ -79,6 +79,10 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		return nil, 0, err
 	}
 
+	if posts == nil {
+		posts = []models.ListPostsRow{}
+	}
+
 	total, err := s.repo.CountPosts(ctx, models.CountPostsParams{
 		StatusFilter:   p.Status != "",
 		Status:         p.Status,

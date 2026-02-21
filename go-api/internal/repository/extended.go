@@ -154,7 +154,7 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        u.avatar_path as author_avatar
 FROM posts p
 JOIN users u ON p.author_id = u.id
-WHERE p.status = 'published'
+WHERE LOWER(p.status) = 'published'
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?`
 
@@ -325,6 +325,38 @@ func (r *Repository) GetTagDescendants(ctx context.Context, tagID int64) ([]mode
 	}
 
 	return result, nil
+}
+
+// TagRelationship represents a parent-child tag relationship pair.
+type TagRelationship struct {
+	ParentID int64
+	ChildID  int64
+}
+
+// GetAllTagRelationships returns all (parent_id, child_id) pairs from tag_relationships.
+func (r *Repository) GetAllTagRelationships(ctx context.Context) ([]TagRelationship, error) {
+	const q = `SELECT parent_id, child_id FROM tag_relationships`
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var pairs []TagRelationship
+	for rows.Next() {
+		var p TagRelationship
+		if err := rows.Scan(&p.ParentID, &p.ChildID); err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, p)
+	}
+	return pairs, rows.Err()
+}
+
+// ClearTagParents removes all parent relationships for a tag (rows where child_id = tagID).
+func (r *Repository) ClearTagParents(ctx context.Context, childID int64) error {
+	const q = `DELETE FROM tag_relationships WHERE child_id = ?`
+	_, err := r.db.ExecContext(ctx, q, childID)
+	return err
 }
 
 // GetOrphanedMediaIDs returns IDs of media that are not referenced in any post content.

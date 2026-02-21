@@ -29,9 +29,9 @@ WHERE id = ?;
 
 -- name: CreateSession :one
 INSERT INTO sessions (
-    user_id, token, ip_address, user_agent, expires_at
+    user_id, token, ip_address, user_agent, expires_at, created_at, last_activity
 ) VALUES (
-    ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 RETURNING *;
 
