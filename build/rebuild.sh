@@ -20,8 +20,25 @@ echo "Building with version: $DEV_BUILD_VERSION"
 # Build CSS bundles
 ./build_css.sh
 
-# Use podman as the standard container engine (with DNS workaround)
+# Use podman as the standard container engine
 # Using build/Dockerfile which is a multi-stage build
-podman build $PULL_FLAG -t point:dev -f Dockerfile --build-arg BUILD_VERSION=$DEV_BUILD_VERSION .. && \
+# We tag the builder stage to avoid dangling images and reuse it
+echo "Starting container build..."
+podman build $PULL_FLAG \
+    --target builder \
+    -t point-builder:latest \
+    -f Dockerfile \
+    ..
+
+podman build $PULL_FLAG \
+    -t point:dev \
+    -f Dockerfile \
+    --cache-from point-builder \
+    --build-arg BUILD_VERSION=$DEV_BUILD_VERSION \
+    .. && \
 podman-compose -f docker-compose.dev.yml down -t 0 && \
 podman-compose -f docker-compose.dev.yml up -d
+
+# Clean up dangling images to save space (optional, but addresses user's concern)
+echo "Cleaning up dangling images..."
+podman image prune -f
