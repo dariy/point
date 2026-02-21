@@ -8,15 +8,20 @@ WORKDIR /app
 
 # Copy go mod and sum files
 COPY go-api/go.mod go-api/go.sum ./
-RUN go mod download
+# Use cache mount for go modules
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # Copy the source code
 COPY go-api/ ./
 
 # Build the application - stripped and optimized
-RUN CGO_ENABLED=1 GOOS=linux go build \
+# Using cache mounts for both modules and build cache
+# Removing -a flag to enable incremental builds
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux go build \
     -ldflags="-s -w" \
-    -a -installsuffix cgo \
+    -installsuffix cgo \
     -o api-bin cmd/api/main.go
 
 # Runtime stage
