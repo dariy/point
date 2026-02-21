@@ -359,6 +359,13 @@ func (r *Repository) ClearTagParents(ctx context.Context, childID int64) error {
 	return err
 }
 
+// ClearTagChildren removes all child relationships for a tag (rows where parent_id = tagID).
+func (r *Repository) ClearTagChildren(ctx context.Context, parentID int64) error {
+	const q = `DELETE FROM tag_relationships WHERE parent_id = ?`
+	_, err := r.db.ExecContext(ctx, q, parentID)
+	return err
+}
+
 // GetOrphanedMediaIDs returns IDs of media that are not referenced in any post content.
 // "Orphaned" here means post_id IS NULL.
 func (r *Repository) ListOrphanedMediaByPage(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error) {
