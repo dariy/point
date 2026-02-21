@@ -6,82 +6,53 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.12', '3.13']
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip'
+          go-version: '1.25'
+          cache-dependency-path: go-api/go.sum
 
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: golangci-lint
+        uses: golangci-lint/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: go-api
+          args: --timeout=5m
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: go-api/go.sum
 
       - name: Build CSS bundles
         run: chmod +x build/build_css.sh && ./build/build_css.sh
 
-      - name: Cleanup source CSS
-        run: rm -rf app/static/css/common/ app/static/css/light/ app/static/css/public/
-
-      - name: Run linting
+      - name: Run tests
         run: |
-          echo "Running ruff linting..."
-          ruff check app/ --output-format=github
-
-      - name: Run type checking
-        run: |
-          echo "Running mypy type checking..."
-          mypy app/ --no-error-summary
-
-      - name: Run tests with coverage
-        run: |
-          echo "Running pytest with coverage..."
-          pytest tests/ \
-            --cov=app \
-            --cov-report=xml \
-            --cov-report=term \
-            --cov-report=html \
-            -v
-
-      - name: Check coverage threshold
-        run: |
-          coverage report --fail-under=80
+          cd go-api
+          go test ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
-        if: matrix.python-version == '3.12'
         with:
-          file: ./coverage.xml
+          file: go-api/coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           flags: unittests
-          name: codecov-${{ matrix.python-version }}
-
-      - name: Upload coverage HTML
-        uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.12'
-        with:
-          name: coverage-report
-          path: htmlcov/
-          retention-days: 7
-
-      - name: Comment coverage on PR
-        if: github.event_name == 'pull_request' && matrix.python-version == '3.12'
-        uses: py-cov-action/python-coverage-comment-action@v3
-        with:
-          GITHUB_TOKEN: ${{ github.token }}
-          MINIMUM_GREEN: 80
-          MINIMUM_ORANGE: 70
+          name: codecov-go
