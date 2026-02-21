@@ -522,12 +522,14 @@
 .tag-toggle span {
     display: inline-flex;
     align-items: center;
-    padding: 3px 10px;
-    font-size: var(--font-size-xs);
+    height: 28px;
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-sm);
     font-weight: 500;
+    line-height: 1;
     border-radius: 9999px;
     border: 1px solid var(--border-primary);
-    background: var(--surface-hover);
+    background: var(--surface-card);
     color: var(--text-secondary);
     transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
     white-space: nowrap;
@@ -535,13 +537,13 @@
 
 .tag-toggle:hover span {
     border-color: var(--color-primary);
-    color: var(--color-primary);
+    color: var(--text-primary);
 }
 
 .tag-toggle input[type="checkbox"]:checked + span {
-    background: var(--color-primary-light);
+    background: var(--color-primary);
     border-color: var(--color-primary);
-    color: var(--color-primary);
+    color: #fff;
 }
 
 /* ===========================

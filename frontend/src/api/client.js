@@ -70,7 +70,7 @@ class ApiClient {
         window.dispatchEvent(new CustomEvent('api:unauthorized'));
       }
       const message =
-        (body && typeof body === 'object' && body.detail) ||
+        (body && typeof body === 'object' && (body.detail || body.message)) ||
         (typeof body === 'string' && body) ||
         `HTTP ${response.status}`;
       throw { status: response.status, message };

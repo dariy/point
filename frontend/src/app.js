@@ -124,6 +124,7 @@ const routes = [
   { path: '/light/posts/:id/edit', load: () => import('./pages/light/PostEditPage.js') },
   { path: '/light/media',          load: () => import('./pages/light/MediaPage.js') },
   { path: '/light/tags',           load: () => import('./pages/light/TagsManagerPage.js') },
+  { path: '/light/tags/:slug',     load: () => import('./pages/light/TagsManagerPage.js') },
   { path: '/light/settings',       load: () => import('./pages/light/SettingsPage.js') },
   { path: '/light/security',       load: () => import('./pages/light/SecurityPage.js') },
   { path: '/light/system',         load: () => import('./pages/light/SystemPage.js') },
