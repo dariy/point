@@ -1,61 +1,61 @@
 # Build stage
-FROM python:3.12-slim as builder
-
-WORKDIR /build
+FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libc6-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache gcc musl-dev git
 
-# Copy requirements and build wheels
-COPY requirements.txt .
-RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+WORKDIR /app
+
+# Copy go mod and sum files
+COPY go-api/go.mod go-api/go.sum ./
+RUN go mod download
+
+# Copy the source code
+COPY go-api/ ./
+
+# Build the application - stripped and optimized
+RUN CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -a -installsuffix cgo \
+    -o api-bin cmd/api/main.go
 
 # Runtime stage
-FROM python:3.12-slim
+FROM alpine:latest
+
+WORKDIR /app
+
+# Install only necessary runtime dependencies and create user in one layer
+RUN apk add --no-cache \
+    ca-certificates \
+    sqlite-libs \
+    tzdata \
+    curl \
+    && adduser -D -u 1000 appuser \
+    && mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups \
+    && chown -R appuser:appuser /app /data
+
+# Copy the binary from the builder stage
+COPY --from=builder /app/api-bin .
+# Copy data.yml
+COPY --from=builder /app/data.yml .
+# Copy frontend assets
+COPY frontend/ /app/frontend/
 
 # Accept build version as argument
 ARG BUILD_VERSION=dev
 ENV APP_VERSION=${BUILD_VERSION}
+ENV DATABASE_URL=/data/point.db
+ENV STORAGE_PATH=/data
+ENV FRONTEND_DIR=/app/frontend
+ENV HOST=0.0.0.0
+ENV PORT=8000
 
-WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy and install Python packages from wheels
-COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir --no-deps /wheels/* && rm -rf /wheels
-
-# Copy application
-COPY app/ /app/app/
-COPY scripts/ /app/scripts/
-COPY frontend/ /app/frontend/
-
-# Create data directory structure
-RUN mkdir -p /data/media/originals \
-    /data/media/thumbnails \
-    /data/media/avatars \
-    /data/cache/pages \
-    /data/cache/feeds \
-    /data/cache/fragments \
-    /data/logs \
-    /data/backups \
-    /data/config
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
-
-# Non-root user
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app /data
 USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Health check using curl (already installed)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["./api-bin"]
