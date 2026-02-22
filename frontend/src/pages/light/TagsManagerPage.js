@@ -83,8 +83,7 @@ export default class TagsManagerPage extends Component {
 
     const rows = sorted.map(tag => {
       const flags = [
-        tag.is_important    ? `<span class="tm-flag tm-flag-important"    title="Important">\u2605</span>`   : '',
-        tag.is_featured     ? `<span class="tm-flag tm-flag-featured"     title="Featured">\u2666</span>`    : '',
+        tag.is_featured     ? `<span class="tm-flag tm-flag-featured"     title="Show on top">\u2605</span>` : '',
         tag.is_hidden       ? `<span class="tm-flag tm-flag-hidden"       title="Hidden">\ud83d\udc41</span>` : '',
         tag.is_hidden_posts ? `<span class="tm-flag tm-flag-hidden-posts" title="Posts hidden">\u2298</span>` : '',
       ].filter(Boolean).join('');
@@ -184,8 +183,7 @@ export default class TagsManagerPage extends Component {
       : `<span class="tm-toggle-spacer"></span>`;
 
     const flags = [
-      node.is_important ? `<span class="tm-flag tm-flag-important" title="Important">\u2605</span>` : '',
-      node.is_featured  ? `<span class="tm-flag tm-flag-featured"  title="Featured">\u2666</span>`  : '',
+      node.is_featured  ? `<span class="tm-flag tm-flag-featured"  title="Show on top">\u2605</span>` : '',
       node.is_hidden    ? `<span class="tm-flag tm-flag-hidden"    title="Hidden">\ud83d\udc41</span>` : '',
     ].filter(Boolean).join('');
 
@@ -338,8 +336,7 @@ export default class TagsManagerPage extends Component {
       '      <div class="tag-flags-section">',
       '        <div class="tag-flags-title">Flags</div>',
       '        <div class="tag-flags-grid">',
-      this._renderFlagCheckbox('is_important',               '\u2605', 'Important',          'Appears in tag cloud',                f.is_important),
-      this._renderFlagCheckbox('is_featured',                '\u2666', 'Featured',            'Display in footer',                   f.is_featured),
+      this._renderFlagCheckbox('is_featured',                '\u2605', 'Show on top',         'Always show in header nav bar',       f.is_featured),
       this._renderFlagCheckbox('is_hidden',                  '\ud83d\udc41', 'Hidden',       'Hide tag from public',                f.is_hidden),
       this._renderFlagCheckbox('is_hidden_posts',            '\u2298', 'Hide Posts',          'Hide posts in this tag from public',  f.is_hidden_posts),
       this._renderFlagCheckbox('include_in_breadcrumbs',     '\ud83d\udd17', 'Breadcrumbs', 'Show in breadcrumb navigation',        f.include_in_breadcrumbs !== false),
@@ -473,7 +470,7 @@ export default class TagsManagerPage extends Component {
       slug:                          (fd.get('slug') || '').trim(),
       description:                   (fd.get('description') || '').trim(),
       custom_url:                    (fd.get('custom_url') || '').trim(),
-      is_important:                  fd.get('is_important') === 'on',
+      is_important:                  false,
       is_featured:                   fd.get('is_featured') === 'on',
       is_hidden:                     fd.get('is_hidden') === 'on',
       is_hidden_posts:               fd.get('is_hidden_posts') === 'on',
