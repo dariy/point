@@ -365,7 +365,7 @@ type NavTagNode struct {
 // Hidden and empty tags are excluded.
 func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) ([]NavTagNode, error) {
 	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter:  false,
+		IncludeEmptyFilter:  true, // featured tags may have 0 posts but must still appear
 		ImportantOnlyFilter: false,
 	})
 	if err != nil {
@@ -417,7 +417,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) 
 		childIDs := childrenOf[id]
 		sortedIDs := make([]int64, 0, len(childIDs))
 		for _, cid := range childIDs {
-			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && ch.PostCount > 0 && !visited[cid] {
+			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && (ch.PostCount > 0 || ch.IsFeatured) && !visited[cid] {
 				sortedIDs = append(sortedIDs, cid)
 			}
 		}
@@ -438,7 +438,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) 
 	var rootIDs []int64
 	if rootID == nil {
 		for _, t := range allTags {
-			if t.IsHidden || t.PostCount == 0 {
+			if t.IsHidden || (t.PostCount == 0 && !t.IsFeatured) {
 				continue
 			}
 			if len(parentsOf[t.ID]) == 0 {
@@ -447,7 +447,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) 
 		}
 	} else {
 		for _, cid := range childrenOf[*rootID] {
-			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && ch.PostCount > 0 {
+			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && (ch.PostCount > 0 || ch.IsFeatured) {
 				rootIDs = append(rootIDs, cid)
 			}
 		}
