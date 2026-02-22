@@ -64,12 +64,22 @@ export default class TagPage extends Component {
     const navTags   = this.state.data?.nav_tags || store.get('navTags') || [];
     const slug      = this.props.params?.slug || '';
 
-    // Build breadcrumb from API data and pass it to the header
+    // Build breadcrumb: all ancestors are links, current tag is the non-linked tail.
+    // The API may or may not include the current tag as the last breadcrumb item,
+    // so we detect and handle both cases.
+    const tag = this.state.data?.tag;
     const breadcrumbs = this.state.data?.breadcrumbs || [];
-    const breadcrumb = breadcrumbs.map((bc, i) => ({
-      name: bc.name,
-      slug: i < breadcrumbs.length - 1 ? bc.slug : undefined,
-    }));
+    const lastCrumbIsCurrentTag =
+      breadcrumbs.length > 0 && breadcrumbs[breadcrumbs.length - 1]?.slug === tag?.slug;
+    const breadcrumb = lastCrumbIsCurrentTag
+      ? breadcrumbs.map((bc, i) => ({
+          name: bc.name,
+          slug: i < breadcrumbs.length - 1 ? bc.slug : undefined,
+        }))
+      : [
+          ...breadcrumbs.map(bc => ({ name: bc.name, slug: bc.slug })),
+          ...(tag ? [{ name: tag.name }] : []),
+        ];
 
     this.mountChild(PublicHeader, '#header-mount', {
       settings,
