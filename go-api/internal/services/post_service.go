@@ -277,3 +277,9 @@ func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (
 	}
 	return post, nil
 }
+
+// GetPostNavigation returns the previous and next published posts adjacent to
+// the given post, ordered by published_at.
+func (s *PostService) GetPostNavigation(ctx context.Context, postID int64) (prev, next *repository.PostNavItem, err error) {
+	return s.repo.GetPostNavigation(ctx, postID)
+}

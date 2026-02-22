@@ -74,9 +74,10 @@ export default class PostPage extends Component {
       currentPath: '',
     });
 
-    // Immersive footer shows post tags; normal footer shows pagination slot
+    // Immersive footer shows post tags + post-to-post navigation; normal footer shows pagination slot
     const immersiveTags = immersive ? (post.tags || []) : [];
-    this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags });
+    const immersiveNav = immersive ? { prev: nav?.prev || null, next: nav?.next || null } : null;
+    this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags, immersiveNav });
 
     if (!post) return;
 

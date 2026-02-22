@@ -11,7 +11,7 @@ import { escapeHtml } from '../../utils/helpers.js';
 
 export class PublicFooter extends Component {
   render() {
-    const { settings = {}, immersiveTags = [] } = this.props;
+    const { settings = {}, immersiveTags = [], immersiveNav = null } = this.props;
     const author = escapeHtml(settings.author_name || settings.blog_title || '');
     const year = new Date().getFullYear();
 
@@ -29,16 +29,28 @@ export class PublicFooter extends Component {
       centerSlot = `<div id="pagination-mount"></div>`;
     }
 
+    // In immersive mode: show prev/next post links in the actions slot.
+    let actionsSlot = '';
+    if (immersiveNav) {
+      const { prev, next } = immersiveNav;
+      const prevLink = prev
+        ? `<a href="/post/${escapeHtml(prev.slug)}" class="post-nav-icon" aria-label="Previous post" title="${escapeHtml(prev.title)}">&#8592;</a>`
+        : `<span class="post-nav-icon disabled" aria-hidden="true"></span>`;
+      const nextLink = next
+        ? `<a href="/post/${escapeHtml(next.slug)}" class="post-nav-icon" aria-label="Next post" title="${escapeHtml(next.title)}">&#8594;</a>`
+        : `<span class="post-nav-icon disabled" aria-hidden="true"></span>`;
+      actionsSlot = `<nav class="footer-actions post-navigation-compact" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
+    }
+
     return `
       <footer class="site-footer">
         <div class="footer-container">
           <div class="footer-content">
             <p class="footer-copyright">
-              <a href="/light">&copy;</a>${author ? ` ${author}` : ''} ${year}
+              <a href="/light">&copy;</a>${author ? ` ${author}` : ''}
             </p>
             ${centerSlot}
-            <nav class="footer-actions" aria-label="Footer navigation">
-            </nav>
+            ${actionsSlot}
           </div>
         </div>
       </footer>`;

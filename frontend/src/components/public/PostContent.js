@@ -26,13 +26,19 @@ const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide wor
  */
 export function shouldUseImmersive(post) {
   if (!post) return false;
+
   const media = post.media || [];
-  if (!media.length) return false;
-  // Audio-only posts keep the normal layout
-  if (media.every((m) => m.type === 'audio')) return false;
-  // Posts with substantial text stay in normal layout
-  const text = (post.content_html || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-  return text.length < 300;
+  // Audio-only attachment posts stay in normal layout
+  if (media.length && media.every((m) => m.type === 'audio')) return false;
+
+  // Only activate when content is purely media elements and whitespace (no real text)
+  const text = (post.content_html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+  if (text.length !== 0) return false;
+
+  // Must have something visual: media attachments or inline images/video in content
+  const hasVisualMedia = media.some((m) => m.type !== 'audio');
+  const hasContentMedia = (post.content_html || '').trim().length > 0;
+  return hasVisualMedia || hasContentMedia;
 }
 
 export class PostContent extends Component {
@@ -74,15 +80,24 @@ export class PostContent extends Component {
 
   // ── Immersive rendering ───────────────────────────────────────────────────
 
-  _renderImmersive(post, prevPost, nextPost) {
+  _renderImmersive(post, _prevPost, _nextPost) {
     const media = post.media || [];
-    const visuals = media.length === 1
-      ? this._mediaEl(media[0])
-      : this._renderCarousel(media);
+    const items = media.length > 0 ? media : this._mediaFromHtml(post.content_html || '');
+    const visuals = items.length === 1
+      ? this._mediaEl(items[0])
+      : this._renderCarousel(items);
+
+    const { showViewCount = false } = this.props;
+    const viewCount = showViewCount && post.view_count != null
+      ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
+
+    const content = post.content_html
+      ? `<div class="post-content-scrollable post-content">${post.content_html}</div>` : '';
 
     return `
       <div class="immersive-wrapper">
         <div class="immersive-visuals">${visuals}</div>
+
       </div>`;
   }
 
@@ -117,6 +132,20 @@ export class PostContent extends Component {
               </div>`;
     }
     return `<img src="${url}" alt="${escapeHtml(item.alt || '')}" class="immersive-bg-image" loading="lazy">`;
+  }
+
+  /** Extract image/video items from HTML via regex (no DOM, no XSS risk). */
+  _mediaFromHtml(html) {
+    const items = [];
+    for (const m of html.matchAll(/<img[^>]+>/gi)) {
+      const src = (m[0].match(/\ssrc="([^"]*)"/i) || [])[1] || '';
+      const alt = (m[0].match(/\salt="([^"]*)"/i) || [])[1] || '';
+      if (src) items.push({ type: 'image', url: src, alt });
+    }
+    for (const m of html.matchAll(/<(?:video|source)[^>]*\ssrc="([^"]*)"[^>]*/gi)) {
+      if (m[1]) items.push({ type: 'video', url: m[1] });
+    }
+    return items;
   }
 
   // ── Immersive interactivity ───────────────────────────────────────────────
@@ -231,7 +260,7 @@ export class PostContent extends Component {
     // ── Click / tap on image or wrapper to navigate or toggle UI ──
     this._on(wrapper, 'click', (e) => {
       if (didSwipe) { didSwipe = false; return; }
-      if (e.target.closest('a, button, input')) return;
+      if (e.target.closest('a, button, input, .post-info-card')) return;
 
       const x = e.clientX;
       const width = window.innerWidth;
