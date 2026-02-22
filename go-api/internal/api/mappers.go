@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"point-api/internal/models"
+	"point-api/internal/repository"
 )
 
 func nullString(s sql.NullString) *string {
@@ -34,7 +35,14 @@ func nullFloat64(f sql.NullFloat64) *float64 {
 	return nil
 }
 
-func postToResponse(p models.ListPostsRow) map[string]interface{} {
+func postTagsOrEmpty(tags []repository.PostTagInfo) []repository.PostTagInfo {
+	if tags == nil {
+		return []repository.PostTagInfo{}
+	}
+	return tags
+}
+
+func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                  p.ID,
 		"title":               p.Title,
@@ -53,10 +61,11 @@ func postToResponse(p models.ListPostsRow) map[string]interface{} {
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,
 		"author_avatar":       nullString(p.AuthorAvatar),
+		"tags":                postTagsOrEmpty(tags),
 	}
 }
 
-func postByTagToResponse(p models.GetPostsByTagRow) map[string]interface{} {
+func postByTagToResponse(p models.GetPostsByTagRow, tags []repository.PostTagInfo) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                  p.ID,
 		"title":               p.Title,
@@ -75,6 +84,7 @@ func postByTagToResponse(p models.GetPostsByTagRow) map[string]interface{} {
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,
 		"author_avatar":       nullString(p.AuthorAvatar),
+		"tags":                postTagsOrEmpty(tags),
 	}
 }
 
@@ -92,7 +102,16 @@ func tagToListItem(t models.Tag) map[string]interface{} {
 	}
 }
 
-func tagToFullResponse(t models.Tag, parents, children []models.Tag) map[string]interface{} {
+func tagLocationsResponse(loc *models.TagLocation) []map[string]interface{} {
+	if loc == nil {
+		return []map[string]interface{}{}
+	}
+	return []map[string]interface{}{
+		{"id": loc.ID, "latitude": loc.Latitude, "longitude": loc.Longitude},
+	}
+}
+
+func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models.TagLocation) map[string]interface{} {
 	parentItems := make([]map[string]interface{}, len(parents))
 	for i, p := range parents {
 		parentItems[i] = tagToListItem(p)
@@ -103,21 +122,22 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag) map[string]
 	}
 
 	return map[string]interface{}{
-		"id":                           t.ID,
-		"name":                         t.Name,
-		"slug":                         t.Slug,
-		"description":                  nullString(t.Description),
-		"custom_url":                   nullString(t.CustomUrl),
-		"is_important":                 t.IsImportant,
-		"is_featured":                  t.IsFeatured,
-		"is_hidden":                    t.IsHidden,
-		"is_hidden_posts":              t.IsHiddenPosts,
-		"include_in_breadcrumbs":       t.IncludeInBreadcrumbs,
+		"id":                            t.ID,
+		"name":                          t.Name,
+		"slug":                          t.Slug,
+		"description":                   nullString(t.Description),
+		"custom_url":                    nullString(t.CustomUrl),
+		"is_important":                  t.IsImportant,
+		"is_featured":                   t.IsFeatured,
+		"is_hidden":                     t.IsHidden,
+		"is_hidden_posts":               t.IsHiddenPosts,
+		"include_in_breadcrumbs":        t.IncludeInBreadcrumbs,
 		"show_related_tags_as_children": t.ShowRelatedTagsAsChildren,
-		"sort_order":                   nullInt64(t.SortOrder),
-		"post_count":                   t.PostCount,
-		"created_at":                   t.CreatedAt,
-		"parents":                      parentItems,
-		"children":                     childItems,
+		"sort_order":                    nullInt64(t.SortOrder),
+		"post_count":                    t.PostCount,
+		"created_at":                    t.CreatedAt,
+		"parents":                       parentItems,
+		"children":                      childItems,
+		"locations":                     tagLocationsResponse(loc),
 	}
 }

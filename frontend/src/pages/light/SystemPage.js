@@ -8,7 +8,8 @@ import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import {
   getStats, getLogs, clearCache, listBackups,
-  createBackup, restoreBackup, deleteBackup, getMigrations
+  createBackup, restoreBackup, deleteBackup, getMigrations,
+  updateMapCoords,
 } from '../../api/system.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
@@ -28,12 +29,14 @@ export default class SystemPage extends Component {
       logLines: 50,
       loadingLogs: false,
       creatingBackup: false,
+      updatingCoords: false,
+      coordsResult: null,
       error: null,
     };
   }
 
   render() {
-    const { loading, error, stats, backups, migrations, logs, logType, logLines, loadingLogs, creatingBackup } = this.state;
+    const { loading, error, stats, backups, migrations, logs, logType, logLines, loadingLogs, creatingBackup, updatingCoords, coordsResult } = this.state;
 
     if (loading) {
       return `
@@ -76,6 +79,17 @@ export default class SystemPage extends Component {
                     ${this._renderBackups(backups)}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top: var(--spacing-xl)">
+              <div class="card-header"><h2>Map Coordinates</h2></div>
+              <div class="card-body">
+                <p>Auto-geocode tags under <strong>city / cities / country / countries</strong> that have no coordinates yet. Uses OpenStreetMap Nominatim (rate-limited to 1 req/sec — may take a while for large tag sets).</p>
+                <button id="update-coords-btn" class="btn btn-secondary" ${updatingCoords ? 'disabled' : ''}>
+                  ${updatingCoords ? 'Geocoding…' : 'Update Missing Coordinates'}
+                </button>
+                ${coordsResult ? this._renderCoordsResult(coordsResult) : ''}
               </div>
             </div>
 
@@ -147,6 +161,19 @@ export default class SystemPage extends Component {
       </table>`;
   }
 
+  _renderCoordsResult(result) {
+    const cls = result.updated_count > 0 ? 'success' : 'info';
+    const errors = result.errors || [];
+    return `
+      <div class="coords-result alert alert-${cls}" style="margin-top: var(--spacing-md)">
+        <strong>${escapeHtml(result.message || '')}</strong>
+        ${errors.length ? `
+          <ul class="coords-errors" style="margin-top: var(--spacing-sm)">
+            ${errors.map(e => `<li>${escapeHtml(e)}</li>`).join('')}
+          </ul>` : ''}
+      </div>`;
+  }
+
   afterRender() {
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/system',
@@ -158,6 +185,9 @@ export default class SystemPage extends Component {
 
     // Cache
     this.$('#clear-cache-btn')?.addEventListener('click', () => this._handleClearCache());
+
+    // Map coordinates
+    this.$('#update-coords-btn')?.addEventListener('click', () => this._handleUpdateCoords());
 
     // Backups
     this.$('#create-backup-btn')?.addEventListener('click', () => this._handleCreateBackup());
@@ -217,6 +247,18 @@ export default class SystemPage extends Component {
       this.setState({ loadingLogs: false, logs });
     } catch (err) {
       this.setState({ loadingLogs: false, logs: [`Error loading logs: ${err.message}`] });
+    }
+  }
+
+  async _handleUpdateCoords() {
+    this.setState({ updatingCoords: true, coordsResult: null });
+    try {
+      const result = await updateMapCoords();
+      this.setState({ updatingCoords: false, coordsResult: result });
+      store.set('toast', { message: result.message || 'Done.', type: 'success' });
+    } catch (err) {
+      this.setState({ updatingCoords: false, coordsResult: null });
+      store.set('toast', { message: err.message || 'Failed to update coordinates.', type: 'error' });
     }
   }
 

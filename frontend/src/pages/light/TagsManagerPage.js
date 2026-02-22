@@ -83,9 +83,10 @@ export default class TagsManagerPage extends Component {
 
     const rows = sorted.map(tag => {
       const flags = [
-        tag.is_featured     ? `<span class="tm-flag tm-flag-featured"     title="Show on top">\u2605</span>` : '',
-        tag.is_hidden       ? `<span class="tm-flag tm-flag-hidden"       title="Hidden">\ud83d\udc41</span>` : '',
-        tag.is_hidden_posts ? `<span class="tm-flag tm-flag-hidden-posts" title="Posts hidden">\u2298</span>` : '',
+        tag.is_featured            ? `<span class="tm-flag tm-flag-featured"     title="Show on top">\u2605</span>` : '',
+        tag.is_hidden              ? `<span class="tm-flag tm-flag-hidden"       title="Hidden">\ud83d\udc41</span>` : '',
+        tag.is_hidden_posts        ? `<span class="tm-flag tm-flag-hidden-posts" title="Posts hidden">\u2298</span>` : '',
+        (tag.locations?.length)    ? `<span class="tm-flag tm-flag-location"     title="Has coordinates">\ud83d\udccd</span>` : '',
       ].filter(Boolean).join('');
 
       const parents = (tag.parents || [])
@@ -183,8 +184,9 @@ export default class TagsManagerPage extends Component {
       : `<span class="tm-toggle-spacer"></span>`;
 
     const flags = [
-      node.is_featured  ? `<span class="tm-flag tm-flag-featured"  title="Show on top">\u2605</span>` : '',
-      node.is_hidden    ? `<span class="tm-flag tm-flag-hidden"    title="Hidden">\ud83d\udc41</span>` : '',
+      node.is_featured         ? `<span class="tm-flag tm-flag-featured"  title="Show on top">\u2605</span>` : '',
+      node.is_hidden           ? `<span class="tm-flag tm-flag-hidden"    title="Hidden">\ud83d\udc41</span>` : '',
+      (node.locations?.length) ? `<span class="tm-flag tm-flag-location"  title="Has coordinates">\ud83d\udccd</span>` : '',
     ].filter(Boolean).join('');
 
     // Multi-parent indicator: show other parents (not the one rendering this node)
@@ -269,6 +271,7 @@ export default class TagsManagerPage extends Component {
 
     const isEdit      = !!tag;
     const f           = tag || {};
+    const existingLoc = f.locations?.[0] ?? null;
     const selfId      = isEdit ? f.id : null;
     const selParents  = isEdit ? (f.parents  || []).map(p => p.id) : (parentId ? [parentId] : []);
     const selChildren = isEdit ? (f.children || []).map(c => c.id) : [];
@@ -342,6 +345,22 @@ export default class TagsManagerPage extends Component {
       this._renderFlagCheckbox('include_in_breadcrumbs',     '\ud83d\udd17', 'Breadcrumbs', 'Show in breadcrumb navigation',        f.include_in_breadcrumbs !== false),
       this._renderFlagCheckbox('show_related_tags_as_children', '\u22a2', 'Related as Children', 'Display related tags as children', f.show_related_tags_as_children),
       '        </div>',
+      '      </div>',
+
+      // Map coordinates
+      '      <div class="tag-coords-section">',
+      '        <div class="tag-flags-title">\ud83d\udccd Map Coordinates</div>',
+      '        <div class="form-row">',
+      '          <div class="form-group">',
+      '            <label>Latitude</label>',
+      `            <input type="number" name="latitude" step="any" value="${existingLoc ? existingLoc.latitude : ''}" placeholder="e.g. 48.8566">`,
+      '          </div>',
+      '          <div class="form-group">',
+      '            <label>Longitude</label>',
+      `            <input type="number" name="longitude" step="any" value="${existingLoc ? existingLoc.longitude : ''}" placeholder="e.g. 2.3522">`,
+      '          </div>',
+      '        </div>',
+      '        <p class="form-hint">Leave blank to remove coordinates. Used to place this tag on the map page.</p>',
       '      </div>',
 
       '    </div>',
@@ -479,6 +498,11 @@ export default class TagsManagerPage extends Component {
       sort_order:                    sortOrderRaw !== '' ? parseInt(sortOrderRaw, 10) : null,
       parent_ids:                    fd.getAll('parent_ids').map(v => parseInt(v, 10)),
       child_ids:                     fd.getAll('child_ids').map(v => parseInt(v, 10)),
+      locations:                     (() => {
+        const lat = parseFloat(fd.get('latitude') || '');
+        const lon = parseFloat(fd.get('longitude') || '');
+        return (!isNaN(lat) && !isNaN(lon)) ? [{ latitude: lat, longitude: lon }] : [];
+      })(),
     };
 
     const submitBtn = form.querySelector('[type="submit"]');

@@ -35,3 +35,12 @@ export function getTagPage(slug, params = {}) {
 export function getTagsPage() {
   return api.get('/api/pages/tags');
 }
+
+/**
+ * Map page data: tags with coordinates, categorised as country / city / other.
+ *
+ * @returns {Promise<{ tags: Array<{name,slug,post_count,lat,lng,type}> }>}
+ */
+export function getMapPage() {
+  return api.get('/api/pages/map');
+}

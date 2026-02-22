@@ -60,3 +60,12 @@ export function deleteBackup(filename) {
 export function getMigrations() {
   return api.get('/api/system/migrations');
 }
+
+/**
+ * Geocode city/country descendant tags that have no coordinates yet.
+ * Uses Nominatim (OpenStreetMap). This can be slow — rate-limited to 1 req/sec.
+ * @returns {Promise<{status: string, updated_count: number, message: string, errors?: string[]}>}
+ */
+export function updateMapCoords() {
+  return api.post('/api/system/map/update-coords');
+}

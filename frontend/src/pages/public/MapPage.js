@@ -1,28 +1,32 @@
 /**
- * MapPage — Leaflet map with tag location markers.
+ * MapPage — Leaflet map showing tag locations.
  *
- * Fetches: GET /api/tags (all tags with location data)
- * Props (from router): { params, query }
+ * Country-type tags are rendered as GeoJSON polygon fills.
+ * City / other tags are rendered as proportional circle div-icons.
  *
- * Leaflet is vendored at /assets/vendor/leaflet/leaflet.js and
- * /assets/vendor/leaflet/leaflet.css — loaded dynamically if needed.
+ * Data source: GET /api/pages/map
+ * GeoJSON:     /assets/vendor/leaflet/countries.geojson
  */
 
 import { Component } from '../../components/Component.js';
 import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
-import { listTags } from '../../api/tags.js';
+import { getMapPage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 
-const LEAFLET_JS  = '/assets/vendor/leaflet/leaflet.js';
-const LEAFLET_CSS = '/assets/vendor/leaflet/leaflet.css';
+const LEAFLET_JS       = '/assets/vendor/leaflet/leaflet.js';
+const LEAFLET_CSS      = '/assets/vendor/leaflet/leaflet.css';
+const COUNTRIES_GEOJSON = '/assets/vendor/leaflet/countries.geojson';
 
-/** Load Leaflet once, return the L global. */
+const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const TILE_ATTR  = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+/** Load Leaflet once; return the L global. */
 async function loadLeaflet() {
   if (window.L) return window.L;
 
-  // Inject CSS
   if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -30,7 +34,6 @@ async function loadLeaflet() {
     document.head.appendChild(link);
   }
 
-  // Inject script
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = LEAFLET_JS;
@@ -42,11 +45,18 @@ async function loadLeaflet() {
   return window.L;
 }
 
+/** Marker radius in px, scaled by post count. */
+function markerRadius(postCount) {
+  return Math.min(30, Math.max(12, 10 + Math.sqrt(postCount || 1) * 2));
+}
+
 export default class MapPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, tags: [], error: null };
     this._map = null;
+    this._tileLayer = null;
+    this._themeListener = null;
   }
 
   render() {
@@ -86,7 +96,7 @@ export default class MapPage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    const navTags = store.get('navTags') || [];
+    const navTags  = store.get('navTags') || [];
     this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '/map' });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
@@ -100,6 +110,10 @@ export default class MapPage extends Component {
       this._map.remove();
       this._map = null;
     }
+    if (this._themeListener) {
+      document.removeEventListener('themechange', this._themeListener);
+      this._themeListener = null;
+    }
   }
 
   mount() {
@@ -109,9 +123,9 @@ export default class MapPage extends Component {
 
   async _load() {
     try {
-      const tags = await listTags({ with_counts: true });
+      const data = await getMapPage();
       document.title = 'Map';
-      this.setState({ loading: false, tags, error: null });
+      this.setState({ loading: false, tags: data.tags || [], error: null });
     } catch (err) {
       this.setState({ loading: false, tags: [], error: err.message || 'Failed to load map data.' });
     }
@@ -129,25 +143,98 @@ export default class MapPage extends Component {
       return;
     }
 
+    const isDark = document.documentElement.dataset.theme === 'dark';
     this._map = L.map(mapEl).setView([20, 0], 2);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    this._tileLayer = L.tileLayer(isDark ? TILE_DARK : TILE_LIGHT, {
+      attribution: TILE_ATTR,
       maxZoom: 18,
     }).addTo(this._map);
 
-    const { tags } = this.state;
-    const tagsWithLocations = tags.filter(
-      (t) => !t.is_hidden && t.locations?.length
-    );
+    // Listen for theme toggle and swap tile layer
+    this._themeListener = () => {
+      const dark = document.documentElement.dataset.theme === 'dark';
+      if (this._tileLayer && this._map) {
+        this._tileLayer.setUrl(dark ? TILE_DARK : TILE_LIGHT);
+      }
+    };
+    document.addEventListener('themechange', this._themeListener);
 
-    tagsWithLocations.forEach((tag) => {
-      tag.locations.forEach((loc) => {
-        const marker = L.marker([loc.latitude, loc.longitude]).addTo(this._map);
-        const label = `<strong>${tag.name}</strong><br><a href="/tag/${tag.slug}">View posts</a>`;
-        marker.bindPopup(label);
-        marker.on('click', () => marker.openPopup());
-      });
+    const { tags } = this.state;
+
+    // Build lookup: lowercased tag name → tag (for country polygon matching)
+    const countryTagMap = {};
+    tags.forEach((t) => {
+      if (t.type === 'country' || t.type === 'city') {
+        countryTagMap[t.name.toLowerCase()] = t;
+      }
     });
+
+    // Load and render country polygons
+    try {
+      const resp = await fetch(COUNTRIES_GEOJSON);
+      const geojson = await resp.json();
+
+      L.geoJSON(geojson, {
+        style: (feature) => {
+          const name = (feature.properties?.name || '').toLowerCase();
+          const tag  = countryTagMap[name];
+          const highlighted = !!tag;
+          return {
+            color:       highlighted ? '#e05c00' : '#888',
+            weight:      highlighted ? 1.5 : 0.5,
+            fillColor:   highlighted ? '#e05c00' : '#aaa',
+            fillOpacity: highlighted ? 0.25 : 0.06,
+            opacity:     highlighted ? 0.8 : 0.3,
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const name = (feature.properties?.name || '').toLowerCase();
+          const tag  = countryTagMap[name];
+          if (!tag) return;
+          layer.bindPopup(
+            `<strong>${escapeHtml(tag.name)}</strong><br>` +
+            `${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}<br>` +
+            `<a href="/tag/${encodeURIComponent(tag.slug)}">View posts</a>`
+          );
+          layer.on('click', () => layer.openPopup());
+        },
+      }).addTo(this._map);
+    } catch {
+      // GeoJSON load failure is non-fatal; fall back to markers only
+    }
+
+    // Render circle markers for city / other tags (not countries — those are shown as polygons)
+    const bounds = [];
+    tags.forEach((tag) => {
+      if (tag.type === 'country') return; // polygon already shown
+      const r   = markerRadius(tag.post_count);
+      const icon = L.divIcon({
+        className: '',
+        html: `<span style="
+          display:block;
+          width:${r}px;height:${r}px;
+          border-radius:50%;
+          background:rgba(224,92,0,0.75);
+          border:2px solid rgba(224,92,0,1);
+          box-shadow:0 1px 4px rgba(0,0,0,0.3);
+        "></span>`,
+        iconSize:   [r, r],
+        iconAnchor: [r / 2, r / 2],
+      });
+
+      const marker = L.marker([tag.lat, tag.lng], { icon }).addTo(this._map);
+      marker.bindPopup(
+        `<strong>${escapeHtml(tag.name)}</strong><br>` +
+        `${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}<br>` +
+        `<a href="/tag/${encodeURIComponent(tag.slug)}">View posts</a>`
+      );
+      marker.on('click', () => marker.openPopup());
+      bounds.push([tag.lat, tag.lng]);
+    });
+
+    if (bounds.length) {
+      this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+    }
   }
 }
