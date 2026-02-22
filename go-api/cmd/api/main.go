@@ -111,6 +111,7 @@ func main() {
 	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(authService))
 	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(authService))
 	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(authService))
+	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(authService))
 	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(authService))
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(authService))
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(authService))

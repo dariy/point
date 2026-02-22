@@ -439,6 +439,27 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 	return c.JSON(http.StatusCreated, resp)
 }
 
+func (h *PostHandler) GetPostNavigation(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	prev, next, err := h.postService.GetPostNavigation(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "post not found")
+	}
+
+	resp := map[string]interface{}{"prev": nil, "next": nil}
+	if prev != nil {
+		resp["prev"] = map[string]interface{}{"id": prev.ID, "title": prev.Title, "slug": prev.Slug}
+	}
+	if next != nil {
+		resp["next"] = map[string]interface{}{"id": next.ID, "title": next.Title, "slug": next.Slug}
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
 func (h *PostHandler) WithdrawPost(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
