@@ -129,7 +129,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postToResponse(p)
+		postResponses[i] = postToResponse(p, nil)
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))

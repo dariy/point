@@ -224,6 +224,27 @@ func (s *TagService) UpdateAllPostCounts(ctx context.Context) error {
 	return s.repo.UpdateAllTagPostCounts(ctx)
 }
 
+// TagLocationInput represents a coordinate pair for create/update requests.
+type TagLocationInput struct {
+	Latitude  float64
+	Longitude float64
+}
+
+// SetTagLocations replaces the location for a tag. Pass nil or empty slice to remove.
+func (s *TagService) SetTagLocations(ctx context.Context, tagID int64, locs []TagLocationInput) error {
+	_ = s.repo.DeleteTagLocation(ctx, tagID)
+	if len(locs) == 0 {
+		return nil
+	}
+	// Only store the first entry (UNIQUE constraint allows one per tag).
+	return s.repo.UpsertTagLocation(ctx, tagID, locs[0].Latitude, locs[0].Longitude)
+}
+
+// GetTagLocationsByTagIDs returns a map of tagID → TagLocation for the given IDs.
+func (s *TagService) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error) {
+	return s.repo.GetTagLocationsByTagIDs(ctx, tagIDs)
+}
+
 // UpdateMissingCoords geocodes city/country descendant tags that have no coordinates.
 // Uses the Nominatim OpenStreetMap API (1 req/sec rate limit).
 func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interface{}, error) {

@@ -4,8 +4,10 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
+	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
@@ -66,9 +68,15 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	postIDs := make([]int64, len(posts))
+	for i, p := range posts {
+		postIDs[i] = p.ID
+	}
+	postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
+
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postToResponse(p)
+		postResponses[i] = postToResponse(p, postTagsMap[p.ID])
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -144,9 +152,15 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	tagPostIDs := make([]int64, len(posts))
+	for i, p := range posts {
+		tagPostIDs[i] = p.ID
+	}
+	tagPostTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, tagPostIDs)
+
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postByTagToResponse(p)
+		postResponses[i] = postByTagToResponse(p, tagPostTagsMap[p.ID])
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -160,8 +174,13 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	}
 
 	parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
+	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, []int64{tag.ID})
+	var tagLoc *models.TagLocation
+	if l, ok := locMap[tag.ID]; ok {
+		tagLoc = &l
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"tag":         tagToFullResponse(tag, parents, children),
+		"tag":         tagToFullResponse(tag, parents, children, tagLoc),
 		"breadcrumbs": breadcrumbs,
 		"posts":       postResponses,
 		"pagination": map[string]interface{}{
@@ -183,13 +202,24 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	// Fetch locations for all tags in one query.
+	allTagIDs := make([]int64, len(tags))
+	for i, t := range tags {
+		allTagIDs[i] = t.ID
+	}
+	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, allTagIDs)
+
 	// Filter hidden tags for public view
 	visible := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
 		if !t.IsHidden {
 			parents, _ := h.tagService.GetTagParents(ctx, t.ID)
 			children, _ := h.tagService.GetTagChildren(ctx, t.ID)
-			visible = append(visible, tagToFullResponse(t, parents, children))
+			var loc *models.TagLocation
+			if l, ok := locMap[t.ID]; ok {
+				loc = &l
+			}
+			visible = append(visible, tagToFullResponse(t, parents, children, loc))
 		}
 	}
 
@@ -197,4 +227,62 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 		"tags":  visible,
 		"total": len(visible),
 	})
+}
+
+// GetMapPage returns all tags that have coordinates, categorised by type
+// (country / city / other) for the public /map page.
+func (h *PagesHandler) GetMapPage(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Find the base category tags used to determine type.
+	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities"})
+
+	countryDescIDs := map[int64]bool{}
+	cityDescIDs := map[int64]bool{}
+	for _, bt := range baseTags {
+		name := strings.ToLower(bt.Name)
+		descs, _ := h.repo.GetTagDescendants(ctx, bt.ID)
+		for _, d := range descs {
+			switch name {
+			case "country", "countries":
+				countryDescIDs[d.ID] = true
+			case "city", "cities":
+				cityDescIDs[d.ID] = true
+			}
+		}
+	}
+
+	allTags, _ := h.tagService.ListTags(ctx, true, false)
+	tagIDs := make([]int64, len(allTags))
+	for i, t := range allTags {
+		tagIDs[i] = t.ID
+	}
+	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, tagIDs)
+
+	mapTags := []map[string]interface{}{}
+	for _, t := range allTags {
+		if t.IsHidden {
+			continue
+		}
+		loc, ok := locMap[t.ID]
+		if !ok {
+			continue
+		}
+		tagType := "other"
+		if cityDescIDs[t.ID] {
+			tagType = "city"
+		} else if countryDescIDs[t.ID] {
+			tagType = "country"
+		}
+		mapTags = append(mapTags, map[string]interface{}{
+			"name":       t.Name,
+			"slug":       t.Slug,
+			"post_count": t.PostCount,
+			"lat":        loc.Latitude,
+			"lng":        loc.Longitude,
+			"type":       tagType,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"tags": mapTags})
 }
