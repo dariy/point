@@ -1356,8 +1356,7 @@ body {
     background: transparent;
 }
 
-/* Show dropdown on hover or when opened */
-.header-tags-bar .tag-group:hover>.tag-children,
+/* Show dropdown only when JS has positioned it (position:fixed via inline style) */
 .header-tags-bar .tag-group.is-open>.tag-children {
     display: flex;
     visibility: visible;
