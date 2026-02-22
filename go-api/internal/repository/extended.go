@@ -276,6 +276,44 @@ WHERE p.preview_token = ? LIMIT 1`
 	return i, err
 }
 
+// PostNavItem holds minimal data for a navigation link (prev/next post).
+type PostNavItem struct {
+	ID    int64
+	Title string
+	Slug  string
+}
+
+// GetPostNavigation returns the previous and next published posts relative to
+// the given post's published_at timestamp. Either pointer may be nil when there
+// is no adjacent post.
+func (r *Repository) GetPostNavigation(ctx context.Context, postID int64) (prev, next *PostNavItem, err error) {
+	const qDate = `SELECT published_at FROM posts WHERE id = ? AND status = 'PUBLISHED' LIMIT 1`
+	var publishedAt string
+	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&publishedAt); err != nil {
+		return nil, nil, err
+	}
+
+	const qPrev = `
+SELECT id, title, slug FROM posts
+WHERE status = 'PUBLISHED' AND published_at < ? AND id != ?
+ORDER BY published_at DESC LIMIT 1`
+	var p PostNavItem
+	if err2 := r.db.QueryRowContext(ctx, qPrev, publishedAt, postID).Scan(&p.ID, &p.Title, &p.Slug); err2 == nil {
+		prev = &p
+	}
+
+	const qNext = `
+SELECT id, title, slug FROM posts
+WHERE status = 'PUBLISHED' AND published_at > ? AND id != ?
+ORDER BY published_at ASC LIMIT 1`
+	var n PostNavItem
+	if err2 := r.db.QueryRowContext(ctx, qNext, publishedAt, postID).Scan(&n.ID, &n.Title, &n.Slug); err2 == nil {
+		next = &n
+	}
+
+	return prev, next, nil
+}
+
 // GetTagAncestors returns the ancestor chain from root to the given tag.
 func (r *Repository) GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error) {
 	// Iterative traversal: find parents of parents until no more parents
