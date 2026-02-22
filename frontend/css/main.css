@@ -3196,6 +3196,14 @@ video.immersive-bg-image {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
+.site-main--map .map-container {
+    height: 100%;
+    min-height: 0;
+    margin-top: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 [data-theme="dark"] .map-container {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
@@ -3300,6 +3308,32 @@ video.immersive-bg-image {
 .tag-popup-count {
     font-size: 0.85rem;
     color: var(--text-secondary);
+}
+
+.map-popup-years {
+    margin: 8px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.map-year-link {
+    font-size: 0.75rem;
+    background: var(--surface-hover, #f1f5f9);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.map-year-link:hover {
+    background: var(--color-primary, #3b82f6);
+    color: white !important;
+}
+
+[data-theme="dark"] .map-year-link {
+    background: var(--surface-active, #334155);
 }
 
 .leaflet-container {
