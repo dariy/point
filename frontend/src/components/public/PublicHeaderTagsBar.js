@@ -75,32 +75,111 @@ export class PublicHeaderTagsBar extends Component {
   }
 
   afterRender() {
-    // Toggle .is-open on click (for touch/keyboard access)
     this.container.querySelectorAll('.tag-group').forEach((group) => {
       const btn = group.querySelector('.toggle-children');
       if (!btn) return;
+
+      // Touch / keyboard: toggle on chevron click.
+      // Close sibling groups only — do NOT close ancestor groups so that
+      // parent dropdowns stay open when a nested chevron is tapped.
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const open = group.classList.toggle('is-open');
-        btn.setAttribute('aria-expanded', String(open));
+        const isOpen = group.classList.contains('is-open');
+        this._closeAllExcept(group);
+        if (!isOpen) this._open(group);
       });
+
+      // Pointer devices: open/close on hover
+      group.addEventListener('mouseenter', () => this._open(group));
+      group.addEventListener('mouseleave', () => this._close(group));
     });
 
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', this._handleOutsideClick.bind(this), { once: false });
+    // Store bound refs so they can be removed in beforeUnmount
+    this._boundOutside  = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
+    this._boundCloseAll = () => this._closeAll();
+
+    document.addEventListener('click',  this._boundOutside);
+    window.addEventListener('scroll',   this._boundCloseAll, { passive: true });
+    window.addEventListener('resize',   this._boundCloseAll, { passive: true });
   }
 
   beforeUnmount() {
-    document.removeEventListener('click', this._handleOutsideClick.bind(this));
+    document.removeEventListener('click',  this._boundOutside);
+    window.removeEventListener('scroll',   this._boundCloseAll);
+    window.removeEventListener('resize',   this._boundCloseAll);
   }
 
-  _handleOutsideClick(e) {
-    if (!this.container.contains(e.target)) {
-      this.container.querySelectorAll('.tag-group.is-open').forEach((g) => {
-        g.classList.remove('is-open');
-        g.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'false');
-      });
+  // Open a dropdown, positioning it with position:fixed so it escapes
+  // any overflow:auto ancestor (the horizontal-scroll tags bar).
+  _open(group) {
+    const dropdown = group.querySelector('.tag-children');
+    const anchor   = group.querySelector('.tag-group-header') || group;
+    if (!dropdown || !anchor) return;
+
+    // Measure dropdown dimensions while invisible
+    dropdown.classList.add('is-measuring');
+    const anchorRect = anchor.getBoundingClientRect();
+    const dropW = dropdown.offsetWidth;
+    const dropH = dropdown.offsetHeight;
+    dropdown.classList.remove('is-measuring');
+
+    const gap      = 4;
+    const isNested = group.parentElement?.classList.contains('tag-children');
+
+    let top, left;
+
+    if (isNested) {
+      // Nested submenu: open to the right of the parent dropdown panel.
+      // group.parentElement is the .tag-children container (the dropdown panel).
+      // We align horizontally off the panel's edge, vertically with the row.
+      const parentPanel = group.parentElement;
+      const panelRect   = parentPanel.getBoundingClientRect();
+      const groupRect   = group.getBoundingClientRect();
+      left = panelRect.right + gap;
+      if (left + dropW > window.innerWidth - 8) {
+        left = panelRect.left - dropW - gap;
+      }
+      top = Math.min(groupRect.top, window.innerHeight - dropH - 8);
+      top = Math.max(8, top);
+    } else {
+      // Top-level: centre below the anchor button, clamped to viewport edges
+      left = anchorRect.left + anchorRect.width / 2 - dropW / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - dropW - 8));
+      top  = anchorRect.bottom + gap;
     }
+
+    dropdown.style.position  = 'fixed';
+    dropdown.style.top       = `${top}px`;
+    dropdown.style.left      = `${left}px`;
+    dropdown.style.transform = 'none';
+
+    group.classList.add('is-open');
+    group.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'true');
+  }
+
+  _close(group) {
+    const dropdown = group.querySelector('.tag-children');
+    if (dropdown) {
+      dropdown.style.position  = '';
+      dropdown.style.top       = '';
+      dropdown.style.left      = '';
+      dropdown.style.transform = '';
+    }
+    group.classList.remove('is-open');
+    group.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'false');
+  }
+
+  _closeAll() {
+    this.container.querySelectorAll('.tag-group.is-open').forEach((g) => this._close(g));
+  }
+
+  // Close all open groups except `group` and its ancestors.
+  // Used by the chevron click handler so that tapping a nested chevron
+  // does not collapse the parent dropdown that contains it.
+  _closeAllExcept(group) {
+    this.container.querySelectorAll('.tag-group.is-open').forEach((g) => {
+      if (g !== group && !g.contains(group)) this._close(g);
+    });
   }
 }
