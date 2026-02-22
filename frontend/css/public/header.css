@@ -40,6 +40,7 @@
 /* tags-bar: inline by default, fills the middle space */
 .header-tags-bar {
     flex: 1;
+    min-width: 0; /* Prevent flex item from overflowing when tags exceed available space */
     order: 2;
     transition: border-color var(--transition-theme);
 }

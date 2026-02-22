@@ -699,6 +699,7 @@ body {
     line-height: 1.6;
     color: var(--text-primary);
     background-color: var(--bg-primary);
+    overflow-x: hidden; /* Prevent horizontal overflow on mobile/tablet */
 }
 
 .site-wrapper {
@@ -834,6 +835,7 @@ body {
 /* tags-bar: inline by default, fills the middle space */
 .header-tags-bar {
     flex: 1;
+    min-width: 0; /* Prevent flex item from overflowing when tags exceed available space */
     order: 2;
     transition: border-color var(--transition-theme);
 }
