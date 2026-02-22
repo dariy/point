@@ -57,6 +57,8 @@ function loadTheme(settings) {
 store.subscribe('theme', (theme) => {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('theme', theme);
+  // Notify components that the theme has changed
+  document.dispatchEvent(new CustomEvent('themechange', { detail: { theme } }));
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
