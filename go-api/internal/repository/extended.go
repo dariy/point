@@ -487,6 +487,96 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 	return items, rows.Err()
 }
 
+// PostTagInfo is a lightweight tag descriptor for embedding in post list responses.
+type PostTagInfo struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// GetTagsByPostIDs bulk-fetches tags for a list of post IDs.
+// Returns a map of postID → []PostTagInfo.
+func (r *Repository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]PostTagInfo, error) {
+	result := make(map[int64][]PostTagInfo)
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	args := make([]interface{}, len(postIDs))
+	placeholders := ""
+	for i, id := range postIDs {
+		args[i] = id
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+	}
+
+	q := `
+SELECT pt.post_id, t.id, t.name, t.slug
+FROM post_tags pt
+JOIN tags t ON t.id = pt.tag_id
+WHERE pt.post_id IN (` + placeholders + `)
+ORDER BY t.name ASC`
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var postID int64
+		var tag PostTagInfo
+		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
+			return nil, err
+		}
+		result[postID] = append(result[postID], tag)
+	}
+	return result, rows.Err()
+}
+
+// GetTagLocationsByTagIDs fetches all tag_locations rows for the given tag IDs.
+// Returns a map of tagID → TagLocation (one per tag due to UNIQUE constraint).
+func (r *Repository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error) {
+	result := make(map[int64]models.TagLocation)
+	if len(tagIDs) == 0 {
+		return result, nil
+	}
+
+	args := make([]interface{}, len(tagIDs))
+	placeholders := ""
+	for i, id := range tagIDs {
+		args[i] = id
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+	}
+
+	q := `SELECT id, tag_id, latitude, longitude FROM tag_locations WHERE tag_id IN (` + placeholders + `)`
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var loc models.TagLocation
+		if err := rows.Scan(&loc.ID, &loc.TagID, &loc.Latitude, &loc.Longitude); err != nil {
+			return nil, err
+		}
+		result[loc.TagID] = loc
+	}
+	return result, rows.Err()
+}
+
+// DeleteTagLocation removes the coordinate record for a tag (if any).
+func (r *Repository) DeleteTagLocation(ctx context.Context, tagID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM tag_locations WHERE tag_id = ?`, tagID)
+	return err
+}
+
 // MigrationRecord holds a single row from migration_history.
 type MigrationRecord struct {
 	ID        int64     `json:"id"`

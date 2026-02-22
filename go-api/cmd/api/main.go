@@ -158,6 +158,7 @@ func main() {
 	systemGroup.GET("/logs", systemHandler.GetLogs, api.AuthMiddleware(authService))
 	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(authService))
 	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(authService))
+	systemGroup.POST("/map/update-coords", systemHandler.UpdateMapCoords, api.AuthMiddleware(authService))
 	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(authService))
 	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(authService))
 	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(authService))
@@ -168,6 +169,7 @@ func main() {
 	pagesGroup.GET("/home", pagesHandler.GetHomePage)
 	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage)
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage)
+	pagesGroup.GET("/map", pagesHandler.GetMapPage)
 
 	// ── Media static file serving ──────────────────────────────────────────────
 	mediaPath := filepath.Join(cfg.StoragePath, "media")
