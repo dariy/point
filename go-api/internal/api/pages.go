@@ -235,10 +235,12 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Find the base category tags used to determine type.
-	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities"})
+	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities", "year", "years"})
 
 	countryDescIDs := map[int64]bool{}
 	cityDescIDs := map[int64]bool{}
+	var yearTagID int64
+
 	for _, bt := range baseTags {
 		name := strings.ToLower(bt.Name)
 		descs, _ := h.repo.GetTagDescendants(ctx, bt.ID)
@@ -250,6 +252,9 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 				cityDescIDs[d.ID] = true
 			}
 		}
+		if name == "year" || name == "years" {
+			yearTagID = bt.ID
+		}
 	}
 
 	allTags, _ := h.tagService.ListTags(ctx, true, false)
@@ -258,6 +263,11 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		tagIDs[i] = t.ID
 	}
 	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, tagIDs)
+
+	var yearMap map[int64][]repository.PostTagInfo
+	if yearTagID > 0 {
+		yearMap, _ = h.repo.GetYearTagsByLocationTagIDs(ctx, tagIDs, yearTagID)
+	}
 
 	mapTags := []map[string]interface{}{}
 	for _, t := range allTags {
@@ -274,6 +284,12 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		} else if countryDescIDs[t.ID] {
 			tagType = "country"
 		}
+
+		years := yearMap[t.ID]
+		if years == nil {
+			years = []repository.PostTagInfo{}
+		}
+
 		mapTags = append(mapTags, map[string]interface{}{
 			"name":       t.Name,
 			"slug":       t.Slug,
@@ -281,6 +297,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			"lat":        loc.Latitude,
 			"lng":        loc.Longitude,
 			"type":       tagType,
+			"years":      years,
 		})
 	}
 

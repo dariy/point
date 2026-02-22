@@ -536,6 +536,53 @@ ORDER BY t.name ASC`
 	return result, rows.Err()
 }
 
+// GetYearTagsByLocationTagIDs returns a map of locationTagID → []PostTagInfo (years).
+// A "year" tag is defined as a child of the provided yearParentID.
+func (r *Repository) GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]PostTagInfo, error) {
+	result := make(map[int64][]PostTagInfo)
+	if len(locTagIDs) == 0 {
+		return result, nil
+	}
+
+	// First part: the location tag IDs
+	args := make([]interface{}, len(locTagIDs))
+	placeholders := ""
+	for i, id := range locTagIDs {
+		args[i] = id
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+	}
+	// Second part: the year parent ID
+	args = append(args, yearParentID)
+
+	q := `
+SELECT DISTINCT pt1.tag_id as loc_tag_id, year_tag.id, year_tag.name, year_tag.slug
+FROM post_tags AS pt1
+JOIN post_tags AS pt2 ON pt1.post_id = pt2.post_id
+JOIN tags AS year_tag ON pt2.tag_id = year_tag.id
+JOIN tag_relationships AS tr ON year_tag.id = tr.child_id
+WHERE pt1.tag_id IN (` + placeholders + `) AND tr.parent_id = ?
+ORDER BY year_tag.name ASC`
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var locTagID int64
+		var tag PostTagInfo
+		if err := rows.Scan(&locTagID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
+			return nil, err
+		}
+		result[locTagID] = append(result[locTagID], tag)
+	}
+	return result, rows.Err()
+}
+
 // GetTagLocationsByTagIDs fetches all tag_locations rows for the given tag IDs.
 // Returns a map of tagID → TagLocation (one per tag due to UNIQUE constraint).
 func (r *Repository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error) {
