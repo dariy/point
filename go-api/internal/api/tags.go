@@ -22,8 +22,8 @@ func NewTagHandler(tagService *services.TagService, settingsService *services.Se
 	}
 }
 
-func tagResponse(tag models.Tag, parents, children []models.Tag) map[string]interface{} {
-	return tagToFullResponse(tag, parents, children)
+func tagResponse(tag models.Tag, parents, children []models.Tag, loc *models.TagLocation) map[string]interface{} {
+	return tagToFullResponse(tag, parents, children, loc)
 }
 
 func (h *TagHandler) ListTags(c echo.Context) error {
@@ -62,6 +62,13 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		}
 	}
 
+	// Fetch locations for all tags.
+	tagIDs := make([]int64, len(tags))
+	for i, t := range tags {
+		tagIDs[i] = t.ID
+	}
+	locationMap, _ := h.tagService.GetTagLocationsByTagIDs(c.Request().Context(), tagIDs)
+
 	tagItems := make([]map[string]interface{}, len(tags))
 	for i, t := range tags {
 		parents := childParents[t.ID]
@@ -71,6 +78,10 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		children := parentChildren[t.ID]
 		if children == nil {
 			children = []map[string]interface{}{}
+		}
+		var loc *models.TagLocation
+		if l, ok := locationMap[t.ID]; ok {
+			loc = &l
 		}
 		tagItems[i] = map[string]interface{}{
 			"id":                            t.ID,
@@ -88,6 +99,7 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 			"post_count":                    t.PostCount,
 			"parents":                       parents,
 			"children":                      children,
+			"locations":                     tagLocationsResponse(loc),
 		}
 	}
 
@@ -124,8 +136,9 @@ func (h *TagHandler) GetTagByID(c echo.Context) error {
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
+	loc := h.tagLocation(c, tag.ID)
 
-	return c.JSON(http.StatusOK, tagResponse(tag, parents, children))
+	return c.JSON(http.StatusOK, tagResponse(tag, parents, children, loc))
 }
 
 func (h *TagHandler) GetTagBySlug(c echo.Context) error {
@@ -138,24 +151,43 @@ func (h *TagHandler) GetTagBySlug(c echo.Context) error {
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
+	loc := h.tagLocation(c, tag.ID)
 
-	return c.JSON(http.StatusOK, tagResponse(tag, parents, children))
+	return c.JSON(http.StatusOK, tagResponse(tag, parents, children, loc))
+}
+
+// tagLocation fetches the location for a single tag, returning nil if none.
+func (h *TagHandler) tagLocation(c echo.Context, tagID int64) *models.TagLocation {
+	locs, err := h.tagService.GetTagLocationsByTagIDs(c.Request().Context(), []int64{tagID})
+	if err != nil {
+		return nil
+	}
+	if l, ok := locs[tagID]; ok {
+		return &l
+	}
+	return nil
+}
+
+type TagLocationInput struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
 type CreateTagRequest struct {
-	Name                      string  `json:"name"`
-	Slug                      string  `json:"slug"`
-	Description               string  `json:"description"`
-	CustomURL                 string  `json:"custom_url"`
-	IsImportant               bool    `json:"is_important"`
-	IsFeatured                bool    `json:"is_featured"`
-	IsHidden                  bool    `json:"is_hidden"`
-	IsHiddenPosts             bool    `json:"is_hidden_posts"`
-	IncludeInBreadcrumbs      bool    `json:"include_in_breadcrumbs"`
-	ShowRelatedTagsAsChildren bool    `json:"show_related_tags_as_children"`
-	SortOrder                 *int32  `json:"sort_order"`
-	ParentIDs                 []int64 `json:"parent_ids"`
-	ChildIDs                  []int64 `json:"child_ids"`
+	Name                      string           `json:"name"`
+	Slug                      string           `json:"slug"`
+	Description               string           `json:"description"`
+	CustomURL                 string           `json:"custom_url"`
+	IsImportant               bool             `json:"is_important"`
+	IsFeatured                bool             `json:"is_featured"`
+	IsHidden                  bool             `json:"is_hidden"`
+	IsHiddenPosts             bool             `json:"is_hidden_posts"`
+	IncludeInBreadcrumbs      bool             `json:"include_in_breadcrumbs"`
+	ShowRelatedTagsAsChildren bool             `json:"show_related_tags_as_children"`
+	SortOrder                 *int32           `json:"sort_order"`
+	ParentIDs                 []int64          `json:"parent_ids"`
+	ChildIDs                  []int64          `json:"child_ids"`
+	Locations                 []TagLocationInput `json:"locations"`
 }
 
 func (h *TagHandler) CreateTag(c echo.Context) error {
@@ -183,11 +215,13 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 
 	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
 	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
+	_ = h.tagService.SetTagLocations(c.Request().Context(), tag.ID, toServiceLocations(req.Locations))
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
+	loc := h.tagLocation(c, tag.ID)
 
-	return c.JSON(http.StatusCreated, tagResponse(tag, parents, children))
+	return c.JSON(http.StatusCreated, tagResponse(tag, parents, children, loc))
 }
 
 func (h *TagHandler) UpdateTag(c echo.Context) error {
@@ -219,14 +253,16 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
-	// Always update parent and child relationships (empty slice = remove all).
+	// Always update parent, child, and location data (empty slice = remove all).
 	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
 	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
+	_ = h.tagService.SetTagLocations(c.Request().Context(), tag.ID, toServiceLocations(req.Locations))
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID)
+	loc := h.tagLocation(c, tag.ID)
 
-	return c.JSON(http.StatusOK, tagResponse(tag, parents, children))
+	return c.JSON(http.StatusOK, tagResponse(tag, parents, children, loc))
 }
 
 func (h *TagHandler) DeleteTag(c echo.Context) error {
@@ -240,6 +276,14 @@ func (h *TagHandler) DeleteTag(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+func toServiceLocations(in []TagLocationInput) []services.TagLocationInput {
+	out := make([]services.TagLocationInput, len(in))
+	for i, l := range in {
+		out[i] = services.TagLocationInput{Latitude: l.Latitude, Longitude: l.Longitude}
+	}
+	return out
 }
 
 func (h *TagHandler) RecalculateCounts(c echo.Context) error {
@@ -276,7 +320,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postByTagToResponse(p)
+		postResponses[i] = postByTagToResponse(p, nil)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

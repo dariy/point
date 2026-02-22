@@ -202,6 +202,14 @@ func (h *SystemHandler) ClearCache(c echo.Context) error {
 	})
 }
 
+func (h *SystemHandler) UpdateMapCoords(c echo.Context) error {
+	result, err := h.tagService.UpdateMissingCoords(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
 func (h *SystemHandler) DeleteBackup(c echo.Context) error {
 	filename := c.Param("filename")
 	if filename == "" || strings.Contains(filename, "/") || strings.Contains(filename, "..") {
