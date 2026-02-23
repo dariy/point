@@ -40,29 +40,37 @@ body {
     height: var(--header-height);
 }
 
-.sidebar-header .logo {
+
+.sidebar-header .site-branding {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+}
+
+.sidebar-header .site-title-link {
+    display: flex;
+    align-items: center;
     color: white;
+    text-decoration: none;
+}
+
+.sidebar-header .site-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
     font-size: var(--font-size-xl);
     font-weight: 700;
-    display: inline-block;
     white-space: nowrap;
 }
 
-.app-logo {
+.sidebar-header .app-logo {
     display: inline-block;
     vertical-align: middle;
     width: 1rem;
     fill: currentColor;
+    flex-shrink: 0;
     transition: fill var(--transition-theme);
-}
-
-.app-logo:hover {
-    fill: var(--color-primary-hover);
-}
-
-h1 .app-logo {
-    width: 1.5rem;
-    vertical-align: baseline;
 }
 
 .sidebar-header .homepage-link {
