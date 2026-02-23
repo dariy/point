@@ -69,7 +69,7 @@ export default class PostPage extends Component {
     // In immersive mode suppress the tag filter bar; tags go in the footer instead
     this.mountChild(PublicHeader, '#header-mount', {
       settings,
-      navTags: immersive ? [] : navTags,
+      navTags: (!post || immersive) ? [] : navTags,
       breadcrumb,
       currentPath: '',
     });
