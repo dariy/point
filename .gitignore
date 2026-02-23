@@ -134,3 +134,5 @@ app/static/css/light.css
 app/static/css/main.css
 go-api/coverage.out
 go-api/coverage.html
+light.css
+main.css
