@@ -17,43 +17,46 @@ export default class LoginPage extends Component {
 
   render() {
     const { loading, error } = this.state;
+    const settings = store.get('settings') || {};
+    const title = escapeHtml(settings.blog_title || 'Point');
+    const multiUser = settings.multi_user_mode === 'true' || settings.multi_user_mode === true;
 
     return `
       <div class="login-page">
         <div class="login-container">
-          <div class="login-card card">
-            <div class="login-header card-body">
-              <h1>Point Admin</h1>
+          <div class="login-card">
+
+            <div class="login-header">
+              <div class="login-branding">
+                <svg class="login-logo" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
+                </svg>
+                <span class="login-site-title">${title}</span>
+              </div>
             </div>
-            <div class="card-body">
-              ${error ? `<div class="login-error" role="alert">${escapeHtml(error)}</div>` : ''}
-              <form id="login-form" novalidate>
-                <div class="form-group">
-                  <label for="username-input">Username (optional)</label>
-                  <input type="text" id="username-input" name="username"
-                         class="form-input" autocomplete="username"
-                         placeholder="Leave blank for single-user blog">
-                </div>
-                <div class="form-group">
-                  <label for="password-input">Password</label>
-                  <input type="password" id="password-input" name="password"
-                         class="form-input" autocomplete="current-password"
-                         required placeholder="Password">
-                </div>
-                <div class="form-group">
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="remember-me" name="remember_me">
-                    Remember me
-                  </label>
-                </div>
-                <div class="login-actions">
-                  <button type="submit" class="btn btn-primary btn-lg" id="submit-btn"
-                          ${loading ? 'disabled' : ''}>
-                    ${loading ? 'Signing in…' : 'Sign in'}
-                  </button>
-                </div>
-              </form>
-            </div>
+
+            ${error ? `<div class="login-error" role="alert">${escapeHtml(error)}</div>` : ''}
+
+            <form id="login-form" novalidate>
+              ${multiUser ? `
+              <div class="form-group">
+                <input type="text" id="username-input" name="username"
+                       class="form-input" autocomplete="username"
+                       placeholder="Username">
+              </div>` : ''}
+              <div class="form-group">
+                <input type="password" id="password-input" name="password"
+                       class="form-input" autocomplete="current-password"
+                       required placeholder="Enter your password">
+              </div>
+              <div class="login-actions">
+                <button type="submit" class="btn btn-primary" id="submit-btn"
+                        ${loading ? 'disabled' : ''}>
+                  ${loading ? 'Signing in…' : 'Sign in'}
+                </button>
+              </div>
+            </form>
+
           </div>
         </div>
       </div>`;
@@ -69,7 +72,6 @@ export default class LoginPage extends Component {
 
       const username = this.$('#username-input')?.value.trim() || null;
       const password = this.$('#password-input')?.value || '';
-      const rememberMe = this.$('#remember-me')?.checked || false;
 
       if (!password) {
         this.setState({ error: 'Password is required.' });
@@ -79,7 +81,7 @@ export default class LoginPage extends Component {
       this.setState({ loading: true, error: null });
 
       try {
-        const result = await login(username, password, rememberMe);
+        const result = await login(username, password, true);
         store.set('user', result.user);
         navigate('/light', { replace: true });
       } catch (err) {
