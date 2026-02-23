@@ -32,13 +32,13 @@ export class PostGrid extends Component {
   }
 
   afterRender() {
-    const { posts = [], showViewCount = false } = this.props;
+    const { posts = [], showViewCount = false, tagSlug, tagPage } = this.props;
     const heroIndex = posts.findIndex((p) => p.is_featured);
 
     posts.forEach((post, i) => {
       const slot = this.container.querySelector(`[data-index="${i}"]`);
       if (slot) {
-        this.mountChild(PostCard, slot, { post, showViewCount, isHero: i === heroIndex });
+        this.mountChild(PostCard, slot, { post, showViewCount, isHero: i === heroIndex, tagSlug, tagPage });
       }
     });
   }

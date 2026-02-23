@@ -128,6 +128,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     transition: color var(--transition-theme);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.site-breadcrumb a.breadcrumb-current:hover {
+    color: var(--color-primary);
 }
 
 .site-breadcrumb .breadcrumb-link {

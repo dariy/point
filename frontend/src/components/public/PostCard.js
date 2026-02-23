@@ -56,12 +56,19 @@ export class PostCard extends Component {
   }
 
   afterRender() {
-    const { post } = this.props;
+    const { post, tagSlug, tagPage } = this.props;
     if (!post) return;
     const card = this.$('.post-card');
     if (!card) return;
 
-    const go = () => navigate(`/post/${post.slug}`);
+    const go = () => {
+      if (tagSlug) {
+        const page = tagPage > 1 ? `&page=${tagPage}` : '';
+        navigate(`/tag/${tagSlug}?slug=${post.slug}${page}`);
+      } else {
+        navigate(`/post/${post.slug}`);
+      }
+    };
 
     card.addEventListener('click', (e) => {
       if (!e.target.closest('a')) go();
