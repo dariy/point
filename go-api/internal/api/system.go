@@ -53,17 +53,14 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 	runtime.ReadMemStats(&memStats)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"posts": map[string]interface{}{
-			"total":     stats.PostCount,
-			"published": stats.PublishedCount,
-			"draft":     stats.DraftCount,
-		},
-		"tags":          stats.TagCount,
-		"media":         stats.MediaCount,
-		"storage_bytes": stats.StorageBytes,
-		"users":         stats.UserCount,
-		"sessions":      stats.SessionCount,
-		"uptime_seconds": int64(time.Since(startTime).Seconds()),
+		"published_posts":  stats.PublishedCount,
+		"total_posts":      stats.PostCount,
+		"total_tags":       stats.TagCount,
+		"total_media":      stats.MediaCount,
+		"storage_used_mb":  float64(stats.StorageBytes) / (1024 * 1024),
+		"users":            stats.UserCount,
+		"sessions":         stats.SessionCount,
+		"uptime_seconds":   int64(time.Since(startTime).Seconds()),
 		"memory": map[string]interface{}{
 			"alloc_mb":       memStats.Alloc / 1024 / 1024,
 			"total_alloc_mb": memStats.TotalAlloc / 1024 / 1024,

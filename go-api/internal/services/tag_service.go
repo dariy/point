@@ -380,6 +380,56 @@ type NavTagNode struct {
 	Children  []NavTagNode `json:"children"`
 }
 
+// buildEffectivelyHiddenIDs computes the set of tag IDs that should not appear publicly.
+// A tag is effectively hidden if:
+//   - It is directly marked is_hidden=true, OR
+//   - Any ancestor has both is_hidden=true AND is_hidden_posts=true
+func buildEffectivelyHiddenIDs(allTags []models.Tag, relationships []repository.TagRelationship) map[int64]bool {
+	childrenOf := make(map[int64][]int64, len(relationships))
+	for _, rel := range relationships {
+		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
+	}
+
+	hidden := make(map[int64]bool, len(allTags))
+	queue := make([]int64, 0)
+	for _, t := range allTags {
+		if t.IsHidden {
+			hidden[t.ID] = true
+		}
+		if t.IsHidden && t.IsHiddenPosts {
+			queue = append(queue, t.ID)
+		}
+	}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, childID := range childrenOf[cur] {
+			if !hidden[childID] {
+				hidden[childID] = true
+				queue = append(queue, childID)
+			}
+		}
+	}
+	return hidden
+}
+
+// EffectivelyHiddenIDs returns the set of tag IDs that should not be shown publicly.
+func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, error) {
+	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
+		IncludeEmptyFilter:  true,
+		ImportantOnlyFilter: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	relationships, err := s.repo.GetAllTagRelationships(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return buildEffectivelyHiddenIDs(allTags, relationships), nil
+}
+
 // GetHierarchicalNavTags builds a recursive tag tree for the public navigation bar.
 // If rootID is nil, returns root-level tags (no parents) and their descendants (for homepage).
 // If rootID is non-nil, returns children of that tag and their descendants (for tag pages).
@@ -402,6 +452,8 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) 
 	if err != nil {
 		return nil, err
 	}
+
+	effectivelyHidden := buildEffectivelyHiddenIDs(allTags, relationships)
 
 	childrenOf := make(map[int64][]int64)
 	parentsOf := make(map[int64][]int64)
@@ -438,7 +490,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) 
 		childIDs := childrenOf[id]
 		sortedIDs := make([]int64, 0, len(childIDs))
 		for _, cid := range childIDs {
-			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && (ch.PostCount > 0 || ch.IsFeatured) && !visited[cid] {
+			if ch, ok := tagByID[cid]; ok && !effectivelyHidden[cid] && (ch.PostCount > 0 || ch.IsFeatured) && !visited[cid] {
 				sortedIDs = append(sortedIDs, cid)
 			}
 		}
@@ -459,7 +511,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) 
 	var rootIDs []int64
 	if rootID == nil {
 		for _, t := range allTags {
-			if t.IsHidden || (t.PostCount == 0 && !t.IsFeatured) {
+			if effectivelyHidden[t.ID] || (t.PostCount == 0 && !t.IsFeatured) {
 				continue
 			}
 			if len(parentsOf[t.ID]) == 0 {
@@ -468,7 +520,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64) 
 		}
 	} else {
 		for _, cid := range childrenOf[*rootID] {
-			if ch, ok := tagByID[cid]; ok && !ch.IsHidden && (ch.PostCount > 0 || ch.IsFeatured) {
+			if ch, ok := tagByID[cid]; ok && !effectivelyHidden[cid] && (ch.PostCount > 0 || ch.IsFeatured) {
 				rootIDs = append(rootIDs, cid)
 			}
 		}

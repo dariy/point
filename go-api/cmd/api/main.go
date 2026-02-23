@@ -55,7 +55,7 @@ func main() {
 	mediaHandler := api.NewMediaHandler(mediaService, settingsService)
 	settingsHandler := api.NewSettingsHandler(settingsService)
 	systemHandler := api.NewSystemHandler(repo, mediaService, settingsService, tagService, cfg.StoragePath)
-	feedsHandler := api.NewFeedsHandler(repo, postService, settingsService)
+	feedsHandler := api.NewFeedsHandler(repo, postService, tagService, settingsService)
 	pagesHandler := api.NewPagesHandler(repo, postService, tagService, settingsService)
 
 	// Global middleware

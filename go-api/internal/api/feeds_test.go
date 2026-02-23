@@ -16,8 +16,9 @@ func TestFeedsHandler(t *testing.T) {
 	defer repo.Close()
 
 	postService := services.NewPostService(repo)
+	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
-	handler := NewFeedsHandler(repo, postService, settingsService)
+	handler := NewFeedsHandler(repo, postService, tagService, settingsService)
 
 	e := echo.New()
 
