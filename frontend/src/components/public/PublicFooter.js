@@ -33,11 +33,15 @@ export class PublicFooter extends Component {
     let actionsSlot = '';
     if (immersiveNav) {
       const { prev, next } = immersiveNav;
+      const { tagSlug } = this.props;
+      const buildHref = (p) => tagSlug
+        ? `/tag/${escapeHtml(tagSlug)}?slug=${escapeHtml(p.slug)}`
+        : `/post/${escapeHtml(p.slug)}`;
       const prevLink = prev
-        ? `<a href="/post/${escapeHtml(prev.slug)}" class="post-nav-icon" aria-label="Previous post" title="${escapeHtml(prev.title)}">&#8592;</a>`
+        ? `<a href="${buildHref(prev)}" class="post-nav-icon" aria-label="Previous post" title="${escapeHtml(prev.title)}">&#8592;</a>`
         : `<span class="post-nav-icon disabled" aria-hidden="true"></span>`;
       const nextLink = next
-        ? `<a href="/post/${escapeHtml(next.slug)}" class="post-nav-icon" aria-label="Next post" title="${escapeHtml(next.title)}">&#8594;</a>`
+        ? `<a href="${buildHref(next)}" class="post-nav-icon" aria-label="Next post" title="${escapeHtml(next.title)}">&#8594;</a>`
         : `<span class="post-nav-icon disabled" aria-hidden="true"></span>`;
       actionsSlot = `<nav class="footer-actions post-navigation-compact" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
     }

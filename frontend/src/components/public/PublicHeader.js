@@ -35,6 +35,10 @@ export class PublicHeader extends Component {
         ...breadcrumb.map((crumb, i) => {
           const isLast = i === breadcrumb.length - 1;
           if (isLast) {
+            if (crumb.slug) {
+              const href = crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/';
+              return `<a href="${href}" class="breadcrumb-current">${escapeHtml(crumb.name)}</a>`;
+            }
             return `<span class="breadcrumb-current">${escapeHtml(crumb.name)}</span>`;
           }
           const href = crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/';
