@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -73,6 +74,9 @@ func main() {
 		XFrameOptions:      "DENY",
 	}))
 
+	// Resolve index.html path once — used by the SPA fallback and the media shortcut.
+	indexHTML := filepath.Join(cfg.FrontendDir, "index.html")
+
 	// ── Public health check ────────────────────────────────────────────────────
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
@@ -90,7 +94,7 @@ func main() {
 	e.GET("/preview/:token", postHandler.GetPostByPreviewToken)
 
 	// ── Simplified media URL: /YYYY/MM/filename ────────────────────────────────
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath))
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML))
 
 	// ── Auth Routes ────────────────────────────────────────────────────────────
 	authGroup := e.Group("/api/auth")
@@ -199,7 +203,6 @@ func main() {
 	}
 
 	// ── SPA fallback — must be last ────────────────────────────────────────────
-	indexHTML := filepath.Join(cfg.FrontendDir, "index.html")
 	e.GET("/*", func(c echo.Context) error {
 		if _, err := os.Stat(indexHTML); err == nil {
 			return c.File(indexHTML)
@@ -218,17 +221,29 @@ func main() {
 }
 
 // serveSimplifiedMedia handles /YYYY/MM/filename shortcut for media files.
-func serveSimplifiedMedia(storagePath string) echo.HandlerFunc {
+// If year or month are not valid integers the path belongs to the SPA, so
+// index.html is served instead (matching the Python backend's {year:int} constraint).
+func serveSimplifiedMedia(storagePath, indexHTML string) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
 		filename := c.Param("filename")
 
-		// Basic validation to prevent path traversal
-		for _, seg := range []string{year, month, filename} {
-			if seg == "" || seg == ".." || seg == "." {
-				return echo.NewHTTPError(http.StatusBadRequest, "invalid path")
+		// Validate year/month are numeric — non-numeric means this is an SPA route.
+		yearInt, yearErr := strconv.Atoi(year)
+		monthInt, monthErr := strconv.Atoi(month)
+		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
+			if _, err := os.Stat(indexHTML); err == nil {
+				return c.File(indexHTML)
 			}
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{
+				"detail": "Frontend not available — build the frontend first",
+			})
+		}
+
+		// Prevent path traversal in the filename segment.
+		if filename == "" || filename == ".." || filename == "." {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid path")
 		}
 
 		filePath := filepath.Join(storagePath, "media", "originals", year, month, filename)

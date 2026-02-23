@@ -221,8 +221,10 @@ export default class TagsManagerPage extends Component {
   beforeUnmount() { this._closeModal(); }
 
   afterRender() {
+    const tagSlug = this.props?.params?.slug;
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/tags',
+      publicUrl: tagSlug ? `/tag/${tagSlug}` : '/',
       user: store.get('user') || {},
       onLogout: this._handleLogout.bind(this),
     });
