@@ -160,8 +160,8 @@
     line-height: 1;
 }
 
-.site-branding:hover,
-.site-branding:hover * {
+.site-title-link:hover,
+.site-title-link:hover * {
     color: var(--color-primary);
 }
 
