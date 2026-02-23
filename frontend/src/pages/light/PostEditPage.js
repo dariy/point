@@ -188,8 +188,10 @@ export default class PostEditPage extends Component {
   }
 
   afterRender() {
+    const postSlug = this.state.post?.slug;
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/posts',
+      publicUrl: postSlug ? `/post/${postSlug}` : '/',
       user: store.get('user') || {},
       onLogout: this._handleLogout.bind(this),
     });
