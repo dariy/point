@@ -82,16 +82,6 @@ export default class DashboardPage extends Component {
             <div class="storage-bar-fill ${barClass}" style="width: ${escapeHtml(String(usagePercent))}%"></div>
           </div>
         </div>
-      </div>
-
-      <div class="card" style="margin-top: var(--spacing-xl)">
-        <div class="card-header"><h2>Quick Actions</h2></div>
-        <div class="card-body" style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
-          <a href="/light/posts/new" class="btn btn-primary">New Post</a>
-          <a href="/light/media" class="btn btn-secondary">Upload Media</a>
-          <a href="/light/tags" class="btn btn-secondary">Manage Tags</a>
-          <a href="/light/settings" class="btn btn-secondary">Settings</a>
-        </div>
       </div>`;
   }
 

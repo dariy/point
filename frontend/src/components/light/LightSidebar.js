@@ -51,7 +51,7 @@ export class LightSidebar extends Component {
         </nav>
         <div class="sidebar-footer">
           <div class="user-info">
-            <button class="logout-btn" id="logout-btn" type="button">Logout</button>
+            <button class="btn btn-primary" id="logout-btn" type="button">Logout</button>
           </div>
         </div>
       </aside>`;
