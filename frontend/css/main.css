@@ -1337,7 +1337,7 @@ body {
     top: calc(100% + var(--spacing-xs));
     left: 50%;
     transform: translateX(-50%);
-    background: var(--surface-card);
+    background: transparent;
     border: 1px solid var(--border-primary);
     border-radius: var(--border-radius-xl);
     padding: var(--spacing-sm);
@@ -1351,9 +1351,21 @@ body {
     box-shadow: var(--shadow-lg);
     width: max-content;
     max-width: 80vw;
-    backdrop-filter: blur(12px);
     visibility: hidden;
     opacity: 0;
+}
+
+/* Background + blur on ::after so backdrop-filter doesn't make this element
+   a containing block for position:fixed descendants (Chrome behaviour). */
+.header-tags-bar .tag-children::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--surface-card);
+    backdrop-filter: blur(12px);
+    border-radius: inherit;
+    z-index: -1;
+    pointer-events: none;
 }
 
 .header-tags-bar .tag-children::before {

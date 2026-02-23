@@ -147,29 +147,20 @@ export class PublicHeaderTagsBar extends Component {
     const dropH = dropdown.offsetHeight;
     dropdown.classList.remove('is-measuring');
 
-    const gap      = 4;
-    const isNested = group.parentElement?.classList.contains('tag-children');
+    const gap = 0;
 
-    let top, left;
+    // Horizontal: always centre on the anchor tag, clamped to viewport edges
+    let left = anchorRect.left + anchorRect.width / 2 - dropW / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - dropW - 8));
 
-    if (isNested) {
-      // Nested submenu: open to the right of the parent dropdown panel.
-      // group.parentElement is the .tag-children container (the dropdown panel).
-      // We align horizontally off the panel's edge, vertically with the row.
-      const parentPanel = group.parentElement;
-      const panelRect   = parentPanel.getBoundingClientRect();
-      const groupRect   = group.getBoundingClientRect();
-      left = panelRect.right + gap;
-      if (left + dropW > window.innerWidth - 8) {
-        left = panelRect.left - dropW - gap;
-      }
-      top = Math.min(groupRect.top, window.innerHeight - dropH - 8);
-      top = Math.max(8, top);
+    // Vertical: open below the anchor button (root) or below the parent panel (nested),
+    // so the gap is consistent at every level.
+    let top;
+    if (group.parentElement?.classList.contains('tag-children')) {
+      const panelRect = group.parentElement.getBoundingClientRect();
+      top = panelRect.bottom + gap;
     } else {
-      // Top-level: centre below the anchor button, clamped to viewport edges
-      left = anchorRect.left + anchorRect.width / 2 - dropW / 2;
-      left = Math.max(8, Math.min(left, window.innerWidth - dropW - 8));
-      top  = anchorRect.bottom + gap;
+      top = anchorRect.bottom + gap;
     }
 
     dropdown.style.position  = 'fixed';
