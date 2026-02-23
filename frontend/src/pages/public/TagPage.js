@@ -93,12 +93,15 @@ export default class TagPage extends Component {
     const breadcrumbs = data?.breadcrumbs || [];
     const lastCrumbIsCurrentTag =
       breadcrumbs.length > 0 && breadcrumbs[breadcrumbs.length - 1]?.slug === tag?.slug;
-    const breadcrumb = lastCrumbIsCurrentTag
+    const computedBreadcrumb = lastCrumbIsCurrentTag
       ? breadcrumbs.map(bc => ({ name: bc.name, slug: bc.slug }))
       : [
           ...breadcrumbs.map(bc => ({ name: bc.name, slug: bc.slug })),
           ...(tag ? [{ name: tag.name, slug: tag.slug }] : []),
         ];
+    const bcCacheKey = `bc:tag:${slug}`;
+    if (data) store.set(bcCacheKey, computedBreadcrumb);
+    const breadcrumb = computedBreadcrumb.length ? computedBreadcrumb : (store.get(bcCacheKey) || []);
 
     if (this._isPostView() && post) {
       // ── Post immersive view within tag context ──────────────────────────────
@@ -137,7 +140,7 @@ export default class TagPage extends Component {
 
       this.mountChild(PublicHeader, '#header-mount', {
         settings,
-        navTags,
+        navTags: this._isPostView() ? [] : navTags,
         currentTagSlug: slug,
         breadcrumb,
         currentPath: '',
