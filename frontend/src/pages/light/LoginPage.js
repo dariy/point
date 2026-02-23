@@ -27,11 +27,15 @@ export default class LoginPage extends Component {
           <div class="login-card">
 
             <div class="login-header">
-              <div class="login-branding">
-                <svg class="login-logo" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
-                </svg>
-                <span class="login-site-title">${title}</span>
+              <div class="site-branding">
+                <a href="/" class="site-title-link">
+                  <span class="site-title">
+                    <svg class="app-logo" viewBox="0 0 128 128" version="1.1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path class="logo-shape" d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
+                    </svg>
+                    ${title}
+                  </span>
+                </a>
               </div>
             </div>
 

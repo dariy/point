@@ -33,14 +33,27 @@
     margin-bottom: var(--spacing-md);
 }
 
-.login-branding {
+.login-header .site-branding {
+    display: inline-flex;
+    justify-content: center;
+}
+
+.login-header .site-title-link {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.login-header .site-title {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-sm);
     line-height: 1;
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
-.login-logo {
+.login-header .app-logo {
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;
@@ -48,15 +61,8 @@
     vertical-align: middle;
 }
 
-.login-logo path {
+.login-header .app-logo .logo-shape {
     fill: var(--text-primary);
-}
-
-.login-site-title {
-    font-size: var(--font-size-xl);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--text-primary);
 }
 
 /* ── Form fields ──────────────────────────────────────────────────── */

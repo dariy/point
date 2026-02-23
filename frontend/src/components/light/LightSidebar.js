@@ -40,10 +40,16 @@ export class LightSidebar extends Component {
     return `
       <aside class="light-sidebar">
         <div class="sidebar-header">
-          <a href="/light" class="app-logo-link" aria-label="Admin home">
-            <span class="app-logo" aria-hidden="true">P</span>
-            <span class="logo">Point</span>
-          </a>
+          <div class="site-branding">
+            <a href="/light" class="site-title-link" aria-label="Admin home">
+              <span class="site-title">
+                <svg class="app-logo" viewBox="0 0 128 128" version="1.1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path class="logo-shape" d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
+                </svg>
+                Point
+              </span>
+            </a>
+          </div>
           <a href="/" class="public-home-link" title="View public site" aria-label="View public site" data-external>↗</a>
         </div>
         <nav class="sidebar-nav" aria-label="Admin navigation">
