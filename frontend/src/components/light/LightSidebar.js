@@ -3,6 +3,7 @@
  *
  * Props:
  *   currentPath  {string}   Active route path
+ *   publicUrl    {string}   URL for the public-site link (defaults to '/')
  *   user         {object}   Current user (display_name, username)
  *   onLogout     {Function} Called when user clicks logout
  */
@@ -22,7 +23,7 @@ const NAV_ITEMS = [
 
 export class LightSidebar extends Component {
   render() {
-    const { currentPath = '', user = {} } = this.props;
+    const { currentPath = '', publicUrl = '/', user = {} } = this.props;
     const displayName = escapeHtml(user.display_name || user.username || 'Admin');
 
     const navItems = NAV_ITEMS.map(({ href, label, icon }) => {
@@ -50,7 +51,7 @@ export class LightSidebar extends Component {
               </span>
             </a>
           </div>
-          <a href="/" class="public-home-link" title="View public site" aria-label="View public site" data-external>↗</a>
+          <a href="${escapeHtml(publicUrl)}" class="public-home-link" title="View public site" aria-label="View public site" data-external>↗</a>
         </div>
         <nav class="sidebar-nav" aria-label="Admin navigation">
           <ul>${navItems}</ul>
