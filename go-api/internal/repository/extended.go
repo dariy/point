@@ -127,8 +127,8 @@ func (r *Repository) GetSystemStats(ctx context.Context) (SystemStats, error) {
 	const q = `
 SELECT
   (SELECT COUNT(*) FROM posts) AS post_count,
-  (SELECT COUNT(*) FROM posts WHERE status = 'published') AS published_count,
-  (SELECT COUNT(*) FROM posts WHERE status = 'draft') AS draft_count,
+  (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'published') AS published_count,
+  (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'draft') AS draft_count,
   (SELECT COUNT(*) FROM tags) AS tag_count,
   (SELECT COUNT(*) FROM media) AS media_count,
   (SELECT COALESCE(SUM(file_size), 0) FROM media) AS storage_bytes,
@@ -227,10 +227,11 @@ ORDER BY published_at DESC, created_at DESC`
 
 // GetPublicTagsForSitemap returns non-hidden tags with posts for the sitemap.
 func (r *Repository) GetPublicTagsForSitemap(ctx context.Context) ([]struct {
+	ID   int64
 	Slug string
 }, error) {
 	const q = `
-SELECT slug FROM tags
+SELECT id, slug FROM tags
 WHERE post_count > 0 AND is_hidden = 0
 ORDER BY name ASC`
 
@@ -240,10 +241,16 @@ ORDER BY name ASC`
 	}
 	defer rows.Close()
 
-	var items []struct{ Slug string }
+	var items []struct {
+		ID   int64
+		Slug string
+	}
 	for rows.Next() {
-		var item struct{ Slug string }
-		if err := rows.Scan(&item.Slug); err != nil {
+		var item struct {
+			ID   int64
+			Slug string
+		}
+		if err := rows.Scan(&item.ID, &item.Slug); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -471,13 +478,24 @@ WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
 	return items, rows.Err()
 }
 
-// UpsertTagLocation inserts or replaces a coordinate record for a tag.
+// UpsertTagLocation inserts or updates a coordinate record for a tag.
+// Uses UPDATE-then-INSERT to avoid dependency on a named UNIQUE constraint.
 func (r *Repository) UpsertTagLocation(ctx context.Context, tagID int64, lat, lon float64) error {
-	const q = `
-INSERT INTO tag_locations (tag_id, latitude, longitude)
-VALUES (?, ?, ?)
-ON CONFLICT(tag_id) DO UPDATE SET latitude = excluded.latitude, longitude = excluded.longitude`
-	_, err := r.db.ExecContext(ctx, q, tagID, lat, lon)
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE tag_locations SET latitude = ?, longitude = ? WHERE tag_id = ?`,
+		lat, lon, tagID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		_, err = r.db.ExecContext(ctx,
+			`INSERT INTO tag_locations (tag_id, latitude, longitude) VALUES (?, ?, ?)`,
+			tagID, lat, lon)
+	}
 	return err
 }
 

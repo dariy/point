@@ -122,6 +122,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
+	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
+	if effectivelyHidden[tag.ID] {
+		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	}
+
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	if page < 1 {
 		page = 1
@@ -140,8 +145,14 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
 
-	// Direct children for tag detail response
-	children, _ := h.tagService.GetTagChildren(ctx, tag.ID)
+	// Direct children for tag detail response (exclude effectively hidden ones)
+	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID)
+	children := make([]models.Tag, 0, len(allChildren))
+	for _, ch := range allChildren {
+		if !effectivelyHidden[ch.ID] {
+			children = append(children, ch)
+		}
+	}
 
 	// Hierarchical children for sub-nav
 	childItems, _ := h.tagService.GetHierarchicalNavTags(ctx, &tag.ID)
@@ -209,12 +220,20 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	}
 	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, allTagIDs)
 
+	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
+
 	// Filter hidden tags for public view
 	visible := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
-		if !t.IsHidden {
+		if !effectivelyHidden[t.ID] {
 			parents, _ := h.tagService.GetTagParents(ctx, t.ID)
-			children, _ := h.tagService.GetTagChildren(ctx, t.ID)
+			allChildren, _ := h.tagService.GetTagChildren(ctx, t.ID)
+			children := make([]models.Tag, 0, len(allChildren))
+			for _, ch := range allChildren {
+				if !effectivelyHidden[ch.ID] {
+					children = append(children, ch)
+				}
+			}
 			var loc *models.TagLocation
 			if l, ok := locMap[t.ID]; ok {
 				loc = &l
@@ -269,9 +288,11 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		yearMap, _ = h.repo.GetYearTagsByLocationTagIDs(ctx, tagIDs, yearTagID)
 	}
 
+	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
+
 	mapTags := []map[string]interface{}{}
 	for _, t := range allTags {
-		if t.IsHidden {
+		if effectivelyHiddenMap[t.ID] {
 			continue
 		}
 		loc, ok := locMap[t.ID]

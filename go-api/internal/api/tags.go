@@ -312,6 +312,12 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	}
 
 	publishedOnly := c.Get("user") == nil
+	if publishedOnly {
+		effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(c.Request().Context())
+		if effectivelyHidden[tag.ID] {
+			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		}
+	}
 
 	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, int32(page), int32(perPage), publishedOnly)
 	if err != nil {

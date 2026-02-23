@@ -15,13 +15,15 @@ type FeedsHandler struct {
 	repo            *repository.Repository
 	postService     *services.PostService
 	settingsService *services.SettingsService
+	tagService      *services.TagService
 }
 
-func NewFeedsHandler(repo *repository.Repository, postService *services.PostService, settingsService *services.SettingsService) *FeedsHandler {
+func NewFeedsHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService) *FeedsHandler {
 	return &FeedsHandler{
 		repo:            repo,
 		postService:     postService,
 		settingsService: settingsService,
+		tagService:      tagService,
 	}
 }
 
@@ -128,6 +130,7 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
 
 	var urls strings.Builder
 	writeURL := func(loc, lastmod, priority string) {
@@ -145,7 +148,9 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	}
 
 	for _, tag := range tags {
-		writeURL(base+"/tag/"+tag.Slug, today, "0.6")
+		if !effectivelyHidden[tag.ID] {
+			writeURL(base+"/tag/"+tag.Slug, today, "0.6")
+		}
 	}
 
 	xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
