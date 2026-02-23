@@ -152,7 +152,7 @@ export class PostContent extends Component {
 
   _initImmersive() {
     let index = 0;
-    const { prevPost = null, nextPost = null } = this.props;
+    const { prevPost = null, nextPost = null, tagSlug } = this.props;
 
     // ── Carousel helpers ──
     const carousel = this.$('#immersive-carousel');
@@ -160,7 +160,8 @@ export class PostContent extends Component {
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
 
     const goToPost = (post) => {
-      if (post) navigate(`/post/${post.slug}`);
+      if (!post) return;
+      navigate(tagSlug ? `/tag/${tagSlug}?slug=${post.slug}` : `/post/${post.slug}`);
     };
 
     const goTo = (i) => {
