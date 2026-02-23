@@ -28,6 +28,7 @@ var publicSettingKeys = map[string]bool{
 	"google_analytics_id": true,
 	"use_thumbnails":     true,
 	"about_post_id":      true,
+	"multi_user_mode":    true,
 }
 
 func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
