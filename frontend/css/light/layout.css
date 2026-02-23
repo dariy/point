@@ -145,21 +145,6 @@ h1 .app-logo {
     color: var(--sidebar-text);
 }
 
-.logout-btn {
-    display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    color: var(--sidebar-text);
-    font-size: var(--font-size-sm);
-    border: 1px solid var(--sidebar-border);
-    border-radius: var(--border-radius-sm);
-    transition: all var(--transition-fast);
-}
-
-.logout-btn:hover {
-    color: var(--sidebar-text-hover);
-    border-color: var(--sidebar-text);
-}
-
 /* Main Content */
 .light-main {
     flex: 1;

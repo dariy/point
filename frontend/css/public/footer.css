@@ -4,7 +4,7 @@
 .site-footer {
     background: var(--footer-bg);
     color: var(--footer-text);
-    padding: var(--spacing-lg) var(--spacing-md);
+    padding: var(--spacing-lg) 0;
     padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
     margin-top: auto;
     transition: background-color var(--transition-theme);
