@@ -179,9 +179,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		pages = 1
 	}
 
-	breadcrumbs := make([]map[string]interface{}, len(ancestors))
-	for i, a := range ancestors {
-		breadcrumbs[i] = tagToListItem(a)
+	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
+	for _, a := range ancestors {
+		if a.IncludeInBreadcrumbs {
+			breadcrumbs = append(breadcrumbs, tagToListItem(a))
+		}
 	}
 
 	parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
