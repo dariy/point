@@ -23,6 +23,10 @@ const SETTING_GROUPS = [
   {
     title: 'Storage & System',
     keys: ['storage_quota_mb', 'enable_map', 'enable_backup', 'backup_interval_hours']
+  },
+  {
+    title: 'Access',
+    keys: ['multi_user_mode']
   }
 ];
 
