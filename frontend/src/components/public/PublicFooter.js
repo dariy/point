@@ -54,7 +54,6 @@ export class PublicFooter extends Component {
               <a href="/light">&copy;</a>${author ? ` ${author}` : ''}
             </p>
             ${centerSlot}
-            ${actionsSlot}
           </div>
         </div>
       </footer>`;
