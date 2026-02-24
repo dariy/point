@@ -56,7 +56,7 @@ ssh "$PROD_HOST" "$DOCKER_CMD cp /tmp/$BACKUP_NAME $PROD_CONTAINER:/tmp/$BACKUP_
 
 # Step 3: Stop the application (keep container running)
 echo "[3/5] Stopping application..."
-ssh "$PROD_HOST" "$DOCKER_CMD exec $PROD_CONTAINER pkill -f uvicorn || true"
+ssh "$PROD_HOST" "$DOCKER_CMD exec $PROD_CONTAINER pkill -f api-bin || true"
 sleep 2
 
 # Step 4: Restore backup inside container
