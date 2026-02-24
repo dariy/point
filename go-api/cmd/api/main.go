@@ -120,14 +120,14 @@ func main() {
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(authService))
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(authService))
 
-	// ── Tag Routes ─────────────────────────────────────────────────────────────
+		// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")
-	tagsGroup.GET("", tagHandler.ListTags)
-	tagsGroup.GET("/cloud", tagHandler.GetTagCloud)
+	tagsGroup.GET("", tagHandler.ListTags, api.OptionalAuthMiddleware(authService))
+	tagsGroup.GET("/cloud", tagHandler.GetTagCloud, api.OptionalAuthMiddleware(authService))
 	tagsGroup.POST("", tagHandler.CreateTag, api.AuthMiddleware(authService))
 	tagsGroup.POST("/recalculate-counts", tagHandler.RecalculateCounts, api.AuthMiddleware(authService))
-	tagsGroup.GET("/id/:id", tagHandler.GetTagByID)
-	tagsGroup.GET("/slug/:slug", tagHandler.GetTagBySlug)
+	tagsGroup.GET("/id/:id", tagHandler.GetTagByID, api.OptionalAuthMiddleware(authService))
+	tagsGroup.GET("/slug/:slug", tagHandler.GetTagBySlug, api.OptionalAuthMiddleware(authService))
 	tagsGroup.GET("/slug/:slug/posts", tagHandler.GetPostsByTag, api.OptionalAuthMiddleware(authService))
 	tagsGroup.PUT("/:id", tagHandler.UpdateTag, api.AuthMiddleware(authService))
 	tagsGroup.DELETE("/:id", tagHandler.DeleteTag, api.AuthMiddleware(authService))
@@ -171,10 +171,10 @@ func main() {
 
 	// ── Page compound data Routes (for SPA) ────────────────────────────────────
 	pagesGroup := e.Group("/api/pages")
-	pagesGroup.GET("/home", pagesHandler.GetHomePage)
-	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage)
-	pagesGroup.GET("/tags", pagesHandler.GetTagsPage)
-	pagesGroup.GET("/map", pagesHandler.GetMapPage)
+	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(authService))
+	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(authService))
+	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(authService))
+	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(authService))
 
 	// ── Media static file serving ──────────────────────────────────────────────
 	mediaPath := filepath.Join(cfg.StoragePath, "media")

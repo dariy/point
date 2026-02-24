@@ -285,6 +285,7 @@ class PostService:
         author_id: int | None = None,
         featured_only: bool = False,
         include_drafts: bool = False,
+        include_hidden: bool = False,
         public_only: bool = False,
         search: str | None = None,
         tag_id: int | None = None,
@@ -299,6 +300,7 @@ class PostService:
             author_id: Filter by author
             featured_only: Only featured posts
             include_drafts: Include draft posts
+            include_hidden: Include hidden posts
             public_only: Exclude posts with hidden tags
             search: Optional search query for title
             tag_id: Optional tag ID to filter by
@@ -311,7 +313,12 @@ class PostService:
         # Apply filters
         if status:
             query = query.where(Post.status == status)
-        elif not include_drafts:
+        elif include_drafts:
+            # No status filter, include all
+            pass
+        elif include_hidden:
+            query = query.where(Post.status.in_([PostStatus.PUBLISHED, PostStatus.HIDDEN]))
+        else:
             query = query.where(Post.status == PostStatus.PUBLISHED)
 
         if author_id:

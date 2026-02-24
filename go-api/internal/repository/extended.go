@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"point-api/internal/models"
@@ -290,29 +291,34 @@ type PostNavItem struct {
 	Slug  string
 }
 
-// GetPostNavigation returns the previous and next published posts relative to
+// GetPostNavigation returns the previous and next posts relative to
 // the given post's published_at timestamp. Either pointer may be nil when there
 // is no adjacent post.
-func (r *Repository) GetPostNavigation(ctx context.Context, postID int64) (prev, next *PostNavItem, err error) {
-	const qDate = `SELECT published_at FROM posts WHERE id = ? AND status = 'PUBLISHED' LIMIT 1`
+func (r *Repository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error) {
+	const qDate = `SELECT published_at FROM posts WHERE id = ? LIMIT 1`
 	var publishedAt string
 	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&publishedAt); err != nil {
 		return nil, nil, err
 	}
 
-	const qPrev = `
+	statusFilter := "LOWER(status) = 'published'"
+	if !publicOnly {
+		statusFilter = "LOWER(status) IN ('published', 'hidden')"
+	}
+
+	qPrev := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE status = 'PUBLISHED' AND published_at < ? AND id != ?
-ORDER BY published_at DESC LIMIT 1`
+WHERE (%s) AND published_at < ? AND id != ?
+ORDER BY published_at DESC LIMIT 1`, statusFilter)
 	var p PostNavItem
 	if err2 := r.db.QueryRowContext(ctx, qPrev, publishedAt, postID).Scan(&p.ID, &p.Title, &p.Slug); err2 == nil {
 		prev = &p
 	}
 
-	const qNext = `
+	qNext := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE status = 'PUBLISHED' AND published_at > ? AND id != ?
-ORDER BY published_at ASC LIMIT 1`
+WHERE (%s) AND published_at > ? AND id != ?
+ORDER BY published_at ASC LIMIT 1`, statusFilter)
 	var n PostNavItem
 	if err2 := r.db.QueryRowContext(ctx, qNext, publishedAt, postID).Scan(&n.ID, &n.Title, &n.Slug); err2 == nil {
 		next = &n
@@ -545,9 +551,10 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 
 // PostTagInfo is a lightweight tag descriptor for embedding in post list responses.
 type PostTagInfo struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	IsHiddenPosts bool   `json:"is_hidden_posts"`
 }
 
 // GetTagsByPostIDs bulk-fetches tags for a list of post IDs.
@@ -569,7 +576,7 @@ func (r *Repository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map
 	}
 
 	q := `
-SELECT pt.post_id, t.id, t.name, t.slug
+SELECT pt.post_id, t.id, t.name, t.slug, t.is_hidden_posts
 FROM post_tags pt
 JOIN tags t ON t.id = pt.tag_id
 WHERE pt.post_id IN (` + placeholders + `)
@@ -584,7 +591,7 @@ ORDER BY t.name ASC`
 	for rows.Next() {
 		var postID int64
 		var tag PostTagInfo
-		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
+		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.IsHiddenPosts); err != nil {
 			return nil, err
 		}
 		result[postID] = append(result[postID], tag)
@@ -614,7 +621,7 @@ func (r *Repository) GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs 
 	args = append(args, yearParentID)
 
 	q := `
-SELECT DISTINCT pt1.tag_id as loc_tag_id, year_tag.id, year_tag.name, year_tag.slug
+SELECT DISTINCT pt1.tag_id as loc_tag_id, year_tag.id, year_tag.name, year_tag.slug, year_tag.is_hidden_posts
 FROM post_tags AS pt1
 JOIN post_tags AS pt2 ON pt1.post_id = pt2.post_id
 JOIN tags AS year_tag ON pt2.tag_id = year_tag.id
@@ -631,7 +638,7 @@ ORDER BY year_tag.name ASC`
 	for rows.Next() {
 		var locTagID int64
 		var tag PostTagInfo
-		if err := rows.Scan(&locTagID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
+		if err := rows.Scan(&locTagID, &tag.ID, &tag.Name, &tag.Slug, &tag.IsHiddenPosts); err != nil {
 			return nil, err
 		}
 		result[locTagID] = append(result[locTagID], tag)

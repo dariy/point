@@ -308,10 +308,13 @@ export class PostContent extends Component {
     const viewCount = showViewCount && post.view_count != null
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
 
+    const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
+    const lockIcon = isHidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+
     return `
-      <article class="post-single" itemscope itemtype="https://schema.org/BlogPosting">
+      <article class="post-single${isHidden ? ' is-hidden' : ''}" itemscope itemtype="https://schema.org/BlogPosting">
         <header class="post-header">
-          <h1 class="post-title" itemprop="headline">${escapeHtml(post.title)}</h1>
+          <h1 class="post-title" itemprop="headline">${lockIcon}${escapeHtml(post.title)}</h1>
           <div class="post-meta">
             <time class="post-date"
                   datetime="${escapeHtml(isoDatetime(post.published_at || post.created_at))}">
