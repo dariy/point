@@ -23,7 +23,7 @@ jobs:
         with:
           filters: |
             code:
-              - 'go-api/**'
+              - 'api/**'
               - 'frontend/**'
             infra:
               - 'build/**'
@@ -40,21 +40,21 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-          cache-dependency-path: go-api/go.sum
+          cache-dependency-path: api/go.sum
 
       - name: Build CSS bundles
         run: chmod +x build/build_css.sh && ./build/build_css.sh
 
       - name: Run tests
         run: |
-          cd go-api
+          cd api
           go test ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         if: github.event_name == 'push'
         with:
-          file: go-api/coverage.txt
+          file: api/coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -170,7 +170,7 @@ jobs:
           envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET,GEMINI_API_KEY
           script: |
             cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
-            
+
             # Create build and data directories if they don't exist (since strip_components: 0 is used)
             mkdir -p build data
 
@@ -192,7 +192,7 @@ jobs:
             printf '%s\n' "SECRET_KEY=${SECRET_KEY}" >> build/.env
             printf '%s\n' "SESSION_SECRET=${SESSION_SECRET}" >> build/.env
             printf '%s\n' "GEMINI_API_KEY=${GEMINI_API_KEY}" >> build/.env
-            
+
             chmod 600 build/.env
 
             # Login to GitHub Container Registry
