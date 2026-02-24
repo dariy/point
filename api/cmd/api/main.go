@@ -171,7 +171,7 @@ func main() {
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")
-	utilGroup.GET("/resolve-url", api.ResolveURL, api.AuthMiddleware(authService))
+	utilGroup.GET("/parse-maps-coords", api.ParseMapsCoords, api.AuthMiddleware(authService))
 
 	// ── Page compound data Routes (for SPA) ────────────────────────────────────
 	pagesGroup := e.Group("/api/pages")
