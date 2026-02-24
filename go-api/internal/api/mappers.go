@@ -43,9 +43,12 @@ func postTagsOrEmpty(tags []repository.PostTagInfo) []repository.PostTagInfo {
 }
 
 func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[string]interface{} {
-	tagNames := make([]string, 0, len(tags))
+	tagObjs := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
-		tagNames = append(tagNames, t.Name)
+		tagObjs = append(tagObjs, map[string]interface{}{
+			"name": t.Name,
+			"slug": t.Slug,
+		})
 	}
 
 	return map[string]interface{}{
@@ -66,14 +69,17 @@ func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[st
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,
 		"author_avatar":       nullString(p.AuthorAvatar),
-		"tags":                tagNames,
+		"tags":                tagObjs,
 	}
 }
 
 func postByTagToResponse(p models.GetPostsByTagRow, tags []repository.PostTagInfo) map[string]interface{} {
-	tagNames := make([]string, 0, len(tags))
+	tagObjs := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
-		tagNames = append(tagNames, t.Name)
+		tagObjs = append(tagObjs, map[string]interface{}{
+			"name": t.Name,
+			"slug": t.Slug,
+		})
 	}
 
 	return map[string]interface{}{
@@ -94,7 +100,7 @@ func postByTagToResponse(p models.GetPostsByTagRow, tags []repository.PostTagInf
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,
 		"author_avatar":       nullString(p.AuthorAvatar),
-		"tags":                tagNames,
+		"tags":                tagObjs,
 	}
 }
 
@@ -149,31 +155,51 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 }
 
 // injectPostHiddenFields adds is_hidden/is_hidden_by_tag to a post response map for admin users.
-func injectPostHiddenFields(resp map[string]interface{}, status string, tags []models.Tag) {
+// It also adds is_hidden to each tag object in resp["tags"].
+// effectiveHiddenPostsTagIDs is the set of tag IDs that effectively hide their posts (including inherited).
+func injectPostHiddenFields(resp map[string]interface{}, status string, tags []models.Tag, effectiveHiddenPostsTagIDs map[int64]bool) {
 	isHiddenByTag := false
 	for _, t := range tags {
-		if t.IsHiddenPosts {
+		if effectiveHiddenPostsTagIDs[t.ID] {
 			isHiddenByTag = true
 		}
 	}
 	resp["is_hidden"] = status == "hidden"
 	resp["is_hidden_by_tag"] = isHiddenByTag
+
+	if tagList, ok := resp["tags"].([]map[string]interface{}); ok {
+		for i, t := range tags {
+			if i < len(tagList) {
+				tagList[i]["is_hidden"] = t.IsHidden
+			}
+		}
+	}
 }
 
 // injectPostHiddenFieldsFromInfo adds is_hidden/is_hidden_by_tag for list endpoints using PostTagInfo.
-func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, tags []repository.PostTagInfo) {
+// It also adds is_hidden to each tag object in resp["tags"].
+func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, tags []repository.PostTagInfo, effectiveHiddenPostsTagIDs map[int64]bool) {
 	isHiddenByTag := false
 	for _, t := range tags {
-		if t.IsHiddenPosts {
+		if effectiveHiddenPostsTagIDs[t.ID] {
 			isHiddenByTag = true
 		}
 	}
 	resp["is_hidden"] = status == "hidden"
 	resp["is_hidden_by_tag"] = isHiddenByTag
+
+	if tagList, ok := resp["tags"].([]map[string]interface{}); ok {
+		for i, t := range tags {
+			if i < len(tagList) {
+				tagList[i]["is_hidden"] = t.IsHidden
+			}
+		}
+	}
 }
 
 // injectTagHiddenFields adds is_hidden/is_hidden_posts to a tag response map for admin users.
-func injectTagHiddenFields(resp map[string]interface{}, t models.Tag) {
+// is_hidden_posts reflects effective inheritance: true if the tag or any ancestor has is_hidden_posts=true.
+func injectTagHiddenFields(resp map[string]interface{}, t models.Tag, effectiveHiddenPostsTagIDs map[int64]bool) {
 	resp["is_hidden"] = t.IsHidden
-	resp["is_hidden_posts"] = t.IsHiddenPosts
+	resp["is_hidden_posts"] = t.IsHiddenPosts || effectiveHiddenPostsTagIDs[t.ID]
 }

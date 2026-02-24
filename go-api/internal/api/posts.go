@@ -17,20 +17,22 @@ type PostHandler struct {
 	postService     *services.PostService
 	settingsService *services.SettingsService
 	mediaService    *services.MediaService
+	tagService      *services.TagService
 }
 
-func NewPostHandler(postService *services.PostService, settingsService *services.SettingsService, mediaService *services.MediaService) *PostHandler {
+func NewPostHandler(postService *services.PostService, settingsService *services.SettingsService, mediaService *services.MediaService, tagService *services.TagService) *PostHandler {
 	return &PostHandler{
 		postService:     postService,
 		settingsService: settingsService,
 		mediaService:    mediaService,
+		tagService:      tagService,
 	}
 }
 
 func buildPostResponse(post models.GetPostRow, tags []models.Tag, htmlContent string) map[string]interface{} {
-	tagNames := make([]string, len(tags))
+	tagObjs := make([]map[string]interface{}, len(tags))
 	for i, t := range tags {
-		tagNames[i] = t.Name
+		tagObjs[i] = map[string]interface{}{"name": t.Name, "slug": t.Slug}
 	}
 	return map[string]interface{}{
 		"id":               post.ID,
@@ -48,7 +50,7 @@ func buildPostResponse(post models.GetPostRow, tags []models.Tag, htmlContent st
 		"thumbnail_path":   nullString(post.ThumbnailPath),
 		"meta_description": nullString(post.MetaDescription),
 		"formatter":        post.Formatter,
-		"tags":             tagNames,
+		"tags":             tagObjs,
 		"author": map[string]interface{}{
 			"id":           post.AuthorID,
 			"username":     post.AuthorUsername,
@@ -59,9 +61,9 @@ func buildPostResponse(post models.GetPostRow, tags []models.Tag, htmlContent st
 }
 
 func buildPostBySlugResponse(post models.GetPostBySlugRow, tags []models.Tag, htmlContent string) map[string]interface{} {
-	tagNames := make([]string, len(tags))
+	tagObjs := make([]map[string]interface{}, len(tags))
 	for i, t := range tags {
-		tagNames[i] = t.Name
+		tagObjs[i] = map[string]interface{}{"name": t.Name, "slug": t.Slug}
 	}
 	return map[string]interface{}{
 		"id":               post.ID,
@@ -79,7 +81,7 @@ func buildPostBySlugResponse(post models.GetPostBySlugRow, tags []models.Tag, ht
 		"thumbnail_path":   nullString(post.ThumbnailPath),
 		"meta_description": nullString(post.MetaDescription),
 		"formatter":        post.Formatter,
-		"tags":             tagNames,
+		"tags":             tagObjs,
 		"author": map[string]interface{}{
 			"id":           post.AuthorID,
 			"username":     post.AuthorUsername,
@@ -92,14 +94,16 @@ func buildPostBySlugResponse(post models.GetPostBySlugRow, tags []models.Tag, ht
 // getFullPostResponse fetches a post by ID with author and tags, returns the response map.
 // Always injects hidden fields since this is called only from auth-required handlers.
 func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[string]interface{}, error) {
-	post, err := h.postService.GetPostByID(c.Request().Context(), postID)
+	ctx := c.Request().Context()
+	post, err := h.postService.GetPostByID(ctx, postID)
 	if err != nil {
 		return nil, err
 	}
-	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), postID)
+	tags, _ := h.postService.GetTagsForPost(ctx, postID)
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 	resp := buildPostResponse(post, tags, htmlContent)
-	injectPostHiddenFields(resp, post.Status, tags)
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	return resp, nil
 }
 
@@ -137,11 +141,15 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	postTagsMap, _ := h.postService.GetTagsByPostIDs(c.Request().Context(), postIDs)
 
 	isAdmin := c.Get("user") != nil
+	var effectiveHiddenPosts map[int64]bool
+	if isAdmin {
+		effectiveHiddenPosts, _ = h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+	}
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
 		resp := postToResponse(p, postTagsMap[p.ID])
 		if isAdmin {
-			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID])
+			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}
 		postResponses[i] = resp
 	}
@@ -167,28 +175,30 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 	}
 
-	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
+	ctx := c.Request().Context()
+	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	if c.Get("user") == nil {
 		if post.Status == "draft" || post.Status == "hidden" {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
-			if t.IsHiddenPosts {
+			if effectiveHiddenPosts[t.ID] {
 				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 			}
 		}
 	}
 
 	if post.Status == "published" {
-		_ = h.postService.IncrementViewCount(c.Request().Context(), post.ID)
+		_ = h.postService.IncrementViewCount(ctx, post.ID)
 	}
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 
 	resp := buildPostBySlugResponse(post, tags, htmlContent)
 	if c.Get("user") != nil {
-		injectPostHiddenFields(resp, post.Status, tags)
+		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -204,14 +214,16 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 	}
 
-	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
+	ctx := c.Request().Context()
+	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	if c.Get("user") == nil {
 		if post.Status == "draft" || post.Status == "hidden" {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
-			if t.IsHiddenPosts {
+			if effectiveHiddenPosts[t.ID] {
 				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 			}
 		}
@@ -221,7 +233,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 
 	resp := buildPostResponse(post, tags, htmlContent)
 	if c.Get("user") != nil {
-		injectPostHiddenFields(resp, post.Status, tags)
+		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
