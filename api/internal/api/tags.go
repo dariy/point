@@ -324,6 +324,47 @@ func toServiceLocations(in []TagLocationInput) []services.TagLocationInput {
 	return out
 }
 
+type ReorderTagRequest struct {
+	TargetID *int64  `json:"target_id"`
+	Position  string  `json:"position"` // "before" or "after"
+	ParentID  *int64  `json:"parent_id"`
+}
+
+func (h *TagHandler) ReorderTag(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid tag id")
+	}
+	var req ReorderTagRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	if err := h.tagService.ReorderTag(c.Request().Context(), services.ReorderTagParams{
+		ID:       id,
+		TargetID: req.TargetID,
+		Position: req.Position,
+		ParentID: req.ParentID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *TagHandler) GeocodeTag(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid tag id")
+	}
+	lat, lon, err := h.tagService.GeocodeTag(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"latitude":  lat,
+		"longitude": lon,
+	})
+}
+
 func (h *TagHandler) RecalculateCounts(c echo.Context) error {
 	if err := h.tagService.UpdateAllPostCounts(c.Request().Context()); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
