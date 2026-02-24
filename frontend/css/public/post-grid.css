@@ -304,23 +304,6 @@
 }
 
 .post-card-tags .tag-link {
-    display: inline-flex;
-    align-items: center;
-    height: 2rem;
-    padding: 0 var(--spacing-md);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: var(--surface-card);
-    border: 1px solid var(--border-primary);
-    border-radius: 9999px;
-    text-decoration: none;
-    transition:
-        background-color var(--transition-theme),
-        color var(--transition-theme),
-        border-color var(--transition-theme),
-        transform 0.2s ease;
-    white-space: nowrap;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }

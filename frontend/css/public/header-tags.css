@@ -46,7 +46,7 @@
 }
 
 /* Filter buttons - both standalone and within lists */
-.header-tags-bar .filter-btn {
+.header-tags-bar .tag-link {
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
@@ -64,7 +64,7 @@
     text-rendering: optimizeLegibility;
 }
 
-.header-tags-bar .filter-btn:hover {
+.header-tags-bar .tag-link:hover {
     border-color: var(--color-primary);
 }
 
@@ -85,7 +85,7 @@
 }
 
 /* Override filter-btn styles when inside tag-group-header - use higher specificity */
-.header-tags-bar .tag-group-header>.filter-btn {
+.header-tags-bar .tag-group-header>.tag-link {
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -203,13 +203,13 @@
 }
 
 /* Ensure children in dropdowns have consistent sizing - use child combinator for specificity */
-.header-tags-bar .tag-children>.filter-btn,
-.header-tags-bar .tag-children>.tag-group .filter-btn {
+.header-tags-bar .tag-children>.tag-link,
+.header-tags-bar .tag-children>.tag-group .tag-link {
     height: 2rem;
     font-size: var(--font-size-sm);
 }
 
-.header-tags-bar .tag-children>.filter-btn {
+.header-tags-bar .tag-children>.tag-link {
     padding: 0 var(--spacing-md);
 }
 
@@ -234,20 +234,3 @@
     color: var(--text-inverted);
 }*/
 
-/* ===========================
-   Hidden Tag Indicator
-   =========================== */
-.header-tags-bar .hidden-tag {
-    opacity: 0.7;
-}
-
-.header-tags-bar .hidden-tag-icon {
-    display: inline-block;
-    margin-right: var(--spacing-xs);
-    vertical-align: middle;
-    opacity: 0.6;
-}
-
-.header-tags-bar .hidden-tag:hover .hidden-tag-icon {
-    opacity: 1;
-}

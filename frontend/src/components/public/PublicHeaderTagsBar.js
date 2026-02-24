@@ -9,7 +9,8 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { CHEVRON_SVG, LOCK_SVG } from '../../utils/icons.js';
+import { CHEVRON_SVG } from '../../utils/icons.js';
+import { renderTagLink } from '../../utils/tags.js';
 
 export class PublicHeaderTagsBar extends Component {
   render() {
@@ -35,31 +36,25 @@ export class PublicHeaderTagsBar extends Component {
    * @returns {string} HTML string
    */
   _renderTag(tag, currentTagSlug, isRoot = false) {
-    const activeClass = currentTagSlug === tag.slug ? ' active' : '';
     const relatedClass = tag.is_related ? ' is-related' : '';
     const rootClass = isRoot ? ' category-tag' : '';
     const hiddenClass = tag.is_hidden ? ' is-hidden' : '';
-    const lockIcon = tag.is_hidden ? LOCK_SVG : '';
 
     if (!tag.children?.length) {
-      return `
-        <a href="/tag/${escapeHtml(tag.slug)}"
-           class="filter-btn${rootClass}${relatedClass}${activeClass}${hiddenClass}">
-          ${lockIcon}${escapeHtml(tag.name)}
-        </a>`;
+      const extra = [isRoot ? 'category-tag' : '', tag.is_related ? 'is-related' : ''].filter(Boolean).join(' ');
+      return renderTagLink(tag, { active: currentTagSlug === tag.slug, extra });
     }
 
     const childHtml = tag.children
       .map((c) => this._renderTag(c, currentTagSlug, false))
       .join('');
 
+    const headerLink = renderTagLink(tag, { active: currentTagSlug === tag.slug });
+
     return `
       <div class="tag-group${rootClass}${relatedClass}${hiddenClass}" data-slug="${escapeHtml(tag.slug)}">
         <div class="tag-group-header">
-          <a href="/tag/${escapeHtml(tag.slug)}"
-             class="filter-btn${activeClass}${hiddenClass}">
-            ${lockIcon}${escapeHtml(tag.name)}
-          </a>
+          ${headerLink}
           <button class="toggle-children" type="button"
                   aria-label="Toggle ${escapeHtml(tag.name)} sub-tags"
                   aria-expanded="false">
