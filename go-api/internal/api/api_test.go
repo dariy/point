@@ -64,7 +64,7 @@ func TestFullWorkflow(t *testing.T) {
 	// Handlers
 	authH := NewAuthHandler(authSvc, cfg)
 	mediaH := NewMediaHandler(mediaSvc, settingsSvc)
-	postH := NewPostHandler(postSvc, settingsSvc, mediaSvc)
+	postH := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	tagH := NewTagHandler(tagSvc, settingsSvc)
 	systemH := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
 	pagesH := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
