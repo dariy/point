@@ -371,7 +371,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			years = []repository.PostTagInfo{}
 		}
 
-		mapTags = append(mapTags, map[string]interface{}{
+		entry := map[string]interface{}{
 			"name":       t.Name,
 			"slug":       t.Slug,
 			"post_count": t.PostCount,
@@ -379,7 +379,11 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			"lng":        loc.Longitude,
 			"type":       tagType,
 			"years":      years,
-		})
+		}
+		if !publicOnly {
+			entry["is_hidden"] = effectivelyHiddenMap[t.ID]
+		}
+		mapTags = append(mapTags, entry)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{"tags": mapTags})
