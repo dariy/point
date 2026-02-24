@@ -237,7 +237,7 @@ export default class MapPage extends Component {
             `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}</div>` +
             yearsHtml
           );
-          layer.on('click', () => layer.openPopup());
+          layer.on('click', (e) => layer.openPopup(e.latlng));
         },
       }).addTo(this._map);
     } catch {
