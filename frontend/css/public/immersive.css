@@ -199,52 +199,32 @@
     transition: opacity 0.3s ease;
 }
 
-.immersive-tags .post-tag {
+.immersive-tags .tag-link {
     background: var(--bg-overlay);
     color: rgba(255, 255, 255, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     pointer-events: auto;
-    transition:
-        background-color var(--transition-theme),
-        color var(--transition-theme),
-        border-color var(--transition-theme),
-        transform 0.2s ease;
 }
 
-.immersive-tags .post-tag:hover {
+.immersive-tags .tag-link:hover {
     background: var(--bg-overlay-hover);
     color: white;
     border-color: var(--color-primary);
     transform: translateY(-2px);
 }
 
-[data-theme="light"].immersive-layout .immersive-tags .post-tag {
+[data-theme="light"].immersive-layout .immersive-tags .tag-link {
     background: rgba(255, 255, 255, 0.85);
     color: var(--text-primary);
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-[data-theme="light"].immersive-layout .immersive-tags .post-tag:hover {
+[data-theme="light"].immersive-layout .immersive-tags .tag-link:hover {
     background: var(--bg-overlay-hover);
     color: white;
     border-color: var(--color-primary);
-}
-
-.immersive-tags .post-tag.hidden-posts-tag {
-    opacity: 0.7;
-}
-
-.immersive-tags .post-tag .hidden-tag-icon {
-    display: inline-block;
-    margin-right: var(--spacing-xs);
-    vertical-align: middle;
-    opacity: 0.6;
-}
-
-.immersive-tags .post-tag.hidden-posts-tag:hover .hidden-tag-icon {
-    opacity: 1;
 }
 
 video.immersive-bg-image {

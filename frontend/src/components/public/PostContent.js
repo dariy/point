@@ -17,6 +17,7 @@ import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDate, isoDatetime } from '../../utils/formatters.js'; // used in _renderNormal
 import { MediaLightbox } from './MediaLightbox.js';
 import { LOCK_SVG } from '../../utils/icons.js';
+import { renderTagLink } from '../../utils/tags.js';
 
 const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
 const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide works
@@ -300,11 +301,7 @@ export class PostContent extends Component {
   _renderNormal(post, prevPost, nextPost) {
     const { showViewCount = false } = this.props;
 
-    const tags = (post.tags || []).map((t) => {
-      const slug = typeof t === 'string' ? t : t.slug;
-      const name = typeof t === 'string' ? t : t.name;
-      return `<a href="/tag/${escapeHtml(slug)}" class="post-tag">${escapeHtml(name)}</a>`;
-    }).join('');
+    const tags = (post.tags || []).map((t) => renderTagLink(t)).join('');
 
     const viewCount = showViewCount && post.view_count != null
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';

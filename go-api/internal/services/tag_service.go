@@ -560,6 +560,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	if publicOnly {
 		effectivelyHidden = buildEffectivelyHiddenIDs(allTags, relationships)
 	}
+	effectivelyHiddenPosts := buildEffectivelyHiddenPostsTagIDs(allTags, relationships)
 
 	childrenOf := make(map[int64][]int64)
 	parentsOf := make(map[int64][]int64)
@@ -589,7 +590,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 			Name:          t.Name,
 			Slug:          t.Slug,
 			IsHidden:      t.IsHidden,
-			IsHiddenPosts: t.IsHiddenPosts,
+			IsHiddenPosts: effectivelyHiddenPosts[t.ID],
 			PostCount:     t.PostCount,
 			IsRelated:     t.ShowRelatedTagsAsChildren,
 			Children:      []NavTagNode{},
