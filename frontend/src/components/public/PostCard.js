@@ -20,7 +20,9 @@ export class PostCard extends Component {
     if (!post) return '';
 
     const hasThumbnail = !!post.thumbnail_path;
-    const cardClass = ['post-card', hasThumbnail ? 'has-image' : 'text-only'].join(' ');
+    const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
+    const cardClass = ['post-card', hasThumbnail ? 'has-image' : 'text-only', isHidden ? 'is-hidden' : ''].filter(Boolean).join(' ');
+    const lockIcon = isHidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
 
     const thumbnailStyle = hasThumbnail
       ? ` style="background-image: url('${safeUrl(post.thumbnail_path)}')"` : '';
@@ -41,7 +43,7 @@ export class PostCard extends Component {
         <div class="post-card-background"${thumbnailStyle}></div>
         <div class="post-card-content${hasThumbnail ? ' overlay' : ''}">
           ${featured}
-          <h2 class="post-card-title">${escapeHtml(post.title)}</h2>
+          <h2 class="post-card-title">${lockIcon}${escapeHtml(post.title)}</h2>
           ${post.excerpt ? `<p class="post-card-excerpt">${escapeHtml(post.excerpt)}</p>` : ''}
           <div class="post-card-meta">
             <time datetime="${escapeHtml(post.published_at || post.created_at || '')}"

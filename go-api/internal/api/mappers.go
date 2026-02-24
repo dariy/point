@@ -43,6 +43,11 @@ func postTagsOrEmpty(tags []repository.PostTagInfo) []repository.PostTagInfo {
 }
 
 func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[string]interface{} {
+	tagNames := make([]string, 0, len(tags))
+	for _, t := range tags {
+		tagNames = append(tagNames, t.Name)
+	}
+
 	return map[string]interface{}{
 		"id":                  p.ID,
 		"title":               p.Title,
@@ -61,11 +66,16 @@ func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[st
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,
 		"author_avatar":       nullString(p.AuthorAvatar),
-		"tags":                postTagsOrEmpty(tags),
+		"tags":                tagNames,
 	}
 }
 
 func postByTagToResponse(p models.GetPostsByTagRow, tags []repository.PostTagInfo) map[string]interface{} {
+	tagNames := make([]string, 0, len(tags))
+	for _, t := range tags {
+		tagNames = append(tagNames, t.Name)
+	}
+
 	return map[string]interface{}{
 		"id":                  p.ID,
 		"title":               p.Title,
@@ -84,7 +94,7 @@ func postByTagToResponse(p models.GetPostsByTagRow, tags []repository.PostTagInf
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,
 		"author_avatar":       nullString(p.AuthorAvatar),
-		"tags":                postTagsOrEmpty(tags),
+		"tags":                tagNames,
 	}
 }
 
@@ -94,8 +104,6 @@ func tagToListItem(t models.Tag) map[string]interface{} {
 		"name":                   t.Name,
 		"slug":                   t.Slug,
 		"is_important":           t.IsImportant,
-		"is_hidden":              t.IsHidden,
-		"is_hidden_posts":        t.IsHiddenPosts,
 		"include_in_breadcrumbs": t.IncludeInBreadcrumbs,
 		"sort_order":             nullInt64(t.SortOrder),
 		"post_count":             t.PostCount,
@@ -129,8 +137,6 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 		"custom_url":                    nullString(t.CustomUrl),
 		"is_important":                  t.IsImportant,
 		"is_featured":                   t.IsFeatured,
-		"is_hidden":                     t.IsHidden,
-		"is_hidden_posts":               t.IsHiddenPosts,
 		"include_in_breadcrumbs":        t.IncludeInBreadcrumbs,
 		"show_related_tags_as_children": t.ShowRelatedTagsAsChildren,
 		"sort_order":                    nullInt64(t.SortOrder),
@@ -140,4 +146,34 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 		"children":                      childItems,
 		"locations":                     tagLocationsResponse(loc),
 	}
+}
+
+// injectPostHiddenFields adds is_hidden/is_hidden_by_tag to a post response map for admin users.
+func injectPostHiddenFields(resp map[string]interface{}, status string, tags []models.Tag) {
+	isHiddenByTag := false
+	for _, t := range tags {
+		if t.IsHiddenPosts {
+			isHiddenByTag = true
+		}
+	}
+	resp["is_hidden"] = status == "hidden"
+	resp["is_hidden_by_tag"] = isHiddenByTag
+}
+
+// injectPostHiddenFieldsFromInfo adds is_hidden/is_hidden_by_tag for list endpoints using PostTagInfo.
+func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, tags []repository.PostTagInfo) {
+	isHiddenByTag := false
+	for _, t := range tags {
+		if t.IsHiddenPosts {
+			isHiddenByTag = true
+		}
+	}
+	resp["is_hidden"] = status == "hidden"
+	resp["is_hidden_by_tag"] = isHiddenByTag
+}
+
+// injectTagHiddenFields adds is_hidden/is_hidden_posts to a tag response map for admin users.
+func injectTagHiddenFields(resp map[string]interface{}, t models.Tag) {
+	resp["is_hidden"] = t.IsHidden
+	resp["is_hidden_posts"] = t.IsHiddenPosts
 }

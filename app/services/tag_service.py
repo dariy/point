@@ -642,12 +642,13 @@ class TagService:
         )
         return list(result.scalars().all())
 
-    async def get_tag_cloud(self, limit: int = 20, featured: bool = True) -> list[dict[str, Any]]:
+    async def get_tag_cloud(self, limit: int = 20, featured: bool = True, public_only: bool = True) -> list[dict[str, Any]]:
         """Get tags for tag cloud with weights."""
         query = select(Tag)
-        hidden_ids = await self.get_publicly_hidden_tag_ids()
-        if hidden_ids:
-            query = query.where(Tag.id.notin_(hidden_ids))
+        if public_only:
+            hidden_ids = await self.get_publicly_hidden_tag_ids()
+            if hidden_ids:
+                query = query.where(Tag.id.notin_(hidden_ids))
 
         query = query.where(Tag.post_count > 0)
         if featured:
@@ -669,6 +670,8 @@ class TagService:
                 "name": tag.name,
                 "slug": tag.slug,
                 "post_count": tag.post_count,
+                "is_hidden": tag.is_hidden,
+                "is_hidden_posts": tag.is_hidden_posts,
                 "weight": (tag.post_count - min_count) / count_range,
             }
             for tag in tag_list
@@ -680,6 +683,8 @@ class TagService:
         page: int = 1,
         per_page: int = 10,
         published_only: bool = True,
+        include_hidden: bool = False,
+        include_drafts: bool = False,
         recursive: bool = True,
         public_only: bool = False,
         offset: int | None = None,
@@ -699,7 +704,12 @@ class TagService:
             .distinct()
         )
 
-        if published_only:
+        if include_drafts:
+            # Include everything
+            pass
+        elif include_hidden:
+            query = query.where(Post.status.in_([PostStatus.PUBLISHED, PostStatus.HIDDEN]))
+        elif published_only:
             query = query.where(Post.status == PostStatus.PUBLISHED)
 
         if featured_only:
@@ -837,7 +847,7 @@ class TagService:
             .select_from(post_tags)
             .join(Post, Post.id == post_tags.c.post_id)
             .where(post_tags.c.tag_id.in_(tag_ids))
-            .where(Post.status == PostStatus.PUBLISHED)
+            .where(Post.status != PostStatus.DRAFT)
         )
         count = count_result.scalar() or 0
 

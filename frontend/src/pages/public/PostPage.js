@@ -64,7 +64,7 @@ export default class PostPage extends Component {
     const immersive = shouldUseImmersive(post);
 
     // Breadcrumb: show post title in header branding area
-    const breadcrumb = post ? [{ name: post.title }] : [];
+    const breadcrumb = post ? [{ name: post.title, is_hidden: post.is_hidden || post.is_hidden_by_tag }] : [];
 
     // In immersive mode suppress the tag filter bar; tags go in the footer instead
     this.mountChild(PublicHeader, '#header-mount', {

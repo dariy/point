@@ -25,11 +25,13 @@ export class TagCloud extends Component {
 
     const items = tags.map((t) => {
       const cls = weightClass(t.weight ?? 0);
+      const lockIcon = t.is_hidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+
       return `
         <li>
           <a href="/tag/${escapeHtml(t.slug)}" class="tag-cloud-link ${cls}"
              title="${escapeHtml(t.name)} (${escapeHtml(String(t.post_count))} posts)">
-            ${escapeHtml(t.name)}
+            ${lockIcon}${escapeHtml(t.name)}
             <span class="tag-cloud-count">${escapeHtml(String(t.post_count))}</span>
           </a>
         </li>`;

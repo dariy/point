@@ -62,6 +62,7 @@ type ListPostsParams struct {
 	Status        string
 	FeaturedOnly  bool
 	IncludeDrafts bool
+	IncludeHidden bool
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.ListPostsRow, int64, error) {
@@ -74,6 +75,7 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		IncludeDrafts:  p.IncludeDrafts,
 		Limit:          int64(p.PerPage),
 		Offset:         int64(offset),
+		IncludeHidden:  p.IncludeHidden,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -88,6 +90,7 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		Status:         p.Status,
 		FeaturedFilter: p.FeaturedOnly,
 		IncludeDrafts:  p.IncludeDrafts,
+		IncludeHidden:  p.IncludeHidden,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -172,6 +175,10 @@ func (s *PostService) IncrementViewCount(ctx context.Context, id int64) error {
 
 func (s *PostService) GetTagsForPost(ctx context.Context, postID int64) ([]models.Tag, error) {
 	return s.repo.GetTagsForPost(ctx, postID)
+}
+
+func (s *PostService) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]repository.PostTagInfo, error) {
+	return s.repo.GetTagsByPostIDs(ctx, postIDs)
 }
 
 type UpdatePostParams struct {
@@ -280,6 +287,6 @@ func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (
 
 // GetPostNavigation returns the previous and next published posts adjacent to
 // the given post, ordered by published_at.
-func (s *PostService) GetPostNavigation(ctx context.Context, postID int64) (prev, next *repository.PostNavItem, err error) {
-	return s.repo.GetPostNavigation(ctx, postID)
+func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error) {
+	return s.repo.GetPostNavigation(ctx, postID, publicOnly)
 }
