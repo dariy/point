@@ -10,6 +10,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { APP_LOGO_SVG } from '../../utils/icons.js';
 
 const NAV_ITEMS = [
   { href: '/light',          label: 'Dashboard',  icon: '⊞' },
@@ -44,9 +45,7 @@ export class LightSidebar extends Component {
           <div class="site-branding">
             <a href="/light" class="site-title-link" aria-label="Admin home">
               <span class="site-title">
-                <svg class="app-logo" viewBox="0 0 128 128" version="1.1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path class="logo-shape" d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
-                </svg>
+                ${APP_LOGO_SVG}
                 Point
               </span>
             </a>
