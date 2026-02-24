@@ -697,6 +697,61 @@ type MigrationRecord struct {
 
 // GetMigrations returns all rows from the migration_history table ordered by applied_at descending.
 // Returns an empty slice if the table does not exist yet.
+// GetChildrenOfTag returns direct children of parentID, ordered by sort_order ASC, name ASC.
+func (r *Repository) GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error) {
+	const q = `
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important,
+       t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs,
+       t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at
+FROM tags t
+JOIN tag_relationships tr ON tr.child_id = t.id
+WHERE tr.parent_id = ?
+ORDER BY t.sort_order ASC, t.name ASC`
+	return r.scanTags(ctx, q, parentID)
+}
+
+// GetRootTags returns tags that have no parents, ordered by sort_order ASC, name ASC.
+func (r *Repository) GetRootTags(ctx context.Context) ([]models.Tag, error) {
+	const q = `
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important,
+       t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs,
+       t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at
+FROM tags t
+LEFT JOIN tag_relationships tr ON tr.child_id = t.id
+WHERE tr.parent_id IS NULL
+ORDER BY t.sort_order ASC, t.name ASC`
+	return r.scanTags(ctx, q)
+}
+
+// UpdateTagSortOrder updates only the sort_order field for a tag.
+func (r *Repository) UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE tags SET sort_order = ? WHERE id = ?`, sortOrder, id)
+	return err
+}
+
+// scanTags is a helper that executes a query and scans the result rows into []models.Tag.
+func (r *Repository) scanTags(ctx context.Context, q string, args ...interface{}) ([]models.Tag, error) {
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []models.Tag
+	for rows.Next() {
+		var t models.Tag
+		if err := rows.Scan(
+			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
+			&t.IsImportant, &t.IsFeatured, &t.IsHidden, &t.IsHiddenPosts,
+			&t.IncludeInBreadcrumbs, &t.ShowRelatedTagsAsChildren,
+			&t.SortOrder, &t.PostCount, &t.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, t)
+	}
+	return items, rows.Err()
+}
+
 func (r *Repository) GetMigrations(ctx context.Context) ([]MigrationRecord, error) {
 	const q = `SELECT id, name, applied_at FROM migration_history ORDER BY applied_at DESC`
 	rows, err := r.db.QueryContext(ctx, q)

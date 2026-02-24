@@ -131,6 +131,8 @@ func main() {
 	tagsGroup.GET("/slug/:slug/posts", tagHandler.GetPostsByTag, api.OptionalAuthMiddleware(authService))
 	tagsGroup.PUT("/:id", tagHandler.UpdateTag, api.AuthMiddleware(authService))
 	tagsGroup.DELETE("/:id", tagHandler.DeleteTag, api.AuthMiddleware(authService))
+	tagsGroup.POST("/:id/reorder", tagHandler.ReorderTag, api.AuthMiddleware(authService))
+	tagsGroup.POST("/:id/geocode", tagHandler.GeocodeTag, api.AuthMiddleware(authService))
 
 	// ── Media Routes ───────────────────────────────────────────────────────────
 	mediaGroup := e.Group("/api/media")

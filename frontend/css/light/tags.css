@@ -140,36 +140,33 @@
 }
 
 /* Drag and Drop Styles */
-.tree-row[draggable="true"] {
+.tm-drag-handle {
+    flex-shrink: 0;
+    width: 16px;
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: -2px;
+    opacity: 0;
     cursor: grab;
+    user-select: none;
+    transition: opacity var(--transition-fast);
 }
 
-.tree-row.dragging {
+.tm-row:hover .tm-drag-handle {
+    opacity: 0.5;
+}
+
+.tm-row[draggable="true"] {
+    cursor: default;
+}
+
+.tm-row.tm-dragging {
     opacity: 0.4;
-    cursor: grabbing;
-    background-color: var(--bg-secondary);
 }
 
-/* Make-child drop target */
-.tree-row.drag-over {
-    background-color: rgba(37, 99, 235, 0.15) !important;
-    outline: 2px dashed var(--color-primary, #2563eb);
-    outline-offset: -2px;
-}
-
-.tree-view.drag-over {
-    outline: 2px dashed var(--color-primary, #2563eb);
-    outline-offset: 4px;
-    background-color: rgba(37, 99, 235, 0.05);
-}
-
-/* Reorder drop indicators */
-.tree-row {
-    position: relative;
-}
-
-.tree-row.drop-before::before,
-.tree-row.drop-after::after {
+/* Drop indicators */
+.tm-row.tm-drop-before::before,
+.tm-row.tm-drop-after::after {
     content: '';
     position: absolute;
     left: 0;
@@ -181,11 +178,11 @@
     pointer-events: none;
 }
 
-.tree-row.drop-before::before {
+.tm-row.tm-drop-before::before {
     top: -1px;
 }
 
-.tree-row.drop-after::after {
+.tm-row.tm-drop-after::after {
     bottom: -1px;
 }
 
@@ -423,27 +420,63 @@
 }
 
 /* ===========================
-   Tag editor modal — flags
+   Tag editor — collapsible sections
+   (Parents / Children)
    =========================== */
-.tag-flags-section {
+.tm-collapsible-section {
     border-top: 1px solid var(--border-primary);
-    padding-top: 16px;
     margin-top: 8px;
 }
 
-.tag-flags-title {
+.tm-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
     font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    margin-bottom: 12px;
+    text-align: left;
+    transition: color var(--transition-fast);
 }
 
+.tm-section-toggle:hover {
+    color: var(--text-primary);
+}
+
+.tm-section-arrow {
+    font-size: 8px;
+    flex-shrink: 0;
+    transition: transform var(--transition-fast);
+}
+
+.tm-section-count {
+    margin-left: auto;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--color-primary);
+    min-width: 16px;
+    text-align: right;
+}
+
+.tm-section-body {
+    padding-bottom: 8px;
+}
+
+/* ===========================
+   Tag editor modal — flags grid
+   =========================== */
 .tag-flags-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+    padding-top: 4px;
 }
 
 .flag-item {
