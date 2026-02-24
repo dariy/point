@@ -104,16 +104,44 @@
     z-index: 1000 !important;
 }
 
-/* Leaflet Popup Styling */
+/* Leaflet Popup Styling
+ * !important is required because leaflet.css is loaded dynamically and may
+ * override these rules depending on load order. */
 .leaflet-popup-content-wrapper {
-    background: var(--bg-primary, white);
-    color: var(--text-primary, black);
-    border-radius: 8px;
+    background: var(--surface-card, #fff) !important;
+    color: var(--text-primary, #0f172a) !important;
+    border-radius: 8px !important;
+    box-shadow: var(--shadow-md) !important;
     padding: 5px;
 }
 
 .leaflet-popup-tip {
-    background: var(--bg-primary, white);
+    background: var(--surface-card, #fff) !important;
+}
+
+.leaflet-popup-content a:not(.map-popup-tag) {
+    color: var(--color-primary, #2563eb);
+}
+
+.map-popup-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    margin-bottom: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary) !important;
+    background: var(--surface-hover);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.map-popup-tag:hover {
+    border-color: var(--color-primary, #2563eb);
+    color: var(--color-primary, #2563eb) !important;
 }
 
 .tag-popup-title {
@@ -136,22 +164,24 @@
 }
 
 .map-year-link {
+    display: inline-flex;
+    align-items: center;
+    height: 1.625rem;
+    padding: 0 0.5rem;
     font-size: 0.75rem;
-    background: var(--surface-hover, #f1f5f9);
+    font-weight: 500;
     color: var(--text-secondary);
-    padding: 2px 6px;
-    border-radius: 4px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
     text-decoration: none;
-    transition: all 0.2s ease;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .map-year-link:hover {
-    background: var(--color-primary, #3b82f6);
-    color: white !important;
-}
-
-[data-theme="dark"] .map-year-link {
-    background: var(--surface-active, #334155);
+    border-color: var(--color-primary, #2563eb);
+    color: var(--color-primary, #2563eb);
 }
 
 .leaflet-container {
