@@ -42,3 +42,4 @@ podman-compose -f docker-compose.dev.yml up -d
 # Clean up dangling images to save space (optional, but addresses user's concern)
 echo "Cleaning up dangling images..."
 podman image prune -f
+rm ../frontend/css/*.css # clear css artifacts for development builds
