@@ -77,13 +77,27 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 	postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
 
-	postResponses := make([]map[string]interface{}, len(posts))
-	for i, p := range posts {
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+
+	postResponses := make([]map[string]interface{}, 0, len(posts))
+	for _, p := range posts {
+		if publicOnly {
+			hidden := false
+			for _, t := range postTagsMap[p.ID] {
+				if effectiveHiddenPosts[t.ID] {
+					hidden = true
+					break
+				}
+			}
+			if hidden {
+				continue
+			}
+		}
 		resp := postToResponse(p, postTagsMap[p.ID])
 		if !publicOnly {
-			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID])
+			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}
-		postResponses[i] = resp
+		postResponses = append(postResponses, resp)
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -135,6 +149,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	if publicOnly && effectivelyHidden[tag.ID] {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
+	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	if page < 1 {
@@ -178,13 +193,25 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	}
 	tagPostTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, tagPostIDs)
 
-	postResponses := make([]map[string]interface{}, len(posts))
-	for i, p := range posts {
+	postResponses := make([]map[string]interface{}, 0, len(posts))
+	for _, p := range posts {
+		if publicOnly {
+			hidden := false
+			for _, t := range tagPostTagsMap[p.ID] {
+				if effectiveHiddenPostsTagIDs[t.ID] {
+					hidden = true
+					break
+				}
+			}
+			if hidden {
+				continue
+			}
+		}
 		resp := postByTagToResponse(p, tagPostTagsMap[p.ID])
 		if !publicOnly {
-			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID])
+			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
 		}
-		postResponses[i] = resp
+		postResponses = append(postResponses, resp)
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -207,7 +234,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	}
 	tagResp := tagToFullResponse(tag, parents, children, tagLoc)
 	if !publicOnly {
-		injectTagHiddenFields(tagResp, tag)
+		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"tag":         tagResp,
@@ -242,6 +269,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, allTagIDs)
 
 	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
+	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	// Filter hidden tags for public view
 	visible := make([]map[string]interface{}, 0, len(tags))
@@ -261,7 +289,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 			}
 			tagResp := tagToFullResponse(t, parents, children, loc)
 			if !publicOnly {
-				injectTagHiddenFields(tagResp, t)
+				injectTagHiddenFields(tagResp, t, effectiveHiddenPostsTagIDs)
 			}
 			visible = append(visible, tagResp)
 		}

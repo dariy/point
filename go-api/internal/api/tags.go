@@ -154,7 +154,8 @@ func (h *TagHandler) GetTagByID(c echo.Context) error {
 
 	resp := tagResponse(tag, parents, children, loc)
 	if !publicOnly {
-		injectTagHiddenFields(resp, tag)
+		effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+		injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -181,7 +182,8 @@ func (h *TagHandler) GetTagBySlug(c echo.Context) error {
 
 	resp := tagResponse(tag, parents, children, loc)
 	if !publicOnly {
-		injectTagHiddenFields(resp, tag)
+		effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+		injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -252,7 +254,8 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 	loc := h.tagLocation(c, tag.ID)
 
 	resp := tagResponse(tag, parents, children, loc)
-	injectTagHiddenFields(resp, tag)
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+	injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
 	return c.JSON(http.StatusCreated, resp)
 }
 
@@ -295,7 +298,8 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 	loc := h.tagLocation(c, tag.ID)
 
 	resp := tagResponse(tag, parents, children, loc)
-	injectTagHiddenFields(resp, tag)
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+	injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -346,11 +350,13 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	}
 
 	publicOnly := c.Get("user") == nil
-	if publicOnly {
-		effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(c.Request().Context())
-		if effectivelyHidden[tag.ID] {
-			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-		}
+	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(c.Request().Context())
+	if publicOnly && effectivelyHidden[tag.ID] {
+		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	}
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+	if publicOnly && effectiveHiddenPosts[tag.ID] {
+		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
 	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, int32(page), int32(perPage), publicOnly, false)
@@ -369,7 +375,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	for i, p := range posts {
 		resp := postByTagToResponse(p, postTagsMap[p.ID])
 		if isAdmin {
-			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID])
+			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}
 		postResponses[i] = resp
 	}

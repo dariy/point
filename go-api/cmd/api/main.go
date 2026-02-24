@@ -52,7 +52,7 @@ func main() {
 	// Handlers
 	authHandler := api.NewAuthHandler(authService, &cfg)
 	tagHandler := api.NewTagHandler(tagService, settingsService)
-	postHandler := api.NewPostHandler(postService, settingsService, mediaService)
+	postHandler := api.NewPostHandler(postService, settingsService, mediaService, tagService)
 	mediaHandler := api.NewMediaHandler(mediaService, settingsService)
 	settingsHandler := api.NewSettingsHandler(settingsService)
 	systemHandler := api.NewSystemHandler(repo, mediaService, settingsService, tagService, cfg.StoragePath)
