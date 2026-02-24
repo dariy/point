@@ -18,7 +18,7 @@ export DEV_BUILD_VERSION="dev-$(date +%Y%m%d-%H%M%S)"
 echo "Building with version: $DEV_BUILD_VERSION"
 
 # Build CSS bundles
-./build_css.sh
+../scripts/build-css.sh
 
 # Use podman as the standard container engine
 # Using build/Dockerfile which is a multi-stage build
@@ -36,8 +36,8 @@ podman build $PULL_FLAG \
     --cache-from point-builder \
     --build-arg BUILD_VERSION=$DEV_BUILD_VERSION \
     .. && \
-podman-compose -f docker-compose.dev.yml down -t 0 && \
-podman-compose -f docker-compose.dev.yml up -d
+podman-compose -f docker-compose.yml down -t 0 && \
+podman-compose -f docker-compose.yml up -d
 
 # Clean up dangling images to save space (optional, but addresses user's concern)
 echo "Cleaning up dangling images..."
