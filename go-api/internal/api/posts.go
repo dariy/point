@@ -90,6 +90,7 @@ func buildPostBySlugResponse(post models.GetPostBySlugRow, tags []models.Tag, ht
 }
 
 // getFullPostResponse fetches a post by ID with author and tags, returns the response map.
+// Always injects hidden fields since this is called only from auth-required handlers.
 func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[string]interface{}, error) {
 	post, err := h.postService.GetPostByID(c.Request().Context(), postID)
 	if err != nil {
@@ -97,7 +98,9 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	}
 	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), postID)
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	return buildPostResponse(post, tags, htmlContent), nil
+	resp := buildPostResponse(post, tags, htmlContent)
+	injectPostHiddenFields(resp, post.Status, tags)
+	return resp, nil
 }
 
 func (h *PostHandler) ListPosts(c echo.Context) error {
@@ -127,9 +130,20 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	postIDs := make([]int64, len(posts))
+	for i, p := range posts {
+		postIDs[i] = p.ID
+	}
+	postTagsMap, _ := h.postService.GetTagsByPostIDs(c.Request().Context(), postIDs)
+
+	isAdmin := c.Get("user") != nil
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postToResponse(p, nil)
+		resp := postToResponse(p, postTagsMap[p.ID])
+		if isAdmin {
+			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID])
+		}
+		postResponses[i] = resp
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -153,8 +167,17 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 	}
 
-	if post.Status == "draft" && c.Get("user") == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
+
+	if c.Get("user") == nil {
+		if post.Status == "draft" || post.Status == "hidden" {
+			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+		}
+		for _, t := range tags {
+			if t.IsHiddenPosts {
+				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+			}
+		}
 	}
 
 	if post.Status == "published" {
@@ -162,9 +185,12 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	}
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
 
-	return c.JSON(http.StatusOK, buildPostBySlugResponse(post, tags, htmlContent))
+	resp := buildPostBySlugResponse(post, tags, htmlContent)
+	if c.Get("user") != nil {
+		injectPostHiddenFields(resp, post.Status, tags)
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *PostHandler) GetPostByID(c echo.Context) error {
@@ -178,14 +204,26 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 	}
 
-	if post.Status == "draft" && c.Get("user") == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
+
+	if c.Get("user") == nil {
+		if post.Status == "draft" || post.Status == "hidden" {
+			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+		}
+		for _, t := range tags {
+			if t.IsHiddenPosts {
+				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
+			}
+		}
 	}
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
 
-	return c.JSON(http.StatusOK, buildPostResponse(post, tags, htmlContent))
+	resp := buildPostResponse(post, tags, htmlContent)
+	if c.Get("user") != nil {
+		injectPostHiddenFields(resp, post.Status, tags)
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 type CreatePostRequest struct {
@@ -445,7 +483,8 @@ func (h *PostHandler) GetPostNavigation(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
-	prev, next, err := h.postService.GetPostNavigation(c.Request().Context(), id)
+	publicOnly := c.Get("user") == nil
+	prev, next, err := h.postService.GetPostNavigation(c.Request().Context(), id, publicOnly)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "post not found")
 	}

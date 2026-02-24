@@ -125,6 +125,8 @@ def post_to_response(
         },
         "thumbnail_path": post.thumbnail_path,
         "tags": [tag.name for tag in post.tags],
+        "is_hidden": post.is_hidden(),
+        "is_hidden_by_tag": post.is_affected_by_hidden_tag(),
     }
 
     if include_content:

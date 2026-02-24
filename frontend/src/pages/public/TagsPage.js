@@ -82,8 +82,6 @@ export default class TagsPage extends Component {
    * @param {number}   depth
    */
   _renderTag(tag, allTags, depth) {
-    if (tag.is_hidden) return '';
-
     const children = (tag.children || [])
       .map((child) => allTags.find((t) => t.id === child.id))
       .filter(Boolean)
@@ -92,11 +90,13 @@ export default class TagsPage extends Component {
 
     const count = tag.post_count ? ` <span class="tag-count">(${escapeHtml(String(tag.post_count))})</span>` : '';
     const important = tag.is_important ? ' tag-important' : '';
+    const hiddenClass = tag.is_hidden ? ' tag-hidden' : '';
+    const lockIcon = tag.is_hidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
 
     return `
-      <li class="tags-tree-item${important}" role="treeitem" aria-expanded="${children ? 'true' : 'false'}">
+      <li class="tags-tree-item${important}${hiddenClass}" role="treeitem" aria-expanded="${children ? 'true' : 'false'}">
         <a href="/tag/${escapeHtml(tag.slug)}" class="tags-tree-link">
-          ${escapeHtml(tag.name)}${count}
+          ${lockIcon}${escapeHtml(tag.name)}${count}
         </a>
         ${tag.description ? `<p class="tags-tree-desc">${escapeHtml(tag.description)}</p>` : ''}
         ${children ? `<ul class="tags-tree-children" role="group">${children}</ul>` : ''}

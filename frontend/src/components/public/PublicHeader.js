@@ -34,15 +34,17 @@ export class PublicHeader extends Component {
         `<span class="breadcrumb-separator" aria-hidden="true">/</span>`,
         ...breadcrumb.map((crumb, i) => {
           const isLast = i === breadcrumb.length - 1;
+          const lockIcon = crumb.is_hidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+
           if (isLast) {
             if (crumb.slug) {
-              const href = crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/';
-              return `<a href="${href}" class="breadcrumb-current">${escapeHtml(crumb.name)}</a>`;
+              const href = `/tag/${escapeHtml(crumb.slug)}`;
+              return `<a href="${href}" class="breadcrumb-current">${lockIcon}${escapeHtml(crumb.name)}</a>`;
             }
-            return `<span class="breadcrumb-current">${escapeHtml(crumb.name)}</span>`;
+            return `<span class="breadcrumb-current">${lockIcon}${escapeHtml(crumb.name)}</span>`;
           }
           const href = crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/';
-          return `<a href="${href}" class="breadcrumb-link">${escapeHtml(crumb.name)}</a>
+          return `<a href="${href}" class="breadcrumb-link">${lockIcon}${escapeHtml(crumb.name)}</a>
                   <span class="breadcrumb-separator" aria-hidden="true">/</span>`;
         }),
       ].join('');

@@ -88,7 +88,11 @@ SELECT COUNT(*) FROM posts p
 WHERE 
     (CASE WHEN ?1 THEN LOWER(p.status) = LOWER(?2) ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE WHEN ?4 THEN 1=1 ELSE LOWER(p.status) = 'published' END)
+    AND (CASE 
+        WHEN ?4 THEN 1=1 
+        WHEN ?5 THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published' 
+    END)
 `
 
 type CountPostsParams struct {
@@ -96,6 +100,7 @@ type CountPostsParams struct {
 	Status         string      `json:"status"`
 	FeaturedFilter interface{} `json:"featured_filter"`
 	IncludeDrafts  interface{} `json:"include_drafts"`
+	IncludeHidden  interface{} `json:"include_hidden"`
 }
 
 func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, error) {
@@ -104,6 +109,7 @@ func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, 
 		arg.Status,
 		arg.FeaturedFilter,
 		arg.IncludeDrafts,
+		arg.IncludeHidden,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -114,16 +120,21 @@ const countPostsByTag = `-- name: CountPostsByTag :one
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE WHEN ?2 THEN LOWER(p.status) = 'published' ELSE 1=1 END)
+AND (CASE 
+    WHEN ?3 THEN 1=1
+    WHEN ?2 THEN LOWER(p.status) = 'published' 
+    ELSE LOWER(p.status) IN ('published', 'hidden') 
+END)
 `
 
 type CountPostsByTagParams struct {
 	TagID               int64       `json:"tag_id"`
 	PublishedOnlyFilter interface{} `json:"published_only_filter"`
+	IncludeDrafts       interface{} `json:"include_drafts"`
 }
 
 func (q *Queries) CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPostsByTag, arg.TagID, arg.PublishedOnlyFilter)
+	row := q.db.QueryRowContext(ctx, countPostsByTag, arg.TagID, arg.PublishedOnlyFilter, arg.IncludeDrafts)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -714,7 +725,11 @@ FROM posts p
 JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE WHEN ?2 THEN LOWER(p.status) = 'published' ELSE 1=1 END)
+AND (CASE 
+    WHEN ?5 THEN 1=1
+    WHEN ?2 THEN LOWER(p.status) = 'published' 
+    ELSE LOWER(p.status) IN ('published', 'hidden') 
+END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?3 OFFSET ?4
 `
@@ -724,6 +739,7 @@ type GetPostsByTagParams struct {
 	PublishedOnlyFilter interface{} `json:"published_only_filter"`
 	Limit               int64       `json:"limit"`
 	Offset              int64       `json:"offset"`
+	IncludeDrafts       interface{} `json:"include_drafts"`
 }
 
 type GetPostsByTagRow struct {
@@ -755,6 +771,7 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 		arg.PublishedOnlyFilter,
 		arg.Limit,
 		arg.Offset,
+		arg.IncludeDrafts,
 	)
 	if err != nil {
 		return nil, err
@@ -1236,7 +1253,11 @@ JOIN users u ON p.author_id = u.id
 WHERE 
     (CASE WHEN ?1 THEN LOWER(p.status) = LOWER(?2) ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE WHEN ?4 THEN 1=1 ELSE LOWER(p.status) = 'published' END)
+    AND (CASE 
+        WHEN ?4 THEN 1=1 
+        WHEN ?7 THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published' 
+    END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?5 OFFSET ?6
 `
@@ -1248,6 +1269,7 @@ type ListPostsParams struct {
 	IncludeDrafts  interface{} `json:"include_drafts"`
 	Limit          int64       `json:"limit"`
 	Offset         int64       `json:"offset"`
+	IncludeHidden  interface{} `json:"include_hidden"`
 }
 
 type ListPostsRow struct {
@@ -1281,6 +1303,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		arg.IncludeDrafts,
 		arg.Limit,
 		arg.Offset,
+		arg.IncludeHidden,
 	)
 	if err != nil {
 		return nil, err
@@ -1489,7 +1512,8 @@ const updateAllTagPostCounts = `-- name: UpdateAllTagPostCounts :exec
 UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
-    WHERE tag_id = tags.id
+    JOIN posts ON post_tags.post_id = posts.id
+    WHERE tag_id = tags.id AND LOWER(posts.status) != 'draft'
 )
 `
 
@@ -1738,7 +1762,8 @@ const updateTagPostCount = `-- name: UpdateTagPostCount :exec
 UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
-    WHERE tag_id = tags.id
+    JOIN posts ON post_tags.post_id = posts.id
+    WHERE tag_id = tags.id AND LOWER(posts.status) != 'draft'
 )
 WHERE id = ?
 `

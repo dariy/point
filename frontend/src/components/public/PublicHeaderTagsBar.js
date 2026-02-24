@@ -40,16 +40,17 @@ export class PublicHeaderTagsBar extends Component {
    * @returns {string} HTML string
    */
   _renderTag(tag, currentTagSlug, isRoot = false) {
-    if (tag.is_hidden) return '';
     const activeClass = currentTagSlug === tag.slug ? ' active' : '';
     const relatedClass = tag.is_related ? ' is-related' : '';
     const rootClass = isRoot ? ' category-tag' : '';
+    const hiddenClass = tag.is_hidden ? ' is-hidden' : '';
+    const lockIcon = tag.is_hidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
 
     if (!tag.children?.length) {
       return `
         <a href="/tag/${escapeHtml(tag.slug)}"
-           class="filter-btn${rootClass}${relatedClass}${activeClass}">
-          ${escapeHtml(tag.name)}
+           class="filter-btn${rootClass}${relatedClass}${activeClass}${hiddenClass}">
+          ${lockIcon}${escapeHtml(tag.name)}
         </a>`;
     }
 
@@ -58,11 +59,11 @@ export class PublicHeaderTagsBar extends Component {
       .join('');
 
     return `
-      <div class="tag-group${rootClass}${relatedClass}" data-slug="${escapeHtml(tag.slug)}">
+      <div class="tag-group${rootClass}${relatedClass}${hiddenClass}" data-slug="${escapeHtml(tag.slug)}">
         <div class="tag-group-header">
           <a href="/tag/${escapeHtml(tag.slug)}"
-             class="filter-btn${activeClass}">
-            ${escapeHtml(tag.name)}
+             class="filter-btn${activeClass}${hiddenClass}">
+            ${lockIcon}${escapeHtml(tag.name)}
           </a>
           <button class="toggle-children" type="button"
                   aria-label="Toggle ${escapeHtml(tag.name)} sub-tags"
