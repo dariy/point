@@ -58,13 +58,22 @@ export function deleteTag(id) {
 }
 
 /**
- * Reorder a tag relative to another.
+ * Reorder a tag relative to another within its sibling group.
  * @param {number} tagId
- * @param {{ target_id: number|null, position: 'before'|'after'|'inside', current_parent_id: number|null }} data
+ * @param {{ target_id: number|null, position: 'before'|'after', parent_id: number|null }} data
  * @returns {Promise<object>}
  */
 export function reorderTag(tagId, data) {
   return api.post(`/api/tags/${tagId}/reorder`, data);
+}
+
+/**
+ * Geocode a tag by its name via Nominatim and store the result.
+ * @param {number} id
+ * @returns {Promise<{ latitude: number, longitude: number }>}
+ */
+export function geocodeTag(id) {
+  return api.post(`/api/tags/${id}/geocode`);
 }
 
 /** Recalculate all tag post counts. */

@@ -301,6 +301,119 @@ func (s *TagService) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map
 	return s.repo.GetTagsByPostIDs(ctx, postIDs)
 }
 
+// ReorderTagParams describes a drag-and-drop reorder request.
+type ReorderTagParams struct {
+	ID       int64
+	TargetID *int64  // nil = move to end
+	Position string  // "before" or "after"
+	ParentID *int64  // nil = root level
+}
+
+// ReorderTag reorders a tag within its sibling group by updating sort_order values.
+func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
+	if p.Position != "before" && p.Position != "after" {
+		return fmt.Errorf("position must be 'before' or 'after'")
+	}
+
+	var siblings []models.Tag
+	var err error
+	if p.ParentID != nil {
+		siblings, err = s.repo.GetChildrenOfTag(ctx, *p.ParentID)
+	} else {
+		siblings, err = s.repo.GetRootTags(ctx)
+	}
+	if err != nil {
+		return err
+	}
+
+	// Find and remove the dragged tag.
+	draggedIdx := -1
+	for i, t := range siblings {
+		if t.ID == p.ID {
+			draggedIdx = i
+			break
+		}
+	}
+	if draggedIdx == -1 {
+		return fmt.Errorf("tag %d not found among siblings", p.ID)
+	}
+	dragged := siblings[draggedIdx]
+	siblings = append(siblings[:draggedIdx], siblings[draggedIdx+1:]...)
+
+	// Find insert position relative to target.
+	insertAt := len(siblings)
+	if p.TargetID != nil {
+		for i, t := range siblings {
+			if t.ID == *p.TargetID {
+				if p.Position == "before" {
+					insertAt = i
+				} else {
+					insertAt = i + 1
+				}
+				break
+			}
+		}
+	}
+
+	// Insert dragged at the new position.
+	siblings = append(siblings, models.Tag{})
+	copy(siblings[insertAt+1:], siblings[insertAt:])
+	siblings[insertAt] = dragged
+
+	// Assign sort_orders 10, 20, 30, ...
+	for i, t := range siblings {
+		if err := s.repo.UpdateTagSortOrder(ctx, t.ID, int32((i+1)*10)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GeocodeTag looks up coordinates for a tag by name via Nominatim and stores them.
+func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64, error) {
+	tag, err := s.repo.GetTag(ctx, id)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	params := url.Values{
+		"q":      {tag.Name},
+		"format": {"json"},
+		"limit":  {"1"},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://nominatim.openstreetmap.org/search?"+params.Encode(), nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	req.Header.Set("User-Agent", "Point/1.0.0")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var results []struct {
+		Lat string `json:"lat"`
+		Lon string `json:"lon"`
+	}
+	if err := json.Unmarshal(body, &results); err != nil || len(results) == 0 {
+		return 0, 0, fmt.Errorf("no geocoding results for %q", tag.Name)
+	}
+
+	var lat, lon float64
+	fmt.Sscanf(results[0].Lat, "%f", &lat)
+	fmt.Sscanf(results[0].Lon, "%f", &lon)
+
+	if err := s.repo.UpsertTagLocation(ctx, id, lat, lon); err != nil {
+		return 0, 0, err
+	}
+	return lat, lon, nil
+}
+
 // UpdateMissingCoords geocodes city/country descendant tags that have no coordinates.
 // Uses the Nominatim OpenStreetMap API (1 req/sec rate limit).
 func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interface{}, error) {
