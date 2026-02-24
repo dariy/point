@@ -7,11 +7,13 @@
 import { api } from './client.js';
 
 /**
- * Resolve a short URL (maps.app.goo.gl) to its final destination.
+ * Extract coordinates from a maps URL or coordinate string.
+ * Accepts Google/Apple Maps URLs (including short links) and degree notation
+ * strings such as "45.50777° N, 73.55446° W".
  *
- * @param {string} url  Short URL to resolve
- * @returns {Promise<{ url: string }>}
+ * @param {string} q  URL or coordinate string
+ * @returns {Promise<{ lat: number, lng: number }>}
  */
-export function resolveUrl(url) {
-  return api.get('/api/util/resolve-url', { url });
+export function parseMapsCoords(q) {
+  return api.get('/api/util/parse-maps-coords', { q });
 }

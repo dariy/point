@@ -10,7 +10,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { listTags, createTag, updateTag, deleteTag, recalculateCounts } from '../../api/tags.js';
-import { resolveUrl } from '../../api/util.js';
+import { parseMapsCoords } from '../../api/util.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -354,9 +354,9 @@ export default class TagsManagerPage extends Component {
       '      <div class="tag-coords-section">',
       '        <div class="tag-flags-title">\ud83d\udccd Map Coordinates</div>',
       '        <div class="form-group">',
-      '          <label>Google Maps URL</label>',
+      '          <label>Maps URL or coordinates</label>',
       '          <div class="input-with-btn">',
-      '            <input type="url" id="gmaps-url-input" placeholder="Paste a Google Maps link to auto-fill coordinates">',
+      '            <input type="text" id="gmaps-url-input" placeholder="Paste a Maps link or &quot;45.507° N, 73.554° W&quot;">',
       '            <button type="button" id="gmaps-parse-btn" class="btn btn-secondary">Parse</button>',
       '          </div>',
       '        </div>',
@@ -421,24 +421,16 @@ export default class TagsManagerPage extends Component {
         parseBtn.textContent = locked ? 'Parsing…' : 'Parse';
       };
 
-      let urlToParse = raw;
-      if (raw.includes('maps.app.goo.gl')) {
-        setLocked(true);
-        try {
-          const result = await resolveUrl(raw);
-          urlToParse = result.url;
-        } catch {
-          setLocked(false);
-          return;
-        }
-        setLocked(false);
-      }
-
-      const coords = this._parseMapsUrl(urlToParse);
-      if (coords) {
+      setLocked(true);
+      try {
+        const coords = await parseMapsCoords(raw);
         latInput.value = coords.lat;
         lngInput.value = coords.lng;
         urlInput.value = '';
+      } catch {
+        // leave fields as-is on error
+      } finally {
+        setLocked(false);
       }
     });
 
@@ -485,29 +477,6 @@ export default class TagsManagerPage extends Component {
       '  </span>',
       '</label>',
     ].join('\n');
-  }
-
-  /**
-   * Extract {lat, lng} from a Google Maps URL, or return null if unrecognised.
-   *
-   * Handles the most common URL formats:
-   *   - https://maps.google.com/?q=48.8566,2.3522
-   *   - https://www.google.com/maps/@48.8566,2.3522,15z
-   *   - https://www.google.com/maps/place/.../@48.8566,2.3522,...
-   *   - https://maps.app.goo.gl/... (short links — user must expand first)
-   */
-  _parseMapsUrl(url) {
-    if (!url) return null;
-    // @lat,lng pattern (maps/@..., /place/.../@...)
-    const atMatch = url.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-    if (atMatch) return { lat: atMatch[1], lng: atMatch[2] };
-    // ?q=lat,lng or &q=lat,lng
-    const qMatch = url.match(/[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-    if (qMatch) return { lat: qMatch[1], lng: qMatch[2] };
-    // ll=lat,lng
-    const llMatch = url.match(/[?&]ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-    if (llMatch) return { lat: llMatch[1], lng: llMatch[2] };
-    return null;
   }
 
   _closeModal() {
