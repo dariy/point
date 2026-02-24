@@ -393,6 +393,20 @@
     padding-right: var(--spacing-md) !important;
 }
 
+.input-with-btn {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.input-with-btn input {
+    flex: 1;
+    min-width: 0;
+}
+
+.input-with-btn .btn {
+    flex-shrink: 0;
+}
+
 .required-mark {
     color: var(--color-danger);
 }
