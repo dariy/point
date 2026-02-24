@@ -13,6 +13,7 @@ import { Component } from '../Component.js';
 import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { APP_LOGO_SVG, MAP_SVG, LOCK_SVG } from '../../utils/icons.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -34,7 +35,7 @@ export class PublicHeader extends Component {
         `<span class="breadcrumb-separator" aria-hidden="true">/</span>`,
         ...breadcrumb.map((crumb, i) => {
           const isLast = i === breadcrumb.length - 1;
-          const lockIcon = crumb.is_hidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+          const lockIcon = crumb.is_hidden ? LOCK_SVG : '';
 
           if (isLast) {
             if (crumb.slug) {
@@ -59,9 +60,7 @@ export class PublicHeader extends Component {
             <div class="site-branding">
               <a href="/" class="site-title-link">
                 <h1 class="site-title">
-                  <svg class="app-logo" viewBox="0 0 128 128" version="1.1" xmlns="http://www.w3.org/2000/svg">
-                      <path class="logo-shape" d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
-                  </svg>
+                  ${APP_LOGO_SVG}
                   ${title}
                 </h1>
                 ${!breadcrumb.length && subtitle ? `<p class="site-subtitle">${subtitle}</p>` : ''}
@@ -75,12 +74,7 @@ export class PublicHeader extends Component {
           <nav class="site-nav" aria-label="Main navigation">
             <a href="/map" class="nav-link${currentPath === '/map' ? ' active' : ''}"
                aria-label="Map view">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
-                      fill="currentColor"/>
-                <circle cx="12" cy="9" r="2.5" fill="white"/>
-              </svg>
+              ${MAP_SVG}
             </a>
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
               <span class="icon-sun" aria-hidden="true">☀</span>

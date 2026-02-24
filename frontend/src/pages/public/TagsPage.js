@@ -11,6 +11,7 @@ import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { getTagsPage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { LOCK_SVG } from '../../utils/icons.js';
 
 export default class TagsPage extends Component {
   constructor(container, props = {}) {
@@ -91,7 +92,7 @@ export default class TagsPage extends Component {
     const count = tag.post_count ? ` <span class="tag-count">(${escapeHtml(String(tag.post_count))})</span>` : '';
     const important = tag.is_important ? ' tag-important' : '';
     const hiddenClass = tag.is_hidden ? ' tag-hidden' : '';
-    const lockIcon = tag.is_hidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+    const lockIcon = tag.is_hidden ? LOCK_SVG : '';
 
     return `
       <li class="tags-tree-item${important}${hiddenClass}" role="treeitem" aria-expanded="${children ? 'true' : 'false'}">

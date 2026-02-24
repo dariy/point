@@ -8,6 +8,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { LOCK_SVG } from '../../utils/icons.js';
 
 /** Map weight (0–1) to a CSS font-size step. */
 function weightClass(weight) {
@@ -25,7 +26,7 @@ export class TagCloud extends Component {
 
     const items = tags.map((t) => {
       const cls = weightClass(t.weight ?? 0);
-      const lockIcon = t.is_hidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+      const lockIcon = t.is_hidden ? LOCK_SVG : '';
 
       return `
         <li>
