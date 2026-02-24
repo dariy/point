@@ -169,6 +169,10 @@ func main() {
 	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(authService))
 	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(authService))
 
+	// ── Utility Routes ─────────────────────────────────────────────────────────
+	utilGroup := e.Group("/api/util")
+	utilGroup.GET("/resolve-url", api.ResolveURL, api.AuthMiddleware(authService))
+
 	// ── Page compound data Routes (for SPA) ────────────────────────────────────
 	pagesGroup := e.Group("/api/pages")
 	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(authService))

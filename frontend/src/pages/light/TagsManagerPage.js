@@ -10,6 +10,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { listTags, createTag, updateTag, deleteTag, recalculateCounts } from '../../api/tags.js';
+import { resolveUrl } from '../../api/util.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -352,14 +353,21 @@ export default class TagsManagerPage extends Component {
       // Map coordinates
       '      <div class="tag-coords-section">',
       '        <div class="tag-flags-title">\ud83d\udccd Map Coordinates</div>',
+      '        <div class="form-group">',
+      '          <label>Google Maps URL</label>',
+      '          <div class="input-with-btn">',
+      '            <input type="url" id="gmaps-url-input" placeholder="Paste a Google Maps link to auto-fill coordinates">',
+      '            <button type="button" id="gmaps-parse-btn" class="btn btn-secondary">Parse</button>',
+      '          </div>',
+      '        </div>',
       '        <div class="form-row">',
       '          <div class="form-group">',
       '            <label>Latitude</label>',
-      `            <input type="number" name="latitude" step="any" value="${existingLoc ? existingLoc.latitude : ''}" placeholder="e.g. 48.8566">`,
+      `            <input type="number" name="latitude" id="coord-lat" step="any" value="${existingLoc ? existingLoc.latitude : ''}" placeholder="e.g. 48.8566">`,
       '          </div>',
       '          <div class="form-group">',
       '            <label>Longitude</label>',
-      `            <input type="number" name="longitude" step="any" value="${existingLoc ? existingLoc.longitude : ''}" placeholder="e.g. 2.3522">`,
+      `            <input type="number" name="longitude" id="coord-lng" step="any" value="${existingLoc ? existingLoc.longitude : ''}" placeholder="e.g. 2.3522">`,
       '          </div>',
       '        </div>',
       '        <p class="form-hint">Leave blank to remove coordinates. Used to place this tag on the map page.</p>',
@@ -394,6 +402,45 @@ export default class TagsManagerPage extends Component {
       if (!slugInput.dataset.manual) slugInput.value = this._slugify(nameInput.value);
     });
     slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
+
+    // Parse Google Maps URL → fill lat/lng fields.
+    modal.querySelector('#gmaps-parse-btn').addEventListener('click', async () => {
+      const urlInput = modal.querySelector('#gmaps-url-input');
+      const latInput = modal.querySelector('#coord-lat');
+      const lngInput = modal.querySelector('#coord-lng');
+      const parseBtn = modal.querySelector('#gmaps-parse-btn');
+
+      const raw = urlInput.value.trim();
+      if (!raw) return;
+
+      const setLocked = locked => {
+        urlInput.disabled = locked;
+        latInput.disabled = locked;
+        lngInput.disabled = locked;
+        parseBtn.disabled = locked;
+        parseBtn.textContent = locked ? 'Parsing…' : 'Parse';
+      };
+
+      let urlToParse = raw;
+      if (raw.includes('maps.app.goo.gl')) {
+        setLocked(true);
+        try {
+          const result = await resolveUrl(raw);
+          urlToParse = result.url;
+        } catch {
+          setLocked(false);
+          return;
+        }
+        setLocked(false);
+      }
+
+      const coords = this._parseMapsUrl(urlToParse);
+      if (coords) {
+        latInput.value = coords.lat;
+        lngInput.value = coords.lng;
+        urlInput.value = '';
+      }
+    });
 
     modal.querySelector('.modal-close').addEventListener('click',    () => this._closeModal());
     modal.querySelector('#modal-cancel-btn').addEventListener('click', () => this._closeModal());
@@ -438,6 +485,29 @@ export default class TagsManagerPage extends Component {
       '  </span>',
       '</label>',
     ].join('\n');
+  }
+
+  /**
+   * Extract {lat, lng} from a Google Maps URL, or return null if unrecognised.
+   *
+   * Handles the most common URL formats:
+   *   - https://maps.google.com/?q=48.8566,2.3522
+   *   - https://www.google.com/maps/@48.8566,2.3522,15z
+   *   - https://www.google.com/maps/place/.../@48.8566,2.3522,...
+   *   - https://maps.app.goo.gl/... (short links — user must expand first)
+   */
+  _parseMapsUrl(url) {
+    if (!url) return null;
+    // @lat,lng pattern (maps/@..., /place/.../@...)
+    const atMatch = url.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (atMatch) return { lat: atMatch[1], lng: atMatch[2] };
+    // ?q=lat,lng or &q=lat,lng
+    const qMatch = url.match(/[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (qMatch) return { lat: qMatch[1], lng: qMatch[2] };
+    // ll=lat,lng
+    const llMatch = url.match(/[?&]ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (llMatch) return { lat: llMatch[1], lng: llMatch[2] };
+    return null;
   }
 
   _closeModal() {
