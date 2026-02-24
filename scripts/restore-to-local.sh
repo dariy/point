@@ -73,7 +73,7 @@ $DOCKER_CMD cp "$BACKUP_FILE" $LOCAL_CONTAINER:/tmp/$BACKUP_NAME
 
 # Step 3: Stop the application (keep container running)
 echo "[3/5] Stopping application..."
-$DOCKER_CMD exec $LOCAL_CONTAINER pkill -f uvicorn || true
+$DOCKER_CMD exec $LOCAL_CONTAINER pkill -f api-bin || true
 sleep 2
 
 # Step 4: Restore backup inside container
