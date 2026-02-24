@@ -26,7 +26,7 @@ This document outlines the strategy for migrating the backend API of the "Point"
 The Go project will follow a clean architecture/service-based approach similar to the current structure:
 
 ```text
-go-api/
+api/
 ├── cmd/api/            # Entry point
 ├── internal/
 │   ├── api/            # Handlers (Routes)
@@ -99,6 +99,6 @@ go-api/
 | **Auth Interoperability** | Ensure JWT signing keys and algorithms match exactly during transition. |
 
 ## 6. Immediate Next Steps
-1. Create a `go-api` directory.
+1. Create a `api` directory.
 2. Define the database schema in SQL (derived from SQLAlchemy models).
 3. Initialize `sqlc` and generate initial boilerplate.

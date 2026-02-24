@@ -1,6 +1,6 @@
 # Go API Migration: Remaining Implementation Tasks
 
-To achieve full parity with the Python API and enable a seamless frontend switch, the following tasks must be completed in the `go-api/` implementation.
+To achieve full parity with the Python API and enable a seamless frontend switch, the following tasks must be completed in the `api/` implementation.
 
 ## 1. Core API Parity
 - [ ] **Error Response Format:** Implement a custom `echo.HTTPErrorHandler` that returns JSON in the format `{"detail": "error message"}` to match the frontend's expectations.
@@ -21,7 +21,7 @@ To achieve full parity with the Python API and enable a seamless frontend switch
 - [ ] **File-Based Caching:** Implement a caching layer for feeds (`/feed.xml`, `/sitemap.xml`) and potentially homepage data to improve performance, similar to Python's `CacheService`.
 
 ## 4. Infrastructure & Validation
-- [ ] **Database Migration Compatibility:** Verify that the Go migration system (`go-api/migrations/`) is fully compatible with the current database schema and can handle future updates without data loss.
+- [ ] **Database Migration Compatibility:** Verify that the Go migration system (`api/migrations/`) is fully compatible with the current database schema and can handle future updates without data loss.
 - [ ] **End-to-End Verification:** Perform a full sweep of all API endpoints using a tool like `bruno` or `curl` to ensure request/response parity for all edge cases.
 - [ ] **Frontend Environment Config:** Update the frontend build/deployment configuration to point to the Go API port (default 8080) instead of the Python API port (default 8000).
 

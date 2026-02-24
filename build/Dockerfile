@@ -7,12 +7,12 @@ RUN apk add --no-cache gcc musl-dev git
 WORKDIR /app
 
 # Copy go mod and sum files
-COPY go-api/go.mod go-api/go.sum ./
+COPY api/go.mod api/go.sum ./
 # Use cache mount for go modules
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # Copy the source code
-COPY go-api/ ./
+COPY api/ ./
 
 # Build the application - stripped and optimized
 # Using cache mounts for both modules and build cache
