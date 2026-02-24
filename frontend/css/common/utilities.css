@@ -172,3 +172,15 @@
     border: 1px solid rgba(239, 68, 68, 0.25);
     border-radius: var(--border-radius);
 }
+
+/* ===========================
+   Locker Icon (Hidden Content Indicator)
+   =========================== */
+.locker-icon {
+    display: inline-block;
+    margin-right: 0.35em;
+    font-size: 0.9em;
+    vertical-align: middle;
+    filter: grayscale(1) opacity(0.7);
+    cursor: help;
+}

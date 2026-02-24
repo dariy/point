@@ -91,15 +91,18 @@ async def list_tags(
         default=False, description="Only return important tags"
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> dict[str, Any]:
     """List all tags.
 
     This endpoint is publicly accessible.
     """
     service = TagService(db)
+    public_only = current_user is None
     tags = await service.list_tags(
         include_empty=include_empty,
         important_only=important_only,
+        public_only=public_only,
     )
 
     return {
@@ -116,13 +119,15 @@ async def list_tags(
 async def get_tag_cloud(
     limit: int = Query(default=20, ge=1, le=100, description="Maximum number of tags"),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get tags for tag cloud display with weights.
 
     This endpoint is publicly accessible.
     """
     service = TagService(db)
-    cloud = await service.get_tag_cloud(limit=limit)
+    public_only = current_user is None
+    cloud = await service.get_tag_cloud(limit=limit, public_only=public_only)
 
     return {"tags": cloud}
 
@@ -330,12 +335,14 @@ async def get_posts_by_tag(
     effective_per_page = per_page or int(all_settings.get("posts_per_page", 10))
 
     published_only = current_user is None
+    public_only = current_user is None
     posts, total = await service.get_posts_by_tag(
         tag_id=tag.id,
         page=page,
         per_page=effective_per_page,
         published_only=published_only,
         recursive=True,
+        public_only=public_only,
     )
 
     pages = math.ceil(total / effective_per_page) if total > 0 else 1

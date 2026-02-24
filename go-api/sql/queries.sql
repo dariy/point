@@ -111,7 +111,11 @@ JOIN users u ON p.author_id = u.id
 WHERE 
     (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE WHEN sqlc.arg('include_drafts') THEN 1=1 ELSE p.status = 'published' END)
+    AND (CASE 
+        WHEN sqlc.arg('include_drafts') THEN 1=1 
+        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
+        ELSE p.status = 'published' 
+    END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?;
 
@@ -120,7 +124,11 @@ SELECT COUNT(*) FROM posts p
 WHERE 
     (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE WHEN sqlc.arg('include_drafts') THEN 1=1 ELSE p.status = 'published' END);
+    AND (CASE 
+        WHEN sqlc.arg('include_drafts') THEN 1=1 
+        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
+        ELSE p.status = 'published' 
+    END);
 
 -- name: CreatePost :one
 INSERT INTO posts (
@@ -220,7 +228,11 @@ FROM posts p
 JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
-AND (CASE WHEN sqlc.arg('published_only_filter') THEN p.status = 'published' ELSE 1=1 END)
+AND (CASE 
+    WHEN sqlc.arg('include_drafts') THEN 1=1
+    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published' 
+    ELSE p.status IN ('published', 'hidden') 
+END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?;
 
@@ -228,13 +240,18 @@ LIMIT ? OFFSET ?;
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
-AND (CASE WHEN sqlc.arg('published_only_filter') THEN p.status = 'published' ELSE 1=1 END);
+AND (CASE 
+    WHEN sqlc.arg('include_drafts') THEN 1=1
+    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published' 
+    ELSE p.status IN ('published', 'hidden') 
+END);
 
 -- name: UpdateTagPostCount :exec
 UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
-    WHERE tag_id = tags.id
+    JOIN posts ON post_tags.post_id = posts.id
+    WHERE tag_id = tags.id AND posts.status != 'draft'
 )
 WHERE id = ?;
 
@@ -242,7 +259,8 @@ WHERE id = ?;
 UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
-    WHERE tag_id = tags.id
+    JOIN posts ON post_tags.post_id = posts.id
+    WHERE tag_id = tags.id AND posts.status != 'draft'
 );
 
 -- HIERARCHY

@@ -42,6 +42,8 @@ var pagePublicSettingKeys = map[string]bool{
 // GetHomePage returns all data needed to render the public homepage.
 func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	ctx := c.Request().Context()
+	user := c.Get("user")
+	publicOnly := user == nil
 
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	if page < 1 {
@@ -62,7 +64,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	posts, total, err := h.postService.ListPosts(ctx, services.ListPostsParams{
 		Page:          int32(page),
 		PerPage:       int32(perPage),
-		IncludeDrafts: false,
+		IncludeDrafts: false, // Never show drafts in public part
+		IncludeHidden: !publicOnly,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -76,7 +79,11 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postToResponse(p, postTagsMap[p.ID])
+		resp := postToResponse(p, postTagsMap[p.ID])
+		if !publicOnly {
+			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID])
+		}
+		postResponses[i] = resp
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -85,10 +92,10 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	// Tag cloud (non-empty tags)
-	cloud, _ := h.tagService.GetTagCloud(ctx, 20)
+	cloud, _ := h.tagService.GetTagCloud(ctx, 20, publicOnly)
 
 	// Hierarchical tags for nav (root tags with nested children)
-	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil)
+	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly)
 
 	// Public settings subset
 	publicSettings := make(map[string]string)
@@ -116,6 +123,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	ctx := c.Request().Context()
 	slug := c.Param("slug")
+	user := c.Get("user")
+	publicOnly := user == nil
 
 	tag, err := h.tagService.GetTagBySlug(ctx, slug)
 	if err != nil {
@@ -123,7 +132,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	}
 
 	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
-	if effectivelyHidden[tag.ID] {
+	if publicOnly && effectivelyHidden[tag.ID] {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
@@ -146,19 +155,19 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
 
 	// Direct children for tag detail response (exclude effectively hidden ones)
-	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID)
+	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly)
 	children := make([]models.Tag, 0, len(allChildren))
 	for _, ch := range allChildren {
-		if !effectivelyHidden[ch.ID] {
+		if !publicOnly || !effectivelyHidden[ch.ID] {
 			children = append(children, ch)
 		}
 	}
 
 	// Hierarchical children for sub-nav
-	childItems, _ := h.tagService.GetHierarchicalNavTags(ctx, &tag.ID)
+	childItems, _ := h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly)
 
 	// Posts for this tag (published only)
-	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), true)
+	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -171,7 +180,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postByTagToResponse(p, tagPostTagsMap[p.ID])
+		resp := postByTagToResponse(p, tagPostTagsMap[p.ID])
+		if !publicOnly {
+			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID])
+		}
+		postResponses[i] = resp
 	}
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -192,8 +205,12 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	if l, ok := locMap[tag.ID]; ok {
 		tagLoc = &l
 	}
+	tagResp := tagToFullResponse(tag, parents, children, tagLoc)
+	if !publicOnly {
+		injectTagHiddenFields(tagResp, tag)
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"tag":         tagToFullResponse(tag, parents, children, tagLoc),
+		"tag":         tagResp,
 		"breadcrumbs": breadcrumbs,
 		"posts":       postResponses,
 		"pagination": map[string]interface{}{
@@ -209,8 +226,10 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 // GetTagsPage returns data for the tags directory page.
 func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	ctx := c.Request().Context()
+	user := c.Get("user")
+	publicOnly := user == nil
 
-	tags, err := h.tagService.ListTags(ctx, false, false)
+	tags, err := h.tagService.ListTags(ctx, false, false, publicOnly)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -227,12 +246,12 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	// Filter hidden tags for public view
 	visible := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
-		if !effectivelyHidden[t.ID] {
+		if !publicOnly || !effectivelyHidden[t.ID] {
 			parents, _ := h.tagService.GetTagParents(ctx, t.ID)
-			allChildren, _ := h.tagService.GetTagChildren(ctx, t.ID)
+			allChildren, _ := h.tagService.GetTagChildren(ctx, t.ID, publicOnly)
 			children := make([]models.Tag, 0, len(allChildren))
 			for _, ch := range allChildren {
-				if !effectivelyHidden[ch.ID] {
+				if !publicOnly || !effectivelyHidden[ch.ID] {
 					children = append(children, ch)
 				}
 			}
@@ -240,7 +259,11 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 			if l, ok := locMap[t.ID]; ok {
 				loc = &l
 			}
-			visible = append(visible, tagToFullResponse(t, parents, children, loc))
+			tagResp := tagToFullResponse(t, parents, children, loc)
+			if !publicOnly {
+				injectTagHiddenFields(tagResp, t)
+			}
+			visible = append(visible, tagResp)
 		}
 	}
 
@@ -254,6 +277,8 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 // (country / city / other) for the public /map page.
 func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	ctx := c.Request().Context()
+	user := c.Get("user")
+	publicOnly := user == nil
 
 	// Find the base category tags used to determine type.
 	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities", "year", "years"})
@@ -278,7 +303,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		}
 	}
 
-	allTags, _ := h.tagService.ListTags(ctx, true, false)
+	allTags, _ := h.tagService.ListTags(ctx, true, false, publicOnly)
 	tagIDs := make([]int64, len(allTags))
 	for i, t := range allTags {
 		tagIDs[i] = t.ID
@@ -294,7 +319,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	mapTags := []map[string]interface{}{}
 	for _, t := range allTags {
-		if effectivelyHiddenMap[t.ID] {
+		if publicOnly && effectivelyHiddenMap[t.ID] {
 			continue
 		}
 		loc, ok := locMap[t.ID]

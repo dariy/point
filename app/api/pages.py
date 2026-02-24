@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.posts import post_to_response
 from app.api.tags import tag_to_list_item, tag_to_response
 from app.database import get_db
+from app.dependencies import get_current_user
+from app.models.user import User
 from app.services.post_service import PostService
 from app.services.settings_service import SettingsService
 from app.services.tag_service import TagService
@@ -23,11 +25,11 @@ from app.services.tag_service import TagService
 router = APIRouter(prefix="/api/pages", tags=["Pages"])
 
 
-async def _get_nav_tags(tag_service: TagService) -> list[dict[str, Any]]:
+async def _get_nav_tags(tag_service: TagService, public_only: bool = True) -> list[dict[str, Any]]:
     """Return root-level tags with their visible hierarchy for the header nav bar."""
     hierarchy = await tag_service.get_hierarchical_tags(
         include_empty=False,
-        public_only=True,
+        public_only=public_only,
     )
 
     def format_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -37,6 +39,7 @@ async def _get_nav_tags(tag_service: TagService) -> list[dict[str, Any]]:
             "name": tag.name,
             "slug": tag.slug,
             "is_hidden": tag.is_hidden,
+            "is_hidden_posts": tag.is_hidden_posts,
             "post_count": tag.post_count,
             "is_related": item.get("is_related", False),
             "children": [format_item(c) for c in item.get("children", [])],
@@ -71,6 +74,7 @@ async def get_home_page(
     page: int = Query(default=1, ge=1, description="Page number"),
     per_page: int | None = Query(default=None, ge=1, le=100, description="Posts per page (defaults to posts_per_page setting)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get homepage data: published posts + tag cloud + public settings."""
     post_service = PostService(db)
@@ -79,6 +83,7 @@ async def get_home_page(
 
     all_settings = await settings_service.get_all_settings()
     effective_per_page = per_page or int(all_settings.get("posts_per_page", 10))
+    public_only = current_user is None
 
     # Fetch the single latest featured post (the hero, always pinned to the top).
     hero_posts, _ = await post_service.list_posts(
@@ -86,7 +91,8 @@ async def get_home_page(
         per_page=1,
         featured_only=True,
         include_drafts=False,
-        public_only=True,
+        include_hidden=!public_only,
+        public_only=public_only,
     )
     hero = hero_posts[0] if hero_posts else None
 
@@ -95,15 +101,16 @@ async def get_home_page(
         page=page,
         per_page=effective_per_page,
         include_drafts=False,
-        public_only=True,
+        include_hidden=!public_only,
+        public_only=public_only,
         exclude_post_id=hero.id if hero else None,
     )
 
     # Page 1 prepends the hero; other pages are regular posts only.
     posts = ([hero] + regular_posts) if (hero and page == 1) else regular_posts
 
-    tag_cloud = await tag_service.get_tag_cloud(limit=20, featured=True)
-    nav_tags = await _get_nav_tags(tag_service)
+    tag_cloud = await tag_service.get_tag_cloud(limit=20, featured=True, public_only=public_only)
+    nav_tags = await _get_nav_tags(tag_service, public_only=public_only)
 
     public_settings = {k: v for k, v in all_settings.items() if k in _PUBLIC_SETTING_KEYS}
 
@@ -138,6 +145,7 @@ async def get_tag_page(
     page: int = Query(default=1, ge=1, description="Page number"),
     per_page: int | None = Query(default=None, ge=1, le=100, description="Posts per page (defaults to posts_per_page setting)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get tag archive page data: tag + ancestor breadcrumbs + posts."""
     tag_service = TagService(db)
@@ -146,6 +154,7 @@ async def get_tag_page(
 
     all_settings = await settings_service.get_all_settings()
     effective_per_page = per_page or int(all_settings.get("posts_per_page", 10))
+    public_only = current_user is None
 
     tag = await tag_service.get_tag_by_slug(slug)
     if not tag:
@@ -160,7 +169,7 @@ async def get_tag_page(
     # Get children hierarchy for this tag to use as sub-filters
     tag_hierarchy = await tag_service.get_hierarchical_tags(
         include_empty=False,
-        public_only=True,
+        public_only=public_only,
         root_id=tag.id,
     )
 
@@ -174,6 +183,7 @@ async def get_tag_page(
                 "name": t.name,
                 "slug": t.slug,
                 "is_hidden": t.is_hidden,
+                "is_hidden_posts": t.is_hidden_posts,
                 "post_count": t.post_count,
                 "is_related": item.get("is_related", False),
                 "children": [format_item(c) for c in item.get("children", [])],
@@ -184,9 +194,10 @@ async def get_tag_page(
         tag_id=tag.id,
         page=page,
         per_page=effective_per_page,
-        published_only=True,
+        published_only=public_only,
+        include_hidden=!public_only,
         recursive=True,
-        public_only=True,
+        public_only=public_only,
     )
 
     pages = math.ceil(total / effective_per_page) if total > 0 else 1
@@ -217,13 +228,15 @@ async def get_tag_page(
 )
 async def get_tags_page(
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get tags directory page data: full tag list with hierarchy info."""
     tag_service = TagService(db)
+    public_only = current_user is None
 
     tags = await tag_service.list_tags(
         include_empty=False,
-        public_only=True,
+        public_only=public_only,
     )
 
     return {
