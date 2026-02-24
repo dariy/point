@@ -13,6 +13,7 @@
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
+import { LOCK_SVG } from '../../utils/icons.js';
 
 export class PostCard extends Component {
   render() {
@@ -22,7 +23,7 @@ export class PostCard extends Component {
     const hasThumbnail = !!post.thumbnail_path;
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     const cardClass = ['post-card', hasThumbnail ? 'has-image' : 'text-only', isHidden ? 'is-hidden' : ''].filter(Boolean).join(' ');
-    const lockIcon = isHidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+    const lockIcon = isHidden ? LOCK_SVG : '';
 
     const thumbnailStyle = hasThumbnail
       ? ` style="background-image: url('${safeUrl(post.thumbnail_path)}')"` : '';
