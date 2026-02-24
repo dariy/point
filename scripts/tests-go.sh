@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 # Go Test runner script
 # Usage: ./scripts/tests-go.sh [package_path] [options]
-# If no parameter provided, tests all Go packages in go-api/
+# If no parameter provided, tests all Go packages in api/
 # Options:
 #   --html          Generate HTML coverage report
 #   --verbose       Show verbose output
@@ -19,7 +19,7 @@ if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
     shift
 fi
 
-# If TARGET doesn't start with . or /, assume it's relative to go-api
+# If TARGET doesn't start with . or /, assume it's relative to api
 if [[ ! "$TARGET" =~ ^(\.|\/) ]]; then
     TARGET="./$TARGET"
 fi
@@ -61,15 +61,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Ensure we are in the go-api directory for running tests
-cd go-api
+# Ensure we are in the api directory for running tests
+cd api
 
 # Run go test with coverage
 if [ "$REPORT_TYPE" = "html" ]; then
     go test $VERBOSE $RACE $SHORT $BENCH -coverprofile=coverage.out "$TARGET"
     go tool cover -html=coverage.out -o coverage.html
     echo ""
-    echo "HTML coverage report generated in go-api/coverage.html"
+    echo "HTML coverage report generated in api/coverage.html"
     # Also show summary in terminal
     go tool cover -func=coverage.out
 else
