@@ -19,10 +19,10 @@ if docker ps --format '{{.Names}}' | grep -q "point-prod"; then
     CONTAINER_NAME="point-prod"
 elif docker ps --format '{{.Names}}' | grep -q "point"; then
     CONTAINER_NAME="point"
-elif docker ps --format '{{.Names}}' | grep -q "photo-blog-prod"; then
-    CONTAINER_NAME="photo-blog-prod"
-elif docker ps --format '{{.Names}}' | grep -q "photo-blog"; then
-    CONTAINER_NAME="photo-blog"
+elif docker ps --format '{{.Names}}' | grep -q "point-prod"; then
+    CONTAINER_NAME="point-prod"
+elif docker ps --format '{{.Names}}' | grep -q "point"; then
+    CONTAINER_NAME="point"
 else
     echo "❌ No running point container found"
     echo ""

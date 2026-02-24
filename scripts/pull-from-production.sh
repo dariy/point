@@ -34,7 +34,7 @@ if [ -z "$LATEST_BACKUP" ]; then
     echo "Attempting to create a new backup on production..."
 
     # Trigger backup creation on production
-    ssh "$PROD_HOST" "$DOCKER_CMD exec $PROD_CONTAINER python -c 'from app.services.backup_service import BackupService; print(BackupService().create_backup())'" || {
+    ssh "$PROD_HOST" "$DOCKER_CMD exec $PROD_CONTAINER /app/scripts/backup.sh" || {
         echo "Failed to create backup. Please check the production server."
         exit 1
     }
