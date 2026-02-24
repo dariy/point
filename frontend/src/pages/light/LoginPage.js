@@ -8,6 +8,7 @@ import { Component } from '../../components/Component.js';
 import { login } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { navigate, escapeHtml } from '../../utils/helpers.js';
+import { APP_LOGO_SVG } from '../../utils/icons.js';
 
 export default class LoginPage extends Component {
   constructor(container, props = {}) {
@@ -30,9 +31,7 @@ export default class LoginPage extends Component {
               <div class="site-branding">
                 <a href="/" class="site-title-link">
                   <span class="site-title">
-                    <svg class="app-logo" viewBox="0 0 128 128" version="1.1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                      <path class="logo-shape" d="M128 64A64 64 0 1 0 64 128h48a16 16 0 0 0 16-16V64z" />
-                    </svg>
+                    ${APP_LOGO_SVG}
                     ${title}
                   </span>
                 </a>

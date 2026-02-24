@@ -16,6 +16,7 @@ import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDate, isoDatetime } from '../../utils/formatters.js'; // used in _renderNormal
 import { MediaLightbox } from './MediaLightbox.js';
+import { LOCK_SVG } from '../../utils/icons.js';
 
 const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
 const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide works
@@ -309,7 +310,7 @@ export class PostContent extends Component {
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
 
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
-    const lockIcon = isHidden ? `<span class="locker-icon" title="Hidden">🔒</span>` : '';
+    const lockIcon = isHidden ? LOCK_SVG : '';
 
     return `
       <article class="post-single${isHidden ? ' is-hidden' : ''}" itemscope itemtype="https://schema.org/BlogPosting">
