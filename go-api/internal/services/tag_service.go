@@ -471,6 +471,52 @@ func buildEffectivelyHiddenIDs(allTags []models.Tag, relationships []repository.
 	return hidden
 }
 
+// buildEffectivelyHiddenPostsTagIDs computes the set of tag IDs whose posts should be hidden.
+// A tag effectively hides posts if it or any of its ancestors has is_hidden_posts=true.
+func buildEffectivelyHiddenPostsTagIDs(allTags []models.Tag, relationships []repository.TagRelationship) map[int64]bool {
+	childrenOf := make(map[int64][]int64, len(relationships))
+	for _, rel := range relationships {
+		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
+	}
+
+	hiddenPosts := make(map[int64]bool, len(allTags))
+	queue := make([]int64, 0)
+	for _, t := range allTags {
+		if t.IsHiddenPosts {
+			hiddenPosts[t.ID] = true
+			queue = append(queue, t.ID)
+		}
+	}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, childID := range childrenOf[cur] {
+			if !hiddenPosts[childID] {
+				hiddenPosts[childID] = true
+				queue = append(queue, childID)
+			}
+		}
+	}
+	return hiddenPosts
+}
+
+// EffectivelyHiddenPostsTagIDs returns the set of tag IDs that effectively hide their posts.
+func (s *TagService) EffectivelyHiddenPostsTagIDs(ctx context.Context) (map[int64]bool, error) {
+	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
+		IncludeEmptyFilter:  true,
+		ImportantOnlyFilter: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	relationships, err := s.repo.GetAllTagRelationships(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return buildEffectivelyHiddenPostsTagIDs(allTags, relationships), nil
+}
+
 // EffectivelyHiddenIDs returns the set of tag IDs that should not be shown publicly.
 func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, error) {
 	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{

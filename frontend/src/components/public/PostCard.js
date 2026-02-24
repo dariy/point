@@ -28,9 +28,13 @@ export class PostCard extends Component {
     const thumbnailStyle = hasThumbnail
       ? ` style="background-image: url('${safeUrl(post.thumbnail_path)}')"` : '';
 
-    const tags = (post.tags || []).slice(0, 3).map((t) =>
-      `<a href="/tag/${escapeHtml(typeof t === 'string' ? t : t.slug)}" class="tag-link">${escapeHtml(typeof t === 'string' ? t : t.name)}</a>`
-    ).join('');
+    const tags = (post.tags || []).slice(0, 3).map((t) => {
+      const name = typeof t === 'string' ? t : t.name;
+      const slug = typeof t === 'string' ? t : t.slug;
+      const tagHidden = t && t.is_hidden;
+      const lock = tagHidden ? LOCK_SVG : '';
+      return `<a href="/tag/${escapeHtml(slug)}" class="tag-link${tagHidden ? ' is-hidden' : ''}">${lock}${escapeHtml(name)}</a>`;
+    }).join('');
 
     const viewCount = showViewCount && post.view_count != null
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';

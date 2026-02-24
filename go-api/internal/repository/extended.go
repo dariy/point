@@ -554,6 +554,7 @@ type PostTagInfo struct {
 	ID            int64  `json:"id"`
 	Name          string `json:"name"`
 	Slug          string `json:"slug"`
+	IsHidden      bool   `json:"is_hidden"`
 	IsHiddenPosts bool   `json:"is_hidden_posts"`
 }
 
@@ -576,7 +577,7 @@ func (r *Repository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map
 	}
 
 	q := `
-SELECT pt.post_id, t.id, t.name, t.slug, t.is_hidden_posts
+SELECT pt.post_id, t.id, t.name, t.slug, t.is_hidden, t.is_hidden_posts
 FROM post_tags pt
 JOIN tags t ON t.id = pt.tag_id
 WHERE pt.post_id IN (` + placeholders + `)
@@ -591,7 +592,7 @@ ORDER BY t.name ASC`
 	for rows.Next() {
 		var postID int64
 		var tag PostTagInfo
-		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.IsHiddenPosts); err != nil {
+		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.IsHidden, &tag.IsHiddenPosts); err != nil {
 			return nil, err
 		}
 		result[postID] = append(result[postID], tag)
