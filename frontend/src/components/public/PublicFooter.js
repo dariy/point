@@ -8,6 +8,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { renderTagLink } from '../../utils/tags.js';
 
 export class PublicFooter extends Component {
   render() {
@@ -19,11 +20,7 @@ export class PublicFooter extends Component {
     // Otherwise: provide the #pagination-mount slot for pages that need it.
     let centerSlot;
     if (immersiveTags.length) {
-      const tagLinks = immersiveTags.map((t) => {
-        const slug = typeof t === 'string' ? t : t.slug;
-        const name = typeof t === 'string' ? t : t.name;
-        return `<a href="/tag/${escapeHtml(slug)}" class="post-tag">${escapeHtml(name)}</a>`;
-      }).join('');
+      const tagLinks = immersiveTags.map((t) => renderTagLink(t)).join('');
       centerSlot = `<div class="immersive-tags">${tagLinks}</div>`;
     } else {
       centerSlot = `<div id="pagination-mount"></div>`;

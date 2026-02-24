@@ -171,13 +171,14 @@ func injectPostHiddenFields(resp map[string]interface{}, status string, tags []m
 		for i, t := range tags {
 			if i < len(tagList) {
 				tagList[i]["is_hidden"] = t.IsHidden
+				tagList[i]["is_hidden_posts"] = effectiveHiddenPostsTagIDs[t.ID]
 			}
 		}
 	}
 }
 
 // injectPostHiddenFieldsFromInfo adds is_hidden/is_hidden_by_tag for list endpoints using PostTagInfo.
-// It also adds is_hidden to each tag object in resp["tags"].
+// It also adds is_hidden and is_hidden_posts to each tag object in resp["tags"].
 func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, tags []repository.PostTagInfo, effectiveHiddenPostsTagIDs map[int64]bool) {
 	isHiddenByTag := false
 	for _, t := range tags {
@@ -192,6 +193,7 @@ func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, 
 		for i, t := range tags {
 			if i < len(tagList) {
 				tagList[i]["is_hidden"] = t.IsHidden
+				tagList[i]["is_hidden_posts"] = effectiveHiddenPostsTagIDs[t.ID]
 			}
 		}
 	}

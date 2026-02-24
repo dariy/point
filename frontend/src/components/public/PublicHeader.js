@@ -35,7 +35,7 @@ export class PublicHeader extends Component {
         `<span class="breadcrumb-separator" aria-hidden="true">/</span>`,
         ...breadcrumb.map((crumb, i) => {
           const isLast = i === breadcrumb.length - 1;
-          const lockIcon = crumb.is_hidden ? LOCK_SVG : '';
+          const lockIcon = (crumb.is_hidden || crumb.is_hidden_posts) ? LOCK_SVG : '';
 
           if (isLast) {
             if (crumb.slug) {
