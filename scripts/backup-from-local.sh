@@ -48,8 +48,8 @@ echo "✓ Container is running"
 
 # Step 2: Trigger backup creation inside container
 echo "[2/5] Creating backup inside container..."
-$DOCKER_CMD exec $LOCAL_CONTAINER python -c "from app.services.backup_service import BackupService; print(BackupService().create_backup())" || {
-    echo "Warning: Could not create backup via Python service"
+$DOCKER_CMD exec $LOCAL_CONTAINER /app/scripts/backup.sh || {
+    echo "Warning: Could not create backup via script"
     echo "Attempting manual backup creation..."
 
     # Manual backup creation

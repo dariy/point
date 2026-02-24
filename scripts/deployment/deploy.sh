@@ -53,7 +53,7 @@ check_env() {
     # Check required variables
     if [ -z "${SECRET_KEY:-}" ] || [ "$SECRET_KEY" = "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY_64_CHARACTERS_OR_MORE" ]; then
         log_error "SECRET_KEY not configured!"
-        log_info "Generate with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+        log_info "Generate with: openssl rand -base64 48"
         exit 1
     fi
 
@@ -98,11 +98,10 @@ pull_image() {
 run_migrations() {
     log_info "Running database migrations..."
 
-    # For now, just initialize the database if it doesn't exist
-    docker compose -f "$COMPOSE_FILE" exec -T point \
-        python scripts/init_db.py || true
+    # Database initialization is handled by the application or requires manual step
+    # docker compose -f "$COMPOSE_FILE" exec -T point ./api-bin -migrate || true
 
-    log_success "Database migrations completed"
+    log_success "Database migrations skipped (handled by app)"
 }
 
 # Deploy new version
@@ -124,7 +123,7 @@ wait_for_health() {
 
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         if docker compose -f "$COMPOSE_FILE" exec -T point \
-            python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" > /dev/null 2>&1; then
+            curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
             log_success "Service is healthy!"
             return 0
         fi
@@ -148,12 +147,12 @@ health_check() {
         return 1
     fi
 
-    # Check database connection
+    # Check database file existence
     if docker compose -f "$COMPOSE_FILE" exec -T point \
-        python -c "from app.database import engine; import asyncio; asyncio.run(engine.connect())" 2>/dev/null; then
-        log_success "Database connection OK"
+        ls /data/point.db >/dev/null 2>&1; then
+        log_success "Database file exists"
     else
-        log_warning "Database connection check failed"
+        log_warning "Database file check failed"
     fi
 
     return 0

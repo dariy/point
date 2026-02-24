@@ -44,14 +44,14 @@ This guide provides comprehensive instructions for deploying Photo Blog to produ
 Run the automated setup script as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/username/photo-blog/main/scripts/deployment/setup-production.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/username/point/main/scripts/deployment/setup-production.sh | sudo bash
 ```
 
 Or manually:
 
 ```bash
-git clone https://github.com/username/photo-blog.git /tmp/photo-blog
-cd /tmp/photo-blog
+git clone https://github.com/dariy/point.git /tmp/point
+cd /tmp/point
 sudo chmod +x scripts/deployment/setup-production.sh
 sudo ./scripts/deployment/setup-production.sh
 ```
@@ -60,7 +60,7 @@ This script will:
 1. Update system packages
 2. Install Docker and Docker Compose
 3. Create `deploy` user with sudo privileges
-4. Set up project directories (`/opt/photo-blog`, `/var/lib/photo-blog/data`)
+4. Set up project directories (`/opt/point`, `/var/lib/point/data`)
 5. Configure firewall (UFW) to allow HTTP, HTTPS, and SSH
 6. Install fail2ban for SSH protection
 7. Install certbot for SSL certificates
@@ -99,10 +99,10 @@ If you prefer to set up manually:
 
 5. **Create directories**:
    ```bash
-   sudo mkdir -p /opt/photo-blog
-   sudo mkdir -p /var/lib/photo-blog/data/{media,cache,logs,backups}
-   sudo chown -R deploy:deploy /opt/photo-blog
-   sudo chown -R deploy:deploy /var/lib/photo-blog
+   sudo mkdir -p /opt/point
+   sudo mkdir -p /var/lib/point/data/{media,cache,logs,backups}
+   sudo chown -R deploy:deploy /opt/point
+   sudo chown -R deploy:deploy /var/lib/point
    ```
 
 6. **Configure firewall**:
@@ -160,7 +160,7 @@ Add these secrets:
 | `DEPLOY_USER` | `deploy` | SSH username |
 | `DEPLOY_SSH_KEY` | `[contents of ~/.ssh/deploy_key]` | Private SSH key |
 | `DEPLOY_SSH_PORT` | `22` | SSH port (optional, default: 22) |
-| `DEPLOY_PATH` | `/opt/photo-blog` | Application directory |
+| `DEPLOY_PATH` | `/opt/point` | Application directory |
 | `CODECOV_TOKEN` | `[from codecov.io]` | For coverage reports (optional) |
 
 To get the private key:
@@ -184,8 +184,8 @@ The workflow publishes Docker images to GitHub Container Registry (ghcr.io).
 On your server as `deploy` user:
 
 ```bash
-cd /opt/photo-blog
-git clone https://github.com/username/photo-blog.git .
+cd /opt/point
+git clone https://github.com/dariy/point.git .
 cp .env.production.example .env
 nano .env  # Configure environment variables
 ```
@@ -231,8 +231,8 @@ Watch the workflow in GitHub Actions tab.
 1. **Clone repository**:
    ```bash
    ssh deploy@yourdomain.com
-   cd /opt/photo-blog
-   git clone https://github.com/username/photo-blog.git .
+   cd /opt/point
+   git clone https://github.com/dariy/point.git .
    ```
 
 2. **Configure environment**:
@@ -249,7 +249,7 @@ Watch the workflow in GitHub Actions tab.
 ### Subsequent Deployments
 
 ```bash
-cd /opt/photo-blog
+cd /opt/point
 git pull origin main
 ./scripts/deployment/deploy.sh
 ```
@@ -283,11 +283,11 @@ The `deploy.sh` script:
 
 3. **Copy certificates to project**:
    ```bash
-   sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /opt/photo-blog/nginx/ssl/
-   sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem /opt/photo-blog/nginx/ssl/
-   sudo chown deploy:deploy /opt/photo-blog/nginx/ssl/*.pem
-   sudo chmod 644 /opt/photo-blog/nginx/ssl/fullchain.pem
-   sudo chmod 600 /opt/photo-blog/nginx/ssl/privkey.pem
+   sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /opt/point/nginx/ssl/
+   sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem /opt/point/nginx/ssl/
+   sudo chown deploy:deploy /opt/point/nginx/ssl/*.pem
+   sudo chmod 644 /opt/point/nginx/ssl/fullchain.pem
+   sudo chmod 600 /opt/point/nginx/ssl/privkey.pem
    ```
 
 4. **Set up auto-renewal**:
@@ -297,13 +297,13 @@ The `deploy.sh` script:
 
    Add:
    ```
-   0 3 * * * certbot renew --quiet && cp /etc/letsencrypt/live/yourdomain.com/*.pem /opt/photo-blog/nginx/ssl/ && docker-compose -f /opt/photo-blog/docker-compose.prod.yml restart nginx
+   0 3 * * * certbot renew --quiet && cp /etc/letsencrypt/live/yourdomain.com/*.pem /opt/point/nginx/ssl/ && docker-compose -f /opt/point/docker-compose.prod.yml restart nginx
    ```
 
 ### Using Self-Signed Certificate (Development/Testing)
 
 ```bash
-cd /opt/photo-blog/nginx/ssl
+cd /opt/point/nginx/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout privkey.pem \
   -out fullchain.pem \
@@ -329,7 +329,7 @@ BLOG_URL=https://yourdomain.com
 BLOG_AUTHOR=Your Name
 
 # GitHub Container Registry (for CI/CD)
-GITHUB_REPOSITORY=username/photo-blog
+GITHUB_REPOSITORY=username/point
 ```
 
 ### Optional Variables
@@ -367,16 +367,16 @@ BACKUP_RETENTION_DAYS=30
 ### Manual Backup
 
 ```bash
-cd /opt/photo-blog
+cd /opt/point
 ./scripts/backup.sh
 ```
 
-Backups are saved to `/var/lib/photo-blog/data/backups/`.
+Backups are saved to `/var/lib/point/data/backups/`.
 
 ### Restore from Backup
 
 ```bash
-./scripts/restore.sh /var/lib/photo-blog/data/backups/2024-01-01_02-00-00.tar.gz
+./scripts/restore.sh /var/lib/point/data/backups/2024-01-01_02-00-00.tar.gz
 ```
 
 ### Off-Site Backups (Recommended)
@@ -422,7 +422,7 @@ docker-compose -f docker-compose.prod.yml logs -f nginx
 docker-compose -f docker-compose.prod.yml logs -f
 
 # View log files directly
-tail -f /var/lib/photo-blog/data/logs/app.log
+tail -f /var/lib/point/data/logs/app.log
 ```
 
 ### System Statistics
@@ -444,8 +444,8 @@ View:
 - View count flushing
 
 **Weekly**:
-- Review logs: `tail -100 /var/lib/photo-blog/data/logs/app.log`
-- Check disk space: `df -h /var/lib/photo-blog`
+- Review logs: `tail -100 /var/lib/point/data/logs/app.log`
+- Check disk space: `df -h /var/lib/point`
 
 **Monthly**:
 - Test backup restore
@@ -476,10 +476,10 @@ docker-compose -f docker-compose.prod.yml restart blog
 
 ```bash
 # Restore from backup
-./scripts/restore.sh /var/lib/photo-blog/data/backups/latest.tar.gz
+./scripts/restore.sh /var/lib/point/data/backups/latest.tar.gz
 
 # If backup is also corrupted, try SQLite recovery
-cd /var/lib/photo-blog/data
+cd /var/lib/point/data
 sqlite3 blog.db ".recover" > recovered.sql
 mv blog.db blog.db.corrupted
 sqlite3 blog.db < recovered.sql
@@ -489,13 +489,13 @@ sqlite3 blog.db < recovered.sql
 
 ```bash
 # Check certificate expiry
-openssl x509 -in /opt/photo-blog/nginx/ssl/fullchain.pem -noout -dates
+openssl x509 -in /opt/point/nginx/ssl/fullchain.pem -noout -dates
 
 # Renew certificate
 sudo certbot renew
 
 # Copy renewed certificates
-sudo cp /etc/letsencrypt/live/yourdomain.com/*.pem /opt/photo-blog/nginx/ssl/
+sudo cp /etc/letsencrypt/live/yourdomain.com/*.pem /opt/point/nginx/ssl/
 
 # Restart nginx
 docker-compose -f docker-compose.prod.yml restart nginx
@@ -533,7 +533,7 @@ The deployment script automatically rolls back on failure. To manually rollback:
    ```
 4. **Check server logs**:
    ```bash
-   ssh deploy@yourdomain.com "docker-compose -f /opt/photo-blog/docker-compose.prod.yml logs"
+   ssh deploy@yourdomain.com "docker-compose -f /opt/point/docker-compose.prod.yml logs"
    ```
 
 ### 502 Bad Gateway
@@ -549,16 +549,16 @@ docker-compose -f docker-compose.prod.yml restart blog
 
 ```bash
 # Check usage
-df -h /var/lib/photo-blog
+df -h /var/lib/point
 
 # Clean old Docker images
 docker image prune -a
 
 # Clean old backups
-find /var/lib/photo-blog/data/backups -name "*.tar.gz" -mtime +30 -delete
+find /var/lib/point/data/backups -name "*.tar.gz" -mtime +30 -delete
 
 # Clean cache
-rm -rf /var/lib/photo-blog/data/cache/*
+rm -rf /var/lib/point/data/cache/*
 ```
 
 ## Performance Optimization
