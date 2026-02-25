@@ -108,6 +108,20 @@ body {
     color: var(--sidebar-text-hover);
 }
 
+.sidebar-footer .theme-toggle {
+    border: none;
+    background: transparent;
+    color: var(--sidebar-text);
+    padding: 0;
+    font-size: 14px;
+}
+
+.sidebar-footer .theme-toggle:hover {
+    background: transparent;
+    border: none;
+    color: var(--sidebar-text-hover);
+}
+
 .sidebar-nav {
     flex: 1;
     list-style: none;
@@ -142,10 +156,13 @@ body {
 .sidebar-footer {
     padding: var(--spacing-md) var(--spacing-lg);
     border-top: 1px solid var(--sidebar-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .user-info {
-    margin-bottom: var(--spacing-sm);
+    flex: 1;
 }
 
 .user-name {
