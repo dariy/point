@@ -130,6 +130,10 @@
     object-fit: cover;
 }
 
+.media-item-preview--clickable {
+    cursor: zoom-in;
+}
+
 .media-item-preview .file-icon {
     font-size: 48px;
     color: var(--text-muted);

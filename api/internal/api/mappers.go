@@ -258,7 +258,7 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		"path":           mediaPath,
 		"original_path":  "/media/originals" + mediaPath,
 		"thumbnail_path": thumbPath,
-		"file_type":      m.FileType,
+		"file_type":      strings.ToLower(m.FileType),
 		"mime_type":      m.MimeType,
 		"file_size":      m.FileSize,
 		"width":          nullInt64(m.Width),

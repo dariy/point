@@ -117,9 +117,18 @@ export class MediaLightbox {
 
   _render() {
     const { src, alt } = this._images[this._index] || {};
-    if (src) this._imgEl.src = src;
+
+    // Hide old image immediately so it doesn't flash while the new one loads
+    this._imgEl.style.opacity = '0';
+    this._imgEl.src = '';
     this._imgEl.alt = alt || '';
     this._captionEl.textContent = alt || '';
+
+    if (src) {
+      this._imgEl.onload = () => { this._imgEl.style.opacity = '1'; };
+      this._imgEl.onerror = () => { this._imgEl.style.opacity = '1'; };
+      this._imgEl.src = src;
+    }
 
     const hasMultiple = this._images.length > 1;
     this._prevBtn.hidden = !hasMultiple;
