@@ -61,7 +61,11 @@ export default class PostsListPage extends Component {
                     ${escapeHtml(STATUS_LABELS[p.status] || p.status)}
                   </span>
                 </td>
-                <td>${escapeHtml(p.tags?.join(', ') || '—')}</td>
+                <td><div class="post-tags-cell">${
+                  p.tags?.length
+                    ? p.tags.map(t => `<a href="/light/tags/${escapeHtml(t.slug ?? t)}" class="tag-link">${escapeHtml(t.name ?? t)}</a>`).join('')
+                    : '—'
+                }</div></td>
                 <td>${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
                 <td class="actions">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
