@@ -129,11 +129,20 @@ export default class PostsListPage extends Component {
       });
     }
 
-    // Search input with debounce
+    // Restore focus to search input after a re-render triggered by _load
     const searchInput = this.$('#search-input');
     if (searchInput) {
+      if (this._restoreSearchFocus) {
+        this._restoreSearchFocus = false;
+        const len = searchInput.value.length;
+        searchInput.focus();
+        searchInput.setSelectionRange(len, len);
+      }
+
       searchInput.addEventListener('input', debounce((e) => {
-        this.setState({ search: e.target.value, page: 1 });
+        // Update state without re-rendering — the input already shows the new value
+        this.state.search = e.target.value;
+        this.state.page = 1;
         this._load({ page: 1, search: e.target.value });
       }, 350));
     }
@@ -165,7 +174,19 @@ export default class PostsListPage extends Component {
   }
 
   async _load(overrides = {}) {
-    this.setState({ loading: true, error: null });
+    // Check focus before any DOM mutation so we can restore it after re-render
+    const searchEl = this.$('#search-input');
+    const searchHadFocus = searchEl && document.activeElement === searchEl;
+
+    // Show loading indicator in-place — no full re-render, no focus loss.
+    // The string is fully static (no user data), so innerHTML is safe here.
+    const tbody = this.$('#posts-tbody');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="5" class="loading">Loading\u2026</td></tr>`; // static, safe
+    }
+    this.state.loading = true;
+    this.state.error = null;
+
     const params = {
       page: overrides.page ?? this.state.page,
       per_page: 20,
@@ -177,6 +198,7 @@ export default class PostsListPage extends Component {
 
     try {
       const data = await listPosts(params);
+      this._restoreSearchFocus = searchHadFocus;
       this.setState({
         loading: false,
         posts: data.posts || data.items || [],
@@ -188,6 +210,7 @@ export default class PostsListPage extends Component {
         },
       });
     } catch (err) {
+      this._restoreSearchFocus = searchHadFocus;
       this.setState({ loading: false, error: err.message || 'Failed to load posts.' });
     }
   }

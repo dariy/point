@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"regexp"
+	"strings"
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
@@ -231,4 +232,41 @@ func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, 
 func injectTagHiddenFields(resp map[string]interface{}, t models.Tag, effectiveHiddenPostsTagIDs map[int64]bool) {
 	resp["is_hidden"] = t.IsHidden
 	resp["is_hidden_posts"] = t.IsHiddenPosts || effectiveHiddenPostsTagIDs[t.ID]
+}
+
+// mediaToResponse converts a Medium model into an API response map with
+// normalised URL fields:
+//
+//	path          = "/<year>/<month>/<filename>"          (e.g. /2026/02/photo.jpg)
+//	original_path = "/media/originals/<year>/<month>/…"
+//	thumbnail_path = "/media/thumbnails/<year>/<month>/…"  (nil when absent)
+//
+// The DB stores relative paths without a leading slash
+// ("originals/YYYY/MM/file"), so we strip the prefix and prepend the
+// canonical web root.
+func mediaToResponse(m models.Medium) map[string]interface{} {
+	mediaPath := strings.TrimPrefix(m.OriginalPath, "originals")
+
+	var thumbPath interface{}
+	if m.ThumbnailPath.Valid {
+		thumbPath = "/media/thumbnails" + strings.TrimPrefix(m.ThumbnailPath.String, "thumbnails")
+	}
+
+	return map[string]interface{}{
+		"id":             m.ID,
+		"filename":       m.Filename,
+		"path":           mediaPath,
+		"original_path":  "/media/originals" + mediaPath,
+		"thumbnail_path": thumbPath,
+		"file_type":      m.FileType,
+		"mime_type":      m.MimeType,
+		"file_size":      m.FileSize,
+		"width":          nullInt64(m.Width),
+		"height":         nullInt64(m.Height),
+		"post_id":        nullInt64(m.PostID),
+		"uploaded_at":    m.UploadedAt,
+		"checksum":       m.Checksum,
+		"alt_text":       nullString(m.AltText),
+		"caption":        nullString(m.Caption),
+	}
 }

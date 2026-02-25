@@ -63,7 +63,7 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusCreated, media)
+	return c.JSON(http.StatusCreated, mediaToResponse(media))
 }
 
 func (h *MediaHandler) ListMedia(c echo.Context) error {
@@ -91,8 +91,12 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 		pages = 1
 	}
 
+	items := make([]map[string]interface{}, len(media))
+	for i, m := range media {
+		items[i] = mediaToResponse(m)
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"media":    media,
+		"media":    items,
 		"total":    total,
 		"page":     page,
 		"per_page": perPage,
@@ -111,7 +115,7 @@ func (h *MediaHandler) GetMedia(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "media not found")
 	}
 
-	return c.JSON(http.StatusOK, media)
+	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 
 type UpdateMediaRequest struct {
@@ -141,7 +145,7 @@ func (h *MediaHandler) UpdateMedia(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "media not found")
 	}
 
-	return c.JSON(http.StatusOK, media)
+	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 
 func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
@@ -164,8 +168,12 @@ func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
 		pages = 1
 	}
 
+	orphaned := make([]map[string]interface{}, len(media))
+	for i, m := range media {
+		orphaned[i] = mediaToResponse(m)
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"media":    media,
+		"media":    orphaned,
 		"total":    total,
 		"page":     page,
 		"per_page": perPage,
