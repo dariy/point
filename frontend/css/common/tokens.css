@@ -15,6 +15,8 @@
     --color-danger: #ef4444;
     --color-danger-light: #fee2e2;
 
+    --bg-overlay: rgba(0, 0, 0, 0.8);
+
     /* Spacing */
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;

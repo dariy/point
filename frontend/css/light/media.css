@@ -314,6 +314,101 @@
 }
 
 /* ===========================
+   MediaBrowser Component
+   =========================== */
+.media-browser {
+    position: relative;
+}
+
+.media-browser-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+/* Scoped drop overlay for picker mode (replaces full-screen overlay) */
+.media-browser-drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.12);
+    border: 3px dashed var(--color-primary);
+    border-radius: var(--border-radius);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.media-browser-drop-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ===========================
+   Picker Mode
+   =========================== */
+
+/* Checkbox overlay on each media item */
+.media-item-checkbox {
+    position: absolute;
+    top: var(--spacing-xs);
+    left: var(--spacing-xs);
+    z-index: 2;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-sm);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+}
+
+.media-item-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+/* Selected state: highlight ring */
+.media-item--selected {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+}
+
+.media-item--selected .media-item-checkbox {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+/* Picker mode: entire item is clickable */
+.media-browser--picker .media-item {
+    cursor: pointer;
+}
+
+/* ===========================
+   MediaPickerDialog
+   =========================== */
+.media-picker-modal {
+    width: 90vw;
+    max-width: 960px;
+    max-height: 90vh;
+}
+
+.media-picker-body {
+    overflow-y: auto;
+    flex: 1;
+    padding: var(--spacing-md);
+}
+
+/* ===========================
    Dropped Media Preview (from drag-drop in editor)
    =========================== */
 .dropped-media-card {

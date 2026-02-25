@@ -12,6 +12,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
+import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
 import { getPost, createPost, updatePost } from '../../api/posts.js';
 import { uploadMedia } from '../../api/media.js';
 import { logout } from '../../api/auth.js';
@@ -40,6 +41,8 @@ export default class PostEditPage extends Component {
     this._autosaveTimer = null;
     this._tagsInputRef = null;
     this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_MS);
+    this._mediaPicker = null;
+    this._dragCount = 0;
   }
 
   render() {
@@ -103,6 +106,7 @@ export default class PostEditPage extends Component {
             <h1>${isNew ? 'New Post' : 'Edit Post'}</h1>
             <div class="header-actions">
               ${statusMsg}
+              <button id="media-btn" class="btn btn-secondary" type="button">Media</button>
               <button id="save-btn" class="btn btn-primary" type="button"
                       ${saving ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
               <a href="/light/posts" class="btn btn-secondary">Cancel</a>
@@ -147,6 +151,15 @@ export default class PostEditPage extends Component {
     });
 
     if (this.state.loading || this.state.error) return;
+
+    // Media picker dialog (created once, reused across open/close cycles)
+    if (!this._mediaPicker) {
+      this._mediaPicker = new MediaPickerDialog({
+        onConfirm: (items) => this._insertMediaPaths(items),
+      });
+      this._mediaPicker.mount();
+    }
+    this.$('#media-btn')?.addEventListener('click', () => this._mediaPicker.open());
 
     // Tags input
     this._tagsInputRef = this.mountChild(TagsInput, '#tags-input-mount', {
@@ -224,6 +237,16 @@ export default class PostEditPage extends Component {
     document.removeEventListener('dragover', this._onDragOver);
     document.removeEventListener('drop', this._onDrop);
     document.body.classList.remove('drag-active');
+    this._mediaPicker?.destroy();
+    this._mediaPicker = null;
+  }
+
+  _insertMediaPaths(items) {
+    const editor = this.$('#content-editor');
+    if (!editor || !items.length) return;
+    const paths = items.map((item) => item.path).join('\n');
+    editor.value = editor.value.trimEnd() + '\n' + paths;
+    editor.scrollTop = editor.scrollHeight;
   }
 
   mount() {
