@@ -2,9 +2,36 @@ package api
 
 import (
 	"database/sql"
+	"regexp"
+
 	"point-api/internal/models"
 	"point-api/internal/repository"
 )
+
+var (
+	// videoTagRe extracts src from <video>/<source> tags.
+	// [^>]* (zero-or-more) matches even when src is the first attribute.
+	videoTagRe = regexp.MustCompile(`(?i)<(?:video|source)[^>]*\ssrc="([^"]+)"`)
+
+	// bareMediaRe matches a line containing only a media file path or URL.
+	bareMediaRe = regexp.MustCompile(`(?im)^[ \t]*((?:https?://|/)\S+\.(?:mp4|webm|mov|ogv|m4v|avi|mkv|mp3|m4a|ogg|wav|flac|aac|opus))[ \t]*$`)
+)
+
+// extractMediaURL returns a single preview URL for list responses:
+// thumbnail path if set, else first video/audio src from a <video>/<source>
+// tag in the content, else first bare media path found in the content.
+func extractMediaURL(thumbPath sql.NullString, content string) *string {
+	if thumbPath.Valid && thumbPath.String != "" {
+		return &thumbPath.String
+	}
+	if m := videoTagRe.FindStringSubmatch(content); m != nil {
+		return &m[1]
+	}
+	if m := bareMediaRe.FindStringSubmatch(content); m != nil {
+		return &m[1]
+	}
+	return nil
+}
 
 func nullString(s sql.NullString) *string {
 	if s.Valid {
@@ -64,7 +91,7 @@ func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[st
 		"created_at":          p.CreatedAt,
 		"updated_at":          p.UpdatedAt,
 		"author_id":           p.AuthorID,
-		"thumbnail_path":      nullString(p.ThumbnailPath),
+		"media_url":           extractMediaURL(p.ThumbnailPath, p.Content),
 		"meta_description":    nullString(p.MetaDescription),
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,
@@ -95,7 +122,7 @@ func postByTagToResponse(p models.GetPostsByTagRow, tags []repository.PostTagInf
 		"created_at":          p.CreatedAt,
 		"updated_at":          p.UpdatedAt,
 		"author_id":           p.AuthorID,
-		"thumbnail_path":      nullString(p.ThumbnailPath),
+		"media_url":           extractMediaURL(p.ThumbnailPath, p.Content),
 		"meta_description":    nullString(p.MetaDescription),
 		"author_username":     p.AuthorUsername,
 		"author_display_name": p.AuthorDisplayName,

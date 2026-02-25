@@ -20,6 +20,9 @@ import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
 
 const AUTOSAVE_MS = 30_000;
 
+/** Extract tag name strings from either a string[] or {name,slug}[] array. */
+const toTagNames = (tags) => (tags || []).map((t) => (typeof t === 'string' ? t : t.name));
+
 export default class PostEditPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
@@ -200,10 +203,10 @@ export default class PostEditPage extends Component {
 
     // Tags input
     this._tagsInputRef = this.mountChild(TagsInput, '#tags-input-mount', {
-      tags: this.state.post?.tags || [],
+      tags: toTagNames(this.state.post?.tags),
       onChange: (tags) => { this._tags = tags; },
     });
-    this._tags = this.state.post?.tags || [];
+    this._tags = toTagNames(this.state.post?.tags);
 
     // Save button
     const saveBtn = this.$('#save-btn');
@@ -249,7 +252,7 @@ export default class PostEditPage extends Component {
   async _loadPost(id) {
     try {
       const post = await getPost(id);
-      this._tags = post.tags || [];
+      this._tags = toTagNames(post.tags);
       this.setState({ loading: false, post, error: null });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Post not found.' });

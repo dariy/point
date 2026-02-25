@@ -21,13 +21,26 @@ export class PostCard extends Component {
     const { post, showViewCount = false, isHero = false } = this.props;
     if (!post) return '';
 
-    const hasThumbnail = !!post.thumbnail_path;
+    const mediaUrl = post.media_url || null;
+    const isVideo = mediaUrl && /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
+    const hasMedia = !!mediaUrl;
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
-    const cardClass = ['post-card', hasThumbnail ? 'has-image' : 'text-only', isHidden ? 'is-hidden' : ''].filter(Boolean).join(' ');
+    const cardClass = ['post-card', hasMedia ? 'has-image' : 'text-only', isHidden ? 'is-hidden' : ''].filter(Boolean).join(' ');
     const lockIcon = isHidden ? LOCK_SVG : '';
 
-    const thumbnailStyle = hasThumbnail
-      ? ` style="background-image: url('${safeUrl(post.thumbnail_path)}')"` : '';
+    const bgStyle = (hasMedia && !isVideo)
+      ? ` style="background-image: url('${safeUrl(mediaUrl)}')"` : '';
+
+    const bgVideo = isVideo
+      ? `<video src="${safeUrl(mediaUrl)}" autoplay muted loop playsinline></video>` : '';
+
+    const playIndicator = isVideo ? `
+      <div class="video-play-indicator">
+        <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
+          <circle cx="26" cy="26" r="25" fill="rgba(0,0,0,0.45)" stroke="rgba(255,255,255,0.8)" stroke-width="1.5"/>
+          <polygon points="21,17 37,26 21,35" fill="white"/>
+        </svg>
+      </div>` : '';
 
     const tags = (post.tags || []).slice(0, 3).map((t) => renderTagLink(t)).join('');
 
@@ -40,8 +53,9 @@ export class PostCard extends Component {
     return `
       <article class="${cardClass}" role="button" tabindex="0"
                data-post-slug="${escapeHtml(post.slug)}" style="cursor:pointer">
-        <div class="post-card-background"${thumbnailStyle}></div>
-        <div class="post-card-content${hasThumbnail ? ' overlay' : ''}">
+        <div class="post-card-background"${bgStyle}>${bgVideo}</div>
+        ${playIndicator}
+        <div class="post-card-content${hasMedia ? ' overlay' : ''}">
           ${featured}
           <h2 class="post-card-title">${lockIcon}${escapeHtml(post.title)}</h2>
           ${post.excerpt ? `<p class="post-card-excerpt">${escapeHtml(post.excerpt)}</p>` : ''}
