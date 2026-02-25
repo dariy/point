@@ -539,7 +539,7 @@ func (r *Repository) ListMediaFiltered(ctx context.Context, fileType, folder str
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
        file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
 FROM media
-WHERE (? = '' OR file_type = ?)
+WHERE (? = '' OR LOWER(file_type) = LOWER(?))
   AND (? = '' OR original_path LIKE ? || '%')
 ORDER BY uploaded_at DESC
 LIMIT ? OFFSET ?`
@@ -573,7 +573,7 @@ func (r *Repository) CountMediaFiltered(ctx context.Context, fileType, folder st
 	}
 	const q = `
 SELECT COUNT(*) FROM media
-WHERE (? = '' OR file_type = ?)
+WHERE (? = '' OR LOWER(file_type) = LOWER(?))
   AND (? = '' OR original_path LIKE ? || '%')`
 
 	var count int64

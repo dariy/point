@@ -7,6 +7,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { Pagination } from '../../components/shared/Pagination.js';
+import { MediaLightbox } from '../../components/public/MediaLightbox.js';
 import { listMedia, uploadMedia, deleteMedia, getMediaFolders } from '../../api/media.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
@@ -32,6 +33,7 @@ export default class MediaPage extends Component {
     };
     this._dragCount = 0;
     this._dragListeners = [];
+    this._lightbox = new MediaLightbox();
   }
 
   render() {
@@ -122,17 +124,22 @@ export default class MediaPage extends Component {
   }
 
   _renderItem(m) {
-    const isImage = m.file_type === 'image';
+    const fileType = (m.file_type || '').toLowerCase();
+    const isImage = fileType === 'image';
     const thumb = m.thumbnail_path || (isImage ? m.original_path : null);
     const preview = isImage && thumb
       ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy">`
-      : `<div class="file-icon" aria-label="${escapeHtml(m.file_type || 'file')}">${
-          m.file_type === 'video' ? '▶' : m.file_type === 'audio' ? '♫' : '📄'
+      : `<div class="file-icon" aria-label="${escapeHtml(fileType || 'file')}">${
+          fileType === 'video' ? '▶' : fileType === 'audio' ? '♫' : '📄'
         }</div>`;
 
+    // Derive /YYYY/MM/filename path from original_path if m.path is missing
+    const copyPath = m.path || (m.original_path ? m.original_path.replace('/media/originals', '') : '');
+
     return `
-      <div class="media-item" data-id="${escapeHtml(String(m.id))}">
-        <div class="media-item-preview">${preview}</div>
+      <div class="media-item" data-id="${escapeHtml(String(m.id))}"${
+        isImage ? ` data-src="${escapeHtml(m.original_path || '')}" data-alt="${escapeHtml(m.filename)}"` : ''}>
+        <div class="media-item-preview${isImage ? ' media-item-preview--clickable' : ''}">${preview}</div>
         <div class="media-item-info">
           <div class="media-item-name" title="${escapeHtml(m.filename)}">${escapeHtml(m.filename)}</div>
           <div class="media-item-meta">
@@ -143,7 +150,7 @@ export default class MediaPage extends Component {
           <a href="${escapeHtml(m.original_path || '')}" class="btn btn-sm" target="_blank"
              rel="noopener" title="View original">↗</a>
           <button class="btn btn-sm copy-path-btn"
-                  data-path="${escapeHtml(m.path || '')}" title="Copy path to clipboard">⎘</button>
+                  data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>
           <button class="btn btn-sm btn-danger delete-media-btn"
                   data-id="${escapeHtml(String(m.id))}"
                   data-name="${escapeHtml(m.filename)}" title="Delete">✕</button>
@@ -215,6 +222,17 @@ export default class MediaPage extends Component {
       });
     });
 
+    // Image lightbox: click on image preview to open full-screen viewer
+    const imageItems = Array.from(this.$$('.media-item[data-src]'));
+    if (imageItems.length > 0) {
+      const images = imageItems.map((el) => ({ src: el.dataset.src, alt: el.dataset.alt || '' }));
+      imageItems.forEach((el, index) => {
+        el.querySelector('.media-item-preview')?.addEventListener('click', () => {
+          this._lightbox.open(images, index);
+        });
+      });
+    }
+
     // Copy path buttons
     this.$$('.copy-path-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -266,6 +284,7 @@ export default class MediaPage extends Component {
       document.removeEventListener(event, fn);
     }
     this._dragListeners = [];
+    this._lightbox?.destroy();
     super.unmount?.();
   }
 

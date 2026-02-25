@@ -36,6 +36,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/light/system.css \
     "$CSS_DIR"/light/settings.css \
     "$CSS_DIR"/light/responsive.css \
+    "$CSS_DIR"/public/lightbox.css \
     > "$CSS_DIR"/light.css
 
 echo "Built light.css ($(wc -c < "$CSS_DIR"/light.css) bytes)"
