@@ -342,7 +342,6 @@ export class PostContent extends Component {
     return `
       <article class="post-single${isHidden ? ' is-hidden' : ''}" itemscope itemtype="https://schema.org/BlogPosting">
         <header class="post-header">
-          <h1 class="post-title" itemprop="headline">${lockIcon}${escapeHtml(post.title)}</h1>
           <div class="post-meta">
             <time class="post-date"
                   datetime="${escapeHtml(isoDatetime(post.published_at || post.created_at))}">
