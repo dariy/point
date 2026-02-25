@@ -186,6 +186,34 @@
     bottom: -1px;
 }
 
+/* Tag link pill (posts table) */
+.tag-link {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 9999px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tag-link:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.post-tags-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
 /* ===========================
    Tags Manager — view toggle
    =========================== */
