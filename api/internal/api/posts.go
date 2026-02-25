@@ -122,6 +122,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	status := c.QueryParam("status")
 	featured := c.QueryParam("featured") == "true"
 	includeDrafts := c.Get("user") != nil
+	search := c.QueryParam("q")
 
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
 		Page:          int32(page),
@@ -129,6 +130,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 		Status:        status,
 		FeaturedOnly:  featured,
 		IncludeDrafts: includeDrafts,
+		Search:        search,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
