@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -226,9 +227,15 @@ func main() {
 	}
 }
 
+// checksumRe matches the 8-char hex checksum embedded in a media filename,
+// e.g. "video_89017c29.mp4" → "89017c29".
+var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
+
 // serveSimplifiedMedia handles /YYYY/MM/filename shortcut for media files.
 // If year or month are not valid integers the path belongs to the SPA, so
-// index.html is served instead (matching the Python backend's {year:int} constraint).
+// index.html is served instead.
+// When the exact filename is not found, a glob fallback uses the embedded
+// checksum suffix to find the real file (handles Unicode/hyphen variants).
 func serveSimplifiedMedia(storagePath, indexHTML string) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
@@ -252,11 +259,21 @@ func serveSimplifiedMedia(storagePath, indexHTML string) echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid path")
 		}
 
-		filePath := filepath.Join(storagePath, "media", "originals", year, month, filename)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		dir := filepath.Join(storagePath, "media", "originals", year, month)
+		filePath := filepath.Join(dir, filename)
+
+		if _, err := os.Stat(filePath); err == nil {
+			return c.File(filePath)
 		}
 
-		return c.File(filePath)
+		// Exact file not found — try to resolve via the embedded checksum.
+		if m := checksumRe.FindStringSubmatch(filename); m != nil {
+			matches, _ := filepath.Glob(filepath.Join(dir, "*_"+m[1]+".*"))
+			if len(matches) == 1 {
+				return c.File(matches[0])
+			}
+		}
+
+		return echo.NewHTTPError(http.StatusNotFound, "media not found")
 	}
 }

@@ -22,6 +22,17 @@ import { renderTagLink } from '../../utils/tags.js';
 const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
 const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide works
 
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'm4v', 'avi', 'mkv']);
+const AUDIO_EXTS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'opus']);
+
+/** Return 'video', 'audio', or null based on file extension. */
+function mediaTypeFromPath(path) {
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  if (VIDEO_EXTS.has(ext)) return 'video';
+  if (AUDIO_EXTS.has(ext)) return 'audio';
+  return null;
+}
+
 /**
  * Returns true when the post should render in immersive (full-screen) mode.
  * Exported so PostPage can use the same check to configure its child components.
@@ -33,11 +44,17 @@ export function shouldUseImmersive(post) {
   // Audio-only attachment posts stay in normal layout
   if (media.length && media.every((m) => m.type === 'audio')) return false;
 
-  // Only activate when content is purely media elements and whitespace (no real text)
+  // Strip all HTML tags; what remains is the visible text.
   const text = (post.content_html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
-  if (text.length !== 0) return false;
 
-  // Must have something visual: media attachments or inline images/video in content
+  // If there is text, check whether every non-empty line is a bare media path.
+  // If so it counts as media, not prose.
+  if (text.length !== 0) {
+    const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    const allMedia = lines.every((l) => /^(?:https?:\/\/|\/)\S+$/.test(l) && mediaTypeFromPath(l));
+    if (!allMedia) return false;
+  }
+
   const hasVisualMedia = media.some((m) => m.type !== 'audio');
   const hasContentMedia = (post.content_html || '').trim().length > 0;
   return hasVisualMedia || hasContentMedia;
@@ -136,7 +153,7 @@ export class PostContent extends Component {
     return `<img src="${url}" alt="${escapeHtml(item.alt || '')}" class="immersive-bg-image" loading="lazy">`;
   }
 
-  /** Extract image/video items from HTML via regex (no DOM, no XSS risk). */
+  /** Extract image/video/audio items from HTML, including bare media paths in text. */
   _mediaFromHtml(html) {
     const items = [];
     for (const m of html.matchAll(/<img[^>]+>/gi)) {
@@ -146,6 +163,19 @@ export class PostContent extends Component {
     }
     for (const m of html.matchAll(/<(?:video|source)[^>]*\ssrc="([^"]*)"[^>]*/gi)) {
       if (m[1]) items.push({ type: 'video', url: m[1] });
+    }
+    for (const m of html.matchAll(/<audio[^>]*\ssrc="([^"]*)"[^>]*/gi)) {
+      if (m[1]) items.push({ type: 'audio', url: m[1] });
+    }
+    // Fallback: bare media paths rendered as plain text by the markdown parser.
+    if (items.length === 0) {
+      const text = html.replace(/<[^>]+>/g, '').trim();
+      for (const line of text.split(/\n+/)) {
+        const url = line.trim();
+        if (!url) continue;
+        const type = mediaTypeFromPath(url);
+        if (type) items.push({ type, url });
+      }
     }
     return items;
   }
