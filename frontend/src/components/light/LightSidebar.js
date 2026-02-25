@@ -11,6 +11,7 @@
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { APP_LOGO_SVG } from '../../utils/icons.js';
+import { store } from '../../store.js';
 
 const NAV_ITEMS = [
   { href: '/light',          label: 'Dashboard',  icon: '⊞' },
@@ -51,6 +52,7 @@ export class LightSidebar extends Component {
             </a>
           </div>
           <a href="${escapeHtml(publicUrl)}" class="public-home-link" title="View public site" aria-label="View public site" data-external>↗</a>
+
         </div>
         <nav class="sidebar-nav" aria-label="Admin navigation">
           <ul>${navItems}</ul>
@@ -59,6 +61,10 @@ export class LightSidebar extends Component {
           <div class="user-info">
             <button class="btn btn-primary" id="logout-btn" type="button">Logout</button>
           </div>
+          <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button">
+            <span class="icon-sun" aria-hidden="true">☀</span>
+            <span class="icon-moon" aria-hidden="true">☾</span>
+          </button>
         </div>
       </aside>`;
   }
@@ -68,5 +74,11 @@ export class LightSidebar extends Component {
     if (btn && this.props.onLogout) {
       btn.addEventListener('click', this.props.onLogout);
     }
+
+    this.$('#sidebar-theme-toggle')?.addEventListener('click', () => {
+      const current = store.get('theme') || 'auto';
+      const next = current === 'dark' ? 'light' : 'dark';
+      store.set('theme', next);
+    });
   }
 }
