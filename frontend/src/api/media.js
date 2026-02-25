@@ -8,11 +8,19 @@ import { api } from './client.js';
 
 /**
  * List media items.
- * @param {{ page?, per_page?, file_type?, orphaned_only? }} [params]
+ * @param {{ page?, per_page?, file_type?, folder?, orphaned_only? }} [params]
  * @returns {Promise<{ media: object[], total, page, per_page, pages }>}
  */
 export function listMedia(params = {}) {
   return api.get('/api/media', params);
+}
+
+/**
+ * Get distinct year/month folders from the media library.
+ * @returns {Promise<{ folders: { year, month, path }[] }>}
+ */
+export function getMediaFolders() {
+  return api.get('/api/media/folders');
 }
 
 /**
