@@ -76,11 +76,13 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 		perPage = 20
 	}
 	fileType := c.QueryParam("file_type")
+	folder := c.QueryParam("folder")
 
 	media, total, err := h.mediaService.ListMedia(c.Request().Context(), services.ListMediaParams{
 		Page:     int32(page),
 		PerPage:  int32(perPage),
 		FileType: fileType,
+		Folder:   folder,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -102,6 +104,23 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 		"per_page": perPage,
 		"pages":    pages,
 	})
+}
+
+func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
+	folders, err := h.mediaService.GetMediaFolders(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	items := make([]map[string]interface{}, 0, len(folders))
+	for _, f := range folders {
+		items = append(items, map[string]interface{}{
+			"year":  f.Year,
+			"month": f.Month,
+			"path":  f.Year + "/" + f.Month,
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{"folders": items})
 }
 
 func (h *MediaHandler) GetMedia(c echo.Context) error {

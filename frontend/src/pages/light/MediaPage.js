@@ -1,17 +1,19 @@
 /**
- * MediaPage — media library with upload, filter, and delete.
+ * MediaPage — media library with folder tree, type filter, upload, copy and delete.
  *
- * Fetches: GET /api/media
+ * Fetches: GET /api/media, GET /api/media/folders
  */
 
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { Pagination } from '../../components/shared/Pagination.js';
-import { listMedia, uploadMedia, deleteMedia } from '../../api/media.js';
+import { listMedia, uploadMedia, deleteMedia, getMediaFolders } from '../../api/media.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export default class MediaPage extends Component {
   constructor(container, props = {}) {
@@ -21,15 +23,22 @@ export default class MediaPage extends Component {
       media: [],
       pagination: {},
       typeFilter: '',
+      selectedFolder: null,  // "YYYY/MM" or null
+      folders: [],           // [{ year, month, path }]
+      expandedYears: {},     // { "YYYY": true/false }
       error: null,
       uploading: false,
+      draggingOver: false,
     };
+    this._dragCount = 0;
+    this._dragListeners = [];
   }
 
   render() {
-    const { loading, media, typeFilter, error, uploading } = this.state;
+    const { loading, media, typeFilter, error, uploading, draggingOver,
+            folders, selectedFolder, expandedYears } = this.state;
 
-    const typeOptions = ['', 'image', 'video', 'audio'].map((t) => {
+    const typeOptions = ['', 'image', 'video', 'audio', 'file'].map((t) => {
       const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : 'All types';
       return `<option value="${t}"${typeFilter === t ? ' selected' : ''}>${label}</option>`;
     }).join('');
@@ -39,8 +48,44 @@ export default class MediaPage extends Component {
       : error
         ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
         : !media.length
-          ? `<p class="empty-state">No media files yet. Upload something!</p>`
+          ? `<p class="empty-state">No media files. Drag &amp; drop anywhere to upload.</p>`
           : `<div class="media-grid">${media.map((m) => this._renderItem(m)).join('')}</div>`;
+
+    // Group folders by year for the tree
+    const yearGroups = {};
+    for (const f of folders) {
+      if (!yearGroups[f.year]) yearGroups[f.year] = [];
+      yearGroups[f.year].push(f);
+    }
+    const sortedYears = Object.keys(yearGroups).sort((a, b) => b - a);
+
+    const folderTree = `
+      <nav class="media-folder-tree" aria-label="Media folders">
+        <button class="folder-tree-all${!selectedFolder ? ' active' : ''}" data-folder="">
+          All media
+        </button>
+        ${sortedYears.map((year) => {
+          const expanded = expandedYears[year] !== false;
+          const months = yearGroups[year];
+          const hasActive = months.some((f) => selectedFolder === f.path);
+          return `
+            <div class="folder-year-group">
+              <button class="folder-year-btn${hasActive ? ' has-active' : ''}" data-year="${escapeHtml(year)}">
+                <span class="folder-year-arrow">${expanded ? '▾' : '▸'}</span>
+                ${escapeHtml(year)}
+              </button>
+              <div class="folder-year-months${expanded ? '' : ' hidden'}">
+                ${months.map((f) => {
+                  const monthName = MONTH_NAMES[parseInt(f.month, 10) - 1] || f.month;
+                  return `<button class="folder-month-btn${selectedFolder === f.path ? ' active' : ''}"
+                                  data-folder="${escapeHtml(f.path)}">
+                    ${escapeHtml(monthName)}
+                  </button>`;
+                }).join('')}
+              </div>
+            </div>`;
+        }).join('')}
+      </nav>`;
 
     return `
       <div class="light-layout">
@@ -48,43 +93,42 @@ export default class MediaPage extends Component {
         <div class="light-main">
           <header class="light-header">
             <h1>Media</h1>
+            <div class="header-actions">
+              <button id="upload-btn" class="btn btn-primary" title="Upload files">⬆ Upload</button>
+            </div>
           </header>
           <main class="light-content">
-
-            <div class="card" id="upload-card">
-              <div class="card-header"><h2>Upload</h2></div>
-              <div class="card-body">
-                <div class="upload-area" id="upload-area" tabindex="0" role="button"
-                     aria-label="Click or drag files here to upload">
-                  <div class="upload-area-icon" aria-hidden="true">⬆</div>
-                  <div class="upload-area-text">
-                    <strong>Click to select</strong> or drag &amp; drop files here
-                    <br><small>Images, video, audio</small>
-                  </div>
-                  <input type="file" id="file-input" multiple accept="image/*,video/*,audio/*"
-                         style="display:none">
+            <input type="file" id="file-input" multiple accept="image/*,video/*,audio/*" style="display:none">
+            ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ''}
+            <div class="media-layout">
+              ${folderTree}
+              <div class="media-content">
+                <div class="filters">
+                  <select id="type-filter" class="filter-select">${typeOptions}</select>
                 </div>
-                ${uploading ? `<p class="upload-progress" aria-live="polite">Uploading…</p>` : ''}
+                <div id="media-area" style="margin-top: var(--spacing-md)">${grid}</div>
+                <div id="pagination-mount"></div>
               </div>
             </div>
-
-            <div class="filters" style="margin-top: var(--spacing-lg)">
-              <select id="type-filter" class="filter-select">${typeOptions}</select>
-            </div>
-
-            <div id="media-area" style="margin-top: var(--spacing-md)">${grid}</div>
-            <div id="pagination-mount"></div>
           </main>
+        </div>
+      </div>
+      <div class="drop-overlay${draggingOver ? ' visible' : ''}" aria-hidden="true">
+        <div class="drop-overlay-inner">
+          <div class="drop-overlay-icon">⬆</div>
+          <div>Drop files to upload</div>
         </div>
       </div>`;
   }
 
   _renderItem(m) {
-    const thumb = m.thumbnail_url || m.url || '';
     const isImage = m.file_type === 'image';
+    const thumb = m.thumbnail_path || (isImage ? m.original_path : null);
     const preview = isImage && thumb
       ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy">`
-      : `<div class="file-icon" aria-label="${escapeHtml(m.file_type || 'file')}">${m.file_type === 'video' ? '▶' : m.file_type === 'audio' ? '♫' : '📄'}</div>`;
+      : `<div class="file-icon" aria-label="${escapeHtml(m.file_type || 'file')}">${
+          m.file_type === 'video' ? '▶' : m.file_type === 'audio' ? '♫' : '📄'
+        }</div>`;
 
     return `
       <div class="media-item" data-id="${escapeHtml(String(m.id))}">
@@ -96,8 +140,10 @@ export default class MediaPage extends Component {
           </div>
         </div>
         <div class="media-item-actions">
-          <a href="${escapeHtml(m.url || '')}" class="btn btn-sm" target="_blank"
-             data-external title="View">↗</a>
+          <a href="${escapeHtml(m.original_path || '')}" class="btn btn-sm" target="_blank"
+             rel="noopener" title="View original">↗</a>
+          <button class="btn btn-sm copy-path-btn"
+                  data-path="${escapeHtml(m.path || '')}" title="Copy path to clipboard">⎘</button>
           <button class="btn btn-sm btn-danger delete-media-btn"
                   data-id="${escapeHtml(String(m.id))}"
                   data-name="${escapeHtml(m.filename)}" title="Delete">✕</button>
@@ -121,12 +167,42 @@ export default class MediaPage extends Component {
       });
     }
 
-    this._wireUpload();
+    const fileInput = this.$('#file-input');
+
+    // Upload button
+    this.$('#upload-btn')?.addEventListener('click', () => fileInput?.click());
+
+    // File input
+    fileInput?.addEventListener('change', () => {
+      this._uploadFiles(Array.from(fileInput.files));
+      fileInput.value = '';
+    });
+
+    // Window-wide drag-drop
+    this._wireDragDrop(fileInput);
 
     // Type filter
     this.$('#type-filter')?.addEventListener('change', (e) => {
       this.setState({ typeFilter: e.target.value });
       this._load({ page: 1 });
+    });
+
+    // Folder year toggle
+    this.$$('.folder-year-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const year = btn.dataset.year;
+        const expanded = this.state.expandedYears[year] !== false;
+        this.setState({ expandedYears: { ...this.state.expandedYears, [year]: !expanded } });
+      });
+    });
+
+    // Folder / "all" selection
+    this.$$('.folder-month-btn, .folder-tree-all').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const folder = btn.dataset.folder || null;
+        this.setState({ selectedFolder: folder });
+        this._load({ page: 1 });
+      });
     });
 
     // Delete buttons
@@ -138,33 +214,59 @@ export default class MediaPage extends Component {
         }
       });
     });
+
+    // Copy path buttons
+    this.$$('.copy-path-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const path = btn.dataset.path;
+        navigator.clipboard.writeText(path).then(() => {
+          store.set('toast', { message: `Copied: ${path}`, type: 'success' });
+        }).catch(() => {
+          store.set('toast', { message: 'Copy failed', type: 'error' });
+        });
+      });
+    });
   }
 
-  _wireUpload() {
-    const uploadArea = this.$('#upload-area');
-    const fileInput  = this.$('#file-input');
-    if (!uploadArea || !fileInput) return;
-
-    uploadArea.addEventListener('click', () => fileInput.click());
-    uploadArea.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') fileInput.click();
-    });
-
-    uploadArea.addEventListener('dragover', (e) => {
+  _wireDragDrop(fileInput) {
+    const onEnter = (e) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      this._dragCount++;
+      if (this._dragCount === 1) this.setState({ draggingOver: true });
+    };
+    const onLeave = () => {
+      this._dragCount = Math.max(0, this._dragCount - 1);
+      if (this._dragCount === 0) this.setState({ draggingOver: false });
+    };
+    const onOver = (e) => e.preventDefault();
+    const onDrop = (e) => {
       e.preventDefault();
-      uploadArea.classList.add('dragover');
-    });
-    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
-    uploadArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      uploadArea.classList.remove('dragover');
-      this._uploadFiles(Array.from(e.dataTransfer.files));
-    });
+      this._dragCount = 0;
+      this.setState({ draggingOver: false });
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (files.length) this._uploadFiles(files);
+    };
 
-    fileInput.addEventListener('change', () => {
-      this._uploadFiles(Array.from(fileInput.files));
-      fileInput.value = '';
-    });
+    document.addEventListener('dragenter', onEnter);
+    document.addEventListener('dragleave', onLeave);
+    document.addEventListener('dragover', onOver);
+    document.addEventListener('drop', onDrop);
+
+    // Store for cleanup on unmount
+    this._dragListeners = [
+      ['dragenter', onEnter],
+      ['dragleave', onLeave],
+      ['dragover', onOver],
+      ['drop', onDrop],
+    ];
+  }
+
+  unmount() {
+    for (const [event, fn] of this._dragListeners) {
+      document.removeEventListener(event, fn);
+    }
+    this._dragListeners = [];
+    super.unmount?.();
   }
 
   async _uploadFiles(files) {
@@ -181,9 +283,12 @@ export default class MediaPage extends Component {
       }
     }
     this.setState({ uploading: false });
-    const msg = `Uploaded ${uploaded}${failed ? `, ${failed} failed` : ''}.`;
-    store.set('toast', { message: msg, type: failed ? 'warning' : 'success' });
+    store.set('toast', {
+      message: `Uploaded ${uploaded}${failed ? `, ${failed} failed` : ''}.`,
+      type: failed ? 'warning' : 'success',
+    });
     this._load();
+    this._loadFolders();
   }
 
   async _deleteMedia(id) {
@@ -191,6 +296,7 @@ export default class MediaPage extends Component {
       await deleteMedia(id);
       store.set('toast', { message: 'File deleted.', type: 'success' });
       this._load();
+      this._loadFolders();
     } catch (err) {
       store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
     }
@@ -198,7 +304,23 @@ export default class MediaPage extends Component {
 
   mount() {
     super.mount();
+    this._loadFolders();
     this._load();
+  }
+
+  async _loadFolders() {
+    try {
+      const data = await getMediaFolders();
+      const folders = data.folders || [];
+      // Auto-expand the most recent year if not yet set
+      const expandedYears = { ...this.state.expandedYears };
+      if (folders.length && expandedYears[folders[0].year] === undefined) {
+        expandedYears[folders[0].year] = true;
+      }
+      this.setState({ folders, expandedYears });
+    } catch {
+      // Silently ignore
+    }
   }
 
   async _load(overrides = {}) {
@@ -208,6 +330,7 @@ export default class MediaPage extends Component {
       per_page: 24,
     };
     if (this.state.typeFilter) params.file_type = this.state.typeFilter;
+    if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
 
     try {
       const data = await listMedia(params);

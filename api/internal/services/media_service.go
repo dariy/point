@@ -187,29 +187,26 @@ type ListMediaParams struct {
 	Page     int32
 	PerPage  int32
 	FileType string
+	Folder   string // "YYYY/MM" format; empty means no folder filter
 }
 
 func (s *MediaService) ListMedia(ctx context.Context, p ListMediaParams) ([]models.Medium, int64, error) {
 	offset := (p.Page - 1) * p.PerPage
-	media, err := s.repo.ListMedia(ctx, models.ListMediaParams{
-		TypeFilter: p.FileType != "",
-		FileType:   p.FileType,
-		Limit:      int64(p.PerPage),
-		Offset:     int64(offset),
-	})
+	media, err := s.repo.ListMediaFiltered(ctx, p.FileType, p.Folder, int64(p.PerPage), int64(offset))
 	if err != nil {
 		return nil, 0, err
 	}
 
-	total, err := s.repo.CountMedia(ctx, models.CountMediaParams{
-		TypeFilter: p.FileType != "",
-		FileType:   p.FileType,
-	})
+	total, err := s.repo.CountMediaFiltered(ctx, p.FileType, p.Folder)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	return media, total, nil
+}
+
+func (s *MediaService) GetMediaFolders(ctx context.Context) ([]repository.MediaFolder, error) {
+	return s.repo.ListMediaFolders(ctx)
 }
 
 type UpdateMediaParams struct {
