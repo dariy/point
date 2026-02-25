@@ -138,6 +138,7 @@ func main() {
 	// ── Media Routes ───────────────────────────────────────────────────────────
 	mediaGroup := e.Group("/api/media")
 	mediaGroup.GET("", mediaHandler.ListMedia, api.AuthMiddleware(authService))
+	mediaGroup.GET("/folders", mediaHandler.GetMediaFolders, api.AuthMiddleware(authService))
 	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(authService))
 	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(authService))
 	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(authService))

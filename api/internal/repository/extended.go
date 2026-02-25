@@ -495,6 +495,92 @@ func (r *Repository) ListOrphanedMediaByPage(ctx context.Context, limit, offset 
 	return media, count, nil
 }
 
+// MediaFolder represents a year/month folder in the media library.
+type MediaFolder struct {
+	Year  string
+	Month string
+}
+
+// ListMediaFolders returns distinct YYYY/MM folder combinations from the media table,
+// ordered newest first.
+func (r *Repository) ListMediaFolders(ctx context.Context) ([]MediaFolder, error) {
+	const q = `
+SELECT DISTINCT
+    substr(original_path, 11, 4) as year,
+    substr(original_path, 16, 2) as month
+FROM media
+WHERE original_path LIKE 'originals/____/__/%'
+ORDER BY year DESC, month DESC`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var folders []MediaFolder
+	for rows.Next() {
+		var f MediaFolder
+		if err := rows.Scan(&f.Year, &f.Month); err != nil {
+			return nil, err
+		}
+		folders = append(folders, f)
+	}
+	return folders, rows.Err()
+}
+
+// ListMediaFiltered lists media with optional file_type and/or folder (YYYY/MM) filters.
+func (r *Repository) ListMediaFiltered(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error) {
+	folderPrefix := ""
+	if folder != "" {
+		folderPrefix = "originals/" + folder + "/"
+	}
+	const q = `
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+FROM media
+WHERE (? = '' OR file_type = ?)
+  AND (? = '' OR original_path LIKE ? || '%')
+ORDER BY uploaded_at DESC
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q, fileType, fileType, folderPrefix, folderPrefix, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.Medium
+	for rows.Next() {
+		var m models.Medium
+		if err := rows.Scan(
+			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
+			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return items, rows.Err()
+}
+
+// CountMediaFiltered counts media with optional file_type and/or folder filters.
+func (r *Repository) CountMediaFiltered(ctx context.Context, fileType, folder string) (int64, error) {
+	folderPrefix := ""
+	if folder != "" {
+		folderPrefix = "originals/" + folder + "/"
+	}
+	const q = `
+SELECT COUNT(*) FROM media
+WHERE (? = '' OR file_type = ?)
+  AND (? = '' OR original_path LIKE ? || '%')`
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q, fileType, fileType, folderPrefix, folderPrefix).Scan(&count)
+	return count, err
+}
+
 // BackupDB creates a SQL dump of the SQLite database using backup API.
 func (r *Repository) BackupDB(ctx context.Context, destPath string) error {
 	_, err := r.db.ExecContext(ctx, "VACUUM INTO ?", destPath)
