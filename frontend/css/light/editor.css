@@ -1,22 +1,11 @@
 /* ===========================
    Post Editor
    =========================== */
-.editor-container {
-    display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: var(--spacing-lg);
-}
-
 .editor-main {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
-}
-
-.editor-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-md);
+    width: 100%;
 }
 
 .editor-content {
@@ -24,18 +13,19 @@
     font-size: var(--font-size-sm);
     line-height: 1.6;
     min-height: 400px;
+    width: 100%;
 }
 
-.editor-content.dragover {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
-    background-color: var(--color-gray-50);
-}
-
-.card-body.dragover {
-    background-color: var(--color-primary-light);
+/* Window-level drag overlay */
+body.drag-active::after {
+    content: '';
+    position: fixed;
+    inset: 4px;
+    background: rgba(37, 99, 235, 0.06);
     border: 2px dashed var(--color-primary);
-    border-radius: var(--border-radius);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 9999;
 }
 
 .preview-panel {
@@ -50,4 +40,44 @@
 .preview-panel img {
     max-width: 100%;
     height: auto;
+}
+
+/* Title row: [★] [status] [title input] */
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.title-row .editor-title {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Featured star toggle */
+.featured-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    padding: 2px 4px;
+    color: var(--text-muted);
+    transition: color var(--transition-fast), transform 0.1s ease;
+    border-radius: var(--border-radius-sm, 4px);
+}
+
+.featured-btn:hover {
+    color: #f59e0b;
+    transform: scale(1.15);
+}
+
+.featured-btn.is-featured {
+    color: #f59e0b;
+}
+
+/* Full-width editor page — override the global max-width */
+.editor-full-width {
+    max-width: none;
 }

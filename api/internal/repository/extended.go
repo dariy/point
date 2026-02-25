@@ -8,6 +8,70 @@ import (
 	"point-api/internal/models"
 )
 
+// ListPostsWithSearch returns posts filtered by a title substring (case-insensitive),
+// in addition to the standard status / featured / visibility filters.
+func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.ListPostsRow, error) {
+	const q = `
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+       p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at,
+       u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+FROM posts p
+JOIN users u ON p.author_id = u.id
+WHERE
+    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND LOWER(p.title) LIKE '%' || LOWER(?) || '%'
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.ListPostsRow
+	for rows.Next() {
+		var i models.ListPostsRow
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
+			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// CountPostsWithSearch counts posts filtered by a title substring.
+func (r *Repository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
+	const q = `
+SELECT COUNT(*) FROM posts p
+WHERE
+    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND LOWER(p.title) LIKE '%' || LOWER(?) || '%'`
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search).Scan(&count)
+	return count, err
+}
+
 // ListOrphanedMedia returns media records with no associated post (post_id IS NULL).
 func (r *Repository) ListOrphanedMedia(ctx context.Context, limit, offset int64) ([]models.Medium, error) {
 	const q = `

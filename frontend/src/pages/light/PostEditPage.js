@@ -108,82 +108,29 @@ export default class PostEditPage extends Component {
               <a href="/light/posts" class="btn btn-secondary">Cancel</a>
             </div>
           </header>
-          <main class="light-content">
-            <div class="editor-container">
-
-              <div class="editor-main">
-                <div class="form-group">
-                  <input type="text" id="title-input" class="form-input editor-title"
-                         placeholder="Post title" value="${title}" required>
-                </div>
-
-                <div class="form-group">
-                  <label for="content-editor">Content</label>
-                  <textarea id="content-editor" class="editor-content"
-                            rows="24" placeholder="Write your post content here…"
-                            id="content-editor">${escapeHtml(content)}</textarea>
-                </div>
-
-                <div class="card">
-                  <div class="card-header"><h3>Drop media here</h3></div>
-                  <div class="card-body" id="drop-zone">
-                    <p class="upload-area-text">Drag &amp; drop image or video files to insert them into your post.</p>
-                    <div id="dropped-media-list"></div>
-                  </div>
-                </div>
+          <main class="light-content editor-full-width">
+            <div class="editor-main">
+              <div class="title-row">
+                <input type="checkbox" id="featured-check" style="display:none"
+                       ${featured ? 'checked' : ''}>
+                <button id="featured-toggle" type="button"
+                        class="featured-btn${featured ? ' is-featured' : ''}"
+                        title="${featured ? 'Unmark as featured' : 'Mark as featured'}">
+                  ${featured ? '★' : '☆'}
+                </button>
+                <select id="status-select" class="status-select badge-${escapeHtml(status)}">
+                  ${statusOpts}
+                </select>
+                <input type="text" id="title-input" class="form-input editor-title"
+                       placeholder="Post title" value="${title}" required>
               </div>
 
-              <div class="editor-sidebar">
-                <div class="card">
-                  <div class="card-header"><h3>Publish</h3></div>
-                  <div class="card-body">
-                    <div class="form-group">
-                      <label for="status-select">Status</label>
-                      <select id="status-select" class="form-input">${statusOpts}</select>
-                    </div>
-                    <div class="form-group">
-                      <label for="formatter-select">Formatter</label>
-                      <select id="formatter-select" class="form-input">${fmtOpts}</select>
-                    </div>
-                    <div class="form-group">
-                      <label class="checkbox-label">
-                        <input type="checkbox" id="featured-check"
-                               ${featured ? 'checked' : ''}> Featured post
-                      </label>
-                    </div>
-                  </div>
-                </div>
+              <div id="tags-input-mount"></div>
 
-                <div class="card">
-                  <div class="card-header"><h3>Tags</h3></div>
-                  <div class="card-body">
-                    <div id="tags-input-mount"></div>
-                  </div>
-                </div>
-
-                <div class="card">
-                  <div class="card-header"><h3>Thumbnail</h3></div>
-                  <div class="card-body">
-                    <div class="form-group">
-                      <label for="thumbnail-input">Path or URL</label>
-                      <input type="text" id="thumbnail-input" class="form-input"
-                             placeholder="/2026/01/photo.jpg" value="${thumb}">
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card">
-                  <div class="card-header"><h3>SEO</h3></div>
-                  <div class="card-body">
-                    <div class="form-group">
-                      <label for="meta-input">Meta description</label>
-                      <textarea id="meta-input" class="form-input" rows="3"
-                                maxlength="300" placeholder="SEO description…">${meta}</textarea>
-                    </div>
-                  </div>
-                </div>
+              <div class="form-group">
+                <textarea id="content-editor" class="editor-content"
+                          rows="24" placeholder="Write your post content here…">${escapeHtml(content)}</textarea>
               </div>
-
             </div>
           </main>
         </div>
@@ -212,6 +159,26 @@ export default class PostEditPage extends Component {
     const saveBtn = this.$('#save-btn');
     saveBtn?.addEventListener('click', () => this._save());
 
+    // Featured star toggle
+    const featuredToggle = this.$('#featured-toggle');
+    const featuredCheck  = this.$('#featured-check');
+    featuredToggle?.addEventListener('click', () => {
+      const newVal = !featuredCheck.checked;
+      featuredCheck.checked = newVal;
+      featuredToggle.textContent = newVal ? '★' : '☆';
+      featuredToggle.classList.toggle('is-featured', newVal);
+      featuredToggle.title = newVal ? 'Unmark as featured' : 'Mark as featured';
+      this._autoSaveField({ is_featured: newVal });
+    });
+
+    // Status pill — auto-save on change
+    const statusSelect = this.$('#status-select');
+    statusSelect?.addEventListener('change', () => {
+      const newStatus = statusSelect.value;
+      statusSelect.className = `status-select badge-${newStatus}`;
+      this._autoSaveField({ status: newStatus });
+    });
+
     // Auto-save on content change
     const titleInput = this.$('#title-input');
     const contentEditor = this.$('#content-editor');
@@ -219,27 +186,44 @@ export default class PostEditPage extends Component {
       el?.addEventListener('input', () => this._debouncedAutosave());
     });
 
-    // Drag-and-drop media upload
-    const dropZone = this.$('#drop-zone');
-    if (dropZone) {
-      dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-      });
-      dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-      dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        const files = Array.from(e.dataTransfer.files).filter(
-          (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
-        );
-        files.forEach((f) => this._uploadAndInsert(f));
-      });
-    }
+    // Window-level drag-and-drop media upload
+    // Remove stale listeners from any previous render before re-attaching.
+    document.removeEventListener('dragenter', this._onDragEnter);
+    document.removeEventListener('dragleave', this._onDragLeave);
+    document.removeEventListener('dragover', this._onDragOver);
+    document.removeEventListener('drop', this._onDrop);
+    this._dragCount = 0;
+    this._onDragEnter = () => {
+      this._dragCount++;
+      document.body.classList.add('drag-active');
+    };
+    this._onDragLeave = () => {
+      this._dragCount--;
+      if (this._dragCount === 0) document.body.classList.remove('drag-active');
+    };
+    this._onDragOver = (e) => { e.preventDefault(); };
+    this._onDrop = (e) => {
+      e.preventDefault();
+      this._dragCount = 0;
+      document.body.classList.remove('drag-active');
+      const files = Array.from(e.dataTransfer.files).filter(
+        (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+      );
+      files.forEach((f) => this._uploadAndInsert(f));
+    };
+    document.addEventListener('dragenter', this._onDragEnter);
+    document.addEventListener('dragleave', this._onDragLeave);
+    document.addEventListener('dragover', this._onDragOver);
+    document.addEventListener('drop', this._onDrop);
   }
 
   beforeUnmount() {
     clearTimeout(this._autosaveTimer);
+    document.removeEventListener('dragenter', this._onDragEnter);
+    document.removeEventListener('dragleave', this._onDragLeave);
+    document.removeEventListener('dragover', this._onDragOver);
+    document.removeEventListener('drop', this._onDrop);
+    document.body.classList.remove('drag-active');
   }
 
   mount() {
@@ -312,30 +296,30 @@ export default class PostEditPage extends Component {
     }
   }
 
-  async _uploadAndInsert(file) {
-    const list = this.$('#dropped-media-list');
-    const indicator = document.createElement('p');
-    indicator.className = 'upload-progress';
-    indicator.textContent = `Uploading ${file.name}…`;
-    list?.appendChild(indicator);
+  async _autoSaveField(patch) {
+    if (this.state.isNew || this.state.saving) return;
+    const formData = this._collectFormData();
+    const fullData = { ...formData, ...patch };
+    try {
+      const post = await updatePost(this.state.postId, fullData);
+      this.state.post = post;  // update before setState so re-render uses correct values
+      this.setState({ saveStatus: 'saved' });
+      setTimeout(() => this.setState({ saveStatus: null }), 2000);
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Auto-save failed.', type: 'error' });
+    }
+  }
 
+  async _uploadAndInsert(file) {
     try {
       const result = await uploadMedia(file, { post_id: this.state.postId || undefined });
-      indicator.remove();
-
-      // Insert markdown or path into content
       const editor = this.$('#content-editor');
       if (editor) {
-        const isImage = file.type.startsWith('image/');
-        const snippet = isImage
-          ? `\n![${file.name}](${result.url})\n`
-          : `\n[${file.name}](${result.url})\n`;
-        const pos = editor.selectionStart ?? editor.value.length;
-        editor.value = editor.value.slice(0, pos) + snippet + editor.value.slice(pos);
+        editor.value = editor.value.trimEnd() + `\n${result.path}`;
+        editor.scrollTop = editor.scrollHeight;
       }
     } catch (err) {
-      indicator.textContent = `Upload failed: ${err.message || file.name}`;
-      indicator.className = 'upload-error';
+      store.set('toast', { message: `Upload failed: ${err.message || file.name}`, type: 'error' });
     }
   }
 
