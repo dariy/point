@@ -7,14 +7,15 @@
     display: flex;
     gap: var(--spacing-lg);
     align-items: flex-start;
+    width: 100%;
 }
 
 /* ===========================
    Folder Tree
    =========================== */
 .media-folder-tree {
-    flex: 0 0 160px;
-    min-width: 140px;
+    flex: 0 0 200px;
+    min-width: 180px;
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
     border-radius: var(--border-radius);
@@ -22,14 +23,28 @@
     position: sticky;
     top: calc(var(--header-height) + var(--spacing-md));
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
+    display: flex;
+    flex-direction: column;
 }
 
-.folder-tree-all,
-.folder-month-btn,
-.folder-year-btn {
+#mb-upload-btn {
+    margin-bottom: var(--spacing-md);
+}
+
+#mb-type-filter {
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--border-primary);
+    background-color: var(--surface-input);
+    color: var(--text-primary);
+}
+
+.folder-tree-item {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
     width: 100%;
     padding: var(--spacing-xs) var(--spacing-sm);
     border: none;
@@ -39,50 +54,116 @@
     text-align: left;
     border-radius: var(--border-radius-sm);
     cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
+    transition: all var(--transition-fast);
 }
 
-.folder-tree-all:hover,
-.folder-month-btn:hover,
-.folder-year-btn:hover {
+.folder-tree-item:hover {
     background-color: var(--surface-hover);
     color: var(--text-primary);
 }
 
-.folder-tree-all.active,
-.folder-month-btn.active {
+.folder-tree-item.active {
     background-color: var(--color-primary-light);
     color: var(--color-primary);
-    font-weight: 500;
-}
-
-.folder-year-btn {
     font-weight: 600;
-    color: var(--text-primary);
-    margin-top: var(--spacing-xs);
 }
 
-.folder-year-btn.has-active {
-    color: var(--color-primary);
-}
-
-.folder-year-arrow {
-    font-size: 10px;
-    width: 10px;
-    display: inline-block;
+.folder-tree-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
     flex-shrink: 0;
 }
 
+.folder-tree-icon svg {
+    display: block;
+}
+
+.folder-tree-all .folder-tree-icon {
+    cursor: pointer;
+}
+
+.folder-tree-all .folder-tree-icon:hover {
+    opacity: 1;
+}
+
+.folder-tree-item.active .folder-tree-icon {
+    opacity: 1;
+}
+
+.folder-year-group {
+    margin-top: 2px;
+}
+
+.folder-year-row {
+    display: flex;
+    align-items: center;
+    border-radius: var(--border-radius-sm);
+}
+
+/* Row active state (when either year is selected or a child is active) */
+.folder-year-row.active {
+    background-color: var(--color-primary-light);
+}
+
+.folder-year-row.has-active-child:not(.active) {
+    background-color: var(--surface-hover);
+}
+
+.folder-year-arrow {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--border-radius-sm);
+    flex-shrink: 0;
+    transition: transform var(--transition-fast);
+    transform: rotate(-90deg);
+}
+
+.folder-year-arrow.rotated {
+    transform: rotate(0deg);
+}
+
+.folder-year-arrow:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
 .folder-year-months {
-    padding-left: var(--spacing-sm);
+    margin-left: 12px;
+    border-left: 1px solid var(--border-primary);
+    padding-left: var(--spacing-xs);
+    margin-top: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
 }
 
 .folder-year-months.hidden {
     display: none;
 }
 
-.folder-year-group {
-    margin-bottom: 2px;
+.folder-month-btn {
+    padding-left: var(--spacing-md);
+    position: relative;
+}
+
+.folder-month-btn::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 8px;
+    border-top: 1px solid var(--border-primary);
 }
 
 /* ===========================
