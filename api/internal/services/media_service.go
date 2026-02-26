@@ -205,8 +205,8 @@ func (s *MediaService) ListMedia(ctx context.Context, p ListMediaParams) ([]mode
 	return media, total, nil
 }
 
-func (s *MediaService) GetMediaFolders(ctx context.Context) ([]repository.MediaFolder, error) {
-	return s.repo.ListMediaFolders(ctx)
+func (s *MediaService) GetMediaFolders(ctx context.Context, fileType string) ([]repository.MediaFolder, error) {
+	return s.repo.ListMediaFolders(ctx, fileType)
 }
 
 type UpdateMediaParams struct {
