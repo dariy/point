@@ -17,10 +17,11 @@ export function listMedia(params = {}) {
 
 /**
  * Get distinct year/month folders from the media library.
+ * @param {{ file_type? }} [params]
  * @returns {Promise<{ folders: { year, month, path }[] }>}
  */
-export function getMediaFolders() {
-  return api.get('/api/media/folders');
+export function getMediaFolders(params = {}) {
+  return api.get('/api/media/folders', params);
 }
 
 /**
@@ -68,6 +69,16 @@ export function uploadMultiple(files, postId) {
  */
 export function updateMedia(id, data) {
   return api.patch(`/api/media/${id}`, data);
+}
+
+/**
+ * Rename a media item.
+ * @param {number} id
+ * @param {string} newFilename
+ * @returns {Promise<object>}
+ */
+export function renameMedia(id, newFilename) {
+  return api.post(`/api/media/${id}/rename`, { new_filename: newFilename });
 }
 
 /**

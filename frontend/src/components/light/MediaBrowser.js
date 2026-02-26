@@ -17,11 +17,11 @@ import { Component } from '../Component.js';
 import { Pagination } from '../shared/Pagination.js';
 import { MediaLightbox } from '../public/MediaLightbox.js';
 import { ConfirmDialog } from '../shared/ConfirmDialog.js';
-import { listMedia, uploadMedia, deleteMedia, getMediaFolders } from '../../api/media.js';
+import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders } from '../../api/media.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
-import { FOLDER_SVG, CALENDAR_SVG, CHEVRON_SVG } from '../../utils/icons.js';
+import { FOLDER_SVG, CALENDAR_SVG, CHEVRON_SVG, EDIT_SVG } from '../../utils/icons.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -170,8 +170,9 @@ export class MediaBrowser extends Component {
       <div class="media-item-actions">
         <a href="${escapeHtml(m.original_path || '')}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original">↗</a>
-        <button class="btn btn-sm copy-path-btn"
-                data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>
+        <button class="btn btn-sm rename-media-btn"
+                data-id="${escapeHtml(String(m.id))}"
+                data-name="${escapeHtml(m.filename)}" title="Rename">${EDIT_SVG}</button>
         <button class="btn btn-sm btn-danger delete-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
                 data-name="${escapeHtml(m.filename)}" title="Delete">✕</button>
@@ -184,7 +185,12 @@ export class MediaBrowser extends Component {
         ${pickerCheckbox}
         <div class="media-item-preview${isImage && !pickerMode ? ' media-item-preview--clickable' : ''}">${preview}</div>
         <div class="media-item-info">
-          <div class="media-item-name" title="${escapeHtml(m.filename)}">${escapeHtml(m.filename)}</div>
+          <div class="media-item-name-row">
+            <div class="media-item-name" title="Click to select: ${escapeHtml(m.path)}">${escapeHtml(m.path)}</div>
+            ${pickerMode ? '' : `
+              <button class="btn btn-sm copy-path-btn"
+                      data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>`}
+          </div>
           <div class="media-item-meta">
             ${escapeHtml(formatFileSize(m.file_size))} · ${escapeHtml(formatDateShort(m.uploaded_at))}
           </div>
@@ -219,6 +225,7 @@ export class MediaBrowser extends Component {
     this.$('#mb-type-filter')?.addEventListener('change', (e) => {
       this.setState({ typeFilter: e.target.value });
       this._load({ page: 1 });
+      this._loadFolders();
     });
 
     // Folder year expansion toggle (arrow only)
@@ -290,6 +297,28 @@ export class MediaBrowser extends Component {
           } else {
             store.set('toast', { message: 'Clipboard unavailable (requires HTTPS)', type: 'error' });
           }
+        });
+      });
+
+      this.$$('.rename-media-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = parseInt(btn.dataset.id, 10);
+          const oldName = btn.dataset.name;
+          const newName = prompt('Rename file:', oldName);
+          if (newName && newName !== oldName) {
+            this._renameMedia(id, newName);
+          }
+        });
+      });
+
+      this.$$('.media-item-name').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation(); // Don't trigger item selection or lightbox
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          selection.removeAllRanges();
+          selection.addRange(range);
         });
       });
 
@@ -380,7 +409,9 @@ export class MediaBrowser extends Component {
 
   async _loadFolders() {
     try {
-      const data = await getMediaFolders();
+      const params = {};
+      if (this.state.typeFilter) params.file_type = this.state.typeFilter;
+      const data = await getMediaFolders(params);
       const folders = data.folders || [];
       this.setState({ folders });
     } catch {
@@ -473,6 +504,17 @@ export class MediaBrowser extends Component {
       this._loadFolders();
     } catch (err) {
       store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
+    }
+  }
+
+  async _renameMedia(id, newFilename) {
+    try {
+      await renameMedia(id, newFilename);
+      store.set('toast', { message: 'File renamed.', type: 'success' });
+      this._load();
+      this._loadFolders();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Rename failed.', type: 'error' });
     }
   }
 }
