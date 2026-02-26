@@ -82,7 +82,7 @@ export default class PostsListPage extends Component {
     return `
       <div class="light-layout">
         <div id="sidebar-mount"></div>
-        <div class="light-main">
+        <div class="light-main posts-list-main">
           <header class="light-header">
             <h1>Posts</h1>
             <div class="header-actions">
@@ -91,11 +91,11 @@ export default class PostsListPage extends Component {
           </header>
           <main class="light-content">
             <div class="filters">
-              <input type="search" id="search-input" class="form-input filter-search"
-                     placeholder="Search posts…" value="${escapeHtml(search)}">
               <select id="status-filter" class="filter-select">
                 ${statusOptions}
               </select>
+              <input type="search" id="search-input" class="form-input filter-search"
+                     placeholder="Search posts…" value="${escapeHtml(search)}">
             </div>
             <div class="table-container">
               <table class="table">
@@ -170,7 +170,32 @@ export default class PostsListPage extends Component {
 
   mount() {
     super.mount();
+    this._perPage = this._calcPerPage();
     this._load();
+
+    this._onResize = debounce(() => {
+      const next = this._calcPerPage();
+      if (next !== this._perPage) {
+        this._perPage = next;
+        this._load({ page: 1 });
+      }
+    }, 200);
+    window.addEventListener('resize', this._onResize);
+  }
+
+  beforeUnmount() {
+    if (this._onResize) window.removeEventListener('resize', this._onResize);
+  }
+
+  /** Measure how many table rows fit in the available container height. */
+  _calcPerPage() {
+    const container = this.$('.table-container');
+    const thead = this.$('thead');
+    const probeRow = this.$('tbody tr');
+    if (!container || !thead || !probeRow) return 20;
+    const bodyHeight = container.clientHeight - thead.offsetHeight;
+    const rowHeight = probeRow.offsetHeight || 44;
+    return Math.max(5, Math.floor(bodyHeight / rowHeight));
   }
 
   async _load(overrides = {}) {
@@ -189,7 +214,7 @@ export default class PostsListPage extends Component {
 
     const params = {
       page: overrides.page ?? this.state.page,
-      per_page: 20,
+      per_page: this._perPage ?? 20,
     };
     const status = overrides.status ?? this.state.statusFilter;
     const search = overrides.search ?? this.state.search;
@@ -201,7 +226,7 @@ export default class PostsListPage extends Component {
       this._restoreSearchFocus = searchHadFocus;
       this.setState({
         loading: false,
-        posts: data.posts || data.items || [],
+        posts: (data.posts || data.items || []).map(p => ({ ...p, status: (p.status || '').toLowerCase() })),
         pagination: {
           page: data.page,
           pages: data.pages,
