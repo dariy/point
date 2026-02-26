@@ -107,7 +107,8 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 }
 
 func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
-	folders, err := h.mediaService.GetMediaFolders(c.Request().Context())
+	fileType := c.QueryParam("file_type")
+	folders, err := h.mediaService.GetMediaFolders(c.Request().Context(), fileType)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

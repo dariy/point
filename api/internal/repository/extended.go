@@ -502,17 +502,18 @@ type MediaFolder struct {
 }
 
 // ListMediaFolders returns distinct YYYY/MM folder combinations from the media table,
-// ordered newest first.
-func (r *Repository) ListMediaFolders(ctx context.Context) ([]MediaFolder, error) {
+// filtered by file_type if provided, ordered newest first.
+func (r *Repository) ListMediaFolders(ctx context.Context, fileType string) ([]MediaFolder, error) {
 	const q = `
 SELECT DISTINCT
     substr(original_path, 11, 4) as year,
     substr(original_path, 16, 2) as month
 FROM media
 WHERE original_path LIKE 'originals/____/__/%'
+  AND (? = '' OR LOWER(file_type) = LOWER(?))
 ORDER BY year DESC, month DESC`
 
-	rows, err := r.db.QueryContext(ctx, q)
+	rows, err := r.db.QueryContext(ctx, q, fileType, fileType)
 	if err != nil {
 		return nil, err
 	}
