@@ -16,10 +16,10 @@ export class Modal extends Component {
     const { title = '', footer = '', maxWidth = '500px' } = this.props;
 
     return `
-      <div class="modal-backdrop" id="modal-backdrop">
-        <div class="modal-container" style="max-width: ${escapeHtml(maxWidth)}">
+      <div class="modal-overlay active" id="modal-backdrop">
+        <div class="modal" style="max-width: ${escapeHtml(maxWidth)}">
           <header class="modal-header">
-            <h2>${escapeHtml(title)}</h2>
+            <h3>${escapeHtml(title)}</h3>
             <button class="modal-close" id="modal-close-btn" aria-label="Close">×</button>
           </header>
           <div class="modal-body" id="modal-body-mount"></div>
