@@ -181,6 +181,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Hierarchical children for sub-nav
 	childItems, _ := h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly)
 
+	// Root-level nav tags for global navigation
+	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly)
+
 	// Posts for this tag (published only)
 	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false)
 	if err != nil {
@@ -242,9 +245,10 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"tag":         tagResp,
-		"breadcrumbs": breadcrumbs,
-		"posts":       postResponses,
+		"tag":           tagResp,
+		"breadcrumbs":   breadcrumbs,
+		"posts":         postResponses,
+		"root_nav_tags": rootNavTags,
 		"pagination": map[string]interface{}{
 			"page":     page,
 			"per_page": perPage,
