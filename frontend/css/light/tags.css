@@ -280,16 +280,116 @@
     margin-left: 6px;
 }
 
+.tm-flags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.tm-flag-toggle, .tm-flag-static {
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all var(--transition-fast);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tm-flag-toggle:hover {
+    border-color: var(--color-primary);
+    background-color: var(--surface-hover);
+    opacity: 1;
+}
+
+.tm-flag-toggle.active, .tm-flag-static.active {
+    opacity: 1;
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-sm);
+}
+
+.tm-flag-static {
+    cursor: default;
+}
+
+.tm-flag-static:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+.tm-flag-static.active:disabled {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Flag specific colors when active */
+.tm-flag-toggle.active.tm-flag-is-important { color: #f59e0b; border-color: #f59e0b; background: #fffbeb; }
+.tm-flag-toggle.active.tm-flag-is-featured  { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
+.tm-flag-toggle.active.tm-flag-is-hidden    { color: var(--text-muted); border-color: var(--text-muted); }
+.tm-flag-toggle.active.tm-flag-is-hidden-posts { color: var(--color-danger); border-color: var(--color-danger); background: #fef2f2; }
+.tm-flag-toggle.active.tm-flag-include-in-breadcrumbs { color: #8b5cf6; border-color: #8b5cf6; background: #f5f3ff; }
+.tm-flag-toggle.active.tm-flag-show-related-tags-as-children { color: #10b981; border-color: #10b981; background: #ecfdf5; }
+
+.tm-flag-static.active.tm-flag-location { color: #ef4444; border-color: #ef4444; background: #fef2f2; opacity: 1; }
+
 .tm-flag {
     font-size: 12px;
     margin: 0 1px;
     opacity: 0.85;
 }
 
-.tm-flag-important { color: #f59e0b; }
-.tm-flag-featured  { color: var(--color-primary); }
-.tm-flag-hidden    { color: var(--text-muted); }
-.tm-flag-hidden-posts { color: var(--color-danger); }
+.tm-parents-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 200px;
+}
+
+.tm-tags-table th, .tm-tags-table td {
+    padding: var(--spacing-sm);
+    vertical-align: middle;
+}
+
+.tm-sortable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--transition-fast);
+}
+
+.tm-sortable-header:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-sortable-header.active {
+    color: var(--color-primary);
+}
+
+.tm-header-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tm-sort-icon {
+    font-size: 10px;
+    width: 10px;
+}
+
+.tm-tags-table .tm-flag-toggle,
+.tm-tags-table .tm-flag-static {
+    margin: 0 auto;
+}
 
 /* ===========================
    Tags Manager — tree view
@@ -322,11 +422,11 @@
 .tm-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     padding: 7px 10px;
     border-radius: var(--border-radius);
     transition: background-color var(--transition-fast);
-    min-height: 36px;
+    min-height: 44px;
 }
 
 .tm-row:hover {
@@ -360,8 +460,18 @@
 }
 
 .tm-row .tm-tag-name {
-    flex: 1;
     font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.tm-node-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.tm-row .tm-flags-row {
+    margin: 0;
 }
 
 .tm-row-meta {
@@ -369,6 +479,7 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+    min-width: 60px;
 }
 
 .tm-actions {
@@ -642,4 +753,3 @@
     margin-right: 4px;
     white-space: nowrap;
 }
-

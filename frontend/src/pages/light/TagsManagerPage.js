@@ -25,6 +25,8 @@ export default class TagsManagerPage extends Component {
       error: null,
       view: 'tree',        // 'tree' | 'list'
       expanded: new Set(), // IDs of expanded nodes in tree view
+      sortField: 'sort_order',
+      sortOrder: 'asc',    // 'asc' | 'desc'
     };
     this._modal = null;
     this._modalKeyHandler = null;
@@ -77,34 +79,81 @@ export default class TagsManagerPage extends Component {
   _renderList(tags) {
     if (!tags.length) return '<p class="empty-state">No tags found.</p>';
 
+    const { sortField, sortOrder } = this.state;
+    const dir = sortOrder === 'asc' ? 1 : -1;
+
     const sorted = [...tags].sort((a, b) => {
-      if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
-      if (a.sort_order != null) return -1;
-      if (b.sort_order != null) return 1;
-      return a.name.localeCompare(b.name);
+      let valA, valB;
+
+      switch (sortField) {
+        case 'name':
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+          break;
+        case 'slug':
+          valA = a.slug.toLowerCase();
+          valB = b.slug.toLowerCase();
+          break;
+        case 'post_count':
+          valA = a.post_count || 0;
+          valB = b.post_count || 0;
+          break;
+        case 'is_featured':
+        case 'is_hidden_posts':
+        case 'is_hidden':
+        case 'include_in_breadcrumbs':
+        case 'show_related_tags_as_children':
+          valA = a[sortField] ? 1 : 0;
+          valB = b[sortField] ? 1 : 0;
+          break;
+        case 'locations':
+          valA = (a.locations?.length > 0) ? 1 : 0;
+          valB = (b.locations?.length > 0) ? 1 : 0;
+          break;
+        case 'parents':
+          valA = (a.parents?.length || 0);
+          valB = (b.parents?.length || 0);
+          break;
+        case 'sort_order':
+        default:
+          valA = a.sort_order ?? Infinity;
+          valB = b.sort_order ?? Infinity;
+          if (valA === valB) {
+            valA = a.name.toLowerCase();
+            valB = b.name.toLowerCase();
+          }
+      }
+
+      if (valA < valB) return -1 * dir;
+      if (valA > valB) return 1 * dir;
+      return 0;
     });
 
     const rows = sorted.map(tag => {
-      const flags = [
-        tag.is_featured            ? `<span class="tm-flag tm-flag-featured"     title="Show on top">\u2605</span>` : '',
-        tag.is_hidden              ? `<span class="tm-flag tm-flag-hidden"       title="Hidden">\ud83d\udc41</span>` : '',
-        tag.is_hidden_posts        ? `<span class="tm-flag tm-flag-hidden-posts" title="Posts hidden">\u2298</span>` : '',
-        (tag.locations?.length)    ? `<span class="tm-flag tm-flag-location"     title="Has coordinates">\ud83d\udccd</span>` : '',
-      ].filter(Boolean).join('');
-
       const parents = (tag.parents || [])
         .map(p => `<span class="tm-rel-badge">${escapeHtml(p.name)}</span>`)
         .join('');
+
+      const hasLocation = tag.locations?.length > 0;
 
       return `
         <tr>
           <td>
             <span class="tm-tag-name">${escapeHtml(tag.name)}</span>
-            ${flags ? `<span class="tm-flags-inline">${flags}</span>` : ''}
+            ${tag.is_important ? `<span class="tm-flag-toggle active tm-flag-is-important" data-id="${tag.id}" data-flag="is_important" title="Important: ON">\u2691</span>` : ''}
           </td>
           <td><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
           <td class="text-center"><span class="tm-count-badge">${tag.post_count || 0}</span></td>
-          <td>${parents || '<span class="text-muted">\u2014</span>'}</td>
+          <td class="text-center">${this._renderFlagToggle(tag, 'is_featured', '\u2605', 'Show on top')}</td>
+          <td class="text-center">${this._renderFlagToggle(tag, 'is_hidden_posts', '\u2298', 'Hide Posts')}</td>
+          <td class="text-center">${this._renderFlagToggle(tag, 'is_hidden', '\ud83d\udc41', 'Hidden')}</td>
+          <td class="text-center">${this._renderFlagToggle(tag, 'include_in_breadcrumbs', '\ud83d\udd17', 'Breadcrumbs')}</td>
+          <td class="text-center">${this._renderFlagToggle(tag, 'show_related_tags_as_children', '\u22a2', 'Related as Children')}</td>
+          <td class="text-center">
+            <span class="tm-flag-static ${hasLocation ? 'active' : ''} tm-flag-location"
+                  title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">\ud83d\udccd</span>
+          </td>
+          <td><div class="tm-parents-cell">${parents || '<span class="text-muted">\u2014</span>'}</div></td>
           <td class="actions">
             <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">\u270e</button>
             <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">\u2715</button>
@@ -114,17 +163,67 @@ export default class TagsManagerPage extends Component {
 
     return `
       <div class="table-container">
-        <table class="table">
+        <table class="table tm-tags-table">
           <thead>
             <tr>
-              <th>Name</th><th>Slug</th>
-              <th class="text-center">Posts</th>
-              <th>Parents</th><th>Actions</th>
+              ${this._renderSortHeader('name', 'Name')}
+              ${this._renderSortHeader('slug', 'Slug')}
+              ${this._renderSortHeader('post_count', 'Posts', 'text-center')}
+              ${this._renderSortHeader('is_featured', '\u2605', 'text-center', 'Show on top')}
+              ${this._renderSortHeader('is_hidden_posts', '\u2298', 'text-center', 'Hide Posts')}
+              ${this._renderSortHeader('is_hidden', '\ud83d\udc41', 'text-center', 'Hidden')}
+              ${this._renderSortHeader('include_in_breadcrumbs', '\ud83d\udd17', 'text-center', 'Breadcrumbs')}
+              ${this._renderSortHeader('show_related_tags_as_children', '\u22a2', 'text-center', 'Related as Children')}
+              ${this._renderSortHeader('locations', '\ud83d\udccd', 'text-center', 'Coordinates')}
+              ${this._renderSortHeader('parents', 'Parents')}
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  }
+
+  _renderSortHeader(field, label, className = '', title = '') {
+    const { sortField, sortOrder } = this.state;
+    const isActive = sortField === field;
+    const icon = isActive ? (sortOrder === 'asc' ? ' \u25b4' : ' \u25be') : '';
+
+    return `
+      <th class="tm-sortable-header ${className} ${isActive ? 'active' : ''}"
+          data-field="${field}"
+          title="${title || 'Sort by ' + label}">
+        <div class="tm-header-content">
+          <span>${label}</span>
+          <span class="tm-sort-icon">${icon}</span>
+        </div>
+      </th>`;
+  }
+
+  _renderFlagToggle(tag, key, icon, title) {
+    const active = !!tag[key];
+    const stateLabel = active ? 'ON' : 'OFF';
+    return `<button type="button" class="btn btn-sm tm-flag-toggle ${active ? 'active' : ''} tm-flag-${key.replace(/_/g, '-')}"
+                  data-id="${tag.id}" data-flag="${key}" title="${title}: ${stateLabel}">${icon}</button>`;
+  }
+
+  _renderFlags(tag) {
+    const flags = [
+      { key: 'is_important', icon: '\u2691', title: 'Important' },
+      { key: 'is_featured',  icon: '\u2605', title: 'Show on top' },
+      { key: 'is_hidden_posts', icon: '\u2298', title: 'Hide Posts' },
+      { key: 'is_hidden',    icon: '\ud83d\udc41', title: 'Hidden' },
+      { key: 'include_in_breadcrumbs', icon: '\ud83d\udd17', title: 'In breadcrumbs' },
+      { key: 'show_related_tags_as_children', icon: '\u22a2', title: 'Related as children' },
+    ];
+
+    const rendered = flags.map(f => this._renderFlagToggle(tag, f.key, f.icon, f.title)).join('');
+
+    const hasLocation = tag.locations?.length > 0;
+    const locationFlag = `<button type="button" disabled class="btn btn-sm tm-flag-static ${hasLocation ? 'active' : ''} tm-flag-location"
+                                title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">\ud83d\udccd</button>`;
+
+    return rendered + locationFlag;
   }
 
   // ── Tree view (multi-parent DAG) ─────────────────────────────────────────────
@@ -186,11 +285,7 @@ export default class TagsManagerPage extends Component {
       ? `<button class="tm-toggle" data-id="${node.id}">${isExpanded ? '\u25bc' : '\u25b6'}</button>`
       : `<span class="tm-toggle-spacer"></span>`;
 
-    const flags = [
-      node.is_featured         ? `<span class="tm-flag tm-flag-featured"  title="Show on top">\u2605</span>` : '',
-      node.is_hidden           ? `<span class="tm-flag tm-flag-hidden"    title="Hidden">\ud83d\udc41</span>` : '',
-      (node.locations?.length) ? `<span class="tm-flag tm-flag-location"  title="Has coordinates">\ud83d\udccd</span>` : '',
-    ].filter(Boolean).join('');
+    const flags = this._renderFlags(node);
 
     // Multi-parent indicator: show other parents (not the one rendering this node)
     const otherParents = (node.parents || []).slice(1);
@@ -205,10 +300,13 @@ export default class TagsManagerPage extends Component {
         <div class="tm-row" draggable="true" data-id="${node.id}" data-parent-id="${parentAttr}">
           <span class="tm-drag-handle" title="Drag to reorder">\u22ee\u22ee</span>
           ${toggle}
-          <span class="tm-tag-name">${escapeHtml(node.name)}</span>
+          <div class="tm-node-body">
+            <span class="tm-tag-name">${escapeHtml(node.name)}</span>
+          </div>
+          <div class="tm-flags-row">${flags}</div>
           <span class="tm-row-meta">
-            ${flags}${multiParentHint}
             <span class="tm-count-badge">${node.post_count || 0}</span>
+            ${multiParentHint}
           </span>
           <div class="tm-actions">
             <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit">\u270e</button>
@@ -272,6 +370,32 @@ export default class TagsManagerPage extends Component {
         if (confirm(`Delete tag "${tag?.name}"? Posts will NOT be deleted.`)) this._handleDelete(id);
       });
     });
+
+    this.$$('.tm-flag-toggle').forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        const id = parseInt(el.dataset.id, 10);
+        const flag = el.dataset.flag;
+        this._handleToggleFlag(id, flag);
+      });
+    });
+
+    if (this.state.view === 'list') {
+      this.$$('.tm-sortable-header').forEach(th => {
+        th.addEventListener('click', () => {
+          this._handleSort(th.dataset.field);
+        });
+      });
+    }
+  }
+
+  _handleSort(field) {
+    const { sortField, sortOrder } = this.state;
+    if (sortField === field) {
+      this.setState({ sortOrder: sortOrder === 'asc' ? 'desc' : 'asc' });
+    } else {
+      this.setState({ sortField: field, sortOrder: 'asc' });
+    }
   }
 
   // ── Drag and Drop ────────────────────────────────────────────────────────────
@@ -423,10 +547,11 @@ export default class TagsManagerPage extends Component {
       '      <div class="tm-collapsible-section">',
       '        <button type="button" class="tm-section-toggle" data-target="flags-body">',
       '          <span class="tm-section-arrow">\u25b6</span> Flags',
-      `          <span class="tm-section-count">${[f.is_featured, f.is_hidden, f.is_hidden_posts, f.show_related_tags_as_children].filter(Boolean).length || ''}</span>`,
+      `          <span class="tm-section-count">${[f.is_important, f.is_featured, f.is_hidden, f.is_hidden_posts, f.include_in_breadcrumbs, f.show_related_tags_as_children].filter(Boolean).length || ''}</span>`,
       '        </button>',
       '        <div class="tm-section-body" id="flags-body" style="display:none">',
       '          <div class="tag-flags-grid">',
+      this._renderFlagCheckbox('is_important',               '\u2691', 'Important',           'Mark as important',                   f.is_important),
       this._renderFlagCheckbox('is_featured',                '\u2605', 'Show on top',         'Always show in header nav bar',       f.is_featured),
       this._renderFlagCheckbox('is_hidden',                  '\ud83d\udc41', 'Hidden',       'Hide tag from public',                f.is_hidden),
       this._renderFlagCheckbox('is_hidden_posts',            '\u2298', 'Hide Posts',          'Hide posts with this tag from public',  f.is_hidden_posts),
@@ -639,7 +764,7 @@ export default class TagsManagerPage extends Component {
       slug:                          (fd.get('slug') || '').trim(),
       description:                   (fd.get('description') || '').trim(),
       custom_url:                    '',
-      is_important:                  false,
+      is_important:                  fd.get('is_important') === 'on',
       is_featured:                   fd.get('is_featured') === 'on',
       is_hidden:                     fd.get('is_hidden') === 'on',
       is_hidden_posts:               fd.get('is_hidden_posts') === 'on',
@@ -674,6 +799,60 @@ export default class TagsManagerPage extends Component {
       store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
       submitBtn.disabled = false;
       submitBtn.textContent = origText;
+    }
+  }
+
+  async _handleToggleFlag(tagId, flag) {
+    const tag = this.state.tags.find(t => t.id === tagId);
+    if (!tag) return;
+
+    const newValue = !tag[flag];
+
+    // The backend UpdateTag requires full state (doesn't support partial updates).
+    const payload = {
+      name:                          tag.name,
+      slug:                          tag.slug,
+      description:                   tag.description || '',
+      custom_url:                    tag.custom_url || '',
+      is_important:                  tag.is_important,
+      is_featured:                   tag.is_featured,
+      is_hidden:                     tag.is_hidden,
+      is_hidden_posts:               tag.is_hidden_posts,
+      include_in_breadcrumbs:        tag.include_in_breadcrumbs,
+      show_related_tags_as_children: tag.show_related_tags_as_children,
+      sort_order:                    tag.sort_order,
+      parent_ids:                    (tag.parents || []).map(p => p.id),
+      child_ids:                     (tag.children || []).map(c => c.id),
+      locations:                     tag.locations || [],
+    };
+
+    // Update the specific flag in payload
+    payload[flag] = newValue;
+
+    try {
+      await updateTag(tagId, payload);
+
+      // Update local state without full reload for better UX
+      const updatedTags = this.state.tags.map(t =>
+        t.id === tagId ? { ...t, [flag]: newValue } : t
+      );
+      this.setState({ tags: updatedTags });
+
+      const flagLabels = {
+        is_important: 'Important',
+        is_featured: 'Featured',
+        is_hidden: 'Hidden',
+        is_hidden_posts: 'Posts hidden',
+        include_in_breadcrumbs: 'In breadcrumbs',
+        show_related_tags_as_children: 'Related as children',
+      };
+
+      store.set('toast', {
+        message: `${flagLabels[flag] || flag} ${newValue ? 'enabled' : 'disabled'}.`,
+        type: 'success'
+      });
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Toggle failed.', type: 'error' });
     }
   }
 
