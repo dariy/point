@@ -21,6 +21,7 @@ import { listMedia, uploadMedia, deleteMedia, getMediaFolders } from '../../api/
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
+import { FOLDER_SVG, CALENDAR_SVG, CHEVRON_SVG } from '../../utils/icons.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -75,26 +76,39 @@ export class MediaBrowser extends Component {
 
     const folderTree = `
       <nav class="media-folder-tree" aria-label="Media folders">
-        <button class="folder-tree-all${!selectedFolder ? ' active' : ''}" data-folder="">
-          All media
+        <button id="mb-upload-btn" class="btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
+        <select id="mb-type-filter" class="filter-select">${typeOptions}</select>
+
+        <button class="folder-tree-item folder-tree-all${!selectedFolder ? ' active' : ''}" data-folder="">
+          <span class="folder-tree-icon">${FOLDER_SVG}</span>
+          <span class="folder-tree-label">All media</span>
         </button>
         ${sortedYears.map((year) => {
-          const expanded = expandedYears[year] !== false;
+          const expanded = expandedYears[year] === true;
           const months = yearGroups[year];
-          const hasActive = months.some((f) => selectedFolder === f.path);
+          const isYearActive = selectedFolder === year;
+          const hasActiveMonth = months.some((f) => selectedFolder === f.path);
+          
           return `
-            <div class="folder-year-group">
-              <button class="folder-year-btn${hasActive ? ' has-active' : ''}" data-year="${escapeHtml(year)}">
-                <span class="folder-year-arrow">${expanded ? '▾' : '▸'}</span>
-                ${escapeHtml(year)}
-              </button>
+            <div class="folder-year-group${expanded ? ' is-expanded' : ''}">
+              <div class="folder-year-row${isYearActive ? ' active' : ''}${hasActiveMonth ? ' has-active-child' : ''}">
+                <button class="folder-year-arrow${expanded ? ' rotated' : ''}" data-year="${escapeHtml(year)}" aria-label="${expanded ? 'Collapse' : 'Expand'}">
+                  ${CHEVRON_SVG}
+                </button>
+                <button class="folder-tree-item folder-year-label${isYearActive ? ' active' : ''}" data-folder="${escapeHtml(year)}">
+                  <span class="folder-tree-icon">${CALENDAR_SVG}</span>
+                  <span class="folder-tree-label">${escapeHtml(year)}</span>
+                </button>
+              </div>
               <div class="folder-year-months${expanded ? '' : ' hidden'}">
                 ${months.map((f) => {
                   const monthName = MONTH_NAMES[parseInt(f.month, 10) - 1] || f.month;
-                  return `<button class="folder-month-btn${selectedFolder === f.path ? ' active' : ''}"
-                                  data-folder="${escapeHtml(f.path)}">
-                    ${escapeHtml(monthName)}
-                  </button>`;
+                  const isActive = selectedFolder === f.path;
+                  return `
+                    <button class="folder-tree-item folder-month-btn${isActive ? ' active' : ''}"
+                            data-folder="${escapeHtml(f.path)}">
+                      <span class="folder-tree-label">${escapeHtml(monthName)}</span>
+                    </button>`;
                 }).join('')}
               </div>
             </div>`;
@@ -118,10 +132,7 @@ export class MediaBrowser extends Component {
     return `
       <div class="media-browser${pickerMode ? ' media-browser--picker' : ''}">
         <input type="file" id="mb-file-input" multiple accept="image/*,video/*,audio/*" style="display:none">
-        <div class="media-browser-toolbar">
-          <button id="mb-upload-btn" class="btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
-          <select id="mb-type-filter" class="filter-select">${typeOptions}</select>
-        </div>
+
         ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ''}
         <div class="media-layout">
           ${folderTree}
@@ -210,22 +221,36 @@ export class MediaBrowser extends Component {
       this._load({ page: 1 });
     });
 
-    // Folder year toggle
-    this.$$('.folder-year-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+    // Folder year expansion toggle (arrow only)
+    this.$$('.folder-year-arrow').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const year = btn.dataset.year;
         const expanded = this.state.expandedYears[year] !== false;
         this.setState({ expandedYears: { ...this.state.expandedYears, [year]: !expanded } });
       });
     });
 
-    // Folder / "all" selection
-    this.$$('.folder-month-btn, .folder-tree-all').forEach((btn) => {
+    // Folder / "all" / Year selection
+    this.$$('.folder-tree-item').forEach((btn) => {
       btn.addEventListener('click', () => {
         const folder = btn.dataset.folder || null;
         this.setState({ selectedFolder: folder });
         this._load({ page: 1 });
       });
+    });
+
+    // Toggle all years when clicking the "All media" icon
+    this.$('.folder-tree-all .folder-tree-icon')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const allYears = [...new Set(this.state.folders.map((f) => f.year))];
+      // A year is collapsed if not explicitly set to true (since default is now collapsed)
+      const anyCollapsed = allYears.some((y) => this.state.expandedYears[y] !== true);
+      const newExpanded = {};
+      allYears.forEach((y) => {
+        newExpanded[y] = anyCollapsed;
+      });
+      this.setState({ expandedYears: newExpanded });
     });
 
     if (pickerMode) {
@@ -357,11 +382,7 @@ export class MediaBrowser extends Component {
     try {
       const data = await getMediaFolders();
       const folders = data.folders || [];
-      const expandedYears = { ...this.state.expandedYears };
-      if (folders.length && expandedYears[folders[0].year] === undefined) {
-        expandedYears[folders[0].year] = true;
-      }
-      this.setState({ folders, expandedYears });
+      this.setState({ folders });
     } catch {
       // Silently ignore
     }
