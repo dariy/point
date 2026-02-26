@@ -4,7 +4,7 @@
 :root,
 [data-theme="light"] {
     /* Admin Layout */
-    --sidebar-width: 240px;
+    --sidebar-width: 160px;
     --header-height: 64px;
     --content-max-width: 1400px;
 

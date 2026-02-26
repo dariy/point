@@ -10,7 +10,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { APP_LOGO_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, LOGOUT_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
 
 const NAV_ITEMS = [
@@ -59,7 +59,7 @@ export class LightSidebar extends Component {
         </nav>
         <div class="sidebar-footer">
           <div class="user-info">
-            <button class="btn btn-primary" id="logout-btn" type="button">Logout</button>
+            <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
           </div>
           <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button">
             <span class="icon-sun" aria-hidden="true">☀</span>
