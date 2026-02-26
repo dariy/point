@@ -165,6 +165,20 @@ body {
     flex: 1;
 }
 
+.logout-btn {
+    border: none;
+    background: transparent;
+    color: var(--sidebar-text);
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.logout-btn:hover {
+    color: var(--sidebar-text-hover);
+}
+
 .user-name {
     font-size: var(--font-size-sm);
     color: var(--sidebar-text);
@@ -210,6 +224,30 @@ body {
     flex: 1;
     padding: var(--spacing-xl);
     max-width: var(--content-max-width);
+}
+
+/* Posts list: fixed-viewport layout — table scrolls, pagination stays visible */
+.posts-list-main {
+    height: 100vh;
+    overflow: hidden;
+}
+
+.posts-list-main .light-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.posts-list-main .light-content .table-container {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.posts-list-main .light-content .filters,
+.posts-list-main .light-content #pagination-mount {
+    flex-shrink: 0;
 }
 
 /* Homepage Link */
