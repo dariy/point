@@ -206,6 +206,7 @@ body {
     z-index: 50;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
     backdrop-filter: blur(4px);
+    max-width: var(--content-max-width);
 }
 
 .light-header h1 {
