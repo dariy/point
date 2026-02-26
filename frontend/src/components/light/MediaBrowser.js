@@ -16,6 +16,7 @@
 import { Component } from '../Component.js';
 import { Pagination } from '../shared/Pagination.js';
 import { MediaLightbox } from '../public/MediaLightbox.js';
+import { ConfirmDialog } from '../shared/ConfirmDialog.js';
 import { listMedia, uploadMedia, deleteMedia, getMediaFolders } from '../../api/media.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
@@ -248,20 +249,22 @@ export class MediaBrowser extends Component {
       this.$$('.delete-media-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.id, 10);
-          if (confirm(`Delete "${btn.dataset.name}"?`)) {
-            this._deleteMedia(id);
-          }
+          this._showDeleteConfirm(id, btn.dataset.name);
         });
       });
 
       this.$$('.copy-path-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const path = btn.dataset.path;
-          navigator.clipboard.writeText(path).then(() => {
-            store.set('toast', { message: `Copied: ${path}`, type: 'success' });
-          }).catch(() => {
-            store.set('toast', { message: 'Copy failed', type: 'error' });
-          });
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(path).then(() => {
+              store.set('toast', { message: `Copied: ${path}`, type: 'success' });
+            }).catch(() => {
+              store.set('toast', { message: 'Copy failed', type: 'error' });
+            });
+          } else {
+            store.set('toast', { message: 'Clipboard unavailable (requires HTTPS)', type: 'error' });
+          }
         });
       });
 
@@ -418,6 +421,27 @@ export class MediaBrowser extends Component {
       const selectedIds = new Set([...this.state.selectedIds, ...newIds]);
       this.setState({ selectedIds });
     }
+  }
+
+  _showDeleteConfirm(id, name) {
+    const mountEl = document.createElement('div');
+    document.body.appendChild(mountEl);
+    const dialog = new ConfirmDialog(mountEl, {
+      title: 'Delete file',
+      message: `Delete "${name}"?`,
+      confirmText: 'Delete',
+      variant: 'danger',
+      onConfirm: () => {
+        dialog.unmount();
+        mountEl.remove();
+        this._deleteMedia(id);
+      },
+      onCancel: () => {
+        dialog.unmount();
+        mountEl.remove();
+      },
+    });
+    dialog.mount();
   }
 
   async _deleteMedia(id) {

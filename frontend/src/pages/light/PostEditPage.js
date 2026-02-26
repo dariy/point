@@ -31,7 +31,6 @@ export default class PostEditPage extends Component {
     this.state = {
       loading: !!id,
       saving: false,
-      saveStatus: null,   // null | 'saving' | 'saved' | 'error'
       post: null,
       error: null,
       isNew: !id,
@@ -46,7 +45,7 @@ export default class PostEditPage extends Component {
   }
 
   render() {
-    const { loading, error, post, isNew, saveStatus, saving } = this.state;
+    const { loading, error, post, isNew, saving } = this.state;
 
     if (loading) {
       return `
@@ -92,11 +91,6 @@ export default class PostEditPage extends Component {
     ).join('');
 
     const saveLabel = saving ? 'Saving…' : 'Save';
-    const statusMsg = saveStatus === 'saved'
-      ? '<span class="save-status success">Saved</span>'
-      : saveStatus === 'error'
-        ? '<span class="save-status error">Save failed</span>'
-        : '';
 
     return `
       <div class="light-layout">
@@ -105,7 +99,6 @@ export default class PostEditPage extends Component {
           <header class="light-header">
             <h1>${isNew ? 'New Post' : 'Edit Post'}</h1>
             <div class="header-actions">
-              ${statusMsg}
               <button id="media-btn" class="btn btn-secondary" type="button">Media</button>
               <button id="save-btn" class="btn btn-primary" type="button"
                       ${saving ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
@@ -286,7 +279,7 @@ export default class PostEditPage extends Component {
       return;
     }
 
-    this.setState({ saving: true, saveStatus: 'saving' });
+    this.setState({ saving: true });
     try {
       let post;
       if (this.state.isNew) {
@@ -297,11 +290,10 @@ export default class PostEditPage extends Component {
       } else {
         post = await updatePost(this.state.postId, data);
       }
-      this.setState({ saving: false, saveStatus: 'saved', post });
+      this.setState({ saving: false, post });
       store.set('toast', { message: 'Post saved.', type: 'success' });
-      setTimeout(() => this.setState({ saveStatus: null }), 3000);
     } catch (err) {
-      this.setState({ saving: false, saveStatus: 'error' });
+      this.setState({ saving: false });
       store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
     }
   }
@@ -312,8 +304,6 @@ export default class PostEditPage extends Component {
     if (!data.title) return;
     try {
       await updatePost(this.state.postId, data);
-      this.setState({ saveStatus: 'saved' });
-      setTimeout(() => this.setState({ saveStatus: null }), 2000);
     } catch {
       // Silent autosave failure.
     }
@@ -325,9 +315,8 @@ export default class PostEditPage extends Component {
     const fullData = { ...formData, ...patch };
     try {
       const post = await updatePost(this.state.postId, fullData);
-      this.state.post = post;  // update before setState so re-render uses correct values
-      this.setState({ saveStatus: 'saved' });
-      setTimeout(() => this.setState({ saveStatus: null }), 2000);
+      this.state.post = post;
+      store.set('toast', { message: 'Saved.', type: 'success' });
     } catch (err) {
       store.set('toast', { message: err.message || 'Auto-save failed.', type: 'error' });
     }
