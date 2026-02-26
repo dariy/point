@@ -22,8 +22,16 @@ export class PublicHeaderTagsBar extends Component {
       .join('');
 
     return `
-      <div class="tags-filters is-ready" data-mode="categories">
-        ${chips}
+      <div class="tags-bar-track">
+        <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">
+          ${CHEVRON_SVG}
+        </button>
+        <div class="tags-filters is-ready" data-mode="categories">
+          ${chips}
+        </div>
+        <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">
+          ${CHEVRON_SVG}
+        </button>
       </div>`;
   }
 
@@ -86,10 +94,29 @@ export class PublicHeaderTagsBar extends Component {
       group.addEventListener('mouseleave', () => this._close(group));
     });
 
+    const filters = this.container.querySelector('.tags-filters');
+    const btnLeft = this.container.querySelector('.tags-scroll-btn--left');
+    const btnRight = this.container.querySelector('.tags-scroll-btn--right');
+
+    this._boundScroll = () => this._updateScrollIndicators();
+
+    if (filters && btnLeft && btnRight) {
+      btnLeft.addEventListener('click', () => {
+        filters.scrollBy({ left: -200, behavior: 'smooth' });
+      });
+      btnRight.addEventListener('click', () => {
+        filters.scrollBy({ left: 200, behavior: 'smooth' });
+      });
+      filters.addEventListener('scroll', this._boundScroll, { passive: true });
+    }
+
     // Store bound refs so they can be removed in beforeUnmount
     this._boundOutside        = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
     this._boundCloseAll       = () => this._closeAll();
-    this._boundCheckOverflow  = () => this._checkOverflow();
+    this._boundCheckOverflow  = () => {
+      this._checkOverflow();
+      this._updateScrollIndicators();
+    };
 
     document.addEventListener('click',  this._boundOutside);
     window.addEventListener('scroll',   this._boundCloseAll, { passive: true });
@@ -97,7 +124,10 @@ export class PublicHeaderTagsBar extends Component {
     window.addEventListener('resize',   this._boundCheckOverflow, { passive: true });
 
     // Defer one frame so the header's flex layout has settled before measuring.
-    requestAnimationFrame(() => this._checkOverflow());
+    requestAnimationFrame(() => {
+      this._checkOverflow();
+      this._updateScrollIndicators();
+    });
   }
 
   beforeUnmount() {
@@ -105,6 +135,24 @@ export class PublicHeaderTagsBar extends Component {
     window.removeEventListener('scroll',   this._boundCloseAll);
     window.removeEventListener('resize',   this._boundCloseAll);
     window.removeEventListener('resize',   this._boundCheckOverflow);
+
+    const filters = this.container.querySelector('.tags-filters');
+    if (filters && this._boundScroll) {
+      filters.removeEventListener('scroll', this._boundScroll);
+    }
+  }
+
+  /**
+   * Toggle visual indicators (fade + arrows) based on scroll position.
+   */
+  _updateScrollIndicators() {
+    const track = this.container.querySelector('.tags-bar-track');
+    const filters = this.container.querySelector('.tags-filters');
+    if (!track || !filters) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = filters;
+    track.classList.toggle('has-scroll-left', scrollLeft > 0);
+    track.classList.toggle('has-scroll-right', scrollLeft + clientWidth < scrollWidth - 2);
   }
 
   /**
