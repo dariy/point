@@ -29,7 +29,9 @@ export class LightSidebar extends Component {
     const displayName = escapeHtml(user.display_name || user.username || 'Admin');
 
     const navItems = NAV_ITEMS.map(({ href, label, icon }) => {
-      const isActive = currentPath === href || currentPath.startsWith(href + '/');
+      const isActive = href === '/light'
+        ? currentPath === href
+        : currentPath === href || currentPath.startsWith(href + '/');
       const cls = isActive ? ' class="nav-item active"' : ' class="nav-item"';
       return `
         <li${cls}>

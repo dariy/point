@@ -84,7 +84,10 @@ export default class TagPage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    const navTags  = this.state.data?.nav_tags || store.get('navTags') || [];
+    const navTags  = this.state.data?.root_nav_tags || this.state.data?.nav_tags || store.get('navTags') || [];
+    if (navTags.length && this.state.data?.root_nav_tags) {
+      store.set('navTags', navTags);
+    }
     const slug     = this.props.params?.slug || '';
     const { data, post } = this.state;
 
@@ -111,12 +114,15 @@ export default class TagPage extends Component {
       const nextPost = postIndex !== -1 && postIndex < posts.length - 1 ? posts[postIndex + 1] : null;
 
       const immersive = shouldUseImmersive(post);
+      const headerBreadcrumb = post
+        ? [...breadcrumb, { name: post.title, slug: null }]
+        : breadcrumb;
 
       this.mountChild(PublicHeader, '#header-mount', {
         settings,
         navTags: immersive ? [] : navTags,
         currentTagSlug: slug,
-        breadcrumb,
+        breadcrumb: headerBreadcrumb,
         currentPath: '',
       });
 
