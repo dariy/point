@@ -345,6 +345,31 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+func (h *PostHandler) UpdatePostTags(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	var req struct {
+		Tags []string `json:"tags"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if err := h.postService.UpdatePostTags(c.Request().Context(), id, req.Tags); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+	}
+
+	resp, err := h.getFullPostResponse(c, id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
 func (h *PostHandler) DeletePost(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {

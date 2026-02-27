@@ -6,8 +6,9 @@
 
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { TagsInput } from '../../components/light/TagsInput.js';
 import { Pagination } from '../../components/shared/Pagination.js';
-import { listPosts, deletePost } from '../../api/posts.js';
+import { listPosts, deletePost, updatePostTags } from '../../api/posts.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
@@ -29,7 +30,7 @@ export default class PostsListPage extends Component {
       pagination: {},
       error: null,
       statusFilter: props.query?.status || '',
-      search: props.query?.q || '',
+      search: props.query?.search || '',
       page: parseInt(props.query?.page || '1', 10),
     };
   }
@@ -50,7 +51,7 @@ export default class PostsListPage extends Component {
         : !posts.length
           ? `<tr><td colspan="5" class="empty-state">No posts found.</td></tr>`
           : posts.map((p) => `
-              <tr>
+              <tr data-post-id="${escapeHtml(String(p.id))}">
                 <td>
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
                     ${escapeHtml(p.title)}
@@ -61,11 +62,7 @@ export default class PostsListPage extends Component {
                     ${escapeHtml(STATUS_LABELS[p.status] || p.status)}
                   </span>
                 </td>
-                <td><div class="post-tags-cell">${
-                  p.tags?.length
-                    ? p.tags.map(t => `<a href="/light/tags/${escapeHtml(t.slug ?? t)}" class="tag-link">${escapeHtml(t.name ?? t)}</a>`).join('')
-                    : '—'
-                }</div></td>
+                <td class="tags-col"><div id="tags-cell-${escapeHtml(String(p.id))}"></div></td>
                 <td>${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
                 <td class="actions">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
@@ -156,6 +153,13 @@ export default class PostsListPage extends Component {
       });
     }
 
+    // Mount a TagsInput in every tags cell
+    if (!this.state.loading && !this.state.error) {
+      for (const post of this.state.posts) {
+        this._mountTagEditor(post);
+      }
+    }
+
     // Delete buttons
     this.$$('.delete-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -198,6 +202,22 @@ export default class PostsListPage extends Component {
     return Math.max(5, Math.floor(bodyHeight / rowHeight));
   }
 
+  /** Update the browser URL to reflect current filters without triggering a full navigation. */
+  _syncUrl(overrides = {}) {
+    const status = overrides.status ?? this.state.statusFilter;
+    const search = overrides.search ?? this.state.search;
+    const page   = overrides.page   ?? this.state.page;
+
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (search) params.set('search', search);
+    if (page > 1) params.set('page', String(page));
+
+    const qs = params.toString();
+    const url = '/light/posts' + (qs ? '?' + qs : '');
+    history.replaceState(null, '', url);
+  }
+
   async _load(overrides = {}) {
     // Check focus before any DOM mutation so we can restore it after re-render
     const searchEl = this.$('#search-input');
@@ -221,6 +241,9 @@ export default class PostsListPage extends Component {
     if (status) params.status = status;
     if (search) params.q = search;
 
+    // Sync URL whenever filters change
+    this._syncUrl(overrides);
+
     try {
       const data = await listPosts(params);
       this._restoreSearchFocus = searchHadFocus;
@@ -238,6 +261,28 @@ export default class PostsListPage extends Component {
       this._restoreSearchFocus = searchHadFocus;
       this.setState({ loading: false, error: err.message || 'Failed to load posts.' });
     }
+  }
+
+  /** Mount a TagsInput directly in the tags cell for a post row. Saves on change. */
+  _mountTagEditor(post) {
+    const mount = this.$(`#tags-cell-${post.id}`);
+    if (!mount) return;
+
+    const initialTags = (post.tags || []).map(t => typeof t === 'string' ? t : t.name);
+
+    this.mountChild(TagsInput, `#tags-cell-${post.id}`, {
+      tags: initialTags,
+      onChange: async (tags) => {
+        try {
+          const updated = await updatePostTags(post.id, tags);
+          // Update local state silently so re-render preserves the new tags
+          post.tags = updated.tags || tags.map(n => ({ name: n, slug: n }));
+          store.set('toast', { message: 'Tags saved.', type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Failed to save tags.', type: 'error' });
+        }
+      },
+    });
   }
 
   async _deletePost(id) {
