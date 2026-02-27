@@ -14,9 +14,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
-import { formatDate, isoDatetime } from '../../utils/formatters.js'; // used in _renderNormal
 import { MediaLightbox } from './MediaLightbox.js';
-import { LOCK_SVG } from '../../utils/icons.js';
 import { renderTagLink } from '../../utils/tags.js';
 
 const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
@@ -329,28 +327,11 @@ export class PostContent extends Component {
   // ── Normal layout ─────────────────────────────────────────────────────────
 
   _renderNormal(post, prevPost, nextPost) {
-    const { showViewCount = false } = this.props;
-
     const tags = (post.tags || []).map((t) => renderTagLink(t)).join('');
-
-    const viewCount = showViewCount && post.view_count != null
-      ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
-
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
-    const lockIcon = isHidden ? LOCK_SVG : '';
 
     return `
       <article class="post-single${isHidden ? ' is-hidden' : ''}" itemscope itemtype="https://schema.org/BlogPosting">
-        <header class="post-header">
-          <div class="post-meta">
-            <time class="post-date"
-                  datetime="${escapeHtml(isoDatetime(post.published_at || post.created_at))}">
-              ${escapeHtml(formatDate(post.published_at || post.created_at))}
-            </time>
-            ${viewCount}
-          </div>
-        </header>
-
         <div class="post-content" itemprop="articleBody">${post.content_html || ''}</div>
 
         ${tags
