@@ -618,6 +618,19 @@ func (r *Repository) BackupDB(ctx context.Context, destPath string) error {
 	return err
 }
 
+// ReplacePostContentPath replaces all occurrences of oldPath with newPath in
+// every post's content column. Returns the number of posts updated.
+func (r *Repository) ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE posts SET content = REPLACE(content, ?, ?) WHERE content LIKE '%' || ? || '%'`,
+		oldPath, newPath, oldPath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // GetTagsWithoutLocation returns tags that have no row in tag_locations.
 // Only tags whose IDs are in the provided set are considered.
 func (r *Repository) GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error) {
