@@ -14,7 +14,6 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
-import { MediaLightbox } from './MediaLightbox.js';
 import { renderTagLink } from '../../utils/tags.js';
 
 const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
@@ -61,24 +60,23 @@ export function shouldUseImmersive(post) {
 export class PostContent extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this._lightbox = null;
     this._idleTimer = null;
     this._lastShowTime = 0;
     this._listeners = []; // [target, type, fn, opts]
   }
 
   render() {
-    const { post, prevPost = null, nextPost = null } = this.props;
+    const { post, prevPost = null, nextPost = null, forceImmersive = false } = this.props;
     if (!post) return '';
-    return shouldUseImmersive(post)
+    return (forceImmersive || shouldUseImmersive(post))
       ? this._renderImmersive(post, prevPost, nextPost)
       : this._renderNormal(post, prevPost, nextPost);
   }
 
   afterRender() {
-    const { post } = this.props;
+    const { post, forceImmersive = false } = this.props;
     if (!post) return;
-    if (shouldUseImmersive(post)) {
+    if (forceImmersive || shouldUseImmersive(post)) {
       document.body.classList.add('immersive-layout');
       this._initImmersive();
     } else {
@@ -92,7 +90,6 @@ export class PostContent extends Component {
     this._listeners.forEach(([t, type, fn, opts]) => t.removeEventListener(type, fn, opts));
     this._listeners = [];
     clearTimeout(this._idleTimer);
-    if (this._lightbox) { this._lightbox.destroy(); this._lightbox = null; }
   }
 
   // ── Immersive rendering ───────────────────────────────────────────────────
@@ -100,9 +97,10 @@ export class PostContent extends Component {
   _renderImmersive(post, _prevPost, _nextPost) {
     const media = post.media || [];
     const items = media.length > 0 ? media : this._mediaFromHtml(post.content_html || '');
+    const startIndex = Math.min(this.props.startIndex || 0, Math.max(0, items.length - 1));
     const visuals = items.length === 1
       ? this._mediaEl(items[0])
-      : this._renderCarousel(items);
+      : this._renderCarousel(items, startIndex);
 
     const { showViewCount = false } = this.props;
     const viewCount = showViewCount && post.view_count != null
@@ -118,14 +116,14 @@ export class PostContent extends Component {
       </div>`;
   }
 
-  _renderCarousel(media) {
+  _renderCarousel(media, startIndex = 0) {
     const slides = media.map((item, i) => `
-      <div class="carousel-slide${i === 0 ? ' active' : ''}" data-index="${i}">
+      <div class="carousel-slide${i === startIndex ? ' active' : ''}" data-index="${i}">
         ${this._mediaEl(item)}
       </div>`).join('');
 
     const dots = media.map((_, i) => `
-      <button class="carousel-dot${i === 0 ? ' active' : ''}"
+      <button class="carousel-dot${i === startIndex ? ' active' : ''}"
               data-index="${i}" aria-label="Media ${i + 1} of ${media.length}"></button>`
     ).join('');
 
@@ -181,13 +179,13 @@ export class PostContent extends Component {
   // ── Immersive interactivity ───────────────────────────────────────────────
 
   _initImmersive() {
-    let index = 0;
     const { prevPost = null, nextPost = null, tagSlug } = this.props;
 
     // ── Carousel helpers ──
     const carousel = this.$('#immersive-carousel');
     const slides = carousel ? Array.from(carousel.querySelectorAll('.carousel-slide')) : [];
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
+    let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));
 
     const goToPost = (post) => {
       if (!post) return;
@@ -345,19 +343,18 @@ export class PostContent extends Component {
   }
 
   _enhanceMedia(body) {
-    const images = Array.from(body.querySelectorAll('img')).filter(
-      (img) => !img.closest('a[href]')
-    );
-    if (images.length) {
-      this._lightbox = new MediaLightbox();
-      const data = images.map((img) => ({ src: img.src, alt: img.alt || img.title || '' }));
+    const { onEnterImmersive } = this.props;
+    if (onEnterImmersive) {
+      const images = Array.from(body.querySelectorAll('img')).filter(
+        (img) => !img.closest('a[href]')
+      );
       images.forEach((img, i) => {
         img.style.cursor = 'zoom-in';
         img.setAttribute('tabindex', '0');
-        const open = () => this._lightbox.open(data, i);
-        img.addEventListener('click', open);
+        const enter = () => onEnterImmersive(i);
+        img.addEventListener('click', enter);
         img.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); }
         });
       });
     }
