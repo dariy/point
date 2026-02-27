@@ -8,13 +8,13 @@
 
 /* Show sun icon in dark mode (to switch to light) */
 [data-theme="dark"] .theme-toggle .icon-sun {
-    display: block;
+    display: flex;
 }
 
 /* Show moon icon in light mode (to switch to dark) */
 :root:not([data-theme="dark"]) .theme-toggle .icon-moon,
 [data-theme="light"] .theme-toggle .icon-moon {
-    display: block;
+    display: flex;
 }
 
 [data-theme="light"] .theme-toggle .icon-sun {
