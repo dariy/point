@@ -13,7 +13,7 @@ import { Component } from '../Component.js';
 import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { APP_LOGO_SVG, MAP_SVG, LOCK_SVG, EDIT_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, MAP_SVG, LOCK_SVG, EDIT_SVG, SUN_SVG, MOON_SVG } from '../../utils/icons.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -55,8 +55,13 @@ export class PublicHeader extends Component {
       crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb">${items}</nav>`;
     }
 
+    // ICON BUTTON GUIDANCE
+    // All icon-only buttons in the header use the `header-action-btn` class.
+    //   <a class="header-action-btn" href="..." aria-label="...">  — for navigation
+    //   <button class="header-action-btn" type="button" aria-label="...">  — for actions (no navigation)
+    // The `.theme-toggle` class is kept as an alias and for sun/moon icon visibility logic.
     const editButton = (user && editUrl)
-      ? `<a href="${escapeHtml(editUrl)}" class="edit-button-link" title="Edit">
+      ? `<a href="${escapeHtml(editUrl)}" class="header-action-btn" title="Edit" aria-label="Edit post">
            ${EDIT_SVG}
          </a>`
       : '';
@@ -82,13 +87,13 @@ export class PublicHeader extends Component {
           ${navTags.length ? '<div class="header-tags-bar" id="header-tags-mount"></div>' : ''}
 
           <nav class="site-nav" aria-label="Main navigation">
-            <a href="/map" class="nav-link${currentPath === '/map' ? ' active' : ''}"
+            <a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
                aria-label="Map view">
               ${MAP_SVG}
             </a>
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
-              <span class="icon-sun" aria-hidden="true">☀</span>
-              <span class="icon-moon" aria-hidden="true">☾</span>
+              <span class="icon-sun">${SUN_SVG}</span>
+              <span class="icon-moon">${MOON_SVG}</span>
             </button>
           </nav>
 
