@@ -46,7 +46,7 @@
     /* Component-specific */
     --header-bg: rgba(255, 255, 255, 0.9);
     --footer-bg: rgba(255, 255, 255, 0.9);
-    --footer-text: rgba(0, 0, 0, 0.95);  /*#94a3b8;*/
+    --footer-text: var(--text-tertiary);
     --code-bg: #1e293b;
     --code-text: #f1f5f9;
     --inline-code-bg: #f1f5f9;

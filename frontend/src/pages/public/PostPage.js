@@ -17,7 +17,7 @@ import { formatDate } from '../../utils/formatters.js';
 export default class PostPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, post: null, nav: null, error: null };
+    this.state = { loading: true, post: null, nav: null, error: null, forceImmersive: false, startIndex: 0 };
   }
 
   render() {
@@ -62,7 +62,7 @@ export default class PostPage extends Component {
     const navTags  = store.get('navTags') || [];
     const { post, nav } = this.state;
 
-    const immersive = shouldUseImmersive(post);
+    const immersive = this.state.forceImmersive || shouldUseImmersive(post);
 
     // Breadcrumb: show post title in header branding area
     let postTooltip = '';
@@ -95,6 +95,9 @@ export default class PostPage extends Component {
       showViewCount: !!settings.show_view_counts,
       prevPost: nav?.prev || null,
       nextPost: nav?.next || null,
+      forceImmersive: immersive,
+      startIndex: this.state.startIndex,
+      onEnterImmersive: (idx = 0) => this.setState({ forceImmersive: true, startIndex: idx }),
     });
   }
 
