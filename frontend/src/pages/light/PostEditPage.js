@@ -75,6 +75,7 @@ export default class PostEditPage extends Component {
 
     const p = post || {};
     const title    = escapeHtml(p.title || '');
+    const slug     = escapeHtml(p.slug || '');
     const content  = p.content || '';
     const status   = p.status || 'draft';
     const featured = p.is_featured || false;
@@ -120,6 +121,12 @@ export default class PostEditPage extends Component {
                 </select>
                 <input type="text" id="title-input" class="form-input editor-title"
                        placeholder="Post title" value="${title}" required>
+              </div>
+
+              <div class="slug-row">
+                <span class="slug-prefix">/post/</span>
+                <input type="text" id="slug-input" class="form-input editor-slug"
+                       placeholder="post-slug" value="${slug}" spellcheck="false">
               </div>
 
               <div id="tags-input-mount"></div>
@@ -187,8 +194,9 @@ export default class PostEditPage extends Component {
 
     // Auto-save on content change
     const titleInput = this.$('#title-input');
+    const slugInput = this.$('#slug-input');
     const contentEditor = this.$('#content-editor');
-    [titleInput, contentEditor].forEach((el) => {
+    [titleInput, slugInput, contentEditor].forEach((el) => {
       el?.addEventListener('input', () => this._debouncedAutosave());
     });
 
@@ -262,6 +270,7 @@ export default class PostEditPage extends Component {
   _collectFormData() {
     return {
       title:            (this.$('#title-input')?.value || '').trim(),
+      slug:             (this.$('#slug-input')?.value || '').trim() || null,
       content:          this.$('#content-editor')?.value || '',
       status:           this.$('#status-select')?.value || 'draft',
       formatter:        this.$('#formatter-select')?.value || 'markdown',

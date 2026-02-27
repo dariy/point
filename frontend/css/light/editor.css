@@ -77,6 +77,28 @@ body.drag-active::after {
     color: #f59e0b;
 }
 
+/* Slug row: [/post/] [slug input] */
+.slug-row {
+    display: flex;
+    align-items: center;
+}
+
+.slug-prefix {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    padding: 0 var(--spacing-xs) 0 2px;
+    user-select: none;
+}
+
+.editor-slug {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    min-width: 0;
+}
+
 /* Full-width editor page — override the global max-width */
 .editor-full-width {
     max-width: none;
