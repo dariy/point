@@ -173,6 +173,7 @@ body {
     cursor: pointer;
     display: flex;
     align-items: center;
+    height: 36px;
 }
 
 .logout-btn:hover {
