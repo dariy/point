@@ -56,6 +56,26 @@ export const CALENDAR_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fil
     stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+export const SUN_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round"/>
+  <line x1="12" y1="2"  x2="12" y2="5"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="2"  y1="12" x2="5"  y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="4.22"  y1="4.22"  x2="6.34"  y2="6.34"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="19.78" y1="4.22"  x2="17.66" y2="6.34"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="6.34"  y1="17.66" x2="4.22"  y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const MOON_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 export const EDIT_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
