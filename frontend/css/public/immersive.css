@@ -138,7 +138,7 @@
 
 .immersive-layout .site-footer .footer-link,
 .immersive-layout .site-footer .footer-copyright {
-    color: rgba(255, 255, 255, 0.95);
+    color: var(--footer-text);
     transition: color var(--transition-theme);
 }
 
@@ -165,9 +165,12 @@
     pointer-events: auto;
 }
 
-[data-theme="light"].immersive-layout .site-footer .footer-link,
-[data-theme="light"].immersive-layout .site-footer .footer-copyright {
+[data-theme="light"].immersive-layout .site-footer .footer-link {
     color: var(--text-primary);
+}
+
+[data-theme="light"].immersive-layout .site-footer .footer-copyright {
+    color: var(--footer-text);
 }
 
 /* Immersive Components */
