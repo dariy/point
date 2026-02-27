@@ -13,7 +13,7 @@ import { Component } from '../Component.js';
 import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { APP_LOGO_SVG, MAP_SVG, LOCK_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, MAP_SVG, LOCK_SVG, EDIT_SVG } from '../../utils/icons.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -22,8 +22,10 @@ export class PublicHeader extends Component {
       currentPath = '/',
       navTags = [],
       breadcrumb = [],
+      editUrl = null,
     } = this.props;
 
+    const user = store.get('user');
     const title    = escapeHtml(settings.blog_title || 'Photo Blog');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
 
@@ -52,6 +54,12 @@ export class PublicHeader extends Component {
       crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb">${items}</nav>`;
     }
 
+    const editButton = (user && editUrl)
+      ? `<a href="${escapeHtml(editUrl)}" class="edit-button-link" title="Edit">
+           ${EDIT_SVG}
+         </a>`
+      : '';
+
     return `
       <div class="site-header-group">
         <div class="site-header-inner">
@@ -66,6 +74,7 @@ export class PublicHeader extends Component {
                 ${!breadcrumb.length && subtitle ? `<p class="site-subtitle">${subtitle}</p>` : ''}
               </a>
               ${crumbHtml}
+              ${editButton}
             </div>
           </div>
 

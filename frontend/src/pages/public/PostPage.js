@@ -72,6 +72,7 @@ export default class PostPage extends Component {
       navTags: (!post || immersive) ? [] : navTags,
       breadcrumb,
       currentPath: '',
+      editUrl: post ? `/light/posts/${post.id}/edit` : null,
     });
 
     // Immersive footer shows post tags + post-to-post navigation; normal footer shows pagination slot
