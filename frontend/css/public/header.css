@@ -171,6 +171,47 @@
     color: var(--color-primary);
 }
 
+.edit-button-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-primary);
+    background-color: var(--color-primary-light);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--border-radius-sm);
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    margin-left: var(--spacing-xs);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.edit-button-link:hover {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.edit-button-link svg {
+    width: 14px;
+    height: 14px;
+}
+
+.edit-button-link span {
+    display: inline;
+}
+
+@media (max-width: 600px) {
+    .edit-button-link span {
+        display: none;
+    }
+    .edit-button-link {
+        padding: 0.3rem;
+    }
+}
+
 .app-logo {
     display: inline-block;
     vertical-align: middle;

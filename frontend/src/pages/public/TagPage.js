@@ -124,6 +124,7 @@ export default class TagPage extends Component {
         currentTagSlug: slug,
         breadcrumb: headerBreadcrumb,
         currentPath: '',
+        editUrl: post ? `/light/posts/${post.id}/edit` : null,
       });
 
       this.mountChild(PublicFooter, '#footer-mount', {
@@ -150,6 +151,7 @@ export default class TagPage extends Component {
         currentTagSlug: slug,
         breadcrumb,
         currentPath: '',
+        editUrl: tag ? `/light/tags/${tag.slug}` : null,
       });
       this.mountChild(PublicFooter, '#footer-mount', { settings });
 
