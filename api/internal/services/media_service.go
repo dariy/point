@@ -374,12 +374,26 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 		_ = os.Rename(oldThumbFull, newThumbFull)
 	}
 
-	return s.repo.UpdateMediaFilename(ctx, models.UpdateMediaFilenameParams{
+	updated, err := s.repo.UpdateMediaFilename(ctx, models.UpdateMediaFilenameParams{
 		ID:            id,
 		Filename:      newBase,
 		OriginalPath:  newOrigRel,
 		ThumbnailPath: newThumbRel,
 	})
+	if err != nil {
+		return models.Medium{}, err
+	}
+
+	// Update any post content that references the old bare path (/YYYY/MM/old.ext).
+	oldContentPath := strings.TrimPrefix(m.OriginalPath, "originals")
+	newContentPath := strings.TrimPrefix(newOrigRel, "originals")
+	if oldContentPath != newContentPath {
+		if _, err := s.repo.ReplacePostContentPath(ctx, oldContentPath, newContentPath); err != nil {
+			return updated, fmt.Errorf("update post content references: %w", err)
+		}
+	}
+
+	return updated, nil
 }
 
 // RebuildThumbnails regenerates thumbnails for all image media.
