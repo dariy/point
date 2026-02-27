@@ -28,7 +28,6 @@
 
 .immersive-layout .site-header .site-title,
 .immersive-layout .site-header .site-subtitle,
-.immersive-layout .site-header .nav-link,
 .immersive-layout .site-header .light-link,
 .immersive-layout .site-header .breadcrumb-link,
 .immersive-layout .site-header .breadcrumb-current {
@@ -66,7 +65,6 @@
 
 [data-theme="light"].immersive-layout .site-header .site-title,
 [data-theme="light"].immersive-layout .site-header .site-subtitle,
-[data-theme="light"].immersive-layout .site-header .nav-link,
 [data-theme="light"].immersive-layout .site-header .light-link,
 [data-theme="light"].immersive-layout .site-header .breadcrumb-link,
 [data-theme="light"].immersive-layout .site-header .breadcrumb-current {
@@ -80,11 +78,11 @@
     transition: color var(--transition-theme);
 }
 
-.immersive-layout .site-header .nav-link:hover {
+.immersive-layout .site-header .header-action-btn:hover {
     background: rgba(255, 255, 255, 0.1);
 }
 
-[data-theme="light"].immersive-layout .site-header .nav-link:hover {
+[data-theme="light"].immersive-layout .site-header .header-action-btn:hover {
     background: var(--surface-hover);
 }
 
