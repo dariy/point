@@ -281,6 +281,31 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 	return post, nil
 }
 
+func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames []string) error {
+	// Verify the post exists.
+	if _, err := s.repo.GetPost(ctx, postID); err != nil {
+		return err
+	}
+
+	_ = s.repo.ClearPostTags(ctx, postID)
+	for _, tagName := range tagNames {
+		tag, err := s.repo.GetTagBySlug(ctx, utils.Slugify(tagName))
+		if err != nil {
+			tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{
+				Name: tagName,
+				Slug: utils.Slugify(tagName),
+			})
+			if err != nil {
+				continue
+			}
+		}
+		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: postID, TagID: tag.ID})
+	}
+
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	return nil
+}
+
 func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error {
 	return s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID})
 }

@@ -115,6 +115,7 @@ func main() {
 	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(authService))
 	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(authService))
 	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(authService))
+	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(authService))
 	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(authService))
 	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(authService))
 	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(authService))
