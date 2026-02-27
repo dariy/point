@@ -8,7 +8,8 @@ import (
 	"point-api/internal/models"
 )
 
-// ListPostsWithSearch returns posts filtered by a title substring (case-insensitive),
+// ListPostsWithSearch returns posts filtered by a search term (case-insensitive)
+// matched against title, post slug, content, and associated tag names/slugs,
 // in addition to the standard status / featured / visibility filters.
 func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.ListPostsRow, error) {
 	const q = `
@@ -26,11 +27,25 @@ WHERE
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
-    AND LOWER(p.title) LIKE '%' || LOWER(?) || '%'
+    AND (
+        LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
+        OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
+        OR LOWER(p.content) LIKE '%' || LOWER(?) || '%'
+        OR EXISTS (
+            SELECT 1 FROM post_tags pt
+            JOIN tags t ON t.id = pt.tag_id
+            WHERE pt.post_id = p.id
+              AND (LOWER(t.name) LIKE '%' || LOWER(?) || '%'
+                   OR LOWER(t.slug) LIKE '%' || LOWER(?) || '%')
+        )
+    )
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
 
-	rows, err := r.db.QueryContext(ctx, q, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, limit, offset)
+	rows, err := r.db.QueryContext(ctx, q,
+		statusFilter, status, featuredFilter, includeDrafts, includeHidden,
+		search, search, search, search, search,
+		limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +68,8 @@ LIMIT ? OFFSET ?`
 	return items, rows.Err()
 }
 
-// CountPostsWithSearch counts posts filtered by a title substring.
+// CountPostsWithSearch counts posts matched by the extended search (title, slug,
+// content, tag name, tag slug).
 func (r *Repository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
 	const q = `
 SELECT COUNT(*) FROM posts p
@@ -65,10 +81,24 @@ WHERE
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
-    AND LOWER(p.title) LIKE '%' || LOWER(?) || '%'`
+    AND (
+        LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
+        OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
+        OR LOWER(p.content) LIKE '%' || LOWER(?) || '%'
+        OR EXISTS (
+            SELECT 1 FROM post_tags pt
+            JOIN tags t ON t.id = pt.tag_id
+            WHERE pt.post_id = p.id
+              AND (LOWER(t.name) LIKE '%' || LOWER(?) || '%'
+                   OR LOWER(t.slug) LIKE '%' || LOWER(?) || '%')
+        )
+    )`
 
 	var count int64
-	err := r.db.QueryRowContext(ctx, q, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search).Scan(&count)
+	err := r.db.QueryRowContext(ctx, q,
+		statusFilter, status, featuredFilter, includeDrafts, includeHidden,
+		search, search, search, search, search,
+	).Scan(&count)
 	return count, err
 }
 
@@ -924,5 +954,107 @@ func (r *Repository) GetMigrations(ctx context.Context) ([]MigrationRecord, erro
 		items = []MigrationRecord{}
 	}
 	return items, rows.Err()
+}
+
+// GetPostsByTagIDs returns paginated posts that have at least one tag from the
+// given set of tag IDs. The status filter mirrors CountPostsByTag / GetPostsByTag.
+func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, limit, offset int64) ([]models.GetPostsByTagRow, error) {
+	if len(tagIDs) == 0 {
+		return []models.GetPostsByTagRow{}, nil
+	}
+
+	placeholders := ""
+	args := make([]interface{}, 0, len(tagIDs)+2)
+	for i, id := range tagIDs {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+	args = append(args, limit, offset)
+
+	var statusClause string
+	if includeDrafts {
+		statusClause = "1=1"
+	} else if publishedOnly {
+		statusClause = "LOWER(p.status) = 'published'"
+	} else {
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+	}
+
+	q := `SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
+       p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
+       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at,
+       u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+FROM posts p
+JOIN users u ON p.author_id = u.id
+WHERE p.id IN (
+    SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
+)
+AND (` + statusClause + `)
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.GetPostsByTagRow
+	for rows.Next() {
+		var i models.GetPostsByTagRow
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter, &i.Status,
+			&i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.CreatedAt, &i.UpdatedAt,
+			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if items == nil {
+		items = []models.GetPostsByTagRow{}
+	}
+	return items, rows.Err()
+}
+
+// CountPostsByTagIDs returns the total number of distinct posts that have at
+// least one tag from the given set of tag IDs.
+func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool) (int64, error) {
+	if len(tagIDs) == 0 {
+		return 0, nil
+	}
+
+	placeholders := ""
+	args := make([]interface{}, 0, len(tagIDs))
+	for i, id := range tagIDs {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+
+	var statusClause string
+	if includeDrafts {
+		statusClause = "1=1"
+	} else if publishedOnly {
+		statusClause = "LOWER(p.status) = 'published'"
+	} else {
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+	}
+
+	q := `SELECT COUNT(*) FROM posts p
+WHERE p.id IN (
+    SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
+)
+AND (` + statusClause + `)`
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
+	return count, err
 }
 
