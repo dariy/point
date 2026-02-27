@@ -40,11 +40,12 @@ export class PublicHeader extends Component {
           const lockIcon = (crumb.is_hidden || crumb.is_hidden_posts) ? LOCK_SVG : '';
 
           if (isLast) {
+            const tooltipAttr = crumb.tooltip ? ` title="${escapeHtml(crumb.tooltip)}"` : '';
             if (crumb.slug) {
               const href = `/tag/${escapeHtml(crumb.slug)}`;
-              return `<a href="${href}" class="breadcrumb-current">${lockIcon}${escapeHtml(crumb.name)}</a>`;
+              return `<a href="${href}" class="breadcrumb-current"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</a>`;
             }
-            return `<span class="breadcrumb-current">${lockIcon}${escapeHtml(crumb.name)}</span>`;
+            return `<span class="breadcrumb-current"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
           }
           const href = crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/';
           return `<a href="${href}" class="breadcrumb-link">${lockIcon}${escapeHtml(crumb.name)}</a>

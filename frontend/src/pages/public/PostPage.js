@@ -12,6 +12,7 @@ import { PostContent, shouldUseImmersive } from '../../components/public/PostCon
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { formatDate } from '../../utils/formatters.js';
 
 export default class PostPage extends Component {
   constructor(container, props = {}) {
@@ -64,7 +65,14 @@ export default class PostPage extends Component {
     const immersive = shouldUseImmersive(post);
 
     // Breadcrumb: show post title in header branding area
-    const breadcrumb = post ? [{ name: post.title, is_hidden: post.is_hidden || post.is_hidden_by_tag }] : [];
+    let postTooltip = '';
+    if (post) {
+      const dateStr = formatDate(post.published_at || post.created_at);
+      const viewStr = settings.show_view_counts && post.view_count != null
+        ? ` · ${post.view_count} views` : '';
+      postTooltip = dateStr + viewStr;
+    }
+    const breadcrumb = post ? [{ name: post.title, is_hidden: post.is_hidden || post.is_hidden_by_tag, tooltip: postTooltip }] : [];
 
     // In immersive mode suppress the tag filter bar; tags go in the footer instead
     this.mountChild(PublicHeader, '#header-mount', {
