@@ -10,17 +10,20 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { APP_LOGO_SVG, LOGOUT_SVG } from '../../utils/icons.js';
+import {
+  APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG,
+  DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
+} from '../../utils/icons.js';
 import { store } from '../../store.js';
 
 const NAV_ITEMS = [
-  { href: '/light',          label: 'Dashboard',  icon: '⊞' },
-  { href: '/light/posts',    label: 'Posts',       icon: '✎' },
-  { href: '/light/media',    label: 'Media',       icon: '⌑' },
-  { href: '/light/tags',     label: 'Tags',        icon: '⊿' },
-  { href: '/light/settings', label: 'Settings',    icon: '⚙' },
-  { href: '/light/security', label: 'Security',    icon: '⚿' },
-  { href: '/light/system',   label: 'System',      icon: '⌥' },
+  { href: '/light',          label: 'Dashboard', icon: DASHBOARD_SVG },
+  { href: '/light/posts',    label: 'Posts',     icon: POSTS_SVG     },
+  { href: '/light/media',    label: 'Media',     icon: MEDIA_SVG     },
+  { href: '/light/tags',     label: 'Tags',      icon: TAGS_SVG      },
+  { href: '/light/settings', label: 'Settings',  icon: SETTINGS_SVG  },
+  { href: '/light/security', label: 'Security',  icon: SECURITY_SVG  },
+  { href: '/light/system',   label: 'System',    icon: SYSTEM_SVG    },
 ];
 
 export class LightSidebar extends Component {
@@ -36,7 +39,7 @@ export class LightSidebar extends Component {
       return `
         <li${cls}>
           <a href="${escapeHtml(href)}">
-            <span class="nav-icon" aria-hidden="true">${icon}</span>
+            ${icon}
             ${escapeHtml(label)}
           </a>
         </li>`;
@@ -53,7 +56,7 @@ export class LightSidebar extends Component {
               </span>
             </a>
           </div>
-          <a href="${escapeHtml(publicUrl)}" class="public-home-link" title="View public site" aria-label="View public site" data-external>↗</a>
+          <a href="${escapeHtml(publicUrl)}" class="public-home-link" title="View public site" aria-label="View public site" data-external>${EXTERNAL_LINK_SVG}</a>
 
         </div>
         <nav class="sidebar-nav" aria-label="Admin navigation">
@@ -64,8 +67,8 @@ export class LightSidebar extends Component {
             <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
           </div>
           <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button">
-            <span class="icon-sun" aria-hidden="true">☀</span>
-            <span class="icon-moon" aria-hidden="true">☾</span>
+            <span class="icon-sun">${SUN_SVG}</span>
+            <span class="icon-moon">${MOON_SVG}</span>
           </button>
         </div>
       </aside>`;
