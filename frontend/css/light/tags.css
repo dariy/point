@@ -214,6 +214,17 @@
     gap: var(--spacing-xs);
 }
 
+/* Tags column in posts table — always-on inline editor */
+.tags-col {
+    min-width: 200px;
+}
+
+.tags-col .tags-input {
+    min-height: 32px;
+    padding: 2px var(--spacing-xs);
+    font-size: var(--font-size-sm);
+}
+
 /* ===========================
    Tags Manager — view toggle
    =========================== */

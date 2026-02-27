@@ -82,6 +82,16 @@ export function setPostStatus(id, status) {
 }
 
 /**
+ * Update a post's tags only.
+ * @param {number} id
+ * @param {string[]} tags  Tag names
+ * @returns {Promise<object>}
+ */
+export function updatePostTags(id, tags) {
+  return api.patch(`/api/posts/${id}/tags`, { tags });
+}
+
+/**
  * Get posts adjacent to a given post for prev/next navigation.
  * @param {number} id
  * @returns {Promise<{ prev: object|null, next: object|null }>}
