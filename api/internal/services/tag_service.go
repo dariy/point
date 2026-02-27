@@ -759,27 +759,22 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 }
 
 func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool) ([]models.GetPostsByTagRow, int64, error) {
+	// Collect the tag itself plus all descendants so that a parent tag page
+	// (e.g. /tag/countries) shows posts from all nested sub-tags.
+	descendants, _ := s.repo.GetTagDescendants(ctx, tagID)
+	tagIDs := make([]int64, 0, 1+len(descendants))
+	tagIDs = append(tagIDs, tagID)
+	for _, d := range descendants {
+		tagIDs = append(tagIDs, d.ID)
+	}
+
 	offset := (page - 1) * perPage
-	posts, err := s.repo.GetPostsByTag(ctx, models.GetPostsByTagParams{
-		TagID:               tagID,
-		PublishedOnlyFilter: publicOnly,
-		Limit:               int64(perPage),
-		Offset:              int64(offset),
-		IncludeDrafts:       includeDrafts,
-	})
+	posts, err := s.repo.GetPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, int64(perPage), int64(offset))
 	if err != nil {
 		return nil, 0, err
 	}
 
-	if posts == nil {
-		posts = []models.GetPostsByTagRow{}
-	}
-
-	total, err := s.repo.CountPostsByTag(ctx, models.CountPostsByTagParams{
-		TagID:               tagID,
-		PublishedOnlyFilter: publicOnly,
-		IncludeDrafts:       includeDrafts,
-	})
+	total, err := s.repo.CountPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts)
 	if err != nil {
 		return nil, 0, err
 	}
