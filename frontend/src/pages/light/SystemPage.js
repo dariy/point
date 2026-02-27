@@ -15,6 +15,8 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
+import { RESTORE_SVG } from '../../utils/icons.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 
 export default class SystemPage extends Component {
   constructor(container, props = {}) {
@@ -59,7 +61,6 @@ export default class SystemPage extends Component {
             <h1>System</h1>
           </header>
           <main class="light-content">
-
             <div class="grid-2-col">
               <div class="card">
                 <div class="card-header"><h2>Cache Management</h2></div>
@@ -70,54 +71,29 @@ export default class SystemPage extends Component {
               </div>
 
               <div class="card">
-                <div class="card-header"><h2>Backups</h2></div>
+                <div class="card-header"><h2>Map Coordinates</h2></div>
                 <div class="card-body">
-                  <button id="create-backup-btn" class="btn btn-primary" ${creatingBackup ? 'disabled' : ''}>
-                    ${creatingBackup ? 'Creating…' : 'Create New Backup'}
+                  <p>Auto-geocode tags under <strong>city / cities / country / countries</strong> that have no coordinates yet. Uses OpenStreetMap Nominatim (rate-limited to 1 req/sec — may take a while for large tag sets).</p>
+                  <button id="update-coords-btn" class="btn btn-secondary" ${updatingCoords ? 'disabled' : ''}>
+                    ${updatingCoords ? 'Geocoding…' : 'Update Missing Coordinates'}
                   </button>
-                  <div class="backup-list" style="margin-top: var(--spacing-md)">
-                    ${this._renderBackups(backups)}
-                  </div>
+                  ${coordsResult ? this._renderCoordsResult(coordsResult) : ''}
                 </div>
               </div>
             </div>
-
-            <div class="card" style="margin-top: var(--spacing-xl)">
-              <div class="card-header"><h2>Map Coordinates</h2></div>
+            <div class="card">
+              <div class="card-header"><h2>Backups</h2></div>
               <div class="card-body">
-                <p>Auto-geocode tags under <strong>city / cities / country / countries</strong> that have no coordinates yet. Uses OpenStreetMap Nominatim (rate-limited to 1 req/sec — may take a while for large tag sets).</p>
-                <button id="update-coords-btn" class="btn btn-secondary" ${updatingCoords ? 'disabled' : ''}>
-                  ${updatingCoords ? 'Geocoding…' : 'Update Missing Coordinates'}
+                <button id="create-backup-btn" class="btn btn-primary" ${creatingBackup ? 'disabled' : ''}>
+                  ${creatingBackup ? 'Creating…' : 'Create New Backup'}
                 </button>
-                ${coordsResult ? this._renderCoordsResult(coordsResult) : ''}
-              </div>
-            </div>
-
-            <div class="card" style="margin-top: var(--spacing-xl)">
-              <div class="card-header">
-                <h2>System Logs</h2>
-                <div class="header-actions">
-                  <select id="log-type-select" class="form-input form-input-sm">
-                    <option value="app" ${logType === 'app' ? 'selected' : ''}>App Log</option>
-                    <option value="error" ${logType === 'error' ? 'selected' : ''}>Error Log</option>
-                  </select>
-                  <select id="log-lines-select" class="form-input form-input-sm">
-                    <option value="50" ${logLines === 50 ? 'selected' : ''}>50 lines</option>
-                    <option value="200" ${logLines === 200 ? 'selected' : ''}>200 lines</option>
-                    <option value="500" ${logLines === 500 ? 'selected' : ''}>500 lines</option>
-                  </select>
-                  <button id="refresh-logs-btn" class="btn btn-sm btn-secondary">Refresh</button>
+                <div class="backup-list">
+                  ${this._renderBackups(backups)}
                 </div>
               </div>
-              <div class="card-body log-viewer">
-                ${loadingLogs
-                  ? `<div class="loading-spinner loading-spinner-sm"></div>`
-                  : `<pre class="log-content">${escapeHtml(logs.join('\n') || 'No log entries found.')}</pre>`
-                }
-              </div>
             </div>
 
-            <div class="card" style="margin-top: var(--spacing-xl)">
+            <div class="card">
               <div class="card-header"><h2>Migrations History</h2></div>
               <div class="card-body">
                 <div class="table-container">
@@ -152,7 +128,7 @@ export default class SystemPage extends Component {
               <td title="${escapeHtml(b.filename)}">${escapeHtml(b.filename)}</td>
               <td>${escapeHtml(formatFileSize(b.size))}</td>
               <td class="actions">
-                <button class="btn btn-sm restore-backup-btn" data-file="${escapeHtml(b.filename)}">Restore</button>
+                <button class="btn btn-sm restore-backup-btn" data-file="${escapeHtml(b.filename)}" title="Restore">${RESTORE_SVG}</button>
                 <button class="btn btn-sm btn-danger delete-backup-btn" data-file="${escapeHtml(b.filename)}">✕</button>
               </td>
             </tr>
@@ -194,17 +170,25 @@ export default class SystemPage extends Component {
     this.$$('.restore-backup-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const file = btn.dataset.file;
-        if (confirm(`Restore backup "${file}"? This will overwrite your current database!`)) {
-          this._handleRestoreBackup(file);
-        }
+        this._showConfirm({
+          title: 'Restore backup',
+          message: `Restore "${file}"? This will overwrite your current database!`,
+          confirmText: 'Restore',
+          variant: 'primary',
+          onConfirm: () => this._handleRestoreBackup(file),
+        });
       });
     });
     this.$$('.delete-backup-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const file = btn.dataset.file;
-        if (confirm(`Delete backup "${file}"?`)) {
-          this._handleDeleteBackup(file);
-        }
+        this._showConfirm({
+          title: 'Delete backup',
+          message: `Delete "${file}"?`,
+          confirmText: 'Delete',
+          variant: 'danger',
+          onConfirm: () => this._handleDeleteBackup(file),
+        });
       });
     });
 
@@ -303,6 +287,20 @@ export default class SystemPage extends Component {
     } catch (err) {
       store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
     }
+  }
+
+  _showConfirm({ title, message, confirmText, variant, onConfirm }) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
   }
 
   async _handleLogout() {
