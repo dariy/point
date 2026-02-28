@@ -46,8 +46,9 @@ COPY --from=builder /app/data.yml .
 # Copy frontend assets
 COPY frontend/ /app/frontend/
 
-# Accept build version as argument
+# Accept build version as argument and stamp it into index.html for cache-busting
 ARG BUILD_VERSION=dev
+RUN sed -i "s/__BUILD_VERSION__/${BUILD_VERSION}/g" /app/frontend/index.html
 ENV APP_VERSION=${BUILD_VERSION}
 ENV DATABASE_URL=/data/point.db
 ENV STORAGE_PATH=/data
