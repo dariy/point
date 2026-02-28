@@ -42,6 +42,10 @@
         grid-template-columns: 1fr;
     }
 
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+
     .backup-item {
         flex-direction: column;
         align-items: stretch;

@@ -1,5 +1,5 @@
 /**
- * SystemPage — system administration (logs, cache, backups, migrations).
+ * SystemPage — system administration (cache, backups, migrations).
  *
  * Fetches: GET /api/system/*
  */
@@ -7,7 +7,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import {
-  getStats, getLogs, clearCache, listBackups,
+  clearCache, listBackups,
   createBackup, restoreBackup, deleteBackup, getMigrations,
   updateMapCoords,
 } from '../../api/system.js';
@@ -15,7 +15,7 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
-import { RESTORE_SVG } from '../../utils/icons.js';
+import { RESTORE_SVG, CHEVRON_SVG } from '../../utils/icons.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 
 export default class SystemPage extends Component {
@@ -23,13 +23,8 @@ export default class SystemPage extends Component {
     super(container, props);
     this.state = {
       loading: true,
-      stats: null,
       backups: [],
       migrations: [],
-      logs: [],
-      logType: 'app',
-      logLines: 50,
-      loadingLogs: false,
       creatingBackup: false,
       updatingCoords: false,
       coordsResult: null,
@@ -38,7 +33,7 @@ export default class SystemPage extends Component {
   }
 
   render() {
-    const { loading, error, stats, backups, migrations, logs, logType, logLines, loadingLogs, creatingBackup, updatingCoords, coordsResult } = this.state;
+    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult } = this.state;
 
     if (loading) {
       return `
@@ -53,6 +48,19 @@ export default class SystemPage extends Component {
         </div>`;
     }
 
+    if (error) {
+      return `
+        <div class="light-layout">
+          <div id="sidebar-mount"></div>
+          <div class="light-main">
+            <header class="light-header"><h1>System</h1></header>
+            <main class="light-content">
+              <p class="error-state" role="alert">${escapeHtml(error)}</p>
+            </main>
+          </div>
+        </div>`;
+    }
+
     return `
       <div class="light-layout">
         <div id="sidebar-mount"></div>
@@ -61,40 +69,51 @@ export default class SystemPage extends Component {
             <h1>System</h1>
           </header>
           <main class="light-content">
-            <div class="grid-2-col">
-              <div class="card">
-                <div class="card-header"><h2>Cache Management</h2></div>
-                <div class="card-body">
-                  <p>Clear the server-side file cache (thumbnails, optimized images).</p>
-                  <button id="clear-cache-btn" class="btn btn-secondary">Clear All Cache</button>
-                </div>
-              </div>
 
-              <div class="card">
-                <div class="card-header"><h2>Map Coordinates</h2></div>
-                <div class="card-body">
-                  <p>Auto-geocode tags under <strong>city / cities / country / countries</strong> that have no coordinates yet. Uses OpenStreetMap Nominatim (rate-limited to 1 req/sec — may take a while for large tag sets).</p>
-                  <button id="update-coords-btn" class="btn btn-secondary" ${updatingCoords ? 'disabled' : ''}>
-                    ${updatingCoords ? 'Geocoding…' : 'Update Missing Coordinates'}
-                  </button>
-                  ${coordsResult ? this._renderCoordsResult(coordsResult) : ''}
-                </div>
-              </div>
-            </div>
             <div class="card">
-              <div class="card-header"><h2>Backups</h2></div>
+              <div class="card-header"><h2>Maintenance</h2></div>
               <div class="card-body">
-                <button id="create-backup-btn" class="btn btn-primary" ${creatingBackup ? 'disabled' : ''}>
-                  ${creatingBackup ? 'Creating…' : 'Create New Backup'}
-                </button>
-                <div class="backup-list">
-                  ${this._renderBackups(backups)}
+                <div class="ops-list">
+                  <div class="op-item">
+                    <div class="op-info">
+                      <h4>Clear Cache</h4>
+                      <p>Clear the server-side file cache (thumbnails, optimized images).</p>
+                    </div>
+                    <button id="clear-cache-btn" class="btn btn-secondary">Clear Cache</button>
+                  </div>
+                  <div class="op-item">
+                    <div class="op-info">
+                      <h4>Update Map Coordinates</h4>
+                      <p>Auto-geocode tags under <strong>city / cities / country / countries</strong> that have no coordinates yet. Uses OpenStreetMap Nominatim (rate-limited — may take a while).</p>
+                    </div>
+                    <button id="update-coords-btn" class="btn btn-secondary" ${updatingCoords ? 'disabled' : ''}>
+                      ${updatingCoords ? 'Geocoding…' : 'Update Coordinates'}
+                    </button>
+                  </div>
                 </div>
+                ${coordsResult ? this._renderCoordsResult(coordsResult) : ''}
               </div>
             </div>
 
             <div class="card">
-              <div class="card-header"><h2>Migrations History</h2></div>
+              <div class="card-header">
+                <h2>Backups</h2>
+                <div class="header-actions">
+                  <button id="create-backup-btn" class="btn btn-primary btn-sm" ${creatingBackup ? 'disabled' : ''}>
+                    ${creatingBackup ? 'Creating…' : 'Create Backup'}
+                  </button>
+                </div>
+              </div>
+              <div class="card-body">
+                ${this._renderBackups(backups)}
+              </div>
+            </div>
+
+            <div class="card collapsed" id="migrations-card">
+              <div class="card-header">
+                <h2>Database Migrations</h2>
+                <span class="toggle-icon">${CHEVRON_SVG}</span>
+              </div>
               <div class="card-body">
                 <div class="table-container">
                   <table class="table">
@@ -119,22 +138,21 @@ export default class SystemPage extends Component {
 
   _renderBackups(backups) {
     if (!backups.length) return '<p class="empty-state">No backups found.</p>';
-    return `
-      <table class="table table-sm">
-        <thead><tr><th>Filename</th><th>Size</th><th>Actions</th></tr></thead>
-        <tbody>
-          ${backups.map(b => `
-            <tr>
-              <td title="${escapeHtml(b.filename)}">${escapeHtml(b.filename)}</td>
-              <td>${escapeHtml(formatFileSize(b.size))}</td>
-              <td class="actions">
-                <button class="btn btn-sm restore-backup-btn" data-file="${escapeHtml(b.filename)}" title="Restore">${RESTORE_SVG}</button>
-                <button class="btn btn-sm btn-danger delete-backup-btn" data-file="${escapeHtml(b.filename)}">✕</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`;
+    return backups.map(b => `
+      <div class="backup-item">
+        <div class="backup-info">
+          <div class="backup-filename" title="${escapeHtml(b.filename)}">${escapeHtml(b.filename)}</div>
+          <div class="backup-meta">
+            <span class="backup-date">${escapeHtml(formatDateShort(b.created_at))}</span>
+            <span class="backup-size">${escapeHtml(formatFileSize(b.size))}</span>
+          </div>
+        </div>
+        <div class="backup-actions">
+          <button class="btn btn-sm restore-backup-btn" data-file="${escapeHtml(b.filename)}" title="Restore">${RESTORE_SVG}</button>
+          <button class="btn btn-sm btn-danger delete-backup-btn" data-file="${escapeHtml(b.filename)}">✕</button>
+        </div>
+      </div>
+    `).join('');
   }
 
   _renderCoordsResult(result) {
@@ -157,7 +175,7 @@ export default class SystemPage extends Component {
       onLogout: this._handleLogout.bind(this),
     });
 
-    if (this.state.loading) return;
+    if (this.state.loading || this.state.error) return;
 
     // Cache
     this.$('#clear-cache-btn')?.addEventListener('click', () => this._handleClearCache());
@@ -172,7 +190,7 @@ export default class SystemPage extends Component {
         const file = btn.dataset.file;
         this._showConfirm({
           title: 'Restore backup',
-          message: `Restore "${file}"? This will overwrite your current database!`,
+          message: `Restore "${escapeHtml(file)}"? This will overwrite your current database!`,
           confirmText: 'Restore',
           variant: 'primary',
           onConfirm: () => this._handleRestoreBackup(file),
@@ -184,7 +202,7 @@ export default class SystemPage extends Component {
         const file = btn.dataset.file;
         this._showConfirm({
           title: 'Delete backup',
-          message: `Delete "${file}"?`,
+          message: `Delete "${escapeHtml(file)}"?`,
           confirmText: 'Delete',
           variant: 'danger',
           onConfirm: () => this._handleDeleteBackup(file),
@@ -192,16 +210,10 @@ export default class SystemPage extends Component {
       });
     });
 
-    // Logs
-    this.$('#log-type-select')?.addEventListener('change', (e) => {
-      this.setState({ logType: e.target.value });
-      this._loadLogs();
+    // Migrations collapse toggle
+    this.$('#migrations-card .card-header')?.addEventListener('click', () => {
+      this.$('#migrations-card')?.classList.toggle('collapsed');
     });
-    this.$('#log-lines-select')?.addEventListener('change', (e) => {
-      this.setState({ logLines: parseInt(e.target.value, 10) });
-      this._loadLogs();
-    });
-    this.$('#refresh-logs-btn')?.addEventListener('click', () => this._loadLogs());
   }
 
   mount() {
@@ -212,25 +224,13 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [stats, backups, migrations] = await Promise.all([
-        getStats(),
+      const [backups, migrations] = await Promise.all([
         listBackups(),
         getMigrations(),
       ]);
-      this.setState({ loading: false, stats, backups, migrations });
-      this._loadLogs();
+      this.setState({ loading: false, backups, migrations });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Failed to load system data.' });
-    }
-  }
-
-  async _loadLogs() {
-    this.setState({ loadingLogs: true });
-    try {
-      const logs = await getLogs({ log_type: this.state.logType, lines: this.state.logLines });
-      this.setState({ loadingLogs: false, logs });
-    } catch (err) {
-      this.setState({ loadingLogs: false, logs: [`Error loading logs: ${err.message}`] });
     }
   }
 
