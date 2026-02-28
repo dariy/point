@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -74,6 +75,16 @@ func main() {
 		ContentTypeNosniff: "nosniff",
 		XFrameOptions:      "DENY",
 	}))
+	// Prevent Safari on iOS from serving stale JS/CSS after a redeploy.
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			p := c.Request().URL.Path
+			if strings.HasPrefix(p, "/assets/js/") || strings.HasPrefix(p, "/assets/css/") {
+				c.Response().Header().Set("Cache-Control", "no-cache")
+			}
+			return next(c)
+		}
+	})
 
 	// Resolve index.html path once — used by the SPA fallback and the media shortcut.
 	indexHTML := filepath.Join(cfg.FrontendDir, "index.html")

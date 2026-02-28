@@ -51,13 +51,8 @@ export default class SettingsPage extends Component {
       content = `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
     } else {
       content = `
-        <form id="settings-form">
+        <form id="settings-form" class="settings-grid">
           ${SETTING_GROUPS.map(group => this._renderGroup(group, settings)).join('')}
-          <div class="form-actions" style="margin-top: var(--spacing-xl)">
-            <button type="submit" class="btn btn-primary" ${saving ? 'disabled' : ''}>
-              ${saving ? 'Saving…' : 'Save Settings'}
-            </button>
-          </div>
         </form>`;
     }
 
@@ -67,6 +62,11 @@ export default class SettingsPage extends Component {
         <div class="light-main">
           <header class="light-header">
             <h1>Settings</h1>
+            <div class="header-actions">
+              <button type="submit" form="settings-form" class="btn btn-primary" ${saving ? 'disabled' : ''}>
+                ${saving ? 'Saving…' : 'Save Settings'}
+              </button>
+            </div>
           </header>
           <main class="light-content">
             ${content}
@@ -76,45 +76,58 @@ export default class SettingsPage extends Component {
   }
 
   _renderGroup(group, settings) {
-    const fields = group.keys.map(key => {
+    const inputs = [];
+    const toggles = [];
+
+    for (const key of group.keys) {
       const value = settings[key] ?? '';
       const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-      // Determine input type
+      if (key.includes('enable') || key.includes('show') || key.includes('use')) {
+        const checked = value === 'true' || value === true || value === 1 || value === '1';
+        toggles.push({ key, label, checked });
+        continue;
+      }
+
       let input = '';
       if (key === 'author_bio' || key === 'footer_text') {
-        input = `<textarea name="${key}" class="form-input" rows="3">${escapeHtml(String(value))}</textarea>`;
+        input = `<textarea name="${key}" class="form-textarea" rows="3">${escapeHtml(String(value))}</textarea>`;
       } else if (key === 'default_theme') {
         input = `
-          <select name="${key}" class="form-input">
+          <select name="${key}" class="form-select">
             <option value="light"${value === 'light' ? ' selected' : ''}>Light</option>
             <option value="dark"${value === 'dark' ? ' selected' : ''}>Dark</option>
             <option value="auto"${value === 'auto' ? ' selected' : ''}>Auto (System)</option>
           </select>`;
-      } else if (key.includes('enable') || key.includes('show') || key.includes('use')) {
-        const checked = value === 'true' || value === true || value === 1 || value === '1';
-        input = `<input type="checkbox" name="${key}" ${checked ? 'checked' : ''}>`;
       } else if (key.includes('per_page') || key.includes('quota') || key.includes('interval')) {
         input = `<input type="number" name="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       } else {
         input = `<input type="text" name="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
 
-      const isCheckbox = input.startsWith('<input type="checkbox"');
-
-      return `
-        <div class="form-group ${isCheckbox ? 'checkbox-group' : ''}">
-          ${isCheckbox ? '' : `<label>${escapeHtml(label)}</label>`}
+      const isTextarea = key === 'author_bio' || key === 'footer_text';
+      inputs.push(`
+        <div class="settings-field${isTextarea ? ' settings-field-top' : ''}">
+          <label class="settings-field-label">${escapeHtml(label)}</label>
           ${input}
-          ${isCheckbox ? `<label>${escapeHtml(label)}</label>` : ''}
-        </div>`;
-    }).join('');
+        </div>`);
+    }
+
+    const inputsHtml = inputs.join('');
+    const togglesHtml = toggles.length ? `
+      <div class="setting-pill-group${inputs.length ? ' setting-pill-group-divided' : ''}">
+        ${toggles.map(({ key, label, checked }) => `
+          <label class="setting-pill">
+            <input type="checkbox" name="${key}" class="setting-pill-input" ${checked ? 'checked' : ''}>
+            <span class="setting-pill-label">${escapeHtml(label)}</span>
+          </label>`).join('')}
+      </div>` : '';
 
     return `
-      <div class="card" style="margin-bottom: var(--spacing-xl)">
+      <div class="card">
         <div class="card-header"><h2>${escapeHtml(group.title)}</h2></div>
         <div class="card-body">
-          ${fields}
+          ${inputsHtml}${togglesHtml}
         </div>
       </div>`;
   }
@@ -163,9 +176,9 @@ export default class SettingsPage extends Component {
         const type = this._getSettingType(k);
 
         if (type === 'boolean') {
-          data[k] = val === 'on' || val === 'true' || val === true;
+          data[k] = String(val === 'on' || val === 'true' || val === true);
         } else if (type === 'number') {
-          data[k] = val ? parseInt(val, 10) : 0;
+          data[k] = String(val ? parseInt(val, 10) : 0);
         } else {
           data[k] = val || '';
         }
@@ -174,9 +187,9 @@ export default class SettingsPage extends Component {
 
     this.setState({ saving: true });
     try {
-      await updateSettings(data);
+      const updated = await updateSettings(data);
       store.set('toast', { message: 'Settings updated.', type: 'success' });
-      this.setState({ saving: false, settings: { ...this.state.settings, ...data } });
+      this.setState({ saving: false, settings: updated });
 
       // Update document title if blog_title changed
       if (data.blog_title) {
