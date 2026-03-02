@@ -14,7 +14,7 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
 import { getPost, createPost, updatePost } from '../../api/posts.js';
-import { uploadMedia, analyzeMedia, analyzeMediaByPath } from '../../api/media.js';
+import { uploadMedia, analyzeMedia, analyzeMediaByPath, listMedia, renameMedia } from '../../api/media.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
@@ -314,7 +314,11 @@ export default class PostEditPage extends Component {
     if (!items.length) return;
     if (this.state.editorMode === 'visual') {
       this._visualImages = [...this._visualImages, ...items.map((item) => item.path)];
-      if (this.$('#visual-editor-mount')) this._mountVisualEditor();
+      if (this._visualEditorRef) {
+        this._visualEditorRef.setProps({ images: this._visualImages });
+      } else if (this.$('#visual-editor-mount')) {
+        this._mountVisualEditor();
+      }
       return;
     }
     const editor = this.$('#content-editor');
@@ -335,10 +339,34 @@ export default class PostEditPage extends Component {
       images: this._visualImages,
       onChange: (imgs) => {
         this._visualImages = imgs;
+        this._visualEditorRef?.setProps({ images: imgs });
         this._debouncedAutosave();
       },
       onAdd: () => this._mediaPicker.open(),
+      onRename: (oldPath, newFilename) => this._handleRename(oldPath, newFilename),
     });
+  }
+
+  async _handleRename(oldPath, newFilename) {
+    const lastSlash = oldPath.lastIndexOf('/');
+    const folder      = oldPath.slice(1, lastSlash);    // strip leading /: "2026/02"
+    const oldFilename = oldPath.slice(lastSlash + 1);   // "photo.jpg"
+    try {
+      const result = await listMedia({ folder, per_page: 200 });
+      const item = (result.media || []).find((m) => m.filename === oldFilename);
+      if (!item) throw new Error(`Media not found: ${oldFilename}`);
+
+      const updated = await renameMedia(item.id, newFilename);
+      const newPath = updated.path;
+
+      this._visualImages = this._visualImages.map((p) => (p === oldPath ? newPath : p));
+      this._visualEditorRef?.setProps({ images: this._visualImages });
+      this._debouncedAutosave();
+      store.set('toast', { message: 'File renamed.', type: 'success' });
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Rename failed.', type: 'error' });
+      throw err;
+    }
   }
 
   _switchMode(targetMode) {
