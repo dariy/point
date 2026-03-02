@@ -55,6 +55,7 @@ export default class PostEditPage extends Component {
       loading: !!id,
       saving: false,
       analyzing: false,
+      analyzingField: null,   // 'title' | 'tags' | 'excerpt' | null
       post: null,
       error: null,
       isNew: !id,
@@ -121,6 +122,12 @@ export default class PostEditPage extends Component {
 
     const saveLabel    = saving    ? 'Saving…'    : 'Save';
     const analyzeLabel = analyzing ? 'Analyzing…' : 'Analyze';
+    const { analyzingField } = this.state;
+    const aiBtnDisabled = analyzing || !!analyzingField;
+    const aiBtn = (field) =>
+      `<button class="field-ai-btn" data-field="${field}" type="button"
+               title="Fill with AI" ${aiBtnDisabled ? 'disabled' : ''}
+               aria-label="AI fill ${field}">✦</button>`;
 
     const modeToggle = `
   <div class="editor-mode-toggle">
@@ -165,6 +172,7 @@ export default class PostEditPage extends Component {
                 </select>
                 <input type="text" id="title-input" class="form-input editor-title"
                        placeholder="Post title" value="${title}" required>
+                ${aiBtn('title')}
               </div>
 
               <div class="slug-row">
@@ -173,11 +181,15 @@ export default class PostEditPage extends Component {
                        placeholder="post-slug" value="${slug}" spellcheck="false">
               </div>
 
-              <div id="tags-input-mount"></div>
+              <div class="tags-row">
+                <div id="tags-input-mount" class="tags-row-input"></div>
+                ${aiBtn('tags')}
+              </div>
 
-              <div class="form-group">
+              <div class="form-group excerpt-row">
                 <textarea id="excerpt-editor" class="form-input editor-excerpt"
                           rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+                ${aiBtn('excerpt')}
               </div>
 
               <div class="form-group">
@@ -212,6 +224,11 @@ export default class PostEditPage extends Component {
 
     this.$('#mode-text-btn')?.addEventListener('click', () => this._switchMode('text'));
     this.$('#mode-visual-btn')?.addEventListener('click', () => this._switchMode('visual'));
+
+    // Per-field AI fill buttons
+    this.container.querySelectorAll('.field-ai-btn').forEach((btn) => {
+      btn.addEventListener('click', () => this._analyzeField(btn.dataset.field));
+    });
 
     // Tags input
     this._tagsInputRef = this.mountChild(TagsInput, '#tags-input-mount', {
@@ -475,6 +492,44 @@ export default class PostEditPage extends Component {
       /(?:^|["'\s(])(\/\d{4}\/\d{2}\/.+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i
     );
     return match ? match[1] : null;
+  }
+
+  _analyzeField(field) {
+    if (this.state.analyzing || this.state.analyzingField) return;
+    const path = this._extractImagePath();
+    if (path) {
+      this._doAnalyzeField(field, { path });
+    } else {
+      this._mediaPicker.open((items) => {
+        if (items?.[0]) this._doAnalyzeField(field, items[0]);
+      });
+    }
+  }
+
+  async _doAnalyzeField(field, item) {
+    if (!item) return;
+    this.setState({ analyzingField: field });
+    try {
+      const result = item.id
+        ? await analyzeMedia(item.id)
+        : await analyzeMediaByPath(item.path);
+
+      const post = { ...(this.state.post || {}) };
+      if (field === 'title' && result.title) {
+        post.title = result.title;
+      } else if (field === 'tags' && result.tags?.length) {
+        this._tags = result.tags;
+        post.tags = result.tags.map((name) => ({ name, slug: name }));
+      } else if (field === 'excerpt' && result.excerpt) {
+        post.excerpt = result.excerpt;
+      }
+
+      store.set('toast', { message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`, type: 'success' });
+      this.setState({ analyzingField: null, post });
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
+      this.setState({ analyzingField: null });
+    }
   }
 
   async _handleAnalyze(item) {

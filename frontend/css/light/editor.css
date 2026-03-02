@@ -77,6 +77,54 @@ body.drag-active::after {
     color: #f59e0b;
 }
 
+/* AI fill button — appears at the end of title/tags/excerpt rows */
+.field-ai-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 4px;
+    color: var(--text-muted);
+    transition: color var(--transition-fast), transform 0.1s ease;
+    border-radius: var(--border-radius-sm, 4px);
+    align-self: center;
+}
+
+.field-ai-btn:hover:not(:disabled) {
+    color: var(--color-primary);
+    transform: scale(1.2);
+}
+
+.field-ai-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Tags row: [TagsInput flex-1] [AI btn] */
+.tags-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+}
+
+.tags-row-input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Excerpt row: positions the AI btn in the top-right corner */
+.excerpt-row {
+    position: relative;
+}
+
+.excerpt-row .field-ai-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+}
+
 /* Slug row: [/post/] [slug input] */
 .slug-row {
     display: flex;
@@ -97,6 +145,11 @@ body.drag-active::after {
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);
     min-width: 0;
+}
+
+/* Give the excerpt textarea padding so text doesn't slide under the AI btn */
+.editor-excerpt {
+    padding-right: 28px;
 }
 
 /* Full-width editor page — override the global max-width */
