@@ -103,3 +103,37 @@ body.drag-active::after {
 .editor-full-width {
     max-width: var(--content-max-width);
 }
+
+/* ===========================
+   Editor mode toggle (Text / Visual)
+   =========================== */
+.editor-mode-toggle {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-bottom: var(--spacing-sm);
+}
+
+.editor-mode-toggle button {
+    background: transparent;
+    border: none;
+    padding: 4px 12px;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.editor-mode-toggle button.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.editor-mode-toggle button:not(.active):hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
