@@ -59,7 +59,7 @@ Append at the bottom of `frontend/css/light/editor.css`:
 
 /* Full-width editor page — override the global max-width */
 .editor-full-width {
-    max-width: none;
+    max-width: var(--content-max-width);
 }
 ```
 

@@ -55,8 +55,9 @@ export class MediaPickerDialog extends Component {
     });
   }
 
-  open() {
+  open(onConfirmOverride) {
     if (this._activeBrowser) return; // already open
+    this._onConfirmOverride = onConfirmOverride || null;
     this.container.classList.add('active');
     document.body.style.overflow = 'hidden';
 
@@ -71,6 +72,7 @@ export class MediaPickerDialog extends Component {
   }
 
   close() {
+    this._onConfirmOverride = null;
     this.container.classList.remove('active');
     document.body.style.overflow = '';
 
@@ -101,7 +103,8 @@ export class MediaPickerDialog extends Component {
       store.set('toast', { message: 'Select at least one item.', type: 'warning' });
       return;
     }
-    this.props.onConfirm(items);
+    const cb = this._onConfirmOverride || this.props.onConfirm;
+    cb(items);
     this.close();
   }
 }
