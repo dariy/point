@@ -309,8 +309,14 @@ export default class PostEditPage extends Component {
   }
 
   _insertMediaPaths(items) {
+    if (!items.length) return;
+    if (this.state.editorMode === 'visual') {
+      this._visualImages = [...this._visualImages, ...items.map((item) => item.path)];
+      this._mountVisualEditor();
+      return;
+    }
     const editor = this.$('#content-editor');
-    if (!editor || !items.length) return;
+    if (!editor) return;
     const paths = items.map((item) => item.path).join('\n');
     editor.value = editor.value.trimEnd() + '\n' + paths;
     editor.scrollTop = editor.scrollHeight;
@@ -375,7 +381,9 @@ export default class PostEditPage extends Component {
       title:            (this.$('#title-input')?.value || '').trim(),
       slug:             (this.$('#slug-input')?.value || '').trim() || null,
       excerpt:          (this.$('#excerpt-editor')?.value || '').trim() || null,
-      content:          this.$('#content-editor')?.value || '',
+      content: this.state.editorMode === 'visual'
+  ? this._visualImages.join('\n')
+  : (this.$('#content-editor')?.value || ''),
       status:           this.$('#status-select')?.value || 'draft',
       formatter:        this.$('#formatter-select')?.value || 'markdown',
       is_featured:      this.$('#featured-check')?.checked || false,
@@ -424,9 +432,12 @@ export default class PostEditPage extends Component {
 
   /** Extract first image path from the content textarea. */
   _extractImagePath() {
+    if (this.state.editorMode === 'visual') {
+      return this._visualImages[0] || null;
+    }
     const content = this.$('#content-editor')?.value || '';
     const match = content.match(
-      /(?:^|["'\s(])(\/\d{4}\/\d{2}\/[^\s"')]+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i
+      /(?:^|["'\s(])(\/\d{4}\/\d{2}\/.+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i
     );
     return match ? match[1] : null;
   }
@@ -456,6 +467,7 @@ export default class PostEditPage extends Component {
         slug:    snap.slug,
         tags:    mergedTags.map((name) => ({ name, slug: name })),
       };
+      if (this.state.editorMode === 'visual') this._visualImages = parseContent(post.content).paths;
 
       store.set('toast', { message: 'Analysis complete.', type: 'success' });
       this.setState({ analyzing: false, post });
@@ -469,6 +481,7 @@ export default class PostEditPage extends Component {
         slug:    snap.slug,
         tags:    snap.tags.map((name) => ({ name, slug: name })),
       };
+      if (this.state.editorMode === 'visual') this._visualImages = parseContent(post.content).paths;
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
       this.setState({ analyzing: false, post });
     }
@@ -490,10 +503,14 @@ export default class PostEditPage extends Component {
   async _uploadAndInsert(file) {
     try {
       const result = await uploadMedia(file, { post_id: this.state.postId || undefined });
-      const editor = this.$('#content-editor');
-      if (editor) {
-        editor.value = editor.value.trimEnd() + `\n${result.path}`;
-        editor.scrollTop = editor.scrollHeight;
+      if (this.state.editorMode === 'visual') {
+        this._insertMediaPaths([{ path: result.path }]);
+      } else {
+        const editor = this.$('#content-editor');
+        if (editor) {
+          editor.value = editor.value.trimEnd() + `\n${result.path}`;
+          editor.scrollTop = editor.scrollHeight;
+        }
       }
     } catch (err) {
       store.set('toast', { message: `Upload failed: ${err.message || file.name}`, type: 'error' });
