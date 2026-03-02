@@ -228,6 +228,48 @@ body.drag-active::after {
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+    cursor: pointer;
+}
+
+.ve-path:hover {
+    color: var(--text-primary);
+    text-decoration: underline dotted;
+}
+
+/* Inline rename form */
+.ve-rename-form {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+.ve-rename-prefix,
+.ve-rename-ext {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.ve-rename-input {
+    flex: 1;
+    min-width: 40px;
+    border: none;
+    border-bottom: 1.5px solid var(--color-primary);
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--text-primary);
+    padding: 0 2px;
+    outline: none;
+}
+
+.ve-rename-input:disabled {
+    opacity: 0.5;
+    cursor: wait;
 }
 
 .ve-remove {
