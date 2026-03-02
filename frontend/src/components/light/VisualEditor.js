@@ -153,5 +153,31 @@ export class VisualEditor extends Component {
       list.querySelectorAll('.ve-card.dragging').forEach((c) => c.classList.remove('dragging'));
     });
   }
-  _bindLightbox() {}
+  _bindLightbox() {
+    this.container.querySelectorAll('.ve-thumb').forEach((img) => {
+      img.addEventListener('click', () => {
+        const full = img.dataset.full;
+        if (!full) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 've-lightbox';
+
+        const fullImg = document.createElement('img');
+        fullImg.src = full;
+        fullImg.alt = '';
+        overlay.appendChild(fullImg);
+        document.body.appendChild(overlay);
+
+        const close = () => overlay.remove();
+        overlay.addEventListener('click', close);
+        const onKey = (e) => {
+          if (e.key === 'Escape') {
+            close();
+            document.removeEventListener('keydown', onKey);
+          }
+        };
+        document.addEventListener('keydown', onKey);
+      });
+    });
+  }
 }
