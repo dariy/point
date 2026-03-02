@@ -140,3 +140,54 @@
     pointer-events: none;
     transition: opacity 0.4s ease;
 }
+
+/* Fade-in on initial mount (post-to-post navigation) */
+@keyframes immersiveFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.immersive-fade-in {
+  animation: immersiveFadeIn 0.5s ease forwards;
+}
+
+/* Navigation press hints — shown on pointerdown in left/right zones */
+.immersive-wrapper::before,
+.immersive-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 30%;
+    height: 100%;
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.immersive-wrapper::before {
+    left: 0;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.2), transparent);
+}
+
+.immersive-wrapper::after {
+    right: 0;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.2), transparent);
+}
+
+.immersive-wrapper.pressing-left::before { opacity: 1; }
+.immersive-wrapper.pressing-right::after  { opacity: 1; }
+
+/* Highlight the matching nav button on press (works even in ui-hidden mode) */
+.immersive-wrapper.pressing-left .carousel-prev,
+.immersive-layout.ui-hidden .immersive-wrapper.pressing-left .carousel-prev {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.65);
+    transform: translateY(-50%) scale(1.15);
+}
+
+.immersive-wrapper.pressing-right .carousel-next,
+.immersive-layout.ui-hidden .immersive-wrapper.pressing-right .carousel-next {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.65);
+    transform: translateY(-50%) scale(1.15);
+}
