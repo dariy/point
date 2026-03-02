@@ -18,6 +18,7 @@ import { uploadMedia, analyzeMedia, analyzeMediaByPath } from '../../api/media.j
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
+import { VisualEditor } from '../../components/light/VisualEditor.js';
 
 const AUTOSAVE_MS = 30_000;
 
@@ -58,8 +59,10 @@ export default class PostEditPage extends Component {
       error: null,
       isNew: !id,
       postId: id,
+      editorMode: 'text',   // 'text' | 'visual' — updated after post loads
     };
     this._tags = [];
+    this._visualImages = []; // canonical image list for visual mode
     this._autosaveTimer = null;
     this._tagsInputRef = null;
     this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_MS);
@@ -118,6 +121,19 @@ export default class PostEditPage extends Component {
     const saveLabel    = saving    ? 'Saving…'    : 'Save';
     const analyzeLabel = analyzing ? 'Analyzing…' : 'Analyze';
 
+    const modeToggle = `
+  <div class="editor-mode-toggle">
+    <button id="mode-text-btn" type="button"
+            class="${this.state.editorMode === 'text' ? 'active' : ''}">Text</button>
+    <button id="mode-visual-btn" type="button"
+            class="${this.state.editorMode === 'visual' ? 'active' : ''}">Visual</button>
+  </div>`;
+
+    const contentArea = this.state.editorMode === 'visual'
+      ? `<div id="visual-editor-mount"></div>`
+      : `<textarea id="content-editor" class="editor-content"
+               rows="24" placeholder="Write your post content here\u2026">${escapeHtml(content)}</textarea>`;
+
     return `
       <div class="light-layout">
         <div id="sidebar-mount"></div>
@@ -164,8 +180,8 @@ export default class PostEditPage extends Component {
               </div>
 
               <div class="form-group">
-                <textarea id="content-editor" class="editor-content"
-                          rows="24" placeholder="Write your post content here…">${escapeHtml(content)}</textarea>
+                ${modeToggle}
+                ${contentArea}
               </div>
             </div>
           </main>
@@ -192,6 +208,9 @@ export default class PostEditPage extends Component {
       this._mediaPicker.mount();
     }
     this.$('#media-btn')?.addEventListener('click', () => this._mediaPicker.open());
+
+    this.$('#mode-text-btn')?.addEventListener('click', () => this._switchMode('text'));
+    this.$('#mode-visual-btn')?.addEventListener('click', () => this._switchMode('visual'));
 
     // Tags input
     this._tagsInputRef = this.mountChild(TagsInput, '#tags-input-mount', {
@@ -243,6 +262,10 @@ export default class PostEditPage extends Component {
       el?.addEventListener('input', () => this._debouncedAutosave());
     });
 
+    if (this.state.editorMode === 'visual') {
+      this._mountVisualEditor();
+    }
+
     // Window-level drag-and-drop media upload
     // Remove stale listeners from any previous render before re-attaching.
     document.removeEventListener('dragenter', this._onDragEnter);
@@ -293,6 +316,17 @@ export default class PostEditPage extends Component {
     editor.scrollTop = editor.scrollHeight;
   }
 
+  _mountVisualEditor() {
+    this.mountChild(VisualEditor, '#visual-editor-mount', {
+      images: this._visualImages,
+      onChange: (imgs) => {
+        this._visualImages = imgs;
+        this._debouncedAutosave();
+      },
+      onAdd: () => this._mediaPicker.open(),
+    });
+  }
+
   mount() {
     super.mount();
     if (this.state.postId) {
@@ -304,7 +338,10 @@ export default class PostEditPage extends Component {
     try {
       const post = await getPost(id);
       this._tags = toTagNames(post.tags);
-      this.setState({ loading: false, post, error: null });
+      const { paths, hasText } = parseContent(post.content);
+      const editorMode = (!hasText && paths.length > 0) ? 'visual' : 'text';
+      this._visualImages = paths;
+      this.setState({ loading: false, post, error: null, editorMode });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Post not found.' });
     }
