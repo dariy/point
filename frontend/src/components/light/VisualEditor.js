@@ -5,6 +5,7 @@
  *   images    {string[]}  Ordered list of bare image paths.
  *   onChange  {fn}        Called with new string[] on any mutation.
  *   onAdd     {fn}        Called when user clicks "Add images" — opens picker.
+ *   onRename  {fn}        Async (oldPath, newFilename) => Promise. Called on inline rename.
  */
 
 import { Component } from '../Component.js';
@@ -46,6 +47,7 @@ export class VisualEditor extends Component {
     this._bindRemove();
     this._bindDrag();
     this._bindLightbox();
+    this._bindInlineRename();
   }
 
   _bindRemove() {
@@ -158,6 +160,84 @@ export class VisualEditor extends Component {
       });
     });
   }
+  _bindInlineRename() {
+    this.container.querySelectorAll('.ve-path').forEach((span) => {
+      span.addEventListener('click', () => {
+        const card = span.closest('.ve-card');
+        if (!card) return;
+        const idx = parseInt(card.dataset.index, 10);
+        const path = this.props.images[idx];
+        if (!path) return;
+        this._startRename(span, path);
+      });
+    });
+  }
+
+  _startRename(span, path) {
+    const lastSlash = path.lastIndexOf('/');
+    const prefix   = path.slice(0, lastSlash + 1);   // e.g. "/2026/02/"
+    const fullName  = path.slice(lastSlash + 1);       // e.g. "photo.jpg"
+    const lastDot   = fullName.lastIndexOf('.');
+    const base = lastDot !== -1 ? fullName.slice(0, lastDot) : fullName;
+    const ext  = lastDot !== -1 ? fullName.slice(lastDot)  : '';
+
+    const form = document.createElement('span');
+    form.className = 've-rename-form';
+
+    const prefixEl = document.createElement('span');
+    prefixEl.className = 've-rename-prefix';
+    prefixEl.textContent = prefix;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 've-rename-input';
+    input.value = base;
+
+    const extEl = document.createElement('span');
+    extEl.className = 've-rename-ext';
+    extEl.textContent = ext;
+
+    form.appendChild(prefixEl);
+    form.appendChild(input);
+    form.appendChild(extEl);
+
+    span.replaceWith(form);
+    input.focus();
+    input.select();
+
+    const cancel = () => {
+      if (document.body.contains(form)) form.replaceWith(span);
+    };
+
+    let submitting = false;
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        cancel();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const newBase = input.value.trim();
+        if (!newBase || newBase === base) { cancel(); return; }
+        const promise = this.props.onRename?.(path, newBase + ext);
+        if (!promise) { cancel(); return; }
+        submitting = true;
+        input.disabled = true;
+        promise.catch(() => {
+          submitting = false;
+          input.disabled = false;
+          input.focus();
+        });
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      if (submitting) return;
+      setTimeout(() => {
+        if (!submitting && document.body.contains(form)) cancel();
+      }, 150);
+    });
+  }
+
   _bindLightbox() {
     this.container.querySelectorAll('.ve-thumb').forEach((img) => {
       img.addEventListener('click', () => {
