@@ -21,6 +21,28 @@ import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
 
 const AUTOSAVE_MS = 30_000;
 
+const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
+
+/**
+ * Split content into ordered image paths + a flag for whether any non-path
+ * text lines exist. Used to auto-detect editor mode and populate VisualEditor.
+ */
+function parseContent(content) {
+  const lines = (content || '').split('\n');
+  const paths = [];
+  let hasText = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (IMAGE_PATH_RE.test(trimmed)) {
+      paths.push(trimmed);
+    } else {
+      hasText = true;
+    }
+  }
+  return { paths, hasText };
+}
+
 /** Extract tag name strings from either a string[] or {name,slug}[] array. */
 const toTagNames = (tags) => (tags || []).map((t) => (typeof t === 'string' ? t : t.name));
 
