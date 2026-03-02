@@ -327,6 +327,29 @@ export default class PostEditPage extends Component {
     });
   }
 
+  _switchMode(targetMode) {
+    if (this.state.editorMode === targetMode) return;
+
+    if (targetMode === 'visual') {
+      const content = this.$('#content-editor')?.value ?? (this.state.post?.content || '');
+      const { paths, hasText } = parseContent(content);
+
+      if (hasText) {
+        const confirmed = window.confirm(
+          'Visual mode only supports image sequences.\nAll text content will be discarded on save.\n\nSwitch anyway?'
+        );
+        if (!confirmed) return;
+      }
+
+      this._visualImages = paths;
+      this.setState({ editorMode: 'visual' });
+    } else {
+      // visual → text: serialize image list back into content field
+      const post = { ...(this.state.post || {}), content: this._visualImages.join('\n') };
+      this.setState({ editorMode: 'text', post });
+    }
+  }
+
   mount() {
     super.mount();
     if (this.state.postId) {
