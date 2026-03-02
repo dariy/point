@@ -189,7 +189,14 @@ export class PostContent extends Component {
 
     const goToPost = (post) => {
       if (!post) return;
-      navigate(tagSlug ? `/tag/${tagSlug}?slug=${post.slug}` : `/post/${post.slug}`);
+      const target = slides[index] ?? this.$('.immersive-visuals');
+      if (target) {
+        target.style.transition = 'opacity 0.5s ease';
+        target.style.opacity = '0';
+      }
+      setTimeout(() => {
+        navigate(tagSlug ? `/tag/${tagSlug}?slug=${post.slug}` : `/post/${post.slug}`);
+      }, 500);
     };
 
     const goTo = (i) => {
@@ -225,6 +232,10 @@ export class PostContent extends Component {
       dots.forEach((d, i) =>
         this._on(d, 'click', (e) => { e.stopPropagation(); goTo(i); }));
     }
+
+    // Fade in on mount
+    const fadeTarget = slides.length > 0 ? slides[index] : this.$('.immersive-visuals');
+    fadeTarget?.classList.add('immersive-fade-in');
 
     // ── Touch swipe ──
     const wrapper = this.$('.immersive-wrapper');
@@ -286,21 +297,41 @@ export class PostContent extends Component {
       }
     });
 
-    // ── Click / tap on image or wrapper to navigate or toggle UI ──
-    this._on(wrapper, 'click', (e) => {
-      if (didSwipe) { didSwipe = false; return; }
-      if (e.target.closest('a, button, input, .post-info-card')) return;
+    // ── Press / tap on image or wrapper to navigate or toggle UI ──
+    // Show direction hint on press, navigate on release.
+    let pressZone = null;
 
+    const clearPressHint = () => {
+      wrapper.classList.remove('pressing-left', 'pressing-right');
+      pressZone = null;
+    };
+
+    this._on(wrapper, 'pointerdown', (e) => {
+      if (e.target.closest('a, button, input, .post-info-card')) return;
       const x = e.clientX;
       const width = window.innerWidth;
-
-      // Click on left/right 30% of screen to navigate
       if (x < width * 0.3) {
-        goTo(index - 1);
+        pressZone = 'left';
+        wrapper.classList.add('pressing-left');
       } else if (x > width * 0.7) {
+        pressZone = 'right';
+        wrapper.classList.add('pressing-right');
+      } else {
+        pressZone = 'center';
+      }
+    });
+
+    this._on(wrapper, 'pointerup', (e) => {
+      if (!pressZone) return;
+      const zone = pressZone;
+      clearPressHint();
+      if (didSwipe) { didSwipe = false; return; }
+      if (zone === 'left') {
+        goTo(index - 1);
+      } else if (zone === 'right') {
         goTo(index + 1);
       } else {
-        // Center click: toggle UI
+        // Center: toggle UI
         if (document.body.classList.contains('ui-hidden')) {
           showUI();
         } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
@@ -309,6 +340,9 @@ export class PostContent extends Component {
         }
       }
     });
+
+    this._on(wrapper, 'pointercancel', clearPressHint);
+    this._on(wrapper, 'pointerleave', clearPressHint);
 
     // Start with UI visible, then auto-hide
     this._lastShowTime = Date.now();
