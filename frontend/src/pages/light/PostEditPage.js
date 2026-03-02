@@ -59,7 +59,7 @@ export default class PostEditPage extends Component {
       error: null,
       isNew: !id,
       postId: id,
-      editorMode: 'text',   // 'text' | 'visual' — updated after post loads
+      editorMode: !id ? 'visual' : 'text',   // 'text' | 'visual' — updated after post loads
     };
     this._tags = [];
     this._visualImages = []; // canonical image list for visual mode
@@ -349,12 +349,11 @@ export default class PostEditPage extends Component {
 
   async _handleRename(oldPath, newFilename) {
     const lastSlash = oldPath.lastIndexOf('/');
-    const folder      = oldPath.slice(1, lastSlash);    // strip leading /: "2026/02"
-    const oldFilename = oldPath.slice(lastSlash + 1);   // "photo.jpg"
+    const folder = oldPath.slice(1, lastSlash);    // strip leading /: "2026/02"
     try {
       const result = await listMedia({ folder, per_page: 200 });
-      const item = (result.media || []).find((m) => m.filename === oldFilename);
-      if (!item) throw new Error(`Media not found: ${oldFilename}`);
+      const item = (result.media || []).find((m) => m.path === oldPath);
+      if (!item) throw new Error(`Media not found: ${oldPath}`);
 
       const updated = await renameMedia(item.id, newFilename);
       const newPath = updated.path;
