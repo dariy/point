@@ -324,7 +324,7 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, media)
+	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 
 func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
