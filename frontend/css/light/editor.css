@@ -137,3 +137,122 @@ body.drag-active::after {
     background: var(--surface-hover);
     color: var(--text-primary);
 }
+
+/* ===========================
+   VisualEditor
+   =========================== */
+.ve-root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.ve-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 80px;
+    position: relative;
+}
+
+.ve-empty {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-md);
+    text-align: center;
+    border: 1px dashed var(--border-primary);
+    border-radius: var(--border-radius);
+}
+
+.ve-card {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: 6px 10px 6px 0;
+    transition: background var(--transition-fast), opacity var(--transition-fast);
+    user-select: none;
+}
+
+.ve-card:hover {
+    background: var(--surface-hover);
+}
+
+.ve-card.dragging {
+    opacity: 0.4;
+}
+
+/* Drag handle — dotted left zone */
+.ve-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    flex-shrink: 0;
+    align-self: stretch;
+    border-right: 1px dotted var(--border-primary);
+    cursor: grab;
+    color: var(--text-muted);
+}
+
+.ve-handle:active {
+    cursor: grabbing;
+}
+
+.ve-handle-dots {
+    display: block;
+    width: 6px;
+    height: 20px;
+    background-image: radial-gradient(circle, var(--text-muted) 1.2px, transparent 1.2px);
+    background-size: 6px 6px;
+}
+
+.ve-thumb {
+    width: 80px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: calc(var(--border-radius) - 2px);
+    flex-shrink: 0;
+    cursor: zoom-in;
+    background: var(--surface-hover);
+}
+
+.ve-path {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.ve-remove {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: var(--border-radius-sm, 4px);
+    transition: color var(--transition-fast);
+}
+
+.ve-remove:hover {
+    color: var(--color-danger, #ef4444);
+}
+
+/* Drop indicator line */
+.ve-drop-indicator {
+    height: 2px;
+    background: var(--color-primary);
+    border-radius: 2px;
+    pointer-events: none;
+    margin: 0 4px;
+    flex-shrink: 0;
+}
