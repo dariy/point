@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -66,6 +67,18 @@ func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsSe
 			
 			if configBytes, err := os.ReadFile(configPath); err == nil {
 				_ = yaml.Unmarshal(configBytes, &s.genaiConfig)
+			}
+
+			// Apply defaults for values not set by data.yml
+			if len(s.genaiConfig.Models) == 0 {
+				s.genaiConfig.Models = []string{"gemini-2.0-flash", "gemini-1.5-flash"}
+			}
+			if s.genaiConfig.Prompt == "" {
+				s.genaiConfig.Prompt = `Analyze this image and return a JSON object with exactly these keys:
+"title": a concise, descriptive title for the image (string),
+"tags": an array of relevant keyword tags (array of strings),
+"excerpt": a 1-2 sentence description of the image (string).
+Return only valid JSON, no markdown or extra text.`
 			}
 		}
 	}
@@ -466,6 +479,66 @@ type AnalysisResponse struct {
 	Title   *string  `json:"title"`
 	Tags    []string `json:"tags"`
 	Excerpt *string  `json:"excerpt"`
+}
+
+var (
+	ErrMediaNotFound = errors.New("media not found")
+	ErrNotAnImage    = errors.New("media item is not an image")
+)
+
+const maxAnalyzeBytes = 20 << 20 // 20 MB
+
+func (s *MediaService) AnalyzeMediaByID(ctx context.Context, id int64) (*AnalysisResponse, error) {
+	media, err := s.repo.GetMedia(ctx, id)
+	if err != nil {
+		return nil, ErrMediaNotFound
+	}
+	if !strings.EqualFold(media.FileType, "image") {
+		return nil, ErrNotAnImage
+	}
+	fullPath := filepath.Join(s.cfg.StoragePath, "media", media.OriginalPath)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not stat media file: %w", err)
+	}
+	if info.Size() > maxAnalyzeBytes {
+		return nil, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes)
+	}
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not read media file: %w", err)
+	}
+	return s.AnalyzeImage(ctx, content, media.Filename, media.MimeType)
+}
+
+// AnalyzeMediaByPath reads a stored media file by its URL path (e.g. "/2024/08/photo.jpg")
+// and analyzes it. The path must be within the originals directory.
+func (s *MediaService) AnalyzeMediaByPath(ctx context.Context, mediaPath string) (*AnalysisResponse, error) {
+	base := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media", "originals"))
+	fullPath := filepath.Clean(filepath.Join(base, strings.TrimPrefix(filepath.FromSlash(mediaPath), "/")))
+	if !strings.HasPrefix(fullPath, base+string(filepath.Separator)) {
+		return nil, fmt.Errorf("invalid media path")
+	}
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("media file not found")
+	}
+	if info.Size() > maxAnalyzeBytes {
+		return nil, fmt.Errorf("image too large for analysis (%d bytes, max %d)", info.Size(), maxAnalyzeBytes)
+	}
+
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not read media file: %w", err)
+	}
+
+	mimeType := http.DetectContentType(content)
+	if !strings.HasPrefix(mimeType, "image/") {
+		return nil, ErrNotAnImage
+	}
+
+	return s.AnalyzeImage(ctx, content, filepath.Base(fullPath), mimeType)
 }
 
 func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {

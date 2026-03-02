@@ -14,7 +14,7 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
 import { getPost, createPost, updatePost } from '../../api/posts.js';
-import { uploadMedia } from '../../api/media.js';
+import { uploadMedia, analyzeMedia, analyzeMediaByPath } from '../../api/media.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
@@ -31,6 +31,7 @@ export default class PostEditPage extends Component {
     this.state = {
       loading: !!id,
       saving: false,
+      analyzing: false,
       post: null,
       error: null,
       isNew: !id,
@@ -45,7 +46,7 @@ export default class PostEditPage extends Component {
   }
 
   render() {
-    const { loading, error, post, isNew, saving } = this.state;
+    const { loading, error, post, isNew, saving, analyzing } = this.state;
 
     if (loading) {
       return `
@@ -82,6 +83,7 @@ export default class PostEditPage extends Component {
     const thumb    = escapeHtml(p.thumbnail_path || '');
     const meta     = escapeHtml(p.meta_description || '');
     const fmt      = p.formatter || 'markdown';
+    const excerpt  = p.excerpt || '';
 
     const statusOpts = ['draft', 'published', 'hidden', 'page'].map((s) =>
       `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`
@@ -91,7 +93,8 @@ export default class PostEditPage extends Component {
       `<option value="${f}"${fmt === f ? ' selected' : ''}>${escapeHtml(f)}</option>`
     ).join('');
 
-    const saveLabel = saving ? 'Saving…' : 'Save';
+    const saveLabel    = saving    ? 'Saving…'    : 'Save';
+    const analyzeLabel = analyzing ? 'Analyzing…' : 'Analyze';
 
     return `
       <div class="light-layout">
@@ -101,6 +104,8 @@ export default class PostEditPage extends Component {
             <h1>${isNew ? 'New Post' : 'Edit Post'}</h1>
             <div class="header-actions">
               <button id="media-btn" class="btn btn-secondary" type="button">Media</button>
+              <button id="analyze-btn" class="btn btn-secondary" type="button"
+                      ${analyzing ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
               <button id="save-btn" class="btn btn-primary" type="button"
                       ${saving ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
               <a href="/light/posts" class="btn btn-secondary">Cancel</a>
@@ -130,6 +135,11 @@ export default class PostEditPage extends Component {
               </div>
 
               <div id="tags-input-mount"></div>
+
+              <div class="form-group">
+                <textarea id="excerpt-editor" class="form-input editor-excerpt"
+                          rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+              </div>
 
               <div class="form-group">
                 <textarea id="content-editor" class="editor-content"
@@ -171,6 +181,17 @@ export default class PostEditPage extends Component {
     // Save button
     const saveBtn = this.$('#save-btn');
     saveBtn?.addEventListener('click', () => this._save());
+
+    // Analyze button — uses first image path from content, or opens picker
+    const analyzeBtn = this.$('#analyze-btn');
+    analyzeBtn?.addEventListener('click', () => {
+      const path = this._extractImagePath();
+      if (path) {
+        this._handleAnalyze({ path });
+      } else {
+        this._mediaPicker.open((items) => this._handleAnalyze(items[0]));
+      }
+    });
 
     // Featured star toggle
     const featuredToggle = this.$('#featured-toggle');
@@ -271,6 +292,7 @@ export default class PostEditPage extends Component {
     return {
       title:            (this.$('#title-input')?.value || '').trim(),
       slug:             (this.$('#slug-input')?.value || '').trim() || null,
+      excerpt:          (this.$('#excerpt-editor')?.value || '').trim() || null,
       content:          this.$('#content-editor')?.value || '',
       status:           this.$('#status-select')?.value || 'draft',
       formatter:        this.$('#formatter-select')?.value || 'markdown',
@@ -315,6 +337,58 @@ export default class PostEditPage extends Component {
       await updatePost(this.state.postId, data);
     } catch {
       // Silent autosave failure.
+    }
+  }
+
+  /** Extract first image path from the content textarea. */
+  _extractImagePath() {
+    const content = this.$('#content-editor')?.value || '';
+    const match = content.match(
+      /(?:^|["'\s(])(\/\d{4}\/\d{2}\/[^\s"')]+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i
+    );
+    return match ? match[1] : null;
+  }
+
+  async _handleAnalyze(item) {
+    if (!item || this.state.analyzing) return;
+
+    // Snapshot current form values before setState re-renders and resets the DOM.
+    const snap = this._collectFormData();
+
+    this.setState({ analyzing: true });
+    try {
+      const result = item.id
+        ? await analyzeMedia(item.id)
+        : await analyzeMediaByPath(item.path);
+
+      const mergedTags = [
+        ...snap.tags,
+        ...(result.tags || []).filter((t) => !snap.tags.includes(t)),
+      ];
+
+      const post = {
+        ...(this.state.post || {}),
+        title:   snap.title   || result.title   || '',
+        excerpt: snap.excerpt || result.excerpt  || null,
+        content: snap.content,
+        slug:    snap.slug,
+        tags:    mergedTags.map((name) => ({ name, slug: name })),
+      };
+
+      store.set('toast', { message: 'Analysis complete.', type: 'success' });
+      this.setState({ analyzing: false, post });
+    } catch (err) {
+      // Restore the user's form values even on failure.
+      const post = {
+        ...(this.state.post || {}),
+        title:   snap.title,
+        excerpt: snap.excerpt,
+        content: snap.content,
+        slug:    snap.slug,
+        tags:    snap.tags.map((name) => ({ name, slug: name })),
+      };
+      store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
+      this.setState({ analyzing: false, post });
     }
   }
 

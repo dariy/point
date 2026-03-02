@@ -113,3 +113,21 @@ export function getOrphanedMedia() {
 export function deleteOrphanedMedia() {
   return api.delete('/api/media/orphaned');
 }
+
+/**
+ * Analyze an existing media item with AI (Gemini) to suggest title, tags, and excerpt.
+ * @param {number} id
+ * @returns {Promise<{ title: string|null, tags: string[], excerpt: string|null }>}
+ */
+export function analyzeMedia(id) {
+  return api.post(`/api/media/${id}/analyze`);
+}
+
+/**
+ * Analyze a stored media file by its URL path (e.g. "/2024/08/photo.jpg").
+ * @param {string} path
+ * @returns {Promise<{ title: string|null, tags: string[], excerpt: string|null }>}
+ */
+export function analyzeMediaByPath(path) {
+  return api.post('/api/media/analyze-path', { path });
+}
