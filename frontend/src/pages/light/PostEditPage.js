@@ -67,6 +67,7 @@ export default class PostEditPage extends Component {
     this._tagsInputRef = null;
     this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_MS);
     this._mediaPicker = null;
+    this._visualEditorRef = null;
     this._dragCount = 0;
   }
 
@@ -306,13 +307,14 @@ export default class PostEditPage extends Component {
     document.body.classList.remove('drag-active');
     this._mediaPicker?.destroy();
     this._mediaPicker = null;
+    this._visualEditorRef = null;
   }
 
   _insertMediaPaths(items) {
     if (!items.length) return;
     if (this.state.editorMode === 'visual') {
       this._visualImages = [...this._visualImages, ...items.map((item) => item.path)];
-      this._mountVisualEditor();
+      if (this.$('#visual-editor-mount')) this._mountVisualEditor();
       return;
     }
     const editor = this.$('#content-editor');
@@ -323,7 +325,13 @@ export default class PostEditPage extends Component {
   }
 
   _mountVisualEditor() {
-    this.mountChild(VisualEditor, '#visual-editor-mount', {
+    if (this._visualEditorRef) {
+      this._visualEditorRef.unmount();
+      const idx = this._children.indexOf(this._visualEditorRef);
+      if (idx !== -1) this._children.splice(idx, 1);
+      this._visualEditorRef = null;
+    }
+    this._visualEditorRef = this.mountChild(VisualEditor, '#visual-editor-mount', {
       images: this._visualImages,
       onChange: (imgs) => {
         this._visualImages = imgs;

@@ -18,7 +18,7 @@ export class VisualEditor extends Component {
       const thumb = `/media/thumbnails${path}`;
       const filename = path.split('/').pop();
       return `
-        <div class="ve-card" data-index="${i}" draggable="true">
+        <div class="ve-card" data-index="${i}">
           <div class="ve-handle" title="Drag to reorder">
             <span class="ve-handle-dots"></span>
           </div>
@@ -96,15 +96,17 @@ export class VisualEditor extends Component {
       return cards.length;
     };
 
-    // dragstart — only from the handle zone
+    // Enable dragging only when mousedown starts on the handle
+    list.addEventListener('mousedown', (e) => {
+      const handle = e.target.closest('.ve-handle');
+      if (!handle) return;
+      const card = handle.closest('.ve-card');
+      if (card) card.setAttribute('draggable', 'true');
+    });
+
     list.addEventListener('dragstart', (e) => {
       const card = e.target.closest('.ve-card');
-      if (!card) return;
-      // Only start drag if initiated from the handle
-      if (!e.target.closest('.ve-handle')) {
-        e.preventDefault();
-        return;
-      }
+      if (!card || card.getAttribute('draggable') !== 'true') return;
       dragIdx = parseInt(card.dataset.index, 10);
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
@@ -150,7 +152,10 @@ export class VisualEditor extends Component {
     list.addEventListener('dragend', () => {
       dragIdx = null;
       removeIndicator();
-      list.querySelectorAll('.ve-card.dragging').forEach((c) => c.classList.remove('dragging'));
+      list.querySelectorAll('.ve-card').forEach((c) => {
+        c.classList.remove('dragging');
+        c.removeAttribute('draggable');
+      });
     });
   }
   _bindLightbox() {
@@ -168,13 +173,13 @@ export class VisualEditor extends Component {
         overlay.appendChild(fullImg);
         document.body.appendChild(overlay);
 
-        const close = () => overlay.remove();
+        const close = () => {
+          overlay.remove();
+          document.removeEventListener('keydown', onKey);
+        };
         overlay.addEventListener('click', close);
         const onKey = (e) => {
-          if (e.key === 'Escape') {
-            close();
-            document.removeEventListener('keydown', onKey);
-          }
+          if (e.key === 'Escape') close();
         };
         document.addEventListener('keydown', onKey);
       });
