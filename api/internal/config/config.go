@@ -53,6 +53,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("THUMBNAIL_WIDTH", 400)
 	viper.SetDefault("THUMBNAIL_HEIGHT", 300)
 	viper.SetDefault("JPEG_QUALITY", 85)
+	viper.SetDefault("GEMINI_API_KEY", "")
 
 	err = viper.ReadInConfig()
 	if err != nil {

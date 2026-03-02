@@ -154,6 +154,7 @@ func main() {
 	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(authService))
 	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(authService))
 	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(authService))
+	mediaGroup.POST("/analyze-path", mediaHandler.AnalyzeImageByPath, api.AuthMiddleware(authService))
 	mediaGroup.GET("/stats", mediaHandler.GetStorageStats, api.AuthMiddleware(authService))
 	mediaGroup.GET("/orphaned", mediaHandler.ListOrphanedMedia, api.AuthMiddleware(authService))
 	mediaGroup.DELETE("/orphaned", mediaHandler.DeleteOrphanedMedia, api.AuthMiddleware(authService))
@@ -163,6 +164,7 @@ func main() {
 	mediaGroup.PUT("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(authService))
 	mediaGroup.PATCH("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(authService))
 	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(authService))
+	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(authService))
 	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(authService))
 
 	// ── Settings Routes ────────────────────────────────────────────────────────

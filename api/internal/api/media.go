@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -373,6 +374,45 @@ func (h *MediaHandler) AnalyzeImage(c echo.Context) error {
 
 	analysis, err := h.mediaService.AnalyzeImage(c.Request().Context(), content, file.Filename, file.Header.Get("Content-Type"))
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, analysis)
+}
+
+func (h *MediaHandler) AnalyzeImageByPath(c echo.Context) error {
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := c.Bind(&req); err != nil || req.Path == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
+	}
+
+	analysis, err := h.mediaService.AnalyzeMediaByPath(c.Request().Context(), req.Path)
+	if err != nil {
+		if errors.Is(err, services.ErrNotAnImage) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, analysis)
+}
+
+func (h *MediaHandler) AnalyzeImageByID(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	analysis, err := h.mediaService.AnalyzeMediaByID(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, services.ErrMediaNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		if errors.Is(err, services.ErrNotAnImage) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
