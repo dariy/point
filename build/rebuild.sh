@@ -20,6 +20,16 @@ echo "Building with version: $DEV_BUILD_VERSION"
 # Build CSS bundles
 ../scripts/build-css.sh
 
+# Inject GEMINI_API_KEY from the system keyring for the deployment.
+# The key is appended to .env now and stripped on EXIT (success or failure).
+_GEMINI_KEY=$(secret-tool lookup service gemini account light 2>/dev/null)
+if [ -n "$_GEMINI_KEY" ]; then
+    sed -i '/^GEMINI_API_KEY=/d' .env          # remove any stale entry
+    echo "GEMINI_API_KEY=$_GEMINI_KEY" >> .env
+    trap 'sed -i "/^GEMINI_API_KEY=/d" .env' EXIT
+fi
+unset _GEMINI_KEY
+
 # Use podman as the standard container engine
 # Using build/Dockerfile which is a multi-stage build
 # We tag the builder stage to avoid dangling images and reuse it
