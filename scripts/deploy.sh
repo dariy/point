@@ -104,6 +104,22 @@ run_migrations() {
     log_success "Database migrations skipped (handled by app)"
 }
 
+# Migrate legacy /media/originals/… paths in posts to the /YYYY/MM/… form
+migrate_paths() {
+    log_info "Migrating legacy media paths..."
+
+    # Dry run first so we can see what would change
+    log_info "Dry run preview:"
+    docker compose -f "$COMPOSE_FILE" exec -T point \
+        ./migrate-paths --db /data/point.db
+
+    log_info "Applying path migration..."
+    docker compose -f "$COMPOSE_FILE" exec -T point \
+        ./migrate-paths --db /data/point.db --apply
+
+    log_success "Path migration complete"
+}
+
 # Deploy new version
 deploy() {
     log_info "Deploying new version..."
@@ -236,8 +252,11 @@ case "${1:-deploy}" in
     backup)
         create_backup
         ;;
+    migrate-paths)
+        migrate_paths
+        ;;
     *)
-        echo "Usage: $0 {deploy|rollback|health|backup}"
+        echo "Usage: $0 {deploy|rollback|health|backup|migrate-paths}"
         exit 1
         ;;
 esac
