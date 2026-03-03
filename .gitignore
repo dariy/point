@@ -136,3 +136,9 @@ api/coverage.out
 api/coverage.html
 light.css
 main.css
+
+.claude/**
+.zed/**
+*/.serena/**
+.mcp.json
+jsconfig.json

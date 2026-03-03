@@ -21,10 +21,10 @@ To achieve full parity with the Python API and enable a seamless frontend switch
 - [ ] **File-Based Caching:** Implement a caching layer for feeds (`/feed.xml`, `/sitemap.xml`) and potentially homepage data to improve performance, similar to Python's `CacheService`.
 
 ## 4. Infrastructure & Validation
-- [ ] **Database Migration Compatibility:** Verify that the Go migration system (`api/migrations/`) is fully compatible with the current database schema and can handle future updates without data loss.
+- [ ] **Database Migration Compatibility:** Migrations are currently applied inline at startup in `cmd/api/main.go`. Verify schema compatibility and consider moving to file-based migrations for better auditability.
 - [ ] **End-to-End Verification:** Perform a full sweep of all API endpoints using a tool like `bruno` or `curl` to ensure request/response parity for all edge cases.
-- [ ] **Frontend Environment Config:** Update the frontend build/deployment configuration to point to the Go API port (default 8080) instead of the Python API port (default 8000).
+- [ ] **Frontend Environment Config:** Verify frontend API base URL points to the Go API (port 8000 — same as Python, no change needed).
 
 ## 5. Deployment
-- [ ] **Dockerfile Update:** Update the project's `Dockerfile` (or create a new one) to build and serve the Go API and the static frontend assets in a single container.
-- [ ] **Docker Compose:** Update `docker-compose.yml` to reflect the switch from Python to Go.
+- [x] **Dockerfile:** Multi-stage build in `build/Dockerfile` — builds Go binary and bundles frontend static assets.
+- [x] **Container Compose:** `build/docker-compose.yml` configured for the Go API. Development uses Podman + podman-compose; production uses Docker + docker-compose.

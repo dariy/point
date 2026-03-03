@@ -10,7 +10,9 @@ This guide explains how to set up your production server to allow backup/restore
 
 ## Option 1: Add User to Docker Group (Recommended for Simplicity)
 
-This allows your user to run Docker commands without sudo.
+This allows your user to run Docker (production) commands without sudo.
+
+> **Note**: Development uses Podman + podman-compose. Production uses Docker + docker-compose.
 
 ### On Production Server
 
