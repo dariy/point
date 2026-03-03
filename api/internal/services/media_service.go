@@ -47,6 +47,10 @@ func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsSe
 		settingsService: settingsService,
 	}
 
+	if cfg == nil {
+		return s
+	}
+
 	// Initialize GenAI if key is present
 	apiKey := cfg.GeminiAPIKey
 	if apiKey != "" {
