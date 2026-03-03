@@ -94,7 +94,8 @@ CREATE TABLE media (
     uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     checksum VARCHAR(64) NOT NULL UNIQUE,
     alt_text VARCHAR(500),
-    caption VARCHAR(1000)
+    caption VARCHAR(1000),
+    is_public INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_media_post_id ON media(post_id);
 CREATE INDEX idx_media_uploaded_at ON media(uploaded_at);
@@ -113,6 +114,16 @@ CREATE TABLE sessions (
     last_activity DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_sessions_token ON sessions(token);
+
+-- MediaVisibilityLog — audit trail for is_public changes on media records
+CREATE TABLE media_visibility_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_id   INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    is_public  INTEGER NOT NULL,
+    changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    post_id    INTEGER REFERENCES posts(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_media_visibility_log_media_id ON media_visibility_log(media_id);
 
 -- BlogSettings
 CREATE TABLE blog_settings (

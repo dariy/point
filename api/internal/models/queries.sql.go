@@ -146,7 +146,7 @@ INSERT INTO media (
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
 `
 
 type CreateMediaParams struct {
@@ -197,6 +197,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.Checksum,
 		&i.AltText,
 		&i.Caption,
+		&i.IsPublic,
 	)
 	return i, err
 }
@@ -503,7 +504,7 @@ func (q *Queries) GetFirstUser(ctx context.Context) (User, error) {
 
 const getMedia = `-- name: GetMedia :one
 
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public FROM media
 WHERE id = ? LIMIT 1
 `
 
@@ -526,12 +527,13 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 		&i.Checksum,
 		&i.AltText,
 		&i.Caption,
+		&i.IsPublic,
 	)
 	return i, err
 }
 
 const getMediaByChecksum = `-- name: GetMediaByChecksum :one
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public FROM media
 WHERE checksum = ? LIMIT 1
 `
 
@@ -553,12 +555,13 @@ func (q *Queries) GetMediaByChecksum(ctx context.Context, checksum string) (Medi
 		&i.Checksum,
 		&i.AltText,
 		&i.Caption,
+		&i.IsPublic,
 	)
 	return i, err
 }
 
 const getMediaByPostID = `-- name: GetMediaByPostID :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public FROM media
 WHERE post_id = ?
 ORDER BY uploaded_at ASC
 `
@@ -587,6 +590,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 			&i.Checksum,
 			&i.AltText,
 			&i.Caption,
+			&i.IsPublic,
 		); err != nil {
 			return nil, err
 		}
@@ -1190,7 +1194,7 @@ func (q *Queries) IncrementPostViewCount(ctx context.Context, id int64) error {
 }
 
 const listMedia = `-- name: ListMedia :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
 ORDER BY uploaded_at DESC
 LIMIT ?3 OFFSET ?4
@@ -1232,6 +1236,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 			&i.Checksum,
 			&i.AltText,
 			&i.Caption,
+			&i.IsPublic,
 		); err != nil {
 			return nil, err
 		}
@@ -1526,7 +1531,7 @@ const updateMedia = `-- name: UpdateMedia :one
 UPDATE media
 SET alt_text = ?, caption = ?, post_id = ?
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
 `
 
 type UpdateMediaParams struct {
@@ -1559,6 +1564,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.Checksum,
 		&i.AltText,
 		&i.Caption,
+		&i.IsPublic,
 	)
 	return i, err
 }
@@ -1567,7 +1573,7 @@ const updateMediaFilename = `-- name: UpdateMediaFilename :one
 UPDATE media
 SET filename = ?, original_path = ?, thumbnail_path = ?
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
 `
 
 type UpdateMediaFilenameParams struct {
@@ -1600,6 +1606,7 @@ func (q *Queries) UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilena
 		&i.Checksum,
 		&i.AltText,
 		&i.Caption,
+		&i.IsPublic,
 	)
 	return i, err
 }

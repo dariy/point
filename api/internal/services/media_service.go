@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -31,6 +32,7 @@ type MediaService struct {
 	repo            *repository.Repository
 	cfg             *config.Config
 	settingsService *SettingsService
+	tagService      *TagService
 	genaiClient     *genai.Client
 	genaiConfig     GenAIConfig
 }
@@ -40,11 +42,12 @@ type GenAIConfig struct {
 	Models []string `yaml:"models"`
 }
 
-func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsService *SettingsService) *MediaService {
+func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsService *SettingsService, tagService *TagService) *MediaService {
 	s := &MediaService{
 		repo:            repo,
 		cfg:             cfg,
 		settingsService: settingsService,
+		tagService:      tagService,
 	}
 
 	if cfg == nil {
@@ -706,4 +709,147 @@ func (s *MediaService) parseAnalysisResult(result map[string]interface{}, filena
 	}
 
 	return analysis, nil
+}
+
+// mediaPathRe matches media paths embedded in post content.
+// Paths can appear as bare lines (/YYYY/MM/file) or inside markdown/HTML
+// (![alt](/YYYY/MM/file) or src="/YYYY/MM/file"). Trailing markup chars are excluded.
+var mediaPathRe = regexp.MustCompile(`(/\d{4}/\d{2}/[^\s)"'>]+)`)
+
+// ExtractMediaPaths returns the distinct set of original_paths (in the DB
+// format "originals/YYYY/MM/file") referenced in content and thumbnailPath.
+func ExtractMediaPaths(content, thumbnailPath string) []string {
+	seen := make(map[string]struct{})
+	var paths []string
+	add := func(p string) {
+		// p is "/YYYY/MM/file" — media table stores "originals/YYYY/MM/file"
+		orig := "originals" + p
+		if _, ok := seen[orig]; !ok {
+			seen[orig] = struct{}{}
+			paths = append(paths, orig)
+		}
+	}
+	for _, m := range mediaPathRe.FindAllStringSubmatch(content, -1) {
+		add(m[1])
+	}
+	if thumbnailPath != "" {
+		add(thumbnailPath)
+	}
+	return paths
+}
+
+// UpdateMediaVisibilityForPaths updates is_public for all media records
+// referenced by the given original_paths (format "originals/YYYY/MM/file").
+// It checks all published posts to determine current public visibility.
+func (s *MediaService) UpdateMediaVisibilityForPaths(ctx context.Context, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	hiddenTagIDs, err := s.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	if err != nil {
+		return err
+	}
+	posts, err := s.repo.GetAllPublishedPostContents(ctx)
+	if err != nil {
+		return err
+	}
+	// Collect which paths appear in at least one publicly visible post.
+	visiblePaths := make(map[string]int64) // original_path → triggering post ID
+	for _, post := range posts {
+		hiddenByTag := false
+		for _, tagID := range post.TagIDs {
+			if hiddenTagIDs[tagID] {
+				hiddenByTag = true
+				break
+			}
+		}
+		if hiddenByTag {
+			continue
+		}
+		for _, m := range mediaPathRe.FindAllStringSubmatch(post.Content, -1) {
+			orig := "originals" + m[1]
+			if _, seen := visiblePaths[orig]; !seen {
+				visiblePaths[orig] = post.ID
+			}
+		}
+		if post.ThumbnailPath != "" {
+			orig := "originals" + post.ThumbnailPath
+			if _, seen := visiblePaths[orig]; !seen {
+				visiblePaths[orig] = post.ID
+			}
+		}
+	}
+	for _, path := range paths {
+		m, err := s.repo.GetMediaByPath(ctx, path)
+		if err != nil {
+			continue // no DB record for this path, skip
+		}
+		postID, shouldBePublic := visiblePaths[path]
+		if m.IsPublic != shouldBePublic {
+			var pid *int64
+			if shouldBePublic {
+				pid = &postID
+			}
+			if err := s.repo.SetMediaPublic(ctx, m.ID, shouldBePublic, pid); err != nil {
+				log.Printf("warning: failed to update media %d visibility: %v", m.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// RecalculateAllMediaVisibility rebuilds is_public for every media record from
+// scratch by scanning all published visible posts. Returns count of changed records.
+func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, error) {
+	hiddenTagIDs, err := s.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	if err != nil {
+		return 0, err
+	}
+	posts, err := s.repo.GetAllPublishedPostContents(ctx)
+	if err != nil {
+		return 0, err
+	}
+	visiblePaths := make(map[string]int64)
+	for _, post := range posts {
+		hiddenByTag := false
+		for _, tagID := range post.TagIDs {
+			if hiddenTagIDs[tagID] {
+				hiddenByTag = true
+				break
+			}
+		}
+		if hiddenByTag {
+			continue
+		}
+		for _, m := range mediaPathRe.FindAllStringSubmatch(post.Content, -1) {
+			orig := "originals" + m[1]
+			if _, seen := visiblePaths[orig]; !seen {
+				visiblePaths[orig] = post.ID
+			}
+		}
+		if post.ThumbnailPath != "" {
+			orig := "originals" + post.ThumbnailPath
+			if _, seen := visiblePaths[orig]; !seen {
+				visiblePaths[orig] = post.ID
+			}
+		}
+	}
+	allMedia, err := s.repo.GetAllMediaPaths(ctx)
+	if err != nil {
+		return 0, err
+	}
+	changed := 0
+	for _, m := range allMedia {
+		postID, shouldBePublic := visiblePaths[m.OriginalPath]
+		if m.IsPublic != shouldBePublic {
+			var pid *int64
+			if shouldBePublic {
+				pid = &postID
+			}
+			if err := s.repo.SetMediaPublic(ctx, m.ID, shouldBePublic, pid); err == nil {
+				changed++
+			}
+		}
+	}
+	return changed, nil
 }
