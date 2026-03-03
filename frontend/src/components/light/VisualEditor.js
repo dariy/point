@@ -17,7 +17,10 @@ export class VisualEditor extends Component {
 
     const insertZone = (index) =>
       `<div class="ve-insert-zone" data-insert-at="${index}">
-         <button class="ve-insert-btn" type="button" title="Insert text node">+</button>
+         <div class="ve-insert-actions">
+           <button class="ve-insert-btn ve-insert-text" type="button" title="Insert text node">+ Text</button>
+           <button class="ve-insert-btn ve-insert-media" type="button" title="Insert media node">+ Media</button>
+         </div>
        </div>`;
 
     const cards = nodes.map((node, i) => {
@@ -54,7 +57,7 @@ export class VisualEditor extends Component {
     }).join('');
 
     const empty = nodes.length === 0
-      ? `<p class="ve-empty">No content yet. Click <strong>Media</strong> to add images.</p>`
+      ? `<p class="ve-empty">No content yet. Use the buttons to add text or media.</p>`
       : '';
 
     return `
@@ -93,7 +96,7 @@ export class VisualEditor extends Component {
   }
 
   _bindInsertZones() {
-    this.container.querySelectorAll('.ve-insert-btn').forEach((btn) => {
+    this.container.querySelectorAll('.ve-insert-text').forEach((btn) => {
       btn.addEventListener('click', () => {
         const zone = btn.closest('.ve-insert-zone');
         if (!zone) return;
@@ -108,6 +111,17 @@ export class VisualEditor extends Component {
         });
       });
     });
+
+    this.container.querySelectorAll('.ve-insert-media').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const zone = btn.closest('.ve-insert-zone');
+        if (!zone) return;
+        const at = parseInt(zone.dataset.insertAt, 10);
+        if (this.props.onAddMedia) {
+          this.props.onAddMedia(at);
+        }
+      });
+    });
   }
 
   _bindTextCards() {
@@ -117,7 +131,19 @@ export class VisualEditor extends Component {
         ta.style.height = ta.scrollHeight + 'px';
       };
       resize();
-      ta.addEventListener('input', resize);
+      ta.addEventListener('input', () => {
+        resize();
+        const card = ta.closest('.ve-card');
+        if (card) {
+          const idx = parseInt(card.dataset.index, 10);
+          if (this.props.nodes[idx]) {
+            this.props.nodes[idx].text = ta.value;
+          }
+        }
+        if (this.props.onInput) {
+          this.props.onInput();
+        }
+      });
     });
   }
 

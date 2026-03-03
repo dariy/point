@@ -440,28 +440,33 @@ body.drag-active::after {
     transition: opacity var(--transition-fast);
 }
 
-.ve-insert-btn {
+.ve-insert-actions {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
     position: relative;
     z-index: 1;
+}
+
+.ve-insert-btn {
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 14px;
+    border-radius: 12px;
+    height: 24px;
+    font-size: 12px;
     cursor: pointer;
     color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0;
-    padding: 0;
+    padding: 0 10px;
     line-height: 1;
-    transition: opacity var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
 }
 
 .ve-list:hover .ve-insert-zone::before,
-.ve-list:hover .ve-insert-btn {
+.ve-list:hover .ve-insert-actions {
     opacity: 1;
 }
 
