@@ -60,7 +60,8 @@ func setupMediaService(t *testing.T) (*MediaService, string) {
 		ThumbnailHeight: 300,
 	}
 	settingsService := NewSettingsService(repo)
-	service := NewMediaService(repo, cfg, settingsService)
+	tagService := NewTagService(repo)
+	service := NewMediaService(repo, cfg, settingsService, tagService)
 
 	return service, tmpDir
 }

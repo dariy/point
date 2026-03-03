@@ -20,8 +20,8 @@ func TestPostHandler_CRUD(t *testing.T) {
 
 	postService := services.NewPostService(repo)
 	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, nil, settingsService)
 	tagService := services.NewTagService(repo)
+	mediaService := services.NewMediaService(repo, nil, settingsService, tagService)
 	handler := NewPostHandler(postService, settingsService, mediaService, tagService)
 
 	e := echo.New()

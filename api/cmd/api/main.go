@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -40,6 +41,34 @@ func main() {
 		}
 	}
 
+	// Apply pending DB migrations.
+	ctx := context.Background()
+	migrations := []struct{ name, sql string }{
+		{
+			"add_media_is_public",
+			`ALTER TABLE media ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`,
+		},
+		{
+			"create_media_visibility_log",
+			`CREATE TABLE IF NOT EXISTS media_visibility_log (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				media_id   INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+				is_public  INTEGER NOT NULL,
+				changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				post_id    INTEGER REFERENCES posts(id) ON DELETE SET NULL
+			)`,
+		},
+		{
+			"create_media_visibility_log_index",
+			`CREATE INDEX IF NOT EXISTS idx_media_visibility_log_media_id ON media_visibility_log(media_id)`,
+		},
+	}
+	for _, m := range migrations {
+		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
+			log.Printf("warning: migration %q: %v", m.name, err)
+		}
+	}
+
 	// Initialize Echo
 	e := echo.New()
 	e.HideBanner = true
@@ -49,7 +78,7 @@ func main() {
 	authService := services.NewAuthService(repo)
 	tagService := services.NewTagService(repo)
 	postService := services.NewPostService(repo)
-	mediaService := services.NewMediaService(repo, &cfg, settingsService)
+	mediaService := services.NewMediaService(repo, &cfg, settingsService, tagService)
 
 	// Handlers
 	authHandler := api.NewAuthHandler(authService, &cfg)
@@ -105,8 +134,9 @@ func main() {
 	// ── Preview route (public, but token-gated) ────────────────────────────────
 	e.GET("/preview/:token", postHandler.GetPostByPreviewToken)
 
-	// ── Simplified media URL: /YYYY/MM/filename ────────────────────────────────
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML))
+	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
+	// Auth-gated: unauthenticated clients see 404 for non-public media.
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(authService))
 
 	// ── Auth Routes ────────────────────────────────────────────────────────────
 	authGroup := e.Group("/api/auth")
@@ -182,6 +212,7 @@ func main() {
 	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(authService))
 	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(authService))
 	systemGroup.POST("/map/update-coords", systemHandler.UpdateMapCoords, api.AuthMiddleware(authService))
+	systemGroup.POST("/media/recalculate-visibility", systemHandler.RecalculateMediaVisibility, api.AuthMiddleware(authService))
 	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(authService))
 	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(authService))
 	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(authService))
@@ -197,10 +228,6 @@ func main() {
 	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(authService))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(authService))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(authService))
-
-	// ── Media static file serving ──────────────────────────────────────────────
-	mediaPath := filepath.Join(cfg.StoragePath, "media")
-	e.Static("/media", mediaPath)
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
@@ -246,12 +273,19 @@ func main() {
 // e.g. "video_89017c29.mp4" → "89017c29".
 var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 
-// serveSimplifiedMedia handles /YYYY/MM/filename shortcut for media files.
-// If year or month are not valid integers the path belongs to the SPA, so
-// index.html is served instead.
-// When the exact filename is not found, a glob fallback uses the embedded
-// checksum suffix to find the real file (handles Unicode/hyphen variants).
-func serveSimplifiedMedia(storagePath, indexHTML string) echo.HandlerFunc {
+// serveSimplifiedMedia handles /YYYY/MM/filename for media files.
+//
+// Access rules:
+//   - Authenticated users (session cookie present) may access any file.
+//   - Unauthenticated users may only access files where media.is_public = 1.
+//   - Files not found in the media table return 404.
+//
+// Variant selection:
+//   - ?thumb serves the thumbnail (media/thumbnails/…) when one exists.
+//   - No query param serves the original (media/originals/…).
+//
+// Non-numeric year/month segments are SPA routes — index.html is served instead.
+func serveSimplifiedMedia(storagePath, indexHTML string, repo *repository.Repository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -274,16 +308,55 @@ func serveSimplifiedMedia(storagePath, indexHTML string) echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid path")
 		}
 
-		dir := filepath.Join(storagePath, "media", "originals", year, month)
-		filePath := filepath.Join(dir, filename)
+		isAuthenticated := c.Get("user") != nil
 
-		if _, err := os.Stat(filePath); err == nil {
-			return c.File(filePath)
+		// Resolve the media record from the DB using the original_path key.
+		origRelPath := "originals/" + year + "/" + month + "/" + filename
+		ctx := c.Request().Context()
+		media, err := repo.GetMediaByPath(ctx, origRelPath)
+		if err != nil {
+			// DB record not found — try the checksum-glob fallback to handle
+			// renamed files, then retry the DB lookup with the resolved name.
+			dir := filepath.Join(storagePath, "media", "originals", year, month)
+			if m := checksumRe.FindStringSubmatch(filename); m != nil {
+				matches, _ := filepath.Glob(filepath.Join(dir, "*_"+m[1]+".*"))
+				if len(matches) == 1 {
+					resolvedName := filepath.Base(matches[0])
+					resolvedPath := "originals/" + year + "/" + month + "/" + resolvedName
+					media, err = repo.GetMediaByPath(ctx, resolvedPath)
+				}
+			}
+			if err != nil {
+				return echo.NewHTTPError(http.StatusNotFound, "media not found")
+			}
 		}
 
-		// Exact file not found — try to resolve via the embedded checksum.
+		// Enforce visibility: unauthenticated clients cannot access private media.
+		if !media.IsPublic && !isAuthenticated {
+			return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		}
+
+		// Determine which file to serve.
+		_, wantThumb := c.Request().URL.Query()["thumb"]
+		if wantThumb {
+			if !media.ThumbnailPath.Valid {
+				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail available")
+			}
+			thumbFile := filepath.Join(storagePath, "media", media.ThumbnailPath.String)
+			if _, err := os.Stat(thumbFile); err != nil {
+				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
+			}
+			return c.File(thumbFile)
+		}
+
+		// Serve original — try exact path first, then checksum-glob fallback.
+		origDir := filepath.Join(storagePath, "media", "originals", year, month)
+		origFile := filepath.Join(origDir, filename)
+		if _, err := os.Stat(origFile); err == nil {
+			return c.File(origFile)
+		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {
-			matches, _ := filepath.Glob(filepath.Join(dir, "*_"+m[1]+".*"))
+			matches, _ := filepath.Glob(filepath.Join(origDir, "*_"+m[1]+".*"))
 			if len(matches) == 1 {
 				return c.File(matches[0])
 			}

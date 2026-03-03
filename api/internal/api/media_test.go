@@ -24,7 +24,8 @@ func TestMediaHandler_Upload(t *testing.T) {
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, cfg, settingsService)
+	tagService := services.NewTagService(repo)
+	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	handler := NewMediaHandler(mediaService, settingsService)
 
 	e := echo.New()
@@ -66,7 +67,8 @@ func TestMediaHandler_List(t *testing.T) {
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, cfg, settingsService)
+	tagService := services.NewTagService(repo)
+	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	handler := NewMediaHandler(mediaService, settingsService)
 
 	e := echo.New()

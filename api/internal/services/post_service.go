@@ -55,24 +55,26 @@ func NewPostService(repo *repository.Repository) *PostService {
 var bareImageRe = regexp.MustCompile(`(?m)^(/\d{4}/\d{2}/\S+)$`)
 var imageExtRe = regexp.MustCompile(`(?i)\.(jpg|jpeg|png|gif|webp|avif|svg|heic|heif|bmp)$`)
 
-// markdownImageRe matches a markdown image whose src starts with /media/originals.
-// Capture group 1 is the path after that prefix.
+// markdownImageRe matches a markdown image whose src starts with /media/originals
+// (legacy format written before the URL refactor). Capture group 1 is the path
+// after that prefix, i.e. "/YYYY/MM/file" — the bare-path storage format.
 var markdownImageRe = regexp.MustCompile(`!\[[^\]]*\]\(/media/originals(/[^)]+)\)`)
 
 // preprocessContent expands bare image paths into markdown image syntax so
 // goldmark renders them as <img> tags.
-// e.g. /2026/02/photo.jpg → ![photo.jpg](/media/originals/2026/02/photo.jpg)
+// e.g. /2026/02/photo.jpg → ![photo.jpg](/2026/02/photo.jpg)
 func preprocessContent(content string) string {
 	return bareImageRe.ReplaceAllStringFunc(content, func(p string) string {
 		if !imageExtRe.MatchString(p) {
 			return p
 		}
-		return fmt.Sprintf("![%s](/media/originals%s)", path.Base(p), p)
+		return fmt.Sprintf("![%s](%s)", path.Base(p), p)
 	})
 }
 
 // normalizeContent converts verbose markdown image syntax back to bare paths
-// before storing in the database.
+// before storing in the database. Handles the legacy /media/originals/… prefix
+// for backward compatibility with any content saved before the URL refactor.
 // e.g. ![alt](/media/originals/2026/02/photo.jpg) → /2026/02/photo.jpg
 func normalizeContent(content string) string {
 	return markdownImageRe.ReplaceAllString(content, "$1")

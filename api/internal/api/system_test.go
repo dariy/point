@@ -20,8 +20,8 @@ func TestSystemHandler_Stats(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService)
 	tagService := services.NewTagService(repo)
+	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
 	handler := NewSystemHandler(repo, mediaService, settingsService, tagService, tmpDir)
 
 	e := echo.New()
@@ -53,8 +53,8 @@ line2
 `), 0644)
 
 	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService)
 	tagService := services.NewTagService(repo)
+	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
 	handler := NewSystemHandler(repo, mediaService, settingsService, tagService, tmpDir)
 
 	e := echo.New()
