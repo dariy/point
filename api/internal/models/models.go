@@ -31,6 +31,7 @@ type Medium struct {
 	Checksum      string         `json:"checksum"`
 	AltText       sql.NullString `json:"alt_text"`
 	Caption       sql.NullString `json:"caption"`
+	IsPublic      bool           `json:"is_public"`
 }
 
 type Post struct {
