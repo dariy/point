@@ -25,23 +25,41 @@ const AUTOSAVE_MS = 30_000;
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
 /**
- * Split content into ordered image paths + a flag for whether any non-path
- * text lines exist. Used to auto-detect editor mode and populate VisualEditor.
+ * Parse content string into an ordered list of image and text nodes.
+ * Consecutive non-image lines are grouped into a single text node.
+ * @param {string} content
+ * @returns {Array<{type:'image',path:string}|{type:'text',text:string}>}
  */
-function parseContent(content) {
+function parseNodes(content) {
   const lines = (content || '').split('\n');
-  const paths = [];
-  let hasText = false;
+  const nodes = [];
+  let textBuf = [];
+
+  const flushText = () => {
+    const text = textBuf.join('\n').trim();
+    if (text) nodes.push({ type: 'text', text });
+    textBuf = [];
+  };
+
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (IMAGE_PATH_RE.test(trimmed)) {
-      paths.push(trimmed);
+    if (IMAGE_PATH_RE.test(line.trim())) {
+      flushText();
+      nodes.push({ type: 'image', path: line.trim() });
     } else {
-      hasText = true;
+      textBuf.push(line);
     }
   }
-  return { paths, hasText };
+  flushText();
+  return nodes;
+}
+
+/**
+ * Serialize an ordered node list back to the plain-text content format.
+ * @param {Array<{type:string,path?:string,text?:string}>} nodes
+ * @returns {string}
+ */
+function serializeNodes(nodes) {
+  return nodes.map((n) => (n.type === 'image' ? n.path : n.text)).join('\n');
 }
 
 /** Extract tag name strings from either a string[] or {name,slug}[] array. */
@@ -60,10 +78,10 @@ export default class PostEditPage extends Component {
       error: null,
       isNew: !id,
       postId: id,
-      editorMode: !id ? 'visual' : 'text',   // 'text' | 'visual' — updated after post loads
+      editorMode: 'visual',
     };
     this._tags = [];
-    this._visualImages = []; // canonical image list for visual mode
+    this._nodes = []; // canonical node list for visual mode
     this._autosaveTimer = null;
     this._tagsInputRef = null;
     this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_MS);
@@ -330,9 +348,12 @@ export default class PostEditPage extends Component {
   _insertMediaPaths(items) {
     if (!items.length) return;
     if (this.state.editorMode === 'visual') {
-      this._visualImages = [...this._visualImages, ...items.map((item) => item.path)];
+      this._nodes = [
+        ...this._nodes,
+        ...items.map((item) => ({ type: 'image', path: item.path })),
+      ];
       if (this._visualEditorRef) {
-        this._visualEditorRef.setProps({ images: this._visualImages });
+        this._visualEditorRef.setProps({ nodes: this._nodes });
       } else if (this.$('#visual-editor-mount')) {
         this._mountVisualEditor();
       }
@@ -353,10 +374,10 @@ export default class PostEditPage extends Component {
       this._visualEditorRef = null;
     }
     this._visualEditorRef = this.mountChild(VisualEditor, '#visual-editor-mount', {
-      images: this._visualImages,
-      onChange: (imgs) => {
-        this._visualImages = imgs;
-        this._visualEditorRef?.setProps({ images: imgs });
+      nodes: this._nodes,
+      onChange: (nodes) => {
+        this._nodes = nodes;
+        this._visualEditorRef?.setProps({ nodes });
         this._debouncedAutosave();
       },
       onAdd: () => this._mediaPicker.open(),
@@ -375,8 +396,10 @@ export default class PostEditPage extends Component {
       const updated = await renameMedia(item.id, newFilename);
       const newPath = updated.path;
 
-      this._visualImages = this._visualImages.map((p) => (p === oldPath ? newPath : p));
-      this._visualEditorRef?.setProps({ images: this._visualImages });
+      this._nodes = this._nodes.map((n) =>
+        n.type === 'image' && n.path === oldPath ? { ...n, path: newPath } : n
+      );
+      this._visualEditorRef?.setProps({ nodes: this._nodes });
       this._debouncedAutosave();
       store.set('toast', { message: 'File renamed.', type: 'success' });
     } catch (err) {
@@ -390,20 +413,12 @@ export default class PostEditPage extends Component {
 
     if (targetMode === 'visual') {
       const content = this.$('#content-editor')?.value ?? (this.state.post?.content || '');
-      const { paths, hasText } = parseContent(content);
-
-      if (hasText) {
-        const confirmed = window.confirm(
-          'Visual mode only supports image sequences.\nAll text content will be discarded on save.\n\nSwitch anyway?'
-        );
-        if (!confirmed) return;
-      }
-
-      this._visualImages = paths;
+      this._nodes = parseNodes(content);
       this.setState({ editorMode: 'visual' });
     } else {
-      // visual → text: serialize image list back into content field
-      const post = { ...(this.state.post || {}), content: this._visualImages.join('\n') };
+      // visual → text: serialize current nodes (reads live textarea values if editor mounted)
+      const content = this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes);
+      const post = { ...(this.state.post || {}), content };
       this.setState({ editorMode: 'text', post });
     }
   }
@@ -419,10 +434,9 @@ export default class PostEditPage extends Component {
     try {
       const post = await getPost(id);
       this._tags = toTagNames(post.tags);
-      const { paths, hasText } = parseContent(post.content);
-      const editorMode = (!hasText && paths.length > 0) ? 'visual' : 'text';
-      this._visualImages = paths;
-      this.setState({ loading: false, post, error: null, editorMode });
+      const nodes = parseNodes(post.content);
+      this._nodes = nodes;
+      this.setState({ loading: false, post, error: null, editorMode: 'visual' });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Post not found.' });
     }
@@ -434,8 +448,8 @@ export default class PostEditPage extends Component {
       slug:             (this.$('#slug-input')?.value || '').trim() || null,
       excerpt:          (this.$('#excerpt-editor')?.value || '').trim() || null,
       content: this.state.editorMode === 'visual'
-  ? this._visualImages.join('\n')
-  : (this.$('#content-editor')?.value || ''),
+        ? (this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes))
+        : (this.$('#content-editor')?.value || ''),
       status:           this.$('#status-select')?.value || 'draft',
       formatter:        this.$('#formatter-select')?.value || 'markdown',
       is_featured:      this.$('#featured-check')?.checked || false,
@@ -485,7 +499,7 @@ export default class PostEditPage extends Component {
   /** Extract first image path from the content textarea. */
   _extractImagePath() {
     if (this.state.editorMode === 'visual') {
-      return this._visualImages[0] || null;
+      return this._nodes.find((n) => n.type === 'image')?.path ?? null;
     }
     const content = this.$('#content-editor')?.value || '';
     const match = content.match(
@@ -557,7 +571,7 @@ export default class PostEditPage extends Component {
         slug:    snap.slug,
         tags:    mergedTags.map((name) => ({ name, slug: name })),
       };
-      if (this.state.editorMode === 'visual') this._visualImages = parseContent(post.content).paths;
+      if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
 
       store.set('toast', { message: 'Analysis complete.', type: 'success' });
       this.setState({ analyzing: false, post });
@@ -571,7 +585,7 @@ export default class PostEditPage extends Component {
         slug:    snap.slug,
         tags:    snap.tags.map((name) => ({ name, slug: name })),
       };
-      if (this.state.editorMode === 'visual') this._visualImages = parseContent(post.content).paths;
+      if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
       this.setState({ analyzing: false, post });
     }

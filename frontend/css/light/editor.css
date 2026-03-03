@@ -371,3 +371,101 @@ body.drag-active::after {
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-lg);
 }
+
+/* ===========================
+   Text node card
+   =========================== */
+.ve-card--text {
+    align-items: flex-start;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* Paragraph icon — same width as drag handle, dotted right border */
+.ve-text-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    flex-shrink: 0;
+    align-self: stretch;
+    border-right: 1px dotted var(--border-primary);
+    color: var(--text-muted);
+    font-size: 13px;
+    user-select: none;
+    padding-right: 2px;
+}
+
+/* Auto-resizing textarea inside text card */
+.ve-text-area {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    color: var(--text-primary);
+    resize: none;
+    overflow: hidden;
+    min-height: 24px;
+    padding: 2px 4px;
+    outline: none;
+    transition: color var(--transition-theme);
+}
+
+.ve-text-area::placeholder {
+    color: var(--text-muted);
+}
+
+/* ===========================
+   Insert zone — appears between cards on list hover
+   =========================== */
+.ve-insert-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    position: relative;
+}
+
+.ve-insert-zone::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border-primary);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.ve-insert-btn {
+    position: relative;
+    z-index: 1;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    padding: 0;
+    line-height: 1;
+    transition: opacity var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ve-list:hover .ve-insert-zone::before,
+.ve-list:hover .ve-insert-btn {
+    opacity: 1;
+}
+
+.ve-insert-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
