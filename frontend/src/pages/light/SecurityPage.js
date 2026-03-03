@@ -6,6 +6,7 @@
 
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { getSessions, deleteSession, deleteAllOtherSessions, changePassword, logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -136,15 +137,29 @@ export default class SecurityPage extends Component {
 
     // Revoke all other sessions
     this.$('#revoke-all-btn')?.addEventListener('click', () => {
-      if (confirm('Revoke all other active sessions? You will remain logged in on this device.')) {
+      this._showConfirm('Revoke all sessions', 'Revoke all other active sessions? You will remain logged in on this device.', 'Revoke', 'danger', () => {
         this._handleRevokeAll();
-      }
+      });
     });
   }
 
   mount() {
     super.mount();
     this._load();
+  }
+
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
   }
 
   async _load() {

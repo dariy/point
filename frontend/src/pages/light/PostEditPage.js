@@ -187,9 +187,11 @@ export default class PostEditPage extends Component {
                 <select id="status-select" class="status-select badge-${escapeHtml(status)}">
                   ${statusOpts}
                 </select>
-                <input type="text" id="title-input" class="form-input editor-title"
-                       placeholder="Post title" value="${title}" required>
-                ${aiBtn('title')}
+                <div class="title-input-wrapper">
+                  <input type="text" id="title-input" class="form-input editor-title"
+                         placeholder="Post title" value="${title}" required>
+                  ${aiBtn('title')}
+                </div>
               </div>
 
               <div class="slug-row">
@@ -199,8 +201,10 @@ export default class PostEditPage extends Component {
               </div>
 
               <div class="tags-row">
-                <div id="tags-input-mount" class="tags-row-input"></div>
-                ${aiBtn('tags')}
+                <div class="tags-input-wrapper">
+                  <div id="tags-input-mount" class="tags-row-input"></div>
+                  ${aiBtn('tags')}
+                </div>
               </div>
 
               <div class="form-group excerpt-row">
@@ -541,8 +545,13 @@ export default class PostEditPage extends Component {
       if (field === 'title' && result.title) {
         post.title = result.title;
       } else if (field === 'tags' && result.tags?.length) {
-        this._tags = result.tags;
-        post.tags = result.tags.map((name) => ({ name, slug: name }));
+        const currentTags = this._tags || [];
+        const mergedTags = [
+          ...currentTags,
+          ...(result.tags || []).filter((t) => !currentTags.includes(t)),
+        ];
+        this._tags = mergedTags;
+        post.tags = mergedTags.map((name) => ({ name, slug: name }));
       } else if (field === 'excerpt' && result.excerpt) {
         post.excerpt = result.excerpt;
       }

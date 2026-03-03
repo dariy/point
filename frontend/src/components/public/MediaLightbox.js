@@ -99,13 +99,27 @@ export class MediaLightbox {
   _show() {
     this._render();
     this._el.classList.add('active');
+    
+    // Prevent layout shift by compensating for scrollbar width
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      this._originalPaddingRight = document.body.style.paddingRight;
+      const currentPadding = parseFloat(window.getComputedStyle(document.body).paddingRight || 0);
+      document.body.style.paddingRight = `${currentPadding + scrollbarWidth}px`;
+    }
+    
+    this._originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     this._el.focus();
   }
 
   _hide() {
     this._el.classList.remove('active');
-    document.body.style.overflow = '';
+    document.body.style.overflow = this._originalOverflow || '';
+    if (this._originalPaddingRight !== undefined) {
+      document.body.style.paddingRight = this._originalPaddingRight;
+      this._originalPaddingRight = undefined;
+    }
   }
 
   _step(delta) {
