@@ -24,6 +24,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -installsuffix cgo \
     -o api-bin cmd/api/main.go
 
+# Build the path migration utility
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -installsuffix cgo \
+    -o migrate-paths cmd/migrate-paths/main.go
+
 # Runtime stage
 FROM alpine:latest
 
@@ -39,8 +47,9 @@ RUN apk add --no-cache \
     && mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups \
     && chown -R appuser:appuser /app /data
 
-# Copy the binary from the builder stage
+# Copy the binaries from the builder stage
 COPY --from=builder /app/api-bin .
+COPY --from=builder /app/migrate-paths .
 # Copy data.yml
 COPY --from=builder /app/data.yml .
 # Copy frontend assets
