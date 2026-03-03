@@ -167,7 +167,6 @@ export default class PostEditPage extends Component {
           <header class="light-header">
             <h1>${isNew ? 'New Post' : 'Edit Post'}</h1>
             <div class="header-actions">
-              <button id="media-btn" class="btn btn-secondary" type="button">Media</button>
               <button id="analyze-btn" class="btn btn-secondary" type="button"
                       ${analyzing ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
               <button id="save-btn" class="btn btn-primary" type="button"
@@ -238,7 +237,6 @@ export default class PostEditPage extends Component {
       });
       this._mediaPicker.mount();
     }
-    this.$('#media-btn')?.addEventListener('click', () => this._mediaPicker.open());
 
     this.$('#mode-text-btn')?.addEventListener('click', () => this._switchMode('text'));
     this.$('#mode-visual-btn')?.addEventListener('click', () => this._switchMode('visual'));
@@ -380,7 +378,18 @@ export default class PostEditPage extends Component {
         this._visualEditorRef?.setProps({ nodes });
         this._debouncedAutosave();
       },
-      onAdd: () => this._mediaPicker.open(),
+      onInput: () => {
+        this._debouncedAutosave();
+      },
+      onAddMedia: (index) => {
+        this._mediaPicker.open((items) => {
+          if (!items.length) return;
+          const newNodes = items.map((item) => ({ type: 'image', path: item.path }));
+          this._nodes.splice(index, 0, ...newNodes);
+          this._visualEditorRef?.setProps({ nodes: this._nodes });
+          this._debouncedAutosave();
+        });
+      },
       onRename: (oldPath, newFilename) => this._handleRename(oldPath, newFilename),
     });
   }
