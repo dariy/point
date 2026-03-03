@@ -106,7 +106,7 @@ WHERE
 func (r *Repository) ListOrphanedMedia(ctx context.Context, limit, offset int64) ([]models.Medium, error) {
 	const q = `
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
-       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
 FROM media
 WHERE post_id IS NULL
 ORDER BY uploaded_at DESC
@@ -124,7 +124,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
 			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
-			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
 		); err != nil {
 			return nil, err
 		}
@@ -151,7 +151,7 @@ func (r *Repository) GetMediaByIDs(ctx context.Context, ids []int64) ([]models.M
 	// Build placeholders
 	const baseQ = `
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
-       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
 FROM media WHERE id IN (`
 
 	args := make([]interface{}, len(ids))
@@ -177,7 +177,7 @@ FROM media WHERE id IN (`
 		if err := rows.Scan(
 			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
 			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
-			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
 		); err != nil {
 			return nil, err
 		}
@@ -568,7 +568,7 @@ func (r *Repository) ListMediaFiltered(ctx context.Context, fileType, folder str
 	}
 	const q = `
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
-       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
 FROM media
 WHERE (? = '' OR LOWER(file_type) = LOWER(?))
   AND (? = '' OR original_path LIKE ? || '%')
@@ -587,7 +587,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
 			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
-			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
 		); err != nil {
 			return nil, err
 		}
@@ -1069,5 +1069,156 @@ AND (` + statusClause + `)`
 	var count int64
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count, err
+}
+
+// GetMediaByPath returns the media record whose original_path matches exactly.
+// The path should be in the stored format, e.g. "originals/2026/03/ts_file.jpg".
+func (r *Repository) GetMediaByPath(ctx context.Context, originalPath string) (models.Medium, error) {
+	const q = `
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
+FROM media WHERE original_path = ? LIMIT 1`
+	var m models.Medium
+	err := r.db.QueryRowContext(ctx, q, originalPath).Scan(
+		&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
+		&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
+		&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
+	)
+	return m, err
+}
+
+// SetMediaPublic updates is_public for a media record and appends an audit row
+// to media_visibility_log. postID may be nil.
+func (r *Repository) SetMediaPublic(ctx context.Context, mediaID int64, isPublic bool, postID *int64) error {
+	isPublicInt := 0
+	if isPublic {
+		isPublicInt = 1
+	}
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE media SET is_public = ? WHERE id = ?`, isPublicInt, mediaID)
+	if err != nil {
+		return err
+	}
+	var pid interface{}
+	if postID != nil {
+		pid = *postID
+	}
+	_, err = r.db.ExecContext(ctx,
+		`INSERT INTO media_visibility_log (media_id, is_public, post_id) VALUES (?, ?, ?)`,
+		mediaID, isPublicInt, pid)
+	return err
+}
+
+// PostContentRow holds content fields needed for media visibility scans.
+type PostContentRow struct {
+	ID            int64
+	Content       string
+	ThumbnailPath string // empty string when NULL
+	TagIDs        []int64
+}
+
+// GetAllPublishedPostContents returns id, content, and thumbnail_path for every
+// published post, along with the IDs of its associated tags.
+func (r *Repository) GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error) {
+	const q = `
+SELECT p.id, p.content, COALESCE(p.thumbnail_path, '') as thumbnail_path
+FROM posts p
+WHERE LOWER(p.status) = 'published'`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []PostContentRow
+	for rows.Next() {
+		var row PostContentRow
+		if err := rows.Scan(&row.ID, &row.Content, &row.ThumbnailPath); err != nil {
+			return nil, err
+		}
+		items = append(items, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(items) == 0 {
+		return items, nil
+	}
+
+	// Fetch tag IDs for all fetched posts in a single query.
+	postIDs := make([]interface{}, len(items))
+	idIndex := make(map[int64]int, len(items))
+	placeholders := ""
+	for i, item := range items {
+		postIDs[i] = item.ID
+		idIndex[item.ID] = i
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+	}
+
+	tagRows, err := r.db.QueryContext(ctx,
+		`SELECT post_id, tag_id FROM post_tags WHERE post_id IN (`+placeholders+`)`, postIDs...)
+	if err != nil {
+		return nil, err
+	}
+	defer tagRows.Close()
+	for tagRows.Next() {
+		var postID, tagID int64
+		if err := tagRows.Scan(&postID, &tagID); err != nil {
+			return nil, err
+		}
+		if idx, ok := idIndex[postID]; ok {
+			items[idx].TagIDs = append(items[idx].TagIDs, tagID)
+		}
+	}
+	return items, tagRows.Err()
+}
+
+// GetAllMediaPaths returns all media records needed for a full visibility recalculation.
+func (r *Repository) GetAllMediaPaths(ctx context.Context) ([]models.Medium, error) {
+	const q = `
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
+FROM media ORDER BY id`
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []models.Medium
+	for rows.Next() {
+		var m models.Medium
+		if err := rows.Scan(
+			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
+			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return items, rows.Err()
+}
+
+// ApplyMigration executes raw SQL and records it in migration_history.
+// It is idempotent: if the migration name already exists it is skipped.
+func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error {
+	var count int64
+	_ = r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_history WHERE name = ?`, name,
+	).Scan(&count)
+	if count > 0 {
+		return nil
+	}
+	if _, err := r.db.ExecContext(ctx, sql); err != nil {
+		return fmt.Errorf("migration %s: %w", name, err)
+	}
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO migration_history (name) VALUES (?)`, name)
+	return err
 }
 

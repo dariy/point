@@ -199,6 +199,17 @@ func (h *SystemHandler) ClearCache(c echo.Context) error {
 	})
 }
 
+func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
+	changed, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status":  "success",
+		"updated": changed,
+	})
+}
+
 func (h *SystemHandler) UpdateMapCoords(c echo.Context) error {
 	result, err := h.tagService.UpdateMissingCoords(c.Request().Context())
 	if err != nil {

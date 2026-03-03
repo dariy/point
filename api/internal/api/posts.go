@@ -285,6 +285,11 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	if strings.EqualFold(post.Status, "published") {
+		paths := services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
+		_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+	}
+
 	resp, err := h.getFullPostResponse(c, post.ID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -319,7 +324,13 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
-	_, err = h.postService.UpdatePost(c.Request().Context(), services.UpdatePostParams{
+	// Capture pre-update paths so that images removed from the post are also re-evaluated.
+	var oldPaths []string
+	if old, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
+		oldPaths = services.ExtractMediaPaths(old.Content, old.ThumbnailPath.String)
+	}
+
+	updated, err := h.postService.UpdatePost(c.Request().Context(), services.UpdatePostParams{
 		ID:              id,
 		AuthorID:        authorID,
 		Title:           req.Title,
@@ -336,6 +347,9 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
 	}
+
+	newPaths := services.ExtractMediaPaths(updated.Content, updated.ThumbnailPath.String)
+	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), append(oldPaths, newPaths...))
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
@@ -362,6 +376,12 @@ func (h *PostHandler) UpdatePostTags(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
 	}
 
+	// Tag changes may affect hidden_posts inheritance — refresh visibility.
+	if post, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
+		paths := services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
+		_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+	}
+
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -378,9 +398,17 @@ func (h *PostHandler) DeletePost(c echo.Context) error {
 
 	authorID := extractUserID(c.Get("user"))
 
+	// Capture media paths before the post is deleted.
+	var mediaPaths []string
+	if post, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
+		mediaPaths = services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
+	}
+
 	if err := h.postService.DeletePost(c.Request().Context(), id, authorID); err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
 	}
+
+	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), mediaPaths)
 
 	return c.NoContent(http.StatusNoContent)
 }
@@ -391,10 +419,13 @@ func (h *PostHandler) PublishPost(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
-	_, err = h.postService.PublishPost(c.Request().Context(), id)
+	published, err := h.postService.PublishPost(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 	}
+
+	paths := services.ExtractMediaPaths(published.Content, published.ThumbnailPath.String)
+	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
@@ -544,10 +575,13 @@ func (h *PostHandler) WithdrawPost(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
-	_, err = h.postService.WithdrawPost(c.Request().Context(), id)
+	withdrawn, err := h.postService.WithdrawPost(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 	}
+
+	paths := services.ExtractMediaPaths(withdrawn.Content, withdrawn.ThumbnailPath.String)
+	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
 
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {

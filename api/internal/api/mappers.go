@@ -245,18 +245,19 @@ func injectTagHiddenFields(resp map[string]interface{}, t models.Tag, effectiveH
 // ("originals/YYYY/MM/file"), so we strip the prefix and prepend the
 // canonical web root.
 func mediaToResponse(m models.Medium) map[string]interface{} {
-	mediaPath := strings.TrimPrefix(m.OriginalPath, "originals")
+	// mediaPath is the public-facing simplified URL, e.g. "/2026/03/ts_file.jpg"
+	mediaPath := "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
 
 	var thumbPath interface{}
 	if m.ThumbnailPath.Valid {
-		thumbPath = "/media/thumbnails" + strings.TrimPrefix(m.ThumbnailPath.String, "thumbnails")
+		// Thumbnail served via the same route with ?thumb query parameter.
+		thumbPath = mediaPath + "?thumb"
 	}
 
 	return map[string]interface{}{
 		"id":             m.ID,
 		"filename":       m.Filename,
 		"path":           mediaPath,
-		"original_path":  "/media/originals" + mediaPath,
 		"thumbnail_path": thumbPath,
 		"file_type":      strings.ToLower(m.FileType),
 		"mime_type":      m.MimeType,
@@ -268,5 +269,6 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		"checksum":       m.Checksum,
 		"alt_text":       nullString(m.AltText),
 		"caption":        nullString(m.Caption),
+		"is_public":      m.IsPublic,
 	}
 }
