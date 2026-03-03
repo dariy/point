@@ -1204,6 +1204,47 @@ FROM media ORDER BY id`
 	return items, rows.Err()
 }
 
+// GetHierarchicalPostCounts returns a map of tagID → effective post count,
+// where the count includes posts from all descendant tags (not just the tag itself).
+// If publishedOnly is true, only published posts are counted (public context).
+// If false, published + hidden posts are counted (admin context).
+func (r *Repository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
+	// UNION (not UNION ALL) deduplicates (root_id, tag_id) pairs, preventing
+	// infinite recursion if tag_relationships contains a cycle.
+	const q = `
+WITH RECURSIVE descendants(root_id, tag_id) AS (
+    SELECT id, id FROM tags
+    UNION
+    SELECT d.root_id, tr.child_id
+    FROM descendants d
+    JOIN tag_relationships tr ON d.tag_id = tr.parent_id
+)
+SELECT d.root_id, COUNT(DISTINCT pt.post_id)
+FROM descendants d
+JOIN post_tags pt ON pt.tag_id = d.tag_id
+JOIN posts p ON pt.post_id = p.id
+WHERE CASE WHEN ? THEN LOWER(p.status) = 'published'
+           ELSE LOWER(p.status) IN ('published', 'hidden')
+      END
+GROUP BY d.root_id`
+
+	rows, err := r.db.QueryContext(ctx, q, publishedOnly)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]int64)
+	for rows.Next() {
+		var tagID, count int64
+		if err := rows.Scan(&tagID, &count); err != nil {
+			return nil, err
+		}
+		result[tagID] = count
+	}
+	return result, rows.Err()
+}
+
 // ApplyMigration executes raw SQL and records it in migration_history.
 // It is idempotent: if the migration name already exists it is skipped.
 func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error {

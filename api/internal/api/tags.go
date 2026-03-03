@@ -74,6 +74,10 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 	}
 	locationMap, _ := h.tagService.GetTagLocationsByTagIDs(c.Request().Context(), tagIDs)
 
+	// Fetch hierarchical post counts (tag + all descendants).
+	// publishedOnly=true for public users, false for admin (includes hidden-status posts).
+	effectiveCounts, _ := h.tagService.GetHierarchicalPostCounts(c.Request().Context(), publicOnly)
+
 	tagItems := make([]map[string]interface{}, len(tags))
 	for i, t := range tags {
 		parents := childParents[t.ID]
@@ -101,7 +105,7 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 			"include_in_breadcrumbs":        t.IncludeInBreadcrumbs,
 			"show_related_tags_as_children": t.ShowRelatedTagsAsChildren,
 			"sort_order":                    nullInt64(t.SortOrder),
-			"post_count":                    t.PostCount,
+			"post_count":                    effectiveCounts[t.ID],
 			"parents":                       parents,
 			"children":                      children,
 			"locations":                     tagLocationsResponse(loc),
