@@ -17,6 +17,7 @@ import { Component } from '../Component.js';
 import { Pagination } from '../shared/Pagination.js';
 import { MediaLightbox } from '../public/MediaLightbox.js';
 import { ConfirmDialog } from '../shared/ConfirmDialog.js';
+import { PromptDialog } from '../shared/PromptDialog.js';
 import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders } from '../../api/media.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
@@ -304,10 +305,7 @@ export class MediaBrowser extends Component {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.id, 10);
           const oldName = btn.dataset.name;
-          const newName = prompt('Rename file:', oldName);
-          if (newName && newName !== oldName) {
-            this._renameMedia(id, newName);
-          }
+          this._showRenamePrompt(id, oldName);
         });
       });
 
@@ -487,6 +485,29 @@ export class MediaBrowser extends Component {
         dialog.unmount();
         mountEl.remove();
         this._deleteMedia(id);
+      },
+      onCancel: () => {
+        dialog.unmount();
+        mountEl.remove();
+      },
+    });
+    dialog.mount();
+  }
+
+  _showRenamePrompt(id, oldName) {
+    const mountEl = document.createElement('div');
+    document.body.appendChild(mountEl);
+    const dialog = new PromptDialog(mountEl, {
+      title: 'Rename file',
+      message: 'Enter new name:',
+      defaultValue: oldName,
+      confirmText: 'Rename',
+      onConfirm: (newName) => {
+        dialog.unmount();
+        mountEl.remove();
+        if (newName && newName.trim() !== '' && newName !== oldName) {
+          this._renameMedia(id, newName.trim());
+        }
       },
       onCancel: () => {
         dialog.unmount();

@@ -8,6 +8,7 @@ import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { Pagination } from '../../components/shared/Pagination.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listPosts, deletePost, updatePostTags } from '../../api/posts.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
@@ -165,9 +166,9 @@ export default class PostsListPage extends Component {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
-        if (confirm(`Delete post "${title}"? This cannot be undone.`)) {
+        this._showConfirm('Delete post', `Delete post "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
           this._deletePost(id);
-        }
+        });
       });
     });
   }
@@ -283,6 +284,20 @@ export default class PostsListPage extends Component {
         }
       },
     });
+  }
+
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
   }
 
   async _deletePost(id) {
