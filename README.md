@@ -37,15 +37,17 @@ A modern, high-performance personal photo blog engine built with Go and Vanilla 
 
 2. **Configure environment**:
    ```bash
-   cp .env.example .env
-   # Edit .env with your desired settings
+   cp build/.env build/.env.local
+   # Edit build/.env with your desired settings (SECRET_KEY is required in production)
    ```
 
-3. **Start the application**:
+3. **Build and start**:
    ```bash
-   docker compose up -d
-   # or
-   podman compose up -d
+   # Development (Podman)
+   cd build && ./rebuild.sh
+
+   # Production (Docker)
+   cd build && docker compose up -d
    ```
 
 The blog will be available at `http://localhost:8000`. The admin interface ("light") is at `http://localhost:8000/light/login`.
@@ -120,64 +122,38 @@ For a more traditional approach:
 
 The frontend is a static SPA served by the Go backend. During development, you can edit files in `frontend/` and refresh the browser.
 
-### Linting & Tests
+### Tests & CSS
 
 ```bash
-# Backend tests
-cd api
-go test ./...
+# Run all Go tests with coverage (from project root)
+./scripts/run-tests.sh
+
+# Rebuild CSS bundles after editing frontend/css/
+./scripts/build-css.sh
 ```
 
 ## 📂 Project Structure
 
-- `.github/workflows/`: CI/CD pipelines for automated testing and deployment.
-- `api/`: Go backend application code.
-- `data/`: Persistent storage (mounted as volume in Docker).
-- `docs/`: Documentation.
-- `frontend/`: Vanilla JS SPA frontend code.
-- `scripts/`: Utility scripts.
+- `api/`: Go backend (Echo v4, sqlc, SQLite).
+- `frontend/`: Vanilla JS SPA (no build step required).
+- `build/`: Dockerfile, docker-compose, rebuild script.
+- `data/`: Persistent storage (DB + media, mounted as volume).
+- `docs/`: Architecture and feature documentation.
+- `scripts/`: Test runner, CSS builder, backup utilities.
 
 ## 🚀 Production Deployment
 
-### Quick Production Setup
-
-1. **Run the setup script on your server** (as root):
+1. **Clone** the repository on your server.
+2. **Configure** `build/.env` — set `SECRET_KEY`, `APP_NAME`, `STORAGE_PATH`.
+3. **Deploy**:
    ```bash
-   sudo ./scripts/deployment/setup-production.sh
+   cd build
+   docker compose up -d
    ```
 
-   This script will:
-   - Install Docker and Docker Compose
-   - Create a `deploy` user
-   - Set up directories and permissions
-   - Configure firewall (UFW)
-   - Install Certbot for SSL certificates
-   - Set up automated backups and log rotation
+Your blog will be available at `http://your-server:8000`. Put it behind a reverse proxy (nginx/Caddy) for HTTPS.
 
-2. **Clone the repository**:
-   ```bash
-   su - deploy
-   cd /opt/point
-   git clone https://github.com/dariy/point.git .
-   ```
-
-3. **Configure environment**:
-   ```bash
-   cp .env.production.example .env
-   nano .env  # Edit with your production settings
-   ```
-
-4. **Deploy the application**:
-   ```bash
-   ./scripts/deployment/deploy.sh
-   ```
-
-5. **Verify deployment**:
-   ```bash
-   ./scripts/deployment/health-check.sh
-   ```
-
-Your blog should now be available at `https://yourdomain.com`!
+See [`scripts/SETUP-PRODUCTION.md`](scripts/SETUP-PRODUCTION.md) for backup/restore setup.
 
 ## 📄 License
 
@@ -190,4 +166,4 @@ Built with:
 - [Echo](https://echo.labstack.com/) - High performance, extensible Go web framework
 - [Vanilla JS](https://developer.mozilla.org/en-US/docs/Web/JavaScript) - Framework-free component system
 - [SQLite](https://sqlite.org/) - Self-contained, serverless database engine
-- [Docker](https://www.docker.com/) - Containerization
+- [Docker](https://www.docker.com/) / [Podman](https://podman.io/) - Containerization
