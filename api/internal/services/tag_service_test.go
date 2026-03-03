@@ -66,7 +66,7 @@ func TestTagService_CRUD(t *testing.T) {
 	}
 
 	// Test List
-	tags, err := service.ListTags(ctx, true, false)
+	tags, err := service.ListTags(ctx, true, false, false)
 	if err != nil {
 		t.Errorf("ListTags failed: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestTagService_CRUD(t *testing.T) {
 	}
 
 	// Test GetPostsByTag (empty result)
-	posts, total, err := service.GetPostsByTag(ctx, 999, 1, 10, true)
+	posts, total, err := service.GetPostsByTag(ctx, 999, 1, 10, true, false)
 	if err != nil {
 		t.Errorf("GetPostsByTag failed: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestTagService_TagCloud(t *testing.T) {
 	_, _ = repo.DB().Exec("UPDATE tags SET post_count = 10 WHERE id = ?", t1.ID)
 	_, _ = repo.DB().Exec("UPDATE tags SET post_count = 5 WHERE id = ?", t2.ID)
 
-	cloud, err := service.GetTagCloud(ctx, 10)
+	cloud, err := service.GetTagCloud(ctx, 10, false)
 	if err != nil {
 		t.Fatalf("GetTagCloud failed: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestTagService_Hierarchy(t *testing.T) {
 	}
 
 	// Test GetChildren
-	children, err := service.GetTagChildren(ctx, parent.ID)
+	children, err := service.GetTagChildren(ctx, parent.ID, false)
 	if err != nil {
 		t.Errorf("GetTagChildren failed: %v", err)
 	}
