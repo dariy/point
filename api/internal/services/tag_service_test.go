@@ -105,13 +105,32 @@ func TestTagService_TagCloud(t *testing.T) {
 	service := NewTagService(repo)
 	ctx := context.Background()
 
-	// Create some tags with different post counts
+	// Create some tags
 	t1, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 1"})
 	t2, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 2"})
 
-	// Manually update post counts for testing (since we don't have posts yet)
-	_, _ = repo.DB().Exec("UPDATE tags SET post_count = 10 WHERE id = ?", t1.ID)
-	_, _ = repo.DB().Exec("UPDATE tags SET post_count = 5 WHERE id = ?", t2.ID)
+	// Create a user and posts so hierarchical counts work from actual post_tags data.
+	// Tag 1 gets 2 posts, Tag 2 gets 1 post → weights 1.0 and 0.5.
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u', 'u@t', 'h', 'U')`)
+	var userID int64
+	_ = repo.DB().QueryRow(`SELECT id FROM users LIMIT 1`).Scan(&userID)
+	for i := 1; i <= 3; i++ {
+		_, _ = repo.DB().Exec(
+			`INSERT INTO posts (title, slug, content, formatter, status, author_id) VALUES (?, ?, '', 'markdown', 'published', ?)`,
+			"p"+string(rune('0'+i)), "p"+string(rune('0'+i)), userID,
+		)
+	}
+	var p1, p2, p3 int64
+	rows, _ := repo.DB().Query(`SELECT id FROM posts ORDER BY id LIMIT 3`)
+	ids := []*int64{&p1, &p2, &p3}
+	for i := 0; rows.Next(); i++ {
+		_ = rows.Scan(ids[i])
+	}
+	rows.Close()
+	// p1, p2 → Tag 1 (count=2); p3 → Tag 2 (count=1)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, p1, t1.ID)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, p2, t1.ID)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, p3, t2.ID)
 
 	cloud, err := service.GetTagCloud(ctx, 10, false)
 	if err != nil {
@@ -122,15 +141,21 @@ func TestTagService_TagCloud(t *testing.T) {
 		t.Errorf("expected 2 cloud items, got %d", len(cloud))
 	}
 
-	// Check weights
+	// Check weights: Tag 1 has 2 posts (weight=1.0), Tag 2 has 1 post (weight=0.5).
 	for _, item := range cloud {
 		if item.ID == t1.ID {
 			if item.Weight != 1.0 {
 				t.Errorf("expected weight 1.0 for Tag 1, got %f", item.Weight)
 			}
+			if item.Count != 2 {
+				t.Errorf("expected count 2 for Tag 1, got %d", item.Count)
+			}
 		} else if item.ID == t2.ID {
 			if item.Weight != 0.5 {
 				t.Errorf("expected weight 0.5 for Tag 2, got %f", item.Weight)
+			}
+			if item.Count != 1 {
+				t.Errorf("expected count 1 for Tag 2, got %d", item.Count)
 			}
 		}
 	}

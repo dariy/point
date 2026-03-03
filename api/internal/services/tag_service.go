@@ -213,7 +213,7 @@ type TagCloudItem struct {
 
 func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool) ([]TagCloudItem, error) {
 	tags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter:  false,
+		IncludeEmptyFilter:  true, // include all; filter below by effective count
 		ImportantOnlyFilter: false,
 	})
 	if err != nil {
@@ -224,27 +224,42 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 		return []TagCloudItem{}, nil
 	}
 
-	var filtered []models.Tag
+	var candidates []models.Tag
 	if publicOnly {
 		effectivelyHidden, _ := s.EffectivelyHiddenIDs(ctx)
 		for _, t := range tags {
 			if !effectivelyHidden[t.ID] {
-				filtered = append(filtered, t)
+				candidates = append(candidates, t)
 			}
 		}
 	} else {
-		filtered = tags
+		candidates = tags
+	}
+
+	if len(candidates) == 0 {
+		return []TagCloudItem{}, nil
+	}
+
+	// Fetch hierarchical counts (includes descendant posts).
+	effectiveCounts, _ := s.GetHierarchicalPostCounts(ctx, publicOnly)
+
+	// Filter to tags with at least one effective post.
+	var filtered []models.Tag
+	for _, t := range candidates {
+		if effectiveCounts[t.ID] > 0 {
+			filtered = append(filtered, t)
+		}
 	}
 
 	if len(filtered) == 0 {
 		return []TagCloudItem{}, nil
 	}
 
-	// Find max count for weight calculation
+	// Find max count for weight calculation.
 	var maxCount int64
 	for _, t := range filtered {
-		if t.PostCount > maxCount {
-			maxCount = t.PostCount
+		if c := effectiveCounts[t.ID]; c > maxCount {
+			maxCount = c
 		}
 	}
 
@@ -255,15 +270,16 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 
 	result := make([]TagCloudItem, len(filtered))
 	for i, t := range filtered {
+		count := effectiveCounts[t.ID]
 		weight := 1.0
 		if maxCount > 0 {
-			weight = float64(t.PostCount) / float64(maxCount)
+			weight = float64(count) / float64(maxCount)
 		}
 		result[i] = TagCloudItem{
 			ID:            t.ID,
 			Name:          t.Name,
 			Slug:          t.Slug,
-			Count:         t.PostCount,
+			Count:         count,
 			Weight:        weight,
 			IsHidden:      t.IsHidden,
 			IsHiddenPosts: t.IsHiddenPosts,
@@ -274,6 +290,12 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 
 func (s *TagService) UpdateAllPostCounts(ctx context.Context) error {
 	return s.repo.UpdateAllTagPostCounts(ctx)
+}
+
+// GetHierarchicalPostCounts returns a map of tagID → effective post count
+// including all descendant tags. publishedOnly=true for public, false for admin.
+func (s *TagService) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
+	return s.repo.GetHierarchicalPostCounts(ctx, publishedOnly)
 }
 
 // TagLocationInput represents a coordinate pair for create/update requests.
