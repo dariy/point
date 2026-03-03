@@ -49,9 +49,22 @@ body.drag-active::after {
     gap: var(--spacing-sm);
 }
 
-.title-row .editor-title {
+.title-input-wrapper {
     flex: 1;
     min-width: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.title-input-wrapper .editor-title {
+    width: 100%;
+    padding-right: 32px;
+}
+
+.title-input-wrapper .field-ai-btn {
+    position: absolute;
+    right: 4px;
 }
 
 /* Featured star toggle */
@@ -109,9 +122,30 @@ body.drag-active::after {
     gap: var(--spacing-xs);
 }
 
-.tags-row-input {
+.tags-input-wrapper {
     flex: 1;
     min-width: 0;
+    position: relative;
+}
+
+.tags-input-wrapper .tags-row-input {
+    width: 100%;
+}
+
+/* Ensure the AI button fits over the tags input without colliding with text */
+.tags-input-wrapper .tags-row-input .tags-input {
+    padding-right: 32px;
+}
+
+.tags-input-wrapper .field-ai-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.tags-input-wrapper .field-ai-btn:hover:not(:disabled) {
+    transform: translateY(-50%) scale(1.2);
 }
 
 /* Excerpt row: positions the AI btn in the top-right corner */
