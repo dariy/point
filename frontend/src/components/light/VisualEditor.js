@@ -13,33 +13,57 @@ import { escapeHtml } from '../../utils/helpers.js';
 
 export class VisualEditor extends Component {
   render() {
-    const { images = [] } = this.props;
+    const { nodes = [] } = this.props;
 
-    const cards = images.map((path, i) => {
-      const thumb = `/media/thumbnails${path}`;
-      const filename = path.split('/').pop();
-      return `
-        <div class="ve-card" data-index="${i}">
-          <div class="ve-handle" title="Drag to reorder">
-            <span class="ve-handle-dots"></span>
-          </div>
-          <img class="ve-thumb" src="${escapeHtml(thumb)}"
-               alt="${escapeHtml(filename)}"
-               data-full="/media/originals${escapeHtml(path)}"
-               loading="lazy">
-          <span class="ve-path">${escapeHtml(path)}</span>
-          <button class="ve-remove" data-index="${i}" type="button"
-                  aria-label="Remove image" title="Remove">&times;</button>
-        </div>`;
+    const insertZone = (index) =>
+      `<div class="ve-insert-zone" data-insert-at="${index}">
+         <button class="ve-insert-btn" type="button" title="Insert text node">+</button>
+       </div>`;
+
+    const cards = nodes.map((node, i) => {
+      if (node.type === 'image') {
+        const thumb = `/media/thumbnails${node.path}`;
+        const filename = node.path.split('/').pop();
+        return `
+          ${insertZone(i)}
+          <div class="ve-card" data-index="${i}">
+            <div class="ve-handle" title="Drag to reorder">
+              <span class="ve-handle-dots"></span>
+            </div>
+            <img class="ve-thumb" src="${escapeHtml(thumb)}"
+                 alt="${escapeHtml(filename)}"
+                 data-full="/media/originals${escapeHtml(node.path)}"
+                 loading="lazy">
+            <span class="ve-path">${escapeHtml(node.path)}</span>
+            <button class="ve-remove" data-index="${i}" type="button"
+                    aria-label="Remove image" title="Remove">&times;</button>
+          </div>`;
+      } else {
+        return `
+          ${insertZone(i)}
+          <div class="ve-card ve-card--text" data-index="${i}">
+            <div class="ve-handle" title="Drag to reorder">
+              <span class="ve-handle-dots"></span>
+            </div>
+            <span class="ve-text-icon" aria-hidden="true">¶</span>
+            <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${escapeHtml(node.text || '')}</textarea>
+            <button class="ve-remove" data-index="${i}" type="button"
+                    aria-label="Remove text block" title="Remove">&times;</button>
+          </div>`;
+      }
     }).join('');
 
-    const empty = images.length === 0
-      ? `<p class="ve-empty">No images yet. Click <strong>Media</strong> to add some.</p>`
+    const empty = nodes.length === 0
+      ? `<p class="ve-empty">No content yet. Click <strong>Media</strong> to add images.</p>`
       : '';
 
     return `
       <div class="ve-root">
-        <div class="ve-list" id="ve-list">${cards}${empty}</div>
+        <div class="ve-list" id="ve-list">
+          ${cards}
+          ${insertZone(nodes.length)}
+          ${empty}
+        </div>
       </div>`;
   }
 
@@ -48,13 +72,60 @@ export class VisualEditor extends Component {
     this._bindDrag();
     this._bindLightbox();
     this._bindInlineRename();
+    this._bindInsertZones();
+    this._bindTextCards();
+  }
+
+  /**
+   * Read current node state from DOM (capturing live textarea values)
+   * and serialize to the plain-text content format.
+   * Called by PostEditPage at save time.
+   * @returns {string}
+   */
+  serializeNodes() {
+    const nodes = this.props.nodes || [];
+    return nodes.map((node, i) => {
+      if (node.type === 'image') return node.path;
+      const card = this.container.querySelector(`.ve-card[data-index="${i}"]`);
+      const ta = card?.querySelector('.ve-text-area');
+      return ta ? ta.value : (node.text || '');
+    }).join('\n');
+  }
+
+  _bindInsertZones() {
+    this.container.querySelectorAll('.ve-insert-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const zone = btn.closest('.ve-insert-zone');
+        if (!zone) return;
+        const at = parseInt(zone.dataset.insertAt, 10);
+        const next = [...this.props.nodes];
+        next.splice(at, 0, { type: 'text', text: '' });
+        this.props.onChange(next);
+        // After parent re-renders via setProps, focus the new textarea
+        requestAnimationFrame(() => {
+          const cards = this.container.querySelectorAll('.ve-card');
+          cards[at]?.querySelector('.ve-text-area')?.focus();
+        });
+      });
+    });
+  }
+
+  _bindTextCards() {
+    this.container.querySelectorAll('.ve-text-area').forEach((ta) => {
+      const resize = () => {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+      };
+      resize();
+      ta.addEventListener('input', resize);
+    });
   }
 
   _bindRemove() {
     this.container.querySelectorAll('.ve-remove').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const idx = parseInt(e.currentTarget.dataset.index, 10);
-        const next = [...this.props.images];
+        const next = [...this.props.nodes];
         next.splice(idx, 1);
         this.props.onChange(next);
       });
@@ -141,7 +212,7 @@ export class VisualEditor extends Component {
       removeIndicator();
 
       const slot = slotFromEvent(e);
-      const next = [...this.props.images];
+      const next = [...this.props.nodes];
       const [moved] = next.splice(dragIdx, 1);
       // Adjust insertion index after removal
       const insertAt = slot > dragIdx ? slot - 1 : slot;
@@ -166,9 +237,9 @@ export class VisualEditor extends Component {
         const card = span.closest('.ve-card');
         if (!card) return;
         const idx = parseInt(card.dataset.index, 10);
-        const path = this.props.images[idx];
-        if (!path) return;
-        this._startRename(span, path);
+        const node = this.props.nodes[idx];
+        if (!node || node.type !== 'image') return;
+        this._startRename(span, node.path);
       });
     });
   }
