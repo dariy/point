@@ -10,6 +10,7 @@
 
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, updateTag, deleteTag, recalculateCounts, reorderTag, geocodeTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { logout } from '../../api/auth.js';
@@ -367,7 +368,9 @@ export default class TagsManagerPage extends Component {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         const tag = this.state.tags.find(t => t.id === id);
-        if (confirm(`Delete tag "${tag?.name}"? Posts will NOT be deleted.`)) this._handleDelete(id);
+        this._showConfirm('Delete tag', `Delete tag "${tag?.name}"? Posts will NOT be deleted.`, 'Delete', 'danger', () => {
+          this._handleDelete(id);
+        });
       });
     });
 
@@ -854,6 +857,20 @@ export default class TagsManagerPage extends Component {
     } catch (err) {
       store.set('toast', { message: err.message || 'Toggle failed.', type: 'error' });
     }
+  }
+
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
   }
 
   async _handleDelete(id) {
