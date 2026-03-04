@@ -1,0 +1,22 @@
+/* ===========================
+   Theme Toggle
+   =========================== */
+.theme-toggle .icon-sun,
+.theme-toggle .icon-moon {
+    display: none;
+}
+
+/* Show sun icon in dark mode (to switch to light) */
+[data-theme="dark"] .theme-toggle .icon-sun {
+    display: flex;
+}
+
+/* Show moon icon in light mode (to switch to dark) */
+:root:not([data-theme="dark"]) .theme-toggle .icon-moon,
+[data-theme="light"] .theme-toggle .icon-moon {
+    display: flex;
+}
+
+[data-theme="light"] .theme-toggle .icon-sun {
+    display: none;
+}
