@@ -49,7 +49,9 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.ListPostsRow
 	for rows.Next() {
@@ -116,7 +118,9 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.Medium
 	for rows.Next() {
@@ -169,7 +173,9 @@ FROM media WHERE id IN (`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.Medium
 	for rows.Next() {
@@ -257,7 +263,9 @@ LIMIT ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.GetPostRow
 	for rows.Next() {
@@ -291,7 +299,9 @@ ORDER BY published_at DESC, created_at DESC`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []struct {
 		Slug      string
@@ -334,7 +344,9 @@ ORDER BY name ASC`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []struct {
 		ID   int64
@@ -485,7 +497,9 @@ func (r *Repository) GetAllTagRelationships(ctx context.Context) ([]TagRelations
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var pairs []TagRelationship
 	for rows.Next() {
 		var p TagRelationship
@@ -547,7 +561,9 @@ ORDER BY year DESC, month DESC`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var folders []MediaFolder
 	for rows.Next() {
@@ -579,7 +595,9 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.Medium
 	for rows.Next() {
@@ -660,7 +678,9 @@ WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.Tag
 	for rows.Next() {
@@ -725,7 +745,9 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.Tag
 	for rows.Next() {
@@ -781,7 +803,9 @@ ORDER BY t.name ASC`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var postID int64
@@ -828,7 +852,9 @@ ORDER BY year_tag.name ASC`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var locTagID int64
@@ -864,7 +890,9 @@ func (r *Repository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var loc models.TagLocation
@@ -929,7 +957,9 @@ func (r *Repository) scanTags(ctx context.Context, q string, args ...interface{}
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var items []models.Tag
 	for rows.Next() {
 		var t models.Tag
@@ -953,7 +983,9 @@ func (r *Repository) GetMigrations(ctx context.Context) ([]MigrationRecord, erro
 		// Table may not exist in older databases — return empty list rather than error.
 		return []MigrationRecord{}, nil
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []MigrationRecord
 	for rows.Next() {
@@ -1013,7 +1045,9 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []models.GetPostsByTagRow
 	for rows.Next() {
@@ -1129,7 +1163,9 @@ WHERE LOWER(p.status) = 'published'`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []PostContentRow
 	for rows.Next() {
@@ -1165,7 +1201,9 @@ WHERE LOWER(p.status) = 'published'`
 	if err != nil {
 		return nil, err
 	}
-	defer tagRows.Close()
+	defer func() {
+		_ = tagRows.Close()
+	}()
 	for tagRows.Next() {
 		var postID, tagID int64
 		if err := tagRows.Scan(&postID, &tagID); err != nil {
@@ -1188,7 +1226,9 @@ FROM media ORDER BY id`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var items []models.Medium
 	for rows.Next() {
 		var m models.Medium
@@ -1232,7 +1272,9 @@ GROUP BY d.root_id`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	result := make(map[int64]int64)
 	for rows.Next() {

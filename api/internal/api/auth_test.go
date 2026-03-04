@@ -18,7 +18,9 @@ import (
 
 func TestAuthHandler_Login(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	password := "pass123"
 	hash, _ := services.HashPassword(password)
@@ -72,7 +74,9 @@ func TestAuthHandler_Login(t *testing.T) {
 
 func TestAuthHandler_Logout(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	authService := services.NewAuthService(repo)
 	handler := NewAuthHandler(authService, &config.Config{})
@@ -93,7 +97,9 @@ func TestAuthHandler_Logout(t *testing.T) {
 
 func TestAuthHandler_Me(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	authService := services.NewAuthService(repo)
 	handler := NewAuthHandler(authService, nil)
 	e := echo.New()
@@ -153,18 +159,20 @@ func TestAuthHandler_Me(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/logout", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	handler.Logout(c)
+	_ = handler.Logout(c)
 
 	// Test Login with invalid JSON
 	req = httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader([]byte("{bad}")))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
-	handler.Login(e.NewContext(req, rec))
+	_ = handler.Login(e.NewContext(req, rec))
 }
 
 func TestAuthHandler_ChangePassword(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	password := "oldpass"
 	hash, _ := services.HashPassword(password)
@@ -221,12 +229,14 @@ func TestAuthHandler_ChangePassword(t *testing.T) {
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	c.Set("user", session)
-	handler.ChangePassword(c) // may or may not error depending on binding
+	_ = handler.ChangePassword(c) // may or may not error depending on binding
 }
 
 func TestAuthHandler_LogoutWithSession(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	password := "pass123"
 	hash, _ := services.HashPassword(password)
@@ -258,7 +268,9 @@ func TestAuthHandler_LogoutWithSession(t *testing.T) {
 
 func TestAuthHandler_DeleteSession(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	authSvc := services.NewAuthService(repo)
 	handler := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720, SessionExpiryPublicHours: 24})

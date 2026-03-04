@@ -18,7 +18,9 @@ import (
 
 func TestPostHandler_CRUD(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	postService := services.NewPostService(repo)
 	settingsService := services.NewSettingsService(repo)
@@ -62,7 +64,7 @@ func TestPostHandler_CRUD(t *testing.T) {
 	}
 
 	var created map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &created)
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
 	postID := int64(created["id"].(float64))
 
 	// Test Get
@@ -111,10 +113,14 @@ func TestPostHandler_CRUD(t *testing.T) {
 
 func TestPostHandler_UpdatePostTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "posts-tags-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -166,10 +172,14 @@ func TestPostHandler_UpdatePostTags(t *testing.T) {
 
 func TestPostHandler_GetPostNavigation(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "posts-nav-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -186,7 +196,7 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	post, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
 		Title: "Nav Post", Content: "content", Status: "published", AuthorID: user.ID,
 	})
-	postSvc.PublishPost(ctx, post.ID)
+	_, _ = postSvc.PublishPost(ctx, post.ID)
 
 	// Valid navigation request
 	req := httptest.NewRequest(http.MethodGet, "/posts/1/navigation", nil)
@@ -214,25 +224,11 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	}
 }
 
-func setupPostHandler(t *testing.T) (*PostHandler, func()) {
-	t.Helper()
-	repo := setupTestDB(t)
-	tmpDir, _ := os.MkdirTemp("", "post-handler-test")
-	cfg := &config.Config{StoragePath: tmpDir}
-	settingsService := services.NewSettingsService(repo)
-	tagService := services.NewTagService(repo)
-	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
-	postService := services.NewPostService(repo)
-	handler := NewPostHandler(postService, settingsService, mediaService, tagService)
-	return handler, func() {
-		repo.Close()
-		os.RemoveAll(tmpDir)
-	}
-}
-
 func TestPostHandler_GetPostByID(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -279,7 +275,9 @@ func TestPostHandler_GetPostByID(t *testing.T) {
 
 func TestPostHandler_GeneratePreviewLink(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -319,7 +317,9 @@ func TestPostHandler_GeneratePreviewLink(t *testing.T) {
 
 func TestPostHandler_UpdateSettings(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsSvc := services.NewSettingsService(repo)
 	handler := NewSettingsHandler(settingsSvc)

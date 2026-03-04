@@ -7,7 +7,9 @@ import (
 
 func TestSettingsService_CRUD(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewSettingsService(repo)
 	ctx := context.Background()

@@ -30,7 +30,9 @@ func setupTestDB(t *testing.T) (*Queries, *sql.DB) {
 
 func TestQueries_Extra(t *testing.T) {
 	q, db := setupTestDB(t)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 	ctx := context.Background()
 
 	// 1. GetUserByEmail
@@ -43,7 +45,7 @@ func TestQueries_Extra(t *testing.T) {
 	// 2. Storage Usage
 	usage, _ := q.GetStorageUsage(ctx)
 	if usage.Valid && usage.Float64 != 0 {
-		// Should be 0
+		t.Errorf("expected 0 storage usage for new DB, got %v", usage.Float64)
 	}
 
 	// 3. Delete Setting
@@ -54,33 +56,33 @@ func TestQueries_Extra(t *testing.T) {
 	}
 
 	// 4. Session cleanup
-	q.DeleteExpiredSessions(ctx)
+	_ = q.DeleteExpiredSessions(ctx)
 
 	// 5. Tag post count
-	q.UpdateTagPostCount(ctx, 1)
+	_ = q.UpdateTagPostCount(ctx, 1)
 
 	// 6. Remove relationships
-	q.RemoveTagFromPost(ctx, RemoveTagFromPostParams{PostID: 1, TagID: 1})
-	q.RemoveTagRelationship(ctx, RemoveTagRelationshipParams{ParentID: 1, ChildID: 2})
+	_ = q.RemoveTagFromPost(ctx, RemoveTagFromPostParams{PostID: 1, TagID: 1})
+	_ = q.RemoveTagRelationship(ctx, RemoveTagRelationshipParams{ParentID: 1, ChildID: 2})
 
 	// 7. WithTx
 	_ = q.WithTx(nil)
 
 	// 8. More model calls
-	q.CountMedia(ctx, CountMediaParams{})
-	q.CountPosts(ctx, CountPostsParams{})
-	q.CountPostsByTag(ctx, CountPostsByTagParams{})
-	q.ListMedia(ctx, ListMediaParams{})
-	q.ListPosts(ctx, ListPostsParams{})
-	q.ListTags(ctx, ListTagsParams{IncludeEmptyFilter: true})
-	q.ListSettings(ctx)
-	q.GetFirstUser(ctx)
-	q.GetMediaByPostID(ctx, sql.NullInt64{Int64: 1, Valid: true})
-	q.GetTagsForPost(ctx, 1)
-	q.GetUserSessions(ctx, 1)
-	q.UpdateSessionActivity(ctx, 1)
-	q.UpdateUserLogin(ctx, 1)
-	q.WithdrawPost(ctx, 1)
-	q.ClearTagRelationships(ctx, ClearTagRelationshipsParams{})
+	_, _ = q.CountMedia(ctx, CountMediaParams{})
+	_, _ = q.CountPosts(ctx, CountPostsParams{})
+	_, _ = q.CountPostsByTag(ctx, CountPostsByTagParams{})
+	_, _ = q.ListMedia(ctx, ListMediaParams{})
+	_, _ = q.ListPosts(ctx, ListPostsParams{})
+	_, _ = q.ListTags(ctx, ListTagsParams{IncludeEmptyFilter: true})
+	_, _ = q.ListSettings(ctx)
+	_, _ = q.GetFirstUser(ctx)
+	_, _ = q.GetMediaByPostID(ctx, sql.NullInt64{Int64: 1, Valid: true})
+	_, _ = q.GetTagsForPost(ctx, 1)
+	_, _ = q.GetUserSessions(ctx, 1)
+	_ = q.UpdateSessionActivity(ctx, 1)
+	_ = q.UpdateUserLogin(ctx, 1)
+	_, _ = q.WithdrawPost(ctx, 1)
+	_ = q.ClearTagRelationships(ctx, ClearTagRelationshipsParams{})
 }
 

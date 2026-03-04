@@ -13,7 +13,9 @@ import (
 
 func TestSettingsHandler(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsService := services.NewSettingsService(repo)
 	handler := NewSettingsHandler(settingsService)
@@ -43,7 +45,7 @@ func TestSettingsHandler(t *testing.T) {
 		t.Fatalf("GetPublicSettings failed: %v", err)
 	}
 	var res map[string]string
-	json.Unmarshal(rec.Body.Bytes(), &res)
+	_ = json.Unmarshal(rec.Body.Bytes(), &res)
 	if res["blog_title"] != "Test Blog" {
 		t.Errorf("expected Test Blog, got %s", res["blog_title"])
 	}
@@ -51,7 +53,9 @@ func TestSettingsHandler(t *testing.T) {
 
 func TestSettingsHandler_GetSettings(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsSvc := services.NewSettingsService(repo)
 	handler := NewSettingsHandler(settingsSvc)
@@ -71,7 +75,9 @@ func TestSettingsHandler_GetSettings(t *testing.T) {
 
 func TestSettingsHandler_GetSettingByKey(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsSvc := services.NewSettingsService(repo)
 	handler := NewSettingsHandler(settingsSvc)

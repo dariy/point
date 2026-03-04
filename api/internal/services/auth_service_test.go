@@ -12,7 +12,9 @@ import (
 
 func TestAuthService_Authenticate(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewAuthService(repo)
 	ctx := context.Background()
@@ -63,7 +65,9 @@ func TestAuthService_Authenticate(t *testing.T) {
 
 func TestAuthService_Sessions(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewAuthService(repo)
 	ctx := context.Background()
@@ -105,9 +109,8 @@ func TestAuthService_Sessions(t *testing.T) {
 	if err != nil {
 		t.Errorf("ListSessions failed: %v", err)
 	}
-	if len(sessions) != 2 { // One active, one expired but still in DB (ValidateSession deleted it only if it was checked)
-		// Wait, ValidateSession should have deleted it.
-		// Let's re-check count.
+	if len(sessions) != 1 { // One active, one expired was deleted by ValidateSession
+		t.Errorf("expected 1 session, got %d", len(sessions))
 	}
 
 	// Test TerminateSession
@@ -138,7 +141,9 @@ func TestAuthService_Sessions(t *testing.T) {
 
 func TestAuthService_ChangePassword(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewAuthService(repo)
 	ctx := context.Background()

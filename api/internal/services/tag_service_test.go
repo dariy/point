@@ -10,7 +10,9 @@ import (
 
 func TestTagService_CRUD(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewTagService(repo)
 	ctx := context.Background()
@@ -49,6 +51,9 @@ func TestTagService_CRUD(t *testing.T) {
 	// Test UpdateMissingCoords (with base tag but no children)
 	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug) VALUES ('city', 'city')`)
 	res, err := service.UpdateMissingCoords(ctx)
+	if err != nil {
+		t.Fatalf("UpdateMissingCoords failed: %v", err)
+	}
 	if res["updated_count"] != 0 {
 		t.Errorf("expected 0 updated, got %v", res["updated_count"])
 	}
@@ -101,7 +106,9 @@ func TestTagService_CRUD(t *testing.T) {
 
 func TestTagService_TagCloud(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewTagService(repo)
 	ctx := context.Background()
@@ -127,7 +134,7 @@ func TestTagService_TagCloud(t *testing.T) {
 	for i := 0; rows.Next(); i++ {
 		_ = rows.Scan(ids[i])
 	}
-	rows.Close()
+	_ = rows.Close()
 	// p1, p2 → Tag 1 (count=2); p3 → Tag 2 (count=1)
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, p1, t1.ID)
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, p2, t1.ID)
@@ -144,14 +151,15 @@ func TestTagService_TagCloud(t *testing.T) {
 
 	// Check weights: Tag 1 has 2 posts (weight=1.0), Tag 2 has 1 post (weight=0.5).
 	for _, item := range cloud {
-		if item.ID == t1.ID {
+		switch item.ID {
+		case t1.ID:
 			if item.Weight != 1.0 {
 				t.Errorf("expected weight 1.0 for Tag 1, got %f", item.Weight)
 			}
 			if item.Count != 2 {
 				t.Errorf("expected count 2 for Tag 1, got %d", item.Count)
 			}
-		} else if item.ID == t2.ID {
+		case t2.ID:
 			if item.Weight != 0.5 {
 				t.Errorf("expected weight 0.5 for Tag 2, got %f", item.Weight)
 			}
@@ -164,7 +172,9 @@ func TestTagService_TagCloud(t *testing.T) {
 
 func TestTagService_Hierarchy(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewTagService(repo)
 	ctx := context.Background()
@@ -202,7 +212,9 @@ func TestTagService_Hierarchy(t *testing.T) {
 
 func TestTagService_SetRelationships(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewTagService(repo)
 	ctx := context.Background()
@@ -253,7 +265,9 @@ func TestTagService_SetRelationships(t *testing.T) {
 
 func TestTagService_ReorderTag(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewTagService(repo)
 	ctx := context.Background()
@@ -295,7 +309,9 @@ func TestTagService_ReorderTag(t *testing.T) {
 
 func TestTagService_Locations(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewTagService(repo)
 	ctx := context.Background()
@@ -337,7 +353,9 @@ func TestTagService_Locations(t *testing.T) {
 
 func TestTagService_GetTagsByPostIDs(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewTagService(repo)
 	ctx := context.Background()
@@ -428,7 +446,9 @@ func TestBuildEffectivelyHiddenPostsTagIDs(t *testing.T) {
 
 func TestTagService_EffectivelyHidden(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewTagService(repo)
 	ctx := context.Background()
@@ -464,7 +484,9 @@ func TestTagService_EffectivelyHidden(t *testing.T) {
 
 func TestTagService_GetHierarchicalNavTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewTagService(repo)
 	ctx := context.Background()
@@ -514,7 +536,9 @@ func TestTagService_GetHierarchicalNavTags(t *testing.T) {
 
 func TestTagService_ListTagsPublicOnly(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
@@ -548,7 +572,9 @@ func TestTagService_ListTagsPublicOnly(t *testing.T) {
 
 func TestTagService_GetTagChildrenPublicOnly(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
@@ -557,7 +583,7 @@ func TestTagService_GetTagChildrenPublicOnly(t *testing.T) {
 	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "HiddenChild", IsHidden: true})
 
 	// Set up relationships
-	svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
+	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 
 	// Without publicOnly
 	children, err := svc.GetTagChildren(ctx, parent.ID, false)
@@ -576,7 +602,9 @@ func TestTagService_GetTagChildrenPublicOnly(t *testing.T) {
 
 func TestTagService_GetHierarchicalNavTagsWithPosts(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
@@ -605,7 +633,9 @@ func TestTagService_GetHierarchicalNavTagsWithPosts(t *testing.T) {
 
 func TestTagService_GetTagCloudWithData(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
@@ -647,7 +677,9 @@ func TestTagService_GetTagCloudWithData(t *testing.T) {
 
 func TestTagService_UpdateMissingCoordsNoBaseTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	svc := NewTagService(repo)
 	ctx := context.Background()
 

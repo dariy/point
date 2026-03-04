@@ -11,7 +11,9 @@ import (
 
 func TestPostService_CRUD(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewPostService(repo)
 	ctx := context.Background()
@@ -131,7 +133,9 @@ func TestPostService_CRUD(t *testing.T) {
 
 func TestPostService_GetPostBySlug(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -158,7 +162,9 @@ func TestPostService_GetPostBySlug(t *testing.T) {
 
 func TestPostService_UpdatePostTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -197,7 +203,9 @@ func TestPostService_UpdatePostTags(t *testing.T) {
 
 func TestPostService_PublishWithdraw(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -230,7 +238,9 @@ func TestPostService_PublishWithdraw(t *testing.T) {
 
 func TestPostService_GetPostNavigation(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -241,9 +251,9 @@ func TestPostService_GetPostNavigation(t *testing.T) {
 
 	// Create multiple published posts
 	p1, _ := svc.CreatePost(ctx, CreatePostParams{Title: "First", Content: "c1", Status: "published", AuthorID: user.ID})
-	svc.PublishPost(ctx, p1.ID)
+	_, _ = svc.PublishPost(ctx, p1.ID)
 	p2, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Second", Content: "c2", Status: "published", AuthorID: user.ID})
-	svc.PublishPost(ctx, p2.ID)
+	_, _ = svc.PublishPost(ctx, p2.ID)
 
 	// Navigation for first post (no prev, may have next)
 	prev, next, err := svc.GetPostNavigation(ctx, p1.ID, true)
@@ -256,7 +266,9 @@ func TestPostService_GetPostNavigation(t *testing.T) {
 
 func TestPostService_PreprocessContent(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -292,7 +304,9 @@ func TestPostService_PreprocessContent(t *testing.T) {
 
 func TestPostService_GetTagsByPostIDs(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -315,7 +329,9 @@ func TestPostService_GetTagsByPostIDs(t *testing.T) {
 
 func TestPostService_ListPostsSearch(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -323,7 +339,7 @@ func TestPostService_ListPostsSearch(t *testing.T) {
 	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
 		Username: "searcher", Email: "s@test.com", PasswordHash: "h", DisplayName: "S",
 	})
-	svc.CreatePost(ctx, CreatePostParams{
+	_, _ = svc.CreatePost(ctx, CreatePostParams{
 		Title: "Unique Searchable Title", Content: "C", Status: "published", AuthorID: user.ID,
 	})
 
@@ -340,7 +356,9 @@ func TestPostService_ListPostsSearch(t *testing.T) {
 
 func TestPostService_PreviewTokenExpired(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	svc := NewPostService(repo)
 	ctx := context.Background()
@@ -352,7 +370,7 @@ func TestPostService_PreviewTokenExpired(t *testing.T) {
 
 	// Set an already-expired preview token directly
 	expiredAt := time.Now().Add(-time.Hour)
-	repo.DB().Exec(`UPDATE posts SET preview_token = 'expiredtok', preview_expires_at = ? WHERE id = ?`,
+	_, _ = repo.DB().Exec(`UPDATE posts SET preview_token = 'expiredtok', preview_expires_at = ? WHERE id = ?`,
 		expiredAt, post.ID)
 
 	// GetPostByPreviewToken with expired token should return ErrNoRows (covers line 352-354)

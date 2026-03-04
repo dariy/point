@@ -34,7 +34,9 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() {
+		_ = src.Close()
+	}()
 
 	content, err := io.ReadAll(src)
 	if err != nil {
@@ -269,7 +271,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 			continue
 		}
 		content, err := io.ReadAll(src)
-		src.Close()
+		_ = src.Close()
 		if err != nil {
 			failed = append(failed, map[string]string{"filename": fh.Filename, "error": err.Error()})
 			continue
@@ -365,7 +367,9 @@ func (h *MediaHandler) AnalyzeImage(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() {
+		_ = src.Close()
+	}()
 
 	content, err := io.ReadAll(src)
 	if err != nil {
