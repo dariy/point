@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:alpine AS builder
+FROM docker.io/library/golang:alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev git
@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -o migrate-paths cmd/migrate-paths/main.go
 
 # Runtime stage
-FROM alpine:latest
+FROM docker.io/library/alpine:latest
 
 WORKDIR /app
 
