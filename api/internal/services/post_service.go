@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strings"
 	"time"
 
 	"point-api/internal/models"
@@ -148,7 +149,7 @@ func (s *PostService) GetPostByID(ctx context.Context, id int64) (models.GetPost
 }
 
 func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.GetPostBySlugRow, error) {
-	return s.repo.GetPostBySlug(ctx, slug)
+	return s.repo.GetPostBySlug(ctx, strings.ToLower(slug))
 }
 
 type CreatePostParams struct {

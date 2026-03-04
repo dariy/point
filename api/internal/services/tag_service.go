@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"point-api/internal/models"
@@ -16,13 +17,16 @@ import (
 	"point-api/internal/utils"
 )
 
-
 type TagService struct {
-	repo *repository.Repository
+	repo             *repository.Repository
+	nominatimBaseURL string
 }
 
 func NewTagService(repo *repository.Repository) *TagService {
-	return &TagService{repo: repo}
+	return &TagService{
+		repo:             repo,
+		nominatimBaseURL: "https://nominatim.openstreetmap.org/search",
+	}
 }
 
 func (s *TagService) ListTags(ctx context.Context, includeEmpty, importantOnly, publicOnly bool) ([]models.Tag, error) {
@@ -49,7 +53,7 @@ func (s *TagService) ListTags(ctx context.Context, includeEmpty, importantOnly, 
 }
 
 func (s *TagService) GetTagBySlug(ctx context.Context, slug string) (models.Tag, error) {
-	return s.repo.GetTagBySlug(ctx, slug)
+	return s.repo.GetTagBySlug(ctx, strings.ToLower(slug))
 }
 
 func (s *TagService) GetTagByID(ctx context.Context, id int64) (models.Tag, error) {
@@ -404,7 +408,7 @@ func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64
 		"limit":  {"1"},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://nominatim.openstreetmap.org/search?"+params.Encode(), nil)
+		s.nominatimBaseURL+"?"+params.Encode(), nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -508,7 +512,7 @@ func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interf
 			"limit":  {"1"},
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-			"https://nominatim.openstreetmap.org/search?"+params.Encode(), nil)
+			s.nominatimBaseURL+"?"+params.Encode(), nil)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("build request for %s: %v", tag.Name, err))
 			continue
