@@ -6,6 +6,7 @@ services:
     image: point:dev
     container_name: point
     restart: unless-stopped
+    network_mode: bridge
     ports:
       - "8000:8000"
     volumes:
@@ -25,8 +26,3 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
-
-networks:
-  default:
-    name: point-network
-    external: true
