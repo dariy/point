@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="" />
+  <title>Loading…</title>
+
+  <!-- CSS — public and admin bundles both preloaded; the active one is set via
+       media="all" and the inactive one via media="not all". The section is
+       switched synchronously by app.js before any page component mounts. -->
+  <link id="css-public" rel="stylesheet" href="/assets/css/main.css?v=__BUILD_VERSION__" />
+  <link id="css-light"  rel="stylesheet" href="/assets/css/light.css?v=__BUILD_VERSION__" media="not all" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="alternate" type="application/rss+xml" title="RSS Feed" href="/feed.xml" />
+</head>
+<body>
+
+  <!-- SPA mount point — all content rendered here by JavaScript -->
+  <div id="app" role="main"></div>
+
+  <!-- Toast container — rendered by ToastContainer component -->
+  <div id="toasts" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- App bootstrap — type=module enables ES module imports -->
+  <script type="module" src="/assets/js/app.js?v=__BUILD_VERSION__"></script>
+
+</body>
+</html>

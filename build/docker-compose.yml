@@ -3,34 +3,26 @@ services:
     build:
       context: ..
       dockerfile: build/Dockerfile
-    image: ghcr.io/dariy/point:main
+    image: point:dev
     container_name: point
     restart: unless-stopped
+    network_mode: bridge
     ports:
       - "8000:8000"
     volumes:
-      - point-data:/data
+      - ../data:/data:z
     env_file:
       - .env
     environment:
       - TZ=UTC
-      - DATABASE_URL=sqlite+aiosqlite:////data/point.db
+      - DATABASE_URL=/data/point.db
       - STORAGE_PATH=/data
-    networks:
-      - point-network
+      - FRONTEND_DIR=/app/frontend
+      - PORT=8000
+      - HOST=0.0.0.0
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
-
-volumes:
-  point-data:
-    driver: local
-
-networks:
-  default:
-    external:
-      name: point-network
-    # driver: bridge
