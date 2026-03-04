@@ -82,7 +82,9 @@ func (h *SystemHandler) GetLogs(c echo.Context) error {
 		// Log file doesn't exist yet — return empty list
 		return c.JSON(http.StatusOK, []string{})
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	var all []string
 	scanner := bufio.NewScanner(f)
@@ -240,13 +242,19 @@ func (h *SystemHandler) createTarGz(destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	gz := gzip.NewWriter(f)
-	defer gz.Close()
+	defer func() {
+		_ = gz.Close()
+	}()
 
 	tw := tar.NewWriter(gz)
-	defer tw.Close()
+	defer func() {
+		_ = tw.Close()
+	}()
 
 	// Walk the data directory, excluding the backups dir itself
 	return filepath.Walk(h.dataPath, func(path string, info os.FileInfo, err error) error {
@@ -279,7 +287,9 @@ func (h *SystemHandler) createTarGz(destPath string) error {
 			if err != nil {
 				return nil
 			}
-			defer src.Close()
+			defer func() {
+				_ = src.Close()
+			}()
 			_, _ = io.Copy(tw, src)
 		}
 
@@ -292,13 +302,17 @@ func (h *SystemHandler) extractTarGz(srcPath, destDir string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return err
 	}
-	defer gz.Close()
+	defer func() {
+		_ = gz.Close()
+	}()
 
 	tr := tar.NewReader(gz)
 	for {
@@ -319,15 +333,15 @@ func (h *SystemHandler) extractTarGz(srcPath, destDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			os.MkdirAll(target, 0755)
+			_ = os.MkdirAll(target, 0755)
 		case tar.TypeReg:
-			os.MkdirAll(filepath.Dir(target), 0755)
+			_ = os.MkdirAll(filepath.Dir(target), 0755)
 			out, err := os.Create(target)
 			if err != nil {
 				continue
 			}
 			_, _ = io.Copy(out, tr)
-			out.Close()
+			_ = out.Close()
 		}
 	}
 	return nil

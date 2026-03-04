@@ -10,7 +10,9 @@ import (
 
 func TestRepository_SystemStats(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 	stats, err := repo.GetSystemStats(ctx)
@@ -26,7 +28,9 @@ func TestRepository_SystemStats(t *testing.T) {
 
 func TestRepository_OrphanedMedia(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -49,7 +53,9 @@ func TestRepository_OrphanedMedia(t *testing.T) {
 
 func TestRepository_Tags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	// Insert tags
@@ -75,7 +81,9 @@ func TestRepository_Tags(t *testing.T) {
 
 func TestRepository_Migrations(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	// Create table
@@ -90,7 +98,9 @@ func TestRepository_Migrations(t *testing.T) {
 
 func TestRepository_Sitemap(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	if _, err := repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1, 'u', 'e', 'h', 'd')`); err != nil {
@@ -122,7 +132,9 @@ func TestRepository_Sitemap(t *testing.T) {
 
 func TestRepository_MediaIDs(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum) VALUES (1, 'f1', 'p1', 'file', 'text/plain', 10, 'c1'), (2, 'f2', 'p2', 'file', 'text/plain', 10, 'c2')`)
@@ -141,7 +153,9 @@ func TestRepository_MediaIDs(t *testing.T) {
 
 func TestRepository_Extra(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	// BackupDB
@@ -190,7 +204,9 @@ func insertUserAndPost(t *testing.T, repo *Repository, slug, status string) (int
 
 func TestRepository_ListPostsWithSearch(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	insertUserAndPost(t, repo, "hello-world", "published")
@@ -220,7 +236,9 @@ func TestRepository_ListPostsWithSearch(t *testing.T) {
 
 func TestRepository_GetPublishedPostsForFeed(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	insertUserAndPost(t, repo, "feed-post", "published")
@@ -236,7 +254,9 @@ func TestRepository_GetPublishedPostsForFeed(t *testing.T) {
 
 func TestRepository_GetPostByPreviewToken(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "preview-post", "draft")
@@ -253,7 +273,9 @@ func TestRepository_GetPostByPreviewToken(t *testing.T) {
 
 func TestRepository_GetPostNavigation(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid1 := insertUserAndPost(t, repo, "post-older", "published")
@@ -276,7 +298,9 @@ func TestRepository_GetPostNavigation(t *testing.T) {
 
 func TestRepository_TagRelationships(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'P','p'),(2,'C','c')`)
@@ -308,7 +332,9 @@ func TestRepository_TagRelationships(t *testing.T) {
 
 func TestRepository_ListOrphanedMediaByPage(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('f1','p1','file','text/plain',10,'c1')`)
@@ -324,7 +350,9 @@ func TestRepository_ListOrphanedMediaByPage(t *testing.T) {
 
 func TestRepository_MediaFolders(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('f1','originals/2024/06/img.jpg','image','image/jpeg',100,'c1')`)
@@ -367,7 +395,9 @@ func TestRepository_MediaFolders(t *testing.T) {
 
 func TestRepository_ReplacePostContentPath(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "rpath-post", "published")
@@ -384,7 +414,9 @@ func TestRepository_ReplacePostContentPath(t *testing.T) {
 
 func TestRepository_GetTagsByPostIDs(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "tagged-post", "published")
@@ -408,7 +440,9 @@ func TestRepository_GetTagsByPostIDs(t *testing.T) {
 
 func TestRepository_GetYearTagsByLocationTagIDs(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "loc-post", "published")
@@ -434,7 +468,9 @@ func TestRepository_GetYearTagsByLocationTagIDs(t *testing.T) {
 
 func TestRepository_TagLocations(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
@@ -465,7 +501,9 @@ func TestRepository_TagLocations(t *testing.T) {
 
 func TestRepository_TagHierarchy(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, sort_order) VALUES (1,'P','p',0),(2,'C','c',0)`)
@@ -492,7 +530,9 @@ func TestRepository_TagHierarchy(t *testing.T) {
 
 func TestRepository_PostsByTagIDs(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "tag-post", "published")
@@ -525,7 +565,9 @@ func TestRepository_PostsByTagIDs(t *testing.T) {
 
 func TestRepository_MediaByPath(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum) VALUES (1,'f1','originals/2024/01/img.jpg','image','image/jpeg',100,'c1')`)
@@ -551,7 +593,9 @@ func TestRepository_MediaByPath(t *testing.T) {
 
 func TestRepository_GetAllPublishedPostContents(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "pub-content", "published")
@@ -572,7 +616,9 @@ func TestRepository_GetAllPublishedPostContents(t *testing.T) {
 
 func TestRepository_GetAllMediaPaths(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('f1','p1','file','text/plain',10,'c1')`)
@@ -588,7 +634,9 @@ func TestRepository_GetAllMediaPaths(t *testing.T) {
 
 func TestRepository_GetHierarchicalPostCounts(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "hpc-post", "published")
@@ -617,7 +665,9 @@ func TestRepository_GetHierarchicalPostCounts(t *testing.T) {
 
 func TestRepository_ApplyMigration(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	// Create migration_history table (not in schema.sql)
@@ -643,7 +693,9 @@ func TestRepository_ApplyMigration(t *testing.T) {
 
 func TestRepository_DeleteSession(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	uid, _ := insertUserAndPost(t, repo, "sess-post", "published")
@@ -668,7 +720,9 @@ func TestRepository_DeleteSession(t *testing.T) {
 
 func TestRepository_ListPostsWithSearchStatusFilters(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	ctx := context.Background()
 
 	insertUserAndPost(t, repo, "pub-post", "published")

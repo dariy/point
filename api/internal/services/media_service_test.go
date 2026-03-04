@@ -15,8 +15,10 @@ import (
 
 func TestMediaService_AnalyzeImage(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -27,12 +29,14 @@ func TestMediaService_AnalyzeImage(t *testing.T) {
 			"tags":  []string{"tag1", "tag2"},
 			"excerpt": "Mock Excerpt",
 		}
-		json.NewEncoder(w).Encode(res)
+		_ = json.NewEncoder(w).Encode(res)
 	}))
 	defer server.Close()
 
 	// Configure endpoint
-	service.settingsService.SetSetting(ctx, "genai_api_endpoint", server.URL, "string")
+	if err := service.settingsService.SetSetting(ctx, "genai_api_endpoint", server.URL, "string"); err != nil {
+		t.Fatalf("SetSetting failed: %v", err)
+	}
 
 	analysis, err := service.AnalyzeImage(ctx, []byte("fake-image"), "test.jpg", "image/jpeg")
 	if err != nil {
@@ -49,8 +53,10 @@ func TestMediaService_AnalyzeImage(t *testing.T) {
 
 func TestMediaService_Upload(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -135,8 +141,10 @@ func TestMediaService_Upload(t *testing.T) {
 
 func TestMediaService_Orphaned(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -187,8 +195,10 @@ func TestMediaService_Orphaned(t *testing.T) {
 
 func TestMediaService_Stats(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -212,8 +222,10 @@ func TestMediaService_Stats(t *testing.T) {
 
 func TestMediaService_RebuildThumbnails(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -229,7 +241,9 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 	// 2. Create a dummy image
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	var buf bytes.Buffer
-	jpeg.Encode(&buf, img, nil)
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatalf("jpeg.Encode failed: %v", err)
+	}
 
 	media, err := service.UploadFile(ctx, UploadFileParams{
 		Content:  buf.Bytes(),
@@ -242,7 +256,7 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 
 	// Force delete thumbnail from disk but keep in DB
 	if media.ThumbnailPath.Valid {
-		os.Remove(filepath.Join(tmpDir, "media", media.ThumbnailPath.String))
+		_ = os.Remove(filepath.Join(tmpDir, "media", media.ThumbnailPath.String))
 	}
 
 	stats, err = service.RebuildThumbnails(ctx, false)
@@ -256,8 +270,10 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 
 func TestMediaService_BulkDelete(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -284,13 +300,15 @@ func TestMediaService_BulkDelete(t *testing.T) {
 
 func TestMediaService_GetMediaFolders(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
 	// Upload a file so a folder exists
-	service.UploadFile(ctx, UploadFileParams{Content: []byte("folder"), Filename: "photo.jpg", MimeType: "image/jpeg"})
+	_, _ = service.UploadFile(ctx, UploadFileParams{Content: []byte("folder"), Filename: "photo.jpg", MimeType: "image/jpeg"})
 
 	folders, err := service.GetMediaFolders(ctx, "")
 	if err != nil {
@@ -321,8 +339,10 @@ func TestMediaService_ExtractMediaPaths(t *testing.T) {
 
 func TestMediaService_UpdateMediaVisibilityForPaths(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 	// Empty paths — should succeed without error
@@ -352,8 +372,10 @@ func TestMediaService_UpdateMediaVisibilityForPaths(t *testing.T) {
 
 func TestMediaService_RecalculateAllMediaVisibility(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -382,8 +404,8 @@ func TestMediaService_RecalculateAllMediaVisibility(t *testing.T) {
 	}
 
 	// Test with thumbnail path reference
-	repo.DB().Exec(`INSERT INTO posts (id, title, slug, content, author_id, status, published_at, thumbnail_path) VALUES (2,'P2','p2','',1,'published',datetime('now'),'/2024/06/thumb.jpg')`)
-	repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum, is_public) VALUES (3,'thumb.jpg','originals/2024/06/thumb.jpg','image','image/jpeg',100,'c3',0)`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (id, title, slug, content, author_id, status, published_at, thumbnail_path) VALUES (2,'P2','p2','',1,'published',datetime('now'),'/2024/06/thumb.jpg')`)
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum, is_public) VALUES (3,'thumb.jpg','originals/2024/06/thumb.jpg','image','image/jpeg',100,'c3',0)`)
 
 	changed2, err := service.RecalculateAllMediaVisibility(ctx)
 	if err != nil {
@@ -450,15 +472,17 @@ func TestMediaService_ParseAnalysisResult(t *testing.T) {
 
 func TestMediaService_ThumbnailBranches(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
 	// Create a user+post so we can test UpdateMedia with a valid PostID
 	repo := service.repo
-	repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','e@t.com','h','D')`)
-	repo.DB().Exec(`INSERT INTO posts (title, slug, content, status, author_id) VALUES ('T','t','C','draft',1)`)
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','e@t.com','h','D')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, status, author_id) VALUES ('T','t','C','draft',1)`)
 
 	// Upload a plain file for UpdateMedia with non-nil PostID (covers line 242)
 	txtMedia, _ := service.UploadFile(ctx, UploadFileParams{Content: []byte("txt"), Filename: "x.txt", MimeType: "text/plain"})
@@ -468,7 +492,9 @@ func TestMediaService_ThumbnailBranches(t *testing.T) {
 	// Upload a JPEG to get a thumbnail
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	var buf bytes.Buffer
-	jpeg.Encode(&buf, img, nil)
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatalf("jpeg.Encode failed: %v", err)
+	}
 	jpegMedia, err := service.UploadFile(ctx, UploadFileParams{Content: buf.Bytes(), Filename: "photo.jpg", MimeType: "image/jpeg"})
 	if err != nil {
 		t.Fatalf("UploadFile JPEG failed: %v", err)

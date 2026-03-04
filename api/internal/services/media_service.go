@@ -630,7 +630,7 @@ func (s *MediaService) analyzeImageViaHTTP(ctx context.Context, content []byte, 
 	if _, err := io.Copy(part, bytes.NewReader(content)); err != nil {
 		return nil, err
 	}
-	writer.Close()
+	_ = writer.Close()
 
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, body)
 	if err != nil {
@@ -643,7 +643,9 @@ func (s *MediaService) analyzeImageViaHTTP(ctx context.Context, content []byte, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GenAI service error: status %d", resp.StatusCode)

@@ -7,7 +7,9 @@ import (
 
 func TestPostService_Render(t *testing.T) {
 	service, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	// 1. Plain text rendering
 	html, _ := service.RenderContent("hello world")
@@ -22,7 +24,9 @@ func TestPostService_Render(t *testing.T) {
 
 func TestPostService_PreviewToken(t *testing.T) {
 	service, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -63,7 +67,9 @@ func TestPostService_PreviewToken(t *testing.T) {
 
 func TestPostService_ListPosts(t *testing.T) {
 	service, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -88,7 +94,7 @@ func TestPostService_ListPosts(t *testing.T) {
 	}
 
 	// List all (admin)
-	posts, total, _ = service.ListPosts(ctx, ListPostsParams{
+	_, total, _ = service.ListPosts(ctx, ListPostsParams{
 		Page:       1,
 		PerPage:    10,
 		IncludeDrafts: true,
@@ -100,7 +106,9 @@ func TestPostService_ListPosts(t *testing.T) {
 
 func TestSettingsService_Defaults(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := NewSettingsService(repo)
 	ctx := context.Background()

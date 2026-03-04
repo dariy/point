@@ -31,7 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to initialize repository: %v", err)
 	}
-	defer repo.Close()
+	defer func() {
+		if err := repo.Close(); err != nil {
+			log.Printf("error closing repository: %v", err)
+		}
+	}()
 
 	// Ensure media directories exist
 	for _, dir := range []string{"originals", "thumbnails"} {

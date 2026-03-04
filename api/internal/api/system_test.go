@@ -14,10 +14,11 @@ import (
 
 func TestSystemHandler_Stats(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
-
 	tmpDir, _ := os.MkdirTemp("", "system-api-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
@@ -40,17 +41,18 @@ func TestSystemHandler_Stats(t *testing.T) {
 
 func TestSystemHandler_Logs(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
-
 	tmpDir, _ := os.MkdirTemp("", "system-api-test-logs")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
-	// Create logs dir and file
-	os.MkdirAll(filepath.Join(tmpDir, "logs"), 0755)
+	// Create a log file
 	logPath := filepath.Join(tmpDir, "logs", "app.log")
-	os.WriteFile(logPath, []byte(`line1
+	_ = os.MkdirAll(filepath.Join(tmpDir, "logs"), 0755)
+	_ = os.WriteFile(logPath, []byte(`line1
 line2
-`), 0644)
+line3`), 0644)
 
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
@@ -73,10 +75,11 @@ line2
 
 func TestSystemHandler_GetMigrations(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
-
 	tmpDir, _ := os.MkdirTemp("", "sys-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
@@ -98,10 +101,11 @@ func TestSystemHandler_GetMigrations(t *testing.T) {
 
 func TestSystemHandler_RecalculateMediaVisibility(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
-
 	tmpDir, _ := os.MkdirTemp("", "sys-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
@@ -123,10 +127,11 @@ func TestSystemHandler_RecalculateMediaVisibility(t *testing.T) {
 
 func TestSystemHandler_UpdateMapCoords(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
-
 	tmpDir, _ := os.MkdirTemp("", "sys-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
