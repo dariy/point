@@ -81,3 +81,176 @@ func TestPagesHandler_TagsPage(t *testing.T) {
 	}
 }
 
+func TestPagesHandler_GetMapPage(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	settingsSvc := services.NewSettingsService(repo)
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	e := echo.New()
+
+	// Public map (no user)
+	req := httptest.NewRequest(http.MethodGet, "/map", nil)
+	rec := httptest.NewRecorder()
+	if err := handler.GetMapPage(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetMapPage failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	// Admin map (with user set)
+	req = httptest.NewRequest(http.MethodGet, "/map", nil)
+	rec = httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", struct{}{})
+	if err := handler.GetMapPage(c); err != nil {
+		t.Fatalf("GetMapPage (admin) failed: %v", err)
+	}
+}
+
+func TestPagesHandler_GetMapPageWithData(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	settingsSvc := services.NewSettingsService(repo)
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	ctx := context.Background()
+
+	// Create country tag and a child (city)
+	country, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Country"})
+	city, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "France"})
+	tagSvc.SetTagParents(ctx, city.ID, []int64{country.ID})
+
+	// Give city a location
+	tagSvc.SetTagLocations(ctx, city.ID, []services.TagLocationInput{{Latitude: 48.8566, Longitude: 2.3522}})
+
+	// Set post_count for city so it appears in ListTags
+	repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
+
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/map", nil)
+	rec := httptest.NewRecorder()
+	if err := handler.GetMapPage(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetMapPage (with data) failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	_ = country
+}
+
+func TestPagesHandler_TagsPageAdmin(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	tagSvc := services.NewTagService(repo)
+	ctx := context.Background()
+	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel", IsFeatured: true})
+	child, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Europe"})
+	tagSvc.SetTagParents(ctx, child.ID, []int64{parent.ID})
+	// Set post_count > 0 so they appear in ListTags(includeEmpty=false)
+	repo.DB().Exec(`UPDATE tags SET post_count = 1`)
+	// Add a location to parent tag so location branch is covered
+	tagSvc.SetTagLocations(ctx, parent.ID, []services.TagLocationInput{{Latitude: 48.8, Longitude: 2.3}})
+
+	postSvc := services.NewPostService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	e := echo.New()
+
+	// Admin mode
+	req := httptest.NewRequest(http.MethodGet, "/tags", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", struct{}{}) // authenticated
+
+	if err := handler.GetTagsPage(c); err != nil {
+		t.Fatalf("GetTagsPage (admin) failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestPagesHandler_TagPageNotFound(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/tag/nonexistent", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("nonexistent")
+	err := handler.GetTagPage(c)
+	if err == nil {
+		t.Error("expected error for nonexistent tag")
+	}
+}
+
+func TestPagesHandler_TagPageHidden(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	tagSvc := services.NewTagService(repo)
+	ctx := context.Background()
+	// Create a hidden tag
+	hidden, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "HiddenTag", Slug: "hidden-tag", IsHidden: true})
+	_ = hidden
+
+	postSvc := services.NewPostService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	e := echo.New()
+
+	// Public user requesting hidden tag should get 404
+	req := httptest.NewRequest(http.MethodGet, "/tag/hidden-tag", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("hidden-tag")
+	err := handler.GetTagPage(c)
+	if err == nil {
+		t.Error("expected error for hidden tag accessed publicly")
+	}
+}
+
+func TestPagesHandler_TagPageWithAuth(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	tagSvc := services.NewTagService(repo)
+	tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "AuthTag", Slug: "auth-tag"})
+
+	postSvc := services.NewPostService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/tag/auth-tag", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("auth-tag")
+	c.Set("user", struct{}{}) // authenticated user — admin mode
+
+	if err := handler.GetTagPage(c); err != nil {
+		t.Fatalf("GetTagPage (admin) failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+

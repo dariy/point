@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"point-api/internal/models"
+	"point-api/internal/repository"
 )
 
 func TestTagService_CRUD(t *testing.T) {
@@ -196,5 +197,466 @@ func TestTagService_Hierarchy(t *testing.T) {
 	}
 	if len(parents) != 1 || parents[0].ID != parent.ID {
 		t.Error("failed to get correct parent")
+	}
+}
+
+func TestTagService_SetRelationships(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Parent"})
+	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Child"})
+	child2, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Child2"})
+
+	// SetTagParents: make child a child of parent
+	if err := svc.SetTagParents(ctx, child.ID, []int64{parent.ID}); err != nil {
+		t.Fatalf("SetTagParents failed: %v", err)
+	}
+
+	// Verify via GetTagChildren
+	children, err := svc.GetTagChildren(ctx, parent.ID, false)
+	if err != nil || len(children) != 1 || children[0].ID != child.ID {
+		t.Errorf("GetTagChildren after SetTagParents: got %v, err %v", children, err)
+	}
+
+	// SetTagChildren: parent now has child + child2
+	if err := svc.SetTagChildren(ctx, parent.ID, []int64{child.ID, child2.ID}); err != nil {
+		t.Fatalf("SetTagChildren failed: %v", err)
+	}
+
+	children, _ = svc.GetTagChildren(ctx, parent.ID, false)
+	if len(children) != 2 {
+		t.Errorf("expected 2 children after SetTagChildren, got %d", len(children))
+	}
+
+	// GetAllTagRelationships
+	rels, err := svc.GetAllTagRelationships(ctx)
+	if err != nil {
+		t.Fatalf("GetAllTagRelationships failed: %v", err)
+	}
+	if len(rels) < 2 {
+		t.Errorf("expected at least 2 relationships, got %d", len(rels))
+	}
+
+	// SetTagParents with empty slice clears parents
+	if err := svc.SetTagParents(ctx, child.ID, []int64{}); err != nil {
+		t.Errorf("SetTagParents (clear) failed: %v", err)
+	}
+	// SetTagChildren with empty slice clears children
+	if err := svc.SetTagChildren(ctx, parent.ID, []int64{}); err != nil {
+		t.Errorf("SetTagChildren (clear) failed: %v", err)
+	}
+}
+
+func TestTagService_ReorderTag(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	t1, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Alpha"})
+	t2, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Beta"})
+	t3, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Gamma"})
+
+	// Reorder t1 after t3 (root level, no parent)
+	if err := svc.ReorderTag(ctx, ReorderTagParams{
+		ID:       t1.ID,
+		TargetID: &t3.ID,
+		Position: "after",
+	}); err != nil {
+		t.Fatalf("ReorderTag (after) failed: %v", err)
+	}
+
+	// Reorder t2 before t1
+	if err := svc.ReorderTag(ctx, ReorderTagParams{
+		ID:       t2.ID,
+		TargetID: &t1.ID,
+		Position: "before",
+	}); err != nil {
+		t.Fatalf("ReorderTag (before) failed: %v", err)
+	}
+
+	// Invalid position
+	err := svc.ReorderTag(ctx, ReorderTagParams{ID: t3.ID, Position: "sideways"})
+	if err == nil {
+		t.Error("expected error for invalid position")
+	}
+
+	// Tag not among siblings (non-existent ID)
+	err = svc.ReorderTag(ctx, ReorderTagParams{ID: 9999, Position: "after"})
+	if err == nil {
+		t.Error("expected error for non-existent tag among siblings")
+	}
+}
+
+func TestTagService_Locations(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Paris"})
+
+	// Set location
+	if err := svc.SetTagLocations(ctx, tag.ID, []TagLocationInput{
+		{Latitude: 48.8566, Longitude: 2.3522},
+	}); err != nil {
+		t.Fatalf("SetTagLocations failed: %v", err)
+	}
+
+	// Get location
+	locs, err := svc.GetTagLocationsByTagIDs(ctx, []int64{tag.ID})
+	if err != nil {
+		t.Fatalf("GetTagLocationsByTagIDs failed: %v", err)
+	}
+	if loc, ok := locs[tag.ID]; !ok {
+		t.Error("expected location for tag")
+	} else if loc.Latitude != 48.8566 {
+		t.Errorf("expected lat 48.8566, got %v", loc.Latitude)
+	}
+
+	// Clear locations
+	if err := svc.SetTagLocations(ctx, tag.ID, []TagLocationInput{}); err != nil {
+		t.Errorf("SetTagLocations (clear) failed: %v", err)
+	}
+
+	// Empty tag IDs
+	locs, err = svc.GetTagLocationsByTagIDs(ctx, []int64{})
+	if err != nil {
+		t.Errorf("GetTagLocationsByTagIDs (empty) failed: %v", err)
+	}
+	if len(locs) != 0 {
+		t.Errorf("expected empty map, got %v", locs)
+	}
+}
+
+func TestTagService_GetTagsByPostIDs(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	// Empty
+	result, err := svc.GetTagsByPostIDs(ctx, []int64{})
+	if err != nil {
+		t.Fatalf("GetTagsByPostIDs (empty) failed: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty result, got %v", result)
+	}
+
+	// With data
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, status, author_id) VALUES ('P','p','b','published',1)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug) VALUES ('Tech','tech')`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, 1)`)
+
+	result, err = svc.GetTagsByPostIDs(ctx, []int64{1})
+	if err != nil {
+		t.Fatalf("GetTagsByPostIDs failed: %v", err)
+	}
+	if len(result[1]) != 1 {
+		t.Errorf("expected 1 tag for post 1, got %d", len(result[1]))
+	}
+}
+
+func TestBuildEffectivelyHiddenIDs(t *testing.T) {
+	tags := []models.Tag{
+		{ID: 1, IsHidden: true, IsHiddenPosts: true},
+		{ID: 2, IsHidden: false, IsHiddenPosts: false},
+		{ID: 3, IsHidden: false, IsHiddenPosts: false},
+	}
+	rels := []repository.TagRelationship{
+		{ParentID: 1, ChildID: 2}, // 2 is child of hidden+hiddenPosts 1
+		{ParentID: 2, ChildID: 3}, // 3 is grandchild
+	}
+
+	hidden := buildEffectivelyHiddenIDs(tags, rels)
+	if !hidden[1] {
+		t.Error("tag 1 should be hidden (direct)")
+	}
+	if !hidden[2] {
+		t.Error("tag 2 should be hidden (parent is hidden+hiddenPosts)")
+	}
+	if !hidden[3] {
+		t.Error("tag 3 should be hidden (grandparent propagation)")
+	}
+
+	// Tag with is_hidden=true but is_hidden_posts=false does NOT propagate
+	tags2 := []models.Tag{
+		{ID: 10, IsHidden: true, IsHiddenPosts: false},
+		{ID: 11, IsHidden: false, IsHiddenPosts: false},
+	}
+	rels2 := []repository.TagRelationship{{ParentID: 10, ChildID: 11}}
+	hidden2 := buildEffectivelyHiddenIDs(tags2, rels2)
+	if !hidden2[10] {
+		t.Error("tag 10 should be hidden (direct)")
+	}
+	if hidden2[11] {
+		t.Error("tag 11 should NOT be hidden (parent is hidden but not hiddenPosts)")
+	}
+}
+
+func TestBuildEffectivelyHiddenPostsTagIDs(t *testing.T) {
+	tags := []models.Tag{
+		{ID: 1, IsHiddenPosts: true},
+		{ID: 2, IsHiddenPosts: false},
+		{ID: 3, IsHiddenPosts: false},
+	}
+	rels := []repository.TagRelationship{
+		{ParentID: 1, ChildID: 2},
+		{ParentID: 2, ChildID: 3},
+	}
+
+	hiddenPosts := buildEffectivelyHiddenPostsTagIDs(tags, rels)
+	if !hiddenPosts[1] {
+		t.Error("tag 1 should hide posts (direct)")
+	}
+	if !hiddenPosts[2] {
+		t.Error("tag 2 should hide posts (inherited from tag 1)")
+	}
+	if !hiddenPosts[3] {
+		t.Error("tag 3 should hide posts (inherited via chain)")
+	}
+}
+
+func TestTagService_EffectivelyHidden(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	// Empty DB — both return empty maps without error
+	hiddenPosts, err := svc.EffectivelyHiddenPostsTagIDs(ctx)
+	if err != nil {
+		t.Fatalf("EffectivelyHiddenPostsTagIDs failed: %v", err)
+	}
+	if len(hiddenPosts) != 0 {
+		t.Errorf("expected empty map, got %v", hiddenPosts)
+	}
+
+	hidden, err := svc.EffectivelyHiddenIDs(ctx)
+	if err != nil {
+		t.Fatalf("EffectivelyHiddenIDs failed: %v", err)
+	}
+	if len(hidden) != 0 {
+		t.Errorf("expected empty map, got %v", hidden)
+	}
+
+	// With a hidden tag
+	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, is_hidden, is_hidden_posts) VALUES ('Secret','secret',1,1)`)
+
+	hidden, err = svc.EffectivelyHiddenIDs(ctx)
+	if err != nil {
+		t.Fatalf("EffectivelyHiddenIDs (with data) failed: %v", err)
+	}
+	if !hidden[1] {
+		t.Error("expected tag 1 to be hidden")
+	}
+}
+
+func TestTagService_GetHierarchicalNavTags(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	// Empty DB
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true)
+	if err != nil {
+		t.Fatalf("GetHierarchicalNavTags (empty) failed: %v", err)
+	}
+	if nodes == nil {
+		t.Error("expected non-nil slice")
+	}
+
+	// With tags
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel", IsImportant: true})
+	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Europe"})
+	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
+
+	// Public mode (no hidden)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	if err != nil {
+		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
+	}
+	_ = nodes
+
+	// Admin mode
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, false)
+	if err != nil {
+		t.Fatalf("GetHierarchicalNavTags (admin) failed: %v", err)
+	}
+	_ = nodes
+
+	// With rootID (children of parent)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, &parent.ID, false)
+	if err != nil {
+		t.Fatalf("GetHierarchicalNavTags (rootID) failed: %v", err)
+	}
+	_ = nodes
+
+	// Public mode (filtering hidden)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	if err != nil {
+		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
+	}
+	_ = nodes
+}
+
+func TestTagService_ListTagsPublicOnly(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	// Create a visible tag and a hidden tag
+	visible, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Visible", IsHidden: false})
+	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "Hidden", IsHidden: true})
+
+	// publicOnly=false: should return both
+	all, err := svc.ListTags(ctx, true, false, false)
+	if err != nil {
+		t.Fatalf("ListTags failed: %v", err)
+	}
+	if len(all) < 2 {
+		t.Errorf("expected at least 2 tags, got %d", len(all))
+	}
+
+	// publicOnly=true: hidden tag should be filtered out
+	public, err := svc.ListTags(ctx, true, false, true)
+	if err != nil {
+		t.Fatalf("ListTags (public) failed: %v", err)
+	}
+	for _, tag := range public {
+		if tag.ID == visible.ID && !tag.IsHidden {
+			continue // expected
+		}
+		if tag.IsHidden {
+			t.Errorf("hidden tag appeared in publicOnly results: %s", tag.Name)
+		}
+	}
+}
+
+func TestTagService_GetTagChildrenPublicOnly(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Parent", IsHidden: false})
+	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Child", IsHidden: false})
+	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "HiddenChild", IsHidden: true})
+
+	// Set up relationships
+	svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
+
+	// Without publicOnly
+	children, err := svc.GetTagChildren(ctx, parent.ID, false)
+	if err != nil {
+		t.Fatalf("GetTagChildren failed: %v", err)
+	}
+	_ = children
+
+	// With publicOnly
+	pubChildren, err := svc.GetTagChildren(ctx, parent.ID, true)
+	if err != nil {
+		t.Fatalf("GetTagChildren (public) failed: %v", err)
+	}
+	_ = pubChildren
+}
+
+func TestTagService_GetHierarchicalNavTagsWithPosts(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	// Create featured tags so they appear in nav (featured bypasses PostCount=0 filter)
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel", IsFeatured: true})
+	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Europe", IsFeatured: true})
+	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
+
+	// Admin mode with rootID
+	nodes, err := svc.GetHierarchicalNavTags(ctx, &parent.ID, false)
+	if err != nil {
+		t.Fatalf("GetHierarchicalNavTags failed: %v", err)
+	}
+	// parent has 1 featured child
+	if len(nodes) != 1 {
+		t.Errorf("expected 1 child node, got %d", len(nodes))
+	}
+
+	// Public mode - parent tag with child
+	nodes2, err := svc.GetHierarchicalNavTags(ctx, nil, true)
+	if err != nil {
+		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
+	}
+	_ = nodes2
+}
+
+func TestTagService_GetTagCloudWithData(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	// Create a tag, add a published post to it so hierarchical count > 0
+	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "CloudTag"})
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('cu','cu@t','h','CU')`)
+	var uid int64
+	_ = repo.DB().QueryRow(`SELECT id FROM users WHERE username='cu'`).Scan(&uid)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('CP','cp','',?,'published',datetime('now'))`, uid)
+	var pid int64
+	_ = repo.DB().QueryRow(`SELECT id FROM posts WHERE slug='cp'`).Scan(&pid)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,?)`, pid, tag.ID)
+
+	// publicOnly=true with actual candidates (exercises the filtering loop)
+	cloud, err := svc.GetTagCloud(ctx, 10, true)
+	if err != nil {
+		t.Fatalf("GetTagCloud(public) failed: %v", err)
+	}
+	if len(cloud) != 1 {
+		t.Errorf("expected 1 cloud item (public), got %d", len(cloud))
+	}
+
+	// publicOnly=false
+	cloud2, err := svc.GetTagCloud(ctx, 10, false)
+	if err != nil {
+		t.Fatalf("GetTagCloud(admin) failed: %v", err)
+	}
+	_ = cloud2
+
+	// With limit=1 (exercises limit branch)
+	cloud3, err := svc.GetTagCloud(ctx, 1, false)
+	if err != nil {
+		t.Fatalf("GetTagCloud(limit=1) failed: %v", err)
+	}
+	if len(cloud3) > 1 {
+		t.Errorf("expected at most 1 item with limit=1, got %d", len(cloud3))
+	}
+}
+
+func TestTagService_UpdateMissingCoordsNoBaseTags(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	svc := NewTagService(repo)
+	ctx := context.Background()
+
+	// No base tags (city/country) exist — should return success with 0 updated
+	result, err := svc.UpdateMissingCoords(ctx)
+	if err != nil {
+		t.Fatalf("UpdateMissingCoords failed: %v", err)
+	}
+	if result["updated_count"] != 0 {
+		t.Errorf("expected 0 updated, got %v", result["updated_count"])
 	}
 }

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
@@ -158,5 +160,155 @@ func TestAuthHandler_Me(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	handler.Login(e.NewContext(req, rec))
+}
+
+func TestAuthHandler_ChangePassword(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	password := "oldpass"
+	hash, _ := services.HashPassword(password)
+	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username: "pwuser", Email: "pw@test.com", PasswordHash: hash, DisplayName: "PW",
+	})
+
+	authSvc := services.NewAuthService(repo)
+	handler := NewAuthHandler(authSvc, &config.Config{})
+	e := echo.New()
+	session := models.GetSessionByTokenRow{UserID: user.ID}
+
+	// Missing new password
+	body, _ := json.Marshal(ChangePasswordRequest{CurrentPassword: password, NewPassword: ""})
+	req := httptest.NewRequest(http.MethodPost, "/auth/password", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", session)
+	err := handler.ChangePassword(c)
+	if err == nil {
+		t.Error("expected error for empty new password")
+	}
+
+	// Wrong current password
+	body, _ = json.Marshal(ChangePasswordRequest{CurrentPassword: "wrongpass", NewPassword: "newpass123"})
+	req = httptest.NewRequest(http.MethodPost, "/auth/password", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.Set("user", session)
+	err = handler.ChangePassword(c)
+	if err == nil {
+		t.Error("expected error for wrong current password")
+	}
+
+	// Success
+	body, _ = json.Marshal(ChangePasswordRequest{CurrentPassword: password, NewPassword: "newpass123"})
+	req = httptest.NewRequest(http.MethodPost, "/auth/password", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.Set("user", session)
+	if err := handler.ChangePassword(c); err != nil {
+		t.Fatalf("ChangePassword failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	// Invalid JSON
+	req = httptest.NewRequest(http.MethodPost, "/auth/password", bytes.NewReader([]byte("{bad")))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.Set("user", session)
+	handler.ChangePassword(c) // may or may not error depending on binding
+}
+
+func TestAuthHandler_LogoutWithSession(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	password := "pass123"
+	hash, _ := services.HashPassword(password)
+	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username: "logoutuser", Email: "logout@test.com", PasswordHash: hash, DisplayName: "LO",
+	})
+
+	authSvc := services.NewAuthService(repo)
+	cfg := &config.Config{SessionExpiryHours: 720}
+	handler := NewAuthHandler(authSvc, cfg)
+	e := echo.New()
+
+	// Create a real session
+	expiry := time.Now().Add(time.Hour)
+	sess, _ := authSvc.CreateSession(context.Background(), user.ID, "1.2.3.4", "agent", expiry, "logout-tok")
+
+	// Logout with valid cookie
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: sess.Token})
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if err := handler.Logout(c); err != nil {
+		t.Fatalf("Logout with session failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_DeleteSession(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	authSvc := services.NewAuthService(repo)
+	handler := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720, SessionExpiryPublicHours: 24})
+	e := echo.New()
+
+	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
+		Username: "dsuser", Email: "ds@test.com", PasswordHash: "h", DisplayName: "DS",
+	})
+
+	// Create a session to delete
+	import_time_add := time.Now().Add(time.Hour)
+	sess, _ := authSvc.CreateSession(context.Background(), user.ID, "1.2.3.4", "agent", import_time_add, "tok-ds")
+	session := models.GetSessionByTokenRow{UserID: user.ID, ID: 99}
+
+	// Invalid session ID param
+	req := httptest.NewRequest(http.MethodDelete, "/auth/sessions/abc", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("abc")
+	c.Set("user", session)
+	err := handler.DeleteSession(c)
+	if err == nil {
+		t.Error("expected error for invalid session ID")
+	}
+
+	// Delete session that belongs to this user
+	req = httptest.NewRequest(http.MethodDelete, "/auth/sessions/1", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(sess.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: user.ID, ID: sess.ID})
+	if err := handler.DeleteSession(c); err != nil {
+		t.Fatalf("DeleteSession failed: %v", err)
+	}
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", rec.Code)
+	}
+
+	// Session not found (already deleted)
+	req = httptest.NewRequest(http.MethodDelete, "/auth/sessions/999", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("999")
+	c.Set("user", session)
+	err = handler.DeleteSession(c)
+	if err == nil {
+		t.Error("expected error for non-existent session")
+	}
 }
 
