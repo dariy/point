@@ -48,3 +48,45 @@ func TestSettingsHandler(t *testing.T) {
 		t.Errorf("expected Test Blog, got %s", res["blog_title"])
 	}
 }
+
+func TestSettingsHandler_GetSettings(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewSettingsHandler(settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := handler.GetSettings(c); err != nil {
+		t.Fatalf("GetSettings failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestSettingsHandler_GetSettingByKey(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewSettingsHandler(settingsSvc)
+	e := echo.New()
+
+	// Existing key
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/blog_title", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("key")
+	c.SetParamValues("blog_title")
+	if err := handler.GetSettingByKey(c); err != nil {
+		t.Fatalf("GetSettingByKey failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}

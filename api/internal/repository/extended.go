@@ -1263,3 +1263,19 @@ func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error
 	return err
 }
 
+// DeleteSession removes a session and returns an error if not found.
+func (r *Repository) DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ? AND user_id = ?`, arg.ID, arg.UserID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("session not found")
+	}
+	return nil
+}
+
