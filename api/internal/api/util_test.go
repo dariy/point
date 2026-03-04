@@ -160,7 +160,7 @@ func TestParseMapsCoords_Handler(t *testing.T) {
 
 	// Apple Maps page URL (fetches body) — mock with httptest server
 	pageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"lat":45.5077734,"lng":-73.5544607}`))
+		_, _ = w.Write([]byte(`{"lat":45.5077734,"lng":-73.5544607}`))
 	}))
 	defer pageServer.Close()
 	// parseCoordsFromPageBody is called internally; we test it via a direct call

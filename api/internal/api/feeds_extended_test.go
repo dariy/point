@@ -11,7 +11,9 @@ import (
 
 func TestFeedsHandler_Sitemap(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)
@@ -38,7 +40,7 @@ func TestFeedsHandler_Sitemap(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	handler.RobotsTxt(c)
+	_ = handler.RobotsTxt(c)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
@@ -46,7 +48,9 @@ func TestFeedsHandler_Sitemap(t *testing.T) {
 
 func TestFeedsHandler_RSS(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)

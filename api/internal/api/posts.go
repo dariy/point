@@ -508,7 +508,9 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to open file")
 	}
-	defer src.Close()
+	defer func() {
+		_ = src.Close()
+	}()
 
 	content, err := io.ReadAll(src)
 	if err != nil {

@@ -18,10 +18,14 @@ import (
 
 func TestMediaHandler_Upload(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "media-api-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsService := services.NewSettingsService(repo)
@@ -35,9 +39,9 @@ func TestMediaHandler_Upload(t *testing.T) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, _ := writer.CreateFormFile("file", "test.txt")
-	part.Write([]byte("hello api"))
-	writer.WriteField("alt_text", "some alt")
-	writer.Close()
+	_, _ = part.Write([]byte("hello api"))
+	_ = writer.WriteField("alt_text", "some alt")
+	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
@@ -53,7 +57,7 @@ func TestMediaHandler_Upload(t *testing.T) {
 	}
 
 	var m map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &m)
+	_ = json.Unmarshal(rec.Body.Bytes(), &m)
 	if m["filename"] != "test.txt" {
 		t.Errorf("expected test.txt, got %v", m["filename"])
 	}
@@ -61,10 +65,14 @@ func TestMediaHandler_Upload(t *testing.T) {
 
 func TestMediaHandler_List(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "media-api-test-list")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsService := services.NewSettingsService(repo)
@@ -74,29 +82,27 @@ func TestMediaHandler_List(t *testing.T) {
 
 	e := echo.New()
 
-	// 1. List empty
-	req := httptest.NewRequest(http.MethodGet, "/media", nil)
 	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/media", nil)
 	c := e.NewContext(req, rec)
-	handler.ListMedia(c)
+	_ = handler.ListMedia(c)
 
-	// 2. Upload one
+	// Rename
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	part, _ := writer.CreateFormFile("file", "to-rename.txt")
-	part.Write([]byte("rename me"))
-	writer.Close()
-	req = httptest.NewRequest(http.MethodPost, "/media/upload", body)
+	part, _ := writer.CreateFormFile("file", "rename.jpg")
+	_, _ = part.Write([]byte("rename me"))
+	_ = writer.Close()
+	req = httptest.NewRequest(http.MethodPost, "/upload", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
 	rec = httptest.NewRecorder()
-	handler.UploadFile(e.NewContext(req, rec))
+	_ = handler.UploadFile(e.NewContext(req, rec))
 	var m map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &m)
+	_ = json.Unmarshal(rec.Body.Bytes(), &m)
 	mediaID := int64(m["id"].(float64))
 
-	// 3. Rename
-	renBody, _ := json.Marshal(RenameMediaRequest{NewFilename: "renamed.txt"})
-	req = httptest.NewRequest(http.MethodPost, "/media/rename", bytes.NewReader(renBody))
+	renameBody, _ := json.Marshal(RenameMediaRequest{NewFilename: "renamed.jpg"})
+	req = httptest.NewRequest(http.MethodPost, "/media/"+strconv.FormatInt(mediaID, 10)+"/rename", bytes.NewReader(renameBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
@@ -106,23 +112,27 @@ func TestMediaHandler_List(t *testing.T) {
 		t.Fatalf("RenameMedia failed: %v", err)
 	}
 
-	// 4. Stats
-	handler.GetStorageStats(e.NewContext(httptest.NewRequest(http.MethodGet, "/stats", nil), httptest.NewRecorder()))
+	// Stats
+	_ = handler.GetStorageStats(e.NewContext(httptest.NewRequest(http.MethodGet, "/stats", nil), httptest.NewRecorder()))
 
-	// 5. Bulk Delete
+	// Bulk delete
 	bulkBody, _ := json.Marshal(BulkDeleteRequest{IDs: []int64{mediaID}})
-	req = httptest.NewRequest(http.MethodPost, "/media/bulk-delete", bytes.NewReader(bulkBody))
+	req = httptest.NewRequest(http.MethodPost, "/bulk-delete", bytes.NewReader(bulkBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
-	handler.BulkDeleteMedia(e.NewContext(req, rec))
+	_ = handler.BulkDeleteMedia(e.NewContext(req, rec))
 }
 
 func TestMediaHandler_GetMediaFolders(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "media-handler-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -143,10 +153,14 @@ func TestMediaHandler_GetMediaFolders(t *testing.T) {
 
 func TestMediaHandler_GetMedia(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "media-handler-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -198,10 +212,14 @@ func TestMediaHandler_GetMedia(t *testing.T) {
 
 func TestMediaHandler_UpdateMedia(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "media-handler-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -244,10 +262,14 @@ func TestMediaHandler_UpdateMedia(t *testing.T) {
 
 func TestMediaHandler_ListOrphanedMedia(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "media-handler-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -268,10 +290,14 @@ func TestMediaHandler_ListOrphanedMedia(t *testing.T) {
 
 func TestMediaHandler_DeleteMedia(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "media-handler-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -319,8 +345,8 @@ func setupMediaHandler(t *testing.T) (*MediaHandler, func()) {
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	handler := NewMediaHandler(mediaService, settingsService)
 	return handler, func() {
-		repo.Close()
-		os.RemoveAll(tmpDir)
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 }
 
@@ -378,7 +404,7 @@ func TestMediaHandler_BulkDelete(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	handler.BulkDeleteMedia(c) // may return 400
+	_ = handler.BulkDeleteMedia(c) // may return 400
 }
 
 func TestMediaHandler_UploadMultiple(t *testing.T) {
@@ -390,7 +416,7 @@ func TestMediaHandler_UploadMultiple(t *testing.T) {
 	// No files → error
 	body := &bytes.Buffer{}
 	w := multipart.NewWriter(body)
-	w.Close()
+	_ = w.Close()
 	req := httptest.NewRequest(http.MethodPost, "/media/upload-multiple", body)
 	req.Header.Set(echo.HeaderContentType, w.FormDataContentType())
 	rec := httptest.NewRecorder()
@@ -403,8 +429,8 @@ func TestMediaHandler_UploadMultiple(t *testing.T) {
 	body = &bytes.Buffer{}
 	w = multipart.NewWriter(body)
 	part, _ := w.CreateFormFile("files", "multi.txt")
-	part.Write([]byte("multi content"))
-	w.Close()
+	_, _ = part.Write([]byte("multi content"))
+	_ = w.Close()
 	req = httptest.NewRequest(http.MethodPost, "/media/upload-multiple", body)
 	req.Header.Set(echo.HeaderContentType, w.FormDataContentType())
 	rec = httptest.NewRecorder()

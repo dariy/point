@@ -32,7 +32,9 @@ type LoginRequest struct {
 
 func GenerateToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
 	return hex.EncodeToString(b)
 }
 

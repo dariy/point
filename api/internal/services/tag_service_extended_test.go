@@ -10,7 +10,9 @@ import (
 
 func TestTagService_GeocodeTagExtended(t *testing.T) {
 	service, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -27,7 +29,7 @@ func TestTagService_GeocodeTagExtended(t *testing.T) {
 		res := []map[string]string{
 			{"lat": "48.8566", "lon": "2.3522"},
 		}
-		json.NewEncoder(w).Encode(res)
+		_ = json.NewEncoder(w).Encode(res)
 	}))
 	defer server.Close()
 
@@ -44,7 +46,9 @@ func TestTagService_GeocodeTagExtended(t *testing.T) {
 
 func TestTagService_UpdateMissingCoordsExtended(t *testing.T) {
 	service, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -55,7 +59,7 @@ func TestTagService_UpdateMissingCoordsExtended(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		res := []map[string]string{{"lat": "48.8", "lon": "2.3"}}
-		json.NewEncoder(w).Encode(res)
+		_ = json.NewEncoder(w).Encode(res)
 	}))
 	defer server.Close()
 
@@ -72,7 +76,9 @@ func TestTagService_UpdateMissingCoordsExtended(t *testing.T) {
 
 func TestTagService_HierarchyVisibility(t *testing.T) {
 	service, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -111,7 +117,9 @@ func TestTagService_HierarchyVisibility(t *testing.T) {
 
 func TestTagService_NavTree(t *testing.T) {
 	service, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -145,7 +153,9 @@ func TestTagService_NavTree(t *testing.T) {
 
 func TestTagService_PostsByTagIDsExtended(t *testing.T) {
 	service, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	ctx := context.Background()
 

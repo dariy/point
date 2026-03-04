@@ -13,7 +13,9 @@ import (
 
 func TestFeedsHandler(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	postService := services.NewPostService(repo)
 	tagService := services.NewTagService(repo)
@@ -57,10 +59,12 @@ func TestFeedsHandler(t *testing.T) {
 
 	// Test RSS with posts
 	ctx := context.Background()
-	user, _ := repo.CreateUser(ctx, models.CreateUserParams{Username: "u", Email: "u@t", PasswordHash: "h", DisplayName: "U"})
-	postService.CreatePost(ctx, services.CreatePostParams{Title: "P1", Content: "C1", Status: "published", AuthorID: user.ID})
-	
-	req = httptest.NewRequest(http.MethodGet, "/rss.xml", nil)
+	// Create user
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{Username: "u", Email: "e", PasswordHash: "h", DisplayName: "U"})
+	// Create published post
+	_, _ = postService.CreatePost(ctx, services.CreatePostParams{Title: "P1", Content: "C1", Status: "published", AuthorID: user.ID})
+
+	req = httptest.NewRequest(http.MethodGet, "/feed.xml", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	if err := handler.RSSFeed(c); err != nil {

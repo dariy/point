@@ -419,7 +419,9 @@ func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64
 	if err != nil {
 		return 0, 0, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	body, _ := io.ReadAll(resp.Body)
 
 	var results []struct {
@@ -431,8 +433,8 @@ func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64
 	}
 
 	var lat, lon float64
-	fmt.Sscanf(results[0].Lat, "%f", &lat)
-	fmt.Sscanf(results[0].Lon, "%f", &lon)
+	_, _ = fmt.Sscanf(results[0].Lat, "%f", &lat)
+	_, _ = fmt.Sscanf(results[0].Lon, "%f", &lon)
 
 	if err := s.repo.UpsertTagLocation(ctx, id, lat, lon); err != nil {
 		return 0, 0, err
@@ -527,7 +529,7 @@ func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interf
 		}
 
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		var results []struct {
 			Lat string `json:"lat"`
@@ -540,8 +542,8 @@ func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interf
 		}
 
 		var lat, lon float64
-		fmt.Sscanf(results[0].Lat, "%f", &lat)
-		fmt.Sscanf(results[0].Lon, "%f", &lon)
+		_, _ = fmt.Sscanf(results[0].Lat, "%f", &lat)
+		_, _ = fmt.Sscanf(results[0].Lon, "%f", &lon)
 
 		if err := s.repo.UpsertTagLocation(ctx, tag.ID, lat, lon); err != nil {
 			errors = append(errors, fmt.Sprintf("save %s: %v", tag.Name, err))
