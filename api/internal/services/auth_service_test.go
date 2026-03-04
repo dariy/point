@@ -2,32 +2,13 @@ package services
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
 	"point-api/internal/models"
-	"point-api/internal/repository"
 )
 
-func setupTestDB(t *testing.T) *repository.Repository {
-	repo, err := repository.NewRepository(":memory:")
-	if err != nil {
-		t.Fatalf("failed to create test repository: %v", err)
-	}
 
-	schema, err := os.ReadFile("../../sql/schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
-	}
-
-	_, err = repo.DB().Exec(string(schema))
-	if err != nil {
-		t.Fatalf("failed to execute schema: %v", err)
-	}
-
-	return repo
-}
 
 func TestAuthService_Authenticate(t *testing.T) {
 	repo := setupTestDB(t)

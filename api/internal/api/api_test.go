@@ -16,28 +16,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
-	"point-api/internal/repository"
 	"point-api/internal/services"
 )
 
-func setupTestDB(t *testing.T) *repository.Repository {
-	repo, err := repository.NewRepository(":memory:")
-	if err != nil {
-		t.Fatalf("failed to create test repository: %v", err)
-	}
 
-	schema, err := os.ReadFile("../../sql/schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
-	}
-
-	_, err = repo.DB().Exec(string(schema))
-	if err != nil {
-		t.Fatalf("failed to execute schema: %v", err)
-	}
-
-	return repo
-}
 
 func TestFullWorkflow(t *testing.T) {
 	repo := setupTestDB(t)
