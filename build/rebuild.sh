@@ -20,6 +20,13 @@ echo "Building with version: $DEV_BUILD_VERSION"
 # Build CSS bundles
 ../scripts/build-css.sh
 
+# Ensure .env exists
+if [ ! -f .env ] && [ -f .env.example ]; then
+    cp .env.example .env
+elif [ ! -f .env ]; then
+    touch .env
+fi
+
 # Inject GEMINI_API_KEY from the system keyring for the deployment.
 # The key is appended to .env now and stripped on EXIT (success or failure).
 _GEMINI_KEY=$(secret-tool lookup service gemini account light 2>/dev/null)
@@ -46,8 +53,21 @@ podman build $PULL_FLAG \
     --cache-from point-builder \
     --build-arg BUILD_VERSION=$DEV_BUILD_VERSION \
     .. && \
-podman-compose -f docker-compose.yml down -t 0 && \
-podman-compose -f docker-compose.yml up -d
+podman rm -f point 2>/dev/null || true && \
+podman run -d \
+    --name point \
+    --restart unless-stopped \
+    --userns=keep-id \
+    -p 8000:8000 \
+    -v ../data:/data:z \
+    --env-file .env \
+    -e TZ=UTC \
+    -e DATABASE_URL=/data/point.db \
+    -e STORAGE_PATH=/data \
+    -e FRONTEND_DIR=/app/frontend \
+    -e PORT=8000 \
+    -e HOST=0.0.0.0 \
+    point:dev
 
 # Clean up dangling images to save space (optional, but addresses user's concern)
 echo "Cleaning up dangling images..."
