@@ -15,10 +15,20 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+var mdImageRe = regexp.MustCompile(`!\[.*?\]\(([^)]+)\)`)
+
+func cleanContent(c string) (string, bool) {
+	newC := c
+	newC = mdImageRe.ReplaceAllString(newC, "$1")
+	newC = strings.ReplaceAll(newC, "/media/originals/", "/")
+	return newC, newC != c
+}
 
 func main() {
 	dbPath := flag.String("db", "data/point.db", "path to the SQLite database")
@@ -81,7 +91,7 @@ func main() {
 		log.Fatalf("update thumbnail_path: %v", err)
 	}
 
-	if err := applyContentPaths(tx); err != nil {
+	if err := applyContentPaths(tx, db); err != nil {
 		_ = tx.Rollback()
 		log.Fatalf("update content: %v", err)
 	}
@@ -128,7 +138,6 @@ func previewContentPaths(db *sql.DB) (int, error) {
 	rows, err := db.Query(`
 		SELECT id, title, content
 		FROM posts
-		WHERE content LIKE '%/media/originals/%'
 		ORDER BY id
 	`)
 	if err != nil {
@@ -145,10 +154,13 @@ func previewContentPaths(db *sql.DB) (int, error) {
 		if err := rows.Scan(&id, &title, &content); err != nil {
 			return 0, err
 		}
-		occurrences := strings.Count(content, "/media/originals/")
-		fmt.Printf("content    post %4d  %-40s  (%d occurrence(s))\n",
-			id, truncate(title, 40), occurrences)
-		count++
+		
+		_, changed := cleanContent(content)
+		if changed {
+			fmt.Printf("content    post %4d  %-40s  (will be updated)\n",
+				id, truncate(title, 40))
+			count++
+		}
 	}
 	return count, rows.Err()
 }
@@ -167,17 +179,47 @@ func applyThumbnailPaths(tx *sql.Tx) error {
 	return nil
 }
 
-func applyContentPaths(tx *sql.Tx) error {
-	res, err := tx.Exec(`
-		UPDATE posts
-		SET content = REPLACE(content, '/media/originals/', '/')
-		WHERE content LIKE '%/media/originals/%'
-	`)
+func applyContentPaths(tx *sql.Tx, db *sql.DB) error {
+	// First fetch all posts
+	rows, err := db.Query(`SELECT id, content FROM posts`)
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	fmt.Fprintf(os.Stderr, "  updated content:        %d rows\n", n)
+	defer rows.Close()
+
+	type update struct {
+		id      int
+		content string
+	}
+	var updates []update
+
+	for rows.Next() {
+		var id int
+		var content string
+		if err := rows.Scan(&id, &content); err != nil {
+			return err
+		}
+		if newC, changed := cleanContent(content); changed {
+			updates = append(updates, update{id, newC})
+		}
+	}
+	_ = rows.Close()
+
+	stmt, err := tx.Prepare(`UPDATE posts SET content = ? WHERE id = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	count := 0
+	for _, u := range updates {
+		if _, err := stmt.Exec(u.content, u.id); err != nil {
+			return err
+		}
+		count++
+	}
+
+	fmt.Fprintf(os.Stderr, "  updated content:        %d rows\n", count)
 	return nil
 }
 

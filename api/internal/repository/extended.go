@@ -1290,6 +1290,14 @@ GROUP BY d.root_id`
 // ApplyMigration executes raw SQL and records it in migration_history.
 // It is idempotent: if the migration name already exists it is skipped.
 func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error {
+	_, _ = r.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS migration_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name VARCHAR(255) NOT NULL UNIQUE,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+
 	var count int64
 	_ = r.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM migration_history WHERE name = ?`, name,
