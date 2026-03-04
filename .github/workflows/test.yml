@@ -22,7 +22,7 @@ jobs:
           cache-dependency-path: api/go.sum
 
       - name: golangci-lint
-        uses: golangci-lint/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           working-directory: api
@@ -41,7 +41,7 @@ jobs:
           cache-dependency-path: api/go.sum
 
       - name: Build CSS bundles
-        run: chmod +x build/build_css.sh && ./build/build_css.sh
+        run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
 
       - name: Run tests
         run: |
