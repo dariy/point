@@ -511,6 +511,31 @@
     width: 700px;
 }
 
+/* Editor-style field spacing (title-row / slug-row have no intrinsic margin) */
+.tag-editor-modal .title-row {
+    margin-bottom: var(--spacing-xs);
+}
+
+.tag-editor-modal .slug-row {
+    margin-bottom: var(--spacing-md);
+}
+
+/* Coordinates section: tighter spacing between lat and lng rows */
+.tag-editor-modal .tm-section-body .input-with-btn {
+    margin-bottom: var(--spacing-sm);
+}
+
+.tag-editor-modal .tm-section-body .slug-row {
+    margin-bottom: var(--spacing-xs);
+}
+
+/* Hint text (e.g. below coordinate fields) */
+.form-hint {
+    margin-top: 4px;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
 /* Form input styles for modal (textarea & select[multiple] not in settings.css) */
 .tag-editor-modal .form-group textarea,
 .tag-editor-modal .form-group select {
@@ -692,8 +717,7 @@
     flex-wrap: wrap;
     gap: 6px;
     padding: 8px 0 4px;
-    max-height: 160px;
-    overflow-y: auto;
+    min-height: fit-content;
 }
 
 .tag-toggles-empty {
