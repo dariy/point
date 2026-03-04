@@ -14,24 +14,38 @@ var (
 	// [^>]* (zero-or-more) matches even when src is the first attribute.
 	videoTagRe = regexp.MustCompile(`(?i)<(?:video|source)[^>]*\ssrc="([^"]+)"`)
 
+	// markdownImageRe matches standard markdown image syntax ![alt](url).
+	markdownImageRe = regexp.MustCompile(`!\[.*\]\(([^)]+)\)`)
+
 	// bareMediaRe matches a line containing only a media file path or URL.
-	bareMediaRe = regexp.MustCompile(`(?im)^[ \t]*((?:https?://|/)\S+\.(?:mp4|webm|mov|ogv|m4v|avi|mkv|mp3|m4a|ogg|wav|flac|aac|opus))[ \t]*$`)
+	bareMediaRe = regexp.MustCompile(`(?im)^[ \t]*((?:https?://|/)\S+\.(?:mp4|webm|mov|ogv|m4v|avi|mkv|mp3|m4a|ogg|wav|flac|aac|opus|jpg|jpeg|png|gif|webp|svg))[ \t]*$`)
 )
 
 // extractMediaURL returns a single preview URL for list responses:
-// thumbnail path if set, else first video/audio src from a <video>/<source>
+// thumbnail path if set, else first markdown image URL, else first video/audio src from a <video>/<source>
 // tag in the content, else first bare media path found in the content.
 func extractMediaURL(thumbPath sql.NullString, content string) *string {
+	var rawURL string
 	if thumbPath.Valid && thumbPath.String != "" {
-		return &thumbPath.String
+		rawURL = thumbPath.String
+	} else if m := markdownImageRe.FindStringSubmatch(content); m != nil {
+		rawURL = m[1]
+	} else if m := videoTagRe.FindStringSubmatch(content); m != nil {
+		rawURL = m[1]
+	} else if m := bareMediaRe.FindStringSubmatch(content); m != nil {
+		rawURL = m[1]
+	} else {
+		return nil
 	}
-	if m := videoTagRe.FindStringSubmatch(content); m != nil {
-		return &m[1]
+
+	// Normalize: strip /media/originals/ or originals/ to return the simplified path
+	normalized := rawURL
+	normalized = strings.TrimPrefix(normalized, "/media/originals/")
+	normalized = strings.TrimPrefix(normalized, "originals/")
+	if !strings.HasPrefix(normalized, "http") && !strings.HasPrefix(normalized, "/") {
+		normalized = "/" + normalized
 	}
-	if m := bareMediaRe.FindStringSubmatch(content); m != nil {
-		return &m[1]
-	}
-	return nil
+	return &normalized
 }
 
 func nullString(s sql.NullString) *string {
