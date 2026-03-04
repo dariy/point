@@ -1,0 +1,510 @@
+/* ===========================
+   Post Editor
+   =========================== */
+.editor-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    width: 100%;
+}
+
+.editor-content {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    min-height: 400px;
+    width: 100%;
+}
+
+/* Window-level drag overlay */
+body.drag-active::after {
+    content: '';
+    position: fixed;
+    inset: 4px;
+    background: rgba(37, 99, 235, 0.06);
+    border: 2px dashed var(--color-primary);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.preview-panel {
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    background: var(--surface-card);
+    min-height: 300px;
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
+}
+
+.preview-panel img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Title row: [★] [status] [title input] */
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.title-input-wrapper {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.title-input-wrapper .editor-title {
+    width: 100%;
+    padding-right: 32px;
+}
+
+.title-input-wrapper .field-ai-btn {
+    position: absolute;
+    right: 4px;
+}
+
+/* Featured star toggle */
+.featured-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    padding: 2px 4px;
+    color: var(--text-muted);
+    transition: color var(--transition-fast), transform 0.1s ease;
+    border-radius: var(--border-radius-sm, 4px);
+}
+
+.featured-btn:hover {
+    color: #f59e0b;
+    transform: scale(1.15);
+}
+
+.featured-btn.is-featured {
+    color: #f59e0b;
+}
+
+/* AI fill button — appears at the end of title/tags/excerpt rows */
+.field-ai-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 4px;
+    color: var(--text-muted);
+    transition: color var(--transition-fast), transform 0.1s ease;
+    border-radius: var(--border-radius-sm, 4px);
+    align-self: center;
+}
+
+.field-ai-btn:hover:not(:disabled) {
+    color: var(--color-primary);
+    transform: scale(1.2);
+}
+
+.field-ai-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Tags row: [TagsInput flex-1] [AI btn] */
+.tags-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+}
+
+.tags-input-wrapper {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+}
+
+.tags-input-wrapper .tags-row-input {
+    width: 100%;
+}
+
+/* Ensure the AI button fits over the tags input without colliding with text */
+.tags-input-wrapper .tags-row-input .tags-input {
+    padding-right: 32px;
+}
+
+.tags-input-wrapper .field-ai-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.tags-input-wrapper .field-ai-btn:hover:not(:disabled) {
+    transform: translateY(-50%) scale(1.2);
+}
+
+/* Excerpt row: positions the AI btn in the top-right corner */
+.excerpt-row {
+    position: relative;
+}
+
+.excerpt-row .field-ai-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+}
+
+/* Slug row: [/post/] [slug input] */
+.slug-row {
+    display: flex;
+    align-items: center;
+}
+
+.slug-prefix {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    padding: 0 var(--spacing-xs) 0 2px;
+    user-select: none;
+}
+
+.editor-slug {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    min-width: 0;
+}
+
+/* Give the excerpt textarea padding so text doesn't slide under the AI btn */
+.editor-excerpt {
+    padding-right: 28px;
+}
+
+/* Full-width editor page — override the global max-width */
+.editor-full-width {
+    max-width: var(--content-max-width);
+}
+
+/* ===========================
+   Editor mode toggle (Text / Visual)
+   =========================== */
+.editor-mode-toggle {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-bottom: var(--spacing-sm);
+}
+
+.editor-mode-toggle button {
+    background: transparent;
+    border: none;
+    padding: 4px 12px;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.editor-mode-toggle button.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.editor-mode-toggle button:not(.active):hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+/* ===========================
+   VisualEditor
+   =========================== */
+.ve-root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.ve-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 80px;
+    position: relative;
+}
+
+.ve-empty {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-md);
+    text-align: center;
+    border: 1px dashed var(--border-primary);
+    border-radius: var(--border-radius);
+}
+
+.ve-card {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: 6px 10px 6px 0;
+    transition: background var(--transition-fast), opacity var(--transition-fast);
+    user-select: none;
+}
+
+.ve-card:hover {
+    background: var(--surface-hover);
+}
+
+.ve-card.dragging {
+    opacity: 0.4;
+}
+
+/* Drag handle — dotted left zone */
+.ve-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    flex-shrink: 0;
+    align-self: stretch;
+    border-right: 1px dotted var(--border-primary);
+    cursor: grab;
+    color: var(--text-muted);
+}
+
+.ve-handle:active {
+    cursor: grabbing;
+}
+
+.ve-handle-dots {
+    display: block;
+    width: 6px;
+    height: 20px;
+    background-image: radial-gradient(circle, var(--text-muted) 1.2px, transparent 1.2px);
+    background-size: 6px 6px;
+}
+
+.ve-thumb {
+    width: 80px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: calc(var(--border-radius) - 2px);
+    flex-shrink: 0;
+    cursor: zoom-in;
+    background: var(--surface-hover);
+}
+
+.ve-path {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.ve-path:hover {
+    color: var(--text-primary);
+    text-decoration: underline dotted;
+}
+
+/* Inline rename form */
+.ve-rename-form {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+.ve-rename-prefix,
+.ve-rename-ext {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.ve-rename-input {
+    flex: 1;
+    min-width: 40px;
+    border: none;
+    border-bottom: 1.5px solid var(--color-primary);
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--text-primary);
+    padding: 0 2px;
+    outline: none;
+}
+
+.ve-rename-input:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.ve-remove {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: var(--border-radius-sm, 4px);
+    transition: color var(--transition-fast);
+}
+
+.ve-remove:hover {
+    color: var(--color-danger, #ef4444);
+}
+
+/* Drop indicator line */
+.ve-drop-indicator {
+    height: 2px;
+    background: var(--color-primary);
+    border-radius: 2px;
+    pointer-events: none;
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* VisualEditor lightbox */
+.ve-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    cursor: zoom-out;
+}
+
+.ve-lightbox img {
+    max-width: 92vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+}
+
+/* ===========================
+   Text node card
+   =========================== */
+.ve-card--text {
+    align-items: flex-start;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* Paragraph icon — same width as drag handle, dotted right border */
+.ve-text-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    flex-shrink: 0;
+    align-self: stretch;
+    border-right: 1px dotted var(--border-primary);
+    color: var(--text-muted);
+    font-size: 13px;
+    user-select: none;
+    padding-right: 2px;
+}
+
+/* Auto-resizing textarea inside text card */
+.ve-text-area {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    color: var(--text-primary);
+    resize: none;
+    overflow: hidden;
+    min-height: 24px;
+    padding: 2px 4px;
+    outline: none;
+    transition: color var(--transition-theme);
+}
+
+.ve-text-area::placeholder {
+    color: var(--text-muted);
+}
+
+/* ===========================
+   Insert zone — appears between cards on list hover
+   =========================== */
+.ve-insert-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    position: relative;
+}
+
+.ve-insert-zone::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border-primary);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.ve-insert-actions {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    position: relative;
+    z-index: 1;
+}
+
+.ve-insert-btn {
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    height: 24px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    line-height: 1;
+    transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.ve-list:hover .ve-insert-zone::before,
+.ve-list:hover .ve-insert-actions {
+    opacity: 1;
+}
+
+.ve-insert-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}

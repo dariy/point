@@ -1,0 +1,100 @@
+/* ===========================
+   System Page Styles
+   =========================== */
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ops-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px;
+}
+
+.op-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.op-info h4 {
+    margin: 0 0 5px 0;
+}
+
+.op-info p {
+    margin: 0;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+/* Backup Management Styles */
+.backups-list,
+.migrations-list {
+    padding: 16px 24px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.backup-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: var(--surface-input);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.backup-item:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.backup-item:last-child {
+    margin-bottom: 0;
+}
+
+.backup-info {
+    flex: 1;
+    min-width: 250px;
+}
+
+.backup-filename {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.backup-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.backup-date::before {
+    content: '\1F4C5 ';
+}
+
+.backup-size::before {
+    content: '\1F4BE ';
+}
+
+.backup-actions {
+    display: flex;
+    gap: 8px;
+}

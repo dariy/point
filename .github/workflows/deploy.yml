@@ -23,11 +23,8 @@ jobs:
         with:
           filters: |
             code:
-              - 'app/**'
-              - 'tests/**'
-              - 'requirements.txt'
-              - 'pyproject.toml'
-              - 'package.json'
+              - 'api/**'
+              - 'frontend/**'
             infra:
               - 'build/**'
               - '.github/workflows/deploy.yml'
@@ -39,39 +36,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+          go-version: '1.25'
+          cache-dependency-path: api/go.sum
 
       - name: Build CSS bundles
-        run: chmod +x build/build_css.sh && ./build/build_css.sh
-
-      - name: Cleanup source CSS
-        run: rm -rf app/static/css/common/ app/static/css/light/ app/static/css/public/
-
-      - name: Run linting
-        run: |
-          ruff check app/
-
-      - name: Run type checking
-        run: |
-          mypy app/
+        run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
 
       - name: Run tests
         run: |
-          pytest tests/ --cov=app --cov-report=xml --cov-report=term
+          cd api
+          go test ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         if: github.event_name == 'push'
         with:
-          file: ./coverage.xml
+          file: api/coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -92,10 +75,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build CSS bundles
-        run: chmod +x build/build_css.sh && ./build/build_css.sh
+        run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
 
       - name: Cleanup source CSS
-        run: rm -rf app/static/css/common/ app/static/css/light/ app/static/css/public/
+        run: rm -rf frontend/css/common/ frontend/css/light/ frontend/css/public/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -137,7 +120,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: build/prod.Dockerfile
+          file: build/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -178,15 +161,16 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET
+          envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET,GEMINI_API_KEY
           script: |
             cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
-            
+
             # Create build and data directories if they don't exist (since strip_components: 0 is used)
             mkdir -p build data
 
@@ -204,20 +188,15 @@ jobs:
             # Add / update sensitive secrets in build/.env (do NOT print them)
             sed -i '/^SECRET_KEY=/d' build/.env || true
             sed -i '/^SESSION_SECRET=/d' build/.env || true
+            sed -i '/^GEMINI_API_KEY=/d' build/.env || true
             printf '%s\n' "SECRET_KEY=${SECRET_KEY}" >> build/.env
             printf '%s\n' "SESSION_SECRET=${SESSION_SECRET}" >> build/.env
+            printf '%s\n' "GEMINI_API_KEY=${GEMINI_API_KEY}" >> build/.env
 
-            # Set AI service URL
-            sed -i '/^AI_SERVICE_URL=/d' build/.env || true
-            echo "AI_SERVICE_URL=http://point-ai:8080" >> build/.env
-            
             chmod 600 build/.env
 
             # Login to GitHub Container Registry
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
-
-            # Ensure shared network exists
-            docker network create point-shared-network || true
 
             # Clean up Docker resources to free disk space
             echo "Cleaning up Docker resources..."
@@ -240,14 +219,6 @@ jobs:
 
             # Deploy new version from build directory
             cd build
-
-            # Backup database before deployment
-            docker exec point-prod python -c "
-            from app.services.backup_service import BackupService
-            service = BackupService()
-            backup_path = service.create_backup()
-            print(f'Backup created: {backup_path}')
-            " || echo "Backup failed, continuing deployment..."
 
             docker compose -f docker-compose.prod.yml up -d point
 
@@ -273,7 +244,7 @@ jobs:
             max_attempts=12
             attempt=0
             while [ $attempt -lt $max_attempts ]; do
-              if docker exec point-prod python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" > /dev/null 2>&1; then
+              if docker exec point-prod wget -qO- http://localhost:8000/health > /dev/null 2>&1; then
                 echo "Health check passed!"
                 exit 0
               fi
