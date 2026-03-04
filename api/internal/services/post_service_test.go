@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"testing"
+	"time"
 
 	"point-api/internal/models"
 )
@@ -333,5 +335,32 @@ func TestPostService_ListPostsSearch(t *testing.T) {
 	}
 	if total != 1 || len(posts) != 1 {
 		t.Errorf("expected 1 result, got total=%d len=%d", total, len(posts))
+	}
+}
+
+func TestPostService_PreviewTokenExpired(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	svc := NewPostService(repo)
+	ctx := context.Background()
+
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "expuser", Email: "exp@t.com", PasswordHash: "h", DisplayName: "E",
+	})
+	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "T", Content: "C", Status: "draft", AuthorID: user.ID})
+
+	// Set an already-expired preview token directly
+	expiredAt := time.Now().Add(-time.Hour)
+	repo.DB().Exec(`UPDATE posts SET preview_token = 'expiredtok', preview_expires_at = ? WHERE id = ?`,
+		expiredAt, post.ID)
+
+	// GetPostByPreviewToken with expired token should return ErrNoRows (covers line 352-354)
+	_, err := svc.GetPostByPreviewToken(ctx, "expiredtok")
+	if err == nil {
+		t.Error("expected error for expired preview token")
+	}
+	if err != sql.ErrNoRows {
+		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }
