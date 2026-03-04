@@ -15,9 +15,11 @@ import (
 
 func TestSystemHandler_Restore_Error(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
 	tmpDir, _ := os.MkdirTemp("", "api-sys-restore-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
@@ -56,9 +58,11 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 
 func TestSystemHandler_StatsExtended(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
 	tmpDir, _ := os.MkdirTemp("", "api-sys-stats-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
@@ -81,9 +85,11 @@ func TestSystemHandler_StatsExtended(t *testing.T) {
 
 func TestSystemHandler_UpdateMapCoordsExtended(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
 	tmpDir, _ := os.MkdirTemp("", "api-sys-coords-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)

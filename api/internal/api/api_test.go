@@ -23,10 +23,14 @@ import (
 
 func TestFullWorkflow(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tmpDir, _ := os.MkdirTemp("", "api-full-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{
 		StoragePath:              tmpDir,
@@ -70,7 +74,7 @@ func TestFullWorkflow(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	authH.Login(c)
+	_ = authH.Login(c)
 	
 	session := models.GetSessionByTokenRow{UserID: user.ID, Username: user.Username}
 
@@ -81,7 +85,7 @@ func TestFullWorkflow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	c.Set("user", session)
-	tagH.CreateTag(c)
+	_ = tagH.CreateTag(c)
 
 	// 4. Create Post
 	postBody, _ := json.Marshal(CreatePostRequest{
@@ -95,64 +99,64 @@ func TestFullWorkflow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	c.Set("user", session)
-	postH.CreatePost(c)
+	_ = postH.CreatePost(c)
 
 	// 5. Homepage
 	rec = httptest.NewRecorder()
-	pagesH.GetHomePage(e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec))
+	_ = pagesH.GetHomePage(e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec))
 
 	// 6. Media upload
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	var imgBuf bytes.Buffer
-	png.Encode(&imgBuf, img)
+	_ = png.Encode(&imgBuf, img)
 	
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	p, _ := writer.CreateFormFile("file", "image.png")
-	p.Write(imgBuf.Bytes())
-	writer.Close()
+	_, _ = p.Write(imgBuf.Bytes())
+	_ = writer.Close()
 	req = httptest.NewRequest(http.MethodPost, "/media/upload", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	mediaH.UploadFile(c)
+	_ = mediaH.UploadFile(c)
 
 	// 7. System operations
 	rec = httptest.NewRecorder()
-	systemH.GetStats(e.NewContext(httptest.NewRequest(http.MethodGet, "/stats", nil), rec))
+	_ = systemH.GetStats(e.NewContext(httptest.NewRequest(http.MethodGet, "/stats", nil), rec))
 	rec = httptest.NewRecorder()
-	systemH.ClearCache(e.NewContext(httptest.NewRequest(http.MethodPost, "/cache/clear", nil), rec))
+	_ = systemH.ClearCache(e.NewContext(httptest.NewRequest(http.MethodPost, "/cache/clear", nil), rec))
 	
 	// Backup
 	rec = httptest.NewRecorder()
-	systemH.CreateBackup(e.NewContext(httptest.NewRequest(http.MethodPost, "/system/backup", nil), rec))
+	_ = systemH.CreateBackup(e.NewContext(httptest.NewRequest(http.MethodPost, "/system/backup", nil), rec))
 	var backupResp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &backupResp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &backupResp)
 	if backupResp != nil && backupResp["filename"] != nil {
 		backupFile := backupResp["filename"].(string)
 
 		// List backups
 		rec = httptest.NewRecorder()
-		systemH.ListBackups(e.NewContext(httptest.NewRequest(http.MethodGet, "/system/backups", nil), rec))
+		_ = systemH.ListBackups(e.NewContext(httptest.NewRequest(http.MethodGet, "/system/backups", nil), rec))
 
 		// Delete backup
 		rec = httptest.NewRecorder()
 		c = e.NewContext(httptest.NewRequest(http.MethodDelete, "/system/backups/"+backupFile, nil), rec)
 		c.SetParamNames("filename")
 		c.SetParamValues(backupFile)
-		systemH.DeleteBackup(c)
+		_ = systemH.DeleteBackup(c)
 
 		// Create another backup to test restore
 		rec = httptest.NewRecorder()
-		systemH.CreateBackup(e.NewContext(httptest.NewRequest(http.MethodPost, "/system/backup", nil), rec))
-		json.Unmarshal(rec.Body.Bytes(), &backupResp)
+		_ = systemH.CreateBackup(e.NewContext(httptest.NewRequest(http.MethodPost, "/system/backup", nil), rec))
+		_ = json.Unmarshal(rec.Body.Bytes(), &backupResp)
 		backupFile2 := backupResp["filename"].(string)
 
 		rec = httptest.NewRecorder()
 		c = e.NewContext(httptest.NewRequest(http.MethodPost, "/system/restore/"+backupFile2, nil), rec)
 		c.SetParamNames("filename")
 		c.SetParamValues(backupFile2)
-		systemH.RestoreBackup(c)
+		_ = systemH.RestoreBackup(c)
 	}
 
 	// 8. Error paths
@@ -161,13 +165,13 @@ func TestFullWorkflow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(badLogin))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
-	authH.Login(e.NewContext(req, rec))
+	_ = authH.Login(e.NewContext(req, rec))
 
 	// Create tag with invalid JSON
 	req = httptest.NewRequest(http.MethodPost, "/tags", bytes.NewReader([]byte("{invalid}")))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
-	tagH.CreateTag(e.NewContext(req, rec))
+	_ = tagH.CreateTag(e.NewContext(req, rec))
 
 	// Get non-existent post
 	req = httptest.NewRequest(http.MethodGet, "/posts/999", nil)
@@ -175,7 +179,7 @@ func TestFullWorkflow(t *testing.T) {
 	c = e.NewContext(req, rec)
 	c.SetParamNames("id")
 	c.SetParamValues("999")
-	postH.GetPostByID(c)
+	_ = postH.GetPostByID(c)
 
 	// 9. Post lifecycle
 	// Get by slug
@@ -184,7 +188,7 @@ func TestFullWorkflow(t *testing.T) {
 	c = e.NewContext(req, rec)
 	c.SetParamNames("slug")
 	c.SetParamValues("hello-world")
-	postH.GetPostBySlug(c)
+	_ = postH.GetPostBySlug(c)
 
 	// Publish
 	req = httptest.NewRequest(http.MethodPost, "/posts/1/publish", nil)
@@ -192,14 +196,14 @@ func TestFullWorkflow(t *testing.T) {
 	c = e.NewContext(req, rec)
 	c.SetParamNames("id")
 	c.SetParamValues("1")
-	postH.PublishPost(c)
+	_ = postH.PublishPost(c)
 
 	// Withdraw
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	c.SetParamNames("id")
 	c.SetParamValues("1")
-	postH.WithdrawPost(c)
+	_ = postH.WithdrawPost(c)
 
 	// Preview link
 	rec = httptest.NewRecorder()
@@ -225,7 +229,7 @@ func TestFullWorkflow(t *testing.T) {
 	c = e.NewContext(req, rec)
 	c.SetParamNames("token")
 	c.SetParamValues(token)
-	postH.GetPostByPreviewToken(c)
+	_ = postH.GetPostByPreviewToken(c)
 
 	// Update post
 	upPostBody, _ := json.Marshal(UpdatePostRequest{Title: "Updated title", Content: "New content", Status: "published"})
@@ -236,30 +240,32 @@ func TestFullWorkflow(t *testing.T) {
 	c.SetParamNames("id")
 	c.SetParamValues("1")
 	c.Set("user", session)
-	postH.UpdatePost(c)
+	_ = postH.UpdatePost(c)
 
 	// Create audio post
 	body = &bytes.Buffer{}
 	writer = multipart.NewWriter(body)
 	p, _ = writer.CreateFormFile("file", "test.mp3")
-	p.Write([]byte("fake audio content"))
-	writer.WriteField("title", "Audio Post")
-	writer.Close()
+	_, _ = p.Write([]byte("fake audio content"))
+	_ = writer.WriteField("title", "Audio Post")
+	_ = writer.Close()
 	req = httptest.NewRequest(http.MethodPost, "/posts/audio", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	c.Set("user", session)
-	postH.CreateAudioPost(c)
+	_ = postH.CreateAudioPost(c)
 
 	// 9. Tag operations
-	tagH.GetTagCloud(e.NewContext(httptest.NewRequest(http.MethodGet, "/tags/cloud", nil), httptest.NewRecorder()))
-	tagH.RecalculateCounts(e.NewContext(httptest.NewRequest(http.MethodPost, "/tags/recalculate", nil), httptest.NewRecorder()))
+	_ = tagH.GetTagCloud(e.NewContext(httptest.NewRequest(http.MethodGet, "/tags/cloud", nil), httptest.NewRecorder()))
+	_ = tagH.RecalculateCounts(e.NewContext(httptest.NewRequest(http.MethodPost, "/tags/recalculate", nil), httptest.NewRecorder()))
 }
 
 func TestAuthMiddleware(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	authSvc := services.NewAuthService(repo)
 	middleware := AuthMiddleware(authSvc)
@@ -319,7 +325,9 @@ func TestAuthMiddleware(t *testing.T) {
 
 func TestOptionalAuthMiddleware(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	authSvc := services.NewAuthService(repo)
 	middleware := OptionalAuthMiddleware(authSvc)

@@ -15,7 +15,9 @@ import (
 
 func TestTagHandler_CRUD(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
@@ -40,7 +42,7 @@ func TestTagHandler_CRUD(t *testing.T) {
 	}
 
 	var created map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &created)
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
 	tagID := int64(created["id"].(float64))
 
 	// Test Get
@@ -86,7 +88,9 @@ func TestTagHandler_CRUD(t *testing.T) {
 
 func TestTagHandler_GetTagBySlug(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -123,7 +127,9 @@ func TestTagHandler_GetTagBySlug(t *testing.T) {
 
 func TestTagHandler_UpdateTag(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -175,7 +181,9 @@ func TestTagHandler_UpdateTag(t *testing.T) {
 
 func TestTagHandler_ReorderTag(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -217,7 +225,9 @@ func TestTagHandler_ReorderTag(t *testing.T) {
 
 func TestTagHandler_GetPostsByTag(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)

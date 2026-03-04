@@ -17,10 +17,14 @@ import (
 
 func TestMediaHandler_UploadMultipleExtended(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
-	tmpDir, _ := os.MkdirTemp("", "api-media-multi-test")
-	defer os.RemoveAll(tmpDir)
+	tmpDir, _ := os.MkdirTemp("", "media-extended-test")
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
@@ -33,10 +37,10 @@ func TestMediaHandler_UploadMultipleExtended(t *testing.T) {
 	writer := multipart.NewWriter(body)
 	
 	p1, _ := writer.CreateFormFile("files", "f1.txt")
-	p1.Write([]byte("f1 content"))
+	_, _ = p1.Write([]byte("f1 content"))
 	p2, _ := writer.CreateFormFile("files", "f2.txt")
-	p2.Write([]byte("f2 content"))
-	writer.Close()
+	_, _ = p2.Write([]byte("f2 content"))
+	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload/multiple", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
@@ -54,7 +58,9 @@ func TestMediaHandler_UploadMultipleExtended(t *testing.T) {
 
 func TestMediaHandler_Rename_Error(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
@@ -84,7 +90,9 @@ func TestMediaHandler_Rename_Error(t *testing.T) {
 
 func TestMediaHandler_GetFoldersExtended(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)

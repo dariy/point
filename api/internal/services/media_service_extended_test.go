@@ -14,7 +14,9 @@ import (
 
 func TestNewMediaService(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settings := NewSettingsService(repo)
@@ -33,8 +35,10 @@ func TestNewMediaService(t *testing.T) {
 
 func TestMediaService_AnalyzeMediaByID(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -71,7 +75,7 @@ func TestMediaService_AnalyzeMediaByID(t *testing.T) {
 	// Create a dummy image
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	var buf bytes.Buffer
-	jpeg.Encode(&buf, img, nil)
+	_ = jpeg.Encode(&buf, img, nil)
 
 	_, _ = service.UploadFile(ctx, UploadFileParams{
 		Content:  buf.Bytes(),
@@ -85,8 +89,10 @@ func TestMediaService_AnalyzeMediaByID(t *testing.T) {
 
 func TestMediaService_AnalyzeMediaByPath(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -105,7 +111,7 @@ func TestMediaService_AnalyzeMediaByPath(t *testing.T) {
 	// 3. Valid path
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	var buf bytes.Buffer
-	jpeg.Encode(&buf, img, nil)
+	_ = jpeg.Encode(&buf, img, nil)
 
 	m, _ := service.UploadFile(ctx, UploadFileParams{
 		Content:  buf.Bytes(),
@@ -130,8 +136,10 @@ func TestMediaService_AnalyzeMediaByPath(t *testing.T) {
 
 func TestMediaService_EdgeCases(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
-	defer service.repo.Close()
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
 
 	ctx := context.Background()
 
@@ -154,6 +162,6 @@ func TestMediaService_EdgeCases(t *testing.T) {
 		t.Errorf("RebuildThumbnails should not fail for missing files: %v", err)
 	}
 	if stats["errors"] == 0 {
-		// Depending on implementation, it might increment error count
+		t.Log("rebuild thumbnails had 0 errors as expected")
 	}
 }

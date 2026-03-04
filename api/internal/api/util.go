@@ -82,7 +82,9 @@ func parseCoordsFromPageBody(pageURL string) (lat, lng float64, ok bool) {
 	if err != nil {
 		return 0, 0, false
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
 	if err != nil {
@@ -155,7 +157,7 @@ func ParseMapsCoords(c echo.Context) error {
 			if err != nil {
 				return echo.NewHTTPError(http.StatusBadGateway, "failed to resolve url")
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 
 			urlToParse = resp.Request.URL.String()
 			if i := strings.Index(urlToParse, "data=!"); i != -1 {

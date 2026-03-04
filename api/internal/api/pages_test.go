@@ -12,7 +12,9 @@ import (
 
 func TestPagesHandler_GetHomePage(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	postService := services.NewPostService(repo)
 	tagService := services.NewTagService(repo)
@@ -35,10 +37,12 @@ func TestPagesHandler_GetHomePage(t *testing.T) {
 
 func TestPagesHandler_TagPage(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
-	tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "News", Slug: "news"})
+	_, _ = tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "News", Slug: "news"})
 
 	postService := services.NewPostService(repo)
 	settingsService := services.NewSettingsService(repo)
@@ -61,7 +65,9 @@ func TestPagesHandler_TagPage(t *testing.T) {
 
 func TestPagesHandler_TagsPage(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
 	postService := services.NewPostService(repo)
@@ -83,7 +89,9 @@ func TestPagesHandler_TagsPage(t *testing.T) {
 
 func TestPagesHandler_GetMapPage(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)
@@ -113,7 +121,9 @@ func TestPagesHandler_GetMapPage(t *testing.T) {
 
 func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)
@@ -123,13 +133,13 @@ func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 	// Create country tag and a child (city)
 	country, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Country"})
 	city, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "France"})
-	tagSvc.SetTagParents(ctx, city.ID, []int64{country.ID})
+	_ = tagSvc.SetTagParents(ctx, city.ID, []int64{country.ID})
 
 	// Give city a location
-	tagSvc.SetTagLocations(ctx, city.ID, []services.TagLocationInput{{Latitude: 48.8566, Longitude: 2.3522}})
+	_ = tagSvc.SetTagLocations(ctx, city.ID, []services.TagLocationInput{{Latitude: 48.8566, Longitude: 2.3522}})
 
 	// Set post_count for city so it appears in ListTags
-	repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
+	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
 
 	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
 	e := echo.New()
@@ -148,17 +158,19 @@ func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 
 func TestPagesHandler_TagsPageAdmin(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
 	ctx := context.Background()
 	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel", IsFeatured: true})
 	child, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Europe"})
-	tagSvc.SetTagParents(ctx, child.ID, []int64{parent.ID})
+	_ = tagSvc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 	// Set post_count > 0 so they appear in ListTags(includeEmpty=false)
-	repo.DB().Exec(`UPDATE tags SET post_count = 1`)
+	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1`)
 	// Add a location to parent tag so location branch is covered
-	tagSvc.SetTagLocations(ctx, parent.ID, []services.TagLocationInput{{Latitude: 48.8, Longitude: 2.3}})
+	_ = tagSvc.SetTagLocations(ctx, parent.ID, []services.TagLocationInput{{Latitude: 48.8, Longitude: 2.3}})
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -181,7 +193,9 @@ func TestPagesHandler_TagsPageAdmin(t *testing.T) {
 
 func TestPagesHandler_TagPageNotFound(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
@@ -202,7 +216,9 @@ func TestPagesHandler_TagPageNotFound(t *testing.T) {
 
 func TestPagesHandler_TagPageHidden(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
 	ctx := context.Background()
@@ -229,10 +245,12 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 
 func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	tagSvc := services.NewTagService(repo)
-	tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "AuthTag", Slug: "auth-tag"})
+	_, _ = tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "AuthTag", Slug: "auth-tag"})
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)

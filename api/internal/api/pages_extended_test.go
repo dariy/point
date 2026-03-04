@@ -11,7 +11,9 @@ import (
 
 func TestPagesHandler_GetTagPage(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)

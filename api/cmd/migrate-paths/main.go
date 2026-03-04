@@ -29,7 +29,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("error closing db: %v", err)
+		}
+	}()
 
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping db: %v", err)
@@ -73,12 +77,12 @@ func main() {
 	}
 
 	if err := applyThumbnailPaths(tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		log.Fatalf("update thumbnail_path: %v", err)
 	}
 
 	if err := applyContentPaths(tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		log.Fatalf("update content: %v", err)
 	}
 
@@ -100,7 +104,9 @@ func previewThumbnailPaths(db *sql.DB) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	count := 0
 	for rows.Next() {
@@ -128,7 +134,9 @@ func previewContentPaths(db *sql.DB) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	count := 0
 	for rows.Next() {
