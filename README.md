@@ -1,19 +1,19 @@
-# Photo Blog Engine
+# Point
 
-A lightweight, professional-grade personal photo blog engine built with FastAPI, SQLite, and Docker. Designed for photographers and visual storytellers who want a fast, self-hosted, and beautiful way to share their work.
+A modern, high-performance personal photo blog engine built with Go and Vanilla JS. Designed for photographers and visual storytellers who want a fast, self-hosted, and beautiful way to share their work.
 
 ## ✨ Key Features
 
-- **🚀 Performance-First**: Fast server-side rendering with Jinja2 and file-based caching.
+- **🚀 High Performance**: Native Go backend (using Echo framework) and a lightweight Vanilla JS Single-Page Application (SPA).
 - **🖼️ Media-Centric**: Automatic thumbnail generation, image resizing, and video support.
 - **📱 Modern UX**:
     - **Immersive Mode**: Full-screen, distraction-free viewing for photo-heavy posts.
-    - **AJAX Navigation**: Seamless transitions between pages without full reloads.
+    - **SPA Navigation**: Instant page transitions via client-side routing.
     - **Gesture Support**: Swipe navigation for touch devices and carousels.
 - **🌓 Dual Themes**: Beautiful dark and light modes with system preference detection.
 - **🛠️ Professional Tools**:
     - Full post management with Markdown support.
-    - **Quick Post Creation**: Drag-and-drop images from any page to instantly create new posts.
+    - **Quick Post Creation**: Drag-and-drop images into the editor or onto the page.
     - **Meta-tagging**: Hierarchical tag system with recursive post retrieval and counts.
     - Integrated backup/restore system.
     - System health and log monitoring.
@@ -25,37 +25,32 @@ A lightweight, professional-grade personal photo blog engine built with FastAPI,
 ### Prerequisites
 
 - Docker and Docker Compose. Podman and Podman Compose as an alternative.
-- (Optional) Python 3.12+ for local development
+- (Optional) Go 1.25+ for local backend development.
 
 ### Installation
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/username/photo-blog.git
-   cd photo-blog
+   git clone https://github.com/dariy/point.git
+   cd point
    ```
 
 2. **Configure environment**:
    ```bash
-   cp .env.example .env
-   # Edit .env with your desired settings
+   cp build/.env build/.env.local
+   # Edit build/.env with your desired settings (SECRET_KEY is required in production)
    ```
 
-3. **Start the application**:
+3. **Build and start**:
    ```bash
-   docker compose up -d
-   # or
-   podman compose up -d
+   # Development (Podman)
+   cd build && ./rebuild.sh
+
+   # Production (Docker)
+   cd build && docker compose up -d
    ```
 
-4. **Initialize the database**:
-   ```bash
-   docker compose exec blog python scripts/init_db.py
-   # or
-   podman compose exec blog python scripts/init_db.py
-   ```
-
-The blog will be available at `http://localhost:8000`. The light interface ("Light") is at `http://localhost:8000/light/login`.
+The blog will be available at `http://localhost:8000`. The admin interface ("light") is at `http://localhost:8000/light/login`.
 
 ## ⚙️ Configuration
 
@@ -104,260 +99,61 @@ For a more traditional approach:
 
 ## 🛠️ Development
 
-### Local Setup (without Docker)
+### Local Setup (Backend)
 
-1. Create a virtual environment:
+1. Navigate to the API directory:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # or venv\Scripts\activate on Windows
+   cd api
    ```
 
 2. Install dependencies:
    ```bash
-   pip install -r requirements.txt
-   pip install pytest ruff mypy
+   go mod download
    ```
 
 3. Run the development server:
    ```bash
-   uvicorn app.main:app --reload
+   go run cmd/api/main.go
    ```
 
-### Running Tests
+   The API will start on port 8000.
+
+### Local Setup (Frontend)
+
+The frontend is a static SPA served by the Go backend. During development, you can edit files in `frontend/` and refresh the browser.
+
+### Tests & CSS
 
 ```bash
-pytest
-```
+# Run all Go tests with coverage (from project root)
+./scripts/run-tests.sh
 
-### Linting & Type Checking
-
-```bash
-ruff check .
-mypy app/
+# Rebuild CSS bundles after editing frontend/css/
+./scripts/build-css.sh
 ```
 
 ## 📂 Project Structure
 
-- `app/`: FastAPI application code.
-- `data/`: Persistent storage (mounted as volume in Docker).
-- `scripts/`: Database initialization, backup, and restore scripts.
-- `.github/workflows/`: CI/CD pipelines for automated testing and deployment.
-- `nginx/`: Nginx reverse proxy configuration for production.
-- `tests/`: Comprehensive test suite.
-- `specification.md`: Detailed technical design.
-- `phases.md`: Development roadmap and progress.
+- `api/`: Go backend (Echo v4, sqlc, SQLite).
+- `frontend/`: Vanilla JS SPA (no build step required).
+- `build/`: Dockerfile, docker-compose, rebuild script.
+- `data/`: Persistent storage (DB + media, mounted as volume).
+- `docs/`: Architecture and feature documentation.
+- `scripts/`: Test runner, CSS builder, backup utilities.
 
 ## 🚀 Production Deployment
 
-### Prerequisites
-
-- Ubuntu 24.04 LTS server (or similar)
-- Domain name pointing to your server
-- SSH access to the server
-- Docker and Docker Compose installed
-
-### Quick Production Setup
-
-1. **Run the setup script on your server** (as root):
+1. **Clone** the repository on your server.
+2. **Configure** `build/.env` — set `SECRET_KEY`, `APP_NAME`, `STORAGE_PATH`.
+3. **Deploy**:
    ```bash
-   sudo ./scripts/deployment/setup-production.sh
+   cd build
+   docker compose up -d
    ```
 
-   This script will:
-   - Install Docker and Docker Compose
-   - Create a `deploy` user
-   - Set up directories and permissions
-   - Configure firewall (UFW)
-   - Install Certbot for SSL certificates
-   - Set up automated backups and log rotation
+Your blog will be available at `http://your-server:8000`. Put it behind a reverse proxy (nginx/Caddy) for HTTPS.
 
-2. **Clone the repository**:
-   ```bash
-   su - deploy
-   cd /opt/photo-blog
-   git clone https://github.com/username/photo-blog.git .
-   ```
-
-3. **Configure environment**:
-   ```bash
-   cp .env.production.example .env
-   nano .env  # Edit with your production settings
-   ```
-
-   **Important**: Generate secure secrets:
-   ```bash
-   python -c "import secrets; print(secrets.token_urlsafe(64))"
-   ```
-
-4. **Obtain SSL certificate**:
-   ```bash
-   sudo certbot certonly --standalone -d yourdomain.com
-   sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem nginx/ssl/
-   sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem nginx/ssl/
-   sudo chown deploy:deploy nginx/ssl/*.pem
-   ```
-
-5. **Deploy the application**:
-   ```bash
-   ./scripts/deployment/deploy.sh
-   ```
-
-6. **Verify deployment**:
-   ```bash
-   ./scripts/deployment/health-check.sh
-   ```
-
-Your blog should now be available at `https://yourdomain.com`!
-
-### GitHub Actions CI/CD
-
-This project includes automated CI/CD pipelines that:
-
-- **On Pull Requests**: Run tests, linting, and type checking
-- **On Push to Main**: Build Docker image, run tests, and deploy to production
-
-#### Required GitHub Secrets
-
-Configure these secrets in your GitHub repository (Settings → Secrets and variables → Actions):
-
-| Secret | Description | Example |
-|--------|-------------|---------|
-| `DEPLOY_HOST` | Production server hostname | `yourdomain.com` |
-| `DEPLOY_USER` | SSH user for deployment | `deploy` |
-| `DEPLOY_SSH_KEY` | Private SSH key for deployment | Contents of `~/.ssh/id_rsa` |
-| `DEPLOY_SSH_PORT` | SSH port (optional) | `22` |
-| `DEPLOY_PATH` | Application directory on server | `/opt/photo-blog` |
-| `CODECOV_TOKEN` | Codecov token (optional) | From codecov.io |
-
-#### Setting Up SSH Key for Deployment
-
-1. Generate SSH key on your local machine:
-   ```bash
-   ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/deploy_key
-   ```
-
-2. Add public key to server:
-   ```bash
-   ssh-copy-id -i ~/.ssh/deploy_key.pub deploy@yourdomain.com
-   ```
-
-3. Add private key as GitHub secret:
-   ```bash
-   cat ~/.ssh/deploy_key  # Copy this to DEPLOY_SSH_KEY secret
-   ```
-
-### Manual Deployment
-
-For manual deployments without GitHub Actions:
-
-```bash
-# On your production server
-cd /opt/photo-blog
-git pull origin main
-./scripts/deployment/deploy.sh
-```
-
-The deployment script will:
-- Create a pre-deployment backup
-- Pull the latest Docker image
-- Deploy the new version
-- Run health checks
-- Automatically rollback if deployment fails
-
-### Deployment Checklist
-
-Before deploying to production:
-
-- [ ] Configure all environment variables in `.env`
-- [ ] Generate secure `SECRET_KEY` and `SESSION_SECRET`
-- [ ] Set up SSL certificates
-- [ ] Configure DNS to point to your server
-- [ ] Set up firewall rules (ports 80, 443, SSH)
-- [ ] Configure automated backups
-- [ ] Set up monitoring/alerts
-- [ ] Test backup and restore procedures
-- [ ] Review security settings
-- [ ] Set up log rotation
-
-### Production Maintenance
-
-**Daily Automated Tasks**:
-- Database backups (2 AM by default)
-- Session cleanup (hourly)
-- View count flushing (every 30 minutes)
-
-**Manual Maintenance**:
-```bash
-# View logs
-docker-compose -f docker-compose.prod.yml logs -f blog
-
-# Create manual backup
-./scripts/backup.sh
-
-# Restore from backup
-./scripts/restore.sh /data/backups/2024-01-01.tar.gz
-
-# Check system health
-./scripts/deployment/health-check.sh
-
-# Update application
-cd /opt/photo-blog
-git pull origin main
-./scripts/deployment/deploy.sh
-```
-
-### Monitoring
-
-Access the light dashboard at `https://yourdomain.com/light/` to view:
-- System statistics (storage, database size, cache stats)
-- Application logs
-- Active sessions
-- Recent posts and activity
-
-### Troubleshooting
-
-**Service won't start**:
-```bash
-docker-compose -f docker-compose.prod.yml logs blog
-```
-
-**Database issues**:
-```bash
-# Check database file
-ls -lh /var/lib/photo-blog/data/blog.db
-
-# Restore from backup
-./scripts/restore.sh /data/backups/latest.tar.gz
-```
-
-**SSL certificate renewal**:
-```bash
-sudo certbot renew
-sudo cp /etc/letsencrypt/live/yourdomain.com/*.pem /opt/photo-blog/nginx/ssl/
-docker-compose -f docker-compose.prod.yml restart nginx
-```
-
-**Rollback deployment**:
-```bash
-./scripts/deployment/deploy.sh rollback
-```
-
-## 📊 Monitoring & Performance
-
-- **Health Check Endpoint**: `https://yourdomain.com/health`
-- **System Stats**: Available in the light dashboard
-- **Logs**: `/var/lib/photo-blog/data/logs/`
-- **Backups**: `/var/lib/photo-blog/data/backups/`
-
-## 🔒 Security
-
-- All passwords are hashed with bcrypt
-- Session tokens are cryptographically secure
-- HTTPS enforced in production
-- Security headers configured (CSP, X-Frame-Options, etc.)
-- File upload validation (type, size, content)
-- Rate limiting on authentication endpoints
-- Regular automated backups
+See [`scripts/SETUP-PRODUCTION.md`](scripts/SETUP-PRODUCTION.md) for backup/restore setup.
 
 ## 📄 License
 
@@ -366,12 +162,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 Built with:
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [SQLAlchemy](https://www.sqlalchemy.org/) - SQL toolkit and ORM
-- [Jinja2](https://jinja.palletsprojects.com/) - Template engine
-- [Pillow](https://python-pillow.org/) - Image processing
-- [Docker](https://www.docker.com/) - Containerization
-
----
-
-**Need Help?** Check out the [specification.md](specification.md) for detailed technical documentation.
+- [Go](https://golang.org/) - Efficient and reliable backend language
+- [Echo](https://echo.labstack.com/) - High performance, extensible Go web framework
+- [Vanilla JS](https://developer.mozilla.org/en-US/docs/Web/JavaScript) - Framework-free component system
+- [SQLite](https://sqlite.org/) - Self-contained, serverless database engine
+- [Docker](https://www.docker.com/) / [Podman](https://podman.io/) - Containerization

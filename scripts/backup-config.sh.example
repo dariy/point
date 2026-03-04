@@ -14,7 +14,7 @@
 export PROD_HOST="user@your-production-server.com"
 
 # Container name on production (as shown in 'docker ps')
-export PROD_CONTAINER="point-prod"
+export PROD_CONTAINER="point"
 
 # Docker command prefix on production
 # Leave empty if user is in docker group

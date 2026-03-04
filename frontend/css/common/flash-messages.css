@@ -1,0 +1,157 @@
+/* ===========================
+   Flash Messages
+   =========================== */
+.flash-messages-container {
+    position: fixed;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    pointer-events: none;
+    max-width: 400px;
+}
+
+.flash-messages {
+    padding: 0 var(--spacing-xl);
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.flash-message {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius);
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    font-size: var(--font-size-sm);
+    box-shadow: var(--shadow-lg);
+    pointer-events: auto;
+    animation: toast-in 0.3s ease-out;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-weight: 500;
+}
+
+/* Light theme overrides for better contrast with 0.8 opacity */
+:root:not([data-theme="dark"]),
+[data-theme="light"] {
+    --color-success-light: rgba(209, 250, 229, 0.8);
+    --color-danger-light: rgba(254, 226, 226, 0.8);
+    --color-warning-light: rgba(254, 243, 199, 0.8);
+    --color-primary-light: rgba(219, 234, 254, 0.8);
+}
+
+.flash-error {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+[data-theme="dark"] .flash-message {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.flash-warning {
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
+}
+
+.flash-info {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+@keyframes toast-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* ===========================
+   Toast Notifications (#toasts)
+   =========================== */
+#toasts {
+    position: fixed;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    z-index: 11000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    max-width: 360px;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    pointer-events: auto;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    transform: translateX(calc(100% + var(--spacing-lg)));
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast.toast-visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast-success {
+    background-color: var(--color-success-light, rgba(209, 250, 229, 0.9));
+    color: var(--color-success, #059669);
+}
+
+.toast-error {
+    background-color: var(--color-danger-light, rgba(254, 226, 226, 0.9));
+    color: var(--color-danger, #dc2626);
+}
+
+.toast-warning {
+    background-color: var(--color-warning-light, rgba(254, 243, 199, 0.9));
+    color: var(--color-warning, #d97706);
+}
+
+.toast-info {
+    background-color: var(--color-primary-light, rgba(219, 234, 254, 0.9));
+    color: var(--color-primary, #2563eb);
+}
+
+.toast-message {
+    flex: 1;
+}
+
+.toast-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    color: inherit;
+    opacity: 0.6;
+    padding: 0 2px;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
