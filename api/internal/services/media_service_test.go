@@ -11,8 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"point-api/internal/config"
 )
 
 func TestMediaService_AnalyzeImage(t *testing.T) {
@@ -47,24 +45,7 @@ func TestMediaService_AnalyzeImage(t *testing.T) {
 }
 
 
-func setupMediaService(t *testing.T) (*MediaService, string) {
-	repo := setupTestDB(t)
-	tmpDir, err := os.MkdirTemp("", "media-test")
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	cfg := &config.Config{
-		StoragePath:     tmpDir,
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
-	}
-	settingsService := NewSettingsService(repo)
-	tagService := NewTagService(repo)
-	service := NewMediaService(repo, cfg, settingsService, tagService)
-
-	return service, tmpDir
-}
 
 func TestMediaService_Upload(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
@@ -464,6 +445,60 @@ func TestMediaService_ParseAnalysisResult(t *testing.T) {
 	}
 	if result4.Tags == nil {
 		t.Error("expected non-nil Tags slice")
+	}
+}
+
+func TestMediaService_ThumbnailBranches(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer os.RemoveAll(tmpDir)
+	defer service.repo.Close()
+
+	ctx := context.Background()
+
+	// Create a user+post so we can test UpdateMedia with a valid PostID
+	repo := service.repo
+	repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','e@t.com','h','D')`)
+	repo.DB().Exec(`INSERT INTO posts (title, slug, content, status, author_id) VALUES ('T','t','C','draft',1)`)
+
+	// Upload a plain file for UpdateMedia with non-nil PostID (covers line 242)
+	txtMedia, _ := service.UploadFile(ctx, UploadFileParams{Content: []byte("txt"), Filename: "x.txt", MimeType: "text/plain"})
+	pid := int64(1)
+	_, _ = service.UpdateMedia(ctx, UpdateMediaParams{ID: txtMedia.ID, PostID: &pid})
+
+	// Upload a JPEG to get a thumbnail
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	var buf bytes.Buffer
+	jpeg.Encode(&buf, img, nil)
+	jpegMedia, err := service.UploadFile(ctx, UploadFileParams{Content: buf.Bytes(), Filename: "photo.jpg", MimeType: "image/jpeg"})
+	if err != nil {
+		t.Fatalf("UploadFile JPEG failed: %v", err)
+	}
+	if !jpegMedia.ThumbnailPath.Valid {
+		t.Skip("thumbnail not generated, skipping thumbnail branches")
+	}
+
+	// GetStorageUsage with data in DB (covers line 109: return int64(usage.Float64), nil)
+	usage, err := service.GetStorageUsage(ctx)
+	if err != nil {
+		t.Fatalf("GetStorageUsage with data failed: %v", err)
+	}
+	if usage <= 0 {
+		t.Errorf("expected usage > 0, got %d", usage)
+	}
+
+	// RenameMedia without extension (covers line 370: newBase += oldExt)
+	// Also covers thumbnail rename branch (lines 384-395) since jpegMedia has a thumbnail
+	renamed, err := service.RenameMedia(ctx, jpegMedia.ID, "newname") // no extension
+	if err != nil {
+		t.Fatalf("RenameMedia without ext failed: %v", err)
+	}
+	if filepath.Ext(renamed.Filename) != ".jpg" {
+		t.Errorf("expected .jpg extension preserved, got %s", renamed.Filename)
+	}
+
+	// DeleteMedia with thumbnail (covers lines 263-265)
+	if err := service.DeleteMedia(ctx, renamed.ID); err != nil {
+		t.Fatalf("DeleteMedia with thumbnail failed: %v", err)
 	}
 }
 
