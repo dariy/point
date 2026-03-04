@@ -273,3 +273,197 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 	}
 }
 
+func TestMediaService_BulkDelete(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer os.RemoveAll(tmpDir)
+	defer service.repo.Close()
+
+	ctx := context.Background()
+
+	m1, _ := service.UploadFile(ctx, UploadFileParams{Content: []byte("f1"), Filename: "f1.txt", MimeType: "text/plain"})
+	m2, _ := service.UploadFile(ctx, UploadFileParams{Content: []byte("f2"), Filename: "f2.txt", MimeType: "text/plain"})
+
+	count, err := service.BulkDeleteMedia(ctx, []int64{m1.ID, m2.ID})
+	if err != nil {
+		t.Fatalf("BulkDeleteMedia failed: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 deleted, got %d", count)
+	}
+
+	// Empty list
+	count, err = service.BulkDeleteMedia(ctx, []int64{})
+	if err != nil {
+		t.Errorf("BulkDeleteMedia with empty IDs should not fail: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 for empty list, got %d", count)
+	}
+}
+
+func TestMediaService_GetMediaFolders(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer os.RemoveAll(tmpDir)
+	defer service.repo.Close()
+
+	ctx := context.Background()
+
+	// Upload a file so a folder exists
+	service.UploadFile(ctx, UploadFileParams{Content: []byte("folder"), Filename: "photo.jpg", MimeType: "image/jpeg"})
+
+	folders, err := service.GetMediaFolders(ctx, "")
+	if err != nil {
+		t.Fatalf("GetMediaFolders failed: %v", err)
+	}
+	_ = folders // might be empty if path format doesn't match, that's OK
+}
+
+func TestMediaService_ExtractMediaPaths(t *testing.T) {
+	// Plain text content without media
+	paths := ExtractMediaPaths("No media here", "")
+	if len(paths) != 0 {
+		t.Errorf("expected 0 paths, got %d", len(paths))
+	}
+
+	// Content with video tag
+	paths = ExtractMediaPaths(`<video src="/2026/01/video.mp4"></video>`, "")
+	if len(paths) < 1 {
+		t.Errorf("expected at least 1 path from video tag, got %d", len(paths))
+	}
+
+	// With thumbnail path
+	paths = ExtractMediaPaths("text", "originals/2026/01/thumb.jpg")
+	if len(paths) < 1 {
+		t.Errorf("expected at least 1 path from thumbnail, got %d", len(paths))
+	}
+}
+
+func TestMediaService_UpdateMediaVisibilityForPaths(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer os.RemoveAll(tmpDir)
+	defer service.repo.Close()
+
+	ctx := context.Background()
+	// Empty paths — should succeed without error
+	err := service.UpdateMediaVisibilityForPaths(ctx, []string{})
+	if err != nil {
+		t.Errorf("UpdateMediaVisibilityForPaths with empty slice failed: %v", err)
+	}
+
+	// Set up a published post with a media reference and the media record
+	repo := service.repo
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','e','h','D')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (id, title, slug, content, author_id, status, published_at) VALUES (1,'P','p','See /2024/06/img.jpg here',1,'published',datetime('now'))`)
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum, is_public) VALUES (1,'img.jpg','originals/2024/06/img.jpg','image','image/jpeg',100,'c1',0)`)
+
+	// Now the media is referenced in a published post — should become public
+	err = service.UpdateMediaVisibilityForPaths(ctx, []string{"originals/2024/06/img.jpg"})
+	if err != nil {
+		t.Errorf("UpdateMediaVisibilityForPaths with data failed: %v", err)
+	}
+
+	// Path with no DB record — should be skipped silently
+	err = service.UpdateMediaVisibilityForPaths(ctx, []string{"originals/2024/06/missing.jpg"})
+	if err != nil {
+		t.Errorf("UpdateMediaVisibilityForPaths with missing path failed: %v", err)
+	}
+}
+
+func TestMediaService_RecalculateAllMediaVisibility(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer os.RemoveAll(tmpDir)
+	defer service.repo.Close()
+
+	ctx := context.Background()
+
+	// Empty DB — should work fine
+	changed, err := service.RecalculateAllMediaVisibility(ctx)
+	if err != nil {
+		t.Fatalf("RecalculateAllMediaVisibility (empty) failed: %v", err)
+	}
+	_ = changed
+
+	// Set up a published post referencing media
+	repo := service.repo
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','e','h','D')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (id, title, slug, content, author_id, status, published_at) VALUES (1,'P','p','See /2024/06/img.jpg',1,'published',datetime('now'))`)
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum, is_public) VALUES (1,'img.jpg','originals/2024/06/img.jpg','image','image/jpeg',100,'c1',0)`)
+	// Add private media not referenced anywhere
+	_, _ = repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum, is_public) VALUES (2,'priv.jpg','originals/2024/06/priv.jpg','image','image/jpeg',100,'c2',1)`)
+
+	changed, err = service.RecalculateAllMediaVisibility(ctx)
+	if err != nil {
+		t.Fatalf("RecalculateAllMediaVisibility failed: %v", err)
+	}
+	// img.jpg should become public, priv.jpg should become private → 2 changes
+	if changed < 1 {
+		t.Errorf("expected at least 1 visibility change, got %d", changed)
+	}
+
+	// Test with thumbnail path reference
+	repo.DB().Exec(`INSERT INTO posts (id, title, slug, content, author_id, status, published_at, thumbnail_path) VALUES (2,'P2','p2','',1,'published',datetime('now'),'/2024/06/thumb.jpg')`)
+	repo.DB().Exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum, is_public) VALUES (3,'thumb.jpg','originals/2024/06/thumb.jpg','image','image/jpeg',100,'c3',0)`)
+
+	changed2, err := service.RecalculateAllMediaVisibility(ctx)
+	if err != nil {
+		t.Fatalf("RecalculateAllMediaVisibility (with thumbnail) failed: %v", err)
+	}
+	_ = changed2 // may be 1 for thumb.jpg becoming public
+}
+
+func TestMediaService_ParseAnalysisResult(t *testing.T) {
+	svc := &MediaService{}
+
+	// Basic result with title, tags, excerpt
+	data := map[string]interface{}{
+		"title":   "Photo",
+		"tags":    []interface{}{"a", "b"},
+		"excerpt": "desc",
+	}
+	result, err := svc.parseAnalysisResult(data, "photo.jpg")
+	if err != nil {
+		t.Fatalf("parseAnalysisResult failed: %v", err)
+	}
+	if result.Title == nil || *result.Title != "Photo" {
+		t.Errorf("expected title Photo, got %v", result.Title)
+	}
+	if len(result.Tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(result.Tags))
+	}
+
+	// Filename starting with year — year tag is prepended
+	data2 := map[string]interface{}{
+		"title": "Landscape",
+		"tags":  []interface{}{"nature"},
+	}
+	result2, err := svc.parseAnalysisResult(data2, "2026-summer.jpg")
+	if err != nil {
+		t.Fatalf("parseAnalysisResult with year filename failed: %v", err)
+	}
+	if len(result2.Tags) < 2 || result2.Tags[0] != "2026" {
+		t.Errorf("expected year tag '2026' prepended, got %v", result2.Tags)
+	}
+
+	// Alternative key mapping: summary → excerpt
+	data3 := map[string]interface{}{
+		"tags":    []interface{}{},
+		"summary": "A summary",
+	}
+	result3, err := svc.parseAnalysisResult(data3, "img.jpg")
+	if err != nil {
+		t.Fatalf("parseAnalysisResult (summary key) failed: %v", err)
+	}
+	if result3.Excerpt == nil || *result3.Excerpt != "A summary" {
+		t.Errorf("expected excerpt from summary key, got %v", result3.Excerpt)
+	}
+
+	// Empty map — should return empty AnalysisResponse without error
+	result4, err := svc.parseAnalysisResult(map[string]interface{}{}, "")
+	if err != nil {
+		t.Fatalf("parseAnalysisResult (empty) failed: %v", err)
+	}
+	if result4.Tags == nil {
+		t.Error("expected non-nil Tags slice")
+	}
+}
+

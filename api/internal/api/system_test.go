@@ -70,3 +70,78 @@ line2
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 }
+
+func TestSystemHandler_GetMigrations(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	tmpDir, _ := os.MkdirTemp("", "sys-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/system/migrations", nil)
+	rec := httptest.NewRecorder()
+
+	if err := handler.GetMigrations(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetMigrations failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestSystemHandler_RecalculateMediaVisibility(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	tmpDir, _ := os.MkdirTemp("", "sys-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/system/media/recalculate", nil)
+	rec := httptest.NewRecorder()
+
+	if err := handler.RecalculateMediaVisibility(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("RecalculateMediaVisibility failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestSystemHandler_UpdateMapCoords(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	tmpDir, _ := os.MkdirTemp("", "sys-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/system/tags/update-coords", nil)
+	rec := httptest.NewRecorder()
+
+	if err := handler.UpdateMapCoords(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("UpdateMapCoords failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
