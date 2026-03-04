@@ -49,6 +49,14 @@ func main() {
 	ctx := context.Background()
 	migrations := []struct{ name, sql string }{
 		{
+			"add_tags_include_in_breadcrumbs",
+			`ALTER TABLE tags ADD COLUMN include_in_breadcrumbs BOOLEAN NOT NULL DEFAULT 1`,
+		},
+		{
+			"add_tags_sort_order",
+			`ALTER TABLE tags ADD COLUMN sort_order INTEGER`,
+		},
+		{
 			"add_media_is_public",
 			`ALTER TABLE media ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`,
 		},
@@ -65,6 +73,19 @@ func main() {
 		{
 			"create_media_visibility_log_index",
 			`CREATE INDEX IF NOT EXISTS idx_media_visibility_log_media_id ON media_visibility_log(media_id)`,
+		},
+		{
+			"create_tag_locations_table",
+			`CREATE TABLE IF NOT EXISTS tag_locations (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				tag_id INTEGER NOT NULL UNIQUE REFERENCES tags(id) ON DELETE CASCADE,
+				latitude FLOAT NOT NULL,
+				longitude FLOAT NOT NULL
+			)`,
+		},
+		{
+			"create_tag_locations_index",
+			`CREATE INDEX IF NOT EXISTS idx_tag_locations_tag_id ON tag_locations(tag_id)`,
 		},
 	}
 	for _, m := range migrations {
