@@ -185,7 +185,9 @@ func applyContentPaths(tx *sql.Tx, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	type update struct {
 		id      int
@@ -209,7 +211,9 @@ func applyContentPaths(tx *sql.Tx, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer func() {
+		_ = stmt.Close()
+	}()
 
 	count := 0
 	for _, u := range updates {
