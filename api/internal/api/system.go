@@ -194,10 +194,18 @@ func (h *SystemHandler) GetMigrations(c echo.Context) error {
 }
 
 func (h *SystemHandler) ClearCache(c echo.Context) error {
-	// The Go API has no application-level cache. Return success for API parity.
+	// The Go API has no application-level cache, but we treat it as an
+	// opportunity to synchronize state. We recalculate media visibility
+	// to ensure all media referenced in public posts is accessible to guests.
+	updated, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status":        "success",
 		"cleared_count": 0,
+		"updated_media": updated,
 	})
 }
 
