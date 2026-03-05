@@ -76,10 +76,10 @@ export default class SystemPage extends Component {
                 <div class="ops-list">
                   <div class="op-item">
                     <div class="op-info">
-                      <h4>Clear Cache</h4>
-                      <p>Clear the server-side file cache (thumbnails, optimized images).</p>
+                      <h4>Clear Cache & Sync Media</h4>
+                      <p>Clears server-side cache and synchronizes media visibility (ensures images in public posts are accessible to guests).</p>
                     </div>
-                    <button id="clear-cache-btn" class="btn btn-secondary">Clear Cache</button>
+                    <button id="clear-cache-btn" class="btn btn-secondary">Clear & Sync</button>
                   </div>
                   <div class="op-item">
                     <div class="op-info">
@@ -248,8 +248,9 @@ export default class SystemPage extends Component {
 
   async _handleClearCache() {
     try {
-      await clearCache();
-      store.set('toast', { message: 'Cache cleared successfully.', type: 'success' });
+      const result = await clearCache();
+      const count = result.updated_media || 0;
+      store.set('toast', { message: `Cache cleared and ${count} media records synchronized.`, type: 'success' });
     } catch (err) {
       store.set('toast', { message: err.message || 'Failed to clear cache.', type: 'error' });
     }
