@@ -284,7 +284,7 @@ render() {
 
   const cards = nodes.map((node, i) => {
     if (node.type === 'image') {
-      const thumb = `/media/thumbnails${node.path}`;
+      const thumb = `${node.path}?thumb`;
       const filename = node.path.split('/').pop();
       return `
         ${insertZone(i)}
