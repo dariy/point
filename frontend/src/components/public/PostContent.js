@@ -15,6 +15,7 @@
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { renderTagLink } from '../../utils/tags.js';
+import { SwipeDetector, TrackpadDetector } from '../../utils/gestures.js';
 
 const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
 const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide works
@@ -74,7 +75,9 @@ export class PostContent extends Component {
   }
 
   afterRender() {
-    const { post, forceImmersive = false } = this.props;
+    this._swipe?.destroy();
+    this._trackpad?.destroy();
+    const { post, prevPost = null, nextPost = null, forceImmersive = false } = this.props;
     if (!post) return;
     if (forceImmersive || shouldUseImmersive(post)) {
       document.body.classList.add('immersive-layout');
@@ -82,6 +85,7 @@ export class PostContent extends Component {
     } else {
       const bodyEl = this.$('.post-content');
       if (bodyEl) this._enhanceMedia(bodyEl);
+      if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
     }
   }
 
@@ -90,6 +94,8 @@ export class PostContent extends Component {
     this._listeners.forEach(([t, type, fn, opts]) => t.removeEventListener(type, fn, opts));
     this._listeners = [];
     clearTimeout(this._idleTimer);
+    this._swipe?.destroy();
+    this._trackpad?.destroy();
   }
 
   // ── Immersive rendering ───────────────────────────────────────────────────
@@ -237,22 +243,28 @@ export class PostContent extends Component {
     const fadeTarget = slides.length > 0 ? slides[index] : this.$('.immersive-visuals');
     fadeTarget?.classList.add('immersive-fade-in');
 
-    // ── Touch swipe ──
+    // ── Gestures ──
     const wrapper = this.$('.immersive-wrapper');
-    let tx = 0, ty = 0, didSwipe = false;
-    this._on(wrapper, 'touchstart', (e) => {
-      tx = e.changedTouches[0].clientX;
-      ty = e.changedTouches[0].clientY;
-      didSwipe = false;
-    }, { passive: true });
-    this._on(wrapper, 'touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - tx;
-      const dy = e.changedTouches[0].clientY - ty;
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-        didSwipe = true;
-        goTo(index + (dx < 0 ? 1 : -1));
+    const dismiss = () => {
+      if (tagSlug) navigate(`/tag/${tagSlug}`);
+      else history.back();
+    };
+
+    this._didSwipe = false;
+    this._swipe = new SwipeDetector(wrapper, {
+      onHorizontal: (dir) => {
+        this._didSwipe = true;
+        goTo(index + (dir === 'left' ? 1 : -1));
+      },
+      onVertical: (dir) => {
+        this._didSwipe = true;
+        if (dir === 'down') dismiss();
       }
-    }, { passive: true });
+    });
+
+    this._trackpad = new TrackpadDetector(wrapper, {
+      onHorizontal: (dir) => goTo(index + (dir === 'left' ? 1 : -1))
+    });
 
     // ── UI show / hide ──
     const showUI = () => {
@@ -325,7 +337,7 @@ export class PostContent extends Component {
       if (!pressZone) return;
       const zone = pressZone;
       clearPressHint();
-      if (didSwipe) { didSwipe = false; return; }
+      if (this._didSwipe) { this._didSwipe = false; return; }
       if (zone === 'left') {
         goTo(index - 1);
       } else if (zone === 'right') {
@@ -347,6 +359,21 @@ export class PostContent extends Component {
     // Start with UI visible, then auto-hide
     this._lastShowTime = Date.now();
     this._idleTimer = setTimeout(hideUI, IDLE_MS);
+  }
+
+  _initNormal(prevPost, nextPost) {
+    this._swipe = new SwipeDetector(this.container, {
+      onHorizontal: (dir) => {
+        if (dir === 'left' && nextPost) navigate('/post/' + nextPost.slug);
+        else if (dir === 'right' && prevPost) navigate('/post/' + prevPost.slug);
+      }
+    });
+    this._trackpad = new TrackpadDetector(this.container, {
+      onHorizontal: (dir) => {
+        if (dir === 'left' && nextPost) navigate('/post/' + nextPost.slug);
+        else if (dir === 'right' && prevPost) navigate('/post/' + prevPost.slug);
+      }
+    });
   }
 
   /** Register a listener and track it for cleanup. */
