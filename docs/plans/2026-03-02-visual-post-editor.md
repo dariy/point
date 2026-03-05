@@ -136,7 +136,7 @@ export class VisualEditor extends Component {
           </div>
           <img class="ve-thumb" src="${escapeHtml(thumb)}"
                alt="${escapeHtml(filename)}"
-               data-full="/media/originals${escapeHtml(path)}"
+               data-full="${escapeHtml(path)}"
                loading="lazy">
           <span class="ve-path">${escapeHtml(path)}</span>
           <button class="ve-remove" data-index="${i}" type="button"
