@@ -22,7 +22,7 @@ import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders } fro
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
-import { FOLDER_SVG, CALENDAR_SVG, CHEVRON_SVG, EDIT_SVG } from '../../utils/icons.js';
+import { FOLDER_SVG, CALENDAR_SVG, CHEVRON_SVG, EDIT_SVG, LOCK_SVG } from '../../utils/icons.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -159,6 +159,11 @@ export class MediaBrowser extends Component {
           fileType === 'video' ? '▶' : fileType === 'audio' ? '♫' : '📄'
         }</div>`;
 
+    const publicStatus = m.is_public ? '' : `
+      <div class="media-item-status" title="Private (hidden from guests)">
+        ${LOCK_SVG}
+      </div>`;
+
     const copyPath = m.path || (m.original_path ? m.original_path.replace('/media/originals', '') : '');
 
     const pickerCheckbox = pickerMode ? `
@@ -184,6 +189,7 @@ export class MediaBrowser extends Component {
            data-id="${escapeHtml(String(m.id))}"${
         isImage ? ` data-src="${escapeHtml(m.original_path || '')}" data-alt="${escapeHtml(m.filename)}"` : ''}>
         ${pickerCheckbox}
+        ${publicStatus}
         <div class="media-item-preview${isImage && !pickerMode ? ' media-item-preview--clickable' : ''}">${preview}</div>
         <div class="media-item-info">
           <div class="media-item-name-row">

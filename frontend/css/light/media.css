@@ -505,6 +505,33 @@
     border-color: var(--color-primary);
 }
 
+/* Status indicator (e.g. lock for private) */
+.media-item-status {
+    position: absolute;
+    top: var(--spacing-xs);
+    left: var(--spacing-xs);
+    z-index: 2;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    color: white;
+    border-radius: var(--border-radius-sm);
+    backdrop-filter: blur(4px);
+}
+
+.media-item-status svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* In picker mode, offset status to avoid overlapping checkbox */
+.media-browser--picker .media-item-status {
+    left: calc(var(--spacing-xs) + 24px + var(--spacing-xs));
+}
+
 /* Picker mode: entire item is clickable */
 .media-browser--picker .media-item {
     cursor: pointer;

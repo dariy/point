@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -148,5 +149,45 @@ func TestSystemHandler_UpdateMapCoords(t *testing.T) {
 	}
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestSystemHandler_ClearCache(t *testing.T) {
+	repo := setupTestDB(t)
+	tmpDir, _ := os.MkdirTemp("", "sys-test")
+	defer func() {
+		_ = repo.Close()
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/system/cache/clear", nil)
+	rec := httptest.NewRecorder()
+
+	if err := handler.ClearCache(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ClearCache failed: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["status"] != "success" {
+		t.Errorf("expected status 'success', got %v", resp["status"])
+	}
+
+	if _, ok := resp["updated_media"]; !ok {
+		t.Errorf("expected 'updated_media' field in response")
 	}
 }
