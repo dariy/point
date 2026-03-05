@@ -21,6 +21,7 @@ import { getTagPage } from '../../api/pages.js';
 import { getPostBySlug } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { SwipeDetector, TrackpadDetector } from '../../utils/gestures.js';
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -83,6 +84,8 @@ export default class TagPage extends Component {
   }
 
   afterRender() {
+    this._swipe?.destroy();
+    this._trackpad?.destroy();
     const settings = store.get('settings') || {};
     const navTags  = this.state.data?.root_nav_tags || this.state.data?.nav_tags || store.get('navTags') || [];
     if (navTags.length && this.state.data?.root_nav_tags) {
@@ -174,8 +177,33 @@ export default class TagPage extends Component {
           total: pagination.total,
           onPage: (p) => navigate(`/tag/${slug}?page=${p}`),
         });
+
+        // Gestures
+        this._swipe = new SwipeDetector(this.container, {
+          onHorizontal: (dir) => {
+            if (dir === 'left' && pagination.page < pagination.pages) {
+              navigate(`/tag/${slug}?page=${pagination.page + 1}`);
+            } else if (dir === 'right' && pagination.page > 1) {
+              navigate(`/tag/${slug}?page=${pagination.page - 1}`);
+            }
+          }
+        });
+        this._trackpad = new TrackpadDetector(this.container, {
+          onHorizontal: (dir) => {
+            if (dir === 'left' && pagination.page < pagination.pages) {
+              navigate(`/tag/${slug}?page=${pagination.page + 1}`);
+            } else if (dir === 'right' && pagination.page > 1) {
+              navigate(`/tag/${slug}?page=${pagination.page - 1}`);
+            }
+          }
+        });
       }
     }
+  }
+
+  beforeUnmount() {
+    this._swipe?.destroy();
+    this._trackpad?.destroy();
   }
 
   mount() {
