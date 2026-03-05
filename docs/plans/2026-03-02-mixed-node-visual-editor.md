@@ -294,7 +294,7 @@ render() {
           </div>
           <img class="ve-thumb" src="${escapeHtml(thumb)}"
                alt="${escapeHtml(filename)}"
-               data-full="/media/originals${escapeHtml(node.path)}"
+               data-full="${escapeHtml(node.path)}"
                loading="lazy">
           <span class="ve-path">${escapeHtml(node.path)}</span>
           <button class="ve-remove" data-index="${i}" type="button"
