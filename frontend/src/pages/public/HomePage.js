@@ -16,6 +16,7 @@ import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { navigate } from '../../utils/helpers.js';
+import { SwipeDetector, TrackpadDetector } from '../../utils/gestures.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
@@ -61,6 +62,8 @@ export default class HomePage extends Component {
   }
 
   afterRender() {
+    this._swipe?.destroy();
+    this._trackpad?.destroy();
     const settings = store.get('settings') || {};
     const navTags = (this.state.data?.nav_tags) || store.get('navTags') || [];
     if (navTags.length) store.set('navTags', navTags);
@@ -81,7 +84,32 @@ export default class HomePage extends Component {
         total: pagination.total,
         onPage: (p) => navigate(`/?page=${p}`),
       });
+
+      // Gestures
+      this._swipe = new SwipeDetector(this.container, {
+        onHorizontal: (dir) => {
+          if (dir === 'left' && pagination.page < pagination.pages) {
+            navigate(`/?page=${pagination.page + 1}`);
+          } else if (dir === 'right' && pagination.page > 1) {
+            navigate(`/?page=${pagination.page - 1}`);
+          }
+        }
+      });
+      this._trackpad = new TrackpadDetector(this.container, {
+        onHorizontal: (dir) => {
+          if (dir === 'left' && pagination.page < pagination.pages) {
+            navigate(`/?page=${pagination.page + 1}`);
+          } else if (dir === 'right' && pagination.page > 1) {
+            navigate(`/?page=${pagination.page - 1}`);
+          }
+        }
+      });
     }
+  }
+
+  beforeUnmount() {
+    this._swipe?.destroy();
+    this._trackpad?.destroy();
   }
 
   mount() {
