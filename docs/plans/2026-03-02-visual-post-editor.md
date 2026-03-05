@@ -127,7 +127,7 @@ export class VisualEditor extends Component {
     const { images = [] } = this.props;
 
     const cards = images.map((path, i) => {
-      const thumb = `/media/thumbnails${path}`;
+      const thumb = `{node.path}?thumb`;
       const filename = path.split('/').pop();
       return `
         <div class="ve-card" data-index="${i}" draggable="true">
