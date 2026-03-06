@@ -116,3 +116,10 @@ Development patterns and standards are documented in `guides/`:
 - Go idioms, `go vet` clean, exported types documented
 - Modern ES modules, vanilla CSS bundles
 - All quality gates must pass before PR creation
+
+## MCP
+Use 
+- serena-go for semantic code retrieval and editing tools for `api` sub-project; 
+- serena-js for semantic code retrieval and editing tools for `frontend` sub-project. 
+- context7 for up to date documentation on third party code
+- sqlite for database access
