@@ -20,6 +20,7 @@ import { getPostPageLocation } from '../../api/posts.js';
 
 const IDLE_MS = 2000;   // hide UI after 5 s of inactivity
 const MIN_SHOW_MS = 2000; // UI must be visible ≥ 3 s before click-to-hide works
+let _overlayHidden = false; // persists across post navigations
 
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'm4v', 'avi', 'mkv']);
 const AUDIO_EXTS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'opus']);
@@ -85,6 +86,7 @@ export class PostContent extends Component {
       document.body.classList.add('immersive-layout');
       this._initImmersive();
     } else {
+      document.body.classList.remove('immersive-layout', 'ui-hidden');
       const bodyEl = this.$('.post-content');
       if (bodyEl) this._enhanceMedia(bodyEl);
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
@@ -92,7 +94,9 @@ export class PostContent extends Component {
   }
 
   beforeUnmount() {
-    document.body.classList.remove('immersive-layout', 'ui-hidden');
+    _overlayHidden = document.body.classList.contains('ui-hidden');
+    // Body classes are kept intentionally — the next page's afterRender handles cleanup.
+    // Keeping them prevents the overlay blink when navigating between immersive posts.
     this._listeners.forEach(([t, type, fn, opts]) => t.removeEventListener(type, fn, opts));
     this._listeners = [];
     clearTimeout(this._idleTimer);
@@ -213,25 +217,26 @@ export class PostContent extends Component {
       const oldIndex = index;
       if (oldIndex === newIndex) return;
 
+      // Update index immediately so gestures during transition reference the new slide.
+      index = newIndex;
+
       const oldSlide = slides[oldIndex];
       const newSlide = slides[newIndex];
 
+      // Hide old slide immediately to prevent it showing through the fading-in new slide.
       if (oldSlide) {
         oldSlide.querySelector('video')?.pause();
-        oldSlide.classList.remove('immersive-fade-in');
-        oldSlide.classList.add('immersive-fade-out');
+        oldSlide.classList.remove('active', 'immersive-fade-in', 'immersive-fade-out');
       }
 
-      setTimeout(() => {
-        if (oldSlide) oldSlide.classList.remove('active', 'immersive-fade-out');
-        index = newIndex;
-        if (newSlide) {
-          newSlide.classList.add('active', 'immersive-fade-in');
-          newSlide.querySelector('video')?.play().catch(() => {});
-        }
-        dots.forEach((d, j) => d.classList.toggle('active', j === index));
-        this._resetZoom();
-      }, 400);
+      // Activate and fade in the new slide.
+      if (newSlide) {
+        newSlide.classList.add('active', 'immersive-fade-in');
+        newSlide.querySelector('video')?.play().catch(() => {});
+      }
+
+      dots.forEach((d, j) => d.classList.toggle('active', j === index));
+      this._resetZoom();
     };
 
     if (carousel) {
@@ -481,9 +486,13 @@ export class PostContent extends Component {
       }
     });
 
-    // Start with UI visible, then auto-hide
+    // Restore overlay visibility from previous post, or start visible then auto-hide
     this._lastShowTime = Date.now();
-    this._idleTimer = setTimeout(hideUI, IDLE_MS);
+    if (_overlayHidden) {
+      hideUI();
+    } else {
+      this._idleTimer = setTimeout(hideUI, IDLE_MS);
+    }
   }
 
   _initNormal(prevPost, nextPost) {
