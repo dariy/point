@@ -15,7 +15,7 @@
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { renderTagLink } from '../../utils/tags.js';
-import { GestureController, TrackpadDetector } from '../../utils/gestures.js';
+import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 import { getPostPageLocation } from '../../api/posts.js';
 
 const IDLE_MS = 2000;   // hide UI after 5 s of inactivity
@@ -331,7 +331,20 @@ export class PostContent extends Component {
     };
 
     this._gesture = new GestureController(wrapper, {
-      onSwipeMove: (dx, dy) => this._updateVisuals(dx, dy),
+      onSwipeMove: (dx, dy) => {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          const n = slides.length;
+          const atLastSlide  = n === 0 || index === n - 1;
+          const atFirstSlide = n === 0 || index === 0;
+          const blockedLeft  = dx < 0 && atLastSlide  && !prevPost;
+          const blockedRight = dx > 0 && atFirstSlide && !nextPost;
+          const blocked = blockedLeft || blockedRight;
+          const tx = blocked ? rubberBand(dx) : dx;
+          this._updateVisuals(tx, dy);
+        } else {
+          this._updateVisuals(dx, dy);
+        }
+      },
       onSwipeCancel: () => {
         if (this._zoomState.scale > 1) {
           this._constrainZoom(true);
@@ -477,11 +490,13 @@ export class PostContent extends Component {
     this._gesture = new GestureController(this.container, {
       onSwipeMove: (dx, dy) => {
         if (Math.abs(dx) > Math.abs(dy)) {
-          if (dx < 0 && !prevPost) return; // swipe-left -> older (prev)
-          if (dx > 0 && !nextPost) return; // swipe-right -> newer (next)
-          this.container.style.transform = `translateX(${dx}px)`;
+          const blocked = (dx < 0 && !prevPost) || (dx > 0 && !nextPost);
+          const tx = blocked ? rubberBand(dx) : dx;
+          this.container.style.transform = `translateX(${tx}px)`;
           this.container.style.transition = 'none';
-          this.container.style.opacity = Math.max(0.3, 1 - Math.abs(dx) / (window.innerWidth || 500));
+          this.container.style.opacity = blocked
+            ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
+            : Math.max(0.3, 1 - Math.abs(tx) / (window.innerWidth || 500));
         }
       },
       onSwipeCancel: () => {
