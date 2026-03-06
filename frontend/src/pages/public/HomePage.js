@@ -86,7 +86,74 @@ export default class HomePage extends Component {
       });
 
       // Gestures
+      const gridMount = this.$('#grid-mount');
+      let previewEl = null;
+
       this._swipe = new SwipeDetector(this.container, {
+        onMove: (dx, dy) => {
+          if (Math.abs(dx) > Math.abs(dy)) {
+            // Restrict drag at boundaries
+            if (dx < 0 && pagination.page >= pagination.pages) return;
+            if (dx > 0 && pagination.page <= 1) return;
+            
+            gridMount.style.transform = `translateX(${dx}px)`;
+            gridMount.style.transition = 'none';
+            gridMount.style.opacity = Math.max(0.2, 1 - Math.abs(dx) / (window.innerWidth || 500));
+
+            // Create placeholder for next page if it doesn't exist
+            if (!previewEl) {
+              previewEl = document.createElement('div');
+              previewEl.className = 'grid-preview-placeholder';
+              // Simple skeleton indication
+              previewEl.innerHTML = `
+                <div class="posts-grid placeholder-grid" style="opacity: 0.5;">
+                  <div class="post-card-slot"></div>
+                  <div class="post-card-slot"></div>
+                  <div class="post-card-slot"></div>
+                  <div class="post-card-slot"></div>
+                </div>
+              `;
+              previewEl.style.position = 'absolute';
+              previewEl.style.top = '0';
+              previewEl.style.width = '100%';
+              gridMount.parentElement.style.position = 'relative';
+              gridMount.parentElement.appendChild(previewEl);
+              
+              // Start prefetching the next page data in parallel
+              const targetPage = dx < 0 ? pagination.page + 1 : pagination.page - 1;
+              getHomePage({ page: targetPage }).then((data) => {
+                if (previewEl && data.posts) {
+                  const html = data.posts.map((p, i) => {
+                    const img = p.media?.find(m => m.type === 'image')?.url;
+                    const bg = img ? `url(${img}) center/cover` : 'var(--surface-card)';
+                    const cls = i === data.posts.findIndex(x => x.is_featured) ? ' featured-post' : '';
+                    return `<div class="post-card-slot${cls}"><div class="post-card" style="background: ${bg}; opacity: 0.8;"></div></div>`;
+                  }).join('');
+                  previewEl.innerHTML = `<div class="posts-grid">${html}</div>`;
+                }
+              }).catch(() => {});
+            }
+
+            // Position the placeholder on the correct side
+            const offset = dx < 0 ? '100%' : '-100%';
+            previewEl.style.transform = `translateX(calc(${offset} + ${dx}px))`;
+          }
+        },
+        onEnd: () => {
+          if (gridMount) {
+            gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            gridMount.style.transform = '';
+            gridMount.style.opacity = '1';
+          }
+          if (previewEl) {
+            previewEl.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            previewEl.style.opacity = '0';
+            setTimeout(() => {
+              previewEl?.remove();
+              previewEl = null;
+            }, 300);
+          }
+        },
         onHorizontal: (dir) => {
           if (dir === 'left' && pagination.page < pagination.pages) {
             navigate(`/?page=${pagination.page + 1}`);

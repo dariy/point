@@ -214,14 +214,12 @@ export class PostContent extends Component {
         return;
       }
       const newIndex = ((i % n) + n) % n;
-      // At boundaries with no wrap intended: navigate to adjacent post
+      // At boundaries with no wrap intended: navigate to adjacent post if it exists
       if (i < 0 && newIndex === n - 1 && slides.length > 1) {
-        goToPost(prevPost);
-        return;
+        if (prevPost) { goToPost(prevPost); return; }
       }
       if (i >= n && newIndex === 0 && slides.length > 1) {
-        goToPost(nextPost);
-        return;
+        if (nextPost) { goToPost(nextPost); return; }
       }
       slides[index]?.querySelector('video')?.pause();
       index = newIndex;
@@ -251,7 +249,28 @@ export class PostContent extends Component {
     };
 
     this._didSwipe = false;
+    const visuals = this.$('.immersive-visuals');
     this._swipe = new SwipeDetector(wrapper, {
+      onMove: (dx, dy) => {
+        if (visuals) {
+          if (Math.abs(dx) > Math.abs(dy)) {
+            visuals.style.transform = `translateX(${dx}px)`;
+            visuals.style.opacity = Math.max(0.3, 1 - Math.abs(dx) / window.innerWidth);
+          } else if (dy > 0) {
+            const scale = Math.max(0.5, 1 - dy / window.innerHeight);
+            visuals.style.transform = `translateY(${dy}px) scale(${scale})`;
+            visuals.style.opacity = scale;
+          }
+          visuals.style.transition = 'none';
+        }
+      },
+      onEnd: () => {
+        if (visuals) {
+          visuals.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+          visuals.style.transform = '';
+          visuals.style.opacity = '1';
+        }
+      },
       onHorizontal: (dir) => {
         this._didSwipe = true;
         goTo(index + (dir === 'left' ? 1 : -1));
@@ -363,6 +382,20 @@ export class PostContent extends Component {
 
   _initNormal(prevPost, nextPost) {
     this._swipe = new SwipeDetector(this.container, {
+      onMove: (dx, dy) => {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (dx < 0 && !nextPost) return;
+          if (dx > 0 && !prevPost) return;
+          this.container.style.transform = `translateX(${dx}px)`;
+          this.container.style.transition = 'none';
+          this.container.style.opacity = Math.max(0.3, 1 - Math.abs(dx) / (window.innerWidth || 500));
+        }
+      },
+      onEnd: () => {
+        this.container.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+        this.container.style.transform = '';
+        this.container.style.opacity = '1';
+      },
       onHorizontal: (dir) => {
         if (dir === 'left' && nextPost) navigate('/post/' + nextPost.slug);
         else if (dir === 'right' && prevPost) navigate('/post/' + prevPost.slug);
