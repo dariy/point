@@ -1,8 +1,10 @@
 # Build stage
-FROM docker.io/library/golang:alpine AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev git nodejs npm
+RUN apk add --no-cache git nodejs npm
 
 WORKDIR /app
 
@@ -19,17 +21,15 @@ COPY api/ ./
 # Removing -a flag to enable incremental builds
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 GOOS=linux go build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-s -w" \
-    -installsuffix cgo \
     -o api-bin cmd/api/main.go
 
 # Build the path migration utility
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 GOOS=linux go build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-s -w" \
-    -installsuffix cgo \
     -o migrate-paths cmd/migrate-paths/main.go
 
 # Bundle and minify frontend JS
@@ -46,7 +46,6 @@ WORKDIR /app
 # Install only necessary runtime dependencies and create user in one layer
 RUN apk add --no-cache \
     ca-certificates \
-    sqlite-libs \
     tzdata \
     curl \
     && adduser -D -u 1000 appuser \
