@@ -194,6 +194,15 @@
     justify-content: center;
     background-color: var(--bg-carouselle);
     transition: background-color var(--transition-theme);
+    will-change: transform, opacity;
+}
+
+.immersive-wrapper.zoomed .immersive-visuals {
+    cursor: grab;
+}
+
+.immersive-wrapper.zoomed .immersive-visuals:active {
+    cursor: grabbing;
 }
 
 .immersive-bg-image {
