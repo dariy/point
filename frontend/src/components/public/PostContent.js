@@ -357,11 +357,29 @@ export class PostContent extends Component {
           const target = slides[index] ?? visuals;
           if (target) {
             target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-            this._updateVisuals();
+            target.style.transform = '';
+            target.style.opacity = '1';
           }
         }
       },
       onSwipeCommit: (dir) => {
+        if (dir === 'left' || dir === 'right') {
+          const n = slides.length;
+          const atLastSlide  = n === 0 || index === n - 1;
+          const atFirstSlide = n === 0 || index === 0;
+          const blocked = (dir === 'left'  && atLastSlide  && !prevPost)
+                       || (dir === 'right' && atFirstSlide && !nextPost);
+          if (blocked) {
+            // Spring back — same as onSwipeCancel
+            const target = slides[index] ?? visuals;
+            if (target) {
+              target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+              target.style.transform = '';
+              target.style.opacity = '1';
+            }
+            return;
+          }
+        }
         // Reversed horizontal direction: left (dx<0) -> next (older)
         if (dir === 'left') goTo(index + 1);
         else if (dir === 'right') goTo(index - 1);
