@@ -292,7 +292,7 @@ func (r *Repository) GetPublishedPostsForSitemap(ctx context.Context) ([]struct 
 	const q = `
 SELECT slug, COALESCE(updated_at, published_at, created_at) as updated_at
 FROM posts
-WHERE status = 'published'
+WHERE LOWER(status) = 'published'
 ORDER BY published_at DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -779,16 +779,17 @@ type PostStub struct {
 	ID          int64
 	Slug        string
 	PublishedAt time.Time
+	CreatedAt   time.Time
 }
 
 // ListPublishedPostStubs returns id, slug, published_at for all published,
 // non-hidden posts, ordered newest first. Does not include content.
 func (r *Repository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, error) {
 	const q = `
-SELECT id, slug, published_at
+SELECT id, slug, published_at, created_at
 FROM posts
-WHERE status = 'published'
-ORDER BY published_at DESC, id DESC`
+WHERE LOWER(status) = 'published'
+ORDER BY published_at DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
@@ -799,7 +800,7 @@ ORDER BY published_at DESC, id DESC`
 	var stubs []PostStub
 	for rows.Next() {
 		var s PostStub
-		if err := rows.Scan(&s.ID, &s.Slug, &s.PublishedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Slug, &s.PublishedAt, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		stubs = append(stubs, s)
