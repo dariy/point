@@ -18,7 +18,7 @@ import (
 	"regexp"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 var mdImageRe = regexp.MustCompile(`!\[.*?\]\(([^)]+)\)`)
@@ -35,7 +35,7 @@ func main() {
 	apply := flag.Bool("apply", false, "commit changes (default is dry run)")
 	flag.Parse()
 
-	db, err := sql.Open("sqlite3", *dbPath)
+	db, err := sql.Open("sqlite", *dbPath)
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
