@@ -16,7 +16,7 @@ import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { navigate } from '../../utils/helpers.js';
-import { GestureController, TrackpadDetector } from '../../utils/gestures.js';
+import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
@@ -88,13 +88,16 @@ export default class HomePage extends Component {
       let previewEl = null;      this._gesture = new GestureController(this.container, {
         onSwipeMove: (dx, dy) => {
           if (Math.abs(dx) > Math.abs(dy)) {
-            // Restrict drag at boundaries
-            if (dx < 0 && pagination.page >= pagination.pages) return;
-            if (dx > 0 && pagination.page <= 1) return;
-            
-            gridMount.style.transform = `translateX(${dx}px)`;
+            const blocked = (dx < 0 && pagination.page >= pagination.pages)
+                         || (dx > 0 && pagination.page <= 1);
+            const tx = blocked ? rubberBand(dx) : dx;
+            gridMount.style.transform = `translateX(${tx}px)`;
             gridMount.style.transition = 'none';
-            gridMount.style.opacity = Math.max(0.2, 1 - Math.abs(dx) / (window.innerWidth || 500));
+            gridMount.style.opacity = blocked
+              ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
+              : Math.max(0.2, 1 - Math.abs(tx) / (window.innerWidth || 500));
+
+            if (blocked) return;
 
             // Create placeholder for next page if it doesn't exist
             if (!previewEl) {
