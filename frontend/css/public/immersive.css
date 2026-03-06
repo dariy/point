@@ -181,6 +181,8 @@
     width: 100%;
     height: 100%;
     background-color: var(--bg-primary);
+    touch-action: none; /* Prevent scroll bouncing on swipe */
+    overscroll-behavior: none; /* Prevent trackpad rubber-banding */
 }
 
 .immersive-visuals {
