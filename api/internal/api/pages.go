@@ -81,17 +81,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
-		if publicOnly {
-			hidden := false
-			for _, t := range postTagsMap[p.ID] {
-				if effectiveHiddenPosts[t.ID] {
-					hidden = true
-					break
-				}
-			}
-			if hidden {
-				continue
-			}
+		if publicOnly && !IsPostVisibleToPublic(postTagsMap[p.ID], effectiveHiddenPosts) {
+			continue
 		}
 		resp := postToResponse(p, postTagsMap[p.ID])
 		if !publicOnly {
@@ -198,17 +189,8 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
-		if publicOnly {
-			hidden := false
-			for _, t := range tagPostTagsMap[p.ID] {
-				if effectiveHiddenPostsTagIDs[t.ID] {
-					hidden = true
-					break
-				}
-			}
-			if hidden {
-				continue
-			}
+		if publicOnly && !IsPostVisibleToPublic(tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs) {
+			continue
 		}
 		resp := postByTagToResponse(p, tagPostTagsMap[p.ID])
 		if !publicOnly {

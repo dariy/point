@@ -134,8 +134,10 @@ app/static/css/light.css
 app/static/css/main.css
 api/coverage.out
 api/coverage.html
+frontend/js/
 light.css
 main.css
+api/api
 
 .claude/**
 .zed/**

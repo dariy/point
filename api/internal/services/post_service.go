@@ -152,6 +152,10 @@ func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.Ge
 	return s.repo.GetPostBySlug(ctx, strings.ToLower(slug))
 }
 
+func (s *PostService) ListPublishedPostStubs(ctx context.Context) ([]repository.PostStub, error) {
+	return s.repo.ListPublishedPostStubs(ctx)
+}
+
 type CreatePostParams struct {
 	Title           string
 	Content         string
