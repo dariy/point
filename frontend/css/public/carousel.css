@@ -151,10 +151,10 @@
   to   { opacity: 0; }
 }
 .immersive-fade-in {
-  animation: immersiveFadeIn 0.4s ease-out forwards;
+  animation: immersiveFadeIn 0.2s ease-out forwards;
 }
 .immersive-fade-out {
-  animation: immersiveFadeOut 0.4s ease-in forwards;
+  animation: immersiveFadeOut 0.2s ease-in forwards;
 }
 
 /* Navigation press hints — shown on pointerdown in left/right zones */

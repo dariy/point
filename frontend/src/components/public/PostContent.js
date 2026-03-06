@@ -16,9 +16,10 @@ import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { renderTagLink } from '../../utils/tags.js';
 import { GestureController, TrackpadDetector } from '../../utils/gestures.js';
+import { getPostPageLocation } from '../../api/posts.js';
 
-const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
-const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide works
+const IDLE_MS = 2000;   // hide UI after 5 s of inactivity
+const MIN_SHOW_MS = 2000; // UI must be visible ≥ 3 s before click-to-hide works
 
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'm4v', 'avi', 'mkv']);
 const AUDIO_EXTS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'opus']);
@@ -249,7 +250,7 @@ export class PostContent extends Component {
     // ── Gestures & Zoom ──
     const wrapper = this.$('.immersive-wrapper');
     const visuals = this.$('.immersive-visuals');
-    
+
     this._resetZoom = () => {
       this._zoomState = { scale: 1, x: 0, y: 0 };
       this._updateVisuals(0, 0);
@@ -296,7 +297,7 @@ export class PostContent extends Component {
       const ty = y + dy;
       const target = slides[index] ?? visuals;
       if (!target) return;
-      
+
       if (scale === 1) {
         // Swipe feedback
         if (Math.abs(tx) > Math.abs(ty)) {
@@ -316,20 +317,16 @@ export class PostContent extends Component {
         target.style.opacity = '1';
       }
       target.style.transition = 'none';
-    };
-
-    const dismiss = async () => {
-      if (tagSlug) {
-        navigate(`/tag/${tagSlug}`);
-      } else {
-        // Use the new API to find exactly which page to go back to
-        try {
-          const res = await fetch(`/api/posts/${post.slug}/page`);
-          const data = await res.json();
-          navigate(data.page > 1 ? `/?page=${data.page}` : '/');
-        } catch (e) {
-          navigate('/');
-        }
+    };    const dismiss = async () => {
+      try {
+        const params = tagSlug ? { tag: tagSlug } : {};
+        const data = await getPostPageLocation(post.slug, params);
+        const url = tagSlug
+          ? (data.page > 1 ? `/tag/${tagSlug}?page=${data.page}` : `/tag/${tagSlug}`)
+          : (data.page > 1 ? `/?page=${data.page}` : '/');
+        navigate(url);
+      } catch (e) {
+        navigate(tagSlug ? `/tag/${tagSlug}` : '/');
       }
     };
 
@@ -364,16 +361,16 @@ export class PostContent extends Component {
         const oldScale = this._zoomState.scale;
         const newScale = Math.max(0.5, Math.min(getMaxScale() * 2, oldScale * delta));
         if (newScale === oldScale) return;
-        
+
         // Zoom relative to pinch center
         const rect = wrapper.getBoundingClientRect();
         const rx = cx - rect.left - rect.width / 2;
         const ry = cy - rect.top - rect.height / 2;
-        
+
         this._zoomState.x -= (rx - this._zoomState.x) * (newScale / oldScale - 1);
         this._zoomState.y -= (ry - this._zoomState.y) * (newScale / oldScale - 1);
         this._zoomState.scale = newScale;
-        
+
         this._gesture.setZoomed(newScale > 1);
         wrapper.classList.toggle('zoomed', newScale > 1);
         this._updateVisuals();

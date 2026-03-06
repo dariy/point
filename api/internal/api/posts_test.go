@@ -404,6 +404,31 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 			t.Errorf("expected 404, got %v", err)
 		}
 	})
+
+	t.Run("post in tag-context page", func(t *testing.T) {
+		// post-1 has tag 'travel'
+		// Create tag
+		_, _ = tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel", Slug: "travel"})
+		// Find post-1 ID
+		p1, _ := postSvc.GetPostBySlug(ctx, "post-1")
+		_ = postSvc.UpdatePostTags(ctx, p1.ID, []string{"Travel"})
+
+		req := httptest.NewRequest(http.MethodGet, "/?tag=travel", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("slug")
+		c.SetParamValues("post-1")
+
+		if err := handler.GetPostPage(c); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var resp map[string]interface{}
+		_ = json.NewDecoder(rec.Body).Decode(&resp)
+		// Only one post has 'travel' tag, so it should be on page 1
+		if int(resp["page"].(float64)) != 1 {
+			t.Errorf("expected page 1 for tag travel, got %v", resp["page"])
+		}
+	})
 }
 
 func TestPostHandler_UpdateSettings(t *testing.T) {
