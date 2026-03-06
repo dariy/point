@@ -2,7 +2,7 @@
 FROM docker.io/library/golang:alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev git
+RUN apk add --no-cache gcc musl-dev git nodejs npm
 
 WORKDIR /app
 
@@ -32,6 +32,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -installsuffix cgo \
     -o migrate-paths cmd/migrate-paths/main.go
 
+# Bundle and minify frontend JS
+COPY frontend/ ./frontend/
+RUN npx --yes esbuild frontend/src/app.js \
+    --bundle --minify --format=esm \
+    --outfile=frontend/js/app.js
+
 # Runtime stage
 FROM docker.io/library/alpine:latest
 
@@ -52,8 +58,8 @@ COPY --from=builder /app/api-bin .
 COPY --from=builder /app/migrate-paths .
 # Copy data.yml
 COPY --from=builder /app/data.yml .
-# Copy frontend assets
-COPY frontend/ /app/frontend/
+# Copy frontend assets (includes built js/ bundle from builder stage)
+COPY --from=builder /app/frontend/ /app/frontend/
 
 # Accept build version as argument and stamp it into index.html for cache-busting
 ARG BUILD_VERSION=dev
