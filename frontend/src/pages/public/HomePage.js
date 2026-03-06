@@ -60,6 +60,7 @@ export default class HomePage extends Component {
         <div id="footer-mount"></div>
       </div>`;
   }  afterRender() {
+    document.body.classList.remove('immersive-layout', 'ui-hidden');
     this._gesture?.destroy();
     this._trackpad?.destroy();
     const settings = store.get('settings') || {};
@@ -82,8 +83,11 @@ export default class HomePage extends Component {
         total: pagination.total,
         onPage: (p) => navigate(`/?page=${p}`),
       });
+    }
 
-      // Gestures
+    // Always set up gestures so horizontal swipes are captured and rubber-banded
+    // even on single-page lists (prevents browser history back/forward).
+    {
       const gridMount = this.$('#grid-mount');
       let previewEl = null;      this._gesture = new GestureController(this.container, {
         onSwipeMove: (dx, dy) => {
