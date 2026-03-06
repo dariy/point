@@ -10,20 +10,23 @@ export class SwipeDetector {
    * @param {number} [options.thresholdPx=50] - Minimum travel distance
    * @param {number} [options.edgeIgnorePx=30] - Width of ignore zones at screen edges
    */
-  constructor(element, { onHorizontal, onVertical, thresholdPx = 50, edgeIgnorePx = 30 }) {
+  constructor(element, { onHorizontal, onVertical, onMove, onEnd, thresholdPx = 50, edgeIgnorePx = 30 } = {}) {
     this.element = element;
     this.onHorizontal = onHorizontal;
     this.onVertical = onVertical;
+    this.onMove = onMove;
+    this.onEnd = onEnd;
     this.thresholdPx = thresholdPx;
     this.edgeIgnorePx = edgeIgnorePx;
 
     this.startX = 0;
     this.startY = 0;
-
     this.handleTouchStart = this.handleTouchStart.bind(this);
+    this.handleTouchMove = this.handleTouchMove.bind(this);
     this.handleTouchEnd = this.handleTouchEnd.bind(this);
 
     this.element.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    this.element.addEventListener('touchmove', this.handleTouchMove, { passive: true });
     this.element.addEventListener('touchend', this.handleTouchEnd, { passive: true });
   }
 
@@ -31,6 +34,18 @@ export class SwipeDetector {
     const touch = e.changedTouches[0];
     this.startX = touch.clientX;
     this.startY = touch.clientY;
+  }
+
+  handleTouchMove(e) {
+    if (!this.onMove) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - this.startX;
+    const dy = touch.clientY - this.startY;
+    
+    // Check edge protection before emitting move events
+    if (this.startX < this.edgeIgnorePx || this.startX > window.innerWidth - this.edgeIgnorePx) return;
+    
+    this.onMove(dx, dy);
   }
 
   handleTouchEnd(e) {
@@ -54,6 +69,10 @@ export class SwipeDetector {
       if (this.onVertical) {
         this.onVertical(dy < 0 ? 'up' : 'down');
       }
+    }
+    
+    if (this.onEnd) {
+      this.onEnd();
     }
   }
 
