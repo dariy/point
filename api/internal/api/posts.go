@@ -211,6 +211,8 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 	ctx := c.Request().Context()
 	slug := c.Param("slug")
 	tagFilter := c.QueryParam("tag")
+	user := c.Get("user")
+	publicOnly := user == nil
 
 	// Verify the post exists and is published
 	post, err := h.postService.GetPostBySlug(ctx, slug)
@@ -244,7 +246,7 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 		if err == nil {
 			filterTagIDs = make(map[int64]bool)
 			filterTagIDs[t.ID] = true
-			desc, _ := h.tagService.GetTagChildren(ctx, t.ID, true)
+			desc, _ := h.tagService.GetTagDescendants(ctx, t.ID)
 			for _, d := range desc {
 				filterTagIDs[d.ID] = true
 			}
@@ -253,7 +255,7 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 
 	for _, s := range stubs {
 		// Public visibility check
-		if !IsPostVisibleToPublic(tagsMap[s.ID], hiddenTagIDs) {
+		if publicOnly && !IsPostVisibleToPublic(tagsMap[s.ID], hiddenTagIDs) {
 			continue
 		}
 
