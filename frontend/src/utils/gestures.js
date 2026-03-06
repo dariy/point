@@ -6,6 +6,19 @@
  * route to onPanMove instead of onSwipeMove.
  */
 
+/**
+ * iOS-style rubber-band damping for edge-resistance drag.
+ * Returns a damped displacement that fights back as dx grows.
+ * @param {number} dx      - Raw displacement in px (positive or negative)
+ * @param {number} width   - Viewport/container width in px (default: window.innerWidth)
+ * @returns {number} damped displacement
+ */
+export function rubberBand(dx, width = window.innerWidth) {
+  const absDx = Math.abs(dx);
+  const damped = (1 - 1 / (absDx * 0.55 / width + 1)) * width; // 0.55 = iOS-standard damping coefficient
+  return dx < 0 ? -damped : damped;
+}
+
 const STATE = {
   IDLE: 'IDLE',
   SINGLE_TOUCH: 'SINGLE_TOUCH',
