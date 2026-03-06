@@ -378,7 +378,7 @@ export class PostContent extends Component {
       onTap: (x, y) => {
         if (document.body.classList.contains('ui-hidden')) {
           showUI();
-        } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
+        } else if (Date.now() - this._lastShowTime >= 150) {
           hideUI();
           clearTimeout(this._idleTimer);
         }
@@ -406,8 +406,10 @@ export class PostContent extends Component {
 
     // ── UI show / hide ──
     const showUI = () => {
-      document.body.classList.remove('ui-hidden');
-      this._lastShowTime = Date.now();
+      if (document.body.classList.contains('ui-hidden')) {
+        document.body.classList.remove('ui-hidden');
+        this._lastShowTime = Date.now();
+      }
       clearTimeout(this._idleTimer);
       this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
@@ -418,6 +420,20 @@ export class PostContent extends Component {
       if (e?.type === 'keydown' && navKeys.includes(e.key)) return;
       showUI();
     };
+
+    let lastTouchTime = 0;
+    this._on(document, 'touchstart', () => { lastTouchTime = Date.now(); }, { passive: true, capture: true });
+
+    this._on(wrapper, 'click', (e) => {
+      if (Date.now() - lastTouchTime < 500) return; // Ignore simulated click from touch
+      if (e.target.closest('a, button, input, .post-info-card')) return;
+      if (document.body.classList.contains('ui-hidden')) {
+        showUI();
+      } else if (Date.now() - this._lastShowTime >= 150) {
+        hideUI();
+        clearTimeout(this._idleTimer);
+      }
+    });
 
     this._on(document, 'mousemove',  resetIdle, { passive: true });
     this._on(document, 'mousedown',  resetIdle, { passive: true });
