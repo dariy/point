@@ -25,7 +25,7 @@ export class VisualEditor extends Component {
 
     const cards = nodes.map((node, i) => {
       if (node.type === 'image') {
-        const thumb = `{node.path}?thumb`;
+        const thumb = `${node.path}?thumb`;
         const filename = node.path.split('/').pop();
         return `
           ${insertZone(i)}

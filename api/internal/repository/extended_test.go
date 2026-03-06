@@ -202,6 +202,40 @@ func insertUserAndPost(t *testing.T, repo *Repository, slug, status string) (int
 	return uid, pid
 }
 
+func TestListPublishedPostStubs(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	ctx := context.Background()
+	// Create two published posts
+	uid, _ := insertUserAndPost(t, repo, "first", "published")
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01 10:00:00' WHERE slug='first'`)
+	
+	// Second post, newer
+	_, _ = repo.DB().Exec(
+		`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('Second', 'second', 'C', ?, 'published', '2024-01-01 11:00:00')`,
+		uid)
+
+	// Draft — should not appear
+	_, _ = repo.DB().Exec(
+		`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('Draft', 'draft', 'C', ?, 'draft', '2024-01-01 12:00:00')`,
+		uid)
+
+	stubs, err := repo.ListPublishedPostStubs(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(stubs) != 2 {
+		t.Fatalf("expected 2 stubs, got %d", len(stubs))
+	}
+	// newest first
+	if stubs[0].Slug != "second" || stubs[1].Slug != "first" {
+		t.Errorf("wrong order: %v %v", stubs[0].Slug, stubs[1].Slug)
+	}
+}
+
 func TestRepository_ListPostsWithSearch(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
@@ -283,6 +317,12 @@ func TestRepository_GetPostNavigation(t *testing.T) {
 	// Ensure ordering
 	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01' WHERE id=?`, pid1)
 	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-06-01' WHERE id=?`, pid2)
+
+	// Debug the DB values
+	var ts1, ts2 string
+	_ = repo.DB().QueryRow(`SELECT published_at FROM posts WHERE id=?`, pid1).Scan(&ts1)
+	_ = repo.DB().QueryRow(`SELECT published_at FROM posts WHERE id=?`, pid2).Scan(&ts2)
+	t.Logf("pid1=%d ts1=%s, pid2=%d ts2=%s", pid1, ts1, pid2, ts2)
 
 	prev, next, err := repo.GetPostNavigation(ctx, pid2, true)
 	if err != nil {

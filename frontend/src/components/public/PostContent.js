@@ -15,9 +15,12 @@
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { renderTagLink } from '../../utils/tags.js';
+import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
+import { getPostPageLocation } from '../../api/posts.js';
 
-const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
-const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide works
+const IDLE_MS = 2000;   // hide UI after 5 s of inactivity
+const MIN_SHOW_MS = 2000; // UI must be visible ≥ 3 s before click-to-hide works
+let _overlayHidden = false; // persists across post navigations
 
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'm4v', 'avi', 'mkv']);
 const AUDIO_EXTS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'opus']);
@@ -63,6 +66,7 @@ export class PostContent extends Component {
     this._idleTimer = null;
     this._lastShowTime = 0;
     this._listeners = []; // [target, type, fn, opts]
+    this._zoomState = { scale: 1, x: 0, y: 0 };
   }
 
   render() {
@@ -74,22 +78,30 @@ export class PostContent extends Component {
   }
 
   afterRender() {
-    const { post, forceImmersive = false } = this.props;
+    this._gesture?.destroy();
+    this._trackpad?.destroy();
+    const { post, prevPost = null, nextPost = null, forceImmersive = false } = this.props;
     if (!post) return;
     if (forceImmersive || shouldUseImmersive(post)) {
       document.body.classList.add('immersive-layout');
       this._initImmersive();
     } else {
+      document.body.classList.remove('immersive-layout', 'ui-hidden');
       const bodyEl = this.$('.post-content');
       if (bodyEl) this._enhanceMedia(bodyEl);
+      if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
     }
   }
 
   beforeUnmount() {
-    document.body.classList.remove('immersive-layout', 'ui-hidden');
+    _overlayHidden = document.body.classList.contains('ui-hidden');
+    // Body classes are kept intentionally — the next page's afterRender handles cleanup.
+    // Keeping them prevents the overlay blink when navigating between immersive posts.
     this._listeners.forEach(([t, type, fn, opts]) => t.removeEventListener(type, fn, opts));
     this._listeners = [];
     clearTimeout(this._idleTimer);
+    this._gesture?.destroy();
+    this._trackpad?.destroy();
   }
 
   // ── Immersive rendering ───────────────────────────────────────────────────
@@ -102,17 +114,9 @@ export class PostContent extends Component {
       ? this._mediaEl(items[0])
       : this._renderCarousel(items, startIndex);
 
-    const { showViewCount = false } = this.props;
-    const viewCount = showViewCount && post.view_count != null
-      ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
-
-    const content = post.content_html
-      ? `<div class="post-content-scrollable post-content">${post.content_html}</div>` : '';
-
     return `
       <div class="immersive-wrapper">
         <div class="immersive-visuals">${visuals}</div>
-
       </div>`;
   }
 
@@ -179,49 +183,60 @@ export class PostContent extends Component {
   // ── Immersive interactivity ───────────────────────────────────────────────
 
   _initImmersive() {
-    const { prevPost = null, nextPost = null, tagSlug } = this.props;
+    const { prevPost = null, nextPost = null, tagSlug, post } = this.props;
 
     // ── Carousel helpers ──
     const carousel = this.$('#immersive-carousel');
     const slides = carousel ? Array.from(carousel.querySelectorAll('.carousel-slide')) : [];
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
-    let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));
-
-    const goToPost = (post) => {
-      if (!post) return;
-      const target = slides[index] ?? this.$('.immersive-visuals');
+    let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));    const goToPost = (p) => {
+      if (!p) return;
+      const target = slides[index] ?? visuals;
       if (target) {
-        target.style.transition = 'opacity 0.5s ease';
-        target.style.opacity = '0';
+        target.classList.remove('immersive-fade-in');
+        target.classList.add('immersive-fade-out');
       }
       setTimeout(() => {
-        navigate(tagSlug ? `/tag/${tagSlug}?slug=${post.slug}` : `/post/${post.slug}`);
-      }, 500);
-    };
-
-    const goTo = (i) => {
+        navigate(tagSlug ? `/tag/${tagSlug}?slug=${p.slug}` : `/post/${p.slug}`);
+      }, 400);
+    };    const goTo = (i) => {
       const n = slides.length;
       if (!n) {
-        // Single image: arrow keys navigate between posts
-        if (i < 0) goToPost(prevPost);
-        else if (i > 0) goToPost(nextPost);
+        if (i < 0) goToPost(nextPost);
+        else if (i > 0) goToPost(prevPost);
         return;
       }
       const newIndex = ((i % n) + n) % n;
-      // At boundaries with no wrap intended: navigate to adjacent post
       if (i < 0 && newIndex === n - 1 && slides.length > 1) {
-        goToPost(prevPost);
-        return;
+        if (nextPost) { goToPost(nextPost); return; }
       }
       if (i >= n && newIndex === 0 && slides.length > 1) {
-        goToPost(nextPost);
-        return;
+        if (prevPost) { goToPost(prevPost); return; }
       }
-      slides[index]?.querySelector('video')?.pause();
+
+      const oldIndex = index;
+      if (oldIndex === newIndex) return;
+
+      // Update index immediately so gestures during transition reference the new slide.
       index = newIndex;
-      slides.forEach((s, j) => s.classList.toggle('active', j === index));
-      dots.forEach((d, j)   => d.classList.toggle('active', j === index));
-      slides[index]?.querySelector('video')?.play().catch(() => {});
+
+      const oldSlide = slides[oldIndex];
+      const newSlide = slides[newIndex];
+
+      // Hide old slide immediately to prevent it showing through the fading-in new slide.
+      if (oldSlide) {
+        oldSlide.querySelector('video')?.pause();
+        oldSlide.classList.remove('active', 'immersive-fade-in', 'immersive-fade-out');
+      }
+
+      // Activate and fade in the new slide.
+      if (newSlide) {
+        newSlide.classList.add('active', 'immersive-fade-in');
+        newSlide.querySelector('video')?.play().catch(() => {});
+      }
+
+      dots.forEach((d, j) => d.classList.toggle('active', j === index));
+      this._resetZoom();
     };
 
     if (carousel) {
@@ -237,27 +252,200 @@ export class PostContent extends Component {
     const fadeTarget = slides.length > 0 ? slides[index] : this.$('.immersive-visuals');
     fadeTarget?.classList.add('immersive-fade-in');
 
-    // ── Touch swipe ──
+    // ── Gestures & Zoom ──
     const wrapper = this.$('.immersive-wrapper');
-    let tx = 0, ty = 0, didSwipe = false;
-    this._on(wrapper, 'touchstart', (e) => {
-      tx = e.changedTouches[0].clientX;
-      ty = e.changedTouches[0].clientY;
-      didSwipe = false;
-    }, { passive: true });
-    this._on(wrapper, 'touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - tx;
-      const dy = e.changedTouches[0].clientY - ty;
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-        didSwipe = true;
-        goTo(index + (dx < 0 ? 1 : -1));
+    const visuals = this.$('.immersive-visuals');
+
+    this._resetZoom = () => {
+      this._zoomState = { scale: 1, x: 0, y: 0 };
+      this._updateVisuals(0, 0);
+      this._gesture?.setZoomed(false);
+      wrapper.classList.remove('zoomed');
+    };
+
+    const getMaxScale = () => {
+      const img = (slides[index] ?? visuals).querySelector('img, video');
+      if (!img || !img.complete && img.tagName === 'IMG') return 2;
+      const rect = img.getBoundingClientRect();
+      const naturalWidth = img.naturalWidth || img.videoWidth;
+      if (!naturalWidth) return 2;
+      const max = naturalWidth / rect.width;
+      return max > 1 ? max : 1;
+    };    this._constrainZoom = (animate = false) => {
+      const { scale } = this._zoomState;
+      if (scale <= 1) {
+        this._zoomState.x = 0;
+        this._zoomState.y = 0;
+        this._zoomState.scale = 1;
+      } else {
+        const img = (slides[index] ?? visuals).querySelector('img, video');
+        if (img) {
+          const rect = img.getBoundingClientRect();
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const rangeX = Math.max(0, (rect.width - vw) / 2);
+          const rangeY = Math.max(0, (rect.height - vh) / 2);
+          this._zoomState.x = Math.max(-rangeX, Math.min(rangeX, this._zoomState.x));
+          this._zoomState.y = Math.max(-rangeY, Math.min(rangeY, this._zoomState.y));
+        }
       }
-    }, { passive: true });
+      const target = slides[index] ?? visuals;
+      if (target && animate) {
+        target.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease';
+      }
+      this._updateVisuals();
+    };
+
+    this._updateVisuals = (dx = 0, dy = 0) => {
+      const { scale, x, y } = this._zoomState;
+      const tx = x + dx;
+      const ty = y + dy;
+      const target = slides[index] ?? visuals;
+      if (!target) return;
+
+      if (scale === 1) {
+        // Swipe feedback
+        if (Math.abs(tx) > Math.abs(ty)) {
+          target.style.transform = `translateX(${tx}px)`;
+          target.style.opacity = Math.max(0.3, 1 - Math.abs(tx) / window.innerWidth);
+        } else if (ty > 0) {
+          const s = Math.max(0.5, 1 - ty / window.innerHeight);
+          target.style.transform = `translateY(${ty}px) scale(${s})`;
+          target.style.opacity = s;
+        } else {
+          target.style.transform = '';
+          target.style.opacity = '1';
+        }
+      } else {
+        // Pan feedback
+        target.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+        target.style.opacity = '1';
+      }
+      target.style.transition = 'none';
+    };    const dismiss = async () => {
+      try {
+        const params = tagSlug ? { tag: tagSlug } : {};
+        const data = await getPostPageLocation(post.slug, params);
+        const url = tagSlug
+          ? (data.page > 1 ? `/tag/${tagSlug}?page=${data.page}` : `/tag/${tagSlug}`)
+          : (data.page > 1 ? `/?page=${data.page}` : '/');
+        navigate(url);
+      } catch (e) {
+        navigate(tagSlug ? `/tag/${tagSlug}` : '/');
+      }
+    };
+
+    this._gesture = new GestureController(wrapper, {
+      onSwipeMove: (dx, dy) => {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          const n = slides.length;
+          const atLastSlide  = n === 0 || index === n - 1;
+          const atFirstSlide = n === 0 || index === 0;
+          const blockedLeft  = dx < 0 && atLastSlide  && !prevPost;
+          const blockedRight = dx > 0 && atFirstSlide && !nextPost;
+          const blocked = blockedLeft || blockedRight;
+          const tx = blocked ? rubberBand(dx) : dx;
+          this._updateVisuals(tx, dy);
+        } else {
+          this._updateVisuals(dx, dy);
+        }
+      },
+      onSwipeCancel: () => {
+        if (this._zoomState.scale > 1) {
+          this._constrainZoom(true);
+        } else {
+          const target = slides[index] ?? visuals;
+          if (target) {
+            target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            target.style.transform = '';
+            target.style.opacity = '1';
+          }
+        }
+      },
+      onSwipeCommit: (dir) => {
+        if (dir === 'left' || dir === 'right') {
+          const n = slides.length;
+          const atLastSlide  = n === 0 || index === n - 1;
+          const atFirstSlide = n === 0 || index === 0;
+          const blocked = (dir === 'left'  && atLastSlide  && !prevPost)
+                       || (dir === 'right' && atFirstSlide && !nextPost);
+          if (blocked) {
+            // Spring back — same as onSwipeCancel
+            const target = slides[index] ?? visuals;
+            if (target) {
+              target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+              target.style.transform = '';
+              target.style.opacity = '1';
+            }
+            return;
+          }
+        }
+        // Reversed horizontal direction: left (dx<0) -> next (older)
+        if (dir === 'left') goTo(index + 1);
+        else if (dir === 'right') goTo(index - 1);
+        else if (dir === 'down') dismiss();
+        else this._updateVisuals();
+      },      onPanMove: (dx, dy) => {
+        this._zoomState.x += dx;
+        this._zoomState.y += dy;
+        this._updateVisuals();
+      },
+      onPinchEnd: () => {
+        this._constrainZoom(true);
+      },
+      onPinchMove: (delta, cx, cy) => {
+        const oldScale = this._zoomState.scale;
+        const newScale = Math.max(0.5, Math.min(getMaxScale() * 2, oldScale * delta));
+        if (newScale === oldScale) return;
+
+        // Zoom relative to pinch center
+        const rect = wrapper.getBoundingClientRect();
+        const rx = cx - rect.left - rect.width / 2;
+        const ry = cy - rect.top - rect.height / 2;
+
+        this._zoomState.x -= (rx - this._zoomState.x) * (newScale / oldScale - 1);
+        this._zoomState.y -= (ry - this._zoomState.y) * (newScale / oldScale - 1);
+        this._zoomState.scale = newScale;
+
+        this._gesture.setZoomed(newScale > 1);
+        wrapper.classList.toggle('zoomed', newScale > 1);
+        this._updateVisuals();
+      },
+      onTap: (x, y) => {
+        if (document.body.classList.contains('ui-hidden')) {
+          showUI();
+        } else if (Date.now() - this._lastShowTime >= 150) {
+          hideUI();
+          clearTimeout(this._idleTimer);
+        }
+      },
+      onDoubleTap: (x, y) => {
+        if (this._zoomState.scale > 1) {
+          this._resetZoom();
+        } else {
+          const max = getMaxScale();
+          if (max <= 1) return;
+          const rect = wrapper.getBoundingClientRect();
+          this._zoomState.scale = max;
+          this._zoomState.x = (rect.width / 2 - (x - rect.left)) * (max - 1);
+          this._zoomState.y = (rect.height / 2 - (y - rect.top)) * (max - 1);
+          this._gesture.setZoomed(true);
+          wrapper.classList.add('zoomed');
+          this._updateVisuals();
+        }
+      }
+    });
+
+    this._trackpad = new TrackpadDetector(wrapper, {
+      onHorizontal: (dir) => goTo(index + (dir === 'left' ? 1 : -1))
+    });
 
     // ── UI show / hide ──
     const showUI = () => {
-      document.body.classList.remove('ui-hidden');
-      this._lastShowTime = Date.now();
+      if (document.body.classList.contains('ui-hidden')) {
+        document.body.classList.remove('ui-hidden');
+        this._lastShowTime = Date.now();
+      }
       clearTimeout(this._idleTimer);
       this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
@@ -269,6 +457,20 @@ export class PostContent extends Component {
       showUI();
     };
 
+    let lastTouchTime = 0;
+    this._on(document, 'touchstart', () => { lastTouchTime = Date.now(); }, { passive: true, capture: true });
+
+    this._on(wrapper, 'click', (e) => {
+      if (Date.now() - lastTouchTime < 500) return; // Ignore simulated click from touch
+      if (e.target.closest('a, button, input, .post-info-card')) return;
+      if (document.body.classList.contains('ui-hidden')) {
+        showUI();
+      } else if (Date.now() - this._lastShowTime >= 150) {
+        hideUI();
+        clearTimeout(this._idleTimer);
+      }
+    });
+
     this._on(document, 'mousemove',  resetIdle, { passive: true });
     this._on(document, 'mousedown',  resetIdle, { passive: true });
     this._on(document, 'keydown',    resetIdle, { passive: true });
@@ -276,12 +478,17 @@ export class PostContent extends Component {
     // ── Keyboard ──
     this._on(document, 'keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (this._zoomState.scale > 1) {
+        if (e.key === 'Escape') this._resetZoom();
+        return;
+      }
       const n = slides.length;
-
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault(); goTo(index - 1);
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
         e.preventDefault(); goTo(index + 1);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault(); dismiss();
       } else if (e.key === 'Home') {
         e.preventDefault(); goTo(0);
       } else if (e.key === 'End') {
@@ -297,56 +504,49 @@ export class PostContent extends Component {
       }
     });
 
-    // ── Press / tap on image or wrapper to navigate or toggle UI ──
-    // Show direction hint on press, navigate on release.
-    let pressZone = null;
+    // Restore overlay visibility from previous post, or start visible then auto-hide
+    this._lastShowTime = Date.now();
+    if (_overlayHidden) {
+      hideUI();
+    } else {
+      this._idleTimer = setTimeout(hideUI, IDLE_MS);
+    }
+  }
 
-    const clearPressHint = () => {
-      wrapper.classList.remove('pressing-left', 'pressing-right');
-      pressZone = null;
-    };
-
-    this._on(wrapper, 'pointerdown', (e) => {
-      if (e.target.closest('a, button, input, .post-info-card')) return;
-      const x = e.clientX;
-      const width = window.innerWidth;
-      if (x < width * 0.3) {
-        pressZone = 'left';
-        wrapper.classList.add('pressing-left');
-      } else if (x > width * 0.7) {
-        pressZone = 'right';
-        wrapper.classList.add('pressing-right');
-      } else {
-        pressZone = 'center';
-      }
-    });
-
-    this._on(wrapper, 'pointerup', (e) => {
-      if (!pressZone) return;
-      const zone = pressZone;
-      clearPressHint();
-      if (didSwipe) { didSwipe = false; return; }
-      if (zone === 'left') {
-        goTo(index - 1);
-      } else if (zone === 'right') {
-        goTo(index + 1);
-      } else {
-        // Center: toggle UI
-        if (document.body.classList.contains('ui-hidden')) {
-          showUI();
-        } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
-          hideUI();
-          clearTimeout(this._idleTimer);
+  _initNormal(prevPost, nextPost) {
+    this._gesture = new GestureController(this.container, {
+      onSwipeMove: (dx, dy) => {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          const blocked = (dx < 0 && !prevPost) || (dx > 0 && !nextPost);
+          const tx = blocked ? rubberBand(dx) : dx;
+          this.container.style.transform = `translateX(${tx}px)`;
+          this.container.style.transition = 'none';
+          this.container.style.opacity = blocked
+            ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
+            : Math.max(0.3, 1 - Math.abs(tx) / (window.innerWidth || 500));
+        }
+      },
+      onSwipeCancel: () => {
+        this.container.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+        this.container.style.transform = '';
+        this.container.style.opacity = '1';
+      },
+      onSwipeCommit: (dir) => {
+        if (dir === 'left' && prevPost) navigate('/post/' + prevPost.slug);
+        else if (dir === 'right' && nextPost) navigate('/post/' + nextPost.slug);
+        else {
+          this.container.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+          this.container.style.transform = '';
+          this.container.style.opacity = '1';
         }
       }
     });
-
-    this._on(wrapper, 'pointercancel', clearPressHint);
-    this._on(wrapper, 'pointerleave', clearPressHint);
-
-    // Start with UI visible, then auto-hide
-    this._lastShowTime = Date.now();
-    this._idleTimer = setTimeout(hideUI, IDLE_MS);
+    this._trackpad = new TrackpadDetector(this.container, {
+      onHorizontal: (dir) => {
+        if (dir === 'left' && prevPost) navigate('/post/' + prevPost.slug);
+        else if (dir === 'right' && nextPost) navigate('/post/' + nextPost.slug);
+      }
+    });
   }
 
   /** Register a listener and track it for cleanup. */
