@@ -284,6 +284,12 @@ func TestRepository_GetPostNavigation(t *testing.T) {
 	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01' WHERE id=?`, pid1)
 	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-06-01' WHERE id=?`, pid2)
 
+	// Debug the DB values
+	var ts1, ts2 string
+	_ = repo.DB().QueryRow(`SELECT published_at FROM posts WHERE id=?`, pid1).Scan(&ts1)
+	_ = repo.DB().QueryRow(`SELECT published_at FROM posts WHERE id=?`, pid2).Scan(&ts2)
+	t.Logf("pid1=%d ts1=%s, pid2=%d ts2=%s", pid1, ts1, pid2, ts2)
+
 	prev, next, err := repo.GetPostNavigation(ctx, pid2, true)
 	if err != nil {
 		t.Fatalf("GetPostNavigation failed: %v", err)
