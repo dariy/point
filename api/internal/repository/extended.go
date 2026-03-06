@@ -774,6 +774,39 @@ type PostTagInfo struct {
 	IsHiddenPosts bool   `json:"is_hidden_posts"`
 }
 
+// PostStub is a lightweight post descriptor used for position/page lookups.
+type PostStub struct {
+	ID          int64
+	Slug        string
+	PublishedAt time.Time
+}
+
+// ListPublishedPostStubs returns id, slug, published_at for all published,
+// non-hidden posts, ordered newest first. Does not include content.
+func (r *Repository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, error) {
+	const q = `
+SELECT id, slug, published_at
+FROM posts
+WHERE status = 'published'
+ORDER BY published_at DESC, id DESC`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stubs []PostStub
+	for rows.Next() {
+		var s PostStub
+		if err := rows.Scan(&s.ID, &s.Slug, &s.PublishedAt); err != nil {
+			return nil, err
+		}
+		stubs = append(stubs, s)
+	}
+	return stubs, rows.Err()
+}
+
 // GetTagsByPostIDs bulk-fetches tags for a list of post IDs.
 // Returns a map of postID → []PostTagInfo.
 func (r *Repository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]PostTagInfo, error) {
