@@ -141,13 +141,20 @@
     transition: opacity 0.4s ease;
 }
 
-/* Fade-in on initial mount (post-to-post navigation) */
+/* Fade transitions for navigation */
 @keyframes immersiveFadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+@keyframes immersiveFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
 .immersive-fade-in {
-  animation: immersiveFadeIn 0.5s ease forwards;
+  animation: immersiveFadeIn 0.4s ease-out forwards;
+}
+.immersive-fade-out {
+  animation: immersiveFadeOut 0.4s ease-in forwards;
 }
 
 /* Navigation press hints — shown on pointerdown in left/right zones */
