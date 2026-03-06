@@ -16,7 +16,7 @@ import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { navigate } from '../../utils/helpers.js';
-import { SwipeDetector, TrackpadDetector } from '../../utils/gestures.js';
+import { GestureController, TrackpadDetector } from '../../utils/gestures.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
@@ -59,10 +59,8 @@ export default class HomePage extends Component {
         </main>
         <div id="footer-mount"></div>
       </div>`;
-  }
-
-  afterRender() {
-    this._swipe?.destroy();
+  }  afterRender() {
+    this._gesture?.destroy();
     this._trackpad?.destroy();
     const settings = store.get('settings') || {};
     const navTags = (this.state.data?.nav_tags) || store.get('navTags') || [];
@@ -87,10 +85,8 @@ export default class HomePage extends Component {
 
       // Gestures
       const gridMount = this.$('#grid-mount');
-      let previewEl = null;
-
-      this._swipe = new SwipeDetector(this.container, {
-        onMove: (dx, dy) => {
+      let previewEl = null;      this._gesture = new GestureController(this.container, {
+        onSwipeMove: (dx, dy) => {
           if (Math.abs(dx) > Math.abs(dy)) {
             // Restrict drag at boundaries
             if (dx < 0 && pagination.page >= pagination.pages) return;
@@ -139,7 +135,7 @@ export default class HomePage extends Component {
             previewEl.style.transform = `translateX(calc(${offset} + ${dx}px))`;
           }
         },
-        onEnd: () => {
+        onSwipeCancel: () => {
           if (gridMount) {
             gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
             gridMount.style.transform = '';
@@ -154,11 +150,26 @@ export default class HomePage extends Component {
             }, 300);
           }
         },
-        onHorizontal: (dir) => {
+        onSwipeCommit: (dir) => {
           if (dir === 'left' && pagination.page < pagination.pages) {
             navigate(`/?page=${pagination.page + 1}`);
           } else if (dir === 'right' && pagination.page > 1) {
             navigate(`/?page=${pagination.page - 1}`);
+          } else {
+            // Reset visuals if not committed
+            if (gridMount) {
+              gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+              gridMount.style.transform = '';
+              gridMount.style.opacity = '1';
+            }
+            if (previewEl) {
+              previewEl.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+              previewEl.style.opacity = '0';
+              setTimeout(() => {
+                previewEl?.remove();
+                previewEl = null;
+              }, 300);
+            }
           }
         }
       });
@@ -172,10 +183,8 @@ export default class HomePage extends Component {
         }
       });
     }
-  }
-
-  beforeUnmount() {
-    this._swipe?.destroy();
+  }  beforeUnmount() {
+    this._gesture?.destroy();
     this._trackpad?.destroy();
   }
 
