@@ -21,6 +21,7 @@ import { getTagPage } from '../../api/pages.js';
 import { getPostBySlug } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -80,9 +81,10 @@ export default class TagPage extends Component {
         </main>
         <div id="footer-mount"></div>
       </div>`;
-  }
-
-  afterRender() {
+  }  afterRender() {
+    document.body.classList.remove('immersive-layout', 'ui-hidden');
+    this._gesture?.destroy();
+    this._trackpad?.destroy();
     const settings = store.get('settings') || {};
     const navTags  = this.state.data?.root_nav_tags || this.state.data?.nav_tags || store.get('navTags') || [];
     if (navTags.length && this.state.data?.root_nav_tags) {
@@ -175,7 +177,112 @@ export default class TagPage extends Component {
           onPage: (p) => navigate(`/tag/${slug}?page=${p}`),
         });
       }
+
+      // Always set up gestures so horizontal swipes are captured and rubber-banded
+      // even on single-page lists (prevents browser history back/forward).
+      {
+        const gridMount = this.$('#grid-mount');
+        let previewEl = null;        this._gesture = new GestureController(this.container, {
+          onSwipeMove: (dx, dy) => {
+            if (Math.abs(dx) > Math.abs(dy)) {
+              const blocked = (dx < 0 && pagination.page >= pagination.pages)
+                         || (dx > 0 && pagination.page <= 1);
+              const tx = blocked ? rubberBand(dx) : dx;
+              gridMount.style.transform = `translateX(${tx}px)`;
+              gridMount.style.transition = 'none';
+              gridMount.style.opacity = blocked
+                ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
+                : Math.max(0.2, 1 - Math.abs(tx) / (window.innerWidth || 500));
+
+              if (blocked) return;
+
+              if (!previewEl) {
+                previewEl = document.createElement('div');
+                previewEl.className = 'grid-preview-placeholder';
+                previewEl.innerHTML = `
+                  <div class="posts-grid placeholder-grid" style="opacity: 0.5;">
+                    <div class="post-card-slot"></div>
+                    <div class="post-card-slot"></div>
+                    <div class="post-card-slot"></div>
+                    <div class="post-card-slot"></div>
+                  </div>
+                `;
+                previewEl.style.position = 'absolute';
+                previewEl.style.top = '0';
+                previewEl.style.width = '100%';
+                gridMount.parentElement.style.position = 'relative';
+                gridMount.parentElement.appendChild(previewEl);
+                
+                const targetPage = dx < 0 ? pagination.page + 1 : pagination.page - 1;
+                getTagPage(slug, { page: targetPage }).then((data) => {
+                  if (previewEl && data.posts) {
+                    const html = data.posts.map((p, i) => {
+                      const img = p.media?.find(m => m.type === 'image')?.url;
+                      const bg = img ? `url(${img}) center/cover` : 'var(--surface-card)';
+                      const cls = i === data.posts.findIndex(x => x.is_featured) ? ' featured-post' : '';
+                      return `<div class="post-card-slot${cls}"><div class="post-card" style="background: ${bg}; opacity: 0.8;"></div></div>`;
+                    }).join('');
+                    previewEl.innerHTML = `<div class="posts-grid">${html}</div>`;
+                  }
+                }).catch(() => {});
+              }
+
+              const offset = dx < 0 ? '100%' : '-100%';
+              previewEl.style.transform = `translateX(calc(${offset} + ${dx}px))`;
+            }
+          },
+          onSwipeCancel: () => {
+            if (gridMount) {
+              gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+              gridMount.style.transform = '';
+              gridMount.style.opacity = '1';
+            }
+            if (previewEl) {
+              previewEl.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+              previewEl.style.opacity = '0';
+              setTimeout(() => {
+                previewEl?.remove();
+                previewEl = null;
+              }, 300);
+            }
+          },
+          onSwipeCommit: (dir) => {
+            if (dir === 'left' && pagination.page < pagination.pages) {
+              navigate(`/tag/${slug}?page=${pagination.page + 1}`);
+            } else if (dir === 'right' && pagination.page > 1) {
+              navigate(`/tag/${slug}?page=${pagination.page - 1}`);
+            } else {
+              // Reset visuals if not committed
+              if (gridMount) {
+                gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+                gridMount.style.transform = '';
+                gridMount.style.opacity = '1';
+              }
+              if (previewEl) {
+                previewEl.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+                previewEl.style.opacity = '0';
+                setTimeout(() => {
+                  previewEl?.remove();
+                  previewEl = null;
+                }, 300);
+              }
+            }
+          }
+        });
+        this._trackpad = new TrackpadDetector(this.container, {
+          onHorizontal: (dir) => {
+            if (dir === 'left' && pagination.page < pagination.pages) {
+              navigate(`/tag/${slug}?page=${pagination.page + 1}`);
+            } else if (dir === 'right' && pagination.page > 1) {
+              navigate(`/tag/${slug}?page=${pagination.page - 1}`);
+            }
+          }
+        });
+      }
     }
+  }  beforeUnmount() {
+    this._gesture?.destroy();
+    this._trackpad?.destroy();
   }
 
   mount() {

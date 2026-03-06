@@ -292,7 +292,7 @@ func (r *Repository) GetPublishedPostsForSitemap(ctx context.Context) ([]struct 
 	const q = `
 SELECT slug, COALESCE(updated_at, published_at, created_at) as updated_at
 FROM posts
-WHERE status = 'published'
+WHERE LOWER(status) = 'published'
 ORDER BY published_at DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -401,7 +401,7 @@ type PostNavItem struct {
 // the given post's published_at timestamp. Either pointer may be nil when there
 // is no adjacent post.
 func (r *Repository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error) {
-	const qDate = `SELECT published_at FROM posts WHERE id = ? LIMIT 1`
+	const qDate = `SELECT CAST(published_at AS TEXT) FROM posts WHERE id = ? LIMIT 1`
 	var publishedAt string
 	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&publishedAt); err != nil {
 		return nil, nil, err
@@ -414,19 +414,19 @@ func (r *Repository) GetPostNavigation(ctx context.Context, postID int64, public
 
 	qPrev := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE (%s) AND published_at < ? AND id != ?
-ORDER BY published_at DESC LIMIT 1`, statusFilter)
+WHERE (%s) AND (published_at < ? OR (published_at = ? AND id < ?))
+ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter)
 	var p PostNavItem
-	if err2 := r.db.QueryRowContext(ctx, qPrev, publishedAt, postID).Scan(&p.ID, &p.Title, &p.Slug); err2 == nil {
+	if err2 := r.db.QueryRowContext(ctx, qPrev, publishedAt, publishedAt, postID).Scan(&p.ID, &p.Title, &p.Slug); err2 == nil {
 		prev = &p
 	}
 
 	qNext := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE (%s) AND published_at > ? AND id != ?
-ORDER BY published_at ASC LIMIT 1`, statusFilter)
+WHERE (%s) AND (published_at > ? OR (published_at = ? AND id > ?))
+ORDER BY published_at ASC, id ASC LIMIT 1`, statusFilter)
 	var n PostNavItem
-	if err2 := r.db.QueryRowContext(ctx, qNext, publishedAt, postID).Scan(&n.ID, &n.Title, &n.Slug); err2 == nil {
+	if err2 := r.db.QueryRowContext(ctx, qNext, publishedAt, publishedAt, postID).Scan(&n.ID, &n.Title, &n.Slug); err2 == nil {
 		next = &n
 	}
 
@@ -772,6 +772,40 @@ type PostTagInfo struct {
 	Slug          string `json:"slug"`
 	IsHidden      bool   `json:"is_hidden"`
 	IsHiddenPosts bool   `json:"is_hidden_posts"`
+}
+
+// PostStub is a lightweight post descriptor used for position/page lookups.
+type PostStub struct {
+	ID          int64
+	Slug        string
+	PublishedAt time.Time
+	CreatedAt   time.Time
+}
+
+// ListPublishedPostStubs returns id, slug, published_at for all published,
+// non-hidden posts, ordered newest first. Does not include content.
+func (r *Repository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, error) {
+	const q = `
+SELECT id, slug, published_at, created_at
+FROM posts
+WHERE LOWER(status) = 'published'
+ORDER BY published_at DESC, created_at DESC`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var stubs []PostStub
+	for rows.Next() {
+		var s PostStub
+		if err := rows.Scan(&s.ID, &s.Slug, &s.PublishedAt, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		stubs = append(stubs, s)
+	}
+	return stubs, rows.Err()
 }
 
 // GetTagsByPostIDs bulk-fetches tags for a list of post IDs.

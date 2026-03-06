@@ -262,3 +262,18 @@ Edit individual files in `css/common/`, `css/light/`, or `css/public/`. Run `scr
 - **CSS requires bundling** — editing `.css` files in `css/` requires running `build-css.sh` to take effect.
 - **Python backend is fully removed** — there is no `app/` directory, no `venv`, no `pytest`.
 - **Auth is session-cookie**, not JWT. Sessions are stored in SQLite.
+
+## metaswarm
+
+This project uses [metaswarm](https://github.com/dsifry/metaswarm) for multi-agent orchestration.
+
+**Setup:** Run `/metaswarm-setup` to detect your project and configure metaswarm.
+
+**Update:** Run `/metaswarm-update-version` to update metaswarm.
+
+## MCP
+Use 
+- serena-go for semantic code retrieval and editing tools for `api` sub-project; 
+- serena-js for semantic code retrieval and editing tools for `frontend` sub-project. 
+- context7 for up to date documentation on third party code
+- sqlite for database access
