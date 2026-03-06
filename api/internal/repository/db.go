@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"point-api/internal/models"
 )
 
@@ -14,7 +14,7 @@ type Repository struct {
 }
 
 func NewRepository(dbURL string) (*Repository, error) {
-	db, err := sql.Open("sqlite3", dbURL)
+	db, err := sql.Open("sqlite", dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

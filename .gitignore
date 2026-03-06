@@ -137,7 +137,7 @@ api/coverage.html
 frontend/js/
 light.css
 main.css
-api/api
+api/api*
 
 .claude/**
 .zed/**
