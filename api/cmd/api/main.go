@@ -19,6 +19,21 @@ import (
 	"point-api/internal/services"
 )
 
+// resolveJSDir returns the directory to serve under /assets/js.
+// It prefers the pre-built bundle directory (frontend/js/) over the raw
+// source directory (frontend/src/), enabling zero-config dev/prod switching.
+func resolveJSDir(frontendDir string) string {
+	jsDir := filepath.Join(frontendDir, "js")
+	if _, err := os.Stat(jsDir); err == nil {
+		return jsDir
+	}
+	srcDir := filepath.Join(frontendDir, "src")
+	if fi, err := os.Stat(srcDir); err == nil && fi.IsDir() {
+		return srcDir
+	}
+	return ""
+}
+
 func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig(".")
@@ -259,15 +274,14 @@ func main() {
 	frontendDir := cfg.FrontendDir
 	if fi, err := os.Stat(frontendDir); err == nil && fi.IsDir() {
 		cssDir := filepath.Join(frontendDir, "css")
-		srcDir := filepath.Join(frontendDir, "src")
 		imagesDir := filepath.Join(frontendDir, "images")
 		vendorDir := filepath.Join(frontendDir, "vendor")
 
 		if fi, err := os.Stat(cssDir); err == nil && fi.IsDir() {
 			e.Static("/assets/css", cssDir)
 		}
-		if fi, err := os.Stat(srcDir); err == nil && fi.IsDir() {
-			e.Static("/assets/js", srcDir)
+		if jsDir := resolveJSDir(frontendDir); jsDir != "" {
+			e.Static("/assets/js", jsDir)
 		}
 		if fi, err := os.Stat(imagesDir); err == nil && fi.IsDir() {
 			e.Static("/assets/images", imagesDir)
