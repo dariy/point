@@ -365,7 +365,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var resp map[string]interface{}
-		json.NewDecoder(rec.Body).Decode(&resp)
+		_ = json.NewDecoder(rec.Body).Decode(&resp)
 		if int(resp["page"].(float64)) != 1 {
 			t.Errorf("expected page 1, got %v", resp["page"])
 		}
@@ -382,7 +382,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var resp map[string]interface{}
-		json.NewDecoder(rec.Body).Decode(&resp)
+		_ = json.NewDecoder(rec.Body).Decode(&resp)
 		if int(resp["page"].(float64)) != 2 {
 			t.Errorf("expected page 2, got %v", resp["page"])
 		}
