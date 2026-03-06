@@ -94,7 +94,7 @@ export class TagsInput extends Component {
     this.props.onChange?.(tags);
 
     const input = this.$('#tag-text-input');
-    if (input) input.value = '';
+    if (input) { input.value = ''; input.focus(); }
     this._hideSuggestions();
   }
 
