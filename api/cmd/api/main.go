@@ -179,6 +179,7 @@ func main() {
 	postsGroup.POST("", postHandler.CreatePost, api.AuthMiddleware(authService))
 	postsGroup.POST("/audio", postHandler.CreateAudioPost, api.AuthMiddleware(authService))
 	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(authService))
+	postsGroup.GET("/:slug/page", postHandler.GetPostPage, api.OptionalAuthMiddleware(authService))
 	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(authService))
 	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(authService))
 	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(authService))
