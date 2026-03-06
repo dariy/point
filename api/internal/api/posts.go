@@ -182,7 +182,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	if c.Get("user") == nil {
-		if post.Status == "draft" || post.Status == "hidden" {
+		if (strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden")) {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
@@ -192,7 +192,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		}
 	}
 
-	if post.Status == "published" {
+	if strings.EqualFold(post.Status, "published") {
 		_ = h.postService.IncrementViewCount(ctx, post.ID)
 	}
 
@@ -203,6 +203,97 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+// GetPostPage returns the home-feed (or tag-feed) page number that contains the given post slug.
+// GET /api/posts/:slug/page?tag=some-tag
+func (h *PostHandler) GetPostPage(c echo.Context) error {
+	ctx := c.Request().Context()
+	slug := c.Param("slug")
+	tagFilter := c.QueryParam("tag")
+	user := c.Get("user")
+	publicOnly := user == nil
+
+	// Verify the post exists and is published
+	post, err := h.postService.GetPostBySlug(ctx, slug)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "post not found")
+	}
+
+	// Compute effective hidden-posts tag set
+	hiddenTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+
+	// Fetch all published post stubs (lightweight: id, slug, published_at)
+	stubs, err := h.postService.ListPublishedPostStubs(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list posts")
+	}
+
+	// Bulk-fetch tags for all stub IDs
+	ids := make([]int64, len(stubs))
+	for i, s := range stubs {
+		ids[i] = s.ID
+	}
+	tagsMap, _ := h.postService.GetTagsByPostIDs(ctx, ids)
+
+	// Walk stubs in order (newest first), apply filters, find position
+	position := 0
+	found := false
+
+	var filterTagIDs map[int64]bool
+	if tagFilter != "" {
+		t, err := h.tagService.GetTagBySlug(ctx, tagFilter)
+		if err == nil {
+			filterTagIDs = make(map[int64]bool)
+			filterTagIDs[t.ID] = true
+			desc, _ := h.tagService.GetTagDescendants(ctx, t.ID)
+			for _, d := range desc {
+				filterTagIDs[d.ID] = true
+			}
+		}
+	}
+
+	for _, s := range stubs {
+		// Public visibility check
+		if publicOnly && !IsPostVisibleToPublic(tagsMap[s.ID], hiddenTagIDs) {
+			continue
+		}
+
+		// Tag filter check
+		if tagFilter != "" {
+			hasTag := false
+			for _, t := range tagsMap[s.ID] {
+				if filterTagIDs[t.ID] {
+					hasTag = true
+					break
+				}
+			}
+			if !hasTag {
+				continue
+			}
+		}
+
+		position++
+		if s.Slug == post.Slug {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return echo.NewHTTPError(http.StatusNotFound, "post not found")
+	}
+
+	perPageStr, _ := h.settingsService.GetSetting(ctx, "posts_per_page", "10")
+	perPage, _ := strconv.Atoi(perPageStr)
+	if perPage < 1 {
+		perPage = 10
+	}
+
+	page := int(math.Ceil(float64(position) / float64(perPage)))
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"page":     page,
+		"per_page": perPage,
+	})
 }
 
 func (h *PostHandler) GetPostByID(c echo.Context) error {
@@ -221,7 +312,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	if c.Get("user") == nil {
-		if post.Status == "draft" || post.Status == "hidden" {
+		if (strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden")) {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {

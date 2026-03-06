@@ -99,3 +99,13 @@ export function updatePostTags(id, tags) {
 export function getPostNavigation(id) {
   return api.get(`/api/posts/${id}/navigation`);
 }
+
+/**
+ * Find which home-feed (or tag-feed) page contains the given post.
+ * @param {string} slug
+ * @param {Object} [params] e.g. { tag: 'travel' }
+ * @returns {Promise<{ page: number, per_page: number }>}
+ */
+export function getPostPageLocation(slug, params = {}) {
+  return api.get(`/api/posts/${slug}/page`, params);
+}
