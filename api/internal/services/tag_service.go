@@ -60,6 +60,10 @@ func (s *TagService) GetTagByID(ctx context.Context, id int64) (models.Tag, erro
 	return s.repo.GetTag(ctx, id)
 }
 
+func (s *TagService) GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error) {
+	return s.repo.GetTagDescendants(ctx, tagID)
+}
+
 type CreateTagParams struct {
 	Name                       string
 	Slug                       string
