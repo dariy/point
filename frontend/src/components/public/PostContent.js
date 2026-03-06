@@ -184,44 +184,53 @@ export class PostContent extends Component {
     const carousel = this.$('#immersive-carousel');
     const slides = carousel ? Array.from(carousel.querySelectorAll('.carousel-slide')) : [];
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
-    let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));
-
-    const goToPost = (p) => {
+    let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));    const goToPost = (p) => {
       if (!p) return;
-      const target = slides[index] ?? this.$('.immersive-visuals');
+      const target = slides[index] ?? visuals;
       if (target) {
-        target.style.transition = 'opacity 0.5s ease';
-        target.style.opacity = '0';
+        target.classList.remove('immersive-fade-in');
+        target.classList.add('immersive-fade-out');
       }
       setTimeout(() => {
         navigate(tagSlug ? `/tag/${tagSlug}?slug=${p.slug}` : `/post/${p.slug}`);
-      }, 500);
-    };
-
-    const goTo = (i) => {
+      }, 400);
+    };    const goTo = (i) => {
       const n = slides.length;
       if (!n) {
-        // Single image: reversed direction logic
-        // Swipe left (next) -> older (prevPost)
-        // Swipe right (prev) -> newer (nextPost)
         if (i < 0) goToPost(nextPost);
         else if (i > 0) goToPost(prevPost);
         return;
       }
       const newIndex = ((i % n) + n) % n;
-      // Boundaries
       if (i < 0 && newIndex === n - 1 && slides.length > 1) {
         if (nextPost) { goToPost(nextPost); return; }
       }
       if (i >= n && newIndex === 0 && slides.length > 1) {
         if (prevPost) { goToPost(prevPost); return; }
       }
-      slides[index]?.querySelector('video')?.pause();
-      index = newIndex;
-      slides.forEach((s, j) => s.classList.toggle('active', j === index));
-      dots.forEach((d, j)   => d.classList.toggle('active', j === index));
-      slides[index]?.querySelector('video')?.play().catch(() => {});
-      this._resetZoom();
+
+      const oldIndex = index;
+      if (oldIndex === newIndex) return;
+
+      const oldSlide = slides[oldIndex];
+      const newSlide = slides[newIndex];
+
+      if (oldSlide) {
+        oldSlide.querySelector('video')?.pause();
+        oldSlide.classList.remove('immersive-fade-in');
+        oldSlide.classList.add('immersive-fade-out');
+      }
+
+      setTimeout(() => {
+        if (oldSlide) oldSlide.classList.remove('active', 'immersive-fade-out');
+        index = newIndex;
+        if (newSlide) {
+          newSlide.classList.add('active', 'immersive-fade-in');
+          newSlide.querySelector('video')?.play().catch(() => {});
+        }
+        dots.forEach((d, j) => d.classList.toggle('active', j === index));
+        this._resetZoom();
+      }, 400);
     };
 
     if (carousel) {
