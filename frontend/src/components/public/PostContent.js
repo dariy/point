@@ -15,7 +15,7 @@
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { renderTagLink } from '../../utils/tags.js';
-import { SwipeDetector, TrackpadDetector } from '../../utils/gestures.js';
+import { GestureController, TrackpadDetector } from '../../utils/gestures.js';
 
 const IDLE_MS = 5000;   // hide UI after 5 s of inactivity
 const MIN_SHOW_MS = 3000; // UI must be visible ≥ 3 s before click-to-hide works
@@ -64,6 +64,7 @@ export class PostContent extends Component {
     this._idleTimer = null;
     this._lastShowTime = 0;
     this._listeners = []; // [target, type, fn, opts]
+    this._zoomState = { scale: 1, x: 0, y: 0 };
   }
 
   render() {
@@ -75,7 +76,7 @@ export class PostContent extends Component {
   }
 
   afterRender() {
-    this._swipe?.destroy();
+    this._gesture?.destroy();
     this._trackpad?.destroy();
     const { post, prevPost = null, nextPost = null, forceImmersive = false } = this.props;
     if (!post) return;
@@ -94,7 +95,7 @@ export class PostContent extends Component {
     this._listeners.forEach(([t, type, fn, opts]) => t.removeEventListener(type, fn, opts));
     this._listeners = [];
     clearTimeout(this._idleTimer);
-    this._swipe?.destroy();
+    this._gesture?.destroy();
     this._trackpad?.destroy();
   }
 
@@ -108,17 +109,9 @@ export class PostContent extends Component {
       ? this._mediaEl(items[0])
       : this._renderCarousel(items, startIndex);
 
-    const { showViewCount = false } = this.props;
-    const viewCount = showViewCount && post.view_count != null
-      ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
-
-    const content = post.content_html
-      ? `<div class="post-content-scrollable post-content">${post.content_html}</div>` : '';
-
     return `
       <div class="immersive-wrapper">
         <div class="immersive-visuals">${visuals}</div>
-
       </div>`;
   }
 
@@ -185,7 +178,7 @@ export class PostContent extends Component {
   // ── Immersive interactivity ───────────────────────────────────────────────
 
   _initImmersive() {
-    const { prevPost = null, nextPost = null, tagSlug } = this.props;
+    const { prevPost = null, nextPost = null, tagSlug, post } = this.props;
 
     // ── Carousel helpers ──
     const carousel = this.$('#immersive-carousel');
@@ -193,39 +186,42 @@ export class PostContent extends Component {
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
     let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));
 
-    const goToPost = (post) => {
-      if (!post) return;
+    const goToPost = (p) => {
+      if (!p) return;
       const target = slides[index] ?? this.$('.immersive-visuals');
       if (target) {
         target.style.transition = 'opacity 0.5s ease';
         target.style.opacity = '0';
       }
       setTimeout(() => {
-        navigate(tagSlug ? `/tag/${tagSlug}?slug=${post.slug}` : `/post/${post.slug}`);
+        navigate(tagSlug ? `/tag/${tagSlug}?slug=${p.slug}` : `/post/${p.slug}`);
       }, 500);
     };
 
     const goTo = (i) => {
       const n = slides.length;
       if (!n) {
-        // Single image: arrow keys navigate between posts
-        if (i < 0) goToPost(prevPost);
-        else if (i > 0) goToPost(nextPost);
+        // Single image: reversed direction logic
+        // Swipe left (next) -> older (prevPost)
+        // Swipe right (prev) -> newer (nextPost)
+        if (i < 0) goToPost(nextPost);
+        else if (i > 0) goToPost(prevPost);
         return;
       }
       const newIndex = ((i % n) + n) % n;
-      // At boundaries with no wrap intended: navigate to adjacent post if it exists
+      // Boundaries
       if (i < 0 && newIndex === n - 1 && slides.length > 1) {
-        if (prevPost) { goToPost(prevPost); return; }
+        if (nextPost) { goToPost(nextPost); return; }
       }
       if (i >= n && newIndex === 0 && slides.length > 1) {
-        if (nextPost) { goToPost(nextPost); return; }
+        if (prevPost) { goToPost(prevPost); return; }
       }
       slides[index]?.querySelector('video')?.pause();
       index = newIndex;
       slides.forEach((s, j) => s.classList.toggle('active', j === index));
       dots.forEach((d, j)   => d.classList.toggle('active', j === index));
       slides[index]?.querySelector('video')?.play().catch(() => {});
+      this._resetZoom();
     };
 
     if (carousel) {
@@ -241,43 +237,131 @@ export class PostContent extends Component {
     const fadeTarget = slides.length > 0 ? slides[index] : this.$('.immersive-visuals');
     fadeTarget?.classList.add('immersive-fade-in');
 
-    // ── Gestures ──
+    // ── Gestures & Zoom ──
     const wrapper = this.$('.immersive-wrapper');
-    const dismiss = () => {
-      if (tagSlug) navigate(`/tag/${tagSlug}`);
-      else history.back();
+    const visuals = this.$('.immersive-visuals');
+    
+    this._resetZoom = () => {
+      this._zoomState = { scale: 1, x: 0, y: 0 };
+      this._updateVisuals(0, 0);
+      this._gesture?.setZoomed(false);
+      wrapper.classList.remove('zoomed');
     };
 
-    this._didSwipe = false;
-    const visuals = this.$('.immersive-visuals');
-    this._swipe = new SwipeDetector(wrapper, {
-      onMove: (dx, dy) => {
-        if (visuals) {
-          if (Math.abs(dx) > Math.abs(dy)) {
-            visuals.style.transform = `translateX(${dx}px)`;
-            visuals.style.opacity = Math.max(0.3, 1 - Math.abs(dx) / window.innerWidth);
-          } else if (dy > 0) {
-            const scale = Math.max(0.5, 1 - dy / window.innerHeight);
-            visuals.style.transform = `translateY(${dy}px) scale(${scale})`;
-            visuals.style.opacity = scale;
-          }
-          visuals.style.transition = 'none';
+    const getMaxScale = () => {
+      const img = (slides[index] ?? visuals).querySelector('img, video');
+      if (!img || !img.complete && img.tagName === 'IMG') return 2;
+      const rect = img.getBoundingClientRect();
+      const naturalWidth = img.naturalWidth || img.videoWidth;
+      if (!naturalWidth) return 2;
+      const max = naturalWidth / rect.width;
+      return max > 1 ? max : 1;
+    };
+
+    this._updateVisuals = (dx = 0, dy = 0) => {
+      const { scale, x, y } = this._zoomState;
+      const tx = x + dx;
+      const ty = y + dy;
+      const target = slides[index] ?? visuals;
+      if (!target) return;
+      
+      if (scale === 1) {
+        // Swipe feedback
+        if (Math.abs(tx) > Math.abs(ty)) {
+          target.style.transform = `translateX(${tx}px)`;
+          target.style.opacity = Math.max(0.3, 1 - Math.abs(tx) / window.innerWidth);
+        } else if (ty > 0) {
+          const s = Math.max(0.5, 1 - ty / window.innerHeight);
+          target.style.transform = `translateY(${ty}px) scale(${s})`;
+          target.style.opacity = s;
+        } else {
+          target.style.transform = '';
+          target.style.opacity = '1';
+        }
+      } else {
+        // Pan feedback
+        target.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+        target.style.opacity = '1';
+      }
+      target.style.transition = 'none';
+    };
+
+    const dismiss = async () => {
+      if (tagSlug) {
+        navigate(`/tag/${tagSlug}`);
+      } else {
+        // Use the new API to find exactly which page to go back to
+        try {
+          const res = await fetch(`/api/posts/${post.slug}/page`);
+          const data = await res.json();
+          navigate(data.page > 1 ? `/?page=${data.page}` : '/');
+        } catch (e) {
+          navigate('/');
+        }
+      }
+    };
+
+    this._gesture = new GestureController(wrapper, {
+      onSwipeMove: (dx, dy) => this._updateVisuals(dx, dy),
+      onSwipeCancel: () => {
+        const target = slides[index] ?? visuals;
+        if (target) {
+          target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+          this._updateVisuals();
         }
       },
-      onEnd: () => {
-        if (visuals) {
-          visuals.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-          visuals.style.transform = '';
-          visuals.style.opacity = '1';
+      onSwipeCommit: (dir) => {
+        // Reversed horizontal direction: left (dx<0) -> next (older)
+        if (dir === 'left') goTo(index + 1);
+        else if (dir === 'right') goTo(index - 1);
+        else if (dir === 'down') dismiss();
+        else this._updateVisuals();
+      },
+      onPanMove: (dx, dy) => {
+        this._zoomState.x += dx;
+        this._zoomState.y += dy;
+        this._updateVisuals();
+      },
+      onPinchMove: (delta, cx, cy) => {
+        const oldScale = this._zoomState.scale;
+        const newScale = Math.max(1, Math.min(getMaxScale(), oldScale * delta));
+        if (newScale === oldScale) return;
+        
+        // Zoom relative to pinch center
+        const rect = wrapper.getBoundingClientRect();
+        const rx = cx - rect.left - rect.width / 2;
+        const ry = cy - rect.top - rect.height / 2;
+        
+        this._zoomState.x -= (rx - this._zoomState.x) * (newScale / oldScale - 1);
+        this._zoomState.y -= (ry - this._zoomState.y) * (newScale / oldScale - 1);
+        this._zoomState.scale = newScale;
+        
+        this._gesture.setZoomed(newScale > 1);
+        wrapper.classList.toggle('zoomed', newScale > 1);
+        this._updateVisuals();
+      },
+      onTap: (x, y) => {
+        if (document.body.classList.contains('ui-hidden')) {
+          showUI();
+        } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
+          hideUI();
+          clearTimeout(this._idleTimer);
         }
       },
-      onHorizontal: (dir) => {
-        this._didSwipe = true;
-        goTo(index + (dir === 'left' ? 1 : -1));
-      },
-      onVertical: (dir) => {
-        this._didSwipe = true;
-        if (dir === 'down') dismiss();
+      onDoubleTap: (x, y) => {
+        if (this._zoomState.scale > 1) {
+          this._resetZoom();
+        } else {
+          const max = getMaxScale();
+          if (max <= 1) return;
+          const rect = wrapper.getBoundingClientRect();
+          this._zoomState.scale = max;
+          this._zoomState.x = (rect.width / 2 - (x - rect.left)) * (max - 1);
+          this._zoomState.y = (rect.height / 2 - (y - rect.top)) * (max - 1);
+          this._gesture.setZoomed(true);
+          wrapper.classList.add('zoomed');
+          this._updateVisuals();
+        }
       }
     });
 
@@ -307,12 +391,17 @@ export class PostContent extends Component {
     // ── Keyboard ──
     this._on(document, 'keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (this._zoomState.scale > 1) {
+        if (e.key === 'Escape') this._resetZoom();
+        return;
+      }
       const n = slides.length;
-
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault(); goTo(index - 1);
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
         e.preventDefault(); goTo(index + 1);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault(); dismiss();
       } else if (e.key === 'Home') {
         e.preventDefault(); goTo(0);
       } else if (e.key === 'End') {
@@ -328,83 +417,41 @@ export class PostContent extends Component {
       }
     });
 
-    // ── Press / tap on image or wrapper to navigate or toggle UI ──
-    // Show direction hint on press, navigate on release.
-    let pressZone = null;
-
-    const clearPressHint = () => {
-      wrapper.classList.remove('pressing-left', 'pressing-right');
-      pressZone = null;
-    };
-
-    this._on(wrapper, 'pointerdown', (e) => {
-      if (e.target.closest('a, button, input, .post-info-card')) return;
-      const x = e.clientX;
-      const width = window.innerWidth;
-      if (x < width * 0.3) {
-        pressZone = 'left';
-        wrapper.classList.add('pressing-left');
-      } else if (x > width * 0.7) {
-        pressZone = 'right';
-        wrapper.classList.add('pressing-right');
-      } else {
-        pressZone = 'center';
-      }
-    });
-
-    this._on(wrapper, 'pointerup', (e) => {
-      if (!pressZone) return;
-      const zone = pressZone;
-      clearPressHint();
-      if (this._didSwipe) { this._didSwipe = false; return; }
-      if (zone === 'left') {
-        goTo(index - 1);
-      } else if (zone === 'right') {
-        goTo(index + 1);
-      } else {
-        // Center: toggle UI
-        if (document.body.classList.contains('ui-hidden')) {
-          showUI();
-        } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
-          hideUI();
-          clearTimeout(this._idleTimer);
-        }
-      }
-    });
-
-    this._on(wrapper, 'pointercancel', clearPressHint);
-    this._on(wrapper, 'pointerleave', clearPressHint);
-
     // Start with UI visible, then auto-hide
     this._lastShowTime = Date.now();
     this._idleTimer = setTimeout(hideUI, IDLE_MS);
   }
 
   _initNormal(prevPost, nextPost) {
-    this._swipe = new SwipeDetector(this.container, {
-      onMove: (dx, dy) => {
+    this._gesture = new GestureController(this.container, {
+      onSwipeMove: (dx, dy) => {
         if (Math.abs(dx) > Math.abs(dy)) {
-          if (dx < 0 && !nextPost) return;
-          if (dx > 0 && !prevPost) return;
+          if (dx < 0 && !prevPost) return; // swipe-left -> older (prev)
+          if (dx > 0 && !nextPost) return; // swipe-right -> newer (next)
           this.container.style.transform = `translateX(${dx}px)`;
           this.container.style.transition = 'none';
           this.container.style.opacity = Math.max(0.3, 1 - Math.abs(dx) / (window.innerWidth || 500));
         }
       },
-      onEnd: () => {
+      onSwipeCancel: () => {
         this.container.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
         this.container.style.transform = '';
         this.container.style.opacity = '1';
       },
-      onHorizontal: (dir) => {
-        if (dir === 'left' && nextPost) navigate('/post/' + nextPost.slug);
-        else if (dir === 'right' && prevPost) navigate('/post/' + prevPost.slug);
+      onSwipeCommit: (dir) => {
+        if (dir === 'left' && prevPost) navigate('/post/' + prevPost.slug);
+        else if (dir === 'right' && nextPost) navigate('/post/' + nextPost.slug);
+        else {
+          this.container.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+          this.container.style.transform = '';
+          this.container.style.opacity = '1';
+        }
       }
     });
     this._trackpad = new TrackpadDetector(this.container, {
       onHorizontal: (dir) => {
-        if (dir === 'left' && nextPost) navigate('/post/' + nextPost.slug);
-        else if (dir === 'right' && prevPost) navigate('/post/' + prevPost.slug);
+        if (dir === 'left' && prevPost) navigate('/post/' + prevPost.slug);
+        else if (dir === 'right' && nextPost) navigate('/post/' + nextPost.slug);
       }
     });
   }
