@@ -270,3 +270,10 @@ This project uses [metaswarm](https://github.com/dsifry/metaswarm) for multi-age
 **Setup:** Run `/metaswarm-setup` to detect your project and configure metaswarm.
 
 **Update:** Run `/metaswarm-update-version` to update metaswarm.
+
+## MCP
+Use 
+- serena-go for semantic code retrieval and editing tools for `api` sub-project; 
+- serena-js for semantic code retrieval and editing tools for `frontend` sub-project. 
+- context7 for up to date documentation on third party code
+- sqlite for database access
