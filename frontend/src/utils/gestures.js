@@ -1,130 +1,267 @@
 /**
- * Detects swipe gestures on a given element.
+ * GestureController — unified touch gesture state machine.
+ *
+ * Recognises: horizontal swipe, vertical swipe, pinch, pan (while zoomed), tap, double-tap.
+ * Call setZoomed(true) when the consumer has zoomed in so that horizontal drags
+ * route to onPanMove instead of onSwipeMove.
  */
-export class SwipeDetector {
+
+const STATE = {
+  IDLE: 'IDLE',
+  SINGLE_TOUCH: 'SINGLE_TOUCH',
+  MULTI_TOUCH: 'MULTI_TOUCH',
+  SWIPING_H: 'SWIPING_H',
+  SWIPING_V: 'SWIPING_V',
+  PINCHING: 'PINCHING',
+  PANNING: 'PANNING',
+};
+
+export class GestureController {
   /**
    * @param {HTMLElement} element
-   * @param {Object} options
-   * @param {Function} options.onHorizontal - Called with 'left' | 'right'
-   * @param {Function} options.onVertical - Called with 'up' | 'down'
-   * @param {number} [options.thresholdPx=50] - Minimum travel distance
-   * @param {number} [options.edgeIgnorePx=30] - Width of ignore zones at screen edges
+   * @param {Object} opts
+   * @param {Function} [opts.onSwipeMove]    (dx, dy) — real-time drag feedback
+   * @param {Function} [opts.onSwipeCommit]  (dir: 'left'|'right'|'up'|'down')
+   * @param {Function} [opts.onSwipeCancel]  () — drag ended without commit
+   * @param {Function} [opts.onPanMove]      (dx, dy) — pan while zoomed
+   * @param {Function} [opts.onPinchMove]    (scaleDelta, cx, cy) — multiplicative
+   * @param {Function} [opts.onPinchEnd]     ()
+   * @param {Function} [opts.onTap]          (x, y)
+   * @param {Function} [opts.onDoubleTap]    (x, y)
+   * @param {number}   [opts.swipeThresholdPx=50]
+   * @param {number}   [opts.commitThresholdPx=12]  movement before state commits
+   * @param {number}   [opts.edgeIgnorePx=30]
+   * @param {number}   [opts.doubleTapMs=300]
+   * @param {number}   [opts.tapMovePx=8]
    */
-  constructor(element, { onHorizontal, onVertical, onMove, onEnd, thresholdPx = 50, edgeIgnorePx = 30 } = {}) {
-    this.element = element;
-    this.onHorizontal = onHorizontal;
-    this.onVertical = onVertical;
-    this.onMove = onMove;
-    this.onEnd = onEnd;
-    this.thresholdPx = thresholdPx;
-    this.edgeIgnorePx = edgeIgnorePx;
+  constructor(element, opts = {}) {
+    this._el = element;
+    this._opts = {
+      swipeThresholdPx: 50,
+      commitThresholdPx: 12,
+      edgeIgnorePx: 30,
+      doubleTapMs: 300,
+      tapMovePx: 8,
+      ...opts,
+    };
+    this._state = STATE.IDLE;
+    this._zoomed = false;
 
-    this.startX = 0;
-    this.startY = 0;
-    this.handleTouchStart = this.handleTouchStart.bind(this);
-    this.handleTouchMove = this.handleTouchMove.bind(this);
-    this.handleTouchEnd = this.handleTouchEnd.bind(this);
+    // Single-touch tracking
+    this._startX = 0;
+    this._startY = 0;
 
-    this.element.addEventListener('touchstart', this.handleTouchStart, { passive: true });
-    this.element.addEventListener('touchmove', this.handleTouchMove, { passive: true });
-    this.element.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+    // Pinch tracking
+    this._pinchStartDist = 0;
+    this._pinchCx = 0;
+    this._pinchCy = 0;
+
+    // Double-tap tracking
+    this._lastTapTime = 0;
+
+    this._onStart  = this._onStart.bind(this);
+    this._onMove   = this._onMove.bind(this);
+    this._onEnd    = this._onEnd.bind(this);
+    this._onCancel = this._onCancel.bind(this);
+
+    element.addEventListener('touchstart',  this._onStart,  { passive: true });
+    element.addEventListener('touchmove',   this._onMove,   { passive: false });
+    element.addEventListener('touchend',    this._onEnd,    { passive: true });
+    element.addEventListener('touchcancel', this._onCancel, { passive: true });
   }
 
-  handleTouchStart(e) {
-    const touch = e.changedTouches[0];
-    this.startX = touch.clientX;
-    this.startY = touch.clientY;
+  /** Call this whenever the consumer's zoom state changes. */
+  setZoomed(zoomed) {
+    this._zoomed = zoomed;
   }
 
-  handleTouchMove(e) {
-    if (!this.onMove) return;
-    const touch = e.changedTouches[0];
-    const dx = touch.clientX - this.startX;
-    const dy = touch.clientY - this.startY;
-    
-    // Check edge protection before emitting move events
-    if (this.startX < this.edgeIgnorePx || this.startX > window.innerWidth - this.edgeIgnorePx) return;
-    
-    this.onMove(dx, dy);
+  _emit(name, ...args) {
+    if (typeof this._opts[name] === 'function') this._opts[name](...args);
   }
 
-  handleTouchEnd(e) {
-    const touch = e.changedTouches[0];
-    const dx = touch.clientX - this.startX;
-    const dy = touch.clientY - this.startY;
+  _dist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
 
-    // Edge protection: ignore swipes starting in the system back zones
-    if (this.startX < this.edgeIgnorePx || this.startX > window.innerWidth - this.edgeIgnorePx) {
+  _center(touches) {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }
+
+  _onStart(e) {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      this._startX = t.clientX;
+      this._startY = t.clientY;
+      this._state = STATE.SINGLE_TOUCH;
+    } else if (e.touches.length === 2) {
+      // Cancel any in-progress swipe
+      if (this._state === STATE.SWIPING_H || this._state === STATE.SWIPING_V ||
+          this._state === STATE.PANNING) {
+        this._emit('onSwipeCancel');
+      }
+      this._pinchStartDist = this._dist(e.touches);
+      const c = this._center(e.touches);
+      this._pinchCx = c.x;
+      this._pinchCy = c.y;
+      this._state = STATE.MULTI_TOUCH;
+    }
+  }
+
+  _onMove(e) {
+    // Two-finger pinch
+    if (e.touches.length === 2 &&
+        (this._state === STATE.MULTI_TOUCH || this._state === STATE.PINCHING)) {
+      e.preventDefault(); // prevent browser zoom
+      this._state = STATE.PINCHING;
+      const scaleDelta = this._dist(e.touches) / this._pinchStartDist;
+      // Update base for next move event so delta is incremental
+      this._pinchStartDist = this._dist(e.touches);
+      this._emit('onPinchMove', scaleDelta, this._pinchCx, this._pinchCy);
       return;
     }
 
+    if (e.touches.length !== 1) return;
+    if (this._state !== STATE.SINGLE_TOUCH &&
+        this._state !== STATE.SWIPING_H &&
+        this._state !== STATE.SWIPING_V &&
+        this._state !== STATE.PANNING) return;
+
+    const t = e.touches[0];
+    const dx = t.clientX - this._startX;
+    const dy = t.clientY - this._startY;
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
 
-    if (absDx > absDy && absDx > this.thresholdPx) {
-      if (this.onHorizontal) {
-        this.onHorizontal(dx < 0 ? 'left' : 'right');
-      }
-    } else if (absDy > absDx && absDy > this.thresholdPx) {
-      if (this.onVertical) {
-        this.onVertical(dy < 0 ? 'up' : 'down');
+    // State commitment
+    if (this._state === STATE.SINGLE_TOUCH) {
+      const moved = Math.max(absDx, absDy);
+      if (moved < this._opts.commitThresholdPx) return;
+
+      if (absDx >= absDy) {
+        // Edge protection: ignore swipes starting in system back-gesture zones
+        if (this._startX < this._opts.edgeIgnorePx ||
+            this._startX > window.innerWidth - this._opts.edgeIgnorePx) {
+          this._state = STATE.IDLE;
+          return;
+        }
+        this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_H;
+      } else {
+        this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_V;
       }
     }
-    
-    if (this.onEnd) {
-      this.onEnd();
+
+    if (this._state === STATE.SWIPING_H || this._state === STATE.SWIPING_V) {
+      this._emit('onSwipeMove', dx, dy);
+    } else if (this._state === STATE.PANNING) {
+      this._emit('onPanMove', dx, dy);
+    }
+  }
+
+  _onEnd(e) {
+    const state = this._state;
+    this._state = STATE.IDLE;
+
+    if (state === STATE.PINCHING || state === STATE.MULTI_TOUCH) {
+      this._emit('onPinchEnd');
+      return;
+    }
+
+    if (state === STATE.PANNING) {
+      this._emit('onSwipeCancel');
+      return;
+    }
+
+    if (state === STATE.SWIPING_H || state === STATE.SWIPING_V) {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - this._startX;
+      const dy = t.clientY - this._startY;
+      if (state === STATE.SWIPING_H && Math.abs(dx) >= this._opts.swipeThresholdPx) {
+        this._emit('onSwipeCommit', dx < 0 ? 'left' : 'right');
+      } else if (state === STATE.SWIPING_V && Math.abs(dy) >= this._opts.swipeThresholdPx) {
+        this._emit('onSwipeCommit', dy < 0 ? 'up' : 'down');
+      } else {
+        this._emit('onSwipeCancel');
+      }
+      return;
+    }
+
+    if (state === STATE.SINGLE_TOUCH && e.changedTouches.length === 1) {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - this._startX;
+      const dy = t.clientY - this._startY;
+      if (Math.sqrt(dx * dx + dy * dy) < this._opts.tapMovePx) {
+        const now = Date.now();
+        if (now - this._lastTapTime < this._opts.doubleTapMs) {
+          this._lastTapTime = 0;
+          this._emit('onDoubleTap', t.clientX, t.clientY);
+        } else {
+          this._lastTapTime = now;
+          this._emit('onTap', t.clientX, t.clientY);
+        }
+      }
+    }
+  }
+
+  _onCancel() {
+    const state = this._state;
+    this._state = STATE.IDLE;
+    if (state === STATE.SWIPING_H || state === STATE.SWIPING_V || state === STATE.PANNING) {
+      this._emit('onSwipeCancel');
+    } else if (state === STATE.PINCHING || state === STATE.MULTI_TOUCH) {
+      this._emit('onPinchEnd');
     }
   }
 
   destroy() {
-    this.element.removeEventListener('touchstart', this.handleTouchStart);
-    this.element.removeEventListener('touchend', this.handleTouchEnd);
+    this._el.removeEventListener('touchstart',  this._onStart);
+    this._el.removeEventListener('touchmove',   this._onMove);
+    this._el.removeEventListener('touchend',    this._onEnd);
+    this._el.removeEventListener('touchcancel', this._onCancel);
   }
 }
 
 /**
- * Detects horizontal trackpad swipes on a given element.
+ * TrackpadDetector — detects horizontal trackpad swipes via wheel events.
+ * Direction: deltaX > 0 → 'left' (finger moved right = content scrolls left).
  */
 export class TrackpadDetector {
   /**
    * @param {HTMLElement} element
-   * @param {Object} options
-   * @param {Function} options.onHorizontal - Called with 'left' | 'right'
-   * @param {number} [options.thresholdDeltaX=60] - Minimum abs(deltaX)
-   * @param {number} [options.maxDeltaY=30] - Maximum abs(deltaY) to filter out mouse scroll
-   * @param {number} [options.cooldownMs=600] - Minimum time between fired events
+   * @param {Object} opts
+   * @param {Function} opts.onHorizontal     Called with 'left' | 'right'
+   * @param {number}   [opts.thresholdDeltaX=60]
+   * @param {number}   [opts.maxDeltaY=30]
+   * @param {number}   [opts.cooldownMs=600]
    */
   constructor(element, { onHorizontal, thresholdDeltaX = 60, maxDeltaY = 30, cooldownMs = 600 }) {
-    this.element = element;
+    this._el = element;
     this.onHorizontal = onHorizontal;
     this.thresholdDeltaX = thresholdDeltaX;
     this.maxDeltaY = maxDeltaY;
     this.cooldownMs = cooldownMs;
+    this._lastFired = 0;
 
-    this.lastFired = 0;
-
-    this.handleWheel = this.handleWheel.bind(this);
-    this.element.addEventListener('wheel', this.handleWheel, { passive: true });
+    this._onWheel = this._onWheel.bind(this);
+    element.addEventListener('wheel', this._onWheel, { passive: true });
   }
 
-  handleWheel(e) {
+  _onWheel(e) {
     const now = Date.now();
-    if (now - this.lastFired < this.cooldownMs) {
-      return;
-    }
-
+    if (now - this._lastFired < this.cooldownMs) return;
     const absDx = Math.abs(e.deltaX);
     const absDy = Math.abs(e.deltaY);
-
     if (absDx > this.thresholdDeltaX && absDy < this.maxDeltaY) {
-      this.lastFired = now;
-      if (this.onHorizontal) {
-        this.onHorizontal(e.deltaX > 0 ? 'left' : 'right');
-      }
+      this._lastFired = now;
+      if (this.onHorizontal) this.onHorizontal(e.deltaX > 0 ? 'left' : 'right');
     }
   }
 
   destroy() {
-    this.element.removeEventListener('wheel', this.handleWheel);
+    this._el.removeEventListener('wheel', this._onWheel);
   }
 }
