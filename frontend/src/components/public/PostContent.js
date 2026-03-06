@@ -256,6 +256,29 @@ export class PostContent extends Component {
       if (!naturalWidth) return 2;
       const max = naturalWidth / rect.width;
       return max > 1 ? max : 1;
+    };    this._constrainZoom = (animate = false) => {
+      const { scale } = this._zoomState;
+      if (scale <= 1) {
+        this._zoomState.x = 0;
+        this._zoomState.y = 0;
+        this._zoomState.scale = 1;
+      } else {
+        const img = (slides[index] ?? visuals).querySelector('img, video');
+        if (img) {
+          const rect = img.getBoundingClientRect();
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const rangeX = Math.max(0, (rect.width - vw) / 2);
+          const rangeY = Math.max(0, (rect.height - vh) / 2);
+          this._zoomState.x = Math.max(-rangeX, Math.min(rangeX, this._zoomState.x));
+          this._zoomState.y = Math.max(-rangeY, Math.min(rangeY, this._zoomState.y));
+        }
+      }
+      const target = slides[index] ?? visuals;
+      if (target && animate) {
+        target.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease';
+      }
+      this._updateVisuals();
     };
 
     this._updateVisuals = (dx = 0, dy = 0) => {
@@ -304,10 +327,14 @@ export class PostContent extends Component {
     this._gesture = new GestureController(wrapper, {
       onSwipeMove: (dx, dy) => this._updateVisuals(dx, dy),
       onSwipeCancel: () => {
-        const target = slides[index] ?? visuals;
-        if (target) {
-          target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-          this._updateVisuals();
+        if (this._zoomState.scale > 1) {
+          this._constrainZoom(true);
+        } else {
+          const target = slides[index] ?? visuals;
+          if (target) {
+            target.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            this._updateVisuals();
+          }
         }
       },
       onSwipeCommit: (dir) => {
@@ -316,15 +343,17 @@ export class PostContent extends Component {
         else if (dir === 'right') goTo(index - 1);
         else if (dir === 'down') dismiss();
         else this._updateVisuals();
-      },
-      onPanMove: (dx, dy) => {
+      },      onPanMove: (dx, dy) => {
         this._zoomState.x += dx;
         this._zoomState.y += dy;
         this._updateVisuals();
       },
+      onPinchEnd: () => {
+        this._constrainZoom(true);
+      },
       onPinchMove: (delta, cx, cy) => {
         const oldScale = this._zoomState.scale;
-        const newScale = Math.max(1, Math.min(getMaxScale(), oldScale * delta));
+        const newScale = Math.max(0.5, Math.min(getMaxScale() * 2, oldScale * delta));
         if (newScale === oldScale) return;
         
         // Zoom relative to pinch center
