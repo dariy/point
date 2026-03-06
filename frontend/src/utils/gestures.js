@@ -154,8 +154,12 @@ export class GestureController {
         this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_V;
       }
     }    if (this._state === STATE.SWIPING_H || this._state === STATE.SWIPING_V) {
+      if (this._state === STATE.SWIPING_H && e.cancelable) {
+        e.preventDefault(); // Stop browser back/forward and touchcancel
+      }
       this._emit('onSwipeMove', dx, dy);
     } else if (this._state === STATE.PANNING) {
+      if (e.cancelable) e.preventDefault(); // Stop any browser scrolling
       this._emit('onPanMove', dx, dy);
       // Update start for next move to provide incremental deltas
       this._startX = t.clientX;
