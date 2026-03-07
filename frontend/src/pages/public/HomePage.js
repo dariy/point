@@ -14,8 +14,7 @@ import { PostGrid } from '../../components/public/PostGrid.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
-import { navigate } from '../../utils/helpers.js';
+import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 
 export default class HomePage extends Component {
@@ -205,7 +204,7 @@ export default class HomePage extends Component {
     try {
       const data = await getHomePage({ page });
       // Merge settings from page response into store.
-      if (data.settings) store.set('settings', { ...store.get('settings'), ...data.settings });
+      if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
       this.setState({ loading: false, data, error: null });
     } catch (err) {
       this.setState({ loading: false, data: null, error: err.message || 'Failed to load posts.' });
