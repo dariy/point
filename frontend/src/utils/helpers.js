@@ -108,3 +108,23 @@ export function navigate(path, { replace = false } = {}) {
     new CustomEvent('app:navigate', { detail: { path, replace } })
   );
 }
+
+/**
+ * Normalize raw string settings from the backend into proper types.
+ *
+ * @param {Record<string, string>} raw
+ * @returns {Record<string, any>}
+ */
+export function normalizeSettings(raw) {
+  if (!raw) return {};
+  const result = { ...raw };
+  for (const key in raw) {
+    const value = raw[key];
+    if (key.includes('enable') || key.includes('show') || key.includes('use') || key === 'multi_user_mode') {
+      result[key] = value === 'true' || value === '1' || value === true || value === 1;
+    } else if (key.includes('per_page') || key.includes('quota') || key.includes('interval')) {
+      result[key] = parseInt(value, 10) || 0;
+    }
+  }
+  return result;
+}
