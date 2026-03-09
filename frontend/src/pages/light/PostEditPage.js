@@ -72,7 +72,6 @@ export default class PostEditPage extends Component {
     this.state = {
       loading: !!id,
       saving: false,
-      analyzing: false,
       analyzingField: null,   // 'title' | 'tags' | 'excerpt' | null
       post: null,
       error: null,
@@ -84,6 +83,7 @@ export default class PostEditPage extends Component {
     this._nodes = []; // canonical node list for visual mode
     this._autosaveTimer = null;
     this._unmounted = false;
+    this._analyzing = false;
     this._tagsInputRef = null;
     this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_MS);
     this._mediaPicker = null;
@@ -92,7 +92,8 @@ export default class PostEditPage extends Component {
   }
 
   render() {
-    const { loading, error, post, isNew, saving, analyzing } = this.state;
+    const { loading, error, post, isNew, saving } = this.state;
+    const analyzing = this._analyzing;
 
     if (loading) {
       return `
@@ -527,7 +528,7 @@ export default class PostEditPage extends Component {
   }
 
   _analyzeField(field) {
-    if (this.state.analyzing || this.state.analyzingField) return;
+    if (this._analyzing || this.state.analyzingField) return;
     const path = this._extractImagePath();
     if (path) {
       this._doAnalyzeField(field, { path });
@@ -540,7 +541,8 @@ export default class PostEditPage extends Component {
 
   async _doAnalyzeField(field, item) {
     if (!item) return;
-    this.setState({ analyzingField: field });
+    // Disable all field AI buttons directly — avoid setState re-render which discards unsaved input.
+    this.$$(`.field-ai-btn`).forEach(b => { b.disabled = true; });
     try {
       const result = item.id
         ? await analyzeMedia(item.id)
@@ -570,12 +572,15 @@ export default class PostEditPage extends Component {
   }
 
   async _handleAnalyze(item) {
-    if (!item || this.state.analyzing) return;
+    if (!item || this._analyzing) return;
 
-    // Snapshot current form values before setState re-renders and resets the DOM.
+    // Snapshot current form values before doing anything — avoids re-render discarding typed input.
     const snap = this._collectFormData();
 
-    this.setState({ analyzing: true });
+    // Disable the analyze button directly without calling setState (which would re-render and discard input).
+    this._analyzing = true;
+    const analyzeBtn = this.$('#analyze-btn');
+    if (analyzeBtn) { analyzeBtn.disabled = true; analyzeBtn.textContent = 'Analyzing…'; }
     try {
       const result = item.id
         ? await analyzeMedia(item.id)
@@ -597,7 +602,8 @@ export default class PostEditPage extends Component {
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
 
       store.set('toast', { message: 'Analysis complete.', type: 'success' });
-      this.setState({ analyzing: false, post });
+      this._analyzing = false;
+      this.setState({ post });
     } catch (err) {
       // Restore the user's form values even on failure.
       const post = {
@@ -610,7 +616,8 @@ export default class PostEditPage extends Component {
       };
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
-      this.setState({ analyzing: false, post });
+      this._analyzing = false;
+      this.setState({ post });
     }
   }
 

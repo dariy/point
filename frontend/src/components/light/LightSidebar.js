@@ -16,6 +16,8 @@ import {
 } from '../../utils/icons.js';
 import { store } from '../../store.js';
 
+const HAMBURGER_SVG = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="2" y1="5" x2="18" y2="5"/><line x1="2" y1="10" x2="18" y2="10"/><line x1="2" y1="15" x2="18" y2="15"/></svg>`;
+
 const NAV_ITEMS = [
   { href: '/light',          label: 'Dashboard', icon: DASHBOARD_SVG },
   { href: '/light/posts',    label: 'Posts',     icon: POSTS_SVG     },
@@ -85,5 +87,48 @@ export class LightSidebar extends Component {
       const next = current === 'dark' ? 'light' : 'dark';
       store.set('theme', next);
     });
+
+    this._setupMobileToggle();
+  }
+
+  _setupMobileToggle() {
+    // Find the sibling .light-header within the same .light-layout.
+    const layout = this.container.closest('.light-layout') || this.container.parentElement;
+    const header = layout?.querySelector('.light-header');
+    if (!header) return;
+
+    // Inject hamburger button only once.
+    if (!header.querySelector('.sidebar-toggle-btn')) {
+      const hamBtn = document.createElement('button');
+      hamBtn.className = 'sidebar-toggle-btn';
+      hamBtn.type = 'button';
+      hamBtn.setAttribute('aria-label', 'Toggle navigation');
+      hamBtn.innerHTML = HAMBURGER_SVG;
+      header.insertBefore(hamBtn, header.firstChild);
+    }
+
+    // Create overlay if not yet present.
+    let overlay = document.querySelector('.sidebar-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'sidebar-overlay';
+      document.body.appendChild(overlay);
+    }
+
+    const sidebar = this.$('.light-sidebar');
+    const toggleOpen = () => {
+      const isOpen = sidebar.classList.contains('open');
+      sidebar.classList.toggle('open', !isOpen);
+      overlay.classList.toggle('active', !isOpen);
+    };
+    const close = () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('active');
+    };
+
+    // Re-bind each time (component may re-render after navigation).
+    const hamBtn = header.querySelector('.sidebar-toggle-btn');
+    hamBtn.onclick = toggleOpen;
+    overlay.onclick = close;
   }
 }
