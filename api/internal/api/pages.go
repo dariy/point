@@ -336,6 +336,10 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
 
+	// Compute hierarchical post counts so that e.g. "Canada" reflects posts
+	// tagged with any of its descendants (Montreal, etc.) even when not directly tagged.
+	hierarchicalCounts, _ := h.tagService.GetHierarchicalPostCounts(ctx, publicOnly)
+
 	mapTags := []map[string]interface{}{}
 	for _, t := range allTags {
 		if publicOnly && effectivelyHiddenMap[t.ID] {
@@ -357,10 +361,15 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			years = []repository.PostTagInfo{}
 		}
 
+		postCount := hierarchicalCounts[t.ID]
+		if postCount == 0 {
+			postCount = int64(t.PostCount)
+		}
+
 		entry := map[string]interface{}{
 			"name":       t.Name,
 			"slug":       t.Slug,
-			"post_count": t.PostCount,
+			"post_count": postCount,
 			"lat":        loc.Latitude,
 			"lng":        loc.Longitude,
 			"type":       tagType,

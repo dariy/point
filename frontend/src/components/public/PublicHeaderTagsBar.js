@@ -44,9 +44,11 @@ export class PublicHeaderTagsBar extends Component {
    * @returns {string} HTML string
    */
   _renderTag(tag, currentTagSlug, isRoot = false) {
+    // Never render hidden tags in the public nav bar.
+    if (tag.is_hidden) return '';
+
     const relatedClass = tag.is_related ? ' is-related' : '';
     const rootClass = isRoot ? ' category-tag' : '';
-    const hiddenClass = tag.is_hidden ? ' is-hidden' : '';
 
     if (!tag.children?.length) {
       const extra = [isRoot ? 'category-tag' : '', tag.is_related ? 'is-related' : ''].filter(Boolean).join(' ');
@@ -60,7 +62,7 @@ export class PublicHeaderTagsBar extends Component {
     const headerLink = renderTagLink(tag, { active: currentTagSlug === tag.slug });
 
     return `
-      <div class="tag-group${rootClass}${relatedClass}${hiddenClass}" data-slug="${escapeHtml(tag.slug)}">
+      <div class="tag-group${rootClass}${relatedClass}" data-slug="${escapeHtml(tag.slug)}">
         <div class="tag-group-header">
           ${headerLink}
           <button class="toggle-children" type="button"
