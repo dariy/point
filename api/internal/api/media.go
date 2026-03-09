@@ -323,7 +323,7 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 	}
 
 	// Validate: only letters, digits, hyphens and underscores allowed in the base name.
-	validName := regexp.MustCompile(`^[a-zA-Z0-9_\-]+$`)
+	validName := regexp.MustCompile(`^[a-zA-Z0-9_\-\.]+$`)
 	if !validName.MatchString(req.NewFilename) {
 		return echo.NewHTTPError(http.StatusBadRequest, "filename may only contain letters, digits, hyphens and underscores")
 	}
