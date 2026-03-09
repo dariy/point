@@ -9,7 +9,7 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { getAllSettings, updateSettings } from '../../api/settings.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
 
 const SETTING_GROUPS = [
   {
@@ -163,7 +163,7 @@ export default class SettingsPage extends Component {
   async _load() {
     this.setState({ loading: true, error: null });
     try {
-      const settings = await getAllSettings();
+      const settings = normalizeSettings(await getAllSettings());
       this.setState({ loading: false, settings });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Failed to load settings.' });
@@ -195,14 +195,14 @@ export default class SettingsPage extends Component {
 
     this.setState({ saving: true });
     try {
-      const updated = await updateSettings(data);
+      const updated = normalizeSettings(await updateSettings(data));
       store.set('toast', { message: 'Settings updated.', type: 'success' });
       this.setState({ saving: false, settings: updated });
+      store.set('settings', updated);
 
       // Update document title if blog_title changed
       if (data.blog_title) {
         document.title = data.blog_title;
-        store.set('settings', { ...store.get('settings'), blog_title: data.blog_title });
       }
     } catch (err) {
       this.setState({ saving: false });
