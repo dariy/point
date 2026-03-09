@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -319,6 +320,12 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 	var req RenameMediaRequest
 	if err := c.Bind(&req); err != nil || req.NewFilename == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "new_filename is required")
+	}
+
+	// Validate: only letters, digits, hyphens and underscores allowed in the base name.
+	validName := regexp.MustCompile(`^[a-zA-Z0-9_\-\.]+$`)
+	if !validName.MatchString(req.NewFilename) {
+		return echo.NewHTTPError(http.StatusBadRequest, "filename may only contain letters, digits, hyphens and underscores")
 	}
 
 	media, err := h.mediaService.RenameMedia(c.Request().Context(), id, req.NewFilename)
