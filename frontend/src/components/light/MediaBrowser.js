@@ -511,8 +511,14 @@ export class MediaBrowser extends Component {
       onConfirm: (newName) => {
         dialog.unmount();
         mountEl.remove();
-        if (newName && newName.trim() !== '' && newName !== oldName) {
-          this._renameMedia(id, newName.trim());
+        // Sanitise: keep only letters, digits, hyphens and underscores.
+        const safe = (newName || '').trim().replace(/[^a-zA-Z0-9\-_]/g, '');
+        if (!safe) {
+          store.set('toast', { message: 'Name must contain letters, digits, hyphens or underscores only.', type: 'error' });
+          return;
+        }
+        if (safe !== oldName) {
+          this._renameMedia(id, safe);
         }
       },
       onCancel: () => {

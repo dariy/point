@@ -83,6 +83,7 @@ export default class PostEditPage extends Component {
     this._tags = [];
     this._nodes = []; // canonical node list for visual mode
     this._autosaveTimer = null;
+    this._unmounted = false;
     this._tagsInputRef = null;
     this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_MS);
     this._mediaPicker = null;
@@ -336,6 +337,7 @@ export default class PostEditPage extends Component {
   }
 
   beforeUnmount() {
+    this._unmounted = true; // Prevent pending debounced autosave from firing after navigation
     clearTimeout(this._autosaveTimer);
     document.removeEventListener('dragenter', this._onDragEnter);
     document.removeEventListener('dragleave', this._onDragLeave);
@@ -446,6 +448,8 @@ export default class PostEditPage extends Component {
   async _loadPost(id) {
     try {
       const post = await getPost(id);
+      // Normalize status to lowercase to guard against unexpected API casing.
+      if (post.status) post.status = post.status.toLowerCase();
       this._tags = toTagNames(post.tags);
       const nodes = parseNodes(post.content);
       this._nodes = nodes;
@@ -463,7 +467,8 @@ export default class PostEditPage extends Component {
       content: this.state.editorMode === 'visual'
         ? (this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes))
         : (this.$('#content-editor')?.value || ''),
-      status:           this.$('#status-select')?.value || 'draft',
+      // Prefer DOM value; fall back to known state to prevent accidental reset to 'draft'.
+      status:           this.$('#status-select')?.value || this.state.post?.status || 'draft',
       formatter:        this.$('#formatter-select')?.value || 'markdown',
       is_featured:      this.$('#featured-check')?.checked || false,
       thumbnail_path:   (this.$('#thumbnail-input')?.value || '').trim() || null,
@@ -499,7 +504,7 @@ export default class PostEditPage extends Component {
   }
 
   async _autosave() {
-    if (this.state.saving || this.state.isNew) return;
+    if (this._unmounted || this.state.saving || this.state.isNew) return;
     const data = this._collectFormData();
     if (!data.title) return;
     try {

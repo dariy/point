@@ -497,7 +497,7 @@ export default class TagsManagerPage extends Component {
       '<div class="modal tag-editor-modal" role="dialog" aria-modal="true">',
       '  <button class="modal-close" aria-label="Close">\u00d7</button>',
       '  <div class="modal-header">',
-      `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}</h3>`,
+      `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}${isEdit ? ` <span class="tm-count-badge" title="Posts with this tag">${f.post_count || 0}</span>` : ''}</h3>`,
       '  </div>',
       '  <form id="tag-editor-form">',
       '    <div class="modal-body">',

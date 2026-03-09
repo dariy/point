@@ -14,7 +14,7 @@ import { escapeHtml, navigate } from '../../utils/helpers.js';
 const SETTING_GROUPS = [
   {
     title: 'General',
-    keys: ['blog_title', 'blog_subtitle', 'author_name', 'author_bio', 'footer_text']
+    keys: ['blog_title', 'blog_subtitle', 'author_name', 'author_bio', 'footer_text', 'about_post_id']
   },
   {
     title: 'Display',
@@ -90,7 +90,15 @@ export default class SettingsPage extends Component {
       }
 
       let input = '';
-      if (key === 'author_bio' || key === 'footer_text') {
+      if (key === 'about_post_id') {
+        const previewLink = value
+          ? `<a href="/post/${escapeHtml(String(value))}" target="_blank" class="settings-preview-link">Preview ↗</a>`
+          : '';
+        input = `<div class="settings-input-with-preview">
+          <input type="text" name="${key}" class="form-input" placeholder="Post slug or ID (e.g. about)" value="${escapeHtml(String(value))}">
+          ${previewLink}
+        </div>`;
+      } else if (key === 'author_bio' || key === 'footer_text') {
         input = `<textarea name="${key}" class="form-textarea" rows="3">${escapeHtml(String(value))}</textarea>`;
       } else if (key === 'default_theme') {
         input = `
