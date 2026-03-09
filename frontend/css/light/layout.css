@@ -4,6 +4,7 @@
 body {
     color: var(--text-primary);
     background-color: var(--bg-primary);
+    overscroll-behavior-y: auto; /* Enable pull-to-refresh for admin pages */
 }
 
 .light-layout {

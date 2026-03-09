@@ -496,12 +496,20 @@
 .tm-actions {
     display: flex;
     gap: 3px;
-    opacity: 0;
+    opacity: 0.3;
     transition: opacity var(--transition-fast);
 }
 
-.tm-row:hover .tm-actions {
+.tm-row:hover .tm-actions,
+.tm-row:focus-within .tm-actions {
     opacity: 1;
+}
+
+/* Always show on touch devices where hover is unavailable */
+@media (hover: none) {
+    .tm-actions {
+        opacity: 1;
+    }
 }
 
 /* ===========================
