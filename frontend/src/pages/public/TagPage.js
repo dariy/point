@@ -139,6 +139,7 @@ export default class TagPage extends Component {
       this.mountChild(PostContent, '#content-mount', {
         post,
         showViewCount: !!settings.show_view_counts,
+        showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
         prevPost,
         nextPost,
         tagSlug: slug,
