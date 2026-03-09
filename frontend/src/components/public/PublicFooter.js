@@ -15,6 +15,9 @@ export class PublicFooter extends Component {
     const { settings = {}, immersiveTags = [], immersiveNav = null } = this.props;
     const author = escapeHtml(settings.author_name || settings.blog_title || '');
     const year = new Date().getFullYear();
+    const aboutHref = settings.about_post_id
+      ? `/post/${escapeHtml(settings.about_post_id)}`
+      : '/light';
 
     // In immersive mode: show post tags in the center slot.
     // Otherwise: provide the #pagination-mount slot for pages that need it.
@@ -48,7 +51,7 @@ export class PublicFooter extends Component {
         <div class="footer-container">
           <div class="footer-content">
             <p class="footer-copyright">
-              <a href="/light">&copy;</a>${author ? ` ${author}` : ''}
+              <a href="${aboutHref}">&copy;</a>${author ? ` ${author}` : ''}
             </p>
             ${centerSlot}
           </div>

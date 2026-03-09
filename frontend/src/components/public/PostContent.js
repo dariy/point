@@ -457,8 +457,21 @@ export class PostContent extends Component {
       showUI();
     };
 
+    // Pause the hide countdown while the user is pressing/touching;
+    // restart it only after they release.
+    const pauseCountdown = () => clearTimeout(this._idleTimer);
+    const resumeCountdown = () => {
+      clearTimeout(this._idleTimer);
+      this._idleTimer = setTimeout(hideUI, IDLE_MS);
+    };
+
     let lastTouchTime = 0;
-    this._on(document, 'touchstart', () => { lastTouchTime = Date.now(); }, { passive: true, capture: true });
+    this._on(document, 'touchstart', () => {
+      lastTouchTime = Date.now();
+      pauseCountdown();
+    }, { passive: true, capture: true });
+    this._on(document, 'touchend',    resumeCountdown, { passive: true, capture: true });
+    this._on(document, 'touchcancel', resumeCountdown, { passive: true, capture: true });
 
     this._on(wrapper, 'click', (e) => {
       if (Date.now() - lastTouchTime < 500) return; // Ignore simulated click from touch
@@ -471,9 +484,10 @@ export class PostContent extends Component {
       }
     });
 
-    this._on(document, 'mousemove',  resetIdle, { passive: true });
-    this._on(document, 'mousedown',  resetIdle, { passive: true });
-    this._on(document, 'keydown',    resetIdle, { passive: true });
+    this._on(document, 'mousemove',  resetIdle,       { passive: true });
+    this._on(document, 'mousedown',  pauseCountdown,  { passive: true });
+    this._on(document, 'mouseup',    resumeCountdown, { passive: true });
+    this._on(document, 'keydown',    resetIdle,       { passive: true });
 
     // ── Keyboard ──
     this._on(document, 'keydown', (e) => {
@@ -577,7 +591,14 @@ export class PostContent extends Component {
   }
 
   _enhanceMedia(body) {
-    const { onEnterImmersive } = this.props;
+    const { onEnterImmersive, post } = this.props;
+    const fallbackAlt = post?.excerpt || post?.title || '';
+
+    // Apply fallback alt text to any image that lacks one.
+    body.querySelectorAll('img').forEach((img) => {
+      if (!img.getAttribute('alt')) img.setAttribute('alt', fallbackAlt);
+    });
+
     if (onEnterImmersive) {
       const images = Array.from(body.querySelectorAll('img')).filter(
         (img) => !img.closest('a[href]')
