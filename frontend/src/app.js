@@ -16,6 +16,7 @@ import { store } from './store.js';
 import { router } from './router.js';
 import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
+import { normalizeSettings } from './utils/helpers.js';
 import { ToastContainer } from './components/shared/Toast.js';
 
 // ── CSS section switching ─────────────────────────────────────────────────
@@ -67,7 +68,7 @@ async function bootstrap() {
   // 1. Fetch public settings (best-effort — fall back to empty object).
   let settings = {};
   try {
-    settings = await getPublicSettings();
+    settings = normalizeSettings(await getPublicSettings());
     store.set('settings', settings);
     if (settings.blog_title) {
       document.title = settings.blog_title;

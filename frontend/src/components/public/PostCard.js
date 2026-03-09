@@ -42,7 +42,7 @@ export class PostCard extends Component {
         </svg>
       </div>` : '';
 
-    const tags = (post.tags || []).slice(0, 3).map((t) => renderTagLink(t)).join('');
+    const tags = (post.tags || []).map((t) => renderTagLink(t)).join('');
 
     const viewCount = showViewCount && post.view_count != null
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
