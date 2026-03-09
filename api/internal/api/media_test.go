@@ -476,3 +476,106 @@ func TestMediaHandler_RenameMedia(t *testing.T) {
 		t.Error("expected error for invalid id")
 	}
 }
+
+func TestMediaHandler_AnalyzeImageByID(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	tmpDir, _ := os.MkdirTemp("", "media-analyze-test")
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+
+	ctx := context.Background()
+	// Upload a non-image file
+	media, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("hello"), Filename: "test.txt", MimeType: "text/plain",
+	})
+
+	// Case 1: Invalid ID
+	req := httptest.NewRequest(http.MethodPost, "/media/abc/analyze", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("abc")
+	err := handler.AnalyzeImageByID(c)
+	if err == nil {
+		t.Error("expected error for invalid ID")
+	}
+
+	// Case 2: Media Not Found
+	req = httptest.NewRequest(http.MethodPost, "/media/9999/analyze", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("9999")
+	err = handler.AnalyzeImageByID(c)
+	if err == nil {
+		t.Error("expected error for non-existent media")
+	} else if he, ok := err.(*echo.HTTPError); ok && he.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", he.Code)
+	}
+
+	// Case 3: Not an Image
+	req = httptest.NewRequest(http.MethodPost, "/media/1/analyze", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	err = handler.AnalyzeImageByID(c)
+	if err == nil {
+		t.Error("expected error for non-image media")
+	} else if he, ok := err.(*echo.HTTPError); ok && he.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", he.Code)
+	}
+}
+
+func TestMediaHandler_AnalyzeImageByPath(t *testing.T) {
+	handler, cleanup := setupMediaHandler(t)
+	defer cleanup()
+
+	e := echo.New()
+
+	// Empty path → 400
+	body, _ := json.Marshal(map[string]string{"path": ""})
+	req := httptest.NewRequest(http.MethodPost, "/media/analyze-path", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if handler.AnalyzeImageByPath(c) == nil {
+		t.Error("expected error for empty path")
+	}
+
+	// Invalid JSON
+	req = httptest.NewRequest(http.MethodPost, "/media/analyze-path", bytes.NewReader([]byte("{bad")))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	_ = handler.AnalyzeImageByPath(e.NewContext(req, rec))
+}
+
+func TestMediaHandler_AnalyzeImage(t *testing.T) {
+	handler, cleanup := setupMediaHandler(t)
+	defer cleanup()
+
+	e := echo.New()
+
+	// No image file → 400
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	_ = w.Close()
+	req := httptest.NewRequest(http.MethodPost, "/media/analyze", body)
+	req.Header.Set(echo.HeaderContentType, w.FormDataContentType())
+	rec := httptest.NewRecorder()
+	if handler.AnalyzeImage(e.NewContext(req, rec)) == nil {
+		t.Error("expected error for missing image file")
+	}
+}

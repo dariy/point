@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"math"
 	"net/http"
 	"strconv"
@@ -29,14 +30,16 @@ func NewPagesHandler(repo *repository.Repository, postService *services.PostServ
 }
 
 var pagePublicSettingKeys = map[string]bool{
-	"blog_title":       true,
-	"blog_subtitle":    true,
-	"author_name":      true,
-	"posts_per_page":   true,
-	"default_theme":    true,
-	"show_view_counts": true,
-	"use_thumbnails":   true,
-	"about_post_id":    true,
+	"blog_title":             true,
+	"blog_subtitle":          true,
+	"author_name":            true,
+	"posts_per_page":         true,
+	"default_theme":          true,
+	"show_view_counts":       true,
+	"use_thumbnails":         true,
+	"about_post_id":          true,
+	"show_immersive_excerpt": true,
+	"min_tag_posts_to_show":  true,
 }
 
 // GetHomePage returns all data needed to render the public homepage.
@@ -76,6 +79,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		postIDs[i] = p.ID
 	}
 	postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
+	ancestorsMap := fetchAncestorsMap(ctx, h.repo, postTagsMap)
+	postTagsMap = expandPostTagsWithAncestors(postTagsMap, ancestorsMap, publicOnly)
 
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
@@ -107,6 +112,21 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	for k, v := range allSettings {
 		if pagePublicSettingKeys[k] {
 			publicSettings[k] = v
+		}
+	}
+
+	// Apply min_tag_posts_to_show filter for public requests.
+	if publicOnly {
+		minPosts := getMinTagPostsSetting(allSettings)
+		navTags = filterNavTagsByMinPosts(navTags, minPosts)
+		if minPosts > 0 {
+			filteredCloud := make([]services.TagCloudItem, 0, len(cloud))
+			for _, item := range cloud {
+				if item.Count >= minPosts {
+					filteredCloud = append(filteredCloud, item)
+				}
+			}
+			cloud = filteredCloud
 		}
 	}
 
@@ -175,6 +195,13 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Root-level nav tags for global navigation
 	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly)
 
+	// Apply min_tag_posts_to_show for public nav.
+	if publicOnly {
+		minPosts := getMinTagPostsSetting(allSettings)
+		rootNavTags = filterNavTagsByMinPosts(rootNavTags, minPosts)
+		childItems = filterNavTagsByMinPosts(childItems, minPosts)
+	}
+
 	// Posts for this tag (published only)
 	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false)
 	if err != nil {
@@ -186,6 +213,8 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		tagPostIDs[i] = p.ID
 	}
 	tagPostTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, tagPostIDs)
+	tagAncestorsMap := fetchAncestorsMap(ctx, h.repo, tagPostTagsMap)
+	tagPostTagsMap = expandPostTagsWithAncestors(tagPostTagsMap, tagAncestorsMap, publicOnly)
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
@@ -299,6 +328,12 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
+	mapSettings, _ := h.settingsService.GetAllSettings(ctx)
+	var minMapPosts int64
+	if publicOnly {
+		minMapPosts = getMinTagPostsSetting(mapSettings)
+	}
+
 	// Find the base category tags used to determine type.
 	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities", "year", "years"})
 
@@ -336,6 +371,10 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
 
+	// Compute hierarchical post counts so that e.g. "Canada" reflects posts
+	// tagged with any of its descendants (Montreal, etc.) even when not directly tagged.
+	hierarchicalCounts, _ := h.tagService.GetHierarchicalPostCounts(ctx, publicOnly)
+
 	mapTags := []map[string]interface{}{}
 	for _, t := range allTags {
 		if publicOnly && effectivelyHiddenMap[t.ID] {
@@ -344,6 +383,15 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		loc, ok := locMap[t.ID]
 		if !ok {
 			continue
+		}
+		if minMapPosts > 0 {
+			cnt := hierarchicalCounts[t.ID]
+			if cnt == 0 {
+				cnt = int64(t.PostCount)
+			}
+			if cnt < minMapPosts {
+				continue
+			}
 		}
 		tagType := "other"
 		if cityDescIDs[t.ID] {
@@ -357,10 +405,15 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			years = []repository.PostTagInfo{}
 		}
 
+		postCount := hierarchicalCounts[t.ID]
+		if postCount == 0 {
+			postCount = int64(t.PostCount)
+		}
+
 		entry := map[string]interface{}{
 			"name":       t.Name,
 			"slug":       t.Slug,
-			"post_count": t.PostCount,
+			"post_count": postCount,
 			"lat":        loc.Latitude,
 			"lng":        loc.Longitude,
 			"type":       tagType,
@@ -373,4 +426,97 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{"tags": mapTags})
+}
+
+// expandPostTagsWithAncestors takes a postID→tags map and adds ancestor tags for each direct tag,
+// filtering out is_hidden ancestors when publicOnly is true. Deduplication is per-post.
+func expandPostTagsWithAncestors(
+	postTagsMap map[int64][]repository.PostTagInfo,
+	ancestorsMap map[int64][]repository.PostTagInfo,
+	publicOnly bool,
+) map[int64][]repository.PostTagInfo {
+	result := make(map[int64][]repository.PostTagInfo, len(postTagsMap))
+	for postID, tags := range postTagsMap {
+		seen := make(map[int64]bool, len(tags)*3)
+		expanded := make([]repository.PostTagInfo, 0, len(tags)*2)
+		for _, t := range tags {
+			if seen[t.ID] {
+				continue
+			}
+			seen[t.ID] = true
+			if publicOnly && t.IsHidden {
+				continue
+			}
+			expanded = append(expanded, t)
+			for _, anc := range ancestorsMap[t.ID] {
+				if seen[anc.ID] {
+					continue
+				}
+				seen[anc.ID] = true
+				if publicOnly && anc.IsHidden {
+					continue
+				}
+				expanded = append(expanded, anc)
+			}
+		}
+		result[postID] = expanded
+	}
+	return result
+}
+
+// tagToPostTagInfo converts a models.Tag to a lightweight PostTagInfo for ancestor expansion.
+func tagToPostTagInfo(t models.Tag) repository.PostTagInfo {
+	return repository.PostTagInfo{
+		ID:            t.ID,
+		Name:          t.Name,
+		Slug:          t.Slug,
+		IsHidden:      t.IsHidden,
+		IsHiddenPosts: t.IsHiddenPosts,
+	}
+}
+
+// fetchAncestorsMap fetches ancestor tags for each unique tag ID in the postTagsMap.
+// Results are cached per tag ID to avoid redundant queries.
+func fetchAncestorsMap(ctx context.Context, repo *repository.Repository, postTagsMap map[int64][]repository.PostTagInfo) map[int64][]repository.PostTagInfo {
+	uniqueTagIDs := make(map[int64]bool)
+	for _, tags := range postTagsMap {
+		for _, t := range tags {
+			uniqueTagIDs[t.ID] = true
+		}
+	}
+	ancestorsMap := make(map[int64][]repository.PostTagInfo, len(uniqueTagIDs))
+	for tagID := range uniqueTagIDs {
+		ancestors, _ := repo.GetTagAncestors(ctx, tagID)
+		infos := make([]repository.PostTagInfo, len(ancestors))
+		for i, a := range ancestors {
+			infos[i] = tagToPostTagInfo(a)
+		}
+		ancestorsMap[tagID] = infos
+	}
+	return ancestorsMap
+}
+
+// filterNavTagsByMinPosts removes NavTagNode entries (and their subtrees) whose PostCount
+// is below minPosts. Featured tags (is_featured) are always kept.
+func filterNavTagsByMinPosts(nodes []services.NavTagNode, minPosts int64) []services.NavTagNode {
+	if minPosts <= 0 {
+		return nodes
+	}
+	result := make([]services.NavTagNode, 0, len(nodes))
+	for _, n := range nodes {
+		n.Children = filterNavTagsByMinPosts(n.Children, minPosts)
+		if n.PostCount >= minPosts || n.IsRelated {
+			result = append(result, n)
+		}
+	}
+	return result
+}
+
+// getMinTagPostsSetting reads the min_tag_posts_to_show setting; returns 0 (no filter) when unset.
+func getMinTagPostsSetting(settings map[string]string) int64 {
+	v, _ := strconv.ParseInt(getSettingOr(settings, "min_tag_posts_to_show", "0"), 10, 64)
+	if v < 0 {
+		return 0
+	}
+	return v
 }
