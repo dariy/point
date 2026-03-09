@@ -93,6 +93,7 @@ export default class PostPage extends Component {
     this.mountChild(PostContent, '#content-mount', {
       post,
       showViewCount: !!settings.show_view_counts,
+      showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
       prevPost: nav?.prev || null,
       nextPost: nav?.next || null,
       forceImmersive: immersive,
