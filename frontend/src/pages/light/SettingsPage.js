@@ -18,7 +18,7 @@ const SETTING_GROUPS = [
   },
   {
     title: 'Display',
-    keys: ['posts_per_page', 'default_theme', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud']
+    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt']
   },
   {
     title: 'Storage & System',
@@ -107,8 +107,8 @@ export default class SettingsPage extends Component {
             <option value="dark"${value === 'dark' ? ' selected' : ''}>Dark</option>
             <option value="auto"${value === 'auto' ? ' selected' : ''}>Auto (System)</option>
           </select>`;
-      } else if (key.includes('per_page') || key.includes('quota') || key.includes('interval')) {
-        input = `<input type="number" name="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
+      } else if (key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
+        input = `<input type="number" name="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
       } else {
         input = `<input type="text" name="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
@@ -212,7 +212,7 @@ export default class SettingsPage extends Component {
 
   _getSettingType(key) {
     if (key.includes('enable') || key.includes('show') || key.includes('use')) return 'boolean';
-    if (key.includes('per_page') || key.includes('quota') || key.includes('interval')) return 'number';
+    if (key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) return 'number';
     return 'string';
   }
 

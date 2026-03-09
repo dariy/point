@@ -114,9 +114,15 @@ export class PostContent extends Component {
       ? this._mediaEl(items[0])
       : this._renderCarousel(items, startIndex);
 
+    const showExcerpt = this.props.showImmersiveExcerpt !== false;
+    const excerptHtml = (showExcerpt && post.excerpt)
+      ? `<div class="post-excerpt-card">${escapeHtml(post.excerpt)}</div>`
+      : '';
+
     return `
       <div class="immersive-wrapper">
         <div class="immersive-visuals">${visuals}</div>
+        ${excerptHtml}
       </div>`;
   }
 
