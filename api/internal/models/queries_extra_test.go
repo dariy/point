@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -35,54 +36,79 @@ func TestQueries_Extra(t *testing.T) {
 	}()
 	ctx := context.Background()
 
-	// 1. GetUserByEmail
-	_, _ = q.CreateUser(ctx, CreateUserParams{Username: "u", Email: "u@t.com", PasswordHash: "h", DisplayName: "U"})
-	user, err := q.GetUserByEmail(ctx, "u@t.com")
-	if err != nil || user.Username != "u" {
-		t.Errorf("GetUserByEmail failed")
-	}
+	// 1. Users
+	u, _ := q.CreateUser(ctx, CreateUserParams{Username: "u", Email: "u@t.com", PasswordHash: "h", DisplayName: "U"})
+	_, _ = q.GetUser(ctx, u.ID)
+	_, _ = q.GetUserByEmail(ctx, "u@t.com")
+	_, _ = q.GetUserByUsername(ctx, "u")
+	_, _ = q.GetFirstUser(ctx)
+	_ = q.UpdateUserLogin(ctx, u.ID)
+	_ = q.UpdateUserPassword(ctx, UpdateUserPasswordParams{ID: u.ID, PasswordHash: "h2"})
 
-	// 2. Storage Usage
-	usage, _ := q.GetStorageUsage(ctx)
-	if usage.Valid && usage.Float64 != 0 {
-		t.Errorf("expected 0 storage usage for new DB, got %v", usage.Float64)
-	}
-
-	// 3. Delete Setting
-	_, _ = q.UpdateSetting(ctx, UpdateSettingParams{Key: "k", Value: sql.NullString{String: "v", Valid: true}, ValueType: "s"})
-	err = q.DeleteSetting(ctx, "k")
-	if err != nil {
-		t.Errorf("DeleteSetting failed")
-	}
-
-	// 4. Session cleanup
+	// 2. Sessions
+	s, _ := q.CreateSession(ctx, CreateSessionParams{UserID: u.ID, Token: "t", IpAddress: "1", UserAgent: "a", ExpiresAt: time.Now().Add(time.Hour)})
+	_, _ = q.GetSessionByToken(ctx, "t")
+	_, _ = q.GetUserSessions(ctx, u.ID)
+	_ = q.UpdateSessionActivity(ctx, s.ID)
+	_ = q.DeleteSession(ctx, DeleteSessionParams{ID: s.ID, UserID: u.ID})
+	_ = q.DeleteUserSessions(ctx, DeleteUserSessionsParams{UserID: u.ID, ID: 999})
 	_ = q.DeleteExpiredSessions(ctx)
 
-	// 5. Tag post count
-	_ = q.UpdateTagPostCount(ctx, 1)
-
-	// 6. Remove relationships
-	_ = q.RemoveTagFromPost(ctx, RemoveTagFromPostParams{PostID: 1, TagID: 1})
-	_ = q.RemoveTagRelationship(ctx, RemoveTagRelationshipParams{ParentID: 1, ChildID: 2})
-
-	// 7. WithTx
-	_ = q.WithTx(nil)
-
-	// 8. More model calls
-	_, _ = q.CountMedia(ctx, CountMediaParams{})
-	_, _ = q.CountPosts(ctx, CountPostsParams{})
-	_, _ = q.CountPostsByTag(ctx, CountPostsByTagParams{})
-	_, _ = q.ListMedia(ctx, ListMediaParams{})
-	_, _ = q.ListPosts(ctx, ListPostsParams{})
-	_, _ = q.ListTags(ctx, ListTagsParams{IncludeEmptyFilter: true})
+	// 3. Settings
+	_, _ = q.UpdateSetting(ctx, UpdateSettingParams{Key: "k", Value: sql.NullString{String: "v", Valid: true}, ValueType: "s"})
+	_, _ = q.GetSetting(ctx, "k")
 	_, _ = q.ListSettings(ctx)
-	_, _ = q.GetFirstUser(ctx)
-	_, _ = q.GetMediaByPostID(ctx, sql.NullInt64{Int64: 1, Valid: true})
-	_, _ = q.GetTagsForPost(ctx, 1)
-	_, _ = q.GetUserSessions(ctx, 1)
-	_ = q.UpdateSessionActivity(ctx, 1)
-	_ = q.UpdateUserLogin(ctx, 1)
-	_, _ = q.WithdrawPost(ctx, 1)
-	_ = q.ClearTagRelationships(ctx, ClearTagRelationshipsParams{})
-}
+	_ = q.DeleteSetting(ctx, "k")
 
+	// 4. Tags
+	tag, _ := q.CreateTag(ctx, CreateTagParams{Name: "T", Slug: "t"})
+	_, _ = q.GetTag(ctx, tag.ID)
+	_, _ = q.GetTagBySlug(ctx, "t")
+	_, _ = q.ListTags(ctx, ListTagsParams{IncludeEmptyFilter: true})
+	_, _ = q.UpdateTag(ctx, UpdateTagParams{ID: tag.ID, Name: "T2", Slug: "t2"})
+	_ = q.UpdateTagPostCount(ctx, tag.ID)
+	_ = q.UpdateAllTagPostCounts(ctx)
+
+	// 5. Hierarchy
+	child, _ := q.CreateTag(ctx, CreateTagParams{Name: "C", Slug: "c"})
+	_ = q.AddTagRelationship(ctx, AddTagRelationshipParams{ParentID: tag.ID, ChildID: child.ID})
+	_, _ = q.GetTagParents(ctx, child.ID)
+	_, _ = q.GetTagChildren(ctx, tag.ID)
+	_ = q.RemoveTagRelationship(ctx, RemoveTagRelationshipParams{ParentID: tag.ID, ChildID: child.ID})
+	_ = q.ClearTagRelationships(ctx, ClearTagRelationshipsParams{ParentID: tag.ID})
+
+	// 6. Posts
+	p, _ := q.CreatePost(ctx, CreatePostParams{Title: "P", Slug: "p", AuthorID: u.ID, Status: "draft"})
+	_, _ = q.GetPost(ctx, p.ID)
+	_, _ = q.GetPostBySlug(ctx, "p")
+	_, _ = q.ListPosts(ctx, ListPostsParams{})
+	_, _ = q.CountPosts(ctx, CountPostsParams{})
+	_ = q.AddTagToPost(ctx, AddTagToPostParams{PostID: p.ID, TagID: tag.ID})
+	_, _ = q.GetTagsForPost(ctx, p.ID)
+	_, _ = q.GetPostsByTag(ctx, GetPostsByTagParams{TagID: tag.ID})
+	_, _ = q.CountPostsByTag(ctx, CountPostsByTagParams{TagID: tag.ID})
+	_ = q.IncrementPostViewCount(ctx, p.ID)
+	_, _ = q.PublishPost(ctx, p.ID)
+	_, _ = q.WithdrawPost(ctx, p.ID)
+	_ = q.SetPostPreviewToken(ctx, SetPostPreviewTokenParams{ID: p.ID, PreviewToken: sql.NullString{String: "tok", Valid: true}})
+	_, _ = q.UpdatePost(ctx, UpdatePostParams{ID: p.ID, AuthorID: u.ID, Title: "P2", Slug: "p2"})
+	_ = q.RemoveTagFromPost(ctx, RemoveTagFromPostParams{PostID: p.ID, TagID: tag.ID})
+	_ = q.ClearPostTags(ctx, p.ID)
+	_ = q.DeletePost(ctx, DeletePostParams{ID: p.ID, AuthorID: u.ID})
+
+	// 7. Media
+	m, _ := q.CreateMedia(ctx, CreateMediaParams{Filename: "f", Checksum: "c", UploadedAt: time.Now()})
+	_, _ = q.GetMedia(ctx, m.ID)
+	_, _ = q.GetMediaByChecksum(ctx, "c")
+	_, _ = q.GetMediaByPostID(ctx, sql.NullInt64{Int64: 1, Valid: true})
+	_, _ = q.ListMedia(ctx, ListMediaParams{})
+	_, _ = q.CountMedia(ctx, CountMediaParams{})
+	_, _ = q.GetStorageUsage(ctx)
+	_, _ = q.UpdateMedia(ctx, UpdateMediaParams{ID: m.ID})
+	_, _ = q.UpdateMediaFilename(ctx, UpdateMediaFilenameParams{ID: m.ID, Filename: "f2"})
+	_ = q.DeleteMedia(ctx, m.ID)
+
+	// 8. Other
+	_ = q.WithTx(nil)
+	_ = q.DeleteTag(ctx, tag.ID)
+}

@@ -497,7 +497,7 @@ export default class TagsManagerPage extends Component {
       '<div class="modal tag-editor-modal" role="dialog" aria-modal="true">',
       '  <button class="modal-close" aria-label="Close">\u00d7</button>',
       '  <div class="modal-header">',
-      `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}</h3>`,
+      `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}${isEdit ? ` <span class="tm-count-badge" title="Posts with this tag">${f.post_count || 0}</span>` : ''}</h3>`,
       '  </div>',
       '  <form id="tag-editor-form">',
       '    <div class="modal-body">',
@@ -678,22 +678,49 @@ export default class TagsManagerPage extends Component {
     nameInput.focus();
   }
 
-  /** Render a set of tag-badge toggle checkboxes for parent/children selection. */
+  /** Render tag-badge toggle checkboxes in a hierarchical tree for parent/children selection. */
   _renderTagToggles(inputName, allTags, selfId, selectedIds) {
-    const available = allTags
-      .filter(t => t.id !== selfId)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
+    const available = allTags.filter(t => t.id !== selfId);
     if (!available.length) {
       return '<span class="tag-toggles-empty">No other tags available.</span>';
     }
 
-    return available.map(t => [
-      '<label class="tag-toggle">',
-      `  <input type="checkbox" name="${inputName}" value="${t.id}"${selectedIds.includes(t.id) ? ' checked' : ''}>`,
-      `  <span>${escapeHtml(t.name)}</span>`,
-      '</label>',
-    ].join('')).join('');
+    const availSet = new Set(available.map(t => t.id));
+
+    // Build parent→children adjacency from .parents[] on each tag.
+    const childrenOf = new Map();
+    available.forEach(t => {
+      (t.parents || []).forEach(p => {
+        if (availSet.has(p.id)) {
+          if (!childrenOf.has(p.id)) childrenOf.set(p.id, []);
+          childrenOf.get(p.id).push(t);
+        }
+      });
+    });
+
+    // Root tags: those whose parents are all outside `available` (or have no parents).
+    const roots = available.filter(t =>
+      !(t.parents || []).some(p => availSet.has(p.id))
+    ).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || a.name.localeCompare(b.name));
+
+    const rendered = new Set();
+    const renderNode = (t, depth) => {
+      if (rendered.has(t.id)) return '';
+      rendered.add(t.id);
+      const pad = depth > 0 ? ` style="padding-left:${depth * 14}px"` : '';
+      const node = [
+        `<label class="tag-toggle"${pad}>`,
+        `  <input type="checkbox" name="${inputName}" value="${t.id}"${selectedIds.includes(t.id) ? ' checked' : ''}>`,
+        `  <span>${escapeHtml(t.name)}</span>`,
+        `</label>`,
+      ].join('');
+      const kids = (childrenOf.get(t.id) || [])
+        .sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || a.name.localeCompare(b.name));
+      return node + kids.map(k => renderNode(k, depth + 1)).join('');
+    };
+
+    const html = roots.map(r => renderNode(r, 0)).join('');
+    return html || '<span class="tag-toggles-empty">No other tags available.</span>';
   }
 
   _renderFlagCheckbox(name, icon, label, description, checked) {
