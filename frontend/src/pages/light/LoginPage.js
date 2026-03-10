@@ -69,6 +69,12 @@ export default class LoginPage extends Component {
     const form = this.$('#login-form');
     if (!form) return;
 
+    // Navigate to ?next= if present, otherwise fall back to /light.
+    const _redirect = () => {
+      const next = this.props?.query?.next;
+      navigate(next ? decodeURIComponent(next) : '/light', { replace: true });
+    };
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (this.state.loading) return;
@@ -86,7 +92,7 @@ export default class LoginPage extends Component {
       try {
         const result = await login(username, password, true);
         store.set('user', result.user);
-        navigate('/light', { replace: true });
+        _redirect();
       } catch (err) {
         this.setState({
           loading: false,
@@ -97,7 +103,7 @@ export default class LoginPage extends Component {
 
     // Auto-redirect if already logged in.
     if (store.get('user')) {
-      navigate('/light', { replace: true });
+      _redirect();
     }
   }
 }

@@ -787,7 +787,7 @@ func (s *MediaService) UpdateMediaVisibilityForPaths(ctx context.Context, paths 
 			continue // no DB record for this path, skip
 		}
 		postID, shouldBePublic := visiblePaths[path]
-		if m.IsPublic != shouldBePublic {
+		if (m.IsPublic != 0) != shouldBePublic {
 			var pid *int64
 			if shouldBePublic {
 				pid = &postID
@@ -843,7 +843,7 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 	changed := 0
 	for _, m := range allMedia {
 		postID, shouldBePublic := visiblePaths[m.OriginalPath]
-		if m.IsPublic != shouldBePublic {
+		if (m.IsPublic != 0) != shouldBePublic {
 			var pid *int64
 			if shouldBePublic {
 				pid = &postID

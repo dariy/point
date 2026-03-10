@@ -291,6 +291,24 @@ func main() {
 		}
 	}
 
+	// ── PWA: manifest + service worker at root scope ──────────────────────────
+	// These must be served as real files (not index.html) and must be registered
+	// before the /* SPA fallback that would otherwise intercept them.
+	if fi, err := os.Stat(filepath.Join(cfg.FrontendDir, "manifest.webmanifest")); err == nil && !fi.IsDir() {
+		manifestPath := filepath.Join(cfg.FrontendDir, "manifest.webmanifest")
+		e.GET("/manifest.webmanifest", func(c echo.Context) error {
+			c.Response().Header().Set("Content-Type", "application/manifest+json")
+			return c.File(manifestPath)
+		})
+	}
+	if fi, err := os.Stat(filepath.Join(cfg.FrontendDir, "sw.js")); err == nil && !fi.IsDir() {
+		swPath := filepath.Join(cfg.FrontendDir, "sw.js")
+		e.GET("/sw.js", func(c echo.Context) error {
+			c.Response().Header().Set("Cache-Control", "no-cache")
+			return c.File(swPath)
+		})
+	}
+
 	// ── SPA fallback — must be last ────────────────────────────────────────────
 	e.GET("/*", func(c echo.Context) error {
 		if _, err := os.Stat(indexHTML); err == nil {
@@ -372,7 +390,7 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo *repository.Reposi
 		}
 
 		// Enforce visibility: unauthenticated clients cannot access private media.
-		if !media.IsPublic && !isAuthenticated {
+		if media.IsPublic == 0 && !isAuthenticated {
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
 
