@@ -16,6 +16,14 @@ type BlogSetting struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
+type MediaVisibilityLog struct {
+	ID        int64         `json:"id"`
+	MediaID   int64         `json:"media_id"`
+	IsPublic  int64         `json:"is_public"`
+	ChangedAt time.Time     `json:"changed_at"`
+	PostID    sql.NullInt64 `json:"post_id"`
+}
+
 type Medium struct {
 	ID            int64          `json:"id"`
 	Filename      string         `json:"filename"`
@@ -31,7 +39,7 @@ type Medium struct {
 	Checksum      string         `json:"checksum"`
 	AltText       sql.NullString `json:"alt_text"`
 	Caption       sql.NullString `json:"caption"`
-	IsPublic      bool           `json:"is_public"`
+	IsPublic      int64          `json:"is_public"`
 }
 
 type Post struct {

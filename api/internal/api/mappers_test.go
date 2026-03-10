@@ -174,7 +174,7 @@ func TestMediaToResponse(t *testing.T) {
 		FileType:     "IMAGE",
 		MimeType:     "image/jpeg",
 		FileSize:     1024,
-		IsPublic:     true,
+		IsPublic:     1,
 		ThumbnailPath: sql.NullString{String: "thumbnails/2026/03/photo.jpg", Valid: true},
 	}
 	resp := mediaToResponse(m)
