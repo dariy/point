@@ -15,6 +15,7 @@ import { TagsInput } from '../../components/light/TagsInput.js';
 import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
 import { getPost, createPost, updatePost } from '../../api/posts.js';
 import { uploadMedia, analyzeMedia, analyzeMediaByPath, listMedia, renameMedia } from '../../api/media.js';
+import { getAllShareEntries, clearShareEntries } from '../../utils/idb.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
@@ -443,6 +444,73 @@ export default class PostEditPage extends Component {
     super.mount();
     if (this.state.postId) {
       this._loadPost(this.state.postId);
+    }
+    if (this.props.query?.share === 'pending') {
+      this._processShareQueue();
+    }
+  }
+
+  /**
+   * Drain the Web Share Target IDB queue.
+   *
+   * Called on mount when ?share=pending is in the URL. Entries are sorted
+   * oldest-first. The first entry's files are uploaded and inserted into the
+   * current (new) post editor. Any remaining entries (offline backlog) each
+   * become a separate draft post.
+   */
+  async _processShareQueue() {
+    let entries;
+    try {
+      entries = await getAllShareEntries();
+    } catch {
+      return;
+    }
+    if (!entries.length) return;
+
+    const [current, ...backlog] = entries;
+
+    // Pre-fill title from share data if the editor title is still empty.
+    if (current.title) {
+      const titleEl = this.$('#title-input');
+      if (titleEl && !titleEl.value.trim()) titleEl.value = current.title;
+    }
+
+    // Upload current entry's files and insert into the open editor.
+    for (const fileEntry of current.files) {
+      const blob = new Blob([fileEntry.data], { type: fileEntry.type });
+      const file = new File([blob], fileEntry.name, { type: fileEntry.type });
+      await this._uploadAndInsert(file);  // eslint-disable-line no-await-in-loop
+    }
+
+    // Process offline backlog: one draft post per queued share entry.
+    for (const entry of backlog) {
+      try {
+        const title = entry.title || entry.files.map((f) => f.name).join(', ') || 'Shared photo';
+        const post  = await createPost({ title, status: 'draft', content: '' }); // eslint-disable-line no-await-in-loop
+        let content = '';
+        for (const fileEntry of entry.files) {
+          const blob  = new Blob([fileEntry.data], { type: fileEntry.type });
+          const file  = new File([blob], fileEntry.name, { type: fileEntry.type });
+          const media = await uploadMedia(file, { post_id: post.id }); // eslint-disable-line no-await-in-loop
+          content += `${media.path}\n`;
+        }
+        await updatePost(post.id, { content: content.trim() }); // eslint-disable-line no-await-in-loop
+      } catch (err) {
+        store.set('toast', { message: `Failed to save offline share: ${err.message || 'unknown error'}`, type: 'error' });
+      }
+    }
+
+    try {
+      await clearShareEntries();
+    } catch {
+      // Non-fatal — entries will be re-processed on next visit.
+    }
+
+    if (backlog.length > 0) {
+      store.set('toast', {
+        message: `${backlog.length} offline share${backlog.length === 1 ? '' : 's'} saved as draft${backlog.length === 1 ? '' : 's'}.`,
+        type: 'success',
+      });
     }
   }
 
