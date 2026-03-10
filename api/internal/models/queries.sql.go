@@ -86,12 +86,12 @@ func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, 
 const countPosts = `-- name: CountPosts :one
 SELECT COUNT(*) FROM posts p
 WHERE 
-    (CASE WHEN ?1 THEN LOWER(p.status) = LOWER(?2) ELSE 1=1 END)
+    (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE 
         WHEN ?4 THEN 1=1 
-        WHEN ?5 THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published' 
+        WHEN ?5 THEN p.status IN ('published', 'hidden')
+        ELSE p.status = 'published' 
     END)
 `
 
@@ -121,20 +121,20 @@ SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
 AND (CASE 
-    WHEN ?3 THEN 1=1
-    WHEN ?2 THEN LOWER(p.status) = 'published' 
-    ELSE LOWER(p.status) IN ('published', 'hidden') 
+    WHEN ?2 THEN 1=1
+    WHEN ?3 THEN p.status = 'published' 
+    ELSE p.status IN ('published', 'hidden') 
 END)
 `
 
 type CountPostsByTagParams struct {
 	TagID               int64       `json:"tag_id"`
-	PublishedOnlyFilter interface{} `json:"published_only_filter"`
 	IncludeDrafts       interface{} `json:"include_drafts"`
+	PublishedOnlyFilter interface{} `json:"published_only_filter"`
 }
 
 func (q *Queries) CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPostsByTag, arg.TagID, arg.PublishedOnlyFilter, arg.IncludeDrafts)
+	row := q.db.QueryRowContext(ctx, countPostsByTag, arg.TagID, arg.IncludeDrafts, arg.PublishedOnlyFilter)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -204,9 +204,9 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, created_at, updated_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
 `
@@ -729,21 +729,21 @@ FROM posts p
 JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE 
-    WHEN ?5 THEN 1=1
-    WHEN ?2 THEN LOWER(p.status) = 'published' 
-    ELSE LOWER(p.status) IN ('published', 'hidden') 
+AND (CASE
+    WHEN ?2 THEN 1=1
+    WHEN ?3 THEN p.status = 'published'
+    ELSE p.status IN ('published', 'hidden')
 END)
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ?3 OFFSET ?4
+LIMIT ?4 OFFSET ?5
 `
 
 type GetPostsByTagParams struct {
 	TagID               int64       `json:"tag_id"`
+	IncludeDrafts       interface{} `json:"include_drafts"`
 	PublishedOnlyFilter interface{} `json:"published_only_filter"`
 	Limit               int64       `json:"limit"`
 	Offset              int64       `json:"offset"`
-	IncludeDrafts       interface{} `json:"include_drafts"`
 }
 
 type GetPostsByTagRow struct {
@@ -772,10 +772,10 @@ type GetPostsByTagRow struct {
 func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]GetPostsByTagRow, error) {
 	rows, err := q.db.QueryContext(ctx, getPostsByTag,
 		arg.TagID,
+		arg.IncludeDrafts,
 		arg.PublishedOnlyFilter,
 		arg.Limit,
 		arg.Offset,
-		arg.IncludeDrafts,
 	)
 	if err != nil {
 		return nil, err
@@ -1255,16 +1255,16 @@ const listPosts = `-- name: ListPosts :many
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
 FROM posts p
 JOIN users u ON p.author_id = u.id
-WHERE 
-    (CASE WHEN ?1 THEN LOWER(p.status) = LOWER(?2) ELSE 1=1 END)
+WHERE
+    (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE 
-        WHEN ?4 THEN 1=1 
-        WHEN ?7 THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published' 
+    AND (CASE
+        WHEN ?4 THEN 1=1
+        WHEN ?5 THEN p.status IN ('published', 'hidden')
+        ELSE p.status = 'published'
     END)
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ?5 OFFSET ?6
+LIMIT ?6 OFFSET ?7
 `
 
 type ListPostsParams struct {
@@ -1272,9 +1272,9 @@ type ListPostsParams struct {
 	Status         string      `json:"status"`
 	FeaturedFilter interface{} `json:"featured_filter"`
 	IncludeDrafts  interface{} `json:"include_drafts"`
+	IncludeHidden  interface{} `json:"include_hidden"`
 	Limit          int64       `json:"limit"`
 	Offset         int64       `json:"offset"`
-	IncludeHidden  interface{} `json:"include_hidden"`
 }
 
 type ListPostsRow struct {
@@ -1306,9 +1306,9 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		arg.Status,
 		arg.FeaturedFilter,
 		arg.IncludeDrafts,
+		arg.IncludeHidden,
 		arg.Limit,
 		arg.Offset,
-		arg.IncludeHidden,
 	)
 	if err != nil {
 		return nil, err
@@ -1518,7 +1518,7 @@ UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
     JOIN posts ON post_tags.post_id = posts.id
-    WHERE tag_id = tags.id AND LOWER(posts.status) != 'draft'
+    WHERE tag_id = tags.id AND posts.status != 'draft'
 )
 `
 
@@ -1770,9 +1770,9 @@ UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
     JOIN posts ON post_tags.post_id = posts.id
-    WHERE tag_id = tags.id AND LOWER(posts.status) != 'draft'
+    WHERE post_tags.tag_id = tags.id AND posts.status != 'draft'
 )
-WHERE id = ?
+WHERE tags.id = ?
 `
 
 func (q *Queries) UpdateTagPostCount(ctx context.Context, id int64) error {
