@@ -179,8 +179,10 @@ class Router {
     }
 
     // Auth guard: redirect to login if route requires authentication.
+    // Encode the current path+query as ?next= so LoginPage can return here.
     if (!matchedRoute.public && this._authGuard && !this._authGuard()) {
-      this.navigate(this._loginPath, { replace: true });
+      const next = encodeURIComponent(fullPath);
+      this.navigate(`${this._loginPath}?next=${next}`, { replace: true });
       return;
     }
 
