@@ -117,7 +117,7 @@ WHERE
         ELSE p.status = 'published' 
     END)
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPosts :one
 SELECT COUNT(*) FROM posts p
@@ -132,9 +132,9 @@ WHERE
 
 -- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, created_at, updated_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 RETURNING *;
 
@@ -234,7 +234,7 @@ AND (CASE
     ELSE p.status IN ('published', 'hidden') 
 END)
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPostsByTag :one
 SELECT COUNT(*) FROM posts p
@@ -251,9 +251,9 @@ UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
     JOIN posts ON post_tags.post_id = posts.id
-    WHERE tag_id = tags.id AND posts.status != 'draft'
+    WHERE post_tags.tag_id = tags.id AND posts.status != 'draft'
 )
-WHERE id = ?;
+WHERE tags.id = ?;
 
 -- name: UpdateAllTagPostCounts :exec
 UPDATE tags
@@ -301,7 +301,7 @@ WHERE checksum = ? LIMIT 1;
 SELECT * FROM media
 WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') ELSE 1=1 END)
 ORDER BY uploaded_at DESC
-LIMIT ? OFFSET ?;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountMedia :one
 SELECT COUNT(*) FROM media
