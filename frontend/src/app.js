@@ -65,6 +65,13 @@ store.subscribe('theme', (theme) => {
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 
 async function bootstrap() {
+  // 0. Register service worker (PWA shell cache + Web Share Target).
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('[SW] Registration failed:', err);
+    });
+  }
+
   // 1. Fetch public settings (best-effort — fall back to empty object).
   let settings = {};
   try {
