@@ -390,7 +390,7 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo *repository.Reposi
 		}
 
 		// Enforce visibility: unauthenticated clients cannot access private media.
-		if !media.IsPublic && !isAuthenticated {
+		if media.IsPublic == 0 && !isAuthenticated {
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
 
