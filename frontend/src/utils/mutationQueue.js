@@ -67,7 +67,7 @@ export async function getQueue() {
 /**
  * Update global store with queue status.
  */
-async function updateStatus() {
+export async function updateStatus() {
   const queue = await getQueue();
   const pending = queue.filter(op => op.status === 'pending').length;
   const failed = queue.filter(op => op.status === 'failed').length;

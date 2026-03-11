@@ -1,7 +1,7 @@
 /**
  * Sync Engine for Point offline mutation queue.
  */
-import { getQueue } from './mutationQueue.js';
+import { getQueue, updateStatus } from './mutationQueue.js';
 import { api } from '../api/client.js';
 
 
@@ -26,6 +26,7 @@ export async function syncQueue() {
     for (const op of pending) {
       // 1. Mark as syncing
       await updateOpStatus(op.id, 'syncing');
+      await updateStatus();
 
       try {
         // 2. Resolve temp IDs in body
@@ -66,13 +67,15 @@ export async function syncQueue() {
       } catch (err) {
         console.error(`[Sync] Operation ${op.id} failed:`, err);
         await updateOpStatus(op.id, 'failed', err.message || 'Server error');
+        await updateStatus();
+        window.dispatchEvent(new CustomEvent('sync:failed'));
         // Halt on first error
         break;
       }
     }
   } finally {
     isSyncing = false;
-    // Re-trigger status update
+    await updateStatus();
     window.dispatchEvent(new CustomEvent('sync:complete'));
   }
 }
