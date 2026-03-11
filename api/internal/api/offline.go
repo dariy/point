@@ -76,8 +76,32 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
 		html, _ := h.postService.RenderContent(p.Content)
-		resp := postToResponse(p, postTagsMap[p.ID])
-		resp["content_html"] = html
+		// Use a temporary map to build a response that looks like GetPostRow/GetPostBySlugRow
+		resp := map[string]interface{}{
+			"id":               p.ID,
+			"title":            p.Title,
+			"slug":             p.Slug,
+			"content":          p.Content,
+			"content_html":     html,
+			"excerpt":          nullString(p.Excerpt),
+			"status":           p.Status,
+			"is_featured":      p.IsFeatured,
+			"view_count":       p.ViewCount,
+			"published_at":     nullTime(p.PublishedAt),
+			"created_at":       p.CreatedAt,
+			"updated_at":       p.UpdatedAt,
+			"thumbnail_path":   nullString(p.ThumbnailPath),
+			"meta_description": nullString(p.MetaDescription),
+			"formatter":        p.Formatter,
+			"tags":             postTagsMap[p.ID],
+			"author": map[string]interface{}{
+				"id":           p.AuthorID,
+				"username":     p.AuthorUsername,
+				"display_name": p.AuthorDisplayName,
+				"avatar_path":  nullString(p.AuthorAvatar),
+			},
+			"media_url": extractMediaURL(p.ThumbnailPath, p.Content),
+		}
 		postResponses[i] = resp
 	}
 
