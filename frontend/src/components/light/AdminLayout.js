@@ -84,14 +84,33 @@ export class AdminLayout extends Component {
       });
     }
 
-    this.$('#sync-pill-btn')?.addEventListener('click', () => {
-      const offline = store.get('offline_status') || {};
-      if (offline.failed) {
-        import('../../utils/helpers.js').then(m => m.navigate('/light/system'));
-      } else if (!offline.syncing && offline.pending) {
-        syncQueue();
-      }
-    });
+    this.$('#sync-pill-btn')?.addEventListener('click', () => this._onSyncPillClick());
+
+    this.subscribeStore(store, 'offline_status', () => this._updateSyncPill());
+  }
+
+  _onSyncPillClick() {
+    const offline = store.get('offline_status') || {};
+    if (offline.failed) {
+      import('../../utils/helpers.js').then(m => m.navigate('/light/system'));
+    } else if (!offline.syncing && offline.pending) {
+      syncQueue();
+    }
+  }
+
+  _updateSyncPill() {
+    const offline = store.get('offline_status') || {};
+    const newPill = this._renderSyncPill(offline);
+    const titleRow = this.$('.header-title-row');
+    if (!titleRow) return;
+
+    const existing = this.$('.sync-pill');
+    if (existing) existing.remove();
+
+    if (newPill) {
+      titleRow.insertAdjacentHTML('beforeend', newPill);
+      this.$('#sync-pill-btn')?.addEventListener('click', () => this._onSyncPillClick());
+    }
   }
 
   /**
