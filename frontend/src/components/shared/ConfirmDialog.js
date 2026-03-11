@@ -16,16 +16,7 @@ import { escapeHtml } from '../../utils/helpers.js';
 
 export class ConfirmDialog extends Component {
   render() {
-    const { title, message, confirmText = 'Confirm', variant = 'primary' } = this.props;
-
-    const footer = `
-      <button class="btn btn-secondary" id="confirm-cancel-btn">Cancel</button>
-      <button class="btn btn-${variant}" id="confirm-ok-btn">${escapeHtml(confirmText)}</button>
-    `;
-
-    return `
-      <div id="modal-wrapper"></div>
-    `;
+    return `<div id="modal-wrapper"></div>`;
   }
 
   afterRender() {
