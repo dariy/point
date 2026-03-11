@@ -42,6 +42,22 @@ const OFFLINE_VERSION = 1;
 function offlineDbOpen() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(OFFLINE_DB, OFFLINE_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      const stores = [
+        ['posts',              { keyPath: 'id' }],
+        ['tags',               { keyPath: 'id' }],
+        ['tag_relationships',  { keyPath: ['parent_id', 'child_id'] }],
+        ['tag_locations',      { keyPath: 'tag_id' }],
+        ['media',              { keyPath: 'id' }],
+        ['mutation_queue',     { keyPath: 'id' }],
+        ['meta',               { keyPath: 'key' }],
+        ['blobs',              { keyPath: 'id' }],
+      ];
+      stores.forEach(([name, opts]) => {
+        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, opts);
+      });
+    };
     req.onsuccess = (e) => resolve(e.target.result);
     req.onerror   = (e) => reject(e.target.error);
   });
@@ -358,7 +374,25 @@ async function serveFromOfflineStore(request) {
       return new Response(JSON.stringify({ error: 'Tag not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 2.2 /api/pages/map
+    // 2.2 /api/pages/tags
+    if (path === '/api/pages/tags') {
+      const tags = allTags
+        .filter(t => !t.is_hidden)
+        .map(t => ({
+          ...t,
+          parents: allRelationships
+            .filter(r => r.child_id === t.id)
+            .map(r => allTags.find(p => p.id === r.parent_id))
+            .filter(Boolean),
+          children: allRelationships
+            .filter(r => r.parent_id === t.id)
+            .map(r => allTags.find(c => c.id === r.child_id))
+            .filter(Boolean),
+        }));
+      return new Response(JSON.stringify({ tags, total: tags.length }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // 2.3 /api/pages/map
     if (path === '/api/pages/map') {
       const allLocs = await idbGet('tag_locations');
       const locMap = {};
@@ -402,10 +436,6 @@ async function serveFromOfflineStore(request) {
   } catch (err) {
     console.error('[SW] Offline store error:', err);
     return new Response(JSON.stringify({ error: 'Offline store error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-  }
-}s: { 'Content-Type': 'application/json' } });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
