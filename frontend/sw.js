@@ -25,7 +25,9 @@ const SHELL_URLS = [
   '/assets/css/main.css',
   '/assets/css/light.css',
   '/assets/images/favicon.svg',
+  '/assets/images/favicon-128.png',
   '/assets/images/favicon-512.png',
+  '/assets/images/favicon-dark-128.png',
   '/assets/images/favicon-dark-512.png',
 ];
 
@@ -140,13 +142,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Offline API reads → serve from IDB
-  if (!navigator.onLine && url.pathname.startsWith('/api/')) {
-    event.respondWith(serveFromOfflineStore(request));
+  // 3. API reads: Network-first with IDB fallback
+  if (url.pathname.startsWith('/api/') && request.method === 'GET') {
+    event.respondWith(
+      fetch(request)
+        .catch(() => serveFromOfflineStore(request))
+    );
     return;
   }
 
-  // 4. API responses must never be cached in the shell cache.
+  // 4. API responses (non-GET) must never be cached in the shell cache.
   if (url.pathname.startsWith('/api/')) return;
 
   // 5. SW and manifest must not be cached.
@@ -156,6 +161,8 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
+        // For SPA, any navigation request that doesn't match a specific file
+        // should serve the root '/'.
         const cached = await cache.match('/');
         if (cached) return cached;
 
@@ -219,13 +226,30 @@ async function serveFromOfflineStore(request) {
     // 1. /api/pages/home
     if (path === '/api/pages/home') {
       const posts = await idbGet('posts');
+      const allTags = await idbGet('tags');
       const settings = await idbGet('meta', 'blog_settings') || {};
       
+      // Basic tag cloud mock: all tags with post_count > 0
+      const tag_cloud = allTags.filter(t => t.post_count > 0).map(t => ({
+        name: t.name,
+        slug: t.slug,
+        count: t.post_count
+      }));
+
+      // Nav tags mock: featured tags
+      const nav_tags = allTags.filter(t => t.is_featured).map(t => ({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        post_count: t.post_count,
+        children: []
+      }));
+
       return new Response(JSON.stringify({
         posts: posts.slice(0, 10), 
         pagination: { page: 1, per_page: 10, total: posts.length, pages: Math.ceil(posts.length / 10) },
-        tag_cloud: [], 
-        nav_tags: [],
+        tag_cloud, 
+        nav_tags,
         settings: settings
       }), { headers: { 'Content-Type': 'application/json' } });
     }
