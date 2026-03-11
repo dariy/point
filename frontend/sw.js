@@ -18,11 +18,25 @@ const CACHE_VERSION = 'v1';
 const CACHE_NAME    = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
+// Includes app.js and its direct static imports so the bootstrap chain
+// completes even on a fresh SW install with no network.
 const SHELL_URLS = [
   '/',
+  // Entry point
   '/assets/js/app.js',
+  // Direct imports of app.js (must be pre-cached for offline bootstrap)
+  '/assets/js/store.js',
+  '/assets/js/router.js',
+  '/assets/js/api/auth.js',
+  '/assets/js/api/client.js',
+  '/assets/js/api/settings.js',
+  '/assets/js/utils/helpers.js',
+  '/assets/js/components/Component.js',
+  '/assets/js/components/shared/Toast.js',
+  // Styles
   '/assets/css/main.css',
   '/assets/css/light.css',
+  // Favicon
   '/assets/images/favicon.svg',
   '/assets/images/favicon-512.png',
   '/assets/images/favicon-dark-512.png',
