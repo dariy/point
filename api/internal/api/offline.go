@@ -153,6 +153,6 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 		"tag_locations":     locations,
 		"media":             publicMedia,
 		"settings":          settings,
-		"exported_at":       time.Now(),
+		"exported_at":       time.Now().UTC().Round(0),
 	})
 }

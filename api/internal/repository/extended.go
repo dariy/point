@@ -236,7 +236,7 @@ SELECT
   (SELECT COUNT(*) FROM users) AS user_count,
   (SELECT COUNT(*) FROM sessions WHERE expires_at > ?) AS session_count
 `
-	err := r.db.QueryRowContext(ctx, q, time.Now()).Scan(
+	err := r.db.QueryRowContext(ctx, q, time.Now().UTC().Round(0)).Scan(
 		&s.PostCount, &s.PublishedCount, &s.DraftCount,
 		&s.TagCount, &s.MediaCount, &s.StorageBytes,
 		&s.UserCount, &s.SessionCount,
