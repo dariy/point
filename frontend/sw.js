@@ -221,16 +221,42 @@ function isMediaPath(path) {
 async function serveFromOfflineStore(request) {
   const url = new URL(request.url);
   const path = url.pathname;
+  const page = parseInt(url.searchParams.get('page'), 10) || 1;
+  const perPage = parseInt(url.searchParams.get('per_page'), 10) || 20;
 
   try {
+    const allTags = await idbGet('tags');
+    const allRelationships = await idbGet('tag_relationships');
+    const settings = await idbGet('meta', 'blog_settings') || {};
+    const minPosts = parseInt(settings.min_tag_posts_to_show || '0', 10);
+
+    // Helper: Build tag hierarchy
+    const buildTagTree = (parentID = null) => {
+      return allTags
+        .filter(t => {
+          if (t.is_hidden) return false;
+          const rels = allRelationships.filter(r => r.child_id === t.id);
+          if (parentID === null) return rels.length === 0;
+          return rels.some(r => r.parent_id === parentID);
+        })
+        .map(t => ({
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+          post_count: t.post_count,
+          is_featured: t.is_featured,
+          children: buildTagTree(t.id)
+        }))
+        .filter(t => t.is_featured || t.post_count >= minPosts || t.children.length > 0)
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
+    };
+
     // 1. /api/pages/home
     if (path === '/api/pages/home') {
       const posts = await idbGet('posts');
-      const allTags = await idbGet('tags');
-      const settings = await idbGet('meta', 'blog_settings') || {};
       
       const tag_cloud = allTags
-        .filter(t => t.post_count > 0 && !t.is_hidden)
+        .filter(t => t.post_count >= minPosts && !t.is_hidden)
         .map(t => ({
           name: t.name,
           slug: t.slug,
@@ -239,19 +265,19 @@ async function serveFromOfflineStore(request) {
         .sort((a, b) => b.count - a.count)
         .slice(0, 20);
 
-      const nav_tags = allTags
-        .filter(t => t.is_featured && !t.is_hidden)
-        .map(t => ({
-          id: t.id,
-          name: t.name,
-          slug: t.slug,
-          post_count: t.post_count,
-          children: []
-        }));
+      const nav_tags = buildTagTree(null);
+
+      const offset = (page - 1) * perPage;
+      const paginatedPosts = posts.slice(offset, offset + perPage);
 
       return new Response(JSON.stringify({
-        posts: posts.slice(0, 10), 
-        pagination: { page: 1, per_page: 10, total: posts.length, pages: Math.ceil(posts.length / 10) },
+        posts: paginatedPosts, 
+        pagination: { 
+          page, 
+          per_page: perPage, 
+          total: posts.length, 
+          pages: Math.ceil(posts.length / perPage) 
+        },
         tag_cloud, 
         nav_tags,
         settings: settings
@@ -274,24 +300,58 @@ async function serveFromOfflineStore(request) {
     const tagPageMatch = path.match(/^\/api\/pages\/tag\/([^/]+)$/);
     if (tagPageMatch) {
       const slug = tagPageMatch[1];
-      const allTags = await idbGet('tags');
       const tag = allTags.find(t => t.slug === slug);
       if (tag) {
         const allPosts = await idbGet('posts');
         const posts = allPosts.filter(p => p.tags && p.tags.some(t => t.slug === slug));
         
+        const offset = (page - 1) * perPage;
+        const paginatedPosts = posts.slice(offset, offset + perPage);
+
+        // Sub-nav for this tag
+        const childItems = buildTagTree(tag.id);
+        const rootNavTags = buildTagTree(null);
+
+        // Breadcrumbs (reconstruct from relationships)
+        const breadcrumbs = [];
+        let curr = tag;
+        while (curr) {
+          const rel = allRelationships.find(r => r.child_id === curr.id);
+          if (rel) {
+            const parent = allTags.find(t => t.id === rel.parent_id);
+            if (parent && parent.include_in_breadcrumbs) {
+              breadcrumbs.unshift({
+                id: parent.id,
+                name: parent.name,
+                slug: parent.slug,
+                post_count: parent.post_count
+              });
+              curr = parent;
+            } else {
+              curr = null;
+            }
+          } else {
+            curr = null;
+          }
+        }
+
         return new Response(JSON.stringify({
           tag: {
             ...tag,
             parents: [], 
-            children: [],
+            children: allTags.filter(t => allRelationships.some(r => r.parent_id === tag.id && r.child_id === t.id)),
             locations: []
           },
-          breadcrumbs: [],
-          posts: posts.slice(0, 20),
-          root_nav_tags: [],
-          pagination: { page: 1, per_page: 20, total: posts.length, pages: Math.ceil(posts.length / 20) },
-          nav_tags: []
+          breadcrumbs: breadcrumbs,
+          posts: paginatedPosts,
+          root_nav_tags: rootNavTags,
+          pagination: { 
+            page, 
+            per_page: perPage, 
+            total: posts.length, 
+            pages: Math.ceil(posts.length / perPage) 
+          },
+          nav_tags: childItems
         }), { headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ error: 'Tag not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
@@ -299,7 +359,6 @@ async function serveFromOfflineStore(request) {
 
     // 2.2 /api/pages/map
     if (path === '/api/pages/map') {
-      const allTags = await idbGet('tags');
       const allLocs = await idbGet('tag_locations');
       const locMap = {};
       allLocs.forEach(l => locMap[l.tag_id] = l);
@@ -321,8 +380,7 @@ async function serveFromOfflineStore(request) {
 
     // 3. /api/tags
     if (path === '/api/tags') {
-      const tags = await idbGet('tags');
-      return new Response(JSON.stringify(tags.map(t => ({ id: t.id, name: t.name, slug: t.slug, post_count: t.post_count }))), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(allTags.map(t => ({ id: t.id, name: t.name, slug: t.slug, post_count: t.post_count }))), { headers: { 'Content-Type': 'application/json' } });
     }
 
     // 4. /api/posts/:id/navigation
@@ -340,6 +398,11 @@ async function serveFromOfflineStore(request) {
     }
 
     return new Response(JSON.stringify({ error: 'Offline' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+  } catch (err) {
+    console.error('[SW] Offline store error:', err);
+    return new Response(JSON.stringify({ error: 'Offline store error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}s: { 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
