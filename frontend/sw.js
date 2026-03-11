@@ -141,7 +141,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(request.url, { cacheName: 'point-images-full-v1' })
         .then(r => r || caches.match(request.url, { cacheName: 'point-images-v1' }))
-        .then(r => r || fetch(request))
+        .then(r => r || fetch(request).catch(() => new Response('Not found', { status: 404 })))
     );
     return;
   }
