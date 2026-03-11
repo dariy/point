@@ -55,15 +55,24 @@ func (h *SystemHandler) GetOfflineStats(c echo.Context) error {
 func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// 1. All published posts (ListPostsRow)
-	posts, err := h.repo.ListPosts(ctx, models.ListPostsParams{
-		Limit:   10000, // Practically all
-		Offset:  0,
-		IncludeHidden: false,
+	// 1. All published posts and pages
+	allPosts, err := h.repo.ListPosts(ctx, models.ListPostsParams{
+		Limit:         10000,
+		Offset:        0,
+		IncludeHidden: true, // Includes 'published' and 'hidden'
 		IncludeDrafts: false,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	// Filter to include 'published', 'hidden', and 'page'
+	posts := make([]models.ListPostsRow, 0)
+	for _, p := range allPosts {
+		st := strings.ToLower(p.Status)
+		if st == "published" || st == "hidden" || st == "page" {
+			posts = append(posts, p)
+		}
 	}
 
 	postIDs := make([]int64, len(posts))
