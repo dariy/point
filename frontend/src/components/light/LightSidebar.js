@@ -30,8 +30,7 @@ const NAV_ITEMS = [
 
 export class LightSidebar extends Component {
   render() {
-    const { currentPath = '', publicUrl = '/', user = {} } = this.props;
-    const displayName = escapeHtml(user.display_name || user.username || 'Admin');
+    const { currentPath = '', publicUrl = '/' } = this.props;
 
     const navItems = NAV_ITEMS.map(({ href, label, icon }) => {
       const isActive = href === '/light'
