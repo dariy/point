@@ -15,6 +15,8 @@
  * @property {string}  message  Human-readable error message
  */
 
+import { enqueue } from '../utils/mutationQueue.js';
+
 class ApiClient {
   /**
    * @param {string} base  Base URL prefix for all requests (e.g. '')
@@ -99,6 +101,9 @@ class ApiClient {
    * @returns {Promise<unknown>}
    */
   post(path, body) {
+    if (!navigator.onLine && path.startsWith('/api/') && !path.includes('/auth/')) {
+      return enqueue('POST', path, body);
+    }
     return this.request(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -113,6 +118,9 @@ class ApiClient {
    * @returns {Promise<unknown>}
    */
   put(path, body) {
+    if (!navigator.onLine && path.startsWith('/api/')) {
+      return enqueue('PUT', path, body);
+    }
     return this.request(path, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -127,6 +135,9 @@ class ApiClient {
    * @returns {Promise<unknown>}
    */
   patch(path, body) {
+    if (!navigator.onLine && path.startsWith('/api/')) {
+      return enqueue('PATCH', path, body);
+    }
     return this.request(path, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -140,6 +151,9 @@ class ApiClient {
    * @returns {Promise<null>}
    */
   delete(path) {
+    if (!navigator.onLine && path.startsWith('/api/')) {
+      return enqueue('DELETE', path);
+    }
     return this.request(path, { method: 'DELETE' });
   }
 
@@ -152,6 +166,11 @@ class ApiClient {
    * @returns {Promise<unknown>}
    */
   upload(path, formData) {
+    if (!navigator.onLine && path.startsWith('/api/')) {
+      // For uploads, we expect a single 'file' field for now in offline mode
+      const file = formData.get('file');
+      return enqueue('POST', path, {}, file);
+    }
     return this.request(path, {
       method: 'POST',
       body: formData,
