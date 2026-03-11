@@ -29,16 +29,17 @@ export async function syncQueue() {
       await updateStatus();
 
       try {
-        // 2. Resolve temp IDs in body
+        // 2. Resolve temp IDs in URL and body
+        const resolvedUrl  = resolveUrl(op.url, idMap);
         const resolvedBody = resolveTempIds(op.body, idMap);
-        
+
         // 3. Handle file upload if needed (bypass offline interceptor)
         if (op.blob_key) {
           const blob = await getBlob(op.blob_key);
           const formData = new FormData();
           formData.append('file', new Blob([blob.data], { type: blob.type }), blob.name);
-          
-          const uploadResp = await api.request(op.url, {
+
+          const uploadResp = await api.request(resolvedUrl, {
             method: 'POST',
             body: formData,
           });
@@ -52,7 +53,7 @@ export async function syncQueue() {
           const headers = { 'Content-Type': 'application/json' };
           const body = (method !== 'DELETE' && op.body) ? JSON.stringify(resolvedBody) : undefined;
           
-          resp = await api.request(op.url, { method, headers, body });
+          resp = await api.request(resolvedUrl, { method, headers, body });
 
           // 5. Track ID mapping for POST
           if (op.method === 'POST' && resp && resp.id) {
@@ -78,6 +79,11 @@ export async function syncQueue() {
     await updateStatus();
     window.dispatchEvent(new CustomEvent('sync:complete'));
   }
+}
+
+// Replace any local_… segment in a URL with the real server ID from idMap.
+function resolveUrl(url, idMap) {
+  return url.replace(/local_[^/?#]+/g, (match) => idMap[match] ?? match);
 }
 
 function resolveTempIds(obj, idMap) {
