@@ -23,8 +23,9 @@ func TestSystemHandler_Stats(t *testing.T) {
 
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
+	postService := services.NewPostService(repo)
 	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
-	handler := NewSystemHandler(repo, mediaService, settingsService, tagService, tmpDir)
+	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, tmpDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/stats", nil)
@@ -57,8 +58,9 @@ line3`), 0644)
 
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
+	postService := services.NewPostService(repo)
 	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
-	handler := NewSystemHandler(repo, mediaService, settingsService, tagService, tmpDir)
+	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, tmpDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/logs", nil)
@@ -85,8 +87,9 @@ func TestSystemHandler_GetMigrations(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/migrations", nil)
@@ -111,8 +114,9 @@ func TestSystemHandler_RecalculateMediaVisibility(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/system/media/recalculate", nil)
@@ -137,8 +141,9 @@ func TestSystemHandler_UpdateMapCoords(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/system/tags/update-coords", nil)
@@ -163,8 +168,9 @@ func TestSystemHandler_ClearCache(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/api/system/cache/clear", nil)
