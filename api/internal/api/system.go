@@ -22,6 +22,7 @@ import (
 type SystemHandler struct {
 	repo            *repository.Repository
 	mediaService    *services.MediaService
+	postService     *services.PostService
 	settingsService *services.SettingsService
 	tagService      *services.TagService
 	dataPath        string
@@ -30,10 +31,11 @@ type SystemHandler struct {
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, settingsService *services.SettingsService, tagService *services.TagService, dataPath string) *SystemHandler {
+func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, dataPath string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
+		postService:     postService,
 		settingsService: settingsService,
 		tagService:      tagService,
 		dataPath:        dataPath,

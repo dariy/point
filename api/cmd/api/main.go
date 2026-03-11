@@ -130,7 +130,7 @@ func main() {
 	postHandler := api.NewPostHandler(postService, settingsService, mediaService, tagService)
 	mediaHandler := api.NewMediaHandler(mediaService, settingsService)
 	settingsHandler := api.NewSettingsHandler(settingsService)
-	systemHandler := api.NewSystemHandler(repo, mediaService, settingsService, tagService, cfg.StoragePath)
+	systemHandler := api.NewSystemHandler(repo, mediaService, postService, settingsService, tagService, cfg.StoragePath)
 	feedsHandler := api.NewFeedsHandler(repo, postService, tagService, settingsService)
 	pagesHandler := api.NewPagesHandler(repo, postService, tagService, settingsService)
 
