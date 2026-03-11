@@ -125,7 +125,7 @@ self.addEventListener('fetch', (event) => {
         // Cache miss — fetch and store for next time.
         try {
           const response = await fetch(request);
-          if (response.ok) cache.put('/', response.clone());
+          if (response.status === 200) cache.put('/', response.clone()).catch(() => {});
           return response;
         } catch {
           // Offline and cold cache — nothing we can serve.
@@ -187,7 +187,11 @@ async function staleWhileRevalidate(request) {
 
   const fetchPromise = fetch(request)
     .then((response) => {
-      if (response.ok) cache.put(keyStr, response.clone());
+      // Only cache full 200 responses — the Cache API rejects 206 Partial
+      // Content (used by range requests for audio/video) and other non-200
+      // 2xx statuses.  Ignore the put() promise so a failure never surfaces
+      // as an unhandled rejection.
+      if (response.status === 200) cache.put(keyStr, response.clone()).catch(() => {});
       return response;
     })
     .catch(() => cached);
