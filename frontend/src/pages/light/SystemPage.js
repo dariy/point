@@ -301,22 +301,23 @@ export default class SystemPage extends Component {
           </div>`,
         confirmText: 'Download',
         variant: 'primary',
-        onConfirm: () => {
-          const scope = document.querySelector('input[name="imageScope"]:checked').value;
+        allowHtml: true,
+        onConfirm: (dialog) => {
+          const selected = dialog.container.querySelector('input[name="imageScope"]:checked');
+          const scope = selected ? selected.value : 'thumbnails';
           this._handleStartDownload(scope);
         },
-      });
-    } catch (err) {
+      });    } catch (err) {
       this.setState({ loadingOfflineStats: false });
       store.set('toast', { message: err.message || 'Failed to fetch offline stats.', type: 'error' });
     }
   }
 
   async _handleStartDownload(imageScope) {
-    this.setState({ 
-      downloadingOffline: true, 
-      offlineProgress: 0, 
-      offlineStatusText: 'Fetching snapshot…' 
+    this.setState({
+      downloadingOffline: true,
+      offlineProgress: 0,
+      offlineStatusText: 'Fetching snapshot…'
     });
 
     try {
@@ -328,7 +329,7 @@ export default class SystemPage extends Component {
       // 2. Images
       const urls = snapshot.media.map(m => imageScope === 'full' ? m.path : m.thumbnail_path).filter(Boolean);
       this.setState({ offlineProgress: 40, offlineStatusText: `Downloading ${urls.length} images…` });
-      
+
       await preCacheImages(urls, imageScope, ({ completed, total }) => {
         const progress = 40 + Math.floor((completed / total) * 55);
         this.setState({ offlineProgress: progress, offlineStatusText: `Images: ${completed}/${total}` });
@@ -340,10 +341,10 @@ export default class SystemPage extends Component {
       await saveMeta('image_scope', imageScope);
       await saveMeta('blog_settings', snapshot.settings);
 
-      this.setState({ 
-        downloadingOffline: false, 
-        lastSync, 
-        offlineStatusText: '' 
+      this.setState({
+        downloadingOffline: false,
+        lastSync,
+        offlineStatusText: ''
       });
       store.set('toast', { message: 'Offline download complete.', type: 'success' });
     } catch (err) {
@@ -408,7 +409,7 @@ export default class SystemPage extends Component {
     }
   }
 
-  _showConfirm({ title, message, confirmText, variant, onConfirm }) {
+  _showConfirm({ title, message, confirmText, variant, allowHtml, onConfirm }) {
     const mount = document.createElement('div');
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
@@ -416,7 +417,8 @@ export default class SystemPage extends Component {
       message,
       confirmText,
       variant,
-      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      allowHtml,
+      onConfirm: () => { onConfirm(dialog); dialog.unmount(); mount.remove(); },
       onCancel:  () => { dialog.unmount(); mount.remove(); },
     });
     dialog.mount();
