@@ -229,21 +229,25 @@ async function serveFromOfflineStore(request) {
       const allTags = await idbGet('tags');
       const settings = await idbGet('meta', 'blog_settings') || {};
       
-      // Basic tag cloud mock: all tags with post_count > 0
-      const tag_cloud = allTags.filter(t => t.post_count > 0).map(t => ({
-        name: t.name,
-        slug: t.slug,
-        count: t.post_count
-      }));
+      const tag_cloud = allTags
+        .filter(t => t.post_count > 0 && !t.is_hidden)
+        .map(t => ({
+          name: t.name,
+          slug: t.slug,
+          count: t.post_count
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20);
 
-      // Nav tags mock: featured tags
-      const nav_tags = allTags.filter(t => t.is_featured).map(t => ({
-        id: t.id,
-        name: t.name,
-        slug: t.slug,
-        post_count: t.post_count,
-        children: []
-      }));
+      const nav_tags = allTags
+        .filter(t => t.is_featured && !t.is_hidden)
+        .map(t => ({
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+          post_count: t.post_count,
+          children: []
+        }));
 
       return new Response(JSON.stringify({
         posts: posts.slice(0, 10), 
