@@ -39,9 +39,13 @@ export class ConfirmDialog extends Component {
 
     const body = modal.getBodyMount();
     if (body) {
-      const p = document.createElement('p');
-      p.textContent = message;
-      body.appendChild(p);
+      if (this.props.allowHtml) {
+        body.innerHTML = message;
+      } else {
+        const p = document.createElement('p');
+        p.textContent = message;
+        body.appendChild(p);
+      }
     }
 
     modal.$('#confirm-cancel-btn')?.addEventListener('click', () => onCancel?.());

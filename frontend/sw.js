@@ -185,26 +185,6 @@ self.addEventListener('fetch', (event) => {
   // Static assets: stale-while-revalidate.
   event.respondWith(staleWhileRevalidate(request));
 });
-          return response;
-        } catch {
-          // Offline and cold cache — nothing we can serve.
-          return new Response(
-            '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>'
-            + '<body style="font-family:sans-serif;padding:2rem">'
-            + '<h1>You\'re offline</h1>'
-            + '<p>Reload the page once you\'re back online.</p>'
-            + '</body></html>',
-            { headers: { 'Content-Type': 'text/html' } },
-          );
-        }
-      }),
-    );
-    return;
-  }
-
-  // Static assets: stale-while-revalidate.
-  event.respondWith(staleWhileRevalidate(request));
-});
 
 // ── Share target handler ──────────────────────────────────────────────────────
 
