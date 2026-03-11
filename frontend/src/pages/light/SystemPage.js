@@ -11,6 +11,9 @@ import {
   createBackup, restoreBackup, deleteBackup, getMigrations,
   updateMapCoords,
 } from '../../api/system.js';
+import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
+import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
+import { preCacheImages } from '../../utils/imageCache.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -29,6 +32,14 @@ export default class SystemPage extends Component {
       updatingCoords: false,
       coordsResult: null,
       error: null,
+      
+      // Offline states
+      offlineStats: null,
+      loadingOfflineStats: false,
+      downloadingOffline: false,
+      offlineProgress: 0,
+      offlineStatusText: '',
+      lastSync: null,
     };
   }
 
@@ -61,6 +72,8 @@ export default class SystemPage extends Component {
         </div>`;
     }
 
+    const { offlineStats, loadingOfflineStats, downloadingOffline, offlineProgress, offlineStatusText, lastSync } = this.state;
+
     return `
       <div class="light-layout">
         <div id="sidebar-mount"></div>
@@ -69,6 +82,32 @@ export default class SystemPage extends Component {
             <h1>System</h1>
           </header>
           <main class="light-content">
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Offline Data</h2>
+                ${lastSync ? `<span class="header-meta">Last synced: ${escapeHtml(formatDateShort(lastSync))}</span>` : ''}
+              </div>
+              <div class="card-body">
+                <div class="ops-list">
+                  <div class="op-item">
+                    <div class="op-info">
+                      <h4>Download for offline</h4>
+                      <p>Download posts, tags, and images to this device for offline reading.</p>
+                      ${downloadingOffline ? `
+                        <div class="offline-progress-container" style="margin-top: 1rem;">
+                          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${offlineProgress}%"></div></div>
+                          <div class="progress-text">${escapeHtml(offlineStatusText)}</div>
+                        </div>
+                      ` : ''}
+                    </div>
+                    <button id="prepare-offline-btn" class="btn btn-secondary" ${downloadingOffline ? 'disabled' : ''}>
+                      ${downloadingOffline ? 'Downloading…' : 'Download for offline'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="card">
               <div class="card-header"><h2>Maintenance</h2></div>
@@ -177,6 +216,9 @@ export default class SystemPage extends Component {
 
     if (this.state.loading || this.state.error) return;
 
+    // Offline
+    this.$('#prepare-offline-btn')?.addEventListener('click', () => this._handlePrepareOffline());
+
     // Cache
     this.$('#clear-cache-btn')?.addEventListener('click', () => this._handleClearCache());
 
@@ -224,13 +266,89 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [backups, migrations] = await Promise.all([
+      const [backups, migrations, lastSync] = await Promise.all([
         listBackups(),
         getMigrations(),
+        getMeta('last_sync'),
       ]);
-      this.setState({ loading: false, backups, migrations });
+      this.setState({ loading: false, backups, migrations, lastSync });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Failed to load system data.' });
+    }
+  }
+
+  async _handlePrepareOffline() {
+    this.setState({ loadingOfflineStats: true });
+    try {
+      const stats = await getOfflineStats();
+      this.setState({ loadingOfflineStats: false, offlineStats: stats });
+      
+      this._showConfirm({
+        title: 'Download for offline',
+        message: `
+          <div class="offline-stats">
+            <p>Download ${stats.post_count} posts and ${stats.image_count} images?</p>
+            <div class="radio-group" style="margin-top: 1rem;">
+              <label style="display: block; margin-bottom: 0.5rem;">
+                <input type="radio" name="imageScope" value="thumbnails" checked> 
+                Thumbnails only (${formatFileSize(stats.thumbnail_bytes)})
+              </label>
+              <label style="display: block;">
+                <input type="radio" name="imageScope" value="full"> 
+                Thumbnails + originals (${formatFileSize(stats.original_bytes)})
+              </label>
+            </div>
+          </div>`,
+        confirmText: 'Download',
+        variant: 'primary',
+        onConfirm: () => {
+          const scope = document.querySelector('input[name="imageScope"]:checked').value;
+          this._handleStartDownload(scope);
+        },
+      });
+    } catch (err) {
+      this.setState({ loadingOfflineStats: false });
+      store.set('toast', { message: err.message || 'Failed to fetch offline stats.', type: 'error' });
+    }
+  }
+
+  async _handleStartDownload(imageScope) {
+    this.setState({ 
+      downloadingOffline: true, 
+      offlineProgress: 0, 
+      offlineStatusText: 'Fetching snapshot…' 
+    });
+
+    try {
+      // 1. Snapshot
+      const snapshot = await getOfflineSnapshot();
+      this.setState({ offlineProgress: 20, offlineStatusText: 'Saving data…' });
+      await saveSnapshot(snapshot);
+
+      // 2. Images
+      const urls = snapshot.media.map(m => imageScope === 'full' ? m.path : m.thumbnail_path).filter(Boolean);
+      this.setState({ offlineProgress: 40, offlineStatusText: `Downloading ${urls.length} images…` });
+      
+      await preCacheImages(urls, imageScope, ({ completed, total }) => {
+        const progress = 40 + Math.floor((completed / total) * 55);
+        this.setState({ offlineProgress: progress, offlineStatusText: `Images: ${completed}/${total}` });
+      });
+
+      // 3. Meta
+      const lastSync = Date.now();
+      await saveMeta('last_sync', lastSync);
+      await saveMeta('image_scope', imageScope);
+      await saveMeta('blog_settings', snapshot.settings);
+
+      this.setState({ 
+        downloadingOffline: false, 
+        lastSync, 
+        offlineStatusText: '' 
+      });
+      store.set('toast', { message: 'Offline download complete.', type: 'success' });
+    } catch (err) {
+      this.setState({ downloadingOffline: false });
+      store.set('toast', { message: err.message || 'Offline download failed.', type: 'error' });
     }
   }
 
