@@ -14,7 +14,7 @@
  * without explicit { type: 'module' } registration.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME    = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
@@ -70,7 +70,17 @@ async function idbPut(entry) {
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(SHELL_URLS))
+      .then(async (cache) => {
+        // Cache each asset individually so one bad URL cannot abort the whole
+        // install and leave the shell (especially '/') uncached.
+        await Promise.allSettled(
+          SHELL_URLS.map((url) =>
+            cache.add(url).catch((err) =>
+              console.warn('[SW] Failed to pre-cache:', url, err),
+            ),
+          ),
+        );
+      })
       .then(() => self.skipWaiting()),
   );
 });
@@ -103,10 +113,32 @@ self.addEventListener('fetch', (event) => {
   // SW and manifest must not be cached by the SW itself.
   if (url.pathname === '/sw.js' || url.pathname === '/manifest.webmanifest') return;
 
-  // Navigation requests (HTML): always serve the cached SPA shell.
+  // Navigation requests (HTML): cache-first (serve the pre-cached SPA shell).
+  // If the cache is cold (install-time pre-cache failed), fetch from the
+  // network and warm the cache so the next offline reload will succeed.
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match('/').then((cached) => cached || fetch(request)),
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match('/');
+        if (cached) return cached;
+
+        // Cache miss — fetch and store for next time.
+        try {
+          const response = await fetch(request);
+          if (response.ok) cache.put('/', response.clone());
+          return response;
+        } catch {
+          // Offline and cold cache — nothing we can serve.
+          return new Response(
+            '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>'
+            + '<body style="font-family:sans-serif;padding:2rem">'
+            + '<h1>You\'re offline</h1>'
+            + '<p>Reload the page once you\'re back online.</p>'
+            + '</body></html>',
+            { headers: { 'Content-Type': 'text/html' } },
+          );
+        }
+      }),
     );
     return;
   }
