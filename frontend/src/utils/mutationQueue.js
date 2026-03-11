@@ -18,7 +18,7 @@ function openDB() {
  * Enqueue a mutation.
  */
 export async function enqueue(method, url, body = null, file = null) {
-  const id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const id = `local_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   const db = await openDB();
   const tx = db.transaction(['mutation_queue', 'blobs'], 'readwrite');
   
@@ -67,7 +67,25 @@ export async function getQueue() {
 /**
  * Update global store with queue status.
  */
-async function updateStatus() {
+/**
+ * Reset all failed ops back to 'pending' so they can be retried.
+ */
+export async function resetFailedOps() {
+  const db = await openDB();
+  const tx = db.transaction('mutation_queue', 'readwrite');
+  const store = tx.objectStore('mutation_queue');
+  const all = await new Promise((res, rej) => {
+    const req = store.getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  all.filter(op => op.status === 'failed').forEach(op => {
+    store.put({ ...op, status: 'pending', error: null });
+  });
+  return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+}
+
+export async function updateStatus() {
   const queue = await getQueue();
   const pending = queue.filter(op => op.status === 'pending').length;
   const failed = queue.filter(op => op.status === 'failed').length;
