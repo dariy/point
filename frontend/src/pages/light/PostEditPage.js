@@ -128,17 +128,10 @@ export default class PostEditPage extends Component {
     const content  = p.content || '';
     const status   = p.status || 'draft';
     const featured = p.is_featured || false;
-    const thumb    = escapeHtml(p.thumbnail_path || '');
-    const meta     = escapeHtml(p.meta_description || '');
-    const fmt      = p.formatter || 'markdown';
     const excerpt  = p.excerpt || '';
 
     const statusOpts = ['draft', 'published', 'hidden', 'page'].map((s) =>
       `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`
-    ).join('');
-
-    const fmtOpts = ['markdown', 'html', 'raw'].map((f) =>
-      `<option value="${f}"${fmt === f ? ' selected' : ''}>${escapeHtml(f)}</option>`
     ).join('');
 
     const saveLabel    = saving    ? 'Saving…'    : 'Save';

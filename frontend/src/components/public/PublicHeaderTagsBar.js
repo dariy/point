@@ -185,7 +185,6 @@ export class PublicHeaderTagsBar extends Component {
     dropdown.classList.add('is-measuring');
     const anchorRect = anchor.getBoundingClientRect();
     const dropW = dropdown.offsetWidth;
-    const dropH = dropdown.offsetHeight;
     dropdown.classList.remove('is-measuring');
 
     const gap = 0;

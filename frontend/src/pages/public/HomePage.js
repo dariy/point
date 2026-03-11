@@ -24,7 +24,7 @@ export default class HomePage extends Component {
   }
 
   render() {
-    const { loading, data, error } = this.state;
+    const { loading, error } = this.state;
 
     if (loading) {
       return `
