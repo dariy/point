@@ -9,7 +9,7 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listPosts, deletePost, updatePostTags } from '../../api/posts.js';
+import { listPosts, deletePost, updatePostTags, updatePost } from '../../api/posts.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
@@ -46,34 +46,45 @@ export default class PostsListPage extends Component {
     }).join('');
 
     const rows = loading
-      ? `<tr><td colspan="5" class="loading">Loading…</td></tr>`
+      ? `<tr><td colspan="4" class="loading">Loading…</td></tr>`
       : error
-        ? `<tr><td colspan="5" class="error-state">${escapeHtml(error)}</td></tr>`
+        ? `<tr><td colspan="4" class="error-state">${escapeHtml(error)}</td></tr>`
         : !posts.length
-          ? `<tr><td colspan="5" class="empty-state">No posts found.</td></tr>`
+          ? `<tr><td colspan="4" class="empty-state">No posts found.</td></tr>`
           : posts.map((p) => `
-              <tr data-post-id="${escapeHtml(String(p.id))}">
-                <td>
+              <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
+                <td class="status-col">
+                  <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
+                          data-id="${escapeHtml(String(p.id))}">
+                    ${['draft', 'published', 'hidden', 'page'].map(s => `
+                      <option value="${s}"${p.status === s ? ' selected' : ''}>
+                        ${escapeHtml(STATUS_LABELS[s] || s)}
+                      </option>
+                    `).join('')}
+                  </select>
+                </td>
+                <td class="title-col">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
                     ${escapeHtml(p.title)}
                   </a>
                 </td>
-                <td>
-                  <span class="badge badge-${escapeHtml(p.status)}">
-                    ${escapeHtml(STATUS_LABELS[p.status] || p.status)}
-                  </span>
+                <td class="updated-col">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
+                <td class="actions-col">
+                  <div class="actions">
+                    <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
+                       class="btn btn-sm" title="Edit">✎</a>
+                    <a href="/post/${escapeHtml(p.slug)}" class="btn btn-sm"
+                       title="View" target="_blank" data-external>↗</a>
+                    <button class="btn btn-sm btn-danger delete-btn"
+                            data-id="${escapeHtml(String(p.id))}"
+                            data-title="${escapeHtml(p.title)}"
+                            title="Delete">✕</button>
+                  </div>
                 </td>
-                <td class="tags-col"><div id="tags-cell-${escapeHtml(String(p.id))}"></div></td>
-                <td>${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
-                <td class="actions">
-                  <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
-                     class="btn btn-sm" title="Edit">✎</a>
-                  <a href="/post/${escapeHtml(p.slug)}" class="btn btn-sm"
-                     title="View" target="_blank" data-external>↗</a>
-                  <button class="btn btn-sm btn-danger delete-btn"
-                          data-id="${escapeHtml(String(p.id))}"
-                          data-title="${escapeHtml(p.title)}"
-                          title="Delete">✕</button>
+              </tr>
+              <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-tags">
+                <td colspan="4" class="tags-col">
+                  <div id="tags-cell-${escapeHtml(String(p.id))}"></div>
                 </td>
               </tr>`).join('');
 
@@ -99,7 +110,7 @@ export default class PostsListPage extends Component {
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Title</th><th>Status</th><th>Tags</th><th>Updated</th><th>Actions</th>
+                    <th>Status</th><th>Title</th><th>Updated</th><th class="actions-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="posts-tbody">${rows}</tbody>
@@ -161,6 +172,15 @@ export default class PostsListPage extends Component {
       }
     }
 
+    // Status change buttons
+    this.$$('.status-change-btn').forEach((select) => {
+      select.addEventListener('change', async (e) => {
+        const id = parseInt(select.dataset.id, 10);
+        const newStatus = e.target.value;
+        await this._updatePostStatus(id, newStatus, select);
+      });
+    });
+
     // Delete buttons
     this.$$('.delete-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -199,7 +219,8 @@ export default class PostsListPage extends Component {
     const probeRow = this.$('tbody tr');
     if (!container || !thead || !probeRow) return 20;
     const bodyHeight = container.clientHeight - thead.offsetHeight;
-    const rowHeight = probeRow.offsetHeight || 44;
+    // Each post item now takes two <tr> rows.
+    const rowHeight = (probeRow.offsetHeight || 44) * 2;
     return Math.max(5, Math.floor(bodyHeight / rowHeight));
   }
 
@@ -228,7 +249,7 @@ export default class PostsListPage extends Component {
     // The string is fully static (no user data), so innerHTML is safe here.
     const tbody = this.$('#posts-tbody');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="5" class="loading">Loading\u2026</td></tr>`; // static, safe
+      tbody.innerHTML = `<tr><td colspan="4" class="loading">Loading…</td></tr>`; // static, safe
     }
     this.state.loading = true;
     this.state.error = null;
@@ -307,6 +328,27 @@ export default class PostsListPage extends Component {
       this._load();
     } catch (err) {
       store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
+    }
+  }
+
+  async _updatePostStatus(id, status, select) {
+    const originalStatus = this.state.posts.find(p => p.id === id)?.status || 'draft';
+    select.classList.add('badge-loading');
+    try {
+      const updated = await updatePost(id, { status });
+      // Update local state silently to prevent full re-render
+      const post = this.state.posts.find(p => p.id === id);
+      if (post) post.status = updated.status.toLowerCase();
+
+      // Update UI
+      select.className = `status-select badge-${updated.status.toLowerCase()} status-change-btn`;
+      store.set('toast', { message: 'Status updated.', type: 'success' });
+    } catch (err) {
+      // Revert select value on failure
+      select.value = originalStatus;
+      store.set('toast', { message: err.message || 'Update failed.', type: 'error' });
+    } finally {
+      select.classList.remove('badge-loading');
     }
   }
 
