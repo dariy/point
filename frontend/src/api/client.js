@@ -50,7 +50,7 @@ class ApiClient {
     let response;
     try {
       response = await fetch(url, opts);
-    } catch (networkErr) {
+    } catch {
       throw { status: 0, message: 'Network error — check your connection.' };
     }
 

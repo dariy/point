@@ -472,22 +472,22 @@ export default class PostEditPage extends Component {
     for (const fileEntry of current.files) {
       const blob = new Blob([fileEntry.data], { type: fileEntry.type });
       const file = new File([blob], fileEntry.name, { type: fileEntry.type });
-      await this._uploadAndInsert(file);  // eslint-disable-line no-await-in-loop
+      await this._uploadAndInsert(file);   
     }
 
     // Process offline backlog: one draft post per queued share entry.
     for (const entry of backlog) {
       try {
         const title = entry.title || entry.files.map((f) => f.name).join(', ') || 'Shared photo';
-        const post  = await createPost({ title, status: 'draft', content: '' }); // eslint-disable-line no-await-in-loop
+        const post  = await createPost({ title, status: 'draft', content: '' });  
         let content = '';
         for (const fileEntry of entry.files) {
           const blob  = new Blob([fileEntry.data], { type: fileEntry.type });
           const file  = new File([blob], fileEntry.name, { type: fileEntry.type });
-          const media = await uploadMedia(file, { post_id: post.id }); // eslint-disable-line no-await-in-loop
+          const media = await uploadMedia(file, { post_id: post.id });  
           content += `${media.path}\n`;
         }
-        await updatePost(post.id, { content: content.trim() }); // eslint-disable-line no-await-in-loop
+        await updatePost(post.id, { content: content.trim() });  
       } catch (err) {
         store.set('toast', { message: `Failed to save offline share: ${err.message || 'unknown error'}`, type: 'error' });
       }
