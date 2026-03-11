@@ -221,13 +221,14 @@ function isMediaPath(path) {
 async function serveFromOfflineStore(request) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const page = parseInt(url.searchParams.get('page'), 10) || 1;
-  const perPage = parseInt(url.searchParams.get('per_page'), 10) || 20;
 
   try {
+    const settings = await idbGet('meta', 'blog_settings') || {};
+    const page = parseInt(url.searchParams.get('page'), 10) || 1;
+    const perPage = parseInt(url.searchParams.get('per_page'), 10) || parseInt(settings.posts_per_page, 10) || 10;
+
     const allTags = await idbGet('tags');
     const allRelationships = await idbGet('tag_relationships');
-    const settings = await idbGet('meta', 'blog_settings') || {};
     const minPosts = parseInt(settings.min_tag_posts_to_show || '0', 10);
 
     // Helper: Build tag hierarchy
