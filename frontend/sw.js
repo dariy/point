@@ -255,6 +255,19 @@ async function serveFromOfflineStore(request) {
       return new Response(JSON.stringify(jsonTags(tags)), { headers: { 'Content-Type': 'application/json' } });
     }
 
+    // 4. /api/posts/:id/navigation
+    const navMatch = path.match(/^\/api\/posts\/(\d+)\/navigation$/);
+    if (navMatch) {
+      const id = parseInt(navMatch[1], 10);
+      const posts = await idbGet('posts');
+      const idx = posts.findIndex(p => p.id === id);
+      if (idx !== -1) {
+        const next = idx > 0 ? { id: posts[idx-1].id, title: posts[idx-1].title, slug: posts[idx-1].slug } : null;
+        const prev = idx < posts.length - 1 ? { id: posts[idx+1].id, title: posts[idx+1].title, slug: posts[idx+1].slug } : null;
+        return new Response(JSON.stringify({ prev, next }), { headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+
     // Default fallback for other API calls when offline
     return new Response(JSON.stringify({ error: 'Offline' }), { 
       status: 503, 
