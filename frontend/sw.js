@@ -47,6 +47,29 @@ const SHELL_URLS = [
 const IDB_DB    = 'point-share';
 const IDB_STORE = 'queue';
 
+// ── Offline Store IndexedDB (point-offline) ──────────────────────────────────
+const OFFLINE_DB = 'point-offline';
+const OFFLINE_VERSION = 1;
+
+function offlineDbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(OFFLINE_DB, OFFLINE_VERSION);
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror   = (e) => reject(e.target.error);
+  });
+}
+
+async function idbGet(storeName, query) {
+  const db = await offlineDbOpen();
+  const tx = db.transaction(storeName, 'readonly');
+  const store = tx.objectStore(storeName);
+  return new Promise((res, rej) => {
+    const req = query ? store.get(query) : store.getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
 function idbOpen() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_DB, 1);
@@ -107,6 +130,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Offline API reads → serve from IDB
+  if (!navigator.onLine && url.pathname.startsWith('/api/')) {
+    event.respondWith(serveFromOfflineStore(request));
+    return;
+  }
+
+  // Image intercept (path pattern /:year/:month/:filename)
+  if (!navigator.onLine && isMediaPath(url.pathname)) {
+    event.respondWith(
+      caches.match(request.url, { cacheName: 'point-images-full-v1' })
+        .then(r => r || caches.match(request.url, { cacheName: 'point-images-v1' }))
+        .then(r => r || fetch(request))
+    );
+    return;
+  }
+
   // API responses must never be cached.
   if (url.pathname.startsWith('/api/')) return;
 
@@ -126,6 +165,26 @@ self.addEventListener('fetch', (event) => {
         try {
           const response = await fetch(request);
           if (response.status === 200) cache.put('/', response.clone()).catch(() => {});
+          return response;
+        } catch {
+          // Offline and cold cache — nothing we can serve.
+          return new Response(
+            '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>'
+            + '<body style="font-family:sans-serif;padding:2rem">'
+            + '<h1>You\'re offline</h1>'
+            + '<p>Reload the page once you\'re back online.</p>'
+            + '</body></html>',
+            { headers: { 'Content-Type': 'text/html' } },
+          );
+        }
+      }),
+    );
+    return;
+  }
+
+  // Static assets: stale-while-revalidate.
+  event.respondWith(staleWhileRevalidate(request));
+});
           return response;
         } catch {
           // Offline and cold cache — nothing we can serve.
@@ -170,6 +229,72 @@ async function handleShareTarget(request) {
   });
 
   return Response.redirect('/light/posts/new?share=pending', 303);
+}
+
+// ── Offline Store Handlers ──────────────────────────────────────────────────
+
+function isMediaPath(path) {
+  // Matches /YYYY/MM/filename
+  return /^\/\d{4}\/\d{2}\/[^/]+$/.test(path);
+}
+
+async function serveFromOfflineStore(request) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  try {
+    // 1. /api/pages/home
+    if (path === '/api/pages/home') {
+      const posts = await idbGet('posts');
+      const settings = await idbGet('meta', 'blog_settings') || {};
+      
+      // Minimal mock of what GetHomePage returns
+      return new Response(JSON.stringify({
+        posts: posts.slice(0, 10), // Basic pagination mock
+        pagination: { page: 1, per_page: 10, total: posts.length, pages: Math.ceil(posts.length / 10) },
+        tag_cloud: [], 
+        nav_tags: [],
+        settings: settings
+      }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // 2. /api/posts/slug/:slug
+    const postSlugMatch = path.match(/^\/api\/posts\/slug\/([^/]+)$/);
+    if (postSlugMatch) {
+      const slug = postSlugMatch[1];
+      const posts = await idbGet('posts');
+      const post = posts.find(p => p.slug === slug);
+      if (post) {
+        return new Response(JSON.stringify(post), { headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // 3. /api/tags
+    if (path === '/api/tags') {
+      const tags = await idbGet('tags');
+      return new Response(JSON.stringify(jsonTags(tags)), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Default fallback for other API calls when offline
+    return new Response(JSON.stringify({ error: 'Offline' }), { 
+      status: 503, 
+      headers: { 'Content-Type': 'application/json' } 
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, 
+      headers: { 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+function jsonTags(tags) {
+  return tags.map(t => ({
+    id: t.id,
+    name: t.name,
+    slug: t.slug,
+    post_count: t.post_count
+  }));
 }
 
 // ── Cache strategy ────────────────────────────────────────────────────────────

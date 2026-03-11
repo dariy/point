@@ -18,6 +18,7 @@ import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
 import { normalizeSettings } from './utils/helpers.js';
 import { ToastContainer } from './components/shared/Toast.js';
+import { syncQueue } from './utils/sync.js';
 
 // ── CSS section switching ─────────────────────────────────────────────────
 //
@@ -72,6 +73,14 @@ async function bootstrap() {
     });
   }
 
+  // 0.1 Handle offline Treated as unauthenticated if network fails
+  try {
+    const lastSync = await (await import('./utils/offlineStore.js')).getMeta('last_sync');
+    if (lastSync) {
+      store.set('offline_status', { available: true, last_sync: lastSync });
+    }
+  } catch { /* ignore */ }
+
   // 1. Fetch public settings (best-effort — fall back to last cached values).
   let settings = {};
   try {
@@ -114,6 +123,10 @@ async function bootstrap() {
     authGuard: () => !!store.get('user'),
     loginPath: '/light/login',
   });
+
+  // 7. Sync queue when online
+  window.addEventListener('online', syncQueue);
+  if (navigator.onLine) syncQueue();
 }
 
 // ── Route table ───────────────────────────────────────────────────────────

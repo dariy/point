@@ -262,6 +262,8 @@ func main() {
 	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(authService))
 	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(authService))
 	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(authService))
+	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(authService))
+	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(authService))
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")
