@@ -3,7 +3,7 @@
  */
 import { getQueue } from './mutationQueue.js';
 import { api } from '../api/client.js';
-import { store } from '../store.js';
+
 
 let isSyncing = false;
 

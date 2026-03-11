@@ -37,7 +37,7 @@ export default class PostsListPage extends Component {
   }
 
   render() {
-    const { loading, posts, pagination, error, statusFilter, search } = this.state;
+    const { loading, posts, error, statusFilter, search } = this.state;
 
     const statusOptions = ['', 'draft', 'published', 'hidden', 'page'].map((s) => {
       const label = s ? STATUS_LABELS[s] : 'All statuses';

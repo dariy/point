@@ -71,8 +71,7 @@ export default class SystemPage extends Component {
           </div>
         </div>`;
     }
-
-    const { offlineStats, loadingOfflineStats, downloadingOffline, offlineProgress, offlineStatusText, lastSync } = this.state;
+    const { downloadingOffline, offlineProgress, offlineStatusText, lastSync } = this.state;
 
     return `
       <div class="light-layout">

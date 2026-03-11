@@ -20,7 +20,6 @@ export default class DashboardPage extends Component {
 
   render() {
     const { loading, stats, error } = this.state;
-    const user = store.get('user') || {};
 
     const content = loading
       ? `<div class="loading-spinner" aria-label="Loading…"></div>`

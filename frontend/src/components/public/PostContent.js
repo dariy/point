@@ -417,7 +417,7 @@ export class PostContent extends Component {
         wrapper.classList.toggle('zoomed', newScale > 1);
         this._updateVisuals();
       },
-      onTap: (x, y) => {
+      onTap: (_x, _y) => {
         if (document.body.classList.contains('ui-hidden')) {
           showUI();
         } else if (Date.now() - this._lastShowTime >= 150) {
