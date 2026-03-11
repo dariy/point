@@ -293,6 +293,28 @@ async function serveFromOfflineStore(request) {
       return new Response(JSON.stringify({ error: 'Tag not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
+    // 2.2 /api/pages/map
+    if (path === '/api/pages/map') {
+      const allTags = await idbGet('tags');
+      const allLocs = await idbGet('tag_locations');
+      const locMap = {};
+      allLocs.forEach(l => locMap[l.tag_id] = l);
+
+      const mapTags = allTags
+        .filter(t => locMap[t.id])
+        .map(t => ({
+          name: t.name,
+          slug: t.slug,
+          post_count: t.post_count,
+          lat: locMap[t.id].latitude,
+          lng: locMap[t.id].longitude,
+          type: 'other', // Simplified for offline
+          years: []
+        }));
+
+      return new Response(JSON.stringify({ tags: mapTags }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
     // 3. /api/tags
     if (path === '/api/tags') {
       const tags = await idbGet('tags');
