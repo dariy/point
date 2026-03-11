@@ -3,11 +3,8 @@
  *
  * Responsibilities:
  *  1. Intercept POST /share-target (Web Share Target Level 2).
- *     Reads shared files, saves entry to IndexedDB, redirects to
- *     /light/posts/new?share=pending.
  *  2. Shell caching (stale-while-revalidate) for offline support.
- *     Caches SPA shell assets on install; serves stale from cache
- *     while updating in the background.
+ *  3. Offline API and Image serving.
  */
 
 const CACHE_VERSION = 'v2';
@@ -56,7 +53,7 @@ async function idbGet(storeName, query) {
     const req = query ? store.get(query) : store.getAll();
     req.onsuccess = () => {
       let result = req.result;
-      if (!query && storeName === 'posts') {
+      if (!query && storeName === 'posts' && Array.isArray(result)) {
         // Default sort for posts: published_at DESC, created_at DESC
         result = result.sort((a, b) => {
           const dateA = a.published_at || a.created_at;
@@ -122,35 +119,37 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Share target: intercept POST entirely
+  // 1. Share target: intercept POST entirely
   if (url.pathname === '/share-target' && request.method === 'POST') {
     event.respondWith(handleShareTarget(request));
     return;
   }
 
-  // Offline API reads → serve from IDB
+  // 2. Image intercept (path pattern /:year/:month/:filename)
+  // Always intercept images to check dedicated caches first.
+  if (isMediaPath(url.pathname)) {
+    event.respondWith(
+      caches.match(request.url, { ignoreSearch: true, cacheName: 'point-images-full-v1' })
+        .then(r => r || caches.match(request.url, { ignoreSearch: true, cacheName: 'point-images-v1' }))
+        .then(r => r || (navigator.onLine ? fetch(request) : new Response('Not found', { status: 404 })))
+        .catch(() => new Response('Not found', { status: 404 }))
+    );
+    return;
+  }
+
+  // 3. Offline API reads → serve from IDB
   if (!navigator.onLine && url.pathname.startsWith('/api/')) {
     event.respondWith(serveFromOfflineStore(request));
     return;
   }
 
-  // Image intercept (path pattern /:year/:month/:filename)
-  if (!navigator.onLine && isMediaPath(url.pathname)) {
-    event.respondWith(
-      caches.match(request.url, { ignoreSearch: true, cacheName: 'point-images-full-v1' })
-        .then(r => r || caches.match(request.url, { ignoreSearch: true, cacheName: 'point-images-v1' }))
-        .then(r => r || fetch(request).catch(() => new Response('Not found', { status: 404 })))
-    );
-    return;
-  }
-
-  // API responses must never be cached.
+  // 4. API responses must never be cached in the shell cache.
   if (url.pathname.startsWith('/api/')) return;
 
-  // SW and manifest must not be cached.
+  // 5. SW and manifest must not be cached.
   if (url.pathname === '/sw.js' || url.pathname === '/manifest.webmanifest') return;
 
-  // Navigation requests (HTML): cache-first (SPA shell).
+  // 6. Navigation requests (HTML): cache-first (SPA shell).
   if (request.mode === 'navigate') {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
@@ -176,7 +175,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: stale-while-revalidate.
+  // 7. Static assets: stale-while-revalidate.
   event.respondWith(staleWhileRevalidate(request));
 });
 
@@ -236,6 +235,32 @@ async function serveFromOfflineStore(request) {
       const post = posts.find(p => p.slug === slug);
       if (post) {
         return new Response(JSON.stringify(post), { headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // 2.1 /api/pages/tag/:slug
+    const tagPageMatch = path.match(/^\/api\/pages\/tag\/([^/]+)$/);
+    if (tagPageMatch) {
+      const slug = tagPageMatch[1];
+      const allTags = await idbGet('tags');
+      const tag = allTags.find(t => t.slug === slug);
+      if (tag) {
+        const allPosts = await idbGet('posts');
+        const posts = allPosts.filter(p => p.tags && p.tags.some(t => t.slug === slug));
+        
+        return new Response(JSON.stringify({
+          tag: {
+            ...tag,
+            parents: [], 
+            children: [],
+            locations: []
+          },
+          breadcrumbs: [],
+          posts: posts.slice(0, 20),
+          root_nav_tags: [],
+          pagination: { page: 1, per_page: 20, total: posts.length, pages: Math.ceil(posts.length / 20) },
+          nav_tags: []
+        }), { headers: { 'Content-Type': 'application/json' } });
       }
     }
 
