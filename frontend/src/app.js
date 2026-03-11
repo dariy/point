@@ -87,8 +87,13 @@ async function bootstrap() {
   // 2. Apply theme before first render to avoid flash.
   loadTheme(settings);
 
-  // 3. Check auth session.
-  const user = await getMe(); // returns null if not logged in
+  // 3. Check auth session (best-effort — treat network errors as unauthenticated).
+  let user = null;
+  try {
+    user = await getMe();
+  } catch {
+    // Offline or server unreachable — proceed as unauthenticated.
+  }
   store.set('user', user);
 
   // 4. Mount toast container.
