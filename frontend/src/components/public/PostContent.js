@@ -336,7 +336,7 @@ export class PostContent extends Component {
           ? (data.page > 1 ? `/tag/${tagSlug}?page=${data.page}` : `/tag/${tagSlug}`)
           : (data.page > 1 ? `/?page=${data.page}` : '/');
         navigate(url);
-      } catch (e) {
+      } catch {
         navigate(tagSlug ? `/tag/${tagSlug}` : '/');
       }
     };
