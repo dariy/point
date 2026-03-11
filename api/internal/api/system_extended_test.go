@@ -24,8 +24,9 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
 	e := echo.New()
 
 	// Restore non-existent backup
@@ -67,8 +68,9 @@ func TestSystemHandler_StatsExtended(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
@@ -94,8 +96,9 @@ func TestSystemHandler_UpdateMapCoordsExtended(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
 	e := echo.New()
 
 	reqBody, _ := json.Marshal(map[string]interface{}{})
