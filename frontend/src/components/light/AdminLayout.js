@@ -67,7 +67,6 @@ export class AdminLayout extends Component {
 
     return `<button class="${cls}" id="sync-pill-btn">${text}</button>`;
   }
-  }
 
   afterRender() {
     this.mountChild(LightSidebar, '#sidebar-mount', {
