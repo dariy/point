@@ -102,6 +102,10 @@ func main() {
 			"create_tag_locations_index",
 			`CREATE INDEX IF NOT EXISTS idx_tag_locations_tag_id ON tag_locations(tag_id)`,
 		},
+		{
+			"normalize_post_status_case",
+			`UPDATE posts SET status = LOWER(status) WHERE status != LOWER(status)`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
