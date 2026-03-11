@@ -53,6 +53,10 @@ async function idbGet(storeName, query) {
     const req = query ? store.get(query) : store.getAll();
     req.onsuccess = () => {
       let result = req.result;
+      if (query && storeName === 'meta') {
+        // Return value property for meta records
+        result = result ? result.value : null;
+      }
       if (!query && storeName === 'posts' && Array.isArray(result)) {
         // Default sort for posts: published_at DESC, created_at DESC
         result = result.sort((a, b) => {
@@ -126,7 +130,6 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 2. Image intercept (path pattern /:year/:month/:filename)
-  // Always intercept images to check dedicated caches first.
   if (isMediaPath(url.pathname)) {
     event.respondWith(
       caches.match(request.url, { ignoreSearch: true, cacheName: 'point-images-full-v1' })
@@ -236,6 +239,7 @@ async function serveFromOfflineStore(request) {
       if (post) {
         return new Response(JSON.stringify(post), { headers: { 'Content-Type': 'application/json' } });
       }
+      return new Response(JSON.stringify({ error: 'Post not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
     // 2.1 /api/pages/tag/:slug
@@ -262,6 +266,7 @@ async function serveFromOfflineStore(request) {
           nav_tags: []
         }), { headers: { 'Content-Type': 'application/json' } });
       }
+      return new Response(JSON.stringify({ error: 'Tag not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
     // 3. /api/tags
@@ -281,6 +286,7 @@ async function serveFromOfflineStore(request) {
         const prev = idx < posts.length - 1 ? { id: posts[idx+1].id, title: posts[idx+1].title, slug: posts[idx+1].slug } : null;
         return new Response(JSON.stringify({ prev, next }), { headers: { 'Content-Type': 'application/json' } });
       }
+      return new Response(JSON.stringify({ error: 'Post not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify({ error: 'Offline' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
