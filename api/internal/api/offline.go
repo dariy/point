@@ -75,7 +75,10 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	// Convert to response format
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		postResponses[i] = postToResponse(p, postTagsMap[p.ID])
+		html, _ := h.postService.RenderContent(p.Content)
+		resp := postToResponse(p, postTagsMap[p.ID])
+		resp["content_html"] = html
+		postResponses[i] = resp
 	}
 
 	// 2. All tags
