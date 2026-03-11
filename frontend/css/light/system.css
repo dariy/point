@@ -168,3 +168,32 @@
     color: var(--text-secondary);
     font-weight: normal;
 }
+
+.sync-error-card {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.875rem;
+}
+
+.sync-error-card strong {
+    color: #c2410c;
+}
+
+.sync-error-card p {
+    margin: 0.25rem 0 0;
+    color: var(--text-secondary);
+}
+
+.sync-error-card code {
+    font-size: 0.8rem;
+    background: #fed7aa;
+    padding: 0.1em 0.3em;
+    border-radius: 2px;
+}
+
+.sync-error-msg {
+    color: #9a3412 !important;
+    font-style: italic;
+}
