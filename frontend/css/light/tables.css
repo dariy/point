@@ -40,7 +40,7 @@
 
 .table .actions {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: var(--spacing-xs);
     align-items: center;
 }
@@ -77,4 +77,48 @@
 .table .actions .btn svg {
     width: 16px;
     height: 16px;
+}
+
+/* Multi-row item grouping (Posts Table) */
+.post-row-main td {
+    border-bottom: none;
+    padding-bottom: var(--spacing-xs);
+}
+
+.post-row-tags td {
+    padding-top: 0;
+    padding-bottom: var(--spacing-md);
+}
+
+.post-row-tags .tags-col {
+    padding-left: 0;
+}
+
+.actions-col {
+    width: 1%;
+    white-space: nowrap;
+    vertical-align: top;
+    padding-top: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+/* Group hover effect: highlight both rows when either is hovered */
+.table tbody tr.post-row-main:hover,
+.table tbody tr.post-row-main:has(+ tr.post-row-tags:hover),
+.table tbody tr.post-row-tags:hover,
+.table tbody tr.post-row-main:hover + tr.post-row-tags {
+    background-color: var(--surface-hover);
+}
+
+td.title-col {
+    width: 100%;
+}
+
+td.updated-col {
+    white-space: nowrap;
+}
+
+/* vertically align "Status" with "Published" */
+th:first-child {
+    padding-left: 25px;
 }
