@@ -486,8 +486,8 @@ func (r *Repository) GetTagDescendants(ctx context.Context, tagID int64) ([]mode
 
 // TagRelationship represents a parent-child tag relationship pair.
 type TagRelationship struct {
-	ParentID int64
-	ChildID  int64
+	ParentID int64 `json:"parent_id"`
+	ChildID  int64 `json:"child_id"`
 }
 
 // GetAllTagRelationships returns all (parent_id, child_id) pairs from tag_relationships.

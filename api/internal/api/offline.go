@@ -107,12 +107,16 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 		}
 	}
 
+	// 6. Blog settings
+	settings, _ := h.settingsService.GetAllSettings(ctx)
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"posts":             postResponses,
 		"tags":              tags,
 		"tag_relationships": relationships,
 		"tag_locations":     locations,
 		"media":             publicMedia,
+		"settings":          settings,
 		"exported_at":       time.Now(),
 	})
 }

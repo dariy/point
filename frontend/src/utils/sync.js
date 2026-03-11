@@ -31,25 +31,27 @@ export async function syncQueue() {
         // 2. Resolve temp IDs in body
         const resolvedBody = resolveTempIds(op.body, idMap);
         
-        // 3. Handle file upload if needed
+        // 3. Handle file upload if needed (bypass offline interceptor)
         if (op.blob_key) {
           const blob = await getBlob(op.blob_key);
           const formData = new FormData();
           formData.append('file', new Blob([blob.data], { type: blob.type }), blob.name);
           
-          const uploadResp = await api.upload(op.url, formData);
+          const uploadResp = await api.request(op.url, {
+            method: 'POST',
+            body: formData,
+          });
           if (uploadResp && uploadResp.id) {
             idMap[op.id] = uploadResp.id;
           }
         } else {
-          // 4. Execute request
+          // 4. Execute request (bypass offline interceptor)
           let resp;
-          switch (op.method) {
-            case 'POST':   resp = await api.post(op.url, resolvedBody); break;
-            case 'PUT':    resp = await api.put(op.url, resolvedBody); break;
-            case 'PATCH':  resp = await api.patch(op.url, resolvedBody); break;
-            case 'DELETE': resp = await api.delete(op.url); break;
-          }
+          const method = op.method;
+          const headers = { 'Content-Type': 'application/json' };
+          const body = (method !== 'DELETE' && op.body) ? JSON.stringify(resolvedBody) : undefined;
+          
+          resp = await api.request(op.url, { method, headers, body });
 
           // 5. Track ID mapping for POST
           if (op.method === 'POST' && resp && resp.id) {
