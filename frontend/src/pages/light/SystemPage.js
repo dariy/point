@@ -14,6 +14,8 @@ import {
 import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
 import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
 import { preCacheImages } from '../../utils/imageCache.js';
+import { getQueue, resetFailedOps, updateStatus } from '../../utils/mutationQueue.js';
+import { syncQueue } from '../../utils/sync.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -40,6 +42,9 @@ export default class SystemPage extends Component {
       offlineProgress: 0,
       offlineStatusText: '',
       lastSync: null,
+
+      // Sync queue state
+      syncQueue: [],
     };
   }
 
@@ -71,7 +76,7 @@ export default class SystemPage extends Component {
           </div>
         </div>`;
     }
-    const { downloadingOffline, offlineProgress, offlineStatusText, lastSync } = this.state;
+    const { downloadingOffline, offlineProgress, offlineStatusText, lastSync, syncQueue: queue } = this.state;
 
     return `
       <div class="light-layout">
@@ -107,6 +112,8 @@ export default class SystemPage extends Component {
                 </div>
               </div>
             </div>
+
+            ${this._renderSyncPanel(queue, lastSync)}
 
             <div class="card">
               <div class="card-header"><h2>Maintenance</h2></div>
@@ -206,6 +213,46 @@ export default class SystemPage extends Component {
       </div>`;
   }
 
+  _renderSyncPanel(queue, lastSync) {
+    const pending  = queue.filter(op => op.status === 'pending').length;
+    const syncing  = queue.filter(op => op.status === 'syncing').length;
+    const failedOp = queue.find(op => op.status === 'failed');
+    const isOnline = navigator.onLine;
+
+    const syncBtnDisabled = !isOnline || (!pending && !syncing) || !!syncing;
+    const syncBtnLabel = syncing ? 'Syncing…' : 'Sync now';
+
+    const statusParts = [];
+    if (pending + syncing > 0) statusParts.push(`${pending + syncing} pending`);
+    if (lastSync) statusParts.push(`Last synced: ${escapeHtml(formatDateShort(lastSync))}`);
+    const statusText = statusParts.length ? statusParts.join(' · ') : (lastSync ? `Last synced: ${escapeHtml(formatDateShort(lastSync))}` : 'No data downloaded yet');
+
+    const errorCard = failedOp ? `
+      <div class="sync-error-card" style="margin-top: 1rem;">
+        <strong>⚠ Sync halted</strong>
+        <p>Failed: <code>${escapeHtml(failedOp.method)} ${escapeHtml(failedOp.url)}</code></p>
+        <p class="sync-error-msg">${escapeHtml(failedOp.error || 'Unknown error')}</p>
+        <button id="dismiss-retry-btn" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">Dismiss &amp; retry</button>
+      </div>` : '';
+
+    return `
+      <div class="card">
+        <div class="card-header"><h2>Offline Sync</h2></div>
+        <div class="card-body">
+          <div class="ops-list">
+            <div class="op-item">
+              <div class="op-info">
+                <h4>Mutation queue</h4>
+                <p>${statusText}</p>
+                ${errorCard}
+              </div>
+              <button id="sync-now-btn" class="btn btn-primary" ${syncBtnDisabled ? 'disabled' : ''}>${syncBtnLabel}</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   afterRender() {
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/system',
@@ -217,6 +264,11 @@ export default class SystemPage extends Component {
 
     // Offline
     this.$('#prepare-offline-btn')?.addEventListener('click', () => this._handlePrepareOffline());
+
+    // Sync panel
+    this.$('#sync-now-btn')?.addEventListener('click', () => this._handleSyncNow());
+    this.$('#dismiss-retry-btn')?.addEventListener('click', () => this._handleDismissRetry());
+    this.subscribeStore(store, 'offline_status', () => this._refreshSyncState());
 
     // Cache
     this.$('#clear-cache-btn')?.addEventListener('click', () => this._handleClearCache());
@@ -265,12 +317,14 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [backups, migrations, lastSync] = await Promise.all([
+      const [backups, migrations, lastSync, queue] = await Promise.all([
         listBackups(),
         getMigrations(),
         getMeta('last_sync'),
+        getQueue(),
       ]);
-      this.setState({ loading: false, backups, migrations, lastSync });
+      await updateStatus();
+      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Failed to load system data.' });
     }
@@ -421,6 +475,23 @@ export default class SystemPage extends Component {
       onCancel:  () => { dialog.unmount(); mount.remove(); },
     });
     dialog.mount();
+  }
+
+  async _refreshSyncState() {
+    const queue = await getQueue();
+    this.setState({ syncQueue: queue });
+  }
+
+  async _handleSyncNow() {
+    await syncQueue();
+    await this._refreshSyncState();
+  }
+
+  async _handleDismissRetry() {
+    await resetFailedOps();
+    await updateStatus();
+    await this._refreshSyncState();
+    syncQueue();
   }
 
   async _handleLogout() {
