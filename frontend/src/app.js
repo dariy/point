@@ -72,16 +72,18 @@ async function bootstrap() {
     });
   }
 
-  // 1. Fetch public settings (best-effort — fall back to empty object).
+  // 1. Fetch public settings (best-effort — fall back to last cached values).
   let settings = {};
   try {
     settings = normalizeSettings(await getPublicSettings());
-    store.set('settings', settings);
-    if (settings.blog_title) {
-      document.title = settings.blog_title;
-    }
+    localStorage.setItem('settings', JSON.stringify(settings));
   } catch {
-    store.set('settings', {});
+    // Offline or server unreachable — use last successfully fetched settings.
+    try { settings = JSON.parse(localStorage.getItem('settings') || '{}'); } catch { /* ignore */ }
+  }
+  store.set('settings', settings);
+  if (settings.blog_title) {
+    document.title = settings.blog_title;
   }
 
   // 2. Apply theme before first render to avoid flash.
