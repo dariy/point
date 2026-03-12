@@ -18,6 +18,7 @@ import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
 import { normalizeSettings } from './utils/helpers.js';
 import { ToastContainer } from './components/shared/Toast.js';
+import { syncQueue } from './utils/sync.js';
 
 // ── CSS section switching ─────────────────────────────────────────────────
 //
@@ -72,23 +73,38 @@ async function bootstrap() {
     });
   }
 
-  // 1. Fetch public settings (best-effort — fall back to empty object).
+  // 0.1 Handle offline Treated as unauthenticated if network fails
+  try {
+    const lastSync = await (await import('./utils/offlineStore.js')).getMeta('last_sync');
+    if (lastSync) {
+      store.set('offline_status', { available: true, last_sync: lastSync });
+    }
+  } catch { /* ignore */ }
+
+  // 1. Fetch public settings (best-effort — fall back to last cached values).
   let settings = {};
   try {
     settings = normalizeSettings(await getPublicSettings());
-    store.set('settings', settings);
-    if (settings.blog_title) {
-      document.title = settings.blog_title;
-    }
+    localStorage.setItem('settings', JSON.stringify(settings));
   } catch {
-    store.set('settings', {});
+    // Offline or server unreachable — use last successfully fetched settings.
+    try { settings = JSON.parse(localStorage.getItem('settings') || '{}'); } catch { /* ignore */ }
+  }
+  store.set('settings', settings);
+  if (settings.blog_title) {
+    document.title = settings.blog_title;
   }
 
   // 2. Apply theme before first render to avoid flash.
   loadTheme(settings);
 
-  // 3. Check auth session.
-  const user = await getMe(); // returns null if not logged in
+  // 3. Check auth session (best-effort — treat network errors as unauthenticated).
+  let user = null;
+  try {
+    user = await getMe();
+  } catch {
+    // Offline or server unreachable — proceed as unauthenticated.
+  }
   store.set('user', user);
 
   // 4. Mount toast container.
@@ -107,6 +123,10 @@ async function bootstrap() {
     authGuard: () => !!store.get('user'),
     loginPath: '/light/login',
   });
+
+  // 7. Sync queue when online
+  window.addEventListener('online', syncQueue);
+  if (navigator.onLine) syncQueue();
 }
 
 // ── Route table ───────────────────────────────────────────────────────────

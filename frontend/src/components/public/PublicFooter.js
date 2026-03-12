@@ -12,9 +12,9 @@ import { renderTagLink } from '../../utils/tags.js';
 
 export class PublicFooter extends Component {
   render() {
-    const { settings = {}, immersiveTags = [], immersiveNav = null } = this.props;
+    const { settings = {}, immersiveTags = [] } = this.props;
     const author = escapeHtml(settings.author_name || settings.blog_title || '');
-    const year = new Date().getFullYear();
+
     const aboutHref = settings.about_post_id
       ? `/post/${escapeHtml(settings.about_post_id)}`
       : '/light';
@@ -29,29 +29,12 @@ export class PublicFooter extends Component {
       centerSlot = `<div id="pagination-mount"></div>`;
     }
 
-    // In immersive mode: show prev/next post links in the actions slot.
-    let actionsSlot = '';
-    if (immersiveNav) {
-      const { prev, next } = immersiveNav;
-      const { tagSlug } = this.props;
-      const buildHref = (p) => tagSlug
-        ? `/tag/${escapeHtml(tagSlug)}?slug=${escapeHtml(p.slug)}`
-        : `/post/${escapeHtml(p.slug)}`;
-      const prevLink = prev
-        ? `<a href="${buildHref(prev)}" class="post-nav-icon" aria-label="Previous post" title="${escapeHtml(prev.title)}">&#8592;</a>`
-        : `<span class="post-nav-icon disabled" aria-hidden="true"></span>`;
-      const nextLink = next
-        ? `<a href="${buildHref(next)}" class="post-nav-icon" aria-label="Next post" title="${escapeHtml(next.title)}">&#8594;</a>`
-        : `<span class="post-nav-icon disabled" aria-hidden="true"></span>`;
-      actionsSlot = `<nav class="footer-actions post-navigation-compact" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
-    }
-
-    return `
+return `
       <footer class="site-footer">
         <div class="footer-container">
           <div class="footer-content">
             <p class="footer-copyright">
-              <a href="${aboutHref}">&copy;</a>${author ? ` ${author}` : ''}
+              <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>` : ''}
             </p>
             ${centerSlot}
           </div>

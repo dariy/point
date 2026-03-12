@@ -333,7 +333,7 @@ func (s *PostService) GeneratePreviewLink(ctx context.Context, postID int64) (st
 		return "", time.Time{}, err
 	}
 	token := hex.EncodeToString(b)
-	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	expiresAt := time.Now().Add(7 * 24 * time.Hour).UTC().Round(0)
 
 	err := s.repo.SetPostPreviewToken(ctx, models.SetPostPreviewTokenParams{
 		PreviewToken:     sql.NullString{String: token, Valid: true},
