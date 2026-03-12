@@ -40,7 +40,7 @@
 
 .table .actions {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: var(--spacing-xs);
     align-items: center;
 }
@@ -77,4 +77,75 @@
 .table .actions .btn svg {
     width: 16px;
     height: 16px;
+}
+
+/* Multi-row item grouping (Posts Table) */
+.post-row-main td {
+    border-bottom: none;
+    padding-bottom: var(--spacing-xs);
+}
+
+.post-row-tags td {
+    padding-top: 0;
+    padding-bottom: var(--spacing-md);
+}
+
+.actions-col {
+    width: 1%;
+    white-space: nowrap;
+    vertical-align: top;
+    padding-top: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+/* Group hover effect: highlight both rows when either is hovered */
+.table tbody tr.post-row-main:hover,
+.table tbody tr.post-row-main:has(+ tr.post-row-tags:hover),
+.table tbody tr.post-row-tags:hover,
+.table tbody tr.post-row-main:hover + tr.post-row-tags {
+    background-color: var(--surface-hover);
+}
+
+td.title-col {
+    width: 100%;
+}
+
+td.updated-col {
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.preview-col {
+    width: 48px;
+    padding-right: 0 !important;
+    border-bottom: 1px solid var(--border-primary) !important;
+    vertical-align: middle;
+}
+
+.post-preview-img {
+    min-width: 80px;
+    min-height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    background-color: var(--surface-hover);
+    display: block;
+}
+
+.post-preview-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    background-color: var(--surface-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border-primary);
+    color: var(--text-muted);
+    font-size: 16px;
+}
+
+/* No special padding for first header since we added a preview column */
+/* vertically align "Status" with "Published" */
+th.status-col {
+    padding-left: 25px;
 }

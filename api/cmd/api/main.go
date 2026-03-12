@@ -102,6 +102,10 @@ func main() {
 			"create_tag_locations_index",
 			`CREATE INDEX IF NOT EXISTS idx_tag_locations_tag_id ON tag_locations(tag_id)`,
 		},
+		{
+			"normalize_post_status_case",
+			`UPDATE posts SET status = LOWER(status) WHERE status != LOWER(status)`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
@@ -126,7 +130,7 @@ func main() {
 	postHandler := api.NewPostHandler(postService, settingsService, mediaService, tagService)
 	mediaHandler := api.NewMediaHandler(mediaService, settingsService)
 	settingsHandler := api.NewSettingsHandler(settingsService)
-	systemHandler := api.NewSystemHandler(repo, mediaService, settingsService, tagService, cfg.StoragePath)
+	systemHandler := api.NewSystemHandler(repo, mediaService, postService, settingsService, tagService, cfg.StoragePath)
 	feedsHandler := api.NewFeedsHandler(repo, postService, tagService, settingsService)
 	pagesHandler := api.NewPagesHandler(repo, postService, tagService, settingsService)
 
@@ -258,6 +262,8 @@ func main() {
 	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(authService))
 	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(authService))
 	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(authService))
+	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(authService))
+	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(authService))
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")

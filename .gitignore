@@ -146,3 +146,4 @@ api/api*
 jsconfig.json
 .gemini/**
 **/.serena/**
+node_modules/**

@@ -66,7 +66,8 @@ export const store = new Store();
 
 // ── Well-known store keys (documented here for discoverability) ────────────
 //
-//  'user'     {object|null}         Current authenticated user, or null
-//  'settings' {object}              Public blog settings from /api/settings/public
-//  'theme'    {'dark'|'light'|'auto'}  Active UI theme
-//  'toast'    {message, type, id}   Most recent toast notification
+//  'user'           {object|null}              Current authenticated user, or null
+//  'settings'       {object}                  Public blog settings from /api/settings/public
+//  'theme'          {'dark'|'light'|'auto'}   Active UI theme
+//  'toast'          {message, type, id}        Most recent toast notification
+//  'offline_status' {pending, failed, syncing, has_ops}  Mutation queue state

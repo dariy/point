@@ -20,7 +20,6 @@ export default class DashboardPage extends Component {
 
   render() {
     const { loading, stats, error } = this.state;
-    const user = store.get('user') || {};
 
     const content = loading
       ? `<div class="loading-spinner" aria-label="Loading…"></div>`
@@ -28,12 +27,23 @@ export default class DashboardPage extends Component {
         ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
         : this._renderStats(stats);
 
+    const offline = store.get('offline_status') || {};
+    let syncPill = '';
+    if (offline.has_ops || offline.syncing) {
+      const text = offline.syncing ? '⟳ Syncing…' : offline.failed ? `⚠ ${offline.failed} failed` : `● ${offline.pending} pending`;
+      const cls = `sync-pill ${offline.syncing ? 'syncing' : offline.failed ? 'failed' : 'pending'}`;
+      syncPill = `<button class="${cls}" id="dashboard-sync-pill">${text}</button>`;
+    }
+
     return `
       <div class="light-layout">
         <div id="sidebar-mount"></div>
         <div class="light-main">
           <header class="light-header">
-            <h1>Dashboard</h1>
+            <div class="header-title-row">
+              <h1>Dashboard</h1>
+              ${syncPill}
+            </div>
             <div class="header-actions">
               <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
             </div>
@@ -90,6 +100,12 @@ export default class DashboardPage extends Component {
       currentPath: '/light',
       user: store.get('user') || {},
       onLogout: this._handleLogout.bind(this),
+    });
+
+    this.$('#dashboard-sync-pill')?.addEventListener('click', () => {
+      const offline = store.get('offline_status') || {};
+      if (offline.failed) navigate('/light/system');
+      else if (offline.pending) import('../../utils/sync.js').then(m => m.syncQueue());
     });
   }
 

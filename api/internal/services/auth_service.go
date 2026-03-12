@@ -67,7 +67,7 @@ func (s *AuthService) CreateSession(ctx context.Context, userID int64, ip, userA
 		Token:     hashedToken,
 		IpAddress: ip,
 		UserAgent: userAgent,
-		ExpiresAt: expiresAt,
+		ExpiresAt: expiresAt.UTC().Round(0),
 	}
 
 	return s.repo.CreateSession(ctx, params)

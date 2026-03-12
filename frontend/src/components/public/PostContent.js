@@ -336,7 +336,7 @@ export class PostContent extends Component {
           ? (data.page > 1 ? `/tag/${tagSlug}?page=${data.page}` : `/tag/${tagSlug}`)
           : (data.page > 1 ? `/?page=${data.page}` : '/');
         navigate(url);
-      } catch (e) {
+      } catch {
         navigate(tagSlug ? `/tag/${tagSlug}` : '/');
       }
     };
@@ -417,7 +417,7 @@ export class PostContent extends Component {
         wrapper.classList.toggle('zoomed', newScale > 1);
         this._updateVisuals();
       },
-      onTap: (x, y) => {
+      onTap: (_x, _y) => {
         if (document.body.classList.contains('ui-hidden')) {
           showUI();
         } else if (Date.now() - this._lastShowTime >= 150) {

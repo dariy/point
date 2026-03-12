@@ -55,7 +55,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	if req.RememberMe {
 		expiryHours = h.cfg.SessionExpiryHours
 	}
-	expiresAt := time.Now().Add(time.Duration(expiryHours) * time.Hour)
+	expiresAt := time.Now().Add(time.Duration(expiryHours) * time.Hour).UTC().Round(0)
 
 	_, err = h.authService.CreateSession(
 		c.Request().Context(),
@@ -107,7 +107,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 	newCookie := &http.Cookie{
 		Name:     "session",
 		Value:    "",
-		Expires:  time.Now().Add(-1 * time.Hour),
+		Expires:  time.Now().Add(-1 * time.Hour).UTC().Round(0),
 		HttpOnly: true,
 		Path:     "/",
 	}

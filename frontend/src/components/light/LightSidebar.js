@@ -30,8 +30,7 @@ const NAV_ITEMS = [
 
 export class LightSidebar extends Component {
   render() {
-    const { currentPath = '', publicUrl = '/', user = {} } = this.props;
-    const displayName = escapeHtml(user.display_name || user.username || 'Admin');
+    const { currentPath = '', publicUrl = '/' } = this.props;
 
     const navItems = NAV_ITEMS.map(({ href, label, icon }) => {
       const isActive = href === '/light'
@@ -91,6 +90,13 @@ export class LightSidebar extends Component {
     this._setupMobileToggle();
   }
 
+  beforeUnmount() {
+    const overlay = document.querySelector('.sidebar-overlay');
+    if (overlay) {
+      overlay.classList.remove('active');
+    }
+  }
+
   _setupMobileToggle() {
     // Find the sibling .light-header within the same .light-layout.
     const layout = this.container.closest('.light-layout') || this.container.parentElement;
@@ -128,7 +134,14 @@ export class LightSidebar extends Component {
 
     // Re-bind each time (component may re-render after navigation).
     const hamBtn = header.querySelector('.sidebar-toggle-btn');
-    hamBtn.onclick = toggleOpen;
+    if (hamBtn) hamBtn.onclick = toggleOpen;
     overlay.onclick = close;
+
+    // Close on any navigation link within the sidebar.
+    this.$$('a').forEach(a => {
+      if (!a.hasAttribute('data-external') && a.target !== '_blank') {
+        a.addEventListener('click', close);
+      }
+    });
   }
 }
