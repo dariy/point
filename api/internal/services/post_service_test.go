@@ -382,3 +382,95 @@ func TestPostService_PreviewTokenExpired(t *testing.T) {
 		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }
+
+func TestPostService_PublishedAt(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	service := NewPostService(repo)
+	ctx := context.Background()
+
+	// Create user
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "author",
+		Email:        "author@example.com",
+		PasswordHash: "hash",
+		DisplayName:  "Author",
+	})
+
+	t.Run("Create published post sets published_at", func(t *testing.T) {
+		post, err := service.CreatePost(ctx, CreatePostParams{
+			Title:    "Initial Published",
+			Content:  "Content",
+			Status:   "published",
+			AuthorID: user.ID,
+		})
+		if err != nil {
+			t.Fatalf("CreatePost failed: %v", err)
+		}
+
+		if !post.PublishedAt.Valid {
+			t.Errorf("expected PublishedAt to be valid for initial published post")
+		}
+	})
+
+	t.Run("Update draft to published sets published_at", func(t *testing.T) {
+		post, err := service.CreatePost(ctx, CreatePostParams{
+			Title:    "Initial Draft",
+			Content:  "Content",
+			Status:   "draft",
+			AuthorID: user.ID,
+		})
+		if err != nil {
+			t.Fatalf("CreatePost failed: %v", err)
+		}
+
+		if post.PublishedAt.Valid {
+			t.Errorf("expected PublishedAt to be invalid for draft post")
+		}
+
+		updated, err := service.UpdatePost(ctx, UpdatePostParams{
+			ID:       post.ID,
+			AuthorID: user.ID,
+			Title:    "Now Published",
+			Content:  "Content",
+			Status:   "published",
+		})
+		if err != nil {
+			t.Fatalf("UpdatePost failed: %v", err)
+		}
+
+		if !updated.PublishedAt.Valid {
+			t.Errorf("expected PublishedAt to be valid after updating status to published")
+		}
+	})
+
+	t.Run("Update published stays published and keeps original published_at", func(t *testing.T) {
+		post, _ := service.CreatePost(ctx, CreatePostParams{
+			Title:    "Pub",
+			Content:  "C",
+			Status:   "published",
+			AuthorID: user.ID,
+		})
+		
+		originalPublishedAt := post.PublishedAt.Time
+
+		// Update something else
+		updated, _ := service.UpdatePost(ctx, UpdatePostParams{
+			ID:       post.ID,
+			AuthorID: user.ID,
+			Title:    "Pub Updated",
+			Content:  "C",
+			Status:   "published",
+		})
+
+		if !updated.PublishedAt.Valid {
+			t.Errorf("expected PublishedAt to remain valid")
+		}
+		if !updated.PublishedAt.Time.Equal(originalPublishedAt) {
+			t.Errorf("expected PublishedAt to remain unchanged, got %v, want %v", updated.PublishedAt.Time, originalPublishedAt)
+		}
+	})
+}

@@ -84,6 +84,12 @@ func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, 
 }
 
 const countPosts = `-- name: CountPosts :one
+WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
+    SELECT id FROM tags WHERE is_hidden_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr
+    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
+)
 SELECT COUNT(*) FROM posts p
 WHERE 
     (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
@@ -93,6 +99,10 @@ WHERE
         WHEN ?5 THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published' 
     END)
+    AND (?5 OR NOT EXISTS (
+        SELECT 1 FROM post_tags pt 
+        WHERE pt.post_id = p.id AND pt.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
+    ))
 `
 
 type CountPostsParams struct {
@@ -117,6 +127,12 @@ func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, 
 }
 
 const countPostsByTag = `-- name: CountPostsByTag :one
+WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
+    SELECT id FROM tags WHERE is_hidden_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr
+    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
+)
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
@@ -125,6 +141,10 @@ AND (CASE
     WHEN ?3 THEN p.status = 'published' 
     ELSE p.status IN ('published', 'hidden') 
 END)
+AND (?2 OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
+    SELECT 1 FROM post_tags pt2 
+    WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
+))
 `
 
 type CountPostsByTagParams struct {
@@ -204,9 +224,9 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, created_at, updated_at
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, created_at, updated_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
 `
@@ -724,26 +744,36 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (GetPostBySlug
 }
 
 const getPostsByTag = `-- name: GetPostsByTag :many
+WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
+    SELECT id FROM tags WHERE is_hidden_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr
+    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
+)
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
 FROM posts p
 JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE
+AND (CASE 
     WHEN ?2 THEN 1=1
-    WHEN ?3 THEN p.status = 'published'
-    ELSE p.status IN ('published', 'hidden')
+    WHEN ?3 THEN p.status = 'published' 
+    ELSE p.status IN ('published', 'hidden') 
 END)
+AND (?2 OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
+    SELECT 1 FROM post_tags pt2 
+    WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
+))
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ?4 OFFSET ?5
+LIMIT ?5 OFFSET ?4
 `
 
 type GetPostsByTagParams struct {
 	TagID               int64       `json:"tag_id"`
 	IncludeDrafts       interface{} `json:"include_drafts"`
 	PublishedOnlyFilter interface{} `json:"published_only_filter"`
-	Limit               int64       `json:"limit"`
 	Offset              int64       `json:"offset"`
+	Limit               int64       `json:"limit"`
 }
 
 type GetPostsByTagRow struct {
@@ -774,8 +804,8 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 		arg.TagID,
 		arg.IncludeDrafts,
 		arg.PublishedOnlyFilter,
-		arg.Limit,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
@@ -1197,22 +1227,22 @@ const listMedia = `-- name: ListMedia :many
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
 ORDER BY uploaded_at DESC
-LIMIT ?3 OFFSET ?4
+LIMIT ?4 OFFSET ?3
 `
 
 type ListMediaParams struct {
 	TypeFilter interface{} `json:"type_filter"`
 	FileType   string      `json:"file_type"`
-	Limit      int64       `json:"limit"`
 	Offset     int64       `json:"offset"`
+	Limit      int64       `json:"limit"`
 }
 
 func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error) {
 	rows, err := q.db.QueryContext(ctx, listMedia,
 		arg.TypeFilter,
 		arg.FileType,
-		arg.Limit,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
@@ -1252,19 +1282,29 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 }
 
 const listPosts = `-- name: ListPosts :many
+WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
+    SELECT id FROM tags WHERE is_hidden_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr
+    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
+)
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
 FROM posts p
 JOIN users u ON p.author_id = u.id
-WHERE
+WHERE 
     (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ?4 THEN 1=1
+    AND (CASE 
+        WHEN ?4 THEN 1=1 
         WHEN ?5 THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published'
+        ELSE p.status = 'published' 
     END)
+    AND (?5 OR NOT EXISTS (
+        SELECT 1 FROM post_tags pt 
+        WHERE pt.post_id = p.id AND pt.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
+    ))
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ?6 OFFSET ?7
+LIMIT ?7 OFFSET ?6
 `
 
 type ListPostsParams struct {
@@ -1273,8 +1313,8 @@ type ListPostsParams struct {
 	FeaturedFilter interface{} `json:"featured_filter"`
 	IncludeDrafts  interface{} `json:"include_drafts"`
 	IncludeHidden  interface{} `json:"include_hidden"`
-	Limit          int64       `json:"limit"`
 	Offset         int64       `json:"offset"`
+	Limit          int64       `json:"limit"`
 }
 
 type ListPostsRow struct {
@@ -1307,8 +1347,8 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		arg.FeaturedFilter,
 		arg.IncludeDrafts,
 		arg.IncludeHidden,
-		arg.Limit,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
@@ -1613,8 +1653,10 @@ func (q *Queries) UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilena
 
 const updatePost = `-- name: UpdatePost :one
 UPDATE posts
-SET title = ?, slug = ?, content = ?, excerpt = ?, formatter = ?, status = ?, is_featured = ?, thumbnail_path = ?, meta_description = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ? AND author_id = ?
+SET title = ?1, slug = ?2, content = ?3, excerpt = ?4, formatter = ?5, status = ?6, is_featured = ?7, thumbnail_path = ?8, meta_description = ?9,
+    published_at = (CASE WHEN ?6 = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?10 AND author_id = ?11
 RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
 `
 
