@@ -90,10 +90,6 @@
     padding-bottom: var(--spacing-md);
 }
 
-.post-row-tags .tags-col {
-    padding-left: 0;
-}
-
 .actions-col {
     width: 1%;
     white-space: nowrap;
@@ -116,9 +112,40 @@ td.title-col {
 
 td.updated-col {
     white-space: nowrap;
+    font-size: 12px;
 }
 
+.preview-col {
+    width: 48px;
+    padding-right: 0 !important;
+    border-bottom: 1px solid var(--border-primary) !important;
+    vertical-align: middle;
+}
+
+.post-preview-img {
+    min-width: 80px;
+    min-height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    background-color: var(--surface-hover);
+    display: block;
+}
+
+.post-preview-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    background-color: var(--surface-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border-primary);
+    color: var(--text-muted);
+    font-size: 16px;
+}
+
+/* No special padding for first header since we added a preview column */
 /* vertically align "Status" with "Published" */
-th:first-child {
+th.status-col {
     padding-left: 25px;
 }
