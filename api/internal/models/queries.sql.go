@@ -99,10 +99,15 @@ WHERE
         WHEN ?5 THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published' 
     END)
-    AND (?5 OR NOT EXISTS (
-        SELECT 1 FROM post_tags pt 
-        WHERE pt.post_id = p.id AND pt.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
-    ))
+
+    AND (CASE 
+        WHEN ?4 THEN 1=1 
+        ELSE p.id NOT IN (
+            SELECT pt.post_id FROM post_tags pt 
+            JOIN tags t ON pt.tag_id = t.id 
+            WHERE t.is_hidden_posts = 1
+        )
+    END)
 `
 
 type CountPostsParams struct {
@@ -1299,10 +1304,15 @@ WHERE
         WHEN ?5 THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published' 
     END)
-    AND (?5 OR NOT EXISTS (
-        SELECT 1 FROM post_tags pt 
-        WHERE pt.post_id = p.id AND pt.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
-    ))
+
+    AND (CASE 
+        WHEN ?4 THEN 1=1 
+        ELSE p.id NOT IN (
+            SELECT pt.post_id FROM post_tags pt 
+            JOIN tags t ON pt.tag_id = t.id 
+            WHERE t.is_hidden_posts = 1
+        )
+    END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?7 OFFSET ?6
 `
