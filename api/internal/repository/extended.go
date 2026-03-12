@@ -1202,7 +1202,7 @@ func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publi
 	}
 
 	placeholders := ""
-	args := make([]interface{}, 0, len(tagIDs)+2)
+	args := make([]interface{}, 0, len(tagIDs)+3)
 	for i, id := range tagIDs {
 		if i > 0 {
 			placeholders += ","
@@ -1210,9 +1210,8 @@ func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publi
 		placeholders += "?"
 		args = append(args, id)
 	}
-	args = append(args, limit, offset)
 
-	var statusClause string
+var statusClause string
 	if includeDrafts {
 		statusClause = "1=1"
 	} else {
@@ -1255,16 +1254,10 @@ AND (? OR NOT EXISTS (
 ))
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
+	// add includeDrafts as the ? for the visibility check, then limit and offset
+	args = append(args, includeDrafts, limit, offset)
 
-	// add includeDrafts as the ? for the visibility check
-	finalArgs := make([]interface{}, 0, len(args)+1)
-	for _, id := range tagIDs {
-		finalArgs = append(finalArgs, id)
-	}
-	finalArgs = append(finalArgs, includeDrafts)
-	finalArgs = append(finalArgs, limit, offset)
-
-	rows, err := r.db.QueryContext(ctx, q, finalArgs...)
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1299,7 +1292,7 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 	}
 
 	placeholders := ""
-	args := make([]interface{}, 0, len(tagIDs))
+	args := make([]interface{}, 0, len(tagIDs)+1)
 	for i, id := range tagIDs {
 		if i > 0 {
 			placeholders += ","
@@ -1307,6 +1300,7 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 		placeholders += "?"
 		args = append(args, id)
 	}
+
 
 	var statusClause string
 	if includeDrafts {
@@ -1344,16 +1338,11 @@ AND (` + statusClause + `)
 AND (? OR NOT EXISTS (
     SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
 ))`
-
 	// add includeDrafts as the ? for the visibility check
-	finalArgs := make([]interface{}, 0, len(tagIDs)+1)
-	for _, id := range tagIDs {
-		finalArgs = append(finalArgs, id)
-	}
-	finalArgs = append(finalArgs, includeDrafts)
+	args = append(args, includeDrafts)
 
 	var count int64
-	err := r.db.QueryRowContext(ctx, q, finalArgs...).Scan(&count)
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count, err
 }
 
