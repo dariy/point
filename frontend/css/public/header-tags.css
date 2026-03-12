@@ -107,6 +107,7 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: visible;
+    overscroll-behavior: contain;
     scrollbar-width: none;
     -ms-overflow-style: none;
     /* Allow dropdowns */

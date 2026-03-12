@@ -13,7 +13,7 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { getMapPage } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 
 const LEAFLET_JS       = '/assets/vendor/leaflet/leaflet.js';

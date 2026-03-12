@@ -116,6 +116,14 @@ WHERE
         WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published' 
     END)
+    AND (CASE 
+        WHEN sqlc.arg('include_drafts') THEN 1=1 
+        ELSE p.id NOT IN (
+            SELECT pt.post_id FROM post_tags pt 
+            JOIN tags t ON pt.tag_id = t.id 
+            WHERE t.is_hidden_posts = 1
+        )
+    END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
@@ -128,6 +136,14 @@ WHERE
         WHEN sqlc.arg('include_drafts') THEN 1=1 
         WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published' 
+    END)
+    AND (CASE 
+        WHEN sqlc.arg('include_drafts') THEN 1=1 
+        ELSE p.id NOT IN (
+            SELECT pt.post_id FROM post_tags pt 
+            JOIN tags t ON pt.tag_id = t.id 
+            WHERE t.is_hidden_posts = 1
+        )
     END);
 
 -- name: CreatePost :one
