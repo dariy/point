@@ -11,6 +11,98 @@ import (
 // ListPostsWithSearch returns posts filtered by a search term (case-insensitive)
 // matched against title, post slug, content, and associated tag names/slugs,
 // in addition to the standard status / featured / visibility filters.
+
+// ListPosts returns all posts, with optional filters.
+func (r *Repository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.ListPostsRow, error) {
+	const q = `
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+       p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at,
+       u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+FROM posts p
+JOIN users u ON p.author_id = u.id
+WHERE
+    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt 
+        WHERE pt.tag_id IN (
+            WITH RECURSIVE h(id) AS (
+                SELECT id FROM tags WHERE is_hidden_posts = 1
+                UNION
+                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+            )
+            SELECT id FROM h
+        )
+    ) END)
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q,
+		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
+		arg.IncludeDrafts,
+		arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var items []models.ListPostsRow
+	for rows.Next() {
+		var i models.ListPostsRow
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
+			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// CountPosts counts posts with optional filters.
+func (r *Repository) CountPosts(ctx context.Context, arg models.CountPostsParams) (int64, error) {
+	const q = `
+SELECT COUNT(*) FROM posts p
+WHERE
+    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt 
+        WHERE pt.tag_id IN (
+            WITH RECURSIVE h(id) AS (
+                SELECT id FROM tags WHERE is_hidden_posts = 1
+                UNION
+                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+            )
+            SELECT id FROM h
+        )
+    ) END)`
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q,
+		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
+		arg.IncludeDrafts,
+	).Scan(&count)
+	return count, err
+}
+
 func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.ListPostsRow, error) {
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
@@ -27,6 +119,17 @@ WHERE
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
+    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt 
+        WHERE pt.tag_id IN (
+            WITH RECURSIVE h(id) AS (
+                SELECT id FROM tags WHERE is_hidden_posts = 1
+                UNION
+                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+            )
+            SELECT id FROM h
+        )
+    ) END)
     AND (
         LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
         OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
@@ -43,7 +146,7 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
-		statusFilter, status, featuredFilter, includeDrafts, includeHidden,
+		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts,
 		search, search, search, search, search,
 		limit, offset)
 	if err != nil {
@@ -83,6 +186,17 @@ WHERE
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
+    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt 
+        WHERE pt.tag_id IN (
+            WITH RECURSIVE h(id) AS (
+                SELECT id FROM tags WHERE is_hidden_posts = 1
+                UNION
+                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+            )
+            SELECT id FROM h
+        )
+    ) END)
     AND (
         LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
         OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
@@ -98,7 +212,7 @@ WHERE
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
-		statusFilter, status, featuredFilter, includeDrafts, includeHidden,
+		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts,
 		search, search, search, search, search,
 	).Scan(&count)
 	return count, err
@@ -236,7 +350,7 @@ SELECT
   (SELECT COUNT(*) FROM users) AS user_count,
   (SELECT COUNT(*) FROM sessions WHERE expires_at > ?) AS session_count
 `
-	err := r.db.QueryRowContext(ctx, q, time.Now()).Scan(
+	err := r.db.QueryRowContext(ctx, q, time.Now().UTC().Round(0)).Scan(
 		&s.PostCount, &s.PublishedCount, &s.DraftCount,
 		&s.TagCount, &s.MediaCount, &s.StorageBytes,
 		&s.UserCount, &s.SessionCount,
@@ -256,6 +370,17 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
 FROM posts p
 JOIN users u ON p.author_id = u.id
 WHERE LOWER(p.status) = 'published'
+AND p.id NOT IN (
+    SELECT pt.post_id FROM post_tags pt 
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE h(id) AS (
+            SELECT id FROM tags WHERE is_hidden_posts = 1
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+        )
+        SELECT id FROM h
+    )
+)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?`
 
@@ -293,6 +418,17 @@ func (r *Repository) GetPublishedPostsForSitemap(ctx context.Context) ([]struct 
 SELECT slug, COALESCE(updated_at, published_at, created_at) as updated_at
 FROM posts
 WHERE LOWER(status) = 'published'
+AND id NOT IN (
+    SELECT pt.post_id FROM post_tags pt 
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE h(id) AS (
+            SELECT id FROM tags WHERE is_hidden_posts = 1
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+        )
+        SELECT id FROM h
+    )
+)
 ORDER BY published_at DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -486,8 +622,8 @@ func (r *Repository) GetTagDescendants(ctx context.Context, tagID int64) ([]mode
 
 // TagRelationship represents a parent-child tag relationship pair.
 type TagRelationship struct {
-	ParentID int64
-	ChildID  int64
+	ParentID int64 `json:"parent_id"`
+	ChildID  int64 `json:"child_id"`
 }
 
 // GetAllTagRelationships returns all (parent_id, child_id) pairs from tag_relationships.
@@ -789,6 +925,17 @@ func (r *Repository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, er
 SELECT id, slug, published_at, created_at
 FROM posts
 WHERE LOWER(status) = 'published'
+AND id NOT IN (
+    SELECT pt.post_id FROM post_tags pt 
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE h(id) AS (
+            SELECT id FROM tags WHERE is_hidden_posts = 1
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+        )
+        SELECT id FROM h
+    )
+)
 ORDER BY published_at DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -1056,10 +1203,23 @@ func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publi
 	var statusClause string
 	if includeDrafts {
 		statusClause = "1=1"
-	} else if publishedOnly {
-		statusClause = "LOWER(p.status) = 'published'"
 	} else {
-		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		if publishedOnly {
+			statusClause = "LOWER(p.status) = 'published'"
+		} else {
+			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		}
+		statusClause += ` AND p.id NOT IN (
+			SELECT pt.post_id FROM post_tags pt 
+			WHERE pt.tag_id IN (
+				WITH RECURSIVE h(id) AS (
+					SELECT id FROM tags WHERE is_hidden_posts = 1
+					UNION
+					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+				)
+				SELECT id FROM h
+			)
+		)`
 	}
 
 	q := `SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
@@ -1122,10 +1282,23 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 	var statusClause string
 	if includeDrafts {
 		statusClause = "1=1"
-	} else if publishedOnly {
-		statusClause = "LOWER(p.status) = 'published'"
 	} else {
-		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		if publishedOnly {
+			statusClause = "LOWER(p.status) = 'published'"
+		} else {
+			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		}
+		statusClause += ` AND p.id NOT IN (
+			SELECT pt.post_id FROM post_tags pt 
+			WHERE pt.tag_id IN (
+				WITH RECURSIVE h(id) AS (
+					SELECT id FROM tags WHERE is_hidden_posts = 1
+					UNION
+					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+				)
+				SELECT id FROM h
+			)
+		)`
 	}
 
 	q := `SELECT COUNT(*) FROM posts p
@@ -1297,12 +1470,23 @@ SELECT d.root_id, COUNT(DISTINCT pt.post_id)
 FROM descendants d
 JOIN post_tags pt ON pt.tag_id = d.tag_id
 JOIN posts p ON pt.post_id = p.id
-WHERE CASE WHEN ? THEN LOWER(p.status) = 'published'
+WHERE (CASE WHEN ? THEN LOWER(p.status) = 'published'
            ELSE LOWER(p.status) IN ('published', 'hidden')
-      END
+      END)
+AND (CASE WHEN ? THEN p.id NOT IN (
+    SELECT pt.post_id FROM post_tags pt 
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE h(id) AS (
+            SELECT id FROM tags WHERE is_hidden_posts = 1
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+        )
+        SELECT id FROM h
+    )
+) ELSE 1=1 END)
 GROUP BY d.root_id`
 
-	rows, err := r.db.QueryContext(ctx, q, publishedOnly)
+	rows, err := r.db.QueryContext(ctx, q, publishedOnly, publishedOnly)
 	if err != nil {
 		return nil, err
 	}

@@ -11,6 +11,11 @@ import {
   createBackup, restoreBackup, deleteBackup, getMigrations,
   updateMapCoords,
 } from '../../api/system.js';
+import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
+import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
+import { preCacheImages } from '../../utils/imageCache.js';
+import { getQueue, resetFailedOps, updateStatus } from '../../utils/mutationQueue.js';
+import { syncQueue } from '../../utils/sync.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -29,6 +34,17 @@ export default class SystemPage extends Component {
       updatingCoords: false,
       coordsResult: null,
       error: null,
+      
+      // Offline states
+      offlineStats: null,
+      loadingOfflineStats: false,
+      downloadingOffline: false,
+      offlineProgress: 0,
+      offlineStatusText: '',
+      lastSync: null,
+
+      // Sync queue state
+      syncQueue: [],
     };
   }
 
@@ -60,6 +76,7 @@ export default class SystemPage extends Component {
           </div>
         </div>`;
     }
+    const { downloadingOffline, offlineProgress, offlineStatusText, lastSync, syncQueue: queue } = this.state;
 
     return `
       <div class="light-layout">
@@ -69,6 +86,34 @@ export default class SystemPage extends Component {
             <h1>System</h1>
           </header>
           <main class="light-content">
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Offline Data</h2>
+                ${lastSync ? `<span class="header-meta">Last synced: ${escapeHtml(formatDateShort(lastSync))}</span>` : ''}
+              </div>
+              <div class="card-body">
+                <div class="ops-list">
+                  <div class="op-item">
+                    <div class="op-info">
+                      <h4>Download for offline</h4>
+                      <p>Download posts, tags, and images to this device for offline reading.</p>
+                      ${downloadingOffline ? `
+                        <div class="offline-progress-container" style="margin-top: 1rem;">
+                          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${offlineProgress}%"></div></div>
+                          <div class="progress-text">${escapeHtml(offlineStatusText)}</div>
+                        </div>
+                      ` : ''}
+                    </div>
+                    <button id="prepare-offline-btn" class="btn btn-secondary" ${downloadingOffline ? 'disabled' : ''}>
+                      ${downloadingOffline ? 'Downloading…' : 'Download for offline'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            ${this._renderSyncPanel(queue, lastSync)}
 
             <div class="card">
               <div class="card-header"><h2>Maintenance</h2></div>
@@ -168,6 +213,46 @@ export default class SystemPage extends Component {
       </div>`;
   }
 
+  _renderSyncPanel(queue, lastSync) {
+    const pending  = queue.filter(op => op.status === 'pending').length;
+    const syncing  = queue.filter(op => op.status === 'syncing').length;
+    const failedOp = queue.find(op => op.status === 'failed');
+    const isOnline = navigator.onLine;
+
+    const syncBtnDisabled = !isOnline || (!pending && !syncing) || !!syncing;
+    const syncBtnLabel = syncing ? 'Syncing…' : 'Sync now';
+
+    const statusParts = [];
+    if (pending + syncing > 0) statusParts.push(`${pending + syncing} pending`);
+    if (lastSync) statusParts.push(`Last synced: ${escapeHtml(formatDateShort(lastSync))}`);
+    const statusText = statusParts.length ? statusParts.join(' · ') : (lastSync ? `Last synced: ${escapeHtml(formatDateShort(lastSync))}` : 'No data downloaded yet');
+
+    const errorCard = failedOp ? `
+      <div class="sync-error-card" style="margin-top: 1rem;">
+        <strong>⚠ Sync halted</strong>
+        <p>Failed: <code>${escapeHtml(failedOp.method)} ${escapeHtml(failedOp.url)}</code></p>
+        <p class="sync-error-msg">${escapeHtml(failedOp.error || 'Unknown error')}</p>
+        <button id="dismiss-retry-btn" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">Dismiss &amp; retry</button>
+      </div>` : '';
+
+    return `
+      <div class="card">
+        <div class="card-header"><h2>Offline Sync</h2></div>
+        <div class="card-body">
+          <div class="ops-list">
+            <div class="op-item">
+              <div class="op-info">
+                <h4>Mutation queue</h4>
+                <p>${statusText}</p>
+                ${errorCard}
+              </div>
+              <button id="sync-now-btn" class="btn btn-primary" ${syncBtnDisabled ? 'disabled' : ''}>${syncBtnLabel}</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   afterRender() {
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/system',
@@ -176,6 +261,14 @@ export default class SystemPage extends Component {
     });
 
     if (this.state.loading || this.state.error) return;
+
+    // Offline
+    this.$('#prepare-offline-btn')?.addEventListener('click', () => this._handlePrepareOffline());
+
+    // Sync panel
+    this.$('#sync-now-btn')?.addEventListener('click', () => this._handleSyncNow());
+    this.$('#dismiss-retry-btn')?.addEventListener('click', () => this._handleDismissRetry());
+    this.subscribeStore(store, 'offline_status', () => this._refreshSyncState());
 
     // Cache
     this.$('#clear-cache-btn')?.addEventListener('click', () => this._handleClearCache());
@@ -224,13 +317,92 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [backups, migrations] = await Promise.all([
+      const [backups, migrations, lastSync, queue] = await Promise.all([
         listBackups(),
         getMigrations(),
+        getMeta('last_sync'),
+        getQueue(),
       ]);
-      this.setState({ loading: false, backups, migrations });
+      await updateStatus();
+      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Failed to load system data.' });
+    }
+  }
+
+  async _handlePrepareOffline() {
+    this.setState({ loadingOfflineStats: true });
+    try {
+      const stats = await getOfflineStats();
+      this.setState({ loadingOfflineStats: false, offlineStats: stats });
+      
+      this._showConfirm({
+        title: 'Download for offline',
+        message: `
+          <div class="offline-stats">
+            <p>Download ${stats.post_count} posts and ${stats.image_count} images?</p>
+            <div class="radio-group" style="margin-top: 1rem;">
+              <label style="display: block; margin-bottom: 0.5rem;">
+                <input type="radio" name="imageScope" value="thumbnails" checked> 
+                Thumbnails only (${formatFileSize(stats.thumbnail_bytes)})
+              </label>
+              <label style="display: block;">
+                <input type="radio" name="imageScope" value="full"> 
+                Thumbnails + originals (${formatFileSize(stats.original_bytes)})
+              </label>
+            </div>
+          </div>`,
+        confirmText: 'Download',
+        variant: 'primary',
+        allowHtml: true,
+        onConfirm: (dialog) => {
+          const selected = dialog.container.querySelector('input[name="imageScope"]:checked');
+          const scope = selected ? selected.value : 'thumbnails';
+          this._handleStartDownload(scope);
+        },
+      });    } catch (err) {
+      this.setState({ loadingOfflineStats: false });
+      store.set('toast', { message: err.message || 'Failed to fetch offline stats.', type: 'error' });
+    }
+  }
+
+  async _handleStartDownload(imageScope) {
+    this.setState({
+      downloadingOffline: true,
+      offlineProgress: 0,
+      offlineStatusText: 'Fetching snapshot…'
+    });
+
+    try {
+      // 1. Snapshot
+      const snapshot = await getOfflineSnapshot();
+      this.setState({ offlineProgress: 20, offlineStatusText: 'Saving data…' });
+      await saveSnapshot(snapshot);
+
+      // 2. Images
+      const urls = snapshot.media.map(m => imageScope === 'full' ? m.path : m.thumbnail_path).filter(Boolean);
+      this.setState({ offlineProgress: 40, offlineStatusText: `Downloading ${urls.length} images…` });
+
+      await preCacheImages(urls, imageScope, ({ completed, total }) => {
+        const progress = 40 + Math.floor((completed / total) * 55);
+        this.setState({ offlineProgress: progress, offlineStatusText: `Images: ${completed}/${total}` });
+      });
+
+      // 3. Meta
+      const lastSync = Date.now();
+      await saveMeta('last_sync', lastSync);
+      await saveMeta('image_scope', imageScope);
+      await saveMeta('blog_settings', snapshot.settings);
+
+      this.setState({
+        downloadingOffline: false,
+        lastSync,
+        offlineStatusText: ''
+      });
+      store.set('toast', { message: 'Offline download complete.', type: 'success' });
+    } catch (err) {
+      this.setState({ downloadingOffline: false });
+      store.set('toast', { message: err.message || 'Offline download failed.', type: 'error' });
     }
   }
 
@@ -290,7 +462,7 @@ export default class SystemPage extends Component {
     }
   }
 
-  _showConfirm({ title, message, confirmText, variant, onConfirm }) {
+  _showConfirm({ title, message, confirmText, variant, allowHtml, onConfirm }) {
     const mount = document.createElement('div');
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
@@ -298,10 +470,28 @@ export default class SystemPage extends Component {
       message,
       confirmText,
       variant,
-      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      allowHtml,
+      onConfirm: () => { onConfirm(dialog); dialog.unmount(); mount.remove(); },
       onCancel:  () => { dialog.unmount(); mount.remove(); },
     });
     dialog.mount();
+  }
+
+  async _refreshSyncState() {
+    const queue = await getQueue();
+    this.setState({ syncQueue: queue });
+  }
+
+  async _handleSyncNow() {
+    await syncQueue();
+    await this._refreshSyncState();
+  }
+
+  async _handleDismissRetry() {
+    await resetFailedOps();
+    await updateStatus();
+    await this._refreshSyncState();
+    syncQueue();
   }
 
   async _handleLogout() {

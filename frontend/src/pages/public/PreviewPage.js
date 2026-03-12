@@ -22,7 +22,7 @@ export default class PreviewPage extends Component {
   }
 
   render() {
-    const { loading, post, error } = this.state;
+    const { loading, error } = this.state;
 
     if (loading) {
       return `

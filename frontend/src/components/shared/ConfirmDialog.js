@@ -16,16 +16,7 @@ import { escapeHtml } from '../../utils/helpers.js';
 
 export class ConfirmDialog extends Component {
   render() {
-    const { title, message, confirmText = 'Confirm', variant = 'primary' } = this.props;
-
-    const footer = `
-      <button class="btn btn-secondary" id="confirm-cancel-btn">Cancel</button>
-      <button class="btn btn-${variant}" id="confirm-ok-btn">${escapeHtml(confirmText)}</button>
-    `;
-
-    return `
-      <div id="modal-wrapper"></div>
-    `;
+    return `<div id="modal-wrapper"></div>`;
   }
 
   afterRender() {
@@ -39,9 +30,13 @@ export class ConfirmDialog extends Component {
 
     const body = modal.getBodyMount();
     if (body) {
-      const p = document.createElement('p');
-      p.textContent = message;
-      body.appendChild(p);
+      if (this.props.allowHtml) {
+        body.innerHTML = message;
+      } else {
+        const p = document.createElement('p');
+        p.textContent = message;
+        body.appendChild(p);
+      }
     }
 
     modal.$('#confirm-cancel-btn')?.addEventListener('click', () => onCancel?.());

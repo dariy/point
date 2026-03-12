@@ -24,7 +24,7 @@ export default class HomePage extends Component {
   }
 
   render() {
-    const { loading, data, error } = this.state;
+    const { loading, error } = this.state;
 
     if (loading) {
       return `
@@ -88,7 +88,7 @@ export default class HomePage extends Component {
     // even on single-page lists (prevents browser history back/forward).
     {
       const gridMount = this.$('#grid-mount');
-      let previewEl = null;      this._gesture = new GestureController(this.container, {
+      let previewEl = null;      this._gesture = new GestureController(this.$('.site-main'), {
         onSwipeMove: (dx, dy) => {
           if (Math.abs(dx) > Math.abs(dy)) {
             const blocked = (dx < 0 && pagination.page >= pagination.pages)
@@ -179,7 +179,7 @@ export default class HomePage extends Component {
           }
         }
       });
-      this._trackpad = new TrackpadDetector(this.container, {
+      this._trackpad = new TrackpadDetector(this.$('.site-main'), {
         onHorizontal: (dir) => {
           if (dir === 'left' && pagination.page < pagination.pages) {
             navigate(`/?page=${pagination.page + 1}`);
