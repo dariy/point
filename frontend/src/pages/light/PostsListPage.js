@@ -46,13 +46,35 @@ export default class PostsListPage extends Component {
     }).join('');
 
     const rows = loading
-      ? `<tr><td colspan="4" class="loading">Loading…</td></tr>`
+      ? `<tr><td colspan="5" class="loading">Loading…</td></tr>`
       : error
-        ? `<tr><td colspan="4" class="error-state">${escapeHtml(error)}</td></tr>`
+        ? `<tr><td colspan="5" class="error-state">${escapeHtml(error)}</td></tr>`
         : !posts.length
-          ? `<tr><td colspan="4" class="empty-state">No posts found.</td></tr>`
-          : posts.map((p) => `
+          ? `<tr><td colspan="5" class="empty-state">No posts found.</td></tr>`
+          : posts.map((p) => {
+              const mediaUrl = p.media_url || '';
+              const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
+              const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
+              const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
+
+              let previewHtml = '';
+              if (isImage && p.media_url) {
+                previewHtml = `<img src="${escapeHtml(p.media_url + '?thumb')}" class="post-preview-img" loading="lazy">`;
+              } else if (isVideo) {
+                previewHtml = `<div class="post-preview-placeholder" title="Video">▶</div>`;
+              } else if (isAudio) {
+                previewHtml = `<div class="post-preview-placeholder" title="Audio">♫</div>`;
+              } else {
+                previewHtml = `<div class="post-preview-placeholder"></div>`;
+              }
+
+              return `
               <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
+                <td class="preview-col" rowspan="2">
+                  <a href="/light/posts/${escapeHtml(String(p.id))}/edit" title="Edit post">
+                    ${previewHtml}
+                  </a>
+                </td>
                 <td class="status-col">
                   <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
                           data-id="${escapeHtml(String(p.id))}">
@@ -86,7 +108,8 @@ export default class PostsListPage extends Component {
                 <td colspan="4" class="tags-col">
                   <div id="tags-cell-${escapeHtml(String(p.id))}"></div>
                 </td>
-              </tr>`).join('');
+              </tr>`;
+            }).join('');
 
     return `
       <div class="light-layout">
@@ -100,7 +123,7 @@ export default class PostsListPage extends Component {
           </header>
           <main class="light-content">
             <div class="filters">
-              <select id="status-filter" class="filter-select">
+              <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || 'draft')} filter-select">
                 ${statusOptions}
               </select>
               <input type="search" id="search-input" class="form-input filter-search"
@@ -108,11 +131,6 @@ export default class PostsListPage extends Component {
             </div>
             <div class="table-container">
               <table class="table">
-                <thead>
-                  <tr>
-                    <th>Status</th><th>Title</th><th>Updated</th><th class="actions-col">Actions</th>
-                  </tr>
-                </thead>
                 <tbody id="posts-tbody">${rows}</tbody>
               </table>
             </div>
@@ -160,8 +178,10 @@ export default class PostsListPage extends Component {
     const statusFilter = this.$('#status-filter');
     if (statusFilter) {
       statusFilter.addEventListener('change', (e) => {
-        this.setState({ statusFilter: e.target.value, page: 1 });
-        this._load({ page: 1, status: e.target.value });
+        const val = e.target.value;
+        statusFilter.className = `status-select badge-${val || 'draft'} filter-select`;
+        this.setState({ statusFilter: val, page: 1 });
+        this._load({ page: 1, status: val });
       });
     }
 
@@ -249,7 +269,7 @@ export default class PostsListPage extends Component {
     // The string is fully static (no user data), so innerHTML is safe here.
     const tbody = this.$('#posts-tbody');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="4" class="loading">Loading…</td></tr>`; // static, safe
+      tbody.innerHTML = `<tr><td colspan="5" class="loading">Loading…</td></tr>`; // static, safe
     }
     this.state.loading = true;
     this.state.error = null;
