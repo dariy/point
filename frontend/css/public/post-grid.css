@@ -42,7 +42,7 @@
 /* --- HAS IMAGE/VISUAL STYLE --- */
 .post-card.has-image,
 .post-card.has-visual {
-    min-height: 320px;
+    min-height: 220px;
     /* Minimum height for image cards */
     color: var(--text-inverted);
     /* Default text color on image */
