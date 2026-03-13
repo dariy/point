@@ -21,15 +21,16 @@ body {
 }
 
 #header-mount {
-    position: fixed;
+    position: sticky;
+    top: 0;
     width: 100%;
-    z-index: 10;
+    z-index: 110;
+    background: var(--header-bg);
 }
 
 .site-main {
     flex: 1;
     padding: var(--spacing-lg) 0;
-    margin-top: 73px;
 }
 
 .main-container {
