@@ -127,7 +127,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		return existing, nil
 	}
 
-	now := time.Now()
+	now := time.Now().UTC().Round(0)
 	datePath := fmt.Sprintf("%d/%02d", now.Year(), now.Month())
 	
 	// Create directories

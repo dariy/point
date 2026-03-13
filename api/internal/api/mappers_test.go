@@ -40,7 +40,7 @@ func TestPostTagsOrEmpty(t *testing.T) {
 }
 
 func TestPostByTagToResponse(t *testing.T) {
-	now := time.Now()
+	now := time.Now().UTC().Round(0)
 	p := models.GetPostsByTagRow{
 		ID:                1,
 		Title:             "My Post",

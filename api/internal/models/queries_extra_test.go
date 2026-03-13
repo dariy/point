@@ -46,7 +46,7 @@ func TestQueries_Extra(t *testing.T) {
 	_ = q.UpdateUserPassword(ctx, UpdateUserPasswordParams{ID: u.ID, PasswordHash: "h2"})
 
 	// 2. Sessions
-	s, _ := q.CreateSession(ctx, CreateSessionParams{UserID: u.ID, Token: "t", IpAddress: "1", UserAgent: "a", ExpiresAt: time.Now().Add(time.Hour)})
+	s, _ := q.CreateSession(ctx, CreateSessionParams{UserID: u.ID, Token: "t", IpAddress: "1", UserAgent: "a", ExpiresAt: time.Now().Add(time.Hour).UTC().Round(0)})
 	_, _ = q.GetSessionByToken(ctx, "t")
 	_, _ = q.GetUserSessions(ctx, u.ID)
 	_ = q.UpdateSessionActivity(ctx, s.ID)
@@ -97,7 +97,7 @@ func TestQueries_Extra(t *testing.T) {
 	_ = q.DeletePost(ctx, DeletePostParams{ID: p.ID, AuthorID: u.ID})
 
 	// 7. Media
-	m, _ := q.CreateMedia(ctx, CreateMediaParams{Filename: "f", Checksum: "c", UploadedAt: time.Now()})
+	m, _ := q.CreateMedia(ctx, CreateMediaParams{Filename: "f", Checksum: "c", UploadedAt: time.Now().UTC().Round(0)})
 	_, _ = q.GetMedia(ctx, m.ID)
 	_, _ = q.GetMediaByChecksum(ctx, "c")
 	_, _ = q.GetMediaByPostID(ctx, sql.NullInt64{Int64: 1, Valid: true})
