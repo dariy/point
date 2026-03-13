@@ -81,7 +81,7 @@ func TestAuthService_Sessions(t *testing.T) {
 	})
 
 	token := "testtoken123"
-	expiresAt := time.Now().Add(1 * time.Hour)
+	expiresAt := time.Now().Add(1 * time.Hour).UTC().Round(0)
 	session, err := service.CreateSession(ctx, user.ID, "127.0.0.1", "test-agent", expiresAt, token)
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
@@ -98,7 +98,7 @@ func TestAuthService_Sessions(t *testing.T) {
 
 	// Test ValidateSession (expired)
 	expiredToken := "expiredtoken"
-	_, _ = service.CreateSession(ctx, user.ID, "127.0.0.1", "test-agent", time.Now().Add(-1*time.Hour), expiredToken)
+	_, _ = service.CreateSession(ctx, user.ID, "127.0.0.1", "test-agent", time.Now().Add(-1*time.Hour).UTC().Round(0), expiredToken)
 	_, err = service.ValidateSession(ctx, expiredToken)
 	if err == nil || err.Error() != "session expired" {
 		t.Errorf("expected session expired error, got %v", err)
