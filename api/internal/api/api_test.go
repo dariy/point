@@ -293,7 +293,7 @@ func TestAuthMiddleware(t *testing.T) {
 		Username: "u1", Email: "u1@t.com", PasswordHash: "h", DisplayName: "U1",
 	})
 	token := "valid-token"
-	expiresAt := time.Now().Add(1 * time.Hour)
+	expiresAt := time.Now().Add(1 * time.Hour).UTC().Round(0)
 	_, _ = authSvc.CreateSession(context.Background(), user.ID, "1.1.1.1", "agent", expiresAt, token)
 
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
@@ -353,7 +353,7 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 		Username: "u2", Email: "u2@t.com", PasswordHash: "h", DisplayName: "U2",
 	})
 	token := "valid-token-opt"
-	expiresAt := time.Now().Add(1 * time.Hour)
+	expiresAt := time.Now().Add(1 * time.Hour).UTC().Round(0)
 	_, _ = authSvc.CreateSession(context.Background(), user.ID, "1.1.1.1", "agent", expiresAt, token)
 
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
