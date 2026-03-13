@@ -1548,18 +1548,22 @@ GROUP BY d.root_id`
 // ApplyMigration executes raw SQL and records it in migration_history.
 // It is idempotent: if the migration name already exists it is skipped.
 func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error {
-	_, _ = r.db.ExecContext(ctx, `
+	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name VARCHAR(255) NOT NULL UNIQUE,
 			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
-	`)
+	`); err != nil {
+		return fmt.Errorf("failed to create migration_history table: %w", err)
+	}
 
 	var count int64
-	_ = r.db.QueryRowContext(ctx,
+	if err := r.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM migration_history WHERE name = ?`, name,
-	).Scan(&count)
+	).Scan(&count); err != nil {
+		return fmt.Errorf("failed to check migration history for %q: %w", name, err)
+	}
 	if count > 0 {
 		return nil
 	}
@@ -1568,7 +1572,10 @@ func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error
 	}
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO migration_history (name) VALUES (?)`, name)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to record migration %q in history: %w", name, err)
+	}
+	return nil
 }
 
 // DeleteSession removes a session and returns an error if not found.
