@@ -250,7 +250,7 @@ func TestAuthHandler_LogoutWithSession(t *testing.T) {
 	e := echo.New()
 
 	// Create a real session
-	expiry := time.Now().Add(time.Hour)
+	expiry := time.Now().Add(time.Hour).UTC().Round(0)
 	sess, _ := authSvc.CreateSession(context.Background(), user.ID, "1.2.3.4", "agent", expiry, "logout-tok")
 
 	// Logout with valid cookie
@@ -281,7 +281,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	})
 
 	// Create a session to delete
-	import_time_add := time.Now().Add(time.Hour)
+	import_time_add := time.Now().Add(time.Hour).UTC().Round(0)
 	sess, _ := authSvc.CreateSession(context.Background(), user.ID, "1.2.3.4", "agent", import_time_add, "tok-ds")
 	session := models.GetSessionByTokenRow{UserID: user.ID, ID: 99}
 

@@ -369,7 +369,7 @@ func TestPostService_PreviewTokenExpired(t *testing.T) {
 	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "T", Content: "C", Status: "draft", AuthorID: user.ID})
 
 	// Set an already-expired preview token directly
-	expiredAt := time.Now().Add(-time.Hour)
+	expiredAt := time.Now().Add(-time.Hour).UTC().Round(0)
 	_, _ = repo.DB().Exec(`UPDATE posts SET preview_token = 'expiredtok', preview_expires_at = ? WHERE id = ?`,
 		expiredAt, post.ID)
 
