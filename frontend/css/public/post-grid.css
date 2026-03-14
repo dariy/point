@@ -133,7 +133,8 @@
     pointer-events: auto;
 }
 
-.post-card:hover .post-card-content.overlay {
+.post-card:hover .post-card-content.overlay,
+.post-card.is-touched .post-card-content.overlay {
     opacity: 1;
 }
 
