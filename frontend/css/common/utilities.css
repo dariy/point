@@ -183,3 +183,5 @@
     opacity: 0.55;
     cursor: help;
 }
+
+/* Notification log FAB — hidden in both bundles; light bundle overrides with .active */.notification-log-fab { display: none; }
