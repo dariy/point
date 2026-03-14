@@ -11,6 +11,7 @@ import { Component } from '../../components/Component.js';
 import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
+import { TagCloud } from '../../components/public/TagCloud.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
@@ -54,6 +55,7 @@ export default class HomePage extends Component {
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount"></div>
+            <div id="tag-cloud-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
@@ -70,10 +72,15 @@ export default class HomePage extends Component {
 
     if (this.state.loading || !this.state.data) return;
 
-    const { posts = [], pagination = {} } = this.state.data;
+    const { posts = [], pagination = {}, tag_cloud: tagCloud = [] } = this.state.data;
     const showViewCount = !!settings.show_view_counts;
+    const useThumbnails = settings.use_thumbnails !== false;
 
-    this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount });
+    this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
+
+    if (!!settings.show_tag_cloud && tagCloud.length) {
+      this.mountChild(TagCloud, '#tag-cloud-mount', { tags: tagCloud });
+    }
 
     if (pagination.pages > 1) {
       this.mountChild(Pagination, '#pagination-mount', {

@@ -13,6 +13,7 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { getMapPage } from '../../api/pages.js';
 import { store } from '../../store.js';
+import { router } from '../../router.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 
@@ -133,6 +134,11 @@ export default class MapPage extends Component {
   }
 
   async _load() {
+    const settings = store.get('settings') || {};
+    if (settings.enable_map === false) {
+      router.notFound();
+      return;
+    }
     try {
       const data = await getMapPage();
       document.title = 'Map';

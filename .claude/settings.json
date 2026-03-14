@@ -6,5 +6,44 @@
     "context7@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "mcp__serena_frontend__find_symbol",
+      "mcp__serena_frontend__find_referencing_symbols",
+      "mcp__serena_frontend__find_referencing_code_snippets",
+      "mcp__serena_frontend__get_symbols_overview",
+      "mcp__serena_frontend__read_file",
+      "mcp__serena_frontend__list_dir",
+      "mcp__serena_frontend__search_for_pattern",
+      "mcp__serena_frontend__replace_symbol_body",
+      "mcp__serena_frontend__insert_after_symbol",
+      "mcp__serena_frontend__insert_before_symbol",
+      "mcp__serena_frontend__replace_lines",
+      "mcp__serena_frontend__delete_lines",
+      "mcp__serena_frontend__onboarding",
+      "mcp__serena_frontend__check_onboarding_performed",
+      "mcp__serena_frontend__think_about_collected_information",
+      "mcp__serena_frontend__think_about_task_adherence",
+      "mcp__serena_frontend__think_about_whether_you_are_done",
+
+      "mcp__serena_api__find_symbol",
+      "mcp__serena_api__find_referencing_symbols",
+      "mcp__serena_api__find_referencing_code_snippets",
+      "mcp__serena_api__get_symbols_overview",
+      "mcp__serena_api__read_file",
+      "mcp__serena_api__list_dir",
+      "mcp__serena_api__search_for_pattern",
+      "mcp__serena_api__replace_symbol_body",
+      "mcp__serena_api__insert_after_symbol",
+      "mcp__serena_api__insert_before_symbol",
+      "mcp__serena_api__replace_lines",
+      "mcp__serena_api__delete_lines",
+      "mcp__serena_api__onboarding",
+      "mcp__serena_api__check_onboarding_performed",
+      "mcp__serena_api__think_about_collected_information",
+      "mcp__serena_api__think_about_task_adherence",
+      "mcp__serena_api__think_about_whether_you_are_done"
+    ]
   }
 }
