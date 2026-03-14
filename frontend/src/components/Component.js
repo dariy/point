@@ -33,6 +33,7 @@ export class Component {
     this._children = [];
     /** @type {Function[]} */
     this._storeUnsubs = [];
+    this._unmounted = false;
   }
 
   // ── Subclass interface ────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ export class Component {
    * @param {object} delta
    */
   setState(delta) {
+    if (this._unmounted) return;
     this.state = { ...this.state, ...delta };
     this._rerender();
   }
@@ -75,6 +77,7 @@ export class Component {
    * @param {object} delta
    */
   setProps(delta) {
+    if (this._unmounted) return;
     this.props = { ...this.props, ...delta };
     this._rerender();
   }
@@ -90,6 +93,7 @@ export class Component {
    * Tear down: call beforeUnmount, unmount children, clear the container.
    */
   unmount() {
+    this._unmounted = true;
     this._storeUnsubs.forEach((fn) => fn());
     this._storeUnsubs = [];
     this._unmountChildren();
