@@ -602,6 +602,7 @@ export default class PostEditPage extends Component {
 
   async _doAnalyzeField(field, item) {
     if (!item) return;
+    const snap = this._collectFormData();
     // Disable all field AI buttons directly — avoid setState re-render which discards unsaved input.
     this.$$(`.field-ai-btn`).forEach(b => { b.disabled = true; });
     try {
@@ -609,7 +610,19 @@ export default class PostEditPage extends Component {
         ? await analyzeMedia(item.id)
         : await analyzeMediaByPath(item.path);
 
-      const post = { ...(this.state.post || {}) };
+      const post = {
+        ...(this.state.post || {}),
+        title:            snap.title,
+        excerpt:          snap.excerpt,
+        content:          snap.content,
+        slug:             snap.slug,
+        status:           snap.status,
+        is_featured:      snap.is_featured,
+        formatter:        snap.formatter,
+        thumbnail_path:   snap.thumbnail_path,
+        meta_description: snap.meta_description,
+        tags:             snap.tags.map((name) => ({ name, slug: name })),
+      };
       if (field === 'title' && result.title) {
         post.title = result.title;
       } else if (field === 'tags' && result.tags?.length) {
@@ -654,11 +667,16 @@ export default class PostEditPage extends Component {
 
       const post = {
         ...(this.state.post || {}),
-        title:   snap.title   || result.title   || '',
-        excerpt: snap.excerpt || result.excerpt  || null,
-        content: snap.content,
-        slug:    snap.slug,
-        tags:    mergedTags.map((name) => ({ name, slug: name })),
+        title:            snap.title   || result.title   || '',
+        excerpt:          snap.excerpt || result.excerpt  || null,
+        content:          snap.content,
+        slug:             snap.slug,
+        status:           snap.status,
+        is_featured:      snap.is_featured,
+        formatter:        snap.formatter,
+        thumbnail_path:   snap.thumbnail_path,
+        meta_description: snap.meta_description,
+        tags:             mergedTags.map((name) => ({ name, slug: name })),
       };
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
 
@@ -669,11 +687,16 @@ export default class PostEditPage extends Component {
       // Restore the user's form values even on failure.
       const post = {
         ...(this.state.post || {}),
-        title:   snap.title,
-        excerpt: snap.excerpt,
-        content: snap.content,
-        slug:    snap.slug,
-        tags:    snap.tags.map((name) => ({ name, slug: name })),
+        title:            snap.title,
+        excerpt:          snap.excerpt,
+        content:          snap.content,
+        slug:             snap.slug,
+        status:           snap.status,
+        is_featured:      snap.is_featured,
+        formatter:        snap.formatter,
+        thumbnail_path:   snap.thumbnail_path,
+        meta_description: snap.meta_description,
+        tags:             snap.tags.map((name) => ({ name, slug: name })),
       };
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
