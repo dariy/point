@@ -106,6 +106,108 @@
         max-width: 90%;
         margin: 20px;
     }
+
+    /* Tag editor modal — clamp to viewport on tablet */
+    .tag-editor-modal {
+        width: min(700px, calc(100vw - 40px));
+    }
+}
+
+/* ===========================
+   Tags Manager — portrait phones
+   =========================== */
+@media (max-width: 640px) {
+    /* Header: two rows — [hamburger + title] then [actions] */
+    .light-header {
+        height: auto;
+        min-height: var(--header-height);
+        flex-wrap: wrap;
+        padding-top: var(--spacing-sm);
+        padding-bottom: var(--spacing-sm);
+        row-gap: 6px;
+    }
+
+    /* Let h1 share line 1 with the hamburger (override width:100%) */
+    .light-header h1 {
+        flex: 1;
+        width: auto;
+        min-width: 0;
+    }
+
+    /* Actions drop to line 2, full width, wrapping allowed */
+    .header-actions {
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        text-wrap-mode: wrap;
+    }
+
+    /* Hide drag handles — touch drag is unavailable */
+    .tm-drag-handle {
+        display: none;
+    }
+
+    .card {
+        background: none;
+    }
+
+    .card-body {
+        padding: 0;
+    }
+
+    .tm-row .tm-actions {
+        order: 5;
+    }
+
+    /* Two-line tree rows:
+       Line 1 – expand toggle + tag name + count badge
+       Line 2 – flag buttons + action buttons              */
+    .tm-row {
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+        min-height: auto;
+        padding: 8px 6px;
+    }
+
+    .tm-toggle,
+    .tm-toggle-spacer {
+        order: 1;
+    }
+
+    .tm-node-body {
+        order: 2;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .tm-row-meta {
+        order: 3;
+        min-width: auto;
+        flex-shrink: 1;
+    }
+
+    /* Hide flag buttons on portrait — keep only edit/add/delete actions */
+    .tm-flags-row {
+        display: none;
+    }
+
+    /* Reduce per-level indentation so deeply nested tags stay readable */
+    .tm-tree.level-1,
+    .tm-tree.level-2,
+    .tm-tree.level-3 {
+        padding-left: 12px;
+        margin-left: 6px;
+    }
+
+    /* Tag editor modal — full width on small screens */
+    .tag-editor-modal {
+        width: calc(100vw - 40px);
+    }
+
+    /* Flags grid: single column instead of two */
+    .tag-flags-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
