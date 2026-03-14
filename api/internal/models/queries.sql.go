@@ -94,17 +94,17 @@ SELECT COUNT(*) FROM posts p
 WHERE 
     (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE 
-        WHEN ?4 THEN 1=1 
-        WHEN ?5 THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published' 
+    AND (CASE
+        WHEN ?4 THEN 1=1
+        WHEN ?5 THEN p.status IN ('published', 'hidden', 'page')
+        ELSE p.status IN ('published', 'page')
     END)
 
-    AND (CASE 
-        WHEN ?4 THEN 1=1 
+    AND (CASE
+        WHEN ?4 THEN 1=1
         ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt 
-            JOIN tags t ON pt.tag_id = t.id 
+            SELECT pt.post_id FROM post_tags pt
+            JOIN tags t ON pt.tag_id = t.id
             WHERE t.is_hidden_posts = 1
         )
     END)
@@ -1217,17 +1217,17 @@ FROM posts p
 WHERE
     (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE 
-        WHEN ?4 THEN 1=1 
-        WHEN ?5 THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published' 
+    AND (CASE
+        WHEN ?4 THEN 1=1
+        WHEN ?5 THEN p.status IN ('published', 'hidden', 'page')
+        ELSE p.status IN ('published', 'page')
     END)
 
-    AND (CASE 
-        WHEN ?4 THEN 1=1 
+    AND (CASE
+        WHEN ?4 THEN 1=1
         ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt 
-            JOIN tags t ON pt.tag_id = t.id 
+            SELECT pt.post_id FROM post_tags pt
+            JOIN tags t ON pt.tag_id = t.id
             WHERE t.is_hidden_posts = 1
         )
     END)
