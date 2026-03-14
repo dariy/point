@@ -418,7 +418,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	isAdmin := !publicOnly
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		resp := postByTagToResponse(p, postTagsMap[p.ID])
+		resp := postToResponse(p, postTagsMap[p.ID])
 		if isAdmin {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}

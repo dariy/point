@@ -99,10 +99,10 @@ type ListPostsParams struct {
 	Search        string
 }
 
-func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.ListPostsRow, int64, error) {
+func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
 	offset := (p.Page - 1) * p.PerPage
 
-	var posts []models.ListPostsRow
+	var posts []models.Post
 	var total int64
 	var err error
 
@@ -138,17 +138,17 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	}
 
 	if posts == nil {
-		posts = []models.ListPostsRow{}
+		posts = []models.Post{}
 	}
 
 	return posts, total, nil
 }
 
-func (s *PostService) GetPostByID(ctx context.Context, id int64) (models.GetPostRow, error) {
+func (s *PostService) GetPostByID(ctx context.Context, id int64) (models.Post, error) {
 	return s.repo.GetPost(ctx, id)
 }
 
-func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.GetPostBySlugRow, error) {
+func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (models.Post, error) {
 	return s.repo.GetPostBySlug(ctx, strings.ToLower(slug))
 }
 
@@ -347,14 +347,14 @@ func (s *PostService) GeneratePreviewLink(ctx context.Context, postID int64) (st
 }
 
 // GetPostByPreviewToken returns a post if the token is valid and not expired.
-func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (models.GetPostRow, error) {
+func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error) {
 	post, err := s.repo.GetPostByPreviewToken(ctx, token)
 	if err != nil {
-		return models.GetPostRow{}, err
+		return models.Post{}, err
 	}
 	// Check expiry
 	if post.PreviewExpiresAt.Valid && time.Now().After(post.PreviewExpiresAt.Time) {
-		return models.GetPostRow{}, sql.ErrNoRows
+		return models.Post{}, sql.ErrNoRows
 	}
 	return post, nil
 }

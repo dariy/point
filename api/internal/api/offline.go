@@ -67,7 +67,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	}
 
 	// Filter to include 'published', 'hidden', and 'page'
-	posts := make([]models.ListPostsRow, 0)
+	posts := make([]models.Post, 0)
 	for _, p := range allPosts {
 		st := strings.ToLower(p.Status)
 		if st == "published" || st == "hidden" || st == "page" {
@@ -103,12 +103,6 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 			"meta_description": nullString(p.MetaDescription),
 			"formatter":        p.Formatter,
 			"tags":             postTagsMap[p.ID],
-			"author": map[string]interface{}{
-				"id":           p.AuthorID,
-				"username":     p.AuthorUsername,
-				"display_name": p.AuthorDisplayName,
-				"avatar_path":  nullString(p.AuthorAvatar),
-			},
 			"media_url": extractMediaURL(p.ThumbnailPath, p.Content),
 		}
 		postResponses[i] = resp

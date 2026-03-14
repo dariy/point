@@ -87,10 +87,11 @@ export class PublicHeader extends Component {
           ${navTags.length ? '<div class="header-tags-bar" id="header-tags-mount"></div>' : ''}
 
           <nav class="site-nav" aria-label="Main navigation">
+            ${settings.enable_map !== false ? `
             <a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
                aria-label="Map view">
               ${MAP_SVG}
-            </a>
+            </a>` : ''}
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
               <span class="icon-sun">${SUN_SVG}</span>
               <span class="icon-moon">${MOON_SVG}</span>

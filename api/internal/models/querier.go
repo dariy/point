@@ -35,9 +35,9 @@ type Querier interface {
 	GetMediaByChecksum(ctx context.Context, checksum string) (Medium, error)
 	GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([]Medium, error)
 	// POSTS
-	GetPost(ctx context.Context, id int64) (GetPostRow, error)
-	GetPostBySlug(ctx context.Context, slug string) (GetPostBySlugRow, error)
-	GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]GetPostsByTagRow, error)
+	GetPost(ctx context.Context, id int64) (Post, error)
+	GetPostBySlug(ctx context.Context, slug string) (Post, error)
+	GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]Post, error)
 	GetSessionByToken(ctx context.Context, token string) (GetSessionByTokenRow, error)
 	// SETTINGS
 	GetSetting(ctx context.Context, key string) (BlogSetting, error)
@@ -55,7 +55,7 @@ type Querier interface {
 	GetUserSessions(ctx context.Context, userID int64) ([]Session, error)
 	IncrementPostViewCount(ctx context.Context, id int64) error
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
-	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
+	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, error)
 	PublishPost(ctx context.Context, id int64) (Post, error)
