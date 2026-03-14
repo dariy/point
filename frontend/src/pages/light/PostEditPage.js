@@ -535,7 +535,7 @@ export default class PostEditPage extends Component {
       is_featured:      this.$('#featured-check')?.checked || false,
       thumbnail_path:   (this.$('#thumbnail-input')?.value || '').trim() || null,
       meta_description: (this.$('#meta-input')?.value || '').trim() || null,
-      tags:             this._tags,
+      tags:             this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
     };
   }
 
