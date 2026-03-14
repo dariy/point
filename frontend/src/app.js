@@ -18,6 +18,8 @@ import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
 import { normalizeSettings } from './utils/helpers.js';
 import { ToastContainer } from './components/shared/Toast.js';
+import { NotificationLogButton } from './components/shared/NotificationLogButton.js';
+import { initNotificationLog } from './utils/notificationLog.js';
 import { syncQueue } from './utils/sync.js';
 
 // ── CSS section switching ─────────────────────────────────────────────────
@@ -107,12 +109,15 @@ async function bootstrap() {
   }
   store.set('user', user);
 
-  // 4. Mount toast container.
+  // 4. Mount toast container and initialise the notification log.
   const toastsEl = document.getElementById('toasts');
   if (toastsEl) {
     const toastContainer = new ToastContainer(toastsEl);
     toastContainer.mount();
   }
+  initNotificationLog(store);
+  const notificationLogBtn = new NotificationLogButton();
+  notificationLogBtn.mount();
 
   // 5. Subscribe to route changes to swap CSS bundles before each page mounts.
   store.subscribe('route', ({ pathname }) => _applySection(pathname));
