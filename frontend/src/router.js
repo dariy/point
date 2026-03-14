@@ -73,6 +73,11 @@ class Router {
     this._render(location.pathname + location.search);
   }
 
+  /** Render the standard 404 fallback without changing the URL. */
+  notFound() {
+    this._showFallback('404', 'Page not found.');
+  }
+
   /**
    * Programmatically navigate to a path.
    * @param {string} path

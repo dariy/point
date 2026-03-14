@@ -632,39 +632,15 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 
 const getPost = `-- name: GetPost :one
 
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE p.id = ? LIMIT 1
 `
 
-type GetPostRow struct {
-	ID                int64          `json:"id"`
-	Title             string         `json:"title"`
-	Slug              string         `json:"slug"`
-	Content           string         `json:"content"`
-	Excerpt           sql.NullString `json:"excerpt"`
-	Formatter         string         `json:"formatter"`
-	Status            string         `json:"status"`
-	IsFeatured        bool           `json:"is_featured"`
-	ViewCount         int64          `json:"view_count"`
-	PublishedAt       sql.NullTime   `json:"published_at"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-	AuthorID          int64          `json:"author_id"`
-	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
-	MetaDescription   sql.NullString `json:"meta_description"`
-	PreviewToken      sql.NullString `json:"preview_token"`
-	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
-	AuthorUsername    string         `json:"author_username"`
-	AuthorDisplayName string         `json:"author_display_name"`
-	AuthorAvatar      sql.NullString `json:"author_avatar"`
-}
-
 // POSTS
-func (q *Queries) GetPost(ctx context.Context, id int64) (GetPostRow, error) {
+func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 	row := q.db.QueryRowContext(ctx, getPost, id)
-	var i GetPostRow
+	var i Post
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -683,46 +659,19 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (GetPostRow, error) {
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
-		&i.AuthorUsername,
-		&i.AuthorDisplayName,
-		&i.AuthorAvatar,
 	)
 	return i, err
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE p.slug = ? LIMIT 1
 `
 
-type GetPostBySlugRow struct {
-	ID                int64          `json:"id"`
-	Title             string         `json:"title"`
-	Slug              string         `json:"slug"`
-	Content           string         `json:"content"`
-	Excerpt           sql.NullString `json:"excerpt"`
-	Formatter         string         `json:"formatter"`
-	Status            string         `json:"status"`
-	IsFeatured        bool           `json:"is_featured"`
-	ViewCount         int64          `json:"view_count"`
-	PublishedAt       sql.NullTime   `json:"published_at"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-	AuthorID          int64          `json:"author_id"`
-	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
-	MetaDescription   sql.NullString `json:"meta_description"`
-	PreviewToken      sql.NullString `json:"preview_token"`
-	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
-	AuthorUsername    string         `json:"author_username"`
-	AuthorDisplayName string         `json:"author_display_name"`
-	AuthorAvatar      sql.NullString `json:"author_avatar"`
-}
-
-func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (GetPostBySlugRow, error) {
+func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) {
 	row := q.db.QueryRowContext(ctx, getPostBySlug, slug)
-	var i GetPostBySlugRow
+	var i Post
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -741,9 +690,6 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (GetPostBySlug
 		&i.MetaDescription,
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
-		&i.AuthorUsername,
-		&i.AuthorDisplayName,
-		&i.AuthorAvatar,
 	)
 	return i, err
 }
@@ -755,9 +701,8 @@ WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
     SELECT tr.child_id FROM tag_relationships tr
     JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
 )
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
 AND (CASE 
@@ -781,30 +726,7 @@ type GetPostsByTagParams struct {
 	Limit               int64       `json:"limit"`
 }
 
-type GetPostsByTagRow struct {
-	ID                int64          `json:"id"`
-	Title             string         `json:"title"`
-	Slug              string         `json:"slug"`
-	Content           string         `json:"content"`
-	Excerpt           sql.NullString `json:"excerpt"`
-	Formatter         string         `json:"formatter"`
-	Status            string         `json:"status"`
-	IsFeatured        bool           `json:"is_featured"`
-	ViewCount         int64          `json:"view_count"`
-	PublishedAt       sql.NullTime   `json:"published_at"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-	AuthorID          int64          `json:"author_id"`
-	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
-	MetaDescription   sql.NullString `json:"meta_description"`
-	PreviewToken      sql.NullString `json:"preview_token"`
-	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
-	AuthorUsername    string         `json:"author_username"`
-	AuthorDisplayName string         `json:"author_display_name"`
-	AuthorAvatar      sql.NullString `json:"author_avatar"`
-}
-
-func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]GetPostsByTagRow, error) {
+func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]Post, error) {
 	rows, err := q.db.QueryContext(ctx, getPostsByTag,
 		arg.TagID,
 		arg.IncludeDrafts,
@@ -816,9 +738,9 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetPostsByTagRow
+	var items []Post
 	for rows.Next() {
-		var i GetPostsByTagRow
+		var i Post
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -837,9 +759,6 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 			&i.MetaDescription,
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
-			&i.AuthorUsername,
-			&i.AuthorDisplayName,
-			&i.AuthorAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -1293,10 +1212,9 @@ WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
     SELECT tr.child_id FROM tag_relationships tr
     JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
 )
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
-WHERE 
+WHERE
     (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE 
@@ -1327,30 +1245,7 @@ type ListPostsParams struct {
 	Limit          int64       `json:"limit"`
 }
 
-type ListPostsRow struct {
-	ID                int64          `json:"id"`
-	Title             string         `json:"title"`
-	Slug              string         `json:"slug"`
-	Content           string         `json:"content"`
-	Excerpt           sql.NullString `json:"excerpt"`
-	Formatter         string         `json:"formatter"`
-	Status            string         `json:"status"`
-	IsFeatured        bool           `json:"is_featured"`
-	ViewCount         int64          `json:"view_count"`
-	PublishedAt       sql.NullTime   `json:"published_at"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-	AuthorID          int64          `json:"author_id"`
-	ThumbnailPath     sql.NullString `json:"thumbnail_path"`
-	MetaDescription   sql.NullString `json:"meta_description"`
-	PreviewToken      sql.NullString `json:"preview_token"`
-	PreviewExpiresAt  sql.NullTime   `json:"preview_expires_at"`
-	AuthorUsername    string         `json:"author_username"`
-	AuthorDisplayName string         `json:"author_display_name"`
-	AuthorAvatar      sql.NullString `json:"author_avatar"`
-}
-
-func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
+func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {
 	rows, err := q.db.QueryContext(ctx, listPosts,
 		arg.StatusFilter,
 		arg.Status,
@@ -1364,9 +1259,9 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListPostsRow
+	var items []Post
 	for rows.Next() {
-		var i ListPostsRow
+		var i Post
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -1385,9 +1280,6 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.MetaDescription,
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
-			&i.AuthorUsername,
-			&i.AuthorDisplayName,
-			&i.AuthorAvatar,
 		); err != nil {
 			return nil, err
 		}

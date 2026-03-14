@@ -41,23 +41,21 @@ func TestPostTagsOrEmpty(t *testing.T) {
 
 func TestPostByTagToResponse(t *testing.T) {
 	now := time.Now().UTC().Round(0)
-	p := models.GetPostsByTagRow{
-		ID:                1,
-		Title:             "My Post",
-		Slug:              "my-post",
-		Formatter:         "markdown",
-		Status:            "published",
-		IsFeatured:        false,
-		ViewCount:         5,
-		CreatedAt:         now,
-		UpdatedAt:         now,
-		AuthorID:          1,
-		AuthorUsername:    "user",
-		AuthorDisplayName: "User",
+	p := models.Post{
+		ID:         1,
+		Title:      "My Post",
+		Slug:       "my-post",
+		Formatter:  "markdown",
+		Status:     "published",
+		IsFeatured: false,
+		ViewCount:  5,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		AuthorID:   1,
 	}
 	tags := []repository.PostTagInfo{{ID: 2, Name: "Tag", Slug: "tag"}}
 
-	resp := postByTagToResponse(p, tags)
+	resp := postToResponse(p, tags)
 	if resp["id"] != int64(1) {
 		t.Errorf("expected id=1, got %v", resp["id"])
 	}
