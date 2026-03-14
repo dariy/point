@@ -84,7 +84,7 @@ func postTagsOrEmpty(tags []repository.PostTagInfo) []repository.PostTagInfo {
 	return tags
 }
 
-func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[string]interface{} {
+func postToResponse(p models.Post, tags []repository.PostTagInfo) map[string]interface{} {
 	tagObjs := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
 		tagObjs = append(tagObjs, map[string]interface{}{
@@ -106,44 +106,8 @@ func postToResponse(p models.ListPostsRow, tags []repository.PostTagInfo) map[st
 		"published_at":        nullTime(p.PublishedAt),
 		"created_at":          p.CreatedAt,
 		"updated_at":          p.UpdatedAt,
-		"author_id":           p.AuthorID,
 		"media_url":           extractMediaURL(p.ThumbnailPath, p.Content),
 		"meta_description":    nullString(p.MetaDescription),
-		"author_username":     p.AuthorUsername,
-		"author_display_name": p.AuthorDisplayName,
-		"author_avatar":       nullString(p.AuthorAvatar),
-		"tags":                tagObjs,
-	}
-}
-
-func postByTagToResponse(p models.GetPostsByTagRow, tags []repository.PostTagInfo) map[string]interface{} {
-	tagObjs := make([]map[string]interface{}, 0, len(tags))
-	for _, t := range tags {
-		tagObjs = append(tagObjs, map[string]interface{}{
-			"name": t.Name,
-			"slug": t.Slug,
-		})
-	}
-
-	return map[string]interface{}{
-		"id":                  p.ID,
-		"title":               p.Title,
-		"slug":                p.Slug,
-		"content":             p.Content,
-		"excerpt":             nullString(p.Excerpt),
-		"formatter":           p.Formatter,
-		"status":              p.Status,
-		"is_featured":         p.IsFeatured,
-		"view_count":          p.ViewCount,
-		"published_at":        nullTime(p.PublishedAt),
-		"created_at":          p.CreatedAt,
-		"updated_at":          p.UpdatedAt,
-		"author_id":           p.AuthorID,
-		"media_url":           extractMediaURL(p.ThumbnailPath, p.Content),
-		"meta_description":    nullString(p.MetaDescription),
-		"author_username":     p.AuthorUsername,
-		"author_display_name": p.AuthorDisplayName,
-		"author_avatar":       nullString(p.AuthorAvatar),
 		"tags":                tagObjs,
 	}
 }

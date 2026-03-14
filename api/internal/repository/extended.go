@@ -13,14 +13,12 @@ import (
 // in addition to the standard status / featured / visibility filters.
 
 // ListPosts returns all posts, with optional filters.
-func (r *Repository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.ListPostsRow, error) {
+func (r *Repository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at,
-       u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE
     (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
@@ -54,15 +52,14 @@ LIMIT ? OFFSET ?`
 		_ = rows.Close()
 	}()
 
-	var items []models.ListPostsRow
+	var items []models.Post
 	for rows.Next() {
-		var i models.ListPostsRow
+		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
-			&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -103,7 +100,7 @@ WHERE
 	return count, err
 }
 
-func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.ListPostsRow, error) {
+func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE is_hidden_posts = 1
@@ -112,10 +109,8 @@ WITH RECURSIVE ehp(id) AS (
 )
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at,
-       u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE
     (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
@@ -162,15 +157,14 @@ statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDraft
 		_ = rows.Close()
 	}()
 
-	var items []models.ListPostsRow
+	var items []models.Post
 	for rows.Next() {
-		var i models.ListPostsRow
+		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
-			&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -371,16 +365,13 @@ SELECT
 }
 
 // GetPublishedPostsForFeed returns the N most recent published posts for RSS/sitemap.
-func (r *Repository) GetPublishedPostsForFeed(ctx context.Context, limit int) ([]models.GetPostRow, error) {
+func (r *Repository) GetPublishedPostsForFeed(ctx context.Context, limit int) ([]models.Post, error) {
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token,
-       p.preview_expires_at,
-       u.username as author_username, u.display_name as author_display_name,
-       u.avatar_path as author_avatar
+       p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE LOWER(p.status) = 'published'
 AND p.id NOT IN (
     SELECT pt.post_id FROM post_tags pt 
@@ -404,15 +395,14 @@ LIMIT ?`
 		_ = rows.Close()
 	}()
 
-	var items []models.GetPostRow
+	var items []models.Post
 	for rows.Next() {
-		var i models.GetPostRow
+		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
-			&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -514,26 +504,22 @@ ORDER BY name ASC`
 }
 
 // GetPostByPreviewToken looks up a post by its preview token.
-func (r *Repository) GetPostByPreviewToken(ctx context.Context, token string) (models.GetPostRow, error) {
+func (r *Repository) GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error) {
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token,
-       p.preview_expires_at,
-       u.username as author_username, u.display_name as author_display_name,
-       u.avatar_path as author_avatar
+       p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE p.preview_token = ? LIMIT 1`
 
 	row := r.db.QueryRowContext(ctx, q, token)
-	var i models.GetPostRow
+	var i models.Post
 	err := row.Scan(
 		&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 		&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 		&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 		&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
-		&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
 	)
 	return i, err
 }
@@ -1196,9 +1182,9 @@ func (r *Repository) GetMigrations(ctx context.Context) ([]MigrationRecord, erro
 
 // GetPostsByTagIDs returns paginated posts that have at least one tag from the
 // given set of tag IDs. The status filter mirrors CountPostsByTag / GetPostsByTag.
-func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, limit, offset int64) ([]models.GetPostsByTagRow, error) {
+func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, limit, offset int64) ([]models.Post, error) {
 	if len(tagIDs) == 0 {
-		return []models.GetPostsByTagRow{}, nil
+		return []models.Post{}, nil
 	}
 
 	placeholders := ""
@@ -1241,10 +1227,8 @@ WITH RECURSIVE ehp(id) AS (
 )
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
-       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at,
-       u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE p.id IN (
     SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
 )
@@ -1265,21 +1249,20 @@ LIMIT ? OFFSET ?`
 		_ = rows.Close()
 	}()
 
-	var items []models.GetPostsByTagRow
+	var items []models.Post
 	for rows.Next() {
-		var i models.GetPostsByTagRow
+		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter, &i.Status,
 			&i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.CreatedAt, &i.UpdatedAt,
 			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
-			&i.AuthorUsername, &i.AuthorDisplayName, &i.AuthorAvatar,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
 	}
 	if items == nil {
-		items = []models.GetPostsByTagRow{}
+		items = []models.Post{}
 	}
 	return items, rows.Err()
 }
