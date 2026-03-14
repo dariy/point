@@ -535,7 +535,7 @@ export default class PostEditPage extends Component {
       is_featured:      this.$('#featured-check')?.checked || false,
       thumbnail_path:   (this.$('#thumbnail-input')?.value || '').trim() || null,
       meta_description: (this.$('#meta-input')?.value || '').trim() || null,
-      tags:             this._tags,
+      tags:             this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
     };
   }
 
@@ -602,14 +602,32 @@ export default class PostEditPage extends Component {
 
   async _doAnalyzeField(field, item) {
     if (!item) return;
+    const snap = this._collectFormData();
     // Disable all field AI buttons directly — avoid setState re-render which discards unsaved input.
     this.$$(`.field-ai-btn`).forEach(b => { b.disabled = true; });
+
+    // Build the post from snap before the API call so both success and error
+    // paths can call setState with current form values (preventing re-render
+    // from stale state.post from resetting unsaved title/slug/etc.).
+    const post = {
+      ...(this.state.post || {}),
+      title:            snap.title,
+      excerpt:          snap.excerpt,
+      content:          snap.content,
+      slug:             snap.slug,
+      status:           snap.status,
+      is_featured:      snap.is_featured,
+      formatter:        snap.formatter,
+      thumbnail_path:   snap.thumbnail_path,
+      meta_description: snap.meta_description,
+      tags:             snap.tags.map((name) => ({ name, slug: name })),
+    };
+
     try {
       const result = item.id
         ? await analyzeMedia(item.id)
         : await analyzeMediaByPath(item.path);
 
-      const post = { ...(this.state.post || {}) };
       if (field === 'title' && result.title) {
         post.title = result.title;
       } else if (field === 'tags' && result.tags?.length) {
@@ -625,11 +643,11 @@ export default class PostEditPage extends Component {
       }
 
       store.set('toast', { message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`, type: 'success' });
-      this.setState({ analyzingField: null, post });
     } catch (err) {
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
-      this.setState({ analyzingField: null });
     }
+
+    this.setState({ analyzingField: null, post });
   }
 
   async _handleAnalyze(item) {
@@ -654,11 +672,16 @@ export default class PostEditPage extends Component {
 
       const post = {
         ...(this.state.post || {}),
-        title:   snap.title   || result.title   || '',
-        excerpt: snap.excerpt || result.excerpt  || null,
-        content: snap.content,
-        slug:    snap.slug,
-        tags:    mergedTags.map((name) => ({ name, slug: name })),
+        title:            snap.title   || result.title   || '',
+        excerpt:          snap.excerpt || result.excerpt  || null,
+        content:          snap.content,
+        slug:             snap.slug,
+        status:           snap.status,
+        is_featured:      snap.is_featured,
+        formatter:        snap.formatter,
+        thumbnail_path:   snap.thumbnail_path,
+        meta_description: snap.meta_description,
+        tags:             mergedTags.map((name) => ({ name, slug: name })),
       };
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
 
@@ -669,11 +692,16 @@ export default class PostEditPage extends Component {
       // Restore the user's form values even on failure.
       const post = {
         ...(this.state.post || {}),
-        title:   snap.title,
-        excerpt: snap.excerpt,
-        content: snap.content,
-        slug:    snap.slug,
-        tags:    snap.tags.map((name) => ({ name, slug: name })),
+        title:            snap.title,
+        excerpt:          snap.excerpt,
+        content:          snap.content,
+        slug:             snap.slug,
+        status:           snap.status,
+        is_featured:      snap.is_featured,
+        formatter:        snap.formatter,
+        thumbnail_path:   snap.thumbnail_path,
+        meta_description: snap.meta_description,
+        tags:             snap.tags.map((name) => ({ name, slug: name })),
       };
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
