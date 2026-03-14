@@ -86,9 +86,44 @@ export class PostCard extends Component {
       }
     };
 
-    card.addEventListener('click', (e) => {
-      if (!e.target.closest('a')) go();
-    });
+    // Image cards have an overlay hidden until the first click/tap.
+    // First interaction: reveal the overlay. Second: navigate or follow tag links.
+    // This applies to all pointer types (mouse, touch, stylus).
+    const hasOverlay = card.classList.contains('has-image');
+
+    if (hasOverlay) {
+      card.addEventListener('click', (e) => {
+        if (!card.classList.contains('is-touched')) {
+          // First click — reveal the overlay.
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Dismiss any other revealed cards.
+          document.querySelectorAll('.post-card.is-touched').forEach((c) => {
+            if (c !== card) c.classList.remove('is-touched');
+          });
+
+          card.classList.add('is-touched');
+
+          // Dismiss when clicking outside this card.
+          const dismiss = (ev) => {
+            if (!card.contains(ev.target)) {
+              card.classList.remove('is-touched');
+              document.removeEventListener('click', dismiss, true);
+            }
+          };
+          document.addEventListener('click', dismiss, true);
+        } else {
+          // Second click — behave normally (tag links fire themselves; card click navigates).
+          if (!e.target.closest('a')) go();
+        }
+      });
+    } else {
+      card.addEventListener('click', (e) => {
+        if (!e.target.closest('a')) go();
+      });
+    }
+
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
     });
