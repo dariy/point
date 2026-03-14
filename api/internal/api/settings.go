@@ -17,18 +17,21 @@ func NewSettingsHandler(settingsService *services.SettingsService) *SettingsHand
 
 // Public settings keys that are safe to expose without authentication.
 var publicSettingKeys = map[string]bool{
-	"blog_title":         true,
-	"blog_subtitle":      true,
-	"author_name":        true,
-	"posts_per_page":     true,
-	"default_language":   true,
-	"default_theme":      true,
-	"show_view_counts":   true,
-	"enable_analytics":   true,
+	"blog_title":          true,
+	"blog_subtitle":       true,
+	"author_name":         true,
+	"posts_per_page":      true,
+	"default_language":    true,
+	"default_theme":       true,
+	"show_view_counts":    true,
+	"enable_analytics":    true,
 	"google_analytics_id": true,
-	"use_thumbnails":     true,
-	"about_post_id":      true,
-	"multi_user_mode":    true,
+	"use_thumbnails":      true,
+	"about_post_id":       true,
+	"multi_user_mode":     true,
+	"show_tag_cloud":      true,
+	"enable_map":          true,
+	"enable_backup":       true,
 }
 
 func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {

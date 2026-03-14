@@ -18,12 +18,12 @@ import { renderTagLink } from '../../utils/tags.js';
 
 export class PostCard extends Component {
   render() {
-    const { post, showViewCount = false, isHero = false } = this.props;
+    const { post, showViewCount = false, useThumbnails = true, isHero = false } = this.props;
     if (!post) return '';
 
     const mediaUrl = post.media_url || null;
     const isVideo = mediaUrl && /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
-    const hasMedia = !!mediaUrl;
+    const hasMedia = !!mediaUrl && useThumbnails;
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     const cardClass = ['post-card', hasMedia ? 'has-image' : 'text-only', isHidden ? 'is-hidden' : ''].filter(Boolean).join(' ');
     const lockIcon = isHidden ? LOCK_SVG : '';

@@ -165,6 +165,7 @@ export default class TagPage extends Component {
       this.mountChild(PostGrid, '#grid-mount', {
         posts,
         showViewCount: !!settings.show_view_counts,
+        useThumbnails: settings.use_thumbnails !== false,
         tagSlug: slug,
         tagPage: page,
         emptyMessage: 'No posts in this tag yet.',

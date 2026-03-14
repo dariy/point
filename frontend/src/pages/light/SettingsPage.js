@@ -153,6 +153,10 @@ export default class SettingsPage extends Component {
       e.preventDefault();
       this._handleSave();
     });
+
+    this.$$('.setting-pill-input').forEach(cb => {
+      cb.addEventListener('change', () => this._handleCheckboxChange(cb.name, cb.checked));
+    });
   }
 
   mount() {
@@ -170,6 +174,17 @@ export default class SettingsPage extends Component {
     }
   }
 
+  async _handleCheckboxChange(key, checked) {
+    try {
+      const updated = normalizeSettings(await updateSettings({ [key]: String(checked) }));
+      const merged = { ...this.state.settings, ...updated };
+      this.setState({ settings: merged });
+      store.set('settings', merged);
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Update failed.', type: 'error' });
+    }
+  }
+
   async _handleSave() {
     const form = this.$('#settings-form');
     if (!form) return;
@@ -177,15 +192,12 @@ export default class SettingsPage extends Component {
     const formData = new FormData(form);
     const data = {};
 
-    // Collect all keys from groups to ensure we handle checkboxes
     SETTING_GROUPS.forEach(g => {
       g.keys.forEach(k => {
-        const val = formData.get(k);
         const type = this._getSettingType(k);
-
-        if (type === 'boolean') {
-          data[k] = String(val === 'on' || val === 'true' || val === true);
-        } else if (type === 'number') {
+        if (type === 'boolean') return; // saved on checkbox change
+        const val = formData.get(k);
+        if (type === 'number') {
           data[k] = String(val ? parseInt(val, 10) : 0);
         } else {
           data[k] = val || '';
@@ -196,9 +208,10 @@ export default class SettingsPage extends Component {
     this.setState({ saving: true });
     try {
       const updated = normalizeSettings(await updateSettings(data));
+      const merged = { ...this.state.settings, ...updated };
       store.set('toast', { message: 'Settings updated.', type: 'success' });
-      this.setState({ saving: false, settings: updated });
-      store.set('settings', updated);
+      this.setState({ saving: false, settings: merged });
+      store.set('settings', merged);
 
       // Update document title if blog_title changed
       if (data.blog_title) {
