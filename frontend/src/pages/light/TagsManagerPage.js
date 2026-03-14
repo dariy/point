@@ -597,6 +597,7 @@ export default class TagsManagerPage extends Component {
     modal['inner' + 'HTML'] = html;
     document.body.appendChild(modal);
     this._modal = modal;
+    this._initTagToggleTrees(modal);
 
     // Reflect the open tag in the browser URL.
     const urlSlug = isEdit ? f.slug : 'new';
@@ -678,7 +679,7 @@ export default class TagsManagerPage extends Component {
     nameInput.focus();
   }
 
-  /** Render tag-badge toggle checkboxes in a hierarchical tree for parent/children selection. */
+  /** Render tag-badge toggle checkboxes as a collapsible tree for parent/children selection. */
   _renderTagToggles(inputName, allTags, selfId, selectedIds) {
     const available = allTags.filter(t => t.id !== selfId);
     if (!available.length) {
@@ -686,6 +687,7 @@ export default class TagsManagerPage extends Component {
     }
 
     const availSet = new Set(available.map(t => t.id));
+    const selectedSet = new Set(selectedIds);
 
     // Build parent→children adjacency from .parents[] on each tag.
     const childrenOf = new Map();
@@ -703,24 +705,100 @@ export default class TagsManagerPage extends Component {
       !(t.parents || []).some(p => availSet.has(p.id))
     ).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || a.name.localeCompare(b.name));
 
+    // Pre-compute which nodes have a checked descendant (for auto-expand on open).
+    const hasCheckedDesc = new Set();
+    const visiting = new Set();
+    const markDesc = (id) => {
+      if (visiting.has(id)) return selectedSet.has(id);
+      visiting.add(id);
+      const kids = childrenOf.get(id) || [];
+      let anyChecked = selectedSet.has(id);
+      for (const kid of kids) { if (markDesc(kid.id)) anyChecked = true; }
+      if (anyChecked && !selectedSet.has(id)) hasCheckedDesc.add(id);
+      return anyChecked;
+    };
+    roots.forEach(r => markDesc(r.id));
+
     const rendered = new Set();
-    const renderNode = (t, depth) => {
+    const renderNode = (t, level) => {
       if (rendered.has(t.id)) return '';
       rendered.add(t.id);
-      const pad = depth > 0 ? ` style="padding-left:${depth * 14}px"` : '';
-      const node = [
-        `<label class="tag-toggle"${pad}>`,
-        `  <input type="checkbox" name="${inputName}" value="${t.id}"${selectedIds.includes(t.id) ? ' checked' : ''}>`,
-        `  <span>${escapeHtml(t.name)}</span>`,
-        `</label>`,
-      ].join('');
+
       const kids = (childrenOf.get(t.id) || [])
         .sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || a.name.localeCompare(b.name));
-      return node + kids.map(k => renderNode(k, depth + 1)).join('');
+      const hasKids = kids.length > 0;
+      // Auto-expand: open if this node has a checked descendant.
+      const expanded = hasCheckedDesc.has(t.id);
+      const nodeId = `tt-${inputName}-${t.id}`;
+
+      const toggleBtn = hasKids
+        ? `<button type="button" class="tag-toggle-btn" data-tt-toggle="${nodeId}" aria-expanded="${expanded}">${expanded ? '\u25bc' : '\u25b6'}</button>`
+        : `<span class="tag-toggle-btn-spacer"></span>`;
+
+      const childList = hasKids
+        ? `<ul class="tag-toggle-tree level-${level + 1}" id="${nodeId}"${expanded ? '' : ' style="display:none"'}>${kids.map(k => renderNode(k, level + 1)).join('')}</ul>`
+        : '';
+
+      return `<li class="tag-toggle-node">
+        <div class="tag-toggle-row">
+          ${toggleBtn}
+          <label class="tag-toggle">
+            <input type="checkbox" name="${inputName}" value="${t.id}"${selectedSet.has(t.id) ? ' checked' : ''}>
+            <span>${escapeHtml(t.name)}</span>
+          </label>
+        </div>
+        ${childList}
+      </li>`;
     };
 
-    const html = roots.map(r => renderNode(r, 0)).join('');
-    return html || '<span class="tag-toggles-empty">No other tags available.</span>';
+    const inner = roots.map(r => renderNode(r, 0)).join('');
+    return inner
+      ? `<ul class="tag-toggle-tree level-0">${inner}</ul>`
+      : '<span class="tag-toggles-empty">No other tags available.</span>';
+  }
+
+  /**
+   * Wire expand/collapse buttons and indeterminate checkbox state for the
+   * tag-toggle trees rendered inside a modal.  Must be called after the modal
+   * HTML has been inserted into the DOM.
+   */
+  _initTagToggleTrees(modal) {
+    // Recompute indeterminate state for every node in a tree, bottom-up.
+    const updateIndeterminate = (tree) => {
+      const nodes = Array.from(tree.querySelectorAll('.tag-toggle-node')).reverse();
+      nodes.forEach(node => {
+        const ownCb = node.querySelector(':scope > .tag-toggle-row .tag-toggle input[type="checkbox"]');
+        if (!ownCb) return;
+        const descCbs = node.querySelectorAll('.tag-toggle-node input[type="checkbox"]');
+        if (!descCbs.length) return;
+        const anyActive = Array.from(descCbs).some(cb => cb.checked || cb.indeterminate);
+        ownCb.indeterminate = !ownCb.checked && anyActive;
+      });
+    };
+
+    // Wire expand/collapse buttons.
+    modal.querySelectorAll('[data-tt-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const list = modal.querySelector(`#${btn.dataset.ttToggle}`);
+        if (!list) return;
+        const open = list.style.display !== 'none';
+        list.style.display = open ? 'none' : '';
+        btn.setAttribute('aria-expanded', String(!open));
+        btn.textContent = open ? '\u25b6' : '\u25bc';
+      });
+    });
+
+    // Set initial indeterminate state.
+    modal.querySelectorAll('.tag-toggle-tree.level-0').forEach(tree => updateIndeterminate(tree));
+
+    // Keep indeterminate live: attach directly to each checkbox to avoid
+    // relying on change-event bubbling through ul/li ancestors.
+    modal.querySelectorAll('.tag-toggle-tree input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const tree = cb.closest('.tag-toggle-tree.level-0');
+        if (tree) updateIndeterminate(tree);
+      });
+    });
   }
 
   _renderFlagCheckbox(name, icon, label, description, checked) {
