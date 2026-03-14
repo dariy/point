@@ -790,7 +790,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	return result, nil
 }
 
-func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool) ([]models.GetPostsByTagRow, int64, error) {
+func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool) ([]models.Post, int64, error) {
 	// Collect the tag itself plus all descendants so that a parent tag page
 	// (e.g. /tag/countries) shows posts from all nested sub-tags.
 	descendants, _ := s.repo.GetTagDescendants(ctx, tagID)

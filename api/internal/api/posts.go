@@ -29,7 +29,7 @@ func NewPostHandler(postService *services.PostService, settingsService *services
 	}
 }
 
-func buildPostResponse(post models.GetPostRow, tags []models.Tag, htmlContent string) map[string]interface{} {
+func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string) map[string]interface{} {
 	tagObjs := make([]map[string]interface{}, len(tags))
 	for i, t := range tags {
 		tagObjs[i] = map[string]interface{}{"name": t.Name, "slug": t.Slug}
@@ -51,43 +51,6 @@ func buildPostResponse(post models.GetPostRow, tags []models.Tag, htmlContent st
 		"meta_description": nullString(post.MetaDescription),
 		"formatter":        post.Formatter,
 		"tags":             tagObjs,
-		"author": map[string]interface{}{
-			"id":           post.AuthorID,
-			"username":     post.AuthorUsername,
-			"display_name": post.AuthorDisplayName,
-			"avatar_path":  nullString(post.AuthorAvatar),
-		},
-	}
-}
-
-func buildPostBySlugResponse(post models.GetPostBySlugRow, tags []models.Tag, htmlContent string) map[string]interface{} {
-	tagObjs := make([]map[string]interface{}, len(tags))
-	for i, t := range tags {
-		tagObjs[i] = map[string]interface{}{"name": t.Name, "slug": t.Slug}
-	}
-	return map[string]interface{}{
-		"id":               post.ID,
-		"title":            post.Title,
-		"slug":             post.Slug,
-		"content":          post.Content,
-		"content_html":     htmlContent,
-		"excerpt":          nullString(post.Excerpt),
-		"status":           post.Status,
-		"is_featured":      post.IsFeatured,
-		"view_count":       post.ViewCount,
-		"published_at":     nullTime(post.PublishedAt),
-		"created_at":       post.CreatedAt,
-		"updated_at":       post.UpdatedAt,
-		"thumbnail_path":   nullString(post.ThumbnailPath),
-		"meta_description": nullString(post.MetaDescription),
-		"formatter":        post.Formatter,
-		"tags":             tagObjs,
-		"author": map[string]interface{}{
-			"id":           post.AuthorID,
-			"username":     post.AuthorUsername,
-			"display_name": post.AuthorDisplayName,
-			"avatar_path":  nullString(post.AuthorAvatar),
-		},
 	}
 }
 
@@ -198,7 +161,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 
-	resp := buildPostBySlugResponse(post, tags, htmlContent)
+	resp := buildPostResponse(post, tags, htmlContent)
 	if c.Get("user") != nil {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
