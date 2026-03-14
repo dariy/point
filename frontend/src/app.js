@@ -116,8 +116,10 @@ async function bootstrap() {
     toastContainer.mount();
   }
   initNotificationLog(store);
-  const notificationLogBtn = new NotificationLogButton();
-  notificationLogBtn.mount();
+  if (user) {
+    const notificationLogBtn = new NotificationLogButton();
+    notificationLogBtn.mount();
+  }
 
   // 5. Subscribe to route changes to swap CSS bundles before each page mounts.
   store.subscribe('route', ({ pathname }) => _applySection(pathname));

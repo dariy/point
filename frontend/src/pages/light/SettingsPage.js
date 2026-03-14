@@ -7,6 +7,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { getAllSettings, updateSettings } from '../../api/settings.js';
+import { listPosts } from '../../api/posts.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
@@ -36,13 +37,14 @@ export default class SettingsPage extends Component {
     this.state = {
       loading: true,
       settings: {},
+      posts: [],
       saving: false,
       error: null,
     };
   }
 
   render() {
-    const { loading, error, settings, saving } = this.state;
+    const { loading, error, settings, posts, saving } = this.state;
 
     let content = '';
     if (loading) {
@@ -52,7 +54,7 @@ export default class SettingsPage extends Component {
     } else {
       content = `
         <form id="settings-form" class="settings-grid">
-          ${SETTING_GROUPS.map(group => this._renderGroup(group, settings)).join('')}
+          ${SETTING_GROUPS.map(group => this._renderGroup(group, settings, posts)).join('')}
         </form>`;
     }
 
@@ -75,7 +77,7 @@ export default class SettingsPage extends Component {
       </div>`;
   }
 
-  _renderGroup(group, settings) {
+  _renderGroup(group, settings, posts) {
     const inputs = [];
     const toggles = [];
 
@@ -91,11 +93,20 @@ export default class SettingsPage extends Component {
 
       let input = '';
       if (key === 'about_post_id') {
+        const options = posts.map(p => {
+          const slug = escapeHtml(p.slug);
+          const title = escapeHtml(p.title || p.slug);
+          const selected = p.slug === value ? ' selected' : '';
+          return `<option value="${slug}"${selected}>${title}</option>`;
+        }).join('');
         const previewLink = value
           ? `<a href="/post/${escapeHtml(String(value))}" target="_blank" class="settings-preview-link">Preview ↗</a>`
           : '';
         input = `<div class="settings-input-with-preview">
-          <input type="text" name="${key}" class="form-input" placeholder="Post slug or ID (e.g. about)" value="${escapeHtml(String(value))}">
+          <select name="${key}" class="form-select">
+            <option value="">— None —</option>
+            ${options}
+          </select>
           ${previewLink}
         </div>`;
       } else if (key === 'author_bio' || key === 'footer_text') {
@@ -157,6 +168,29 @@ export default class SettingsPage extends Component {
     this.$$('.setting-pill-input').forEach(cb => {
       cb.addEventListener('change', () => this._handleCheckboxChange(cb.name, cb.checked));
     });
+
+    const aboutSelect = this.$('select[name="about_post_id"]');
+    if (aboutSelect) {
+      aboutSelect.addEventListener('change', () => {
+        const slug = aboutSelect.value;
+        const wrapper = aboutSelect.closest('.settings-input-with-preview');
+        let link = wrapper?.querySelector('.settings-preview-link');
+        if (slug) {
+          if (link) {
+            link.href = `/post/${slug}`;
+          } else {
+            const a = document.createElement('a');
+            a.href = `/post/${slug}`;
+            a.target = '_blank';
+            a.className = 'settings-preview-link';
+            a.textContent = 'Preview ↗';
+            wrapper.appendChild(a);
+          }
+        } else if (link) {
+          link.remove();
+        }
+      });
+    }
   }
 
   mount() {
@@ -167,8 +201,15 @@ export default class SettingsPage extends Component {
   async _load() {
     this.setState({ loading: true, error: null });
     try {
-      const settings = normalizeSettings(await getAllSettings());
-      this.setState({ loading: false, settings });
+      const [settings, postsResult] = await Promise.all([
+        getAllSettings(),
+        listPosts({ status: 'page', per_page: 200 }),
+      ]);
+      this.setState({
+        loading: false,
+        settings: normalizeSettings(settings),
+        posts: postsResult.posts || [],
+      });
     } catch (err) {
       this.setState({ loading: false, error: err.message || 'Failed to load settings.' });
     }

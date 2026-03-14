@@ -161,13 +161,12 @@
    Notification Log FAB
    =========================== */
 
-/* Wrapper — hidden by default; .active shown only on /light pages with recent entries */
+/* Wrapper — positioned and shown only on /light pages with recent entries */
 .notification-log-fab {
     position: fixed;
     bottom: var(--spacing-lg);
     right: var(--spacing-lg);
     z-index: 9999;
-    display: none;
 }
 
 .notification-log-fab.active {
