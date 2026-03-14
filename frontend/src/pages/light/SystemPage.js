@@ -50,6 +50,8 @@ export default class SystemPage extends Component {
 
   render() {
     const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult } = this.state;
+    const settings = store.get('settings') || {};
+    const enableBackup = settings.enable_backup !== false;
 
     if (loading) {
       return `
@@ -140,6 +142,7 @@ export default class SystemPage extends Component {
               </div>
             </div>
 
+            ${enableBackup ? `
             <div class="card">
               <div class="card-header">
                 <h2>Backups</h2>
@@ -152,7 +155,7 @@ export default class SystemPage extends Component {
               <div class="card-body">
                 ${this._renderBackups(backups)}
               </div>
-            </div>
+            </div>` : ''}
 
             <div class="card collapsed" id="migrations-card">
               <div class="card-header">

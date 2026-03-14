@@ -93,15 +93,13 @@ WHERE key = ?;
 -- POSTS
 
 -- name: GetPost :one
-SELECT p.*, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.*
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE p.id = ? LIMIT 1;
 
 -- name: GetPostBySlug :one
-SELECT p.*, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.*
 FROM posts p
-JOIN users u ON p.author_id = u.id
 WHERE p.slug = ? LIMIT 1;
 
 -- name: ListPosts :many
@@ -111,23 +109,22 @@ WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
     SELECT tr.child_id FROM tag_relationships tr
     JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
 )
-SELECT p.*, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.*
 FROM posts p
-JOIN users u ON p.author_id = u.id
-WHERE 
+WHERE
     (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE 
-        WHEN sqlc.arg('include_drafts') THEN 1=1 
-        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published' 
+    AND (CASE
+        WHEN sqlc.arg('include_drafts') THEN 1=1
+        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
+        ELSE p.status IN ('published', 'page')
     END)
 
-    AND (CASE 
-        WHEN sqlc.arg('include_drafts') THEN 1=1 
+    AND (CASE
+        WHEN sqlc.arg('include_drafts') THEN 1=1
         ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt 
-            JOIN tags t ON pt.tag_id = t.id 
+            SELECT pt.post_id FROM post_tags pt
+            JOIN tags t ON pt.tag_id = t.id
             WHERE t.is_hidden_posts = 1
         )
     END)
@@ -145,17 +142,17 @@ SELECT COUNT(*) FROM posts p
 WHERE 
     (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE 
-        WHEN sqlc.arg('include_drafts') THEN 1=1 
-        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
-        ELSE p.status = 'published' 
+    AND (CASE
+        WHEN sqlc.arg('include_drafts') THEN 1=1
+        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
+        ELSE p.status IN ('published', 'page')
     END)
 
-    AND (CASE 
-        WHEN sqlc.arg('include_drafts') THEN 1=1 
+    AND (CASE
+        WHEN sqlc.arg('include_drafts') THEN 1=1
         ELSE p.id NOT IN (
-            SELECT pt.post_id FROM post_tags pt 
-            JOIN tags t ON pt.tag_id = t.id 
+            SELECT pt.post_id FROM post_tags pt
+            JOIN tags t ON pt.tag_id = t.id
             WHERE t.is_hidden_posts = 1
         )
     END);
@@ -261,9 +258,8 @@ WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
     SELECT tr.child_id FROM tag_relationships tr
     JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
 )
-SELECT p.*, u.username as author_username, u.display_name as author_display_name, u.avatar_path as author_avatar
+SELECT p.*
 FROM posts p
-JOIN users u ON p.author_id = u.id
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
 AND (CASE 

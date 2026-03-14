@@ -40,6 +40,8 @@ var pagePublicSettingKeys = map[string]bool{
 	"about_post_id":          true,
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
+	"show_tag_cloud":         true,
+	"enable_map":             true,
 }
 
 // GetHomePage returns all data needed to render the public homepage.
@@ -221,7 +223,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		if publicOnly && !IsPostVisibleToPublic(tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs) {
 			continue
 		}
-		resp := postByTagToResponse(p, tagPostTagsMap[p.ID])
+		resp := postToResponse(p, tagPostTagsMap[p.ID])
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
 		}
@@ -329,6 +331,10 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	publicOnly := user == nil
 
 	mapSettings, _ := h.settingsService.GetAllSettings(ctx)
+
+	if publicOnly && mapSettings["enable_map"] == "false" {
+		return echo.NewHTTPError(http.StatusNotFound, "map not found")
+	}
 	var minMapPosts int64
 	if publicOnly {
 		minMapPosts = getMinTagPostsSetting(mapSettings)

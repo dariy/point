@@ -57,10 +57,34 @@ export class TagsInput extends Component {
     if (!input) return;
 
     input.addEventListener('input', (e) => {
-      const val = e.target.value;
-      this.state.input = val;
-      if (val.trim()) {
-        this._fetchSuggestions(val.trim());
+      // Android virtual keyboards fire Enter as insertLineBreak (no keydown key).
+      if (e.inputType === 'insertLineBreak') {
+        input.value = input.value.replace(/\n/g, '');
+        const val = input.value.trim();
+        if (val) this._addTag(val);
+        return;
+      }
+
+      const raw = e.target.value;
+
+      // Handle comma as a delimiter (needed on Android where keydown may not fire).
+      if (raw.includes(',')) {
+        const parts = raw.split(',');
+        const toAdd = parts[0].trim();
+        input.value = parts.slice(1).join(',');
+        if (toAdd) this._addTag(toAdd);
+        this.state.input = input.value;
+        if (input.value.trim()) {
+          this._fetchSuggestions(input.value.trim());
+        } else {
+          this._hideSuggestions();
+        }
+        return;
+      }
+
+      this.state.input = raw;
+      if (raw.trim()) {
+        this._fetchSuggestions(raw.trim());
       } else {
         this._hideSuggestions();
       }
@@ -75,6 +99,7 @@ export class TagsInput extends Component {
         const tags = this.state.tags.slice(0, -1);
         this.setState({ tags });
         this.props.onChange?.(tags);
+        this.$('#tag-text-input')?.focus();
       } else if (e.key === 'Escape') {
         this._hideSuggestions();
       }
