@@ -113,9 +113,9 @@ func TestTagService_TagCloud(t *testing.T) {
 	service := NewTagService(repo)
 	ctx := context.Background()
 
-	// Create some tags
-	t1, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 1"})
-	t2, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 2"})
+	// Create some tags (IsImportant=true so they appear in the tag cloud)
+	t1, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 1", IsImportant: true})
+	t2, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 2", IsImportant: true})
 
 	// Create a user and posts so hierarchical counts work from actual post_tags data.
 	// Tag 1 gets 2 posts, Tag 2 gets 1 post → weights 1.0 and 0.5.
@@ -640,7 +640,7 @@ func TestTagService_GetTagCloudWithData(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a tag, add a published post to it so hierarchical count > 0
-	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "CloudTag"})
+	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "CloudTag", IsImportant: true})
 	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('cu','cu@t','h','CU')`)
 	var uid int64
 	_ = repo.DB().QueryRow(`SELECT id FROM users WHERE username='cu'`).Scan(&uid)

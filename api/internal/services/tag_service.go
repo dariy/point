@@ -577,6 +577,7 @@ type NavTagNode struct {
 	Slug          string       `json:"slug"`
 	IsHidden      bool         `json:"is_hidden"`
 	IsHiddenPosts bool         `json:"is_hidden_posts"`
+	IsFeatured    bool         `json:"is_featured"`
 	PostCount     int64        `json:"post_count"`
 	IsRelated     bool         `json:"is_related"`
 	Children      []NavTagNode `json:"children"`
@@ -736,6 +737,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 			Slug:          t.Slug,
 			IsHidden:      t.IsHidden,
 			IsHiddenPosts: effectivelyHiddenPosts[t.ID],
+			IsFeatured:    t.IsFeatured,
 			PostCount:     t.PostCount,
 			IsRelated:     t.ShowRelatedTagsAsChildren,
 			Children:      []NavTagNode{},
@@ -767,7 +769,8 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 			if (publicOnly && effectivelyHidden[t.ID]) || (t.PostCount == 0 && !t.IsFeatured) {
 				continue
 			}
-			if len(parentsOf[t.ID]) == 0 {
+			// Include root-level tags, or any featured tag regardless of depth.
+			if len(parentsOf[t.ID]) == 0 || t.IsFeatured {
 				rootIDs = append(rootIDs, t.ID)
 			}
 		}
