@@ -579,14 +579,23 @@ func (r *Repository) GetTagAncestors(ctx context.Context, tagID int64) ([]models
 		if err != nil || len(parents) == 0 {
 			break
 		}
-		// Take first parent (assume single-parent hierarchy)
-		parent := parents[0]
-		if visited[parent.ID] {
+		// Prefer eligible parents: not hidden and included in breadcrumbs.
+		// If multiple parents exist, skip ineligible ones so the breadcrumb
+		// path only travels through tags that should be visible.
+		var chosen *models.Tag
+		for i := range parents {
+			p := &parents[i]
+			if !visited[p.ID] && !p.IsHidden && p.IncludeInBreadcrumbs {
+				chosen = p
+				break
+			}
+		}
+		if chosen == nil {
 			break
 		}
-		visited[parent.ID] = true
-		ancestors = append([]models.Tag{parent}, ancestors...)
-		currentID = parent.ID
+		visited[chosen.ID] = true
+		ancestors = append([]models.Tag{*chosen}, ancestors...)
+		currentID = chosen.ID
 	}
 
 	return ancestors, nil

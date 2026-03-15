@@ -99,6 +99,7 @@ export default class TagsManagerPage extends Component {
           valA = a.post_count || 0;
           valB = b.post_count || 0;
           break;
+        case 'is_important':
         case 'is_featured':
         case 'is_hidden_posts':
         case 'is_hidden':
@@ -141,10 +142,10 @@ export default class TagsManagerPage extends Component {
         <tr>
           <td>
             <span class="tm-tag-name">${escapeHtml(tag.name)}</span>
-            ${tag.is_important ? `<span class="tm-flag-toggle active tm-flag-is-important" data-id="${tag.id}" data-flag="is_important" title="Important: ON">\u2691</span>` : ''}
           </td>
           <td><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
           <td class="text-center"><span class="tm-count-badge">${tag.post_count || 0}</span></td>
+          <td class="text-center">${this._renderFlagToggle(tag, 'is_important', '\u2691', 'Important')}</td>
           <td class="text-center">${this._renderFlagToggle(tag, 'is_featured', '\u2605', 'Show on top')}</td>
           <td class="text-center">${this._renderFlagToggle(tag, 'is_hidden_posts', '\u2298', 'Hide Posts')}</td>
           <td class="text-center">${this._renderFlagToggle(tag, 'is_hidden', '\ud83d\udc41', 'Hidden')}</td>
@@ -170,6 +171,7 @@ export default class TagsManagerPage extends Component {
               ${this._renderSortHeader('name', 'Name')}
               ${this._renderSortHeader('slug', 'Slug')}
               ${this._renderSortHeader('post_count', 'Posts', 'text-center')}
+              ${this._renderSortHeader('is_important', '\u2691', 'text-center', 'Important')}
               ${this._renderSortHeader('is_featured', '\u2605', 'text-center', 'Show on top')}
               ${this._renderSortHeader('is_hidden_posts', '\u2298', 'text-center', 'Hide Posts')}
               ${this._renderSortHeader('is_hidden', '\ud83d\udc41', 'text-center', 'Hidden')}
