@@ -156,7 +156,7 @@ export default class TagsManagerPage extends Component {
                   title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">\ud83d\udccd</span>
           </td>
           <td><div class="tm-parents-cell">${parents || '<span class="text-muted">\u2014</span>'}</div></td>
-          <td class="actions">
+          <td class="tm-actions">
             <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">\u270e</button>
             <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">\u2715</button>
           </td>
