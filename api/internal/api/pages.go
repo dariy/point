@@ -237,10 +237,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
 	for _, a := range ancestors {
-		if a.IncludeInBreadcrumbs {
+		if a.IncludeInBreadcrumbs && !effectivelyHidden[a.ID] {
 			crumb := tagToListItem(a)
 			if !publicOnly {
-				crumb["is_hidden"] = a.IsHidden
 				crumb["is_hidden_posts"] = a.IsHiddenPosts || effectiveHiddenPostsTagIDs[a.ID]
 			}
 			breadcrumbs = append(breadcrumbs, crumb)
