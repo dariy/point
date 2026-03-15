@@ -52,10 +52,10 @@ export default class HomePage extends Component {
     return `
       <div class="site-wrapper">
         <div id="header-mount"></div>
+        <div id="tag-cloud-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount"></div>
-            <div id="tag-cloud-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>

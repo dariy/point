@@ -498,6 +498,7 @@
     gap: 3px;
     opacity: 0.3;
     transition: opacity var(--transition-fast);
+    text-wrap-mode: nowrap;
 }
 
 .tm-row:hover .tm-actions,
