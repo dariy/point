@@ -26,7 +26,7 @@ export class TagCloud extends Component {
 
     const items = tags.map((t) => {
       const cls = weightClass(t.weight ?? 0);
-      const lockIcon = t.is_hidden ? LOCK_SVG : '';
+      const lockIcon = (t.is_hidden || t.is_hidden_posts) ? LOCK_SVG : '';
 
       return `
         <li>

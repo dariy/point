@@ -118,6 +118,8 @@ func tagToListItem(t models.Tag) map[string]interface{} {
 		"name":                   t.Name,
 		"slug":                   t.Slug,
 		"is_important":           t.IsImportant,
+		"is_hidden":              t.IsHidden,
+		"is_hidden_posts":        t.IsHiddenPosts,
 		"include_in_breadcrumbs": t.IncludeInBreadcrumbs,
 		"sort_order":             nullInt64(t.SortOrder),
 		"post_count":             t.PostCount,
