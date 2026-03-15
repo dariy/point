@@ -165,10 +165,6 @@ export default class SettingsPage extends Component {
       this._handleSave();
     });
 
-    this.$$('.setting-pill-input').forEach(cb => {
-      cb.addEventListener('change', () => this._handleCheckboxChange(cb.name, cb.checked));
-    });
-
     const aboutSelect = this.$('select[name="about_post_id"]');
     if (aboutSelect) {
       aboutSelect.addEventListener('change', () => {
@@ -195,6 +191,12 @@ export default class SettingsPage extends Component {
 
   mount() {
     super.mount();
+    // Delegated listener on the container so it survives re-renders.
+    this.container.addEventListener('change', (e) => {
+      if (e.target.classList.contains('setting-pill-input')) {
+        this._handleCheckboxChange(e.target.name, e.target.checked);
+      }
+    });
     this._load();
   }
 
