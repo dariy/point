@@ -222,7 +222,7 @@ type TagCloudItem struct {
 func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool) ([]TagCloudItem, error) {
 	tags, err := s.repo.ListTags(ctx, models.ListTagsParams{
 		IncludeEmptyFilter:  true, // include all; filter below by effective count
-		ImportantOnlyFilter: false,
+		ImportantOnlyFilter: true,
 	})
 	if err != nil {
 		return nil, err
