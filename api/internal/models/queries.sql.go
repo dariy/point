@@ -84,14 +84,8 @@ func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, 
 }
 
 const countPosts = `-- name: CountPosts :one
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT COUNT(*) FROM posts p
-WHERE 
+WHERE
     (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -104,8 +98,9 @@ WHERE
         WHEN ?4 THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            JOIN tags t ON pt.tag_id = t.id
-            WHERE t.is_hidden_posts = 1
+            WHERE pt.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
         )
     END)
 `
@@ -132,23 +127,19 @@ func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, 
 }
 
 const countPostsByTag = `-- name: CountPostsByTag :one
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE 
+AND (CASE
     WHEN ?2 THEN 1=1
-    WHEN ?3 THEN p.status = 'published' 
-    ELSE p.status IN ('published', 'hidden') 
+    WHEN ?3 THEN p.status = 'published'
+    ELSE p.status IN ('published', 'hidden')
 END)
-AND (?2 OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
-    SELECT 1 FROM post_tags pt2 
-    WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
+AND (?2 OR NOT (?3) OR NOT EXISTS (
+    SELECT 1 FROM post_tags pt2
+    WHERE pt2.post_id = p.id AND pt2.tag_id IN (
+        SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    )
 ))
 `
 
@@ -327,25 +318,19 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 
 const createTag = `-- name: CreateTag :one
 INSERT INTO tags (
-    name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at
+    name, slug, description, custom_url, sort_order, post_count, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
+    ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
 )
-RETURNING id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at
+RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at
 `
 
 type CreateTagParams struct {
-	Name                      string         `json:"name"`
-	Slug                      string         `json:"slug"`
-	Description               sql.NullString `json:"description"`
-	CustomUrl                 sql.NullString `json:"custom_url"`
-	IsImportant               bool           `json:"is_important"`
-	IsFeatured                bool           `json:"is_featured"`
-	IsHidden                  bool           `json:"is_hidden"`
-	IsHiddenPosts             bool           `json:"is_hidden_posts"`
-	IncludeInBreadcrumbs      bool           `json:"include_in_breadcrumbs"`
-	ShowRelatedTagsAsChildren bool           `json:"show_related_tags_as_children"`
-	SortOrder                 sql.NullInt64  `json:"sort_order"`
+	Name        string         `json:"name"`
+	Slug        string         `json:"slug"`
+	Description sql.NullString `json:"description"`
+	CustomUrl   sql.NullString `json:"custom_url"`
+	SortOrder   sql.NullInt64  `json:"sort_order"`
 }
 
 func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
@@ -354,12 +339,6 @@ func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, erro
 		arg.Slug,
 		arg.Description,
 		arg.CustomUrl,
-		arg.IsImportant,
-		arg.IsFeatured,
-		arg.IsHidden,
-		arg.IsHiddenPosts,
-		arg.IncludeInBreadcrumbs,
-		arg.ShowRelatedTagsAsChildren,
 		arg.SortOrder,
 	)
 	var i Tag
@@ -369,12 +348,6 @@ func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, erro
 		&i.Slug,
 		&i.Description,
 		&i.CustomUrl,
-		&i.IsImportant,
-		&i.IsFeatured,
-		&i.IsHidden,
-		&i.IsHiddenPosts,
-		&i.IncludeInBreadcrumbs,
-		&i.ShowRelatedTagsAsChildren,
 		&i.SortOrder,
 		&i.PostCount,
 		&i.CreatedAt,
@@ -845,7 +818,7 @@ func (q *Queries) GetStorageUsage(ctx context.Context) (sql.NullFloat64, error) 
 
 const getTag = `-- name: GetTag :one
 
-SELECT id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at FROM tags
+SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
 WHERE id = ? LIMIT 1
 `
 
@@ -859,12 +832,6 @@ func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
 		&i.Slug,
 		&i.Description,
 		&i.CustomUrl,
-		&i.IsImportant,
-		&i.IsFeatured,
-		&i.IsHidden,
-		&i.IsHiddenPosts,
-		&i.IncludeInBreadcrumbs,
-		&i.ShowRelatedTagsAsChildren,
 		&i.SortOrder,
 		&i.PostCount,
 		&i.CreatedAt,
@@ -873,7 +840,7 @@ func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
 }
 
 const getTagBySlug = `-- name: GetTagBySlug :one
-SELECT id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at FROM tags
+SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
 WHERE slug = ? LIMIT 1
 `
 
@@ -886,12 +853,6 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 		&i.Slug,
 		&i.Description,
 		&i.CustomUrl,
-		&i.IsImportant,
-		&i.IsFeatured,
-		&i.IsHidden,
-		&i.IsHiddenPosts,
-		&i.IncludeInBreadcrumbs,
-		&i.ShowRelatedTagsAsChildren,
 		&i.SortOrder,
 		&i.PostCount,
 		&i.CreatedAt,
@@ -900,7 +861,7 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 }
 
 const getTagChildren = `-- name: GetTagChildren :many
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important, t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs, t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at FROM tags t
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at FROM tags t
 JOIN tag_relationships tr ON t.id = tr.child_id
 WHERE tr.parent_id = ?
 `
@@ -920,12 +881,6 @@ func (q *Queries) GetTagChildren(ctx context.Context, parentID int64) ([]Tag, er
 			&i.Slug,
 			&i.Description,
 			&i.CustomUrl,
-			&i.IsImportant,
-			&i.IsFeatured,
-			&i.IsHidden,
-			&i.IsHiddenPosts,
-			&i.IncludeInBreadcrumbs,
-			&i.ShowRelatedTagsAsChildren,
 			&i.SortOrder,
 			&i.PostCount,
 			&i.CreatedAt,
@@ -945,7 +900,7 @@ func (q *Queries) GetTagChildren(ctx context.Context, parentID int64) ([]Tag, er
 
 const getTagParents = `-- name: GetTagParents :many
 
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important, t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs, t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at FROM tags t
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at FROM tags t
 JOIN tag_relationships tr ON t.id = tr.parent_id
 WHERE tr.child_id = ?
 `
@@ -966,12 +921,6 @@ func (q *Queries) GetTagParents(ctx context.Context, childID int64) ([]Tag, erro
 			&i.Slug,
 			&i.Description,
 			&i.CustomUrl,
-			&i.IsImportant,
-			&i.IsFeatured,
-			&i.IsHidden,
-			&i.IsHiddenPosts,
-			&i.IncludeInBreadcrumbs,
-			&i.ShowRelatedTagsAsChildren,
 			&i.SortOrder,
 			&i.PostCount,
 			&i.CreatedAt,
@@ -990,7 +939,7 @@ func (q *Queries) GetTagParents(ctx context.Context, childID int64) ([]Tag, erro
 }
 
 const getTagsForPost = `-- name: GetTagsForPost :many
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important, t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs, t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at FROM tags t
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at FROM tags t
 JOIN post_tags pt ON t.id = pt.tag_id
 WHERE pt.post_id = ?
 ORDER BY t.name ASC
@@ -1011,12 +960,6 @@ func (q *Queries) GetTagsForPost(ctx context.Context, postID int64) ([]Tag, erro
 			&i.Slug,
 			&i.Description,
 			&i.CustomUrl,
-			&i.IsImportant,
-			&i.IsFeatured,
-			&i.IsHidden,
-			&i.IsHiddenPosts,
-			&i.IncludeInBreadcrumbs,
-			&i.ShowRelatedTagsAsChildren,
 			&i.SortOrder,
 			&i.PostCount,
 			&i.CreatedAt,
@@ -1206,12 +1149,6 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 }
 
 const listPosts = `-- name: ListPosts :many
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 WHERE
@@ -1227,8 +1164,9 @@ WHERE
         WHEN ?4 THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            JOIN tags t ON pt.tag_id = t.id
-            WHERE t.is_hidden_posts = 1
+            WHERE pt.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
         )
     END)
 ORDER BY p.published_at DESC, p.created_at DESC
@@ -1327,19 +1265,17 @@ func (q *Queries) ListSettings(ctx context.Context) ([]BlogSetting, error) {
 }
 
 const listTags = `-- name: ListTags :many
-SELECT id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at FROM tags
-WHERE (CASE WHEN ?1 THEN is_important = 1 ELSE 1=1 END)
-AND (CASE WHEN ?2 THEN 1=1 ELSE post_count > 0 END)
+SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
+WHERE (CASE WHEN ?1 THEN 1=1 ELSE post_count > 0 END)
 ORDER BY sort_order ASC, name ASC
 `
 
 type ListTagsParams struct {
-	ImportantOnlyFilter interface{} `json:"important_only_filter"`
-	IncludeEmptyFilter  interface{} `json:"include_empty_filter"`
+	IncludeEmptyFilter interface{} `json:"include_empty_filter"`
 }
 
 func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, error) {
-	rows, err := q.db.QueryContext(ctx, listTags, arg.ImportantOnlyFilter, arg.IncludeEmptyFilter)
+	rows, err := q.db.QueryContext(ctx, listTags, arg.IncludeEmptyFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -1353,12 +1289,6 @@ func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, erro
 			&i.Slug,
 			&i.Description,
 			&i.CustomUrl,
-			&i.IsImportant,
-			&i.IsFeatured,
-			&i.IsHidden,
-			&i.IsHiddenPosts,
-			&i.IncludeInBreadcrumbs,
-			&i.ShowRelatedTagsAsChildren,
 			&i.SortOrder,
 			&i.PostCount,
 			&i.CreatedAt,
@@ -1654,24 +1584,18 @@ func (q *Queries) UpdateSetting(ctx context.Context, arg UpdateSettingParams) (B
 
 const updateTag = `-- name: UpdateTag :one
 UPDATE tags
-SET name = ?, slug = ?, description = ?, custom_url = ?, is_important = ?, is_featured = ?, is_hidden = ?, is_hidden_posts = ?, include_in_breadcrumbs = ?, show_related_tags_as_children = ?, sort_order = ?
+SET name = ?, slug = ?, description = ?, custom_url = ?, sort_order = ?
 WHERE id = ?
-RETURNING id, name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at
+RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at
 `
 
 type UpdateTagParams struct {
-	Name                      string         `json:"name"`
-	Slug                      string         `json:"slug"`
-	Description               sql.NullString `json:"description"`
-	CustomUrl                 sql.NullString `json:"custom_url"`
-	IsImportant               bool           `json:"is_important"`
-	IsFeatured                bool           `json:"is_featured"`
-	IsHidden                  bool           `json:"is_hidden"`
-	IsHiddenPosts             bool           `json:"is_hidden_posts"`
-	IncludeInBreadcrumbs      bool           `json:"include_in_breadcrumbs"`
-	ShowRelatedTagsAsChildren bool           `json:"show_related_tags_as_children"`
-	SortOrder                 sql.NullInt64  `json:"sort_order"`
-	ID                        int64          `json:"id"`
+	Name        string         `json:"name"`
+	Slug        string         `json:"slug"`
+	Description sql.NullString `json:"description"`
+	CustomUrl   sql.NullString `json:"custom_url"`
+	SortOrder   sql.NullInt64  `json:"sort_order"`
+	ID          int64          `json:"id"`
 }
 
 func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error) {
@@ -1680,12 +1604,6 @@ func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, erro
 		arg.Slug,
 		arg.Description,
 		arg.CustomUrl,
-		arg.IsImportant,
-		arg.IsFeatured,
-		arg.IsHidden,
-		arg.IsHiddenPosts,
-		arg.IncludeInBreadcrumbs,
-		arg.ShowRelatedTagsAsChildren,
 		arg.SortOrder,
 		arg.ID,
 	)
@@ -1696,12 +1614,6 @@ func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, erro
 		&i.Slug,
 		&i.Description,
 		&i.CustomUrl,
-		&i.IsImportant,
-		&i.IsFeatured,
-		&i.IsHidden,
-		&i.IsHiddenPosts,
-		&i.IncludeInBreadcrumbs,
-		&i.ShowRelatedTagsAsChildren,
 		&i.SortOrder,
 		&i.PostCount,
 		&i.CreatedAt,

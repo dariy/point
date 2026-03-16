@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"point-api/internal/models"
@@ -21,7 +22,7 @@ func TestTagService_CRUD(t *testing.T) {
 	tag, err := service.CreateTag(ctx, CreateTagParams{
 		Name:        "Test Tag",
 		Description: "Test Description",
-		IsImportant: true,
+		
 	})
 	if err != nil {
 		t.Fatalf("CreateTag failed: %v", err)
@@ -62,7 +63,7 @@ func TestTagService_CRUD(t *testing.T) {
 	updated, err := service.UpdateTag(ctx, UpdateTagParams{
 		ID:          tag.ID,
 		Name:        "Updated Tag",
-		IsImportant: false,
+		
 	})
 	if err != nil {
 		t.Errorf("UpdateTag failed: %v", err)
@@ -72,7 +73,7 @@ func TestTagService_CRUD(t *testing.T) {
 	}
 
 	// Test List
-	tags, err := service.ListTags(ctx, true, false, false)
+	tags, err := service.ListTags(ctx, true, false)
 	if err != nil {
 		t.Errorf("ListTags failed: %v", err)
 	}
@@ -114,8 +115,8 @@ func TestTagService_TagCloud(t *testing.T) {
 	ctx := context.Background()
 
 	// Create some tags (IsImportant=true so they appear in the tag cloud)
-	t1, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 1", IsImportant: true})
-	t2, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 2", IsImportant: true})
+	t1, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 1", })
+	t2, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 2", })
 
 	// Create a user and posts so hierarchical counts work from actual post_tags data.
 	// Tag 1 gets 2 posts, Tag 2 gets 1 post → weights 1.0 and 0.5.
@@ -385,56 +386,63 @@ func TestTagService_GetTagsByPostIDs(t *testing.T) {
 }
 
 func TestBuildEffectivelyHiddenIDs(t *testing.T) {
+	// System tag _hidden (ID=100) is parent; descendants should all be hidden.
 	tags := []models.Tag{
-		{ID: 1, IsHidden: true, IsHiddenPosts: true},
-		{ID: 2, IsHidden: false, IsHiddenPosts: false},
-		{ID: 3, IsHidden: false, IsHiddenPosts: false},
+		{ID: 100, Slug: "_hidden"},
+		{ID: 1, Slug: "tag1"},
+		{ID: 2, Slug: "tag2"},
+		{ID: 3, Slug: "tag3"},
 	}
 	rels := []repository.TagRelationship{
-		{ParentID: 1, ChildID: 2}, // 2 is child of hidden+hiddenPosts 1
-		{ParentID: 2, ChildID: 3}, // 3 is grandchild
+		{ParentID: 100, ChildID: 1}, // direct child of _hidden
+		{ParentID: 1, ChildID: 2},
+		{ParentID: 2, ChildID: 3},
 	}
 
 	hidden := buildEffectivelyHiddenIDs(tags, rels)
 	if !hidden[1] {
-		t.Error("tag 1 should be hidden (direct)")
+		t.Error("tag 1 should be hidden (direct child of _hidden)")
 	}
 	if !hidden[2] {
-		t.Error("tag 2 should be hidden (parent is hidden+hiddenPosts)")
+		t.Error("tag 2 should be hidden (descendant)")
 	}
 	if !hidden[3] {
 		t.Error("tag 3 should be hidden (grandparent propagation)")
 	}
 
-	// Tag with is_hidden=true but is_hidden_posts=false does NOT propagate
+	// Tag not connected to _hidden should not be hidden.
 	tags2 := []models.Tag{
-		{ID: 10, IsHidden: true, IsHiddenPosts: false},
-		{ID: 11, IsHidden: false, IsHiddenPosts: false},
+		{ID: 100, Slug: "_hidden"},
+		{ID: 10, Slug: "tag10"},
+		{ID: 11, Slug: "tag11"},
 	}
 	rels2 := []repository.TagRelationship{{ParentID: 10, ChildID: 11}}
 	hidden2 := buildEffectivelyHiddenIDs(tags2, rels2)
-	if !hidden2[10] {
-		t.Error("tag 10 should be hidden (direct)")
+	if hidden2[10] {
+		t.Error("tag 10 should NOT be hidden (not under _hidden)")
 	}
 	if hidden2[11] {
-		t.Error("tag 11 should NOT be hidden (parent is hidden but not hiddenPosts)")
+		t.Error("tag 11 should NOT be hidden (parent not under _hidden)")
 	}
 }
 
 func TestBuildEffectivelyHiddenPostsTagIDs(t *testing.T) {
+	// System tag _hide_posts (ID=100) is parent; descendants should all hide posts.
 	tags := []models.Tag{
-		{ID: 1, IsHiddenPosts: true},
-		{ID: 2, IsHiddenPosts: false},
-		{ID: 3, IsHiddenPosts: false},
+		{ID: 100, Slug: "_hide_posts"},
+		{ID: 1, Slug: "tag1"},
+		{ID: 2, Slug: "tag2"},
+		{ID: 3, Slug: "tag3"},
 	}
 	rels := []repository.TagRelationship{
+		{ParentID: 100, ChildID: 1},
 		{ParentID: 1, ChildID: 2},
 		{ParentID: 2, ChildID: 3},
 	}
 
 	hiddenPosts := buildEffectivelyHiddenPostsTagIDs(tags, rels)
 	if !hiddenPosts[1] {
-		t.Error("tag 1 should hide posts (direct)")
+		t.Error("tag 1 should hide posts (direct child of _hide_posts)")
 	}
 	if !hiddenPosts[2] {
 		t.Error("tag 2 should hide posts (inherited from tag 1)")
@@ -470,15 +478,22 @@ func TestTagService_EffectivelyHidden(t *testing.T) {
 		t.Errorf("expected empty map, got %v", hidden)
 	}
 
-	// With a hidden tag
-	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, is_hidden, is_hidden_posts) VALUES ('Secret','secret',1,1)`)
+	// Set up _hidden system tag and make a tag its child.
+	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, post_count) VALUES ('Hidden','_hidden',0)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, post_count) VALUES ('Secret','secret',0)`)
+	_, _ = repo.DB().Exec(`
+		INSERT INTO tag_relationships (parent_id, child_id)
+		SELECT h.id, s.id FROM tags h, tags s WHERE h.slug='_hidden' AND s.slug='secret'`)
+
+	var secretID int64
+	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug='secret'`).Scan(&secretID)
 
 	hidden, err = svc.EffectivelyHiddenIDs(ctx)
 	if err != nil {
 		t.Fatalf("EffectivelyHiddenIDs (with data) failed: %v", err)
 	}
-	if !hidden[1] {
-		t.Error("expected tag 1 to be hidden")
+	if !hidden[secretID] {
+		t.Errorf("expected secret tag (id=%d) to be hidden", secretID)
 	}
 }
 
@@ -501,7 +516,7 @@ func TestTagService_GetHierarchicalNavTags(t *testing.T) {
 	}
 
 	// With tags
-	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel", IsImportant: true})
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel", })
 	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Europe"})
 	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 
@@ -543,11 +558,11 @@ func TestTagService_ListTagsPublicOnly(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a visible tag and a hidden tag
-	visible, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Visible", IsHidden: false})
-	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "Hidden", IsHidden: true})
+	visible, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Visible", })
+	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "Hidden", })
 
 	// publicOnly=false: should return both
-	all, err := svc.ListTags(ctx, true, false, false)
+	all, err := svc.ListTags(ctx, true, false)
 	if err != nil {
 		t.Fatalf("ListTags failed: %v", err)
 	}
@@ -556,17 +571,22 @@ func TestTagService_ListTagsPublicOnly(t *testing.T) {
 	}
 
 	// publicOnly=true: hidden tag should be filtered out
-	public, err := svc.ListTags(ctx, true, false, true)
+	public, err := svc.ListTags(ctx, true, true)
 	if err != nil {
 		t.Fatalf("ListTags (public) failed: %v", err)
 	}
+	// Verify visible tag appears and no system tags appear.
+	found := false
 	for _, tag := range public {
-		if tag.ID == visible.ID && !tag.IsHidden {
-			continue // expected
+		if tag.ID == visible.ID {
+			found = true
 		}
-		if tag.IsHidden {
-			t.Errorf("hidden tag appeared in publicOnly results: %s", tag.Name)
+		if strings.HasPrefix(tag.Slug, "_") {
+			t.Errorf("system tag appeared in publicOnly results: %s", tag.Name)
 		}
+	}
+	if !found {
+		t.Error("visible tag not found in public listing")
 	}
 }
 
@@ -578,9 +598,9 @@ func TestTagService_GetTagChildrenPublicOnly(t *testing.T) {
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
-	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Parent", IsHidden: false})
-	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Child", IsHidden: false})
-	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "HiddenChild", IsHidden: true})
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Parent", })
+	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Child", })
+	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "HiddenChild", })
 
 	// Set up relationships
 	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
@@ -608,17 +628,21 @@ func TestTagService_GetHierarchicalNavTagsWithPosts(t *testing.T) {
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
-	// Create featured tags so they appear in nav (featured bypasses PostCount=0 filter)
-	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel", IsFeatured: true})
-	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Europe", IsFeatured: true})
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel"})
+	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Europe"})
 	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 
-	// Admin mode with rootID
+	// Give child a post so it appears in nav (post_count > 0).
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('nv','nv@t.com','h','NV')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('P','p','',1,'published',datetime('now'))`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, ?)`, child.ID)
+	_ = svc.UpdateAllPostCounts(ctx)
+
+	// Admin mode with rootID — child has posts so it appears.
 	nodes, err := svc.GetHierarchicalNavTags(ctx, &parent.ID, false)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags failed: %v", err)
 	}
-	// parent has 1 featured child
 	if len(nodes) != 1 {
 		t.Errorf("expected 1 child node, got %d", len(nodes))
 	}
@@ -640,7 +664,7 @@ func TestTagService_GetTagCloudWithData(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a tag, add a published post to it so hierarchical count > 0
-	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "CloudTag", IsImportant: true})
+	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "CloudTag", })
 	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('cu','cu@t','h','CU')`)
 	var uid int64
 	_ = repo.DB().QueryRow(`SELECT id FROM users WHERE username='cu'`).Scan(&uid)

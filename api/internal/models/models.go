@@ -80,20 +80,14 @@ type Session struct {
 }
 
 type Tag struct {
-	ID                        int64          `json:"id"`
-	Name                      string         `json:"name"`
-	Slug                      string         `json:"slug"`
-	Description               sql.NullString `json:"description"`
-	CustomUrl                 sql.NullString `json:"custom_url"`
-	IsImportant               bool           `json:"is_important"`
-	IsFeatured                bool           `json:"is_featured"`
-	IsHidden                  bool           `json:"is_hidden"`
-	IsHiddenPosts             bool           `json:"is_hidden_posts"`
-	IncludeInBreadcrumbs      bool           `json:"include_in_breadcrumbs"`
-	ShowRelatedTagsAsChildren bool           `json:"show_related_tags_as_children"`
-	SortOrder                 sql.NullInt64  `json:"sort_order"`
-	PostCount                 int64          `json:"post_count"`
-	CreatedAt                 time.Time      `json:"created_at"`
+	ID          int64          `json:"id"`
+	Name        string         `json:"name"`
+	Slug        string         `json:"slug"`
+	Description sql.NullString `json:"description"`
+	CustomUrl   sql.NullString `json:"custom_url"`
+	SortOrder   sql.NullInt64  `json:"sort_order"`
+	PostCount   int64          `json:"post_count"`
+	CreatedAt   time.Time      `json:"created_at"`
 }
 
 type TagLocation struct {

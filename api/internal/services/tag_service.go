@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/utils"
@@ -29,10 +30,9 @@ func NewTagService(repo *repository.Repository) *TagService {
 	}
 }
 
-func (s *TagService) ListTags(ctx context.Context, includeEmpty, importantOnly, publicOnly bool) ([]models.Tag, error) {
+func (s *TagService) ListTags(ctx context.Context, includeEmpty, publicOnly bool) ([]models.Tag, error) {
 	tags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter:  includeEmpty,
-		ImportantOnlyFilter: importantOnly,
+		IncludeEmptyFilter: includeEmpty,
 	})
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func (s *TagService) ListTags(ctx context.Context, includeEmpty, importantOnly, 
 	effectivelyHidden, _ := s.EffectivelyHiddenIDs(ctx)
 	result := make([]models.Tag, 0, len(tags))
 	for _, t := range tags {
-		if !effectivelyHidden[t.ID] {
+		if !strings.HasPrefix(t.Slug, "_") && !effectivelyHidden[t.ID] {
 			result = append(result, t)
 		}
 	}
@@ -53,11 +53,21 @@ func (s *TagService) ListTags(ctx context.Context, includeEmpty, importantOnly, 
 }
 
 func (s *TagService) GetTagBySlug(ctx context.Context, slug string) (models.Tag, error) {
+	if strings.HasPrefix(slug, "_") {
+		return models.Tag{}, echo.NewHTTPError(http.StatusNotFound, "tag not found")
+	}
 	return s.repo.GetTagBySlug(ctx, strings.ToLower(slug))
 }
 
 func (s *TagService) GetTagByID(ctx context.Context, id int64) (models.Tag, error) {
-	return s.repo.GetTag(ctx, id)
+	tag, err := s.repo.GetTag(ctx, id)
+	if err != nil {
+		return models.Tag{}, err
+	}
+	if strings.HasPrefix(tag.Slug, "_") {
+		return models.Tag{}, echo.NewHTTPError(http.StatusNotFound, "tag not found")
+	}
+	return tag, nil
 }
 
 func (s *TagService) GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error) {
@@ -65,17 +75,12 @@ func (s *TagService) GetTagDescendants(ctx context.Context, tagID int64) ([]mode
 }
 
 type CreateTagParams struct {
-	Name                       string
-	Slug                       string
-	Description                string
-	CustomURL                  string
-	IsImportant                bool
-	IsFeatured                 bool
-	IsHidden                   bool
-	IsHiddenPosts              bool
-	IncludeInBreadcrumbs       bool
-	ShowRelatedTagsAsChildren  bool
-	SortOrder                  *int32
+	Name        string
+	Slug        string
+	Description string
+	CustomURL   string
+	SortOrder   *int32
+	ParentIDs   []int64
 }
 
 func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.Tag, error) {
@@ -83,27 +88,41 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 		p.Slug = utils.Slugify(p.Name)
 	}
 
+	if strings.HasPrefix(p.Slug, "_") {
+		return models.Tag{}, echo.NewHTTPError(http.StatusBadRequest, "tag slug cannot start with '_'")
+	}
+
 	var sortOrder sql.NullInt64
 	if p.SortOrder != nil {
 		sortOrder = sql.NullInt64{Int64: int64(*p.SortOrder), Valid: true}
 	}
 
-	return s.repo.CreateTag(ctx, models.CreateTagParams{
-		Name:                      p.Name,
-		Slug:                      p.Slug,
-		Description:               sql.NullString{String: p.Description, Valid: p.Description != ""},
-		CustomUrl:                 sql.NullString{String: p.CustomURL, Valid: p.CustomURL != ""},
-		IsImportant:               p.IsImportant,
-		IsFeatured:                p.IsFeatured,
-		IsHidden:                  p.IsHidden,
-		IsHiddenPosts:             p.IsHiddenPosts,
-		IncludeInBreadcrumbs:      p.IncludeInBreadcrumbs,
-		ShowRelatedTagsAsChildren: p.ShowRelatedTagsAsChildren,
-		SortOrder:                 sortOrder,
+	tag, err := s.repo.CreateTag(ctx, models.CreateTagParams{
+		Name:        p.Name,
+		Slug:        p.Slug,
+		Description: sql.NullString{String: p.Description, Valid: p.Description != ""},
+		CustomUrl:   sql.NullString{String: p.CustomURL, Valid: p.CustomURL != ""},
+		SortOrder:   sortOrder,
 	})
+	if err != nil {
+		return models.Tag{}, err
+	}
+
+	if err := s.SetTagParents(ctx, tag.ID, p.ParentIDs); err != nil {
+		return models.Tag{}, err
+	}
+
+	return tag, nil
 }
 
 func (s *TagService) DeleteTag(ctx context.Context, id int64) error {
+	tag, err := s.repo.GetTag(ctx, id)
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(tag.Slug, "_") {
+		return echo.NewHTTPError(http.StatusForbidden, "system tags cannot be deleted")
+	}
 	return s.repo.DeleteTag(ctx, id)
 }
 
@@ -133,6 +152,15 @@ func (s *TagService) GetTagChildren(ctx context.Context, id int64, publicOnly bo
 
 // SetTagParents replaces all parent relationships for a tag.
 func (s *TagService) SetTagParents(ctx context.Context, tagID int64, parentIDs []int64) error {
+	// System tags have fixed parents and cannot be re-parented.
+	tag, err := s.repo.GetTag(ctx, tagID)
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(tag.Slug, "_") {
+		return echo.NewHTTPError(http.StatusForbidden, "cannot re-parent system tags")
+	}
+
 	if err := s.repo.ClearTagParents(ctx, tagID); err != nil {
 		return err
 	}
@@ -144,11 +172,34 @@ func (s *TagService) SetTagParents(ctx context.Context, tagID int64, parentIDs [
 			return err
 		}
 	}
+
+	// If no parents were set, auto-assign _pending as parent.
+	if len(parentIDs) == 0 {
+		pending, err := s.repo.GetTagBySlug(ctx, "_pending")
+		if err == nil {
+			_ = s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
+				ParentID: pending.ID,
+				ChildID:  tagID,
+			})
+		}
+	}
+
 	return nil
 }
 
 // SetTagChildren replaces all child relationships for a tag.
 func (s *TagService) SetTagChildren(ctx context.Context, tagID int64, childIDs []int64) error {
+	// Reject if any child is a system tag (system tags cannot be children of user tags).
+	for _, childID := range childIDs {
+		child, err := s.repo.GetTag(ctx, childID)
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(child.Slug, "_") {
+			return echo.NewHTTPError(http.StatusForbidden, "system tags cannot be children of user tags")
+		}
+	}
+
 	if err := s.repo.ClearTagChildren(ctx, tagID); err != nil {
 		return err
 	}
@@ -169,23 +220,31 @@ func (s *TagService) GetAllTagRelationships(ctx context.Context) ([]repository.T
 }
 
 type UpdateTagParams struct {
-	ID                        int64
-	Name                      string
-	Slug                      string
-	Description               string
-	CustomURL                 string
-	IsImportant               bool
-	IsFeatured                bool
-	IsHidden                  bool
-	IsHiddenPosts             bool
-	IncludeInBreadcrumbs      bool
-	ShowRelatedTagsAsChildren bool
-	SortOrder                 *int32
+	ID          int64
+	Name        string
+	Slug        string
+	Description string
+	CustomURL   string
+	SortOrder   *int32
 }
 
 func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.Tag, error) {
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Name)
+	}
+
+	if strings.HasPrefix(p.Slug, "_") {
+		return models.Tag{}, echo.NewHTTPError(http.StatusBadRequest, "tag slug cannot start with '_'")
+	}
+
+	existing, err := s.repo.GetTag(ctx, p.ID)
+	if err != nil {
+		return models.Tag{}, err
+	}
+	if strings.HasPrefix(existing.Slug, "_") {
+		// System tags: preserve name and slug; other fields (description, etc.) may change.
+		p.Name = existing.Name
+		p.Slug = existing.Slug
 	}
 
 	var sortOrder sql.NullInt64
@@ -194,35 +253,26 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 	}
 
 	return s.repo.UpdateTag(ctx, models.UpdateTagParams{
-		ID:                        p.ID,
-		Name:                      p.Name,
-		Slug:                      p.Slug,
-		Description:               sql.NullString{String: p.Description, Valid: p.Description != ""},
-		CustomUrl:                 sql.NullString{String: p.CustomURL, Valid: p.CustomURL != ""},
-		IsImportant:               p.IsImportant,
-		IsFeatured:                p.IsFeatured,
-		IsHidden:                  p.IsHidden,
-		IsHiddenPosts:             p.IsHiddenPosts,
-		IncludeInBreadcrumbs:      p.IncludeInBreadcrumbs,
-		ShowRelatedTagsAsChildren: p.ShowRelatedTagsAsChildren,
-		SortOrder:                 sortOrder,
+		ID:          p.ID,
+		Name:        p.Name,
+		Slug:        p.Slug,
+		Description: sql.NullString{String: p.Description, Valid: p.Description != ""},
+		CustomUrl:   sql.NullString{String: p.CustomURL, Valid: p.CustomURL != ""},
+		SortOrder:   sortOrder,
 	})
 }
 
 type TagCloudItem struct {
-	ID            int64   `json:"id"`
-	Name          string  `json:"name"`
-	Slug          string  `json:"slug"`
-	Count         int64   `json:"count"`
-	Weight        float64 `json:"weight"`
-	IsHidden      bool    `json:"is_hidden"`
-	IsHiddenPosts bool    `json:"is_hidden_posts"`
+	ID     int64   `json:"id"`
+	Name   string  `json:"name"`
+	Slug   string  `json:"slug"`
+	Count  int64   `json:"count"`
+	Weight float64 `json:"weight"`
 }
 
 func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool) ([]TagCloudItem, error) {
 	tags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter:  true, // include all; filter below by effective count
-		ImportantOnlyFilter: true,
+		IncludeEmptyFilter: true, // include all; filter below by effective count
 	})
 	if err != nil {
 		return nil, err
@@ -236,12 +286,16 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 	if publicOnly {
 		effectivelyHidden, _ := s.EffectivelyHiddenIDs(ctx)
 		for _, t := range tags {
-			if !effectivelyHidden[t.ID] {
+			if !strings.HasPrefix(t.Slug, "_") && !effectivelyHidden[t.ID] {
 				candidates = append(candidates, t)
 			}
 		}
 	} else {
-		candidates = tags
+		for _, t := range tags {
+			if !strings.HasPrefix(t.Slug, "_") {
+				candidates = append(candidates, t)
+			}
+		}
 	}
 
 	if len(candidates) == 0 {
@@ -284,13 +338,11 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 			weight = float64(count) / float64(maxCount)
 		}
 		result[i] = TagCloudItem{
-			ID:            t.ID,
-			Name:          t.Name,
-			Slug:          t.Slug,
-			Count:         count,
-			Weight:        weight,
-			IsHidden:      t.IsHidden,
-			IsHiddenPosts: t.IsHiddenPosts,
+			ID:     t.ID,
+			Name:   t.Name,
+			Slug:   t.Slug,
+			Count:  count,
+			Weight: weight,
 		}
 	}
 	return result, nil
@@ -572,38 +624,43 @@ func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interf
 
 // NavTagNode is a tag node in the public navigation hierarchy with nested children.
 type NavTagNode struct {
-	ID            int64        `json:"id"`
-	Name          string       `json:"name"`
-	Slug          string       `json:"slug"`
-	IsHidden      bool         `json:"is_hidden"`
-	IsHiddenPosts bool         `json:"is_hidden_posts"`
-	IsFeatured    bool         `json:"is_featured"`
-	PostCount     int64        `json:"post_count"`
-	IsRelated     bool         `json:"is_related"`
-	Children      []NavTagNode `json:"children"`
+	ID        int64        `json:"id"`
+	Name      string       `json:"name"`
+	Slug      string       `json:"slug"`
+	PostCount int64        `json:"post_count"`
+	IsRelated bool         `json:"is_related"`
+	Children  []NavTagNode `json:"children"`
 }
 
 // buildEffectivelyHiddenIDs computes the set of tag IDs that should not appear publicly.
-// A tag is effectively hidden if:
-//   - It is directly marked is_hidden=true, OR
-//   - Any ancestor has both is_hidden=true AND is_hidden_posts=true
+// Seeds from direct children of the _hidden system tag, then propagates to all descendants.
 func buildEffectivelyHiddenIDs(allTags []models.Tag, relationships []repository.TagRelationship) map[int64]bool {
 	childrenOf := make(map[int64][]int64, len(relationships))
 	for _, rel := range relationships {
 		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
 	}
 
-	hidden := make(map[int64]bool, len(allTags))
-	queue := make([]int64, 0)
+	// Find the _hidden system tag.
+	var hiddenSystemID int64
 	for _, t := range allTags {
-		if t.IsHidden {
-			hidden[t.ID] = true
-		}
-		if t.IsHidden && t.IsHiddenPosts {
-			queue = append(queue, t.ID)
+		if t.Slug == "_hidden" {
+			hiddenSystemID = t.ID
+			break
 		}
 	}
 
+	hidden := make(map[int64]bool, len(allTags))
+	queue := make([]int64, 0)
+
+	// Seed with direct children of _hidden.
+	if hiddenSystemID != 0 {
+		for _, childID := range childrenOf[hiddenSystemID] {
+			hidden[childID] = true
+			queue = append(queue, childID)
+		}
+	}
+
+	// BFS to propagate through descendants.
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -618,22 +675,34 @@ func buildEffectivelyHiddenIDs(allTags []models.Tag, relationships []repository.
 }
 
 // buildEffectivelyHiddenPostsTagIDs computes the set of tag IDs whose posts should be hidden.
-// A tag effectively hides posts if it or any of its ancestors has is_hidden_posts=true.
+// Seeds from direct children of the _hide_posts system tag, then propagates to all descendants.
 func buildEffectivelyHiddenPostsTagIDs(allTags []models.Tag, relationships []repository.TagRelationship) map[int64]bool {
 	childrenOf := make(map[int64][]int64, len(relationships))
 	for _, rel := range relationships {
 		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
 	}
 
-	hiddenPosts := make(map[int64]bool, len(allTags))
-	queue := make([]int64, 0)
+	// Find the _hide_posts system tag.
+	var hidePostsSystemID int64
 	for _, t := range allTags {
-		if t.IsHiddenPosts {
-			hiddenPosts[t.ID] = true
-			queue = append(queue, t.ID)
+		if t.Slug == "_hide_posts" {
+			hidePostsSystemID = t.ID
+			break
 		}
 	}
 
+	hiddenPosts := make(map[int64]bool, len(allTags))
+	queue := make([]int64, 0)
+
+	// Seed with direct children of _hide_posts.
+	if hidePostsSystemID != 0 {
+		for _, childID := range childrenOf[hidePostsSystemID] {
+			hiddenPosts[childID] = true
+			queue = append(queue, childID)
+		}
+	}
+
+	// BFS to propagate through descendants.
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -650,8 +719,7 @@ func buildEffectivelyHiddenPostsTagIDs(allTags []models.Tag, relationships []rep
 // EffectivelyHiddenPostsTagIDs returns the set of tag IDs that effectively hide their posts.
 func (s *TagService) EffectivelyHiddenPostsTagIDs(ctx context.Context) (map[int64]bool, error) {
 	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter:  true,
-		ImportantOnlyFilter: false,
+		IncludeEmptyFilter: true,
 	})
 	if err != nil {
 		return nil, err
@@ -666,8 +734,7 @@ func (s *TagService) EffectivelyHiddenPostsTagIDs(ctx context.Context) (map[int6
 // EffectivelyHiddenIDs returns the set of tag IDs that should not be shown publicly.
 func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, error) {
 	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter:  true,
-		ImportantOnlyFilter: false,
+		IncludeEmptyFilter: true,
 	})
 	if err != nil {
 		return nil, err
@@ -680,13 +747,12 @@ func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, 
 }
 
 // GetHierarchicalNavTags builds a recursive tag tree for the public navigation bar.
-// If rootID is nil, returns root-level tags (no parents) and their descendants (for homepage).
+// If rootID is nil, returns direct children of the _root system tag and their descendants.
 // If rootID is non-nil, returns children of that tag and their descendants (for tag pages).
-// Hidden and empty tags are excluded.
+// System tags (slug starting with "_") and hidden/empty tags are excluded from output.
 func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, publicOnly bool) ([]NavTagNode, error) {
 	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter:  true, // featured tags may have 0 posts but must still appear
-		ImportantOnlyFilter: false,
+		IncludeEmptyFilter: true, // system tags may have 0 posts but must still be traversed
 	})
 	if err != nil {
 		return nil, err
@@ -706,13 +772,29 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	if publicOnly {
 		effectivelyHidden = buildEffectivelyHiddenIDs(allTags, relationships)
 	}
-	effectivelyHiddenPosts := buildEffectivelyHiddenPostsTagIDs(allTags, relationships)
 
 	childrenOf := make(map[int64][]int64)
-	parentsOf := make(map[int64][]int64)
 	for _, rel := range relationships {
 		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
-		parentsOf[rel.ChildID] = append(parentsOf[rel.ChildID], rel.ParentID)
+	}
+
+	// Find system tag IDs for _root and _with_related.
+	var rootSystemID, withRelatedID int64
+	for _, t := range allTags {
+		switch t.Slug {
+		case "_root":
+			rootSystemID = t.ID
+		case "_with_related":
+			withRelatedID = t.ID
+		}
+	}
+
+	// Build set of _with_related children for IsRelated determination.
+	withRelatedChildren := make(map[int64]bool)
+	if withRelatedID != 0 {
+		for _, cid := range childrenOf[withRelatedID] {
+			withRelatedChildren[cid] = true
+		}
 	}
 
 	tagLess := func(a, b models.Tag) bool {
@@ -732,22 +814,34 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	build = func(id int64, visited map[int64]bool) NavTagNode {
 		t := tagByID[id]
 		node := NavTagNode{
-			ID:            t.ID,
-			Name:          t.Name,
-			Slug:          t.Slug,
-			IsHidden:      t.IsHidden,
-			IsHiddenPosts: effectivelyHiddenPosts[t.ID],
-			IsFeatured:    t.IsFeatured,
-			PostCount:     t.PostCount,
-			IsRelated:     t.ShowRelatedTagsAsChildren,
-			Children:      []NavTagNode{},
+			ID:        t.ID,
+			Name:      t.Name,
+			Slug:      t.Slug,
+			PostCount: t.PostCount,
+			IsRelated: withRelatedChildren[t.ID],
+			Children:  []NavTagNode{},
 		}
 		childIDs := childrenOf[id]
 		sortedIDs := make([]int64, 0, len(childIDs))
 		for _, cid := range childIDs {
-			if ch, ok := tagByID[cid]; ok && (!publicOnly || !effectivelyHidden[cid]) && (ch.PostCount > 0 || ch.IsFeatured) && !visited[cid] {
-				sortedIDs = append(sortedIDs, cid)
+			ch, ok := tagByID[cid]
+			if !ok {
+				continue
 			}
+			// Skip system tags in the output tree.
+			if strings.HasPrefix(ch.Slug, "_") {
+				continue
+			}
+			if publicOnly && effectivelyHidden[cid] {
+				continue
+			}
+			if ch.PostCount == 0 {
+				continue
+			}
+			if visited[cid] {
+				continue
+			}
+			sortedIDs = append(sortedIDs, cid)
 		}
 		sort.Slice(sortedIDs, func(i, j int) bool {
 			return tagLess(tagByID[sortedIDs[i]], tagByID[sortedIDs[j]])
@@ -763,31 +857,46 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 		return node
 	}
 
-	var rootIDs []int64
+	var navRootIDs []int64
 	if rootID == nil {
-		for _, t := range allTags {
-			if (publicOnly && effectivelyHidden[t.ID]) || (t.PostCount == 0 && !t.IsFeatured) {
-				continue
-			}
-			// Include root-level tags, or any featured tag regardless of depth.
-			if len(parentsOf[t.ID]) == 0 || t.IsFeatured {
-				rootIDs = append(rootIDs, t.ID)
+		// Use direct children of _root system tag as nav roots.
+		if rootSystemID != 0 {
+			for _, cid := range childrenOf[rootSystemID] {
+				ch, ok := tagByID[cid]
+				if !ok || strings.HasPrefix(ch.Slug, "_") {
+					continue
+				}
+				if publicOnly && effectivelyHidden[cid] {
+					continue
+				}
+				if ch.PostCount == 0 {
+					continue
+				}
+				navRootIDs = append(navRootIDs, cid)
 			}
 		}
 	} else {
 		for _, cid := range childrenOf[*rootID] {
-			if ch, ok := tagByID[cid]; ok && (!publicOnly || !effectivelyHidden[cid]) && (ch.PostCount > 0 || ch.IsFeatured) {
-				rootIDs = append(rootIDs, cid)
+			ch, ok := tagByID[cid]
+			if !ok || strings.HasPrefix(ch.Slug, "_") {
+				continue
 			}
+			if publicOnly && effectivelyHidden[cid] {
+				continue
+			}
+			if ch.PostCount == 0 {
+				continue
+			}
+			navRootIDs = append(navRootIDs, cid)
 		}
 	}
 
-	sort.Slice(rootIDs, func(i, j int) bool {
-		return tagLess(tagByID[rootIDs[i]], tagByID[rootIDs[j]])
+	sort.Slice(navRootIDs, func(i, j int) bool {
+		return tagLess(tagByID[navRootIDs[i]], tagByID[navRootIDs[j]])
 	})
 
-	result := make([]NavTagNode, 0, len(rootIDs))
-	for _, id := range rootIDs {
+	result := make([]NavTagNode, 0, len(navRootIDs))
+	for _, id := range navRootIDs {
 		result = append(result, build(id, map[int64]bool{id: true}))
 	}
 	return result, nil

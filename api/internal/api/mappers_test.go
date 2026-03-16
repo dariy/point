@@ -47,7 +47,7 @@ func TestPostByTagToResponse(t *testing.T) {
 		Slug:       "my-post",
 		Formatter:  "markdown",
 		Status:     "published",
-		IsFeatured: false,
+		
 		ViewCount:  5,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -73,7 +73,7 @@ func TestTagToListItem(t *testing.T) {
 		ID:          10,
 		Name:        "Places",
 		Slug:        "places",
-		IsImportant: true,
+		
 		PostCount:   5,
 	}
 	item := tagToListItem(tag)
@@ -134,7 +134,7 @@ func TestInjectPostHiddenFields(t *testing.T) {
 	resp := map[string]interface{}{
 		"tags": []map[string]interface{}{{"name": "foo"}},
 	}
-	tags := []models.Tag{{ID: 1, IsHidden: true}}
+	tags := []models.Tag{{ID: 1, }}
 	hiddenPostsIDs := map[int64]bool{1: true}
 
 	injectPostHiddenFields(resp, "hidden", tags, hiddenPostsIDs)
@@ -151,7 +151,7 @@ func TestInjectPostHiddenFieldsFromInfo(t *testing.T) {
 	resp := map[string]interface{}{
 		"tags": []map[string]interface{}{{"name": "bar"}},
 	}
-	tags := []repository.PostTagInfo{{ID: 2, IsHidden: true}}
+	tags := []repository.PostTagInfo{{ID: 2, }}
 	hiddenPostsIDs := map[int64]bool{2: true}
 
 	injectPostHiddenFieldsFromInfo(resp, "published", tags, hiddenPostsIDs)
