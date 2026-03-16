@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
@@ -28,10 +29,9 @@ func tagResponse(tag models.Tag, parents, children []models.Tag, loc *models.Tag
 
 func (h *TagHandler) ListTags(c echo.Context) error {
 	includeEmpty := c.QueryParam("include_empty") != "false"
-	importantOnly := c.QueryParam("important_only") == "true"
 	publicOnly := c.Get("user") == nil
 
-	tags, err := h.tagService.ListTags(c.Request().Context(), includeEmpty, importantOnly, publicOnly)
+	tags, err := h.tagService.ListTags(c.Request().Context(), includeEmpty, publicOnly)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -49,20 +49,16 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 	for _, rel := range rels {
 		if parent, ok := tagMap[rel.ParentID]; ok {
 			childParents[rel.ChildID] = append(childParents[rel.ChildID], map[string]interface{}{
-				"id":              parent.ID,
-				"name":            parent.Name,
-				"slug":            parent.Slug,
-				"is_hidden":       parent.IsHidden,
-				"is_hidden_posts": parent.IsHiddenPosts,
+				"id":   parent.ID,
+				"name": parent.Name,
+				"slug": parent.Slug,
 			})
 		}
 		if child, ok := tagMap[rel.ChildID]; ok {
 			parentChildren[rel.ParentID] = append(parentChildren[rel.ParentID], map[string]interface{}{
-				"id":              child.ID,
-				"name":            child.Name,
-				"slug":            child.Slug,
-				"is_hidden":       child.IsHidden,
-				"is_hidden_posts": child.IsHiddenPosts,
+				"id":   child.ID,
+				"name": child.Name,
+				"slug": child.Slug,
 			})
 		}
 	}
@@ -93,22 +89,17 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 			loc = &l
 		}
 		tagItems[i] = map[string]interface{}{
-			"id":                            t.ID,
-			"name":                          t.Name,
-			"slug":                          t.Slug,
-			"description":                   nullString(t.Description),
-			"custom_url":                    nullString(t.CustomUrl),
-			"is_important":                  t.IsImportant,
-			"is_featured":                   t.IsFeatured,
-			"is_hidden":                     t.IsHidden,
-			"is_hidden_posts":               t.IsHiddenPosts,
-			"include_in_breadcrumbs":        t.IncludeInBreadcrumbs,
-			"show_related_tags_as_children": t.ShowRelatedTagsAsChildren,
-			"sort_order":                    nullInt64(t.SortOrder),
-			"post_count":                    effectiveCounts[t.ID],
-			"parents":                       parents,
-			"children":                      children,
-			"locations":                     tagLocationsResponse(loc),
+			"id":          t.ID,
+			"name":        t.Name,
+			"slug":        t.Slug,
+			"description": nullString(t.Description),
+			"custom_url":  nullString(t.CustomUrl),
+			"sort_order":  nullInt64(t.SortOrder),
+			"post_count":  effectiveCounts[t.ID],
+			"is_system":   strings.HasPrefix(t.Slug, "_"),
+			"parents":     parents,
+			"children":    children,
+			"locations":   tagLocationsResponse(loc),
 		}
 	}
 
@@ -210,20 +201,14 @@ type TagLocationInput struct {
 }
 
 type CreateTagRequest struct {
-	Name                      string           `json:"name"`
-	Slug                      string           `json:"slug"`
-	Description               string           `json:"description"`
-	CustomURL                 string           `json:"custom_url"`
-	IsImportant               bool             `json:"is_important"`
-	IsFeatured                bool             `json:"is_featured"`
-	IsHidden                  bool             `json:"is_hidden"`
-	IsHiddenPosts             bool             `json:"is_hidden_posts"`
-	IncludeInBreadcrumbs      bool             `json:"include_in_breadcrumbs"`
-	ShowRelatedTagsAsChildren bool             `json:"show_related_tags_as_children"`
-	SortOrder                 *int32           `json:"sort_order"`
-	ParentIDs                 []int64          `json:"parent_ids"`
-	ChildIDs                  []int64          `json:"child_ids"`
-	Locations                 []TagLocationInput `json:"locations"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug"`
+	Description string             `json:"description"`
+	CustomURL   string             `json:"custom_url"`
+	SortOrder   *int32             `json:"sort_order"`
+	ParentIDs   []int64            `json:"parent_ids"`
+	ChildIDs    []int64            `json:"child_ids"`
+	Locations   []TagLocationInput `json:"locations"`
 }
 
 func (h *TagHandler) CreateTag(c echo.Context) error {
@@ -233,23 +218,17 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 	}
 
 	tag, err := h.tagService.CreateTag(c.Request().Context(), services.CreateTagParams{
-		Name:                      req.Name,
-		Slug:                      req.Slug,
-		Description:               req.Description,
-		CustomURL:                 req.CustomURL,
-		IsImportant:               req.IsImportant,
-		IsFeatured:                req.IsFeatured,
-		IsHidden:                  req.IsHidden,
-		IsHiddenPosts:             req.IsHiddenPosts,
-		IncludeInBreadcrumbs:      req.IncludeInBreadcrumbs,
-		ShowRelatedTagsAsChildren: req.ShowRelatedTagsAsChildren,
-		SortOrder:                 req.SortOrder,
+		Name:        req.Name,
+		Slug:        req.Slug,
+		Description: req.Description,
+		CustomURL:   req.CustomURL,
+		SortOrder:   req.SortOrder,
+		ParentIDs:   req.ParentIDs,
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusConflict, err.Error())
+		return err
 	}
 
-	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
 	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
 	_ = h.tagService.SetTagLocations(c.Request().Context(), tag.ID, toServiceLocations(req.Locations))
 
@@ -275,21 +254,15 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 	}
 
 	tag, err := h.tagService.UpdateTag(c.Request().Context(), services.UpdateTagParams{
-		ID:                        id,
-		Name:                      req.Name,
-		Slug:                      req.Slug,
-		Description:               req.Description,
-		CustomURL:                 req.CustomURL,
-		IsImportant:               req.IsImportant,
-		IsFeatured:                req.IsFeatured,
-		IsHidden:                  req.IsHidden,
-		IsHiddenPosts:             req.IsHiddenPosts,
-		IncludeInBreadcrumbs:      req.IncludeInBreadcrumbs,
-		ShowRelatedTagsAsChildren: req.ShowRelatedTagsAsChildren,
-		SortOrder:                 req.SortOrder,
+		ID:          id,
+		Name:        req.Name,
+		Slug:        req.Slug,
+		Description: req.Description,
+		CustomURL:   req.CustomURL,
+		SortOrder:   req.SortOrder,
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		return err
 	}
 
 	// Always update parent, child, and location data (empty slice = remove all).

@@ -141,7 +141,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			"pages":    pages,
 		},
 		"tag_cloud": cloud,
-		"nav_tags":  navTags,
+		"menu":  navTags,
 		"settings":  publicSettings,
 	})
 }
@@ -237,10 +237,10 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
 	for _, a := range ancestors {
-		if a.IncludeInBreadcrumbs && !effectivelyHidden[a.ID] {
+		if !effectivelyHidden[a.ID] {
 			crumb := tagToListItem(a)
 			if !publicOnly {
-				crumb["is_hidden_posts"] = a.IsHiddenPosts || effectiveHiddenPostsTagIDs[a.ID]
+				crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
 			}
 			breadcrumbs = append(breadcrumbs, crumb)
 		}
@@ -257,17 +257,17 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"tag":           tagResp,
-		"breadcrumbs":   breadcrumbs,
-		"posts":         postResponses,
-		"root_nav_tags": rootNavTags,
+		"tag":          tagResp,
+		"breadcrumbs":  breadcrumbs,
+		"posts":        postResponses,
+		"menu":         rootNavTags,
+		"nav_children": childItems,
 		"pagination": map[string]interface{}{
 			"page":     page,
 			"per_page": perPage,
 			"total":    total,
 			"pages":    pages,
 		},
-		"nav_tags": childItems,
 	})
 }
 
@@ -277,7 +277,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	tags, err := h.tagService.ListTags(ctx, false, false, publicOnly)
+	tags, err := h.tagService.ListTags(ctx, false, publicOnly)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -362,7 +362,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		}
 	}
 
-	allTags, _ := h.tagService.ListTags(ctx, true, false, publicOnly)
+	allTags, _ := h.tagService.ListTags(ctx, true, publicOnly)
 	tagIDs := make([]int64, len(allTags))
 	for i, t := range allTags {
 		tagIDs[i] = t.ID
@@ -449,7 +449,7 @@ func expandPostTagsWithAncestors(
 				continue
 			}
 			seen[t.ID] = true
-			if publicOnly && t.IsHidden {
+			if publicOnly && strings.HasPrefix(t.Slug, "_") {
 				continue
 			}
 			expanded = append(expanded, t)
@@ -458,7 +458,7 @@ func expandPostTagsWithAncestors(
 					continue
 				}
 				seen[anc.ID] = true
-				if publicOnly && anc.IsHidden {
+				if publicOnly && strings.HasPrefix(anc.Slug, "_") {
 					continue
 				}
 				expanded = append(expanded, anc)
@@ -472,11 +472,9 @@ func expandPostTagsWithAncestors(
 // tagToPostTagInfo converts a models.Tag to a lightweight PostTagInfo for ancestor expansion.
 func tagToPostTagInfo(t models.Tag) repository.PostTagInfo {
 	return repository.PostTagInfo{
-		ID:            t.ID,
-		Name:          t.Name,
-		Slug:          t.Slug,
-		IsHidden:      t.IsHidden,
-		IsHiddenPosts: t.IsHiddenPosts,
+		ID:   t.ID,
+		Name: t.Name,
+		Slug: t.Slug,
 	}
 }
 
