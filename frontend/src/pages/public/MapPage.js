@@ -15,7 +15,7 @@ import { getMapPage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { router } from '../../router.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { LOCK_SVG } from '../../utils/icons.js';
+
 
 const LEAFLET_JS       = '/assets/vendor/leaflet/leaflet.js';
 const LEAFLET_CSS      = '/assets/vendor/leaflet/leaflet.css';
@@ -210,16 +210,6 @@ export default class MapPage extends Component {
           const highlighted = !!tag;
           const countryColor = getCountryColor(rawName);
 
-          if (highlighted && tag.is_hidden) {
-            return {
-              color:       '#7c6f8a',
-              weight:      1.5,
-              dashArray:   '6 3',
-              fillColor:   '#9b8ab0',
-              fillOpacity: 0.2,
-              opacity:     0.7,
-            };
-          }
           return {
             color:       highlighted ? '#e05c00' : '#888',
             weight:      highlighted ? 1.5 : 0.5,
@@ -232,14 +222,14 @@ export default class MapPage extends Component {
           const name = (feature.properties?.name || '').toLowerCase();
           const tag  = countryTagMap[name];
           if (!tag) return;
-          const lockIcon = tag.is_hidden ? LOCK_SVG : '';
+          
           const yearsHtml = tag.years && tag.years.length > 0
             ? `<div class="map-popup-years">` +
               tag.years.map(y => `<a href="/tag/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`).join(' ') +
               `</div>`
             : '';
           layer.bindPopup(
-            `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag">${lockIcon}${escapeHtml(tag.name)}</a>` +
+            `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag">${escapeHtml(tag.name)}</a>` +
             `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}</div>` +
             yearsHtml
           );
@@ -255,16 +245,7 @@ export default class MapPage extends Component {
     tags.forEach((tag) => {
       if (tag.type === 'country') return; // polygon already shown
       const r   = markerRadius(tag.post_count);
-      const markerHtml = tag.is_hidden
-        ? `<span style="
-            display:block;
-            width:${r}px;height:${r}px;
-            border-radius:50%;
-            background:rgba(150,100,200,0.35);
-            border:2px dashed rgba(150,100,200,0.8);
-            box-shadow:0 1px 4px rgba(0,0,0,0.2);
-          "></span>`
-        : `<span style="
+      const markerHtml = `<span style="
             display:block;
             width:${r}px;height:${r}px;
             border-radius:50%;
@@ -280,14 +261,14 @@ export default class MapPage extends Component {
       });
 
       const marker = L.marker([tag.lat, tag.lng], { icon }).addTo(this._map);
-      const lockIcon = tag.is_hidden ? LOCK_SVG : '';
+      
       const yearsHtml = tag.years && tag.years.length > 0
         ? `<div class="map-popup-years">` +
           tag.years.map(y => `<a href="/tag/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`).join(' ') +
           `</div>`
         : '';
       marker.bindPopup(
-        `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag">${lockIcon}${escapeHtml(tag.name)}</a>` +
+        `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag">${escapeHtml(tag.name)}</a>` +
         `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}</div>` +
         yearsHtml
       );
