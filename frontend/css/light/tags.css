@@ -186,6 +186,13 @@
     bottom: -1px;
 }
 
+.tm-row.tm-drop-on {
+    background-color: rgba(37, 99, 235, 0.08);
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: -2px;
+    border-radius: 3px;
+}
+
 /* Tag link pill (posts table) */
 .tag-link {
     display: inline-flex;
@@ -431,6 +438,7 @@
 }
 
 .tm-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
