@@ -113,6 +113,21 @@ func main() {
 		}
 	}
 
+	// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
+	if err := repo.MigrateFlagsToSystemTags(ctx); err != nil {
+		log.Printf("warning: system_tags_phase_a: %v", err)
+	}
+	// Phase B: rebuild tags table to drop the now-migrated boolean columns.
+	if err := repo.RebuildTagsTableDropBooleans(ctx); err != nil {
+		log.Printf("warning: system_tags_phase_b: %v", err)
+	}
+
+	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
+	if err := repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
+		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
+		log.Printf("warning: migration %q: %v", "rename_system_tags_to_slug", err)
+	}
+
 	// Initialize Echo
 	e := echo.New()
 	e.HideBanner = true

@@ -45,7 +45,7 @@ export class PublicHeaderTagsBar extends Component {
    */
   _renderTag(tag, currentTagSlug, isRoot = false) {
     // Never render hidden tags in the public nav bar.
-    if (tag.is_hidden) return '';
+    
 
     const relatedClass = tag.is_related ? ' is-related' : '';
     const rootClass = isRoot ? ' category-tag' : '';
