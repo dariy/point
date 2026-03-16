@@ -914,6 +914,12 @@
     background: var(--surface-hover);
 }
 
+/* Inline flag strip below Description in the tag editor modal */
+.tm-flags-inline-strip {
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
 /* System tag pill strip inside parent/child selector */
 .tag-toggle-system-strip {
     display: flex;
