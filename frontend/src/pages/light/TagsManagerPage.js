@@ -453,6 +453,18 @@ export default class TagsManagerPage extends Component {
   _bindDragAndDrop() {
     const rows = this.$$('.tm-row[draggable="true"]');
 
+    const clearIndicators = () => {
+      this.$$('.tm-row').forEach(r => r.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on'));
+    };
+
+    // Return 'before' | 'on' | 'after' based on cursor position within row.
+    const dropZone = (e, rect) => {
+      const rel = (e.clientY - rect.top) / rect.height;
+      if (rel < 0.25) return 'before';
+      if (rel > 0.75) return 'after';
+      return 'on';
+    };
+
     rows.forEach(row => {
       row.addEventListener('dragstart', e => {
         const id = parseInt(row.dataset.id, 10);
@@ -465,36 +477,31 @@ export default class TagsManagerPage extends Component {
 
       row.addEventListener('dragend', () => {
         row.classList.remove('tm-dragging');
-        this.$$('.tm-row').forEach(r => r.classList.remove('tm-drop-before', 'tm-drop-after'));
+        clearIndicators();
         this._dragState = null;
       });
 
       row.addEventListener('dragover', e => {
         if (!this._dragState) return;
-        const dragId = this._dragState.tagId;
+        const dragId   = this._dragState.tagId;
         const targetId = parseInt(row.dataset.id, 10);
         if (dragId === targetId) return;
-
-        // Only allow reorder within the same parent context.
-        const rowParentId = row.dataset.parentId !== '' ? parseInt(row.dataset.parentId, 10) : null;
-        if (rowParentId !== this._dragState.parentId) return;
 
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
 
-        // Show before/after indicator based on vertical position.
-        const rect = row.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        this.$$('.tm-row').forEach(r => r.classList.remove('tm-drop-before', 'tm-drop-after'));
-        if (e.clientY < midY) {
-          row.classList.add('tm-drop-before');
-        } else {
-          row.classList.add('tm-drop-after');
-        }
+        clearIndicators();
+        const zone = dropZone(e, row.getBoundingClientRect());
+        if (zone === 'before') row.classList.add('tm-drop-before');
+        else if (zone === 'after') row.classList.add('tm-drop-after');
+        else row.classList.add('tm-drop-on');
       });
 
-      row.addEventListener('dragleave', () => {
-        row.classList.remove('tm-drop-before', 'tm-drop-after');
+      row.addEventListener('dragleave', e => {
+        // Only clear if leaving the row entirely (not entering a child element).
+        if (!row.contains(e.relatedTarget)) {
+          row.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on');
+        }
       });
 
       row.addEventListener('drop', async e => {
@@ -502,23 +509,39 @@ export default class TagsManagerPage extends Component {
         if (!this._dragState) return;
 
         const dragId   = this._dragState.tagId;
-        const parentId = this._dragState.parentId;
         const targetId = parseInt(row.dataset.id, 10);
-        if (dragId === targetId) return;
+        if (dragId === targetId) { clearIndicators(); this._dragState = null; return; }
 
-        const position = row.classList.contains('tm-drop-before') ? 'before' : 'after';
-        row.classList.remove('tm-drop-before', 'tm-drop-after');
+        const zone = row.classList.contains('tm-drop-before') ? 'before'
+                   : row.classList.contains('tm-drop-after')  ? 'after'
+                   : 'on';
+        clearIndicators();
         this._dragState = null;
 
+        const targetParentId = row.dataset.parentId !== '' ? parseInt(row.dataset.parentId, 10) : null;
+
         try {
-          await reorderTag(dragId, {
-            target_id: targetId,
-            position,
-            parent_id: parentId,
-          });
+          if (zone === 'on') {
+            // Reparent: make targetId the sole parent of dragId.
+            const dragTag = this.state.tags.find(t => t.id === dragId);
+            if (!dragTag) return;
+            await updateTag(dragId, {
+              name:       dragTag.name,
+              slug:       dragTag.slug,
+              parent_ids: [targetId],
+              child_ids:  (dragTag.children || []).map(c => c.id),
+            });
+          } else {
+            // Reorder within target's parent context; also reparents if cross-hierarchy.
+            await reorderTag(dragId, {
+              target_id: targetId,
+              position:  zone,
+              parent_id: targetParentId,
+            });
+          }
           this._load();
         } catch (err) {
-          store.set('toast', { message: err.message || 'Reorder failed.', type: 'error' });
+          store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
         }
       });
     });
