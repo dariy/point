@@ -397,8 +397,12 @@ func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
 		return fmt.Errorf("position must be 'before' or 'after'")
 	}
 
+	dragged, err := s.repo.GetTag(ctx, p.ID)
+	if err != nil {
+		return fmt.Errorf("tag %q not found", p.ID)
+	}
+
 	var siblings []models.Tag
-	var err error
 	if p.ParentID != nil {
 		siblings, err = s.repo.GetChildrenOfTag(ctx, *p.ParentID)
 	} else {
@@ -408,7 +412,7 @@ func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
 		return err
 	}
 
-	// Find and remove the dragged tag.
+	// Find and remove the dragged tag from siblings (may not be present on cross-hierarchy move).
 	draggedIdx := -1
 	for i, t := range siblings {
 		if t.ID == p.ID {
@@ -416,11 +420,18 @@ func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
 			break
 		}
 	}
-	if draggedIdx == -1 {
-		return fmt.Errorf("tag %d not found among siblings", p.ID)
+	if draggedIdx != -1 {
+		siblings = append(siblings[:draggedIdx], siblings[draggedIdx+1:]...)
+	} else {
+		// Cross-hierarchy move: reparent the dragged tag to the target parent.
+		var newParents []int64
+		if p.ParentID != nil {
+			newParents = []int64{*p.ParentID}
+		}
+		if err := s.SetTagParents(ctx, p.ID, newParents); err != nil {
+			return fmt.Errorf("reparent tag %q: %w", dragged.Slug, err)
+		}
 	}
-	dragged := siblings[draggedIdx]
-	siblings = append(siblings[:draggedIdx], siblings[draggedIdx+1:]...)
 
 	// Find insert position relative to target.
 	insertAt := len(siblings)
