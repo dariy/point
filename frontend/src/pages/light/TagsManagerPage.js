@@ -566,6 +566,9 @@ export default class TagsManagerPage extends Component {
       `        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description\u2026">${escapeHtml(f.description || '')}</textarea>`,
       '      </div>',
 
+      // System flag tags — always inline, right below description
+      this._renderSystemFlags(selParents),
+
       // Parents (collapsible) — hidden for system tags (parents are fixed)
       ...(isSystem ? [] : [
         '      <div class="tm-collapsible-section">',
@@ -717,36 +720,41 @@ export default class TagsManagerPage extends Component {
     nameInput.focus();
   }
 
-  /** Render tag-badge toggle checkboxes for parent/children selection.
+  /**
+   * Render the four flag system tags (_hidden, _hide_posts, _is_in_breadcrumbs, _with_related)
+   * as an inline pill strip, positioned below Description in the modal.
+   * The checkboxes use name="parent_ids" so they're included in the save payload.
+   */
+  _renderSystemFlags(selectedIds) {
+    const FLAG_SLUGS = ['_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related'];
+    const selectedSet = new Set(selectedIds);
+    const flagTags = FLAG_SLUGS.map(s => this.state.tags.find(t => t.slug === s)).filter(Boolean);
+    if (!flagTags.length) return '';
+    const pills = flagTags.map(t =>
+      `<span class="tag-toggle-system-item tm-system-node">
+        <label class="tag-toggle">
+          <input type="checkbox" name="parent_ids" value="${t.id}"${selectedSet.has(t.id) ? ' checked' : ''}>
+          <span>${escapeHtml(t.name)}</span>
+        </label>
+      </span>`
+    ).join('');
+    return `<div class="tag-toggle-system-strip tm-flags-inline-strip">${pills}</div>`;
+  }
+
+  /** Render tag-badge toggle checkboxes for parent/children selection (tree only).
    *
-   * Layout:
-   *   - Leaf system strip (flat row): _hidden, _hide_posts, _is_in_breadcrumbs, _with_related
-   *   - Tree section: _root (with full subtree) + all user tags
-   *
-   * Excluded entirely: _system (org container), _pending (auto-assigned, not user-selectable).
+   * Excluded: _system, _pending, and the four flag tags (shown inline above).
    */
   _renderTagToggles(inputName, allTags, selfId, selectedIds) {
-    const EXCLUDE   = new Set(['_system', '_pending']);
-    const LEAF_SYS  = new Set(['_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related']);
+    const EXCLUDE = new Set(['_system', '_pending', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related']);
 
     const available = allTags.filter(t => t.id !== selfId && !EXCLUDE.has(t.slug));
     if (!available.length) return '<span class="tag-toggles-empty">No other tags available.</span>';
 
     const selectedSet = new Set(selectedIds);
 
-    // ── Leaf system strip (flat pills, no tree) ──────────────────────────────
-    const leafItems = available.filter(t => LEAF_SYS.has(t.slug));
-    const leafHtml = leafItems.map(t =>
-      `<span class="tag-toggle-system-item tm-system-node" data-name="${escapeHtml(t.name.toLowerCase())}">
-        <label class="tag-toggle">
-          <input type="checkbox" name="${inputName}" value="${t.id}"${selectedSet.has(t.id) ? ' checked' : ''}>
-          <span>${escapeHtml(t.name)}</span>
-        </label>
-      </span>`
-    ).join('');
-
     // ── Tree section (_root + user tags) ─────────────────────────────────────
-    const treeItems = available.filter(t => !LEAF_SYS.has(t.slug)); // _root + user tags
+    const treeItems = available; // _root + user tags
     const treeById  = new Map(treeItems.map(t => [t.id, t]));
 
     const childrenOf = new Map();
@@ -808,13 +816,9 @@ export default class TagsManagerPage extends Component {
     };
 
     const treeInner = roots.map(r => renderNode(r, 0)).join('');
-    const treeHtml = treeInner ? `<ul class="tag-toggle-tree level-0">${treeInner}</ul>` : '';
-
-    if (!leafHtml && !treeHtml) return '<span class="tag-toggles-empty">No other tags available.</span>';
-
-    const strip = leafHtml ? `<div class="tag-toggle-system-strip">${leafHtml}</div>` : '';
-    const divider = strip && treeHtml ? '<div class="tag-toggle-divider"></div>' : '';
-    return `${strip}${divider}${treeHtml}`;
+    return treeInner
+      ? `<ul class="tag-toggle-tree level-0">${treeInner}</ul>`
+      : '<span class="tag-toggles-empty">No other tags available.</span>';
   }
 
   /**
@@ -866,29 +870,16 @@ export default class TagsManagerPage extends Component {
       if (!container) return;
       input.addEventListener('input', () => {
         const q = input.value.trim().toLowerCase();
-
-        // Leaf system strip items.
-        const sysItems = Array.from(container.querySelectorAll('.tag-toggle-system-item'));
-        sysItems.forEach(el => {
-          el.style.display = (!q || el.dataset.name.includes(q)) ? '' : 'none';
-        });
-        const strip = container.querySelector('.tag-toggle-system-strip');
-        if (strip) {
-          strip.style.display = (!q || sysItems.some(el => el.style.display !== 'none')) ? '' : 'none';
-        }
-        const divider = container.querySelector('.tag-toggle-divider');
-
-        // Tree nodes.
         const allNodes = Array.from(container.querySelectorAll('.tag-toggle-node'));
         const allLists = Array.from(container.querySelectorAll('.tag-toggle-tree'));
         if (!q) {
           allNodes.forEach(n => (n.style.display = ''));
           allLists.forEach(l => (l.style.display = ''));
-          if (divider) divider.style.display = '';
           return;
         }
         allNodes.forEach(n => (n.style.display = 'none'));
         allLists.forEach(l => (l.style.display = 'none'));
+        // Show matching nodes and all their ancestors.
         allNodes.forEach(n => {
           const label = n.querySelector(':scope > .tag-toggle-row .tag-toggle span');
           if (label && label.textContent.toLowerCase().includes(q)) {
@@ -901,11 +892,6 @@ export default class TagsManagerPage extends Component {
             }
           }
         });
-        // Hide divider when tree section is fully empty.
-        if (divider) {
-          const anyTreeVisible = allNodes.some(n => n.style.display !== 'none');
-          divider.style.display = (anyTreeVisible || (strip && strip.style.display !== 'none')) ? '' : 'none';
-        }
       });
     });
   }
