@@ -546,7 +546,23 @@ export default class PostEditPage extends Component {
       return;
     }
 
-    this.setState({ saving: true });
+    // Snapshot current form values so any re-render triggered by setState
+    // (saving: true/false) restores what the user typed rather than stale state.post.
+    const postSnap = {
+      ...(this.state.post || {}),
+      title:            data.title,
+      slug:             data.slug,
+      excerpt:          data.excerpt,
+      content:          data.content,
+      status:           data.status,
+      is_featured:      data.is_featured,
+      formatter:        data.formatter,
+      thumbnail_path:   data.thumbnail_path,
+      meta_description: data.meta_description,
+      tags:             (data.tags || []).map((name) => ({ name, slug: name })),
+    };
+
+    this.setState({ saving: true, post: postSnap });
     try {
       let post;
       if (this.state.isNew) {
@@ -560,7 +576,7 @@ export default class PostEditPage extends Component {
       this.setState({ saving: false, post });
       store.set('toast', { message: 'Post saved.', type: 'success' });
     } catch (err) {
-      this.setState({ saving: false });
+      this.setState({ saving: false, post: postSnap });
       store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
     }
   }
