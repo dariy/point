@@ -137,8 +137,14 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 		}
 	}
 
-	// 6. Blog settings
-	settings, _ := h.settingsService.GetAllSettings(ctx)
+	// 6. Blog settings — only public-safe keys for client-side storage
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	publicSettings := make(map[string]string)
+	for k, v := range allSettings {
+		if pagePublicSettingKeys[k] {
+			publicSettings[k] = v
+		}
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"posts":             postResponses,
@@ -146,7 +152,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 		"tag_relationships": relationships,
 		"tag_locations":     locations,
 		"media":             publicMedia,
-		"settings":          settings,
+		"settings":          publicSettings,
 		"exported_at":       time.Now().UTC().Round(0),
 	})
 }

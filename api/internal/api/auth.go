@@ -9,6 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
+	"point-api/internal/models"
 	"point-api/internal/services"
 )
 
@@ -117,11 +118,15 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 }
 
 func (h *AuthHandler) Me(c echo.Context) error {
-	session := c.Get("user")
-	if session == nil {
+	session, ok := c.Get("user").(models.GetSessionByTokenRow)
+	if !ok || session.UserID == 0 {
 		return echo.NewHTTPError(http.StatusUnauthorized, "not authenticated")
 	}
-	return c.JSON(http.StatusOK, session)
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"id":           session.UserID,
+		"username":     session.Username,
+		"display_name": session.DisplayName,
+	})
 }
 
 type ChangePasswordRequest struct {
@@ -162,7 +167,7 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 		IPAddress    string    `json:"ip_address"`
 		UserAgent    string    `json:"user_agent"`
 		CreatedAt    time.Time `json:"created_at"`
-		LastActivity time.Time `json:"last_activity"`
+		LastActivity time.Time `json:"last_active_at"`
 		ExpiresAt    time.Time `json:"expires_at"`
 		IsCurrent    bool      `json:"is_current"`
 	}
