@@ -517,7 +517,9 @@ export default class PostEditPage extends Component {
       this._nodes = nodes;
       this.setState({ loading: false, post, error: null, editorMode: 'visual' });
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Post not found.' });
+      console.error('[PostEditPage] load error:', err);
+      store.set('toast', { message: 'Could not load post.', type: 'error' });
+      navigate('/light/posts', { replace: true });
     }
   }
 

@@ -209,7 +209,9 @@ export default class SettingsPage extends Component {
         posts: postsResult.posts || [],
       });
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Failed to load settings.' });
+      console.error('[SettingsPage] load error:', err);
+      store.set('toast', { message: 'Could not load settings.', type: 'error' });
+      this.setState({ loading: false });
     }
   }
 
