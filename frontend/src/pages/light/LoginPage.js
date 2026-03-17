@@ -1,14 +1,19 @@
 /**
- * LoginPage — admin login form.
+ * LoginPage — minimal login overlay.
  *
- * On success, stores the user in the store and redirects to /light.
+ * Renders into a dedicated overlay container (outside #app) so the current
+ * public page remains visible and blurred behind it.
+ *
+ * Props:
+ *   next       {string|null}   URL to navigate to on success
+ *   onSuccess  {Function}      Called with the user object after login
+ *   onCancel   {Function}      Called when the backdrop or Escape is pressed
  */
 
 import { Component } from '../../components/Component.js';
 import { login } from '../../api/auth.js';
 import { store } from '../../store.js';
-import { navigate, escapeHtml } from '../../utils/helpers.js';
-import { APP_LOGO_SVG } from '../../utils/icons.js';
+import { escapeHtml } from '../../utils/helpers.js';
 
 export default class LoginPage extends Component {
   constructor(container, props = {}) {
@@ -19,48 +24,22 @@ export default class LoginPage extends Component {
   render() {
     const { loading, error } = this.state;
     const settings = store.get('settings') || {};
-    const title = escapeHtml(settings.blog_title || 'Point');
     const multiUser = settings.multi_user_mode === 'true' || settings.multi_user_mode === true;
 
     return `
-      <div class="login-page">
-        <div class="login-container">
-          <div class="login-card">
-
-            <div class="login-header">
-              <div class="site-branding">
-                <a href="/" class="site-title-link">
-                  <span class="site-title">
-                    ${APP_LOGO_SVG}
-                    ${title}
-                  </span>
-                </a>
-              </div>
-            </div>
-
-            ${error ? `<div class="login-error" role="alert">${escapeHtml(error)}</div>` : ''}
-
-            <form id="login-form" novalidate>
-              ${multiUser ? `
-              <div class="form-group">
-                <input type="text" id="username-input" name="username"
-                       class="form-input" autocomplete="username"
-                       placeholder="Username">
-              </div>` : ''}
-              <div class="form-group">
-                <input type="password" id="password-input" name="password"
-                       class="form-input" autocomplete="current-password"
-                       required placeholder="Enter your password">
-              </div>
-              <div class="login-actions">
-                <button type="submit" class="btn btn-primary" id="submit-btn"
-                        ${loading ? 'disabled' : ''}>
-                  ${loading ? 'Signing in…' : 'Sign in'}
-                </button>
-              </div>
-            </form>
-
-          </div>
+      <div class="login-overlay-backdrop" id="login-backdrop">
+        <div class="login-modal-box">
+          ${error ? `<p class="login-modal-error" role="alert">${escapeHtml(error)}</p>` : ''}
+          <form id="login-form" class="login-modal-form" novalidate>
+            ${multiUser ? `
+            <input type="text" id="username-input" name="username"
+                   class="login-input" autocomplete="username"
+                   placeholder="Username">` : ''}
+            <input type="password" id="password-input" name="password"
+                   class="login-input" autocomplete="current-password"
+                   required placeholder="${loading ? 'Signing in…' : 'Password'}"
+                   ${loading ? 'disabled' : ''}>
+          </form>
         </div>
       </div>`;
   }
@@ -68,12 +47,6 @@ export default class LoginPage extends Component {
   afterRender() {
     const form = this.$('#login-form');
     if (!form) return;
-
-    // Navigate to ?next= if present, otherwise fall back to /light.
-    const _redirect = () => {
-      const next = this.props?.query?.next;
-      navigate(next ? decodeURIComponent(next) : '/light', { replace: true });
-    };
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -92,7 +65,7 @@ export default class LoginPage extends Component {
       try {
         const result = await login(username, password, true);
         store.set('user', result.user);
-        _redirect();
+        this.props.onSuccess?.(result.user);
       } catch (err) {
         this.setState({
           loading: false,
@@ -101,9 +74,28 @@ export default class LoginPage extends Component {
       }
     });
 
+    // Backdrop click cancels.
+    const backdrop = this.$('#login-backdrop');
+    backdrop?.addEventListener('click', (e) => {
+      if (e.target === backdrop) this.props.onCancel?.();
+    });
+
+    // Escape key cancels.
+    this._onKeyDown = (e) => {
+      if (e.key === 'Escape') this.props.onCancel?.();
+    };
+    window.addEventListener('keydown', this._onKeyDown);
+
+    // Auto-focus first input after animation settles.
+    const pwField = this.$('#password-input');
+    const usrField = this.$('#username-input');
+    setTimeout(() => (usrField || pwField)?.focus(), 80);
+
     // Auto-redirect if already logged in.
-    if (store.get('user')) {
-      _redirect();
-    }
+    if (store.get('user')) this.props.onSuccess?.(store.get('user'));
+  }
+
+  beforeUnmount() {
+    window.removeEventListener('keydown', this._onKeyDown);
   }
 }

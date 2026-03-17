@@ -22,6 +22,66 @@ import { NotificationLogButton } from './components/shared/NotificationLogButton
 import { initNotificationLog } from './utils/notificationLog.js';
 import { syncQueue } from './utils/sync.js';
 
+// ── Login overlay ─────────────────────────────────────────────────────────
+
+const _loginOverlayEl = document.createElement('div');
+_loginOverlayEl.id = 'login-overlay';
+document.body.appendChild(_loginOverlayEl);
+
+let _loginModalInstance = null;
+
+async function _showLoginOverlay(next) {
+  if (_loginModalInstance) return;
+
+  const appEl = document.getElementById('app');
+
+  // If #app has no content yet (e.g. direct navigation to /light/login),
+  // render the home page as the blurred background.
+  if (!appEl || appEl.children.length === 0) {
+    const homeRoute = routes.find((r) => r.path === '/');
+    if (homeRoute) {
+      try {
+        const mod = await homeRoute.load();
+        const PageClass = mod.default;
+        const bgPage = new PageClass(appEl, { params: {}, query: {} });
+        bgPage.mount();
+        _applySection('/');
+        store.set('route', { pathname: '/', params: {}, query: {} });
+      } catch { /* ignore */ }
+    }
+  }
+
+  if (appEl) appEl.classList.add('login-blur');
+
+  const { default: LoginPage } = await import('./pages/light/LoginPage.js');
+  _loginModalInstance = new LoginPage(_loginOverlayEl, {
+    next,
+    onSuccess: () => {
+      _hideLoginOverlay(false);
+      router.navigate(next || '/light', { replace: true });
+    },
+    onCancel: _hideLoginOverlay,
+  });
+  _loginModalInstance.mount();
+}
+
+function _hideLoginOverlay(restoreUrl = true) {
+  const appEl = document.getElementById('app');
+  if (appEl) appEl.classList.remove('login-blur');
+
+  _loginModalInstance?.unmount();
+  _loginModalInstance = null;
+
+  if (restoreUrl && location.pathname.startsWith('/light/login')) {
+    const route = store.get('route');
+    history.replaceState(null, '', route?.pathname || '/');
+  }
+}
+
+window.addEventListener('app:login-required', ({ detail }) => {
+  _showLoginOverlay(detail?.next || null);
+});
+
 // ── CSS section switching ─────────────────────────────────────────────────
 //
 // The SPA uses two CSS bundles with incompatible :root token sets:
@@ -154,7 +214,6 @@ const routes = [
   { path: '/preview/:token', load: () => import('./pages/public/PreviewPage.js'), public: true },
 
   // Admin (Light) — protected
-  { path: '/light/login', load: () => import('./pages/light/LoginPage.js'),   public: true },
   { path: '/light',       load: () => import('./pages/light/DashboardPage.js') },
   { path: '/light/posts', load: () => import('./pages/light/PostsListPage.js') },
   { path: '/light/posts/new',      load: () => import('./pages/light/PostEditPage.js') },
