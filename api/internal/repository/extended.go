@@ -656,7 +656,7 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var tags []models.Tag
 	for rows.Next() {
 		var t models.Tag
