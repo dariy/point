@@ -329,7 +329,9 @@ export default class SystemPage extends Component {
       await updateStatus();
       this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue });
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Failed to load system data.' });
+      console.error('[SystemPage] load error:', err);
+      store.set('toast', { message: 'Could not load system data.', type: 'error' });
+      this.setState({ loading: false });
     }
   }
 
