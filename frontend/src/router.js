@@ -179,7 +179,12 @@ class Router {
     }
 
     if (!matchedRoute) {
-      this._showFallback('404', 'Page not found.');
+      if (pathname.startsWith('/light') && pathname !== '/light') {
+        store.set('toast', { message: 'Page not found.', type: 'error' });
+        this.navigate('/light', { replace: true });
+      } else {
+        this._showFallback('404', 'Page not found.');
+      }
       return;
     }
 
@@ -205,7 +210,12 @@ class Router {
       this._currentPage.mount();
     } catch (err) {
       console.error('[Router] Failed to load page:', err);
-      this._showFallback('Error', 'Failed to load page. Please try again.');
+      if (pathname.startsWith('/light') && pathname !== '/light') {
+        store.set('toast', { message: 'Failed to load page. Please try again.', type: 'error' });
+        this.navigate('/light', { replace: true });
+      } else {
+        this._showFallback('Error', 'Failed to load page. Please try again.');
+      }
     }
   }
 
