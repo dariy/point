@@ -104,7 +104,7 @@ class Router {
   }
 
   _onUnauthorized() {
-    this.navigate(this._loginPath, { replace: true });
+    window.dispatchEvent(new CustomEvent('app:login-required', { detail: { next: null } }));
   }
 
   /** Intercept clicks on same-origin <a> elements. */
@@ -167,6 +167,13 @@ class Router {
     const search = qIndex === -1 ? '' : fullPath.slice(qIndex);
     const query = this._parseSearch(search);
 
+    // Login path: delegate entirely to the overlay system, never unmount current page.
+    if (pathname === this._loginPath) {
+      const next = query.next ? decodeURIComponent(query.next) : null;
+      window.dispatchEvent(new CustomEvent('app:login-required', { detail: { next } }));
+      return;
+    }
+
     let matchedRoute = null;
     let params = {};
     for (const route of this._routes) {
@@ -188,11 +195,10 @@ class Router {
       return;
     }
 
-    // Auth guard: redirect to login if route requires authentication.
-    // Encode the current path+query as ?next= so LoginPage can return here.
+    // Auth guard: show login overlay without unmounting the current page.
     if (!matchedRoute.public && this._authGuard && !this._authGuard()) {
-      const next = encodeURIComponent(fullPath);
-      this.navigate(`${this._loginPath}?next=${next}`, { replace: true });
+      history.replaceState(null, '', `${this._loginPath}?next=${encodeURIComponent(fullPath)}`);
+      window.dispatchEvent(new CustomEvent('app:login-required', { detail: { next: fullPath } }));
       return;
     }
 
