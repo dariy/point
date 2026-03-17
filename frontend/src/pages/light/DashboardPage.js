@@ -119,7 +119,9 @@ export default class DashboardPage extends Component {
       const stats = await getStats();
       this.setState({ loading: false, stats, error: null });
     } catch (err) {
-      this.setState({ loading: false, stats: null, error: err.message || 'Failed to load stats.' });
+      console.error('[DashboardPage] load error:', err);
+      store.set('toast', { message: 'Could not load dashboard stats.', type: 'error' });
+      this.setState({ loading: false, stats: null });
     }
   }
 
