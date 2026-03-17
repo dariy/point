@@ -1,0 +1,100 @@
+/* ===========================
+   Login Overlay
+   Included in both CSS bundles — the overlay sits above #app
+   regardless of which section (public / light) is active.
+   =========================== */
+
+/* Blur the page behind the modal */
+#app {
+    transition: filter 0.25s ease-out;
+}
+
+#app.login-blur {
+    filter: blur(6px) brightness(0.75);
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Backdrop */
+.login-overlay-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.25);
+    animation: loginBackdropIn 0.2s ease-out;
+}
+
+/* Modal box */
+.login-modal-box {
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-xl, 12px);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 320px;
+    overflow: hidden;
+    animation: loginModalIn 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Error */
+.login-modal-error {
+    margin: 0;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border-primary);
+    color: var(--color-danger);
+    font-size: 0.875rem;
+    text-align: center;
+    line-height: 1.5;
+}
+
+/* Form */
+.login-modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.5rem;
+}
+
+/* Input */
+.login-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background: var(--bg-input, var(--surface-elevated, var(--bg-primary)));
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius, 6px);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.login-input:focus {
+    border-color: var(--color-primary, #2563eb);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.login-input::placeholder {
+    color: var(--text-muted, #9ca3af);
+}
+
+.login-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Animations */
+@keyframes loginBackdropIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes loginModalIn {
+    from { opacity: 0; transform: translateY(14px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
