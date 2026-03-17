@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,6 +18,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"point-api/internal/api"
 	"point-api/internal/config"
+	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
@@ -32,6 +36,45 @@ func resolveJSDir(frontendDir string) string {
 		return srcDir
 	}
 	return ""
+}
+
+// ensureSecretKey guarantees cfg.SecretKey is populated before the server
+// starts. If SECRET_KEY is absent from the environment / .env file it checks
+// blog_settings for the key "_secret_key". When no persisted key exists it
+// generates a cryptographically random 32-byte hex string, stores it in the
+// database, and uses it for this and future runs.
+func ensureSecretKey(ctx context.Context, cfg *config.Config, repo *repository.Repository) error {
+	if cfg.SecretKey != "" {
+		return nil
+	}
+
+	// Try to load a previously generated key from the database.
+	setting, err := repo.GetSetting(ctx, "_secret_key")
+	if err == nil && setting.Value.Valid && setting.Value.String != "" {
+		cfg.SecretKey = setting.Value.String
+		log.Printf("loaded secret key from database settings")
+		return nil
+	}
+
+	// Generate a new 32-byte (64 hex chars) random secret key.
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return fmt.Errorf("generate secret key: %w", err)
+	}
+	key := hex.EncodeToString(raw)
+
+	// Persist it so future restarts reuse the same key.
+	if _, err := repo.UpdateSetting(ctx, models.UpdateSettingParams{
+		Key:       "_secret_key",
+		Value:     sql.NullString{String: key, Valid: true},
+		ValueType: "string",
+	}); err != nil {
+		return fmt.Errorf("store secret key: %w", err)
+	}
+
+	cfg.SecretKey = key
+	log.Printf("generated and stored new secret key in database settings")
+	return nil
 }
 
 func main() {
@@ -128,6 +171,11 @@ func main() {
 		log.Printf("warning: migration %q: %v", "rename_system_tags_to_slug", err)
 	}
 
+	// Ensure a secret key is available for session signing.
+	if err := ensureSecretKey(ctx, &cfg, repo); err != nil {
+		log.Fatalf("failed to ensure secret key: %v", err)
+	}
+
 	// Initialize Echo
 	e := echo.New()
 	e.HideBanner = true
@@ -145,9 +193,10 @@ func main() {
 	postHandler := api.NewPostHandler(postService, settingsService, mediaService, tagService)
 	mediaHandler := api.NewMediaHandler(mediaService, settingsService)
 	settingsHandler := api.NewSettingsHandler(settingsService)
-	systemHandler := api.NewSystemHandler(repo, mediaService, postService, settingsService, tagService, cfg.StoragePath)
+	systemHandler := api.NewSystemHandler(repo, mediaService, postService, settingsService, tagService, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, postService, tagService, settingsService)
 	pagesHandler := api.NewPagesHandler(repo, postService, tagService, settingsService)
+	setupHandler := api.NewSetupHandler(authService, settingsService, repo)
 
 	// Global middleware
 	e.Use(middleware.RequestLogger())
@@ -196,6 +245,10 @@ func main() {
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
 	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(authService))
+
+	// ── Setup Routes (unauthenticated — first-run wizard) ──────────────────────
+	e.GET("/api/setup/status", setupHandler.SetupStatus)
+	e.POST("/api/setup", setupHandler.Setup)
 
 	// ── Auth Routes ────────────────────────────────────────────────────────────
 	authGroup := e.Group("/api/auth")
@@ -279,6 +332,8 @@ func main() {
 	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(authService))
 	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(authService))
 	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(authService))
+	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(authService))
+	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(authService))
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")
