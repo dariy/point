@@ -114,13 +114,11 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo) map[string]int
 
 func tagToListItem(t models.Tag) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                     t.ID,
-		"name":                   t.Name,
-		"slug":                   t.Slug,
-		"is_important":           t.IsImportant,
-		"include_in_breadcrumbs": t.IncludeInBreadcrumbs,
-		"sort_order":             nullInt64(t.SortOrder),
-		"post_count":             t.PostCount,
+		"id":         t.ID,
+		"name":       t.Name,
+		"slug":       t.Slug,
+		"sort_order": nullInt64(t.SortOrder),
+		"post_count": t.PostCount,
 	}
 }
 
@@ -144,21 +142,17 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 	}
 
 	return map[string]interface{}{
-		"id":                            t.ID,
-		"name":                          t.Name,
-		"slug":                          t.Slug,
-		"description":                   nullString(t.Description),
-		"custom_url":                    nullString(t.CustomUrl),
-		"is_important":                  t.IsImportant,
-		"is_featured":                   t.IsFeatured,
-		"include_in_breadcrumbs":        t.IncludeInBreadcrumbs,
-		"show_related_tags_as_children": t.ShowRelatedTagsAsChildren,
-		"sort_order":                    nullInt64(t.SortOrder),
-		"post_count":                    t.PostCount,
-		"created_at":                    t.CreatedAt,
-		"parents":                       parentItems,
-		"children":                      childItems,
-		"locations":                     tagLocationsResponse(loc),
+		"id":          t.ID,
+		"name":        t.Name,
+		"slug":        t.Slug,
+		"description": nullString(t.Description),
+		"custom_url":  nullString(t.CustomUrl),
+		"sort_order":  nullInt64(t.SortOrder),
+		"post_count":  t.PostCount,
+		"created_at":  t.CreatedAt,
+		"parents":     parentItems,
+		"children":    childItems,
+		"locations":   tagLocationsResponse(loc),
 	}
 }
 
@@ -178,7 +172,6 @@ func injectPostHiddenFields(resp map[string]interface{}, status string, tags []m
 	if tagList, ok := resp["tags"].([]map[string]interface{}); ok {
 		for i, t := range tags {
 			if i < len(tagList) {
-				tagList[i]["is_hidden"] = t.IsHidden
 				tagList[i]["is_hidden_posts"] = effectiveHiddenPostsTagIDs[t.ID]
 			}
 		}
@@ -186,7 +179,7 @@ func injectPostHiddenFields(resp map[string]interface{}, status string, tags []m
 }
 
 // injectPostHiddenFieldsFromInfo adds is_hidden/is_hidden_by_tag for list endpoints using PostTagInfo.
-// It also adds is_hidden and is_hidden_posts to each tag object in resp["tags"].
+// It also adds is_hidden_posts to each tag object in resp["tags"].
 func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, tags []repository.PostTagInfo, effectiveHiddenPostsTagIDs map[int64]bool) {
 	isHiddenByTag := false
 	for _, t := range tags {
@@ -200,18 +193,16 @@ func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, 
 	if tagList, ok := resp["tags"].([]map[string]interface{}); ok {
 		for i, t := range tags {
 			if i < len(tagList) {
-				tagList[i]["is_hidden"] = t.IsHidden
 				tagList[i]["is_hidden_posts"] = effectiveHiddenPostsTagIDs[t.ID]
 			}
 		}
 	}
 }
 
-// injectTagHiddenFields adds is_hidden/is_hidden_posts to a tag response map for admin users.
-// is_hidden_posts reflects effective inheritance: true if the tag or any ancestor has is_hidden_posts=true.
+// injectTagHiddenFields adds is_hidden_posts to a tag response map for admin users.
+// is_hidden_posts reflects effective inheritance: true if the tag or any ancestor effectively hides posts.
 func injectTagHiddenFields(resp map[string]interface{}, t models.Tag, effectiveHiddenPostsTagIDs map[int64]bool) {
-	resp["is_hidden"] = t.IsHidden
-	resp["is_hidden_posts"] = t.IsHiddenPosts || effectiveHiddenPostsTagIDs[t.ID]
+	resp["is_hidden_posts"] = effectiveHiddenPostsTagIDs[t.ID]
 }
 
 // mediaToResponse converts a Medium model into an API response map with

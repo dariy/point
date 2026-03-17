@@ -164,7 +164,7 @@ func TestPagesHandler_TagsPageAdmin(t *testing.T) {
 
 	tagSvc := services.NewTagService(repo)
 	ctx := context.Background()
-	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel", IsFeatured: true})
+	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel", })
 	child, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Europe"})
 	_ = tagSvc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 	// Set post_count > 0 so they appear in ListTags(includeEmpty=false)
@@ -222,9 +222,12 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 
 	tagSvc := services.NewTagService(repo)
 	ctx := context.Background()
-	// Create a hidden tag
-	hidden, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "HiddenTag", Slug: "hidden-tag", IsHidden: true})
-	_ = hidden
+	// Create hidden-tag and make it a child of the _hidden system tag.
+	hidden, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "HiddenTag", Slug: "hidden-tag"})
+	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug, post_count) VALUES ('Hidden','_hidden',0)`)
+	_, _ = repo.DB().Exec(`
+		INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+		SELECT h.id, ? FROM tags h WHERE h.slug = '_hidden'`, hidden.ID)
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)

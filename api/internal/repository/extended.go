@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"point-api/internal/models"
@@ -31,7 +32,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt 
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE is_hidden_posts = 1
+                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -84,7 +85,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt 
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE is_hidden_posts = 1
+                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -103,7 +104,7 @@ WHERE
 func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -124,7 +125,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt 
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE is_hidden_posts = 1
+                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -178,7 +179,7 @@ statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDraft
 func (r *Repository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -196,7 +197,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt 
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE is_hidden_posts = 1
+                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -377,7 +378,7 @@ AND p.id NOT IN (
     SELECT pt.post_id FROM post_tags pt 
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE is_hidden_posts = 1
+            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -424,7 +425,7 @@ AND id NOT IN (
     SELECT pt.post_id FROM post_tags pt 
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE is_hidden_posts = 1
+            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -475,7 +476,7 @@ func (r *Repository) GetPublicTagsForSitemap(ctx context.Context) ([]struct {
 }, error) {
 	const q = `
 SELECT id, slug FROM tags
-WHERE post_count > 0 AND is_hidden = 0
+WHERE post_count > 0 AND slug NOT LIKE '\_%%' ESCAPE '\' AND id NOT IN (SELECT tr.child_id FROM tag_relationships tr JOIN tags t ON t.id = tr.parent_id WHERE t.slug = '_hidden')
 ORDER BY name ASC`
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -579,14 +580,23 @@ func (r *Repository) GetTagAncestors(ctx context.Context, tagID int64) ([]models
 		if err != nil || len(parents) == 0 {
 			break
 		}
-		// Take first parent (assume single-parent hierarchy)
-		parent := parents[0]
-		if visited[parent.ID] {
+		// Prefer eligible parents: not a system tag (slug starts with "_").
+		// If multiple parents exist, skip ineligible ones so the breadcrumb
+		// path only travels through tags that should be visible.
+		var chosen *models.Tag
+		for i := range parents {
+			p := &parents[i]
+			if !visited[p.ID] && !strings.HasPrefix(p.Slug, "_") {
+				chosen = p
+				break
+			}
+		}
+		if chosen == nil {
 			break
 		}
-		visited[parent.ID] = true
-		ancestors = append([]models.Tag{parent}, ancestors...)
-		currentID = parent.ID
+		visited[chosen.ID] = true
+		ancestors = append([]models.Tag{*chosen}, ancestors...)
+		currentID = chosen.ID
 	}
 
 	return ancestors, nil
@@ -616,6 +626,47 @@ func (r *Repository) GetTagDescendants(ctx context.Context, tagID int64) ([]mode
 	}
 
 	return result, nil
+}
+
+// GetCoOccurringTags returns tags that appear on the same posts as tagID,
+// ordered by co-occurrence count descending. System tags (slug starting with "_")
+// and the tag itself are excluded.
+func (r *Repository) GetCoOccurringTags(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error) {
+	statusClause := ""
+	if publicOnly {
+		statusClause = "AND p.status = 'published'"
+	}
+	q := fmt.Sprintf(`
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+FROM tags t
+JOIN post_tags pt ON t.id = pt.tag_id
+JOIN posts p ON pt.post_id = p.id
+WHERE pt.post_id IN (
+    SELECT pt2.post_id FROM post_tags pt2
+    JOIN posts p2 ON pt2.post_id = p2.id
+    WHERE pt2.tag_id = ? %s
+)
+AND t.id != ?
+AND t.slug NOT LIKE '_%%'
+AND t.post_count > 0
+GROUP BY t.id
+ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
+
+	rows, err := r.db.QueryContext(ctx, q, tagID, tagID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []models.Tag
+	for rows.Next() {
+		var t models.Tag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
+			&t.SortOrder, &t.PostCount, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
 }
 
 // TagRelationship represents a parent-child tag relationship pair.
@@ -801,9 +852,7 @@ func (r *Repository) GetTagsWithoutLocation(ctx context.Context, tagIDs []int64)
 	}
 
 	q := `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important,
-       t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs,
-       t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
 FROM tags t
 LEFT JOIN tag_locations tl ON tl.tag_id = t.id
 WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
@@ -821,8 +870,6 @@ WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
 		var t models.Tag
 		if err := rows.Scan(
 			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.IsImportant, &t.IsFeatured, &t.IsHidden, &t.IsHiddenPosts,
-			&t.IncludeInBreadcrumbs, &t.ShowRelatedTagsAsChildren,
 			&t.SortOrder, &t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -870,9 +917,7 @@ func (r *Repository) FindTagsByNames(ctx context.Context, names []string) ([]mod
 	}
 
 	q := `
-SELECT id, name, slug, description, custom_url, is_important, is_featured,
-       is_hidden, is_hidden_posts, include_in_breadcrumbs,
-       show_related_tags_as_children, sort_order, post_count, created_at
+SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at
 FROM tags WHERE lower(name) IN (` + placeholders + `)`
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -888,8 +933,6 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 		var t models.Tag
 		if err := rows.Scan(
 			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.IsImportant, &t.IsFeatured, &t.IsHidden, &t.IsHiddenPosts,
-			&t.IncludeInBreadcrumbs, &t.ShowRelatedTagsAsChildren,
 			&t.SortOrder, &t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -901,11 +944,9 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 
 // PostTagInfo is a lightweight tag descriptor for embedding in post list responses.
 type PostTagInfo struct {
-	ID            int64  `json:"id"`
-	Name          string `json:"name"`
-	Slug          string `json:"slug"`
-	IsHidden      bool   `json:"is_hidden"`
-	IsHiddenPosts bool   `json:"is_hidden_posts"`
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
 }
 
 // PostStub is a lightweight post descriptor used for position/page lookups.
@@ -927,7 +968,7 @@ AND id NOT IN (
     SELECT pt.post_id FROM post_tags pt 
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE is_hidden_posts = 1
+            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -972,7 +1013,7 @@ func (r *Repository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map
 	}
 
 	q := `
-SELECT pt.post_id, t.id, t.name, t.slug, t.is_hidden, t.is_hidden_posts
+SELECT pt.post_id, t.id, t.name, t.slug
 FROM post_tags pt
 JOIN tags t ON t.id = pt.tag_id
 WHERE pt.post_id IN (` + placeholders + `)
@@ -989,7 +1030,7 @@ ORDER BY t.name ASC`
 	for rows.Next() {
 		var postID int64
 		var tag PostTagInfo
-		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.IsHidden, &tag.IsHiddenPosts); err != nil {
+		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
 			return nil, err
 		}
 		result[postID] = append(result[postID], tag)
@@ -1019,7 +1060,7 @@ func (r *Repository) GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs 
 	args = append(args, yearParentID)
 
 	q := `
-SELECT DISTINCT pt1.tag_id as loc_tag_id, year_tag.id, year_tag.name, year_tag.slug, year_tag.is_hidden_posts
+SELECT DISTINCT pt1.tag_id as loc_tag_id, year_tag.id, year_tag.name, year_tag.slug
 FROM post_tags AS pt1
 JOIN post_tags AS pt2 ON pt1.post_id = pt2.post_id
 JOIN tags AS year_tag ON pt2.tag_id = year_tag.id
@@ -1038,7 +1079,7 @@ ORDER BY year_tag.name ASC`
 	for rows.Next() {
 		var locTagID int64
 		var tag PostTagInfo
-		if err := rows.Scan(&locTagID, &tag.ID, &tag.Name, &tag.Slug, &tag.IsHiddenPosts); err != nil {
+		if err := rows.Scan(&locTagID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
 			return nil, err
 		}
 		result[locTagID] = append(result[locTagID], tag)
@@ -1101,9 +1142,7 @@ type MigrationRecord struct {
 // GetChildrenOfTag returns direct children of parentID, ordered by sort_order ASC, name ASC.
 func (r *Repository) GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error) {
 	const q = `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important,
-       t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs,
-       t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
 FROM tags t
 JOIN tag_relationships tr ON tr.child_id = t.id
 WHERE tr.parent_id = ?
@@ -1114,9 +1153,7 @@ ORDER BY t.sort_order ASC, t.name ASC`
 // GetRootTags returns tags that have no parents, ordered by sort_order ASC, name ASC.
 func (r *Repository) GetRootTags(ctx context.Context) ([]models.Tag, error) {
 	const q = `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.is_important,
-       t.is_featured, t.is_hidden, t.is_hidden_posts, t.include_in_breadcrumbs,
-       t.show_related_tags_as_children, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
 FROM tags t
 LEFT JOIN tag_relationships tr ON tr.child_id = t.id
 WHERE tr.parent_id IS NULL
@@ -1144,8 +1181,6 @@ func (r *Repository) scanTags(ctx context.Context, q string, args ...interface{}
 		var t models.Tag
 		if err := rows.Scan(
 			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.IsImportant, &t.IsFeatured, &t.IsHidden, &t.IsHiddenPosts,
-			&t.IncludeInBreadcrumbs, &t.ShowRelatedTagsAsChildren,
 			&t.SortOrder, &t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -1210,7 +1245,7 @@ var statusClause string
 			SELECT pt.post_id FROM post_tags pt 
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
-					SELECT id FROM tags WHERE is_hidden_posts = 1
+					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
 					UNION
 					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
 				)
@@ -1221,7 +1256,7 @@ var statusClause string
 
 	q := `
 WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -1298,7 +1333,7 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 			SELECT pt.post_id FROM post_tags pt 
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
-					SELECT id FROM tags WHERE is_hidden_posts = 1
+					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
 					UNION
 					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
 				)
@@ -1309,7 +1344,7 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 
 	q := `
 WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -1477,7 +1512,7 @@ func (r *Repository) GetHierarchicalPostCounts(ctx context.Context, publishedOnl
 	// infinite recursion if tag_relationships contains a cycle.
 	const q = `
 WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 ),
@@ -1500,7 +1535,7 @@ AND (CASE WHEN ? THEN p.id NOT IN (
     SELECT pt.post_id FROM post_tags pt 
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT id FROM tags WHERE is_hidden_posts = 1
+            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -1557,6 +1592,178 @@ func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error
 		`INSERT INTO migration_history (name) VALUES (?)`, name)
 	if err != nil {
 		return fmt.Errorf("failed to record migration %q in history: %w", name, err)
+	}
+	return nil
+}
+
+// MigrateFlagsToSystemTags is an idempotent migration that seeds system tags and
+// migrates the old boolean flag columns (is_featured, is_hidden, is_hidden_posts,
+// include_in_breadcrumbs, show_related_tags_as_children) into tag_relationships.
+// It records "system_tags_phase_a" in migration_history when complete.
+func (r *Repository) MigrateFlagsToSystemTags(ctx context.Context) error {
+	// Ensure migration_history table exists.
+	if _, err := r.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS migration_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name VARCHAR(255) NOT NULL UNIQUE,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("create migration_history: %w", err)
+	}
+
+	// Check if already applied.
+	var count int64
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_history WHERE name = 'system_tags_phase_a'`,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("check migration_history: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	// Check if is_featured column still exists.
+	rows, err := r.db.QueryContext(ctx, "SELECT name FROM pragma_table_info('tags') WHERE name = 'is_featured'")
+	if err != nil {
+		return fmt.Errorf("pragma table_info: %w", err)
+	}
+	columnExists := rows.Next()
+	_ = rows.Close()
+
+	if columnExists {
+		// Seed system tags (old schema still has boolean columns).
+		if _, err := r.db.ExecContext(ctx, `
+			INSERT OR IGNORE INTO tags (name, slug, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at) VALUES
+				('_system',            '_system',            0, 0, 0, 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP),
+				('_root',              '_root',              0, 0, 0, 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP),
+				('_hidden',            '_hidden',            0, 0, 0, 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP),
+				('_hide_posts',        '_hide_posts',        0, 0, 0, 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP),
+				('_is_in_breadcrumbs', '_is_in_breadcrumbs', 0, 0, 0, 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP),
+				('_with_related',      '_with_related',      0, 0, 0, 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP),
+				('_pending',           '_pending',           0, 0, 0, 0, 0, 0, NULL, 0, CURRENT_TIMESTAMP)
+		`); err != nil {
+			return fmt.Errorf("seed system tags: %w", err)
+		}
+
+		// Seed system tag relationships (all 6 are children of _system).
+		if _, err := r.db.ExecContext(ctx, `
+			INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			SELECT s.id, c.id FROM tags s, tags c
+			WHERE s.slug = '_system' AND c.slug IN ('_root', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_pending')
+		`); err != nil {
+			return fmt.Errorf("seed system tag relationships: %w", err)
+		}
+
+		// Migrate flag data to relationships.
+		flagMigrations := []struct {
+			parentSlug string
+			condition  string
+		}{
+			{"_root", "is_featured = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
+			{"_hidden", "is_hidden = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
+			{"_hide_posts", "is_hidden_posts = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
+			{"_is_in_breadcrumbs", "include_in_breadcrumbs = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
+			{"_with_related", "show_related_tags_as_children = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
+		}
+		for _, fm := range flagMigrations {
+			q := fmt.Sprintf(`
+				INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+				SELECT (SELECT id FROM tags WHERE slug = '%s'), id FROM tags WHERE %s`,
+				fm.parentSlug, fm.condition)
+			if _, err := r.db.ExecContext(ctx, q); err != nil {
+				return fmt.Errorf("migrate flag to %s: %w", fm.parentSlug, err)
+			}
+		}
+
+		// Assign _pending to orphaned non-system tags.
+		if _, err := r.db.ExecContext(ctx, `
+			INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			SELECT (SELECT id FROM tags WHERE slug = '_pending'), t.id
+			FROM tags t
+			WHERE t.slug NOT LIKE '\_%%' ESCAPE '\'
+			AND NOT EXISTS (SELECT 1 FROM tag_relationships tr WHERE tr.child_id = t.id)
+		`); err != nil {
+			return fmt.Errorf("assign _pending to orphans: %w", err)
+		}
+	}
+
+	// Record migration.
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO migration_history (name) VALUES ('system_tags_phase_a')`,
+	); err != nil {
+		return fmt.Errorf("record system_tags_phase_a: %w", err)
+	}
+	return nil
+}
+
+// RebuildTagsTableDropBooleans drops the 6 boolean columns from the tags table via
+// a table rebuild (SQLite does not support DROP COLUMN in older versions).
+// It is idempotent: it checks for "system_tags_phase_b" in migration_history first.
+func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
+	// Ensure migration_history table exists.
+	if _, err := r.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS migration_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name VARCHAR(255) NOT NULL UNIQUE,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("create migration_history: %w", err)
+	}
+
+	// Check if already applied.
+	var count int64
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_history WHERE name = 'system_tags_phase_b'`,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("check migration_history: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	// Check if is_featured column still exists.
+	rows, err := r.db.QueryContext(ctx, "SELECT name FROM pragma_table_info('tags') WHERE name = 'is_featured'")
+	if err != nil {
+		return fmt.Errorf("pragma table_info: %w", err)
+	}
+	columnExists := rows.Next()
+	_ = rows.Close()
+
+	if columnExists {
+		stmts := []string{
+			"PRAGMA foreign_keys = OFF",
+			`CREATE TABLE IF NOT EXISTS tags_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name VARCHAR(100) NOT NULL UNIQUE,
+				slug VARCHAR(100) NOT NULL UNIQUE,
+				description TEXT,
+				custom_url VARCHAR(200),
+				sort_order INTEGER,
+				post_count INTEGER NOT NULL DEFAULT 0,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`INSERT INTO tags_new (id, name, slug, description, custom_url, sort_order, post_count, created_at)
+			SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags`,
+			`DROP TABLE tags`,
+			`ALTER TABLE tags_new RENAME TO tags`,
+			`CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)`,
+			`CREATE INDEX IF NOT EXISTS idx_tags_slug ON tags(slug)`,
+			"PRAGMA foreign_keys = ON",
+		}
+		for _, stmt := range stmts {
+			if _, err := r.db.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("rebuild tags: %w", err)
+			}
+		}
+	}
+
+	// Record migration.
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO migration_history (name) VALUES ('system_tags_phase_b')`,
+	); err != nil {
+		return fmt.Errorf("record system_tags_phase_b: %w", err)
 	}
 	return nil
 }
