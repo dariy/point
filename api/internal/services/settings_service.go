@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"database/sql"
+	"strconv"
+
 	"point-api/internal/models"
 	"point-api/internal/repository"
 )
@@ -33,6 +35,22 @@ func (s *SettingsService) SetSetting(ctx context.Context, key string, value stri
 		ValueType: valueType,
 	})
 	return err
+}
+
+// GetConfigSetting resolves a runtime-tunable integer config value using a
+// three-tier priority: env var > DB setting > hard-coded default.
+// envValue is the value loaded from the config struct (0 means "not set").
+func (s *SettingsService) GetConfigSetting(ctx context.Context, key string, envValue int, defaultValue int) int {
+	if envValue != 0 {
+		return envValue
+	}
+	raw, _ := s.GetSetting(ctx, key, "")
+	if raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v != 0 {
+			return v
+		}
+	}
+	return defaultValue
 }
 
 func (s *SettingsService) GetAllSettings(ctx context.Context) (map[string]string, error) {

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -98,6 +99,22 @@ func CalculateChecksum(data []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
+// thumbnailWidth returns the effective thumbnail width, preferring env config
+// then DB setting then the hard-coded default.
+func (s *MediaService) thumbnailWidth(ctx context.Context) int {
+	return s.settingsService.GetConfigSetting(ctx, "thumbnail_width", s.cfg.ThumbnailWidth, 400)
+}
+
+// thumbnailHeight returns the effective thumbnail height.
+func (s *MediaService) thumbnailHeight(ctx context.Context) int {
+	return s.settingsService.GetConfigSetting(ctx, "thumbnail_height", s.cfg.ThumbnailHeight, 300)
+}
+
+// jpegQuality returns the effective JPEG quality (1-100).
+func (s *MediaService) jpegQuality(ctx context.Context) int {
+	return s.settingsService.GetConfigSetting(ctx, "jpeg_quality", s.cfg.JpegQuality, 85)
+}
+
 func (s *MediaService) GetStorageUsage(ctx context.Context) (int64, error) {
 	usage, err := s.repo.GetStorageUsage(ctx)
 	if err != nil {
@@ -160,12 +177,12 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
 
 			// Generate thumbnail
-			thumb := imaging.Fill(src, s.cfg.ThumbnailWidth, s.cfg.ThumbnailHeight, imaging.Center, imaging.Lanczos)
+			thumb := imaging.Fill(src, s.thumbnailWidth(ctx), s.thumbnailHeight(ctx), imaging.Center, imaging.Lanczos)
 			thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
 			thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
 			thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
 
-			if err := imaging.Save(thumb, thumbFull); err == nil {
+			if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
 				thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
 			}
 		}
@@ -195,6 +212,89 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		Checksum:      checksum,
 		AltText:       sql.NullString{String: p.AltText, Valid: p.AltText != ""},
 		Caption:       sql.NullString{String: p.Caption, Valid: p.Caption != ""},
+		UploadedAt:    now,
+	})
+}
+
+// ImportFromPath copies a file from srcPath into the managed media store and
+// inserts a DB record with is_public=0. The caller is responsible for
+// deduplication (checksum check) before calling this.
+func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (models.Medium, error) {
+	content, err := os.ReadFile(srcPath)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("read file: %w", err)
+	}
+
+	filename := filepath.Base(srcPath)
+	ext := strings.ToLower(filepath.Ext(filename))
+
+	// Determine MIME type: try extension first, fall back to content sniff.
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = http.DetectContentType(content)
+	}
+
+	checksum := CalculateChecksum(content)
+
+	now := time.Now().UTC().Round(0)
+	datePath := fmt.Sprintf("%d/%02d", now.Year(), now.Month())
+
+	originalsDir := filepath.Join(s.cfg.StoragePath, "media", "originals", datePath)
+	thumbnailsDir := filepath.Join(s.cfg.StoragePath, "media", "thumbnails", datePath)
+
+	if err := os.MkdirAll(originalsDir, 0755); err != nil {
+		return models.Medium{}, err
+	}
+	if err := os.MkdirAll(thumbnailsDir, 0755); err != nil {
+		return models.Medium{}, err
+	}
+
+	uniqueFilename := fmt.Sprintf("%d_%s", now.Unix(), filename)
+	originalRelPath := filepath.Join("originals", datePath, uniqueFilename)
+	originalFullPath := filepath.Join(s.cfg.StoragePath, "media", originalRelPath)
+
+	var width, height sql.NullInt64
+	var thumbnailRelPath sql.NullString
+	fileType := "file"
+
+	if strings.HasPrefix(mimeType, "image/") {
+		fileType = "image"
+		src, err := imaging.Decode(bytes.NewReader(content))
+		if err == nil {
+			bounds := src.Bounds()
+			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
+			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
+
+			thumb := imaging.Fill(src, s.cfg.ThumbnailWidth, s.cfg.ThumbnailHeight, imaging.Center, imaging.Lanczos)
+			thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
+			thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
+			thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
+
+			if err := imaging.Save(thumb, thumbFull); err == nil {
+				thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
+			}
+		}
+	} else if strings.HasPrefix(mimeType, "video/") {
+		fileType = "video"
+	}
+
+	if err := os.WriteFile(originalFullPath, content, 0644); err != nil {
+		return models.Medium{}, err
+	}
+
+	return s.repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename:      filename,
+		OriginalPath:  originalRelPath,
+		ThumbnailPath: thumbnailRelPath,
+		FileType:      fileType,
+		MimeType:      mimeType,
+		FileSize:      int64(len(content)),
+		Width:         width,
+		Height:        height,
+		PostID:        sql.NullInt64{},
+		Checksum:      checksum,
+		AltText:       sql.NullString{},
+		Caption:       sql.NullString{},
 		UploadedAt:    now,
 	})
 }
@@ -450,7 +550,7 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 			continue
 		}
 
-		thumb := imaging.Fill(src, s.cfg.ThumbnailWidth, s.cfg.ThumbnailHeight, imaging.Center, imaging.Lanczos)
+		thumb := imaging.Fill(src, s.thumbnailWidth(ctx), s.thumbnailHeight(ctx), imaging.Center, imaging.Lanczos)
 
 		// Derive thumbnail path from original
 		origRel := m.OriginalPath
@@ -464,7 +564,7 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 			stats["errors"]++
 			continue
 		}
-		if err := imaging.Save(thumb, thumbFull); err != nil {
+		if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
 			stats["errors"]++
 			continue
 		}

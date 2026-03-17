@@ -69,3 +69,20 @@ export function getMigrations() {
 export function updateMapCoords() {
   return api.post('/api/system/map/update-coords');
 }
+
+/**
+ * Scan the configured photo library import path for new media.
+ * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
+ */
+export function scanMediaImport() {
+  return api.post('/api/system/media/scan');
+}
+
+/**
+ * Check current and latest available version.
+ * Result is cached server-side for 24 hours.
+ * @returns {Promise<{current: string, latest: string, update_available: boolean}>}
+ */
+export function getVersion() {
+  return api.get('/api/system/version');
+}

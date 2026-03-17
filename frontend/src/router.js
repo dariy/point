@@ -40,6 +40,8 @@ class Router {
     this._authGuard = null;
     /** @type {string} */
     this._loginPath = '/light/login';
+    /** @type {string} */
+    this._setupPath = '/setup';
     /** @type {import('./components/Component.js').Component|null} */
     this._currentPage = null;
 
@@ -54,13 +56,14 @@ class Router {
    * Initialise the router and render the current URL.
    *
    * @param {Array<{ path: string, load: Function, public?: boolean }>} routes
-   * @param {{ mountPoint: HTMLElement, authGuard?: Function, loginPath?: string }} opts
+   * @param {{ mountPoint: HTMLElement, authGuard?: Function, loginPath?: string, setupPath?: string }} opts
    */
-  init(routes, { mountPoint, authGuard = null, loginPath = '/light/login' } = {}) {
+  init(routes, { mountPoint, authGuard = null, loginPath = '/light/login', setupPath = '/setup' } = {}) {
     this._routes = routes;
     this._mountPoint = mountPoint;
     this._authGuard = authGuard;
     this._loginPath = loginPath;
+    this._setupPath = setupPath;
 
     window.addEventListener('popstate', this._onPopState);
     window.addEventListener('app:navigate', this._onNavigate);
@@ -193,6 +196,25 @@ class Router {
         this._showFallback('404', 'Page not found.');
       }
       return;
+    }
+
+    // Setup guard: if navigating to /light/* and setup is not complete, redirect to /setup.
+    // If already on /setup but setup is complete, redirect to /light.
+    if (pathname.startsWith('/light') || pathname === this._setupPath) {
+      try {
+        const res = await fetch('/api/setup/status', { credentials: 'include' });
+        const data = await res.json();
+        if (!data.setup_complete && pathname !== this._setupPath) {
+          this.navigate(this._setupPath, { replace: true });
+          return;
+        }
+        if (data.setup_complete && pathname === this._setupPath) {
+          this.navigate('/light', { replace: true });
+          return;
+        }
+      } catch {
+        // If the status check fails, proceed normally (e.g. network error).
+      }
     }
 
     // Auth guard: show login overlay without unmounting the current page.
