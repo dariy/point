@@ -204,11 +204,18 @@ body {
     padding: 0 var(--spacing-xl);
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-between;
     z-index: 50;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
     backdrop-filter: blur(4px);
-    max-width: var(--content-max-width);
+}
+
+.header-title-row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-width: 0;
 }
 
 .light-header h1 {
@@ -216,8 +223,7 @@ body {
     font-weight: 600;
     color: var(--text-primary);
     transition: color var(--transition-theme);
-    margin-left: var(--spacing-lg);
-    width: 100%;
+    margin-left: var(--spacing-sm);
 }
 
 .header-actions {
