@@ -1,0 +1,50 @@
+services:
+  point:
+    image: ghcr.io/dariy/point:latest
+    container_name: point
+    restart: unless-stopped
+
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+    env_file:
+      - .env
+
+    environment:
+      - DATABASE_URL=/data/point.db
+      - STORAGE_PATH=/data
+      - FRONTEND_DIR=/app/frontend
+      - PORT=8000
+      - HOST=0.0.0.0
+
+    volumes:
+      - point-data:/data
+      - ${PHOTO_LIBRARY_PATH:-/dev/null}:/photos:ro
+
+    networks:
+      - point-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+volumes:
+  point-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}
+
+networks:
+  point-network:
+    driver: bridge

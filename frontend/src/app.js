@@ -97,7 +97,7 @@ const _cssPublic = document.getElementById('css-public');
 const _cssLight  = document.getElementById('css-light');
 
 function _applySection(pathname) {
-  const isLight = pathname.startsWith('/light');
+  const isLight = pathname.startsWith('/light') || pathname === '/setup';
   if (_cssPublic) _cssPublic.media = isLight ? 'not all' : 'all';
   if (_cssLight)  _cssLight.media  = isLight ? 'all' : 'not all';
   document.documentElement.dataset.section = isLight ? 'light' : 'public';
@@ -205,6 +205,9 @@ async function bootstrap() {
 // (absent)      →  requires authentication (authGuard redirect)
 
 const routes = [
+  // First-run setup wizard (public — no auth required)
+  { path: '/setup',       load: () => import('./pages/light/SetupPage.js'),   public: true },
+
   // Public blog
   { path: '/',            load: () => import('./pages/public/HomePage.js'),   public: true },
   { path: '/post/:slug',  load: () => import('./pages/public/PostPage.js'),   public: true },

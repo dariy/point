@@ -4,6 +4,9 @@ import (
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,11 +29,12 @@ type SystemHandler struct {
 	tagService      *services.TagService
 	dataPath        string
 	logPath         string
+	appVersion      string
 }
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, dataPath string) *SystemHandler {
+func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
@@ -39,7 +43,77 @@ func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaS
 		tagService:      tagService,
 		dataPath:        dataPath,
 		logPath:         filepath.Join(dataPath, "logs", "app.log"),
+		appVersion:      appVersion,
 	}
+}
+
+// versionCheckCache is the structure stored in blog_settings under _version_check_cached.
+type versionCheckCache struct {
+	Latest    string    `json:"latest"`
+	CheckedAt time.Time `json:"checked_at"`
+}
+
+// GetVersion returns the running version and the latest available version from GitHub.
+// The GitHub response is cached in blog_settings for 24 hours to avoid hammering the API.
+func (h *SystemHandler) GetVersion(c echo.Context) error {
+	ctx := c.Request().Context()
+	current := h.appVersion
+
+	// Try to load cached GitHub release info.
+	var cache versionCheckCache
+	cacheStr, _ := h.settingsService.GetSetting(ctx, "_version_check_cached", "")
+	if cacheStr != "" {
+		_ = json.Unmarshal([]byte(cacheStr), &cache)
+	}
+
+	// Refresh if cache is missing or stale (>24h).
+	if cache.Latest == "" || time.Since(cache.CheckedAt) > 24*time.Hour {
+		latest, err := fetchLatestGitHubRelease()
+		if err == nil {
+			cache.Latest = latest
+			cache.CheckedAt = time.Now()
+			if b, marshalErr := json.Marshal(cache); marshalErr == nil {
+				_ = h.settingsService.SetSetting(ctx, "_version_check_cached", string(b), "string")
+			}
+		}
+		// On fetch failure: keep existing cache.Latest (may be empty string).
+	}
+
+	updateAvailable := cache.Latest != "" && cache.Latest != current
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"current":          current,
+		"latest":           cache.Latest,
+		"update_available": updateAvailable,
+	})
+}
+
+// fetchLatestGitHubRelease calls the GitHub releases API and returns the tag_name.
+func fetchLatestGitHubRelease() (string, error) {
+	client := &http.Client{Timeout: 3 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/dariy/point/releases/latest", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "point-version-check")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	return payload.TagName, nil
 }
 
 func (h *SystemHandler) GetStats(c echo.Context) error {
@@ -231,6 +305,86 @@ func (h *SystemHandler) DeleteBackup(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "success", "message": "Backup deleted"})
+}
+
+var importableExtensions = map[string]bool{
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
+	".gif":  true,
+	".webp": true,
+	".mp4":  true,
+	".mov":  true,
+	".avi":  true,
+	".mkv":  true,
+	".m4v":  true,
+	".heic": true,
+	".heif": true,
+}
+
+func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	importPath, err := h.settingsService.GetSetting(ctx, "media_import_path", "")
+	if err != nil || importPath == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"detail": "media_import_path not configured in settings",
+		})
+	}
+
+	if _, err := os.Stat(importPath); os.IsNotExist(err) {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"detail": fmt.Sprintf("import path does not exist: %s", importPath),
+		})
+	}
+
+	var imported, skipped int
+	errors := []string{}
+
+	_ = filepath.WalkDir(importPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+
+		ext := strings.ToLower(filepath.Ext(path))
+		if !importableExtensions[ext] {
+			return nil
+		}
+
+		// Compute checksum without loading full file into memory twice
+		f, ferr := os.Open(path)
+		if ferr != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), ferr))
+			return nil
+		}
+		h256 := sha256.New()
+		if _, copyErr := io.Copy(h256, f); copyErr != nil {
+			_ = f.Close()
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), copyErr))
+			return nil
+		}
+		_ = f.Close()
+		checksum := hex.EncodeToString(h256.Sum(nil))
+
+		// Skip duplicates
+		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil {
+			skipped++
+			return nil
+		}
+
+		if _, importErr := h.mediaService.ImportFromPath(ctx, path); importErr != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), importErr))
+			return nil
+		}
+		imported++
+		return nil
+	})
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"imported": imported,
+		"skipped":  skipped,
+		"errors":   errors,
+	})
 }
 
 func (h *SystemHandler) createTarGz(destPath string) error {
