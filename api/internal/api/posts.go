@@ -336,6 +336,9 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		Tags:            req.Tags,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {
+			return c.JSON(http.StatusConflict, map[string]string{"detail": "A post with this slug already exists. Please choose a different title or slug."})
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -399,6 +402,9 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		Tags:            req.Tags,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {
+			return c.JSON(http.StatusConflict, map[string]string{"detail": "A post with this slug already exists. Please choose a different slug."})
+		}
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
 	}
 
