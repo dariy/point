@@ -742,6 +742,66 @@ func (s *TagService) EffectivelyHiddenPostsTagIDs(ctx context.Context) (map[int6
 	return buildEffectivelyHiddenPostsTagIDs(allTags, relationships), nil
 }
 
+// WithRelatedIDs returns the set of tag IDs that are direct children of _with_related.
+func (s *TagService) WithRelatedIDs(ctx context.Context) (map[int64]bool, error) {
+	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{IncludeEmptyFilter: true})
+	if err != nil {
+		return nil, err
+	}
+	relationships, err := s.repo.GetAllTagRelationships(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var withRelatedSystemID int64
+	for _, t := range allTags {
+		if t.Slug == "_with_related" {
+			withRelatedSystemID = t.ID
+			break
+		}
+	}
+	if withRelatedSystemID == 0 {
+		return map[int64]bool{}, nil
+	}
+	result := make(map[int64]bool)
+	for _, rel := range relationships {
+		if rel.ParentID == withRelatedSystemID {
+			result[rel.ChildID] = true
+		}
+	}
+	return result, nil
+}
+
+// InBreadcrumbsIDs returns the set of tag IDs that are direct children of _is_in_breadcrumbs.
+func (s *TagService) InBreadcrumbsIDs(ctx context.Context) (map[int64]bool, error) {
+	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{IncludeEmptyFilter: true})
+	if err != nil {
+		return nil, err
+	}
+	relationships, err := s.repo.GetAllTagRelationships(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var breadcrumbsSystemID int64
+	for _, t := range allTags {
+		if t.Slug == "_is_in_breadcrumbs" {
+			breadcrumbsSystemID = t.ID
+			break
+		}
+	}
+	if breadcrumbsSystemID == 0 {
+		return map[int64]bool{}, nil
+	}
+
+	result := make(map[int64]bool)
+	for _, rel := range relationships {
+		if rel.ParentID == breadcrumbsSystemID {
+			result[rel.ChildID] = true
+		}
+	}
+	return result, nil
+}
+
 // EffectivelyHiddenIDs returns the set of tag IDs that should not be shown publicly.
 func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, error) {
 	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
