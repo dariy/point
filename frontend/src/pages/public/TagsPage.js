@@ -90,12 +90,12 @@ export default class TagsPage extends Component {
       .join('');
 
     const count = tag.post_count ? ` <span class="tag-count">(${escapeHtml(String(tag.post_count))})</span>` : '';
-    const important = tag.is_important ? ' tag-important' : '';
-    const hiddenClass = tag.is_hidden ? ' tag-hidden' : '';
+    
+    
     const link = renderTagLink(tag, { extra: 'tags-tree-link', suffix: count });
 
     return `
-      <li class="tags-tree-item${important}${hiddenClass}" role="treeitem" aria-expanded="${children ? 'true' : 'false'}">
+      <li class="tags-tree-item" role="treeitem" aria-expanded="${children ? 'true' : 'false'}">
         ${link}
         ${tag.description ? `<p class="tags-tree-desc">${escapeHtml(tag.description)}</p>` : ''}
         ${children ? `<ul class="tags-tree-children" role="group">${children}</ul>` : ''}

@@ -10,9 +10,12 @@ import { Component } from '../Component.js';
 import { listTags } from '../../api/tags.js';
 import { escapeHtml, debounce } from '../../utils/helpers.js';
 
+let _tagInputCounter = 0;
+
 export class TagsInput extends Component {
   constructor(container, props = {}) {
     super(container, props);
+    this._uid = `tags-input-${++_tagInputCounter}`;
     this.state = {
       tags: [...(props.tags || [])],
       input: '',
@@ -33,11 +36,11 @@ export class TagsInput extends Component {
     ).join('');
 
     return `
-      <div class="tags-input" id="tags-input-box">
+      <div class="tags-input" id="${this._uid}-box">
         ${badges}
-        <input type="text" id="tag-text-input" class="tag-text-field"
+        <input type="text" id="${this._uid}-text" class="tag-text-field"
                placeholder="Add tag…" autocomplete="off" aria-label="Add a tag">
-        <div class="tags-suggestions" id="tags-suggestions"></div>
+        <div class="tags-suggestions" id="${this._uid}-suggestions"></div>
       </div>`;
   }
 
@@ -53,7 +56,7 @@ export class TagsInput extends Component {
     });
 
     // Text input
-    const input = this.$('#tag-text-input');
+    const input = this.$(`#${this._uid}-text`);
     if (!input) return;
 
     input.addEventListener('input', (e) => {
@@ -99,7 +102,7 @@ export class TagsInput extends Component {
         const tags = this.state.tags.slice(0, -1);
         this.setState({ tags });
         this.props.onChange?.(tags);
-        this.$('#tag-text-input')?.focus();
+        this.$(`#${this._uid}-text`)?.focus();
       } else if (e.key === 'Escape') {
         this._hideSuggestions();
       }
@@ -118,7 +121,7 @@ export class TagsInput extends Component {
     this.setState({ tags });
     this.props.onChange?.(tags);
 
-    const input = this.$('#tag-text-input');
+    const input = this.$(`#${this._uid}-text`);
     if (input) { input.value = ''; input.focus(); }
     this._hideSuggestions();
   }
@@ -140,7 +143,7 @@ export class TagsInput extends Component {
   }
 
   _showSuggestions(suggestions, input) {
-    const box = this.$('#tags-suggestions');
+    const box = this.$(`#${this._uid}-suggestions`);
     if (!box) return;
 
     if (!suggestions.length) {
@@ -173,7 +176,7 @@ export class TagsInput extends Component {
   }
 
   _hideSuggestions() {
-    const box = this.$('#tags-suggestions');
+    const box = this.$(`#${this._uid}-suggestions`);
     if (box) box.classList.remove('show');
   }
 
