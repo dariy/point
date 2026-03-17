@@ -63,6 +63,9 @@ export default class TagsManagerPage extends Component {
                 <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">\u29ad Tree</button>
                 <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">\u2261 List</button>
               </div>
+              ${view === 'tree' ? `
+              <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">\u21c5 Expand all</button>
+              <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">\u2012 Collapse all</button>` : ''}
               <button id="add-root-tag-btn" class="btn btn-primary">+ New Tag</button>
               <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">\u27f3</button>
             </div>
@@ -118,7 +121,7 @@ export default class TagsManagerPage extends Component {
         <tr class="tm-tag-row" data-name="${escapeHtml(tag.name.toLowerCase())}" data-slug="${escapeHtml(tag.slug.toLowerCase())}" data-parent-ids="${parentIds}" data-parent-names="${escapeHtml(parentNamesLower)}">
           <td><span class="tm-tag-name">${escapeHtml(tag.name)}${systemBadge}</span></td>
           <td><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
-          <td class="text-center"><span class="tm-count-badge">${tag.post_count || 0}</span></td>
+          <td class="text-center"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a></td>
           <td class="text-center">
             <span class="tm-flag-static ${hasLocation ? 'active' : ''} tm-flag-location"
                   title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">\ud83d\udccd</span>
@@ -329,7 +332,7 @@ export default class TagsManagerPage extends Component {
           </div>
           <div class="tm-flags-row">${locationFlag}</div>
           <span class="tm-row-meta">
-            <span class="tm-count-badge">${node.post_count || 0}</span>
+            <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(node.slug)}" title="View posts tagged ${escapeHtml(node.slug)}">${node.post_count || 0}</a>
             ${multiParentHint}
           </span>
           <div class="tm-actions">
@@ -365,6 +368,9 @@ export default class TagsManagerPage extends Component {
     this.$('#recalc-counts-btn')?.addEventListener('click', () => this._handleRecalc());
 
     if (this.state.view === 'tree') {
+      this.$('#expand-all-btn')?.addEventListener('click', () => this._expandAll());
+      this.$('#collapse-all-btn')?.addEventListener('click', () => this._collapseAll());
+
       this.$$('.tm-toggle').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.id, 10);
@@ -437,6 +443,22 @@ export default class TagsManagerPage extends Component {
       // Re-apply filter immediately (restores after sort/view-switch)
       this._applyListFilter();
     }
+  }
+
+  _expandAll() {
+    const expanded = new Set();
+    const collect = (nodes) => nodes.forEach(n => {
+      if (n.childrenNodes.length > 0) {
+        expanded.add(n.id);
+        collect(n.childrenNodes);
+      }
+    });
+    collect(this._buildTree(this.state.tags));
+    this.setState({ expanded });
+  }
+
+  _collapseAll() {
+    this.setState({ expanded: new Set() });
   }
 
   _handleSort(field) {
@@ -559,6 +581,11 @@ export default class TagsManagerPage extends Component {
     const selfId      = isEdit ? f.id : null;
     const selParents  = isEdit ? (f.parents  || []).map(p => p.id) : (parentId ? [parentId] : []);
     const selChildren = isEdit ? (f.children || []).map(c => c.id) : [];
+    const tagById     = new Map(this.state.tags.map(t => [t.id, t]));
+    const visibleParentCount = selParents.filter(id => {
+      const t = tagById.get(id);
+      return !t || !t.is_system || t.slug === '_root';
+    }).length;
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay active';
@@ -568,7 +595,7 @@ export default class TagsManagerPage extends Component {
       '<div class="modal tag-editor-modal" role="dialog" aria-modal="true">',
       '  <button class="modal-close" aria-label="Close">\u00d7</button>',
       '  <div class="modal-header">',
-      `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}${isEdit ? ` <span class="tm-count-badge" title="Posts with this tag">${f.post_count || 0}</span>` : ''}</h3>`,
+      `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}${isEdit ? ` <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(f.slug || '')}" title="View posts tagged ${escapeHtml(f.slug || '')}">${f.post_count || 0}</a>` : ''}</h3>`,
       '  </div>',
       '  <form id="tag-editor-form">',
       '    <div class="modal-body">',
@@ -597,7 +624,7 @@ export default class TagsManagerPage extends Component {
         '      <div class="tm-collapsible-section">',
         '        <button type="button" class="tm-section-toggle" data-target="parents-body">',
         `          <span class="tm-section-arrow">\u25b6</span> Parents`,
-        `          <span class="tm-section-count">${selParents.length > 0 ? selParents.length : ''}</span>`,
+        `          <span class="tm-section-count">${visibleParentCount > 0 ? visibleParentCount : ''}</span>`,
         '        </button>',
         '        <div class="tm-section-body" id="parents-body" style="display:none">',
         '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags\u2026" autocomplete="off">',
@@ -960,7 +987,11 @@ export default class TagsManagerPage extends Component {
     try {
       const data = await listTags({ include_empty: true });
       const tags = data.tags || [];
-      this.setState({ loading: false, tags });
+      const rootTag = tags.find(t => t.slug === '_root');
+      const expanded = this.state.expanded.size === 0 && rootTag
+        ? new Set([rootTag.id])
+        : this.state.expanded;
+      this.setState({ loading: false, tags, expanded });
 
       // Auto-open editor when navigated directly to /light/tags/:slug
       const slug = this.props?.params?.slug;
