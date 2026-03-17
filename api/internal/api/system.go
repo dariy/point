@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -51,25 +50,13 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
-
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"published_posts":  stats.PublishedCount,
-		"total_posts":      stats.PostCount,
-		"total_tags":       stats.TagCount,
-		"total_media":      stats.MediaCount,
-		"storage_used_mb":  float64(stats.StorageBytes) / (1024 * 1024),
-		"users":            stats.UserCount,
-		"sessions":         stats.SessionCount,
-		"uptime_seconds":   int64(time.Since(startTime).Seconds()),
-		"memory": map[string]interface{}{
-			"alloc_mb":       memStats.Alloc / 1024 / 1024,
-			"total_alloc_mb": memStats.TotalAlloc / 1024 / 1024,
-			"sys_mb":         memStats.Sys / 1024 / 1024,
-		},
-		"go_version":    runtime.Version(),
-		"num_goroutine": runtime.NumGoroutine(),
+		"published_posts": stats.PublishedCount,
+		"total_posts":     stats.PostCount,
+		"total_tags":      stats.TagCount,
+		"total_media":     stats.MediaCount,
+		"storage_used_mb": float64(stats.StorageBytes) / (1024 * 1024),
+		"uptime_seconds":  int64(time.Since(startTime).Seconds()),
 	})
 }
 
@@ -125,7 +112,6 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status":   "success",
 		"filename": backupName,
-		"path":     backupPath,
 		"size":     size,
 	})
 }

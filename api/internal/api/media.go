@@ -288,7 +288,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 			failed = append(failed, map[string]string{"filename": fh.Filename, "error": err.Error()})
 			continue
 		}
-		uploaded = append(uploaded, media)
+		uploaded = append(uploaded, mediaToResponse(media))
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{

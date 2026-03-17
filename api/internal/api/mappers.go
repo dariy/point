@@ -237,7 +237,6 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		"height":         nullInt64(m.Height),
 		"post_id":        nullInt64(m.PostID),
 		"uploaded_at":    m.UploadedAt,
-		"checksum":       m.Checksum,
 		"alt_text":       nullString(m.AltText),
 		"caption":        nullString(m.Caption),
 		"is_public":      m.IsPublic,
