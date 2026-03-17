@@ -186,6 +186,13 @@
     bottom: -1px;
 }
 
+.tm-row.tm-drop-on {
+    background-color: rgba(37, 99, 235, 0.08);
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: -2px;
+    border-radius: 3px;
+}
+
 /* Tag link pill (posts table) */
 .tag-link {
     display: inline-flex;
@@ -431,6 +438,7 @@
 }
 
 .tm-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -498,6 +506,7 @@
     gap: 3px;
     opacity: 0.3;
     transition: opacity var(--transition-fast);
+    text-wrap-mode: nowrap;
 }
 
 .tm-row:hover .tm-actions,
@@ -864,4 +873,152 @@
     color: var(--color-primary);
     margin-right: 4px;
     white-space: nowrap;
+}
+
+/* ===========================
+   System tag highlighting
+   (tree view rows + toggle-picker nodes)
+   =========================== */
+.tm-node.tm-system-node > .tm-row {
+    background: rgba(245, 158, 11, 0.07);
+}
+
+.tm-node.tm-system-node > .tm-row:hover {
+    background: rgba(245, 158, 11, 0.14);
+}
+
+.tm-node.tm-system-node > .tm-row .tm-tag-name {
+    color: #92400e;
+}
+
+.tm-system-badge {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 11px;
+    opacity: 0.75;
+    vertical-align: middle;
+}
+
+/* System tags in the parent/child toggle picker */
+.tag-toggle-node.tm-system-node > .tag-toggle-row {
+    background: rgba(245, 158, 11, 0.07);
+    border-radius: var(--border-radius);
+}
+
+.tag-toggle-node.tm-system-node > .tag-toggle-row:hover {
+    background: rgba(245, 158, 11, 0.14);
+}
+
+.tag-toggle-node.tm-system-node > .tag-toggle-row .tag-toggle span {
+    border-color: rgba(180, 120, 0, 0.35);
+    color: #92400e;
+}
+
+/* Readonly name/slug fields in system tag editor */
+.tag-editor-modal .editor-title[readonly],
+.tag-editor-modal .editor-slug[readonly] {
+    opacity: 0.6;
+    cursor: default;
+    background: var(--surface-hover);
+}
+
+/* Inline flag strip below Description in the tag editor modal */
+.tm-flags-inline-strip {
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
+/* System tag pill strip inside parent/child selector */
+.tag-toggle-system-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 0 6px;
+}
+
+.tag-toggle-system-item {
+    display: inline-flex;
+}
+
+.tag-toggle-divider {
+    border: none;
+    border-top: 1px solid var(--border-primary);
+    margin: 6px 0;
+}
+
+/* ===========================
+   Tag selector search input
+   =========================== */
+.tm-toggle-search {
+    width: 100%;
+    padding: 5px 10px;
+    font-size: var(--font-size-sm);
+    margin-bottom: 6px;
+    box-sizing: border-box;
+}
+
+/* ===========================
+   List-view filter bar
+   =========================== */
+.tm-list-filter-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.tm-list-search-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.tm-list-search {
+    flex: 1;
+    padding: 6px 12px;
+    font-size: var(--font-size-sm);
+}
+
+.tm-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 0;
+}
+
+.tm-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.tm-filter-chip:hover {
+    background: var(--color-primary-dark, #1d4ed8);
+}
+
+.tm-chip-remove {
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0.8;
+}
+
+/* Parent filter buttons inside table cells */
+.tm-parent-filter-btn.tm-rel-badge {
+    cursor: pointer;
+    border: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-parent-filter-btn.tm-rel-badge:hover {
+    background: var(--color-primary);
+    color: #fff;
 }

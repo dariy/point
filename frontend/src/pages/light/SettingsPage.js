@@ -24,10 +24,6 @@ const SETTING_GROUPS = [
   {
     title: 'Storage & System',
     keys: ['storage_quota_mb', 'enable_map', 'enable_backup', 'backup_interval_hours']
-  },
-  {
-    title: 'Access',
-    keys: ['multi_user_mode']
   }
 ];
 
@@ -103,31 +99,31 @@ export default class SettingsPage extends Component {
           ? `<a href="/post/${escapeHtml(String(value))}" target="_blank" class="settings-preview-link">Preview ↗</a>`
           : '';
         input = `<div class="settings-input-with-preview">
-          <select name="${key}" class="form-select">
+          <select name="${key}" id="${key}" class="form-select">
             <option value="">— None —</option>
             ${options}
           </select>
           ${previewLink}
         </div>`;
       } else if (key === 'author_bio' || key === 'footer_text') {
-        input = `<textarea name="${key}" class="form-textarea" rows="3">${escapeHtml(String(value))}</textarea>`;
+        input = `<textarea name="${key}" id="${key}" class="form-textarea" rows="3">${escapeHtml(String(value))}</textarea>`;
       } else if (key === 'default_theme') {
         input = `
-          <select name="${key}" class="form-select">
+          <select name="${key}" id="${key}" class="form-select">
             <option value="light"${value === 'light' ? ' selected' : ''}>Light</option>
             <option value="dark"${value === 'dark' ? ' selected' : ''}>Dark</option>
             <option value="auto"${value === 'auto' ? ' selected' : ''}>Auto (System)</option>
           </select>`;
       } else if (key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
-        input = `<input type="number" name="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
+        input = `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
       } else {
-        input = `<input type="text" name="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
+        input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
 
       const isTextarea = key === 'author_bio' || key === 'footer_text';
       inputs.push(`
         <div class="settings-field${isTextarea ? ' settings-field-top' : ''}">
-          <label class="settings-field-label">${escapeHtml(label)}</label>
+          <label class="settings-field-label" for="${key}">${escapeHtml(label)}</label>
           ${input}
         </div>`);
     }
@@ -165,10 +161,6 @@ export default class SettingsPage extends Component {
       this._handleSave();
     });
 
-    this.$$('.setting-pill-input').forEach(cb => {
-      cb.addEventListener('change', () => this._handleCheckboxChange(cb.name, cb.checked));
-    });
-
     const aboutSelect = this.$('select[name="about_post_id"]');
     if (aboutSelect) {
       aboutSelect.addEventListener('change', () => {
@@ -195,6 +187,12 @@ export default class SettingsPage extends Component {
 
   mount() {
     super.mount();
+    // Delegated listener on the container so it survives re-renders.
+    this.container.addEventListener('change', (e) => {
+      if (e.target.classList.contains('setting-pill-input')) {
+        this._handleCheckboxChange(e.target.name, e.target.checked);
+      }
+    });
     this._load();
   }
 

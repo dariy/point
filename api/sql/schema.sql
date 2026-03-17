@@ -43,12 +43,6 @@ CREATE TABLE tags (
     slug VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     custom_url VARCHAR(200),
-    is_important BOOLEAN NOT NULL DEFAULT 0,
-    is_featured BOOLEAN NOT NULL DEFAULT 0,
-    is_hidden BOOLEAN NOT NULL DEFAULT 0,
-    is_hidden_posts BOOLEAN NOT NULL DEFAULT 0,
-    include_in_breadcrumbs BOOLEAN NOT NULL DEFAULT 1,
-    show_related_tags_as_children BOOLEAN NOT NULL DEFAULT 0,
     sort_order INTEGER,
     post_count INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
