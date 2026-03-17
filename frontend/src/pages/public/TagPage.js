@@ -86,10 +86,10 @@ export default class TagPage extends Component {
     this._gesture?.destroy();
     this._trackpad?.destroy();
     const settings = store.get('settings') || {};
-    const navTags  = this.state.data?.menu || store.get('navTags') || [];
-    if (navTags.length && this.state.data?.menu) {
-      store.set('navTags', navTags);
-    }
+    const rootMenu = this.state.data?.menu || store.get('navTags') || [];
+    if (rootMenu.length && this.state.data?.menu) store.set('navTags', rootMenu);
+    const navChildren = this.state.data?.nav_children || [];
+    const navTags = navChildren.length ? navChildren : rootMenu;
     const slug     = this.props.params?.slug || '';
     const { data, post } = this.state;
 

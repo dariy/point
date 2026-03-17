@@ -628,6 +628,47 @@ func (r *Repository) GetTagDescendants(ctx context.Context, tagID int64) ([]mode
 	return result, nil
 }
 
+// GetCoOccurringTags returns tags that appear on the same posts as tagID,
+// ordered by co-occurrence count descending. System tags (slug starting with "_")
+// and the tag itself are excluded.
+func (r *Repository) GetCoOccurringTags(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error) {
+	statusClause := ""
+	if publicOnly {
+		statusClause = "AND p.status = 'published'"
+	}
+	q := fmt.Sprintf(`
+SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+FROM tags t
+JOIN post_tags pt ON t.id = pt.tag_id
+JOIN posts p ON pt.post_id = p.id
+WHERE pt.post_id IN (
+    SELECT pt2.post_id FROM post_tags pt2
+    JOIN posts p2 ON pt2.post_id = p2.id
+    WHERE pt2.tag_id = ? %s
+)
+AND t.id != ?
+AND t.slug NOT LIKE '_%%'
+AND t.post_count > 0
+GROUP BY t.id
+ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
+
+	rows, err := r.db.QueryContext(ctx, q, tagID, tagID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []models.Tag
+	for rows.Next() {
+		var t models.Tag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
+			&t.SortOrder, &t.PostCount, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
 // TagRelationship represents a parent-child tag relationship pair.
 type TagRelationship struct {
 	ParentID int64 `json:"parent_id"`
