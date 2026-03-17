@@ -1002,7 +1002,9 @@ export default class TagsManagerPage extends Component {
         }
       }
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Failed to load tags.' });
+      console.error('[TagsManagerPage] load error:', err);
+      store.set('toast', { message: 'Could not load tags.', type: 'error' });
+      this.setState({ loading: false, tags: [] });
     }
   }
 
