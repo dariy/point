@@ -181,6 +181,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
+	inBreadcrumbs, _ := h.tagService.InBreadcrumbsIDs(ctx)
 
 	// Direct children for tag detail response (exclude effectively hidden ones)
 	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly)
@@ -191,8 +192,37 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		}
 	}
 
-	// Hierarchical children for sub-nav
-	childItems, _ := h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly)
+	// Hierarchical children for sub-nav.
+	// If the tag (or any of its parents) has _with_related, replace the normal
+	// sub-nav with co-occurring tags from posts, marked as related.
+	withRelatedIDs, _ := h.tagService.WithRelatedIDs(ctx)
+	var childItems []services.NavTagNode
+	if useCoOccurrence := withRelatedIDs[tag.ID] || func() bool {
+		parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
+		for _, p := range parents {
+			if withRelatedIDs[p.ID] {
+				return true
+			}
+		}
+		return false
+	}(); useCoOccurrence {
+		coTags, _ := h.repo.GetCoOccurringTags(ctx, tag.ID, publicOnly)
+		for _, t := range coTags {
+			if publicOnly && effectivelyHidden[t.ID] {
+				continue
+			}
+			childItems = append(childItems, services.NavTagNode{
+				ID:        t.ID,
+				Name:      t.Name,
+				Slug:      t.Slug,
+				PostCount: t.PostCount,
+				IsRelated: true,
+				Children:  []services.NavTagNode{},
+			})
+		}
+	} else {
+		childItems, _ = h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly)
+	}
 
 	// Root-level nav tags for global navigation
 	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly)
@@ -237,7 +267,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
 	for _, a := range ancestors {
-		if !effectivelyHidden[a.ID] {
+		if !effectivelyHidden[a.ID] && inBreadcrumbs[a.ID] {
 			crumb := tagToListItem(a)
 			if !publicOnly {
 				crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
