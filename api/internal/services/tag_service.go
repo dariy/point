@@ -846,7 +846,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 			if publicOnly && effectivelyHidden[cid] {
 				continue
 			}
-			if ch.PostCount == 0 {
+			if ch.PostCount == 0 && len(childrenOf[cid]) == 0 {
 				continue
 			}
 			if visited[cid] {
@@ -880,7 +880,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 				if publicOnly && effectivelyHidden[cid] {
 					continue
 				}
-				if ch.PostCount == 0 {
+				if ch.PostCount == 0 && len(childrenOf[cid]) == 0 {
 					continue
 				}
 				navRootIDs = append(navRootIDs, cid)
@@ -895,7 +895,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 			if publicOnly && effectivelyHidden[cid] {
 				continue
 			}
-			if ch.PostCount == 0 {
+			if ch.PostCount == 0 && len(childrenOf[cid]) == 0 {
 				continue
 			}
 			navRootIDs = append(navRootIDs, cid)
