@@ -508,7 +508,7 @@ func filterNavTagsByMinPosts(nodes []services.NavTagNode, minPosts int64) []serv
 	result := make([]services.NavTagNode, 0, len(nodes))
 	for _, n := range nodes {
 		n.Children = filterNavTagsByMinPosts(n.Children, minPosts)
-		if n.PostCount >= minPosts || n.IsRelated {
+		if n.PostCount >= minPosts || n.IsRelated || len(n.Children) > 0 {
 			result = append(result, n)
 		}
 	}
