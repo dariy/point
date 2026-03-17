@@ -103,12 +103,6 @@ FROM posts p
 WHERE p.slug = ? LIMIT 1;
 
 -- name: ListPosts :many
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT p.*
 FROM posts p
 WHERE
@@ -124,22 +118,17 @@ WHERE
         WHEN sqlc.arg('include_drafts') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            JOIN tags t ON pt.tag_id = t.id
-            WHERE t.is_hidden_posts = 1
+            WHERE pt.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
         )
     END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPosts :one
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT COUNT(*) FROM posts p
-WHERE 
+WHERE
     (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -152,8 +141,9 @@ WHERE
         WHEN sqlc.arg('include_drafts') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            JOIN tags t ON pt.tag_id = t.id
-            WHERE t.is_hidden_posts = 1
+            WHERE pt.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
         )
     END);
 
@@ -210,24 +200,23 @@ SELECT * FROM tags
 WHERE slug = ? LIMIT 1;
 
 -- name: ListTags :many
-SELECT * FROM tags
-WHERE (CASE WHEN sqlc.arg('important_only_filter') THEN is_important = 1 ELSE 1=1 END)
-AND (CASE WHEN sqlc.arg('include_empty_filter') THEN 1=1 ELSE post_count > 0 END)
+SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
+WHERE (CASE WHEN sqlc.arg('include_empty_filter') THEN 1=1 ELSE post_count > 0 END)
 ORDER BY sort_order ASC, name ASC;
 
 -- name: CreateTag :one
 INSERT INTO tags (
-    name, slug, description, custom_url, is_important, is_featured, is_hidden, is_hidden_posts, include_in_breadcrumbs, show_related_tags_as_children, sort_order, post_count, created_at
+    name, slug, description, custom_url, sort_order, post_count, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
+    ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
 )
-RETURNING *;
+RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at;
 
 -- name: UpdateTag :one
 UPDATE tags
-SET name = ?, slug = ?, description = ?, custom_url = ?, is_important = ?, is_featured = ?, is_hidden = ?, is_hidden_posts = ?, include_in_breadcrumbs = ?, show_related_tags_as_children = ?, sort_order = ?
+SET name = ?, slug = ?, description = ?, custom_url = ?, sort_order = ?
 WHERE id = ?
-RETURNING *;
+RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at;
 
 -- name: DeleteTag :exec
 DELETE FROM tags
@@ -252,46 +241,38 @@ DELETE FROM post_tags
 WHERE post_id = ?;
 
 -- name: GetPostsByTag :many
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT p.*
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
-AND (CASE 
+AND (CASE
     WHEN sqlc.arg('include_drafts') THEN 1=1
-    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published' 
-    ELSE p.status IN ('published', 'hidden') 
+    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published'
+    ELSE p.status IN ('published', 'hidden')
 END)
 AND (sqlc.arg('include_drafts') OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
-    SELECT 1 FROM post_tags pt2 
-    WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
+    SELECT 1 FROM post_tags pt2
+    WHERE pt2.post_id = p.id AND pt2.tag_id IN (
+        SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    )
 ))
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPostsByTag :one
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
-AND (CASE 
+AND (CASE
     WHEN sqlc.arg('include_drafts') THEN 1=1
-    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published' 
-    ELSE p.status IN ('published', 'hidden') 
+    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published'
+    ELSE p.status IN ('published', 'hidden')
 END)
 AND (sqlc.arg('include_drafts') OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
-    SELECT 1 FROM post_tags pt2 
-    WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
+    SELECT 1 FROM post_tags pt2
+    WHERE pt2.post_id = p.id AND pt2.tag_id IN (
+        SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    )
 ));
 
 -- name: UpdateTagPostCount :exec

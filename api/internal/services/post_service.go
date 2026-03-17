@@ -270,15 +270,9 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 	// Replace tags
 	_ = s.repo.ClearPostTags(ctx, post.ID)
 	for _, tagName := range p.Tags {
-		tag, err := s.repo.GetTagBySlug(ctx, utils.Slugify(tagName))
+		tag, err := s.getOrCreateTag(ctx, tagName)
 		if err != nil {
-			tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{
-				Name: tagName,
-				Slug: utils.Slugify(tagName),
-			})
-			if err != nil {
-				continue
-			}
+			continue
 		}
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: tag.ID})
 	}
@@ -296,21 +290,36 @@ func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames
 
 	_ = s.repo.ClearPostTags(ctx, postID)
 	for _, tagName := range tagNames {
-		tag, err := s.repo.GetTagBySlug(ctx, utils.Slugify(tagName))
+		tag, err := s.getOrCreateTag(ctx, tagName)
 		if err != nil {
-			tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{
-				Name: tagName,
-				Slug: utils.Slugify(tagName),
-			})
-			if err != nil {
-				continue
-			}
+			continue
 		}
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: postID, TagID: tag.ID})
 	}
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	return nil
+}
+
+// getOrCreateTag looks up a tag by slug, creating it if absent and auto-assigning _pending.
+func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.Tag, error) {
+	slug := utils.Slugify(name)
+	tag, err := s.repo.GetTagBySlug(ctx, slug)
+	if err == nil {
+		return tag, nil
+	}
+	tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{Name: name, Slug: slug})
+	if err != nil {
+		return tag, err
+	}
+	// Auto-assign to _pending so new tags appear in the admin tree.
+	if pending, perr := s.repo.GetTagBySlug(ctx, "_pending"); perr == nil {
+		_ = s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
+			ParentID: pending.ID,
+			ChildID:  tag.ID,
+		})
+	}
+	return tag, nil
 }
 
 func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error {

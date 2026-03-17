@@ -86,10 +86,10 @@ export default class TagPage extends Component {
     this._gesture?.destroy();
     this._trackpad?.destroy();
     const settings = store.get('settings') || {};
-    const navTags  = this.state.data?.root_nav_tags || this.state.data?.nav_tags || store.get('navTags') || [];
-    if (navTags.length && this.state.data?.root_nav_tags) {
-      store.set('navTags', navTags);
-    }
+    const rootMenu = this.state.data?.menu || store.get('navTags') || [];
+    if (rootMenu.length && this.state.data?.menu) store.set('navTags', rootMenu);
+    const navChildren = this.state.data?.nav_children || [];
+    const navTags = navChildren.length ? navChildren : rootMenu;
     const slug     = this.props.params?.slug || '';
     const { data, post } = this.state;
 
@@ -99,10 +99,10 @@ export default class TagPage extends Component {
     const lastCrumbIsCurrentTag =
       breadcrumbs.length > 0 && breadcrumbs[breadcrumbs.length - 1]?.slug === tag?.slug;
     const computedBreadcrumb = lastCrumbIsCurrentTag
-      ? breadcrumbs.map(bc => ({ name: bc.name, slug: bc.slug, is_hidden: bc.is_hidden, is_hidden_posts: bc.is_hidden_posts }))
+      ? breadcrumbs.map(bc => ({ name: bc.name, slug: bc.slug }))
       : [
-          ...breadcrumbs.map(bc => ({ name: bc.name, slug: bc.slug, is_hidden: bc.is_hidden, is_hidden_posts: bc.is_hidden_posts })),
-          ...(tag ? [{ name: tag.name, slug: tag.slug, is_hidden: tag.is_hidden, is_hidden_posts: tag.is_hidden_posts }] : []),
+          ...breadcrumbs.map(bc => ({ name: bc.name, slug: bc.slug })),
+          ...(tag ? [{ name: tag.name, slug: tag.slug }] : []),
         ];
     const bcCacheKey = `bc:tag:${slug}`;
     if (data) store.set(bcCacheKey, computedBreadcrumb);

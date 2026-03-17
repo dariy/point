@@ -109,7 +109,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 	}
 
 	// 2. All tags
-	tags, err := h.tagService.ListTags(ctx, false, false, true)
+	tags, err := h.tagService.ListTags(ctx, false, true)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

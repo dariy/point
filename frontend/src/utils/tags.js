@@ -4,13 +4,12 @@
  */
 
 import { escapeHtml } from './helpers.js';
-import { LOCK_SVG } from './icons.js';
 
 /**
- * Render a tag link `<a>` element with consistent class structure,
- * lock-icon indication for hidden tags, and optional modifier classes.
+ * Render a tag link `<a>` element with consistent class structure
+ * and optional modifier classes.
  *
- * @param {string|{name:string, slug:string, is_hidden?:boolean}} tag
+ * @param {string|{name:string, slug:string}} tag
  * @param {object}  [opts]
  * @param {boolean} [opts.active=false]  Add `active` class (nav-bar active state).
  * @param {string}  [opts.extra='']      Extra CSS classes appended to `tag-link`.
@@ -21,12 +20,10 @@ import { LOCK_SVG } from './icons.js';
 export function renderTagLink(tag, { active = false, extra = '', suffix = '' } = {}) {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
-  const hidden = typeof tag === 'object' && tag !== null && (!!tag.is_hidden || !!tag.is_hidden_posts);
 
-  const classes = ['tag-link', hidden ? 'is-hidden' : '', active ? 'active' : '', extra]
+  const classes = ['tag-link', active ? 'active' : '', extra]
     .filter(Boolean)
     .join(' ');
 
-  const lock = hidden ? LOCK_SVG : '';
-  return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${lock}${escapeHtml(name)}${suffix}</a>`;
+  return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${escapeHtml(name)}${suffix}</a>`;
 }
