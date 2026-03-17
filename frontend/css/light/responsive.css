@@ -127,13 +127,6 @@
         row-gap: 6px;
     }
 
-    /* Let h1 share line 1 with the hamburger (override width:100%) */
-    .light-header h1 {
-        flex: 1;
-        width: auto;
-        min-width: 0;
-    }
-
     /* Actions drop to line 2, full width, wrapping allowed */
     .header-actions {
         flex-basis: 100%;
