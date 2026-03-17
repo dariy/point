@@ -77,7 +77,7 @@ export default class PostsListPage extends Component {
                 </td>
                 <td class="status-col">
                   <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
-                          data-id="${escapeHtml(String(p.id))}">
+                          name="status" data-id="${escapeHtml(String(p.id))}">
                     ${['draft', 'published', 'hidden', 'page'].map(s => `
                       <option value="${s}"${p.status === s ? ' selected' : ''}>
                         ${escapeHtml(STATUS_LABELS[s] || s)}
