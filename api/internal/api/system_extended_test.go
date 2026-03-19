@@ -26,7 +26,7 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	// Restore non-existent backup
@@ -70,7 +70,7 @@ func TestSystemHandler_StatsExtended(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
@@ -98,7 +98,7 @@ func TestSystemHandler_UpdateMapCoordsExtended(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	reqBody, _ := json.Marshal(map[string]interface{}{})
