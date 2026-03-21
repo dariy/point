@@ -247,15 +247,16 @@ JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
 AND (CASE
     WHEN sqlc.arg('include_drafts') THEN 1=1
-    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published'
+    WHEN sqlc.arg('published_only_filter') THEN
+        p.status = 'published'
+        AND NOT EXISTS (
+            SELECT 1 FROM post_tags pt2
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
+        )
     ELSE p.status IN ('published', 'hidden')
 END)
-AND (sqlc.arg('include_drafts') OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
-    SELECT 1 FROM post_tags pt2
-    WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-        SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-    )
-))
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
@@ -265,15 +266,16 @@ JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
 AND (CASE
     WHEN sqlc.arg('include_drafts') THEN 1=1
-    WHEN sqlc.arg('published_only_filter') THEN p.status = 'published'
+    WHEN sqlc.arg('published_only_filter') THEN
+        p.status = 'published'
+        AND NOT EXISTS (
+            SELECT 1 FROM post_tags pt2
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
+        )
     ELSE p.status IN ('published', 'hidden')
-END)
-AND (sqlc.arg('include_drafts') OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
-    SELECT 1 FROM post_tags pt2
-    WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-        SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-    )
-));
+END);
 
 -- name: UpdateTagPostCount :exec
 UPDATE tags
