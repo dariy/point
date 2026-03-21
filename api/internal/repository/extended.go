@@ -25,8 +25,8 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        ELSE LOWER(p.status) IN ('published', 'page')
     END)
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
         SELECT pt.post_id FROM post_tags pt 
@@ -78,8 +78,8 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        ELSE LOWER(p.status) IN ('published', 'page')
     END)
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
         SELECT pt.post_id FROM post_tags pt 
@@ -117,8 +117,8 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        ELSE LOWER(p.status) IN ('published', 'page')
     END)
 
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
@@ -189,8 +189,8 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        ELSE LOWER(p.status) IN ('published', 'page')
     END)
 
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
@@ -647,7 +647,7 @@ WHERE pt.post_id IN (
     WHERE pt2.tag_id = ? %s
 )
 AND t.id != ?
-AND t.slug NOT LIKE '_%%'
+AND t.slug NOT LIKE '\_%%' ESCAPE '\'
 AND t.post_count > 0
 GROUP BY t.id
 ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
