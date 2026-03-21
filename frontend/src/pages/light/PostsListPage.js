@@ -301,7 +301,9 @@ export default class PostsListPage extends Component {
       });
     } catch (err) {
       this._restoreSearchFocus = searchHadFocus;
-      this.setState({ loading: false, error: err.message || 'Failed to load posts.' });
+      console.error('[PostsListPage] load error:', err);
+      store.set('toast', { message: 'Could not load posts.', type: 'error' });
+      this.setState({ loading: false });
     }
   }
 

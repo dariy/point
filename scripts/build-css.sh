@@ -23,6 +23,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/common/category-chips.css \
     "$CSS_DIR"/common/theme-toggle.css \
     "$CSS_DIR"/common/utilities.css \
+    "$CSS_DIR"/common/login-overlay.css \
     "$CSS_DIR"/light/layout.css \
     "$CSS_DIR"/light/login.css \
     "$CSS_DIR"/light/cards.css \
@@ -51,6 +52,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/common/category-chips.css \
     "$CSS_DIR"/common/theme-toggle.css \
     "$CSS_DIR"/common/utilities.css \
+    "$CSS_DIR"/common/login-overlay.css \
     "$CSS_DIR"/public/layout.css \
     "$CSS_DIR"/public/header.css \
     "$CSS_DIR"/public/header-tags.css \

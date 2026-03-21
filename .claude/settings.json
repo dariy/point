@@ -1,12 +1,4 @@
 {
-  "enabledPlugins": {
-    "frontend-design@claude-plugins-official": true,
-    "github@claude-plugins-official": true,
-    "feature-dev@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true
-  },
   "permissions": {
     "allow": [
       "mcp__serena_frontend__find_symbol",
@@ -26,7 +18,6 @@
       "mcp__serena_frontend__think_about_collected_information",
       "mcp__serena_frontend__think_about_task_adherence",
       "mcp__serena_frontend__think_about_whether_you_are_done",
-
       "mcp__serena_api__find_symbol",
       "mcp__serena_api__find_referencing_symbols",
       "mcp__serena_api__find_referencing_code_snippets",
@@ -45,5 +36,14 @@
       "mcp__serena_api__think_about_task_adherence",
       "mcp__serena_api__think_about_whether_you_are_done"
     ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "beads@beads-marketplace": true
   }
 }

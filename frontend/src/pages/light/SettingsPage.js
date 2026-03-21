@@ -24,8 +24,16 @@ const SETTING_GROUPS = [
   {
     title: 'Storage & System',
     keys: ['storage_quota_mb', 'enable_map', 'enable_backup', 'backup_interval_hours']
+  },
+  {
+    title: 'Advanced',
+    keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality']
   }
 ];
+
+const NUMERIC_KEYS = new Set([
+  'max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality'
+]);
 
 export default class SettingsPage extends Component {
   constructor(container, props = {}) {
@@ -114,7 +122,7 @@ export default class SettingsPage extends Component {
             <option value="dark"${value === 'dark' ? ' selected' : ''}>Dark</option>
             <option value="auto"${value === 'auto' ? ' selected' : ''}>Auto (System)</option>
           </select>`;
-      } else if (key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
+      } else if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
         input = `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
       } else {
         input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
@@ -209,7 +217,9 @@ export default class SettingsPage extends Component {
         posts: postsResult.posts || [],
       });
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Failed to load settings.' });
+      console.error('[SettingsPage] load error:', err);
+      store.set('toast', { message: 'Could not load settings.', type: 'error' });
+      this.setState({ loading: false });
     }
   }
 
@@ -264,7 +274,7 @@ export default class SettingsPage extends Component {
 
   _getSettingType(key) {
     if (key.includes('enable') || key.includes('show') || key.includes('use')) return 'boolean';
-    if (key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) return 'number';
+    if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) return 'number';
     return 'string';
   }
 

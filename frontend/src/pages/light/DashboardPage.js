@@ -1,12 +1,12 @@
 /**
  * DashboardPage — admin overview with stats and quick actions.
  *
- * Fetches: GET /api/system/stats
+ * Fetches: GET /api/system/stats, GET /api/system/version
  */
 
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
-import { getStats } from '../../api/system.js';
+import { getStats, getVersion } from '../../api/system.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -15,11 +15,11 @@ import { formatFileSize } from '../../utils/formatters.js';
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, stats: null, error: null };
+    this.state = { loading: true, stats: null, error: null, versionBanner: null };
   }
 
   render() {
-    const { loading, stats, error } = this.state;
+    const { loading, stats, error, versionBanner } = this.state;
 
     const content = loading
       ? `<div class="loading-spinner" aria-label="Loading…"></div>`
@@ -35,6 +35,13 @@ export default class DashboardPage extends Component {
       syncPill = `<button class="${cls}" id="dashboard-sync-pill">${text}</button>`;
     }
 
+    const banner = versionBanner
+      ? `<div class="version-update-banner" role="status">
+           Point ${escapeHtml(versionBanner)} is available. Update with: <code>./update.sh</code>
+           <button class="version-update-dismiss" id="dashboard-version-dismiss" aria-label="Dismiss">&times;</button>
+         </div>`
+      : '';
+
     return `
       <div class="light-layout">
         <div id="sidebar-mount"></div>
@@ -48,6 +55,7 @@ export default class DashboardPage extends Component {
               <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
             </div>
           </header>
+          ${banner}
           <main class="light-content">${content}</main>
         </div>
       </div>`;
@@ -107,6 +115,14 @@ export default class DashboardPage extends Component {
       if (offline.failed) navigate('/light/system');
       else if (offline.pending) import('../../utils/sync.js').then(m => m.syncQueue());
     });
+
+    this.$('#dashboard-version-dismiss')?.addEventListener('click', () => {
+      const { versionBanner } = this.state;
+      if (versionBanner) {
+        localStorage.setItem(`version_dismissed_${versionBanner}`, '1');
+        this.setState({ versionBanner: null });
+      }
+    });
   }
 
   mount() {
@@ -119,7 +135,22 @@ export default class DashboardPage extends Component {
       const stats = await getStats();
       this.setState({ loading: false, stats, error: null });
     } catch (err) {
-      this.setState({ loading: false, stats: null, error: err.message || 'Failed to load stats.' });
+      console.error('[DashboardPage] load error:', err);
+      store.set('toast', { message: 'Could not load dashboard stats.', type: 'error' });
+      this.setState({ loading: false, stats: null });
+    }
+
+    // Check for available updates in the background — don't block the page.
+    try {
+      const ver = await getVersion();
+      if (ver.update_available) {
+        const dismissKey = `version_dismissed_${ver.latest}`;
+        if (!localStorage.getItem(dismissKey)) {
+          this.setState({ versionBanner: ver.latest });
+        }
+      }
+    } catch {
+      // Version check failure is non-critical; silently ignore.
     }
   }
 

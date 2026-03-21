@@ -57,7 +57,7 @@ type Querier interface {
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
-	ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, error)
+	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
 	PublishPost(ctx context.Context, id int64) (Post, error)
 	RemoveTagFromPost(ctx context.Context, arg RemoveTagFromPostParams) error
 	RemoveTagRelationship(ctx context.Context, arg RemoveTagRelationshipParams) error
