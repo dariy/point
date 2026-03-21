@@ -31,9 +31,7 @@ func NewTagService(repo *repository.Repository) *TagService {
 }
 
 func (s *TagService) ListTags(ctx context.Context, includeEmpty, publicOnly bool) ([]models.Tag, error) {
-	tags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter: includeEmpty,
-	})
+	tags, err := s.repo.ListTags(ctx, includeEmpty)
 	if err != nil {
 		return nil, err
 	}
@@ -271,9 +269,7 @@ type TagCloudItem struct {
 }
 
 func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool) ([]TagCloudItem, error) {
-	tags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter: true, // include all; filter below by effective count
-	})
+	tags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -729,9 +725,7 @@ func buildEffectivelyHiddenPostsTagIDs(allTags []models.Tag, relationships []rep
 
 // EffectivelyHiddenPostsTagIDs returns the set of tag IDs that effectively hide their posts.
 func (s *TagService) EffectivelyHiddenPostsTagIDs(ctx context.Context) (map[int64]bool, error) {
-	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter: true,
-	})
+	allTags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -744,7 +738,7 @@ func (s *TagService) EffectivelyHiddenPostsTagIDs(ctx context.Context) (map[int6
 
 // WithRelatedIDs returns the set of tag IDs that are direct children of _with_related.
 func (s *TagService) WithRelatedIDs(ctx context.Context) (map[int64]bool, error) {
-	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{IncludeEmptyFilter: true})
+	allTags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -773,7 +767,7 @@ func (s *TagService) WithRelatedIDs(ctx context.Context) (map[int64]bool, error)
 
 // InBreadcrumbsIDs returns the set of tag IDs that are direct children of _is_in_breadcrumbs.
 func (s *TagService) InBreadcrumbsIDs(ctx context.Context) (map[int64]bool, error) {
-	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{IncludeEmptyFilter: true})
+	allTags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -804,9 +798,7 @@ func (s *TagService) InBreadcrumbsIDs(ctx context.Context) (map[int64]bool, erro
 
 // EffectivelyHiddenIDs returns the set of tag IDs that should not be shown publicly.
 func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, error) {
-	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter: true,
-	})
+	allTags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -822,9 +814,7 @@ func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, 
 // If rootID is non-nil, returns children of that tag and their descendants (for tag pages).
 // System tags (slug starting with "_") and hidden/empty tags are excluded from output.
 func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, publicOnly bool) ([]NavTagNode, error) {
-	allTags, err := s.repo.ListTags(ctx, models.ListTagsParams{
-		IncludeEmptyFilter: true, // system tags may have 0 posts but must still be traversed
-	})
+	allTags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
 	}

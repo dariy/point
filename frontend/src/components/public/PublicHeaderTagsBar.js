@@ -91,9 +91,23 @@ export class PublicHeaderTagsBar extends Component {
         if (!isOpen) this._open(group);
       });
 
-      // Pointer devices: open/close on hover
-      group.addEventListener('mouseenter', () => this._open(group));
-      group.addEventListener('mouseleave', () => this._close(group));
+      // Pointer devices: open on hover; delay close so the cursor can travel
+      // from the narrow tag pill to the (often wider) fixed dropdown without
+      // triggering mouseleave on the group's layout box first.
+      group.addEventListener('mouseenter', () => {
+        clearTimeout(group._hoverTimer);
+        this._open(group);
+      });
+      group.addEventListener('mouseleave', () => {
+        group._hoverTimer = setTimeout(() => this._close(group), 150);
+      });
+      const dropdown = group.querySelector('.tag-children');
+      if (dropdown) {
+        dropdown.addEventListener('mouseenter', () => clearTimeout(group._hoverTimer));
+        dropdown.addEventListener('mouseleave', () => {
+          group._hoverTimer = setTimeout(() => this._close(group), 150);
+        });
+      }
     });
 
     const filters = this.container.querySelector('.tags-filters');
@@ -193,15 +207,9 @@ export class PublicHeaderTagsBar extends Component {
     let left = anchorRect.left + anchorRect.width / 2 - dropW / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - dropW - 8));
 
-    // Vertical: open below the anchor button (root) or below the parent panel (nested),
-    // so the gap is consistent at every level.
-    let top;
-    if (group.parentElement?.classList.contains('tag-children')) {
-      const panelRect = group.parentElement.getBoundingClientRect();
-      top = panelRect.bottom + gap;
-    } else {
-      top = anchorRect.bottom + gap;
-    }
+    // Vertical: always open directly below the hovered tag's header pill,
+    // regardless of nesting level.
+    const top = anchorRect.bottom + gap;
 
     dropdown.style.position  = 'fixed';
     dropdown.style.top       = `${top}px`;
