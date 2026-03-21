@@ -64,7 +64,7 @@ func TestQueries_Extra(t *testing.T) {
 	tag, _ := q.CreateTag(ctx, CreateTagParams{Name: "T", Slug: "t"})
 	_, _ = q.GetTag(ctx, tag.ID)
 	_, _ = q.GetTagBySlug(ctx, "t")
-	_, _ = q.ListTags(ctx, ListTagsParams{IncludeEmptyFilter: true})
+	_, _ = q.ListTags(ctx, true)
 	_, _ = q.UpdateTag(ctx, UpdateTagParams{ID: tag.ID, Name: "T2", Slug: "t2"})
 	_ = q.UpdateTagPostCount(ctx, tag.ID)
 	_ = q.UpdateAllTagPostCounts(ctx)

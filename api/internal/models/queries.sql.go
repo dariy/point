@@ -132,15 +132,16 @@ JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
 AND (CASE
     WHEN ?2 THEN 1=1
-    WHEN ?3 THEN p.status = 'published'
+    WHEN ?3 THEN
+        p.status = 'published'
+        AND NOT EXISTS (
+            SELECT 1 FROM post_tags pt2
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
+        )
     ELSE p.status IN ('published', 'hidden')
 END)
-AND (?2 OR NOT (?3) OR NOT EXISTS (
-    SELECT 1 FROM post_tags pt2
-    WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-        SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-    )
-))
 `
 
 type CountPostsByTagParams struct {
@@ -668,25 +669,22 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 }
 
 const getPostsByTag = `-- name: GetPostsByTag :many
-WITH RECURSIVE effectively_hidden_posts_tags(id) AS (
-    SELECT id FROM tags WHERE is_hidden_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr
-    JOIN effectively_hidden_posts_tags ehpt ON tr.parent_id = ehpt.id
-)
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
-AND (CASE 
+AND (CASE
     WHEN ?2 THEN 1=1
-    WHEN ?3 THEN p.status = 'published' 
-    ELSE p.status IN ('published', 'hidden') 
+    WHEN ?3 THEN
+        p.status = 'published'
+        AND NOT EXISTS (
+            SELECT 1 FROM post_tags pt2
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
+        )
+    ELSE p.status IN ('published', 'hidden')
 END)
-AND (?2 OR NOT (sqlc.arg('published_only_filter')) OR NOT EXISTS (
-    SELECT 1 FROM post_tags pt2 
-    WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM effectively_hidden_posts_tags)
-))
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ?5 OFFSET ?4
 `
@@ -1270,12 +1268,8 @@ WHERE (CASE WHEN ?1 THEN 1=1 ELSE post_count > 0 END)
 ORDER BY sort_order ASC, name ASC
 `
 
-type ListTagsParams struct {
-	IncludeEmptyFilter interface{} `json:"include_empty_filter"`
-}
-
-func (q *Queries) ListTags(ctx context.Context, arg ListTagsParams) ([]Tag, error) {
-	rows, err := q.db.QueryContext(ctx, listTags, arg.IncludeEmptyFilter)
+func (q *Queries) ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, listTags, includeEmptyFilter)
 	if err != nil {
 		return nil, err
 	}
