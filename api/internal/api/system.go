@@ -483,14 +483,23 @@ func (h *SystemHandler) extractTarGz(srcPath, destDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			_ = os.MkdirAll(target, 0755)
+			if mkErr := os.MkdirAll(target, 0755); mkErr != nil {
+				// Directory may already exist with restrictive permissions — try to loosen them.
+				_ = os.Chmod(target, 0755)
+			}
 		case tar.TypeReg:
-			_ = os.MkdirAll(filepath.Dir(target), 0755)
+			parentDir := filepath.Dir(target)
+			if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
+				_ = os.Chmod(parentDir, 0755)
+			}
 			out, err := os.Create(target)
 			if err != nil {
-				continue
+				return fmt.Errorf("restore: cannot write %s: %w", header.Name, err)
 			}
-			_, _ = io.Copy(out, tr)
+			if _, copyErr := io.Copy(out, tr); copyErr != nil {
+				_ = out.Close()
+				return fmt.Errorf("restore: cannot write %s: %w", header.Name, copyErr)
+			}
 			_ = out.Close()
 		}
 	}
