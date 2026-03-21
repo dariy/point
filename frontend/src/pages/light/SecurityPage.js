@@ -168,7 +168,9 @@ export default class SecurityPage extends Component {
       const data = await getSessions();
       this.setState({ loading: false, sessions: data.sessions || [] });
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Failed to load sessions.' });
+      console.error('[SecurityPage] load error:', err);
+      store.set('toast', { message: 'Could not load sessions.', type: 'error' });
+      this.setState({ loading: false, sessions: [] });
     }
   }
 

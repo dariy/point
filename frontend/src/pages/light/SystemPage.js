@@ -9,8 +9,9 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import {
   clearCache, listBackups,
   createBackup, restoreBackup, deleteBackup, getMigrations,
-  updateMapCoords,
+  updateMapCoords, scanMediaImport,
 } from '../../api/system.js';
+import { getAllSettings } from '../../api/settings.js';
 import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
 import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
 import { preCacheImages } from '../../utils/imageCache.js';
@@ -45,11 +46,16 @@ export default class SystemPage extends Component {
 
       // Sync queue state
       syncQueue: [],
+
+      // Photo library import
+      scanningMedia: false,
+      scanResult: null,
+      importPath: '',
     };
   }
 
   render() {
-    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult } = this.state;
+    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult, scanningMedia, scanResult, importPath } = this.state;
     const settings = store.get('settings') || {};
     const enableBackup = settings.enable_backup !== false;
 
@@ -116,6 +122,28 @@ export default class SystemPage extends Component {
             </div>
 
             ${this._renderSyncPanel(queue, lastSync)}
+
+            <div class="card">
+              <div class="card-header"><h2>Photo Library</h2></div>
+              <div class="card-body">
+                <div class="ops-list">
+                  <div class="op-item">
+                    <div class="op-info">
+                      <h4>Scan for New Photos</h4>
+                      ${importPath
+                        ? `<p>Scanning: <code>${escapeHtml(importPath)}</code></p>`
+                        : `<p class="text-muted">Set a <strong>Photo Library path</strong> (<code>media_import_path</code>) in Settings first.</p>`
+                      }
+                      ${scanningMedia ? `<p class="text-muted" style="margin-top:var(--spacing-sm)">Scanning library, please wait&hellip;</p>` : ''}
+                      ${scanResult ? this._renderScanResult(scanResult) : ''}
+                    </div>
+                    <button id="scan-media-btn" class="btn btn-secondary" ${scanningMedia || !importPath ? 'disabled' : ''}>
+                      ${scanningMedia ? 'Scanning&hellip;' : 'Scan for New Photos'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="card">
               <div class="card-header"><h2>Maintenance</h2></div>
@@ -216,6 +244,20 @@ export default class SystemPage extends Component {
       </div>`;
   }
 
+  _renderScanResult(result) {
+    const cls = result.imported > 0 ? 'success' : 'info';
+    const errs = result.errors || [];
+    return `
+      <div class="alert alert-${cls}" style="margin-top: var(--spacing-md)">
+        Imported <strong>${result.imported}</strong> photo${result.imported !== 1 ? 's' : ''},
+        skipped <strong>${result.skipped}</strong> duplicate${result.skipped !== 1 ? 's' : ''}.
+        ${errs.length ? `
+          <ul style="margin-top: var(--spacing-sm)">
+            ${errs.map(e => `<li>${escapeHtml(e)}</li>`).join('')}
+          </ul>` : ''}
+      </div>`;
+  }
+
   _renderSyncPanel(queue, lastSync) {
     const pending  = queue.filter(op => op.status === 'pending').length;
     const syncing  = queue.filter(op => op.status === 'syncing').length;
@@ -273,6 +315,9 @@ export default class SystemPage extends Component {
     this.$('#dismiss-retry-btn')?.addEventListener('click', () => this._handleDismissRetry());
     this.subscribeStore(store, 'offline_status', () => this._refreshSyncState());
 
+    // Photo library scan
+    this.$('#scan-media-btn')?.addEventListener('click', () => this._handleScanMedia());
+
     // Cache
     this.$('#clear-cache-btn')?.addEventListener('click', () => this._handleClearCache());
 
@@ -320,16 +365,20 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [backups, migrations, lastSync, queue] = await Promise.all([
+      const [backups, migrations, lastSync, queue, allSettings] = await Promise.all([
         listBackups(),
         getMigrations(),
         getMeta('last_sync'),
         getQueue(),
+        getAllSettings().catch(() => ({})),
       ]);
       await updateStatus();
-      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue });
+      const importPath = allSettings.media_import_path || '';
+      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue, importPath });
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Failed to load system data.' });
+      console.error('[SystemPage] load error:', err);
+      store.set('toast', { message: 'Could not load system data.', type: 'error' });
+      this.setState({ loading: false });
     }
   }
 
@@ -418,6 +467,19 @@ export default class SystemPage extends Component {
     } catch (err) {
       this.setState({ updatingCoords: false, coordsResult: null });
       store.set('toast', { message: err.message || 'Failed to update coordinates.', type: 'error' });
+    }
+  }
+
+  async _handleScanMedia() {
+    this.setState({ scanningMedia: true, scanResult: null });
+    try {
+      const result = await scanMediaImport();
+      this.setState({ scanningMedia: false, scanResult: result });
+      const msg = `Imported ${result.imported} photo${result.imported !== 1 ? 's' : ''}, skipped ${result.skipped} duplicate${result.skipped !== 1 ? 's' : ''}.`;
+      store.set('toast', { message: msg, type: result.imported > 0 ? 'success' : 'info' });
+    } catch (err) {
+      this.setState({ scanningMedia: false });
+      store.set('toast', { message: err.message || 'Scan failed.', type: 'error' });
     }
   }
 

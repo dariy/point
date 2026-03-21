@@ -83,3 +83,42 @@
 .storage-bar-fill.danger {
     background-color: var(--color-danger);
 }
+
+/* ===========================
+   Version Update Banner
+   =========================== */
+.version-update-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background-color: var(--color-primary-light, rgba(219, 234, 254, 0.8));
+    color: var(--color-primary, #2563eb);
+    border-bottom: 1px solid rgba(37, 99, 235, 0.15);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.version-update-banner code {
+    font-family: monospace;
+    background: rgba(0, 0, 0, 0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+.version-update-dismiss {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    color: inherit;
+    opacity: 0.6;
+    padding: 0 2px;
+    flex-shrink: 0;
+}
+
+.version-update-dismiss:hover {
+    opacity: 1;
+}

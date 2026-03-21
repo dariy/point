@@ -52,7 +52,7 @@ func TestFullWorkflow(t *testing.T) {
 	mediaH := NewMediaHandler(mediaSvc, settingsSvc)
 	postH := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	tagH := NewTagHandler(tagSvc, settingsSvc)
-	systemH := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir)
+	systemH := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.0.0")
 	pagesH := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
 
 	e := echo.New()
