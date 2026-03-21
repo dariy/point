@@ -40,6 +40,8 @@ class Router {
     this._authGuard = null;
     /** @type {string} */
     this._loginPath = '/light/login';
+    /** @type {string} */
+    this._setupPath = '/setup';
     /** @type {import('./components/Component.js').Component|null} */
     this._currentPage = null;
 
@@ -54,13 +56,14 @@ class Router {
    * Initialise the router and render the current URL.
    *
    * @param {Array<{ path: string, load: Function, public?: boolean }>} routes
-   * @param {{ mountPoint: HTMLElement, authGuard?: Function, loginPath?: string }} opts
+   * @param {{ mountPoint: HTMLElement, authGuard?: Function, loginPath?: string, setupPath?: string }} opts
    */
-  init(routes, { mountPoint, authGuard = null, loginPath = '/light/login' } = {}) {
+  init(routes, { mountPoint, authGuard = null, loginPath = '/light/login', setupPath = '/setup' } = {}) {
     this._routes = routes;
     this._mountPoint = mountPoint;
     this._authGuard = authGuard;
     this._loginPath = loginPath;
+    this._setupPath = setupPath;
 
     window.addEventListener('popstate', this._onPopState);
     window.addEventListener('app:navigate', this._onNavigate);
@@ -104,7 +107,7 @@ class Router {
   }
 
   _onUnauthorized() {
-    this.navigate(this._loginPath, { replace: true });
+    window.dispatchEvent(new CustomEvent('app:login-required', { detail: { next: null } }));
   }
 
   /** Intercept clicks on same-origin <a> elements. */
@@ -167,6 +170,13 @@ class Router {
     const search = qIndex === -1 ? '' : fullPath.slice(qIndex);
     const query = this._parseSearch(search);
 
+    // Login path: delegate entirely to the overlay system, never unmount current page.
+    if (pathname === this._loginPath) {
+      const next = query.next ? decodeURIComponent(query.next) : null;
+      window.dispatchEvent(new CustomEvent('app:login-required', { detail: { next } }));
+      return;
+    }
+
     let matchedRoute = null;
     let params = {};
     for (const route of this._routes) {
@@ -179,15 +189,38 @@ class Router {
     }
 
     if (!matchedRoute) {
-      this._showFallback('404', 'Page not found.');
+      if (pathname.startsWith('/light') && pathname !== '/light') {
+        store.set('toast', { message: 'Page not found.', type: 'error' });
+        this.navigate('/light', { replace: true });
+      } else {
+        this._showFallback('404', 'Page not found.');
+      }
       return;
     }
 
-    // Auth guard: redirect to login if route requires authentication.
-    // Encode the current path+query as ?next= so LoginPage can return here.
+    // Setup guard: if navigating to /light/* and setup is not complete, redirect to /setup.
+    // If already on /setup but setup is complete, redirect to /light.
+    if (pathname.startsWith('/light') || pathname === this._setupPath) {
+      try {
+        const res = await fetch('/api/setup/status', { credentials: 'include' });
+        const data = await res.json();
+        if (!data.setup_complete && pathname !== this._setupPath) {
+          this.navigate(this._setupPath, { replace: true });
+          return;
+        }
+        if (data.setup_complete && pathname === this._setupPath) {
+          this.navigate('/light', { replace: true });
+          return;
+        }
+      } catch {
+        // If the status check fails, proceed normally (e.g. network error).
+      }
+    }
+
+    // Auth guard: show login overlay without unmounting the current page.
     if (!matchedRoute.public && this._authGuard && !this._authGuard()) {
-      const next = encodeURIComponent(fullPath);
-      this.navigate(`${this._loginPath}?next=${next}`, { replace: true });
+      history.replaceState(null, '', `${this._loginPath}?next=${encodeURIComponent(fullPath)}`);
+      window.dispatchEvent(new CustomEvent('app:login-required', { detail: { next: fullPath } }));
       return;
     }
 
@@ -205,7 +238,12 @@ class Router {
       this._currentPage.mount();
     } catch (err) {
       console.error('[Router] Failed to load page:', err);
-      this._showFallback('Error', 'Failed to load page. Please try again.');
+      if (pathname.startsWith('/light') && pathname !== '/light') {
+        store.set('toast', { message: 'Failed to load page. Please try again.', type: 'error' });
+        this.navigate('/light', { replace: true });
+      } else {
+        this._showFallback('Error', 'Failed to load page. Please try again.');
+      }
     }
   }
 
