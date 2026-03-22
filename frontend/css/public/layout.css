@@ -27,7 +27,7 @@ body {
     width: 100%;
     z-index: 110;
     background: var(--header-bg);
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: env(safe-area-inset-top, 0);
 }
 
 .site-main {

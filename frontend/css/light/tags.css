@@ -21,8 +21,8 @@
     font-size: var(--font-size-xs);
     color: var(--text-muted);
     background-color: var(--border-primary);
-    padding: 2px 6px;
-    border-radius: 9999px;
+    padding: 0.125rem 0.375rem;
+    border-radius: 624.938rem;
 }
 
 .slug-link {
@@ -41,7 +41,7 @@
     text-decoration: none;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--spacing-xs);
 }
 
 .sort-link:hover {
@@ -62,12 +62,12 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--border-radius);
     background: var(--surface-input);
-    min-height: 42px;
+    min-height: 2.625rem;
 }
 
 .tags-input:focus-within {
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
+    box-shadow: 0 0 0 0.1875rem var(--color-primary-light);
 }
 
 .tags-input .tag {
@@ -78,7 +78,7 @@
 
 .tags-input .tag-remove {
     cursor: pointer;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1;
     opacity: 0.7;
     transition: opacity 0.2s;
@@ -90,7 +90,7 @@
 
 .tags-input input {
     flex: 1;
-    min-width: 100px;
+    min-width: 6.25rem;
     border: none;
     outline: none;
     padding: var(--spacing-xs);
@@ -110,9 +110,9 @@
     box-shadow: var(--shadow-lg);
     z-index: 100;
     display: none;
-    max-height: 200px;
+    max-height: 12.5rem;
     overflow-y: auto;
-    margin-top: 4px;
+    margin-top: var(--spacing-xs);
 }
 
 .suggestion-item {
@@ -142,10 +142,10 @@
 /* Drag and Drop Styles */
 .tm-drag-handle {
     flex-shrink: 0;
-    width: 16px;
+    width: 1rem;
     color: var(--text-muted);
-    font-size: 10px;
-    letter-spacing: -2px;
+    font-size: 0.625rem;
+    letter-spacing: -0.125rem;
     opacity: 0;
     cursor: grab;
     user-select: none;
@@ -171,40 +171,40 @@
     position: absolute;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 0.125rem;
     background-color: var(--color-primary, #2563eb);
-    border-radius: 1px;
+    border-radius: 0.0625rem;
     z-index: 10;
     pointer-events: none;
 }
 
 .tm-row.tm-drop-before::before {
-    top: -1px;
+    top: -0.0625rem;
 }
 
 .tm-row.tm-drop-after::after {
-    bottom: -1px;
+    bottom: -0.0625rem;
 }
 
 .tm-row.tm-drop-on {
     background-color: rgba(37, 99, 235, 0.08);
-    outline: 2px solid var(--color-primary, #2563eb);
-    outline-offset: -2px;
-    border-radius: 3px;
+    outline: 0.125rem solid var(--color-primary, #2563eb);
+    outline-offset: -0.125rem;
+    border-radius: 0.1875rem;
 }
 
 /* Tag link pill (posts table) */
 .tag-link {
     display: inline-flex;
     align-items: center;
-    height: 24px;
+    height: 1.5rem;
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-xs);
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
-    border-radius: 9999px;
+    border-radius: 624.938rem;
     text-decoration: none;
     white-space: nowrap;
     transition: border-color var(--transition-fast), color var(--transition-fast);
@@ -223,12 +223,12 @@
 
 /* Tags column in posts table — always-on inline editor */
 .tags-col {
-    min-width: 200px;
+    min-width: 12.5rem;
 }
 
 .tags-col .tags-input {
-    min-height: 32px;
-    padding: 2px var(--spacing-xs);
+    min-height: 2rem;
+    padding: 0.125rem var(--spacing-xs);
     font-size: var(--font-size-sm);
 }
 
@@ -274,9 +274,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    padding: 1px 6px;
-    border-radius: 9999px;
+    min-width: 1.375rem;
+    padding: 0.0625rem 0.375rem;
+    border-radius: 624.938rem;
     font-size: var(--font-size-xs);
     font-weight: 600;
     background: var(--border-primary);
@@ -285,30 +285,30 @@
 
 .tm-parent-badge {
     display: inline-block;
-    padding: 2px 7px;
+    padding: 0.125rem 0.4375rem;
     border-radius: var(--border-radius-sm);
     font-size: var(--font-size-xs);
     background: var(--color-primary-light);
     color: var(--color-primary);
-    margin-right: 4px;
+    margin-right: var(--spacing-xs);
     white-space: nowrap;
 }
 
 .tm-flags-inline {
-    margin-left: 6px;
+    margin-left: 0.375rem;
 }
 
 .tm-flags-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--spacing-xs);
 }
 
 .tm-flag-toggle, .tm-flag-static {
     padding: 0;
-    width: 28px;
-    height: 28px;
-    font-size: 13px;
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.8125rem;
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
     color: var(--text-muted);
@@ -362,16 +362,16 @@
 .tm-flag-static.active.tm-flag-location { color: #ef4444; border-color: #ef4444; background: #fef2f2; opacity: 1; }
 
 .tm-flag {
-    font-size: 12px;
-    margin: 0 1px;
+    font-size: var(--font-size-xs);
+    margin: 0 0.0625rem;
     opacity: 0.85;
 }
 
 .tm-parents-cell {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    max-width: 200px;
+    gap: var(--spacing-xs);
+    max-width: 12.5rem;
 }
 
 .tm-tags-table th, .tm-tags-table td {
@@ -396,12 +396,12 @@
 .tm-header-content {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--spacing-xs);
 }
 
 .tm-sort-icon {
-    font-size: 10px;
-    width: 10px;
+    font-size: 0.625rem;
+    width: 0.625rem;
 }
 
 .tm-tags-table .tm-flag-toggle,
@@ -413,7 +413,7 @@
    Tags Manager — tree view
    =========================== */
 .tags-tree-container {
-    padding: 4px 0;
+    padding: var(--spacing-xs) 0;
 }
 
 .tm-tree {
@@ -425,11 +425,11 @@
 .tm-tree.level-1,
 .tm-tree.level-2,
 .tm-tree.level-3 {
-    padding-left: 20px;
+    padding-left: 1.25rem;
     border-left: 1px dashed var(--border-primary);
-    margin-left: 11px;
-    margin-top: 2px;
-    margin-bottom: 2px;
+    margin-left: 0.6875rem;
+    margin-top: 0.125rem;
+    margin-bottom: 0.125rem;
 }
 
 .tm-node {
@@ -441,11 +441,11 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 7px 10px;
+    gap: 0.75rem;
+    padding: 0.4375rem 0.625rem;
     border-radius: var(--border-radius);
     transition: background-color var(--transition-fast);
-    min-height: 44px;
+    min-height: 2.75rem;
 }
 
 .tm-row:hover {
@@ -454,8 +454,8 @@
 
 .tm-toggle {
     flex-shrink: 0;
-    width: 22px;
-    height: 22px;
+    width: 1.375rem;
+    height: 1.375rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -463,7 +463,7 @@
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: 9px;
+    font-size: 0.5625rem;
     border-radius: var(--border-radius-sm);
     transition: background-color var(--transition-fast), color var(--transition-fast);
 }
@@ -475,7 +475,7 @@
 
 .tm-toggle-spacer {
     flex-shrink: 0;
-    width: 22px;
+    width: 1.375rem;
 }
 
 .tm-row .tm-tag-name {
@@ -496,14 +496,14 @@
 .tm-row-meta {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
     flex-shrink: 0;
-    min-width: 60px;
+    min-width: 3.75rem;
 }
 
 .tm-actions {
     display: flex;
-    gap: 3px;
+    gap: 0.1875rem;
     opacity: 0.3;
     transition: opacity var(--transition-fast);
     text-wrap-mode: nowrap;
@@ -525,7 +525,7 @@
    Tag editor modal — wider
    =========================== */
 .tag-editor-modal {
-    width: 700px;
+    width: 43.75rem;
 }
 
 /* Editor-style field spacing (title-row / slug-row have no intrinsic margin) */
@@ -548,7 +548,7 @@
 
 /* Hint text (e.g. below coordinate fields) */
 .form-hint {
-    margin-top: 4px;
+    margin-top: var(--spacing-xs);
     font-size: var(--font-size-xs);
     color: var(--text-muted);
 }
@@ -571,7 +571,7 @@
 .tag-editor-modal .form-group select:focus {
     outline: none;
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
+    box-shadow: 0 0 0 0.1875rem var(--color-primary-light);
 }
 
 /* Remove dropdown arrow from multi-select */
@@ -606,7 +606,7 @@
 }
 
 .form-help {
-    margin-top: 4px;
+    margin-top: var(--spacing-xs);
     font-size: var(--font-size-xs);
     color: var(--text-muted);
 }
@@ -617,15 +617,15 @@
    =========================== */
 .tm-collapsible-section {
     border-top: 1px solid var(--border-primary);
-    margin-top: 8px;
+    margin-top: var(--spacing-sm);
 }
 
 .tm-section-toggle {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
     width: 100%;
-    padding: 10px 0;
+    padding: 0.625rem 0;
     background: none;
     border: none;
     cursor: pointer;
@@ -643,7 +643,7 @@
 }
 
 .tm-section-arrow {
-    font-size: 8px;
+    font-size: 0.5rem;
     flex-shrink: 0;
     transition: transform var(--transition-fast);
 }
@@ -653,12 +653,12 @@
     font-size: var(--font-size-xs);
     font-weight: 700;
     color: var(--color-primary);
-    min-width: 16px;
+    min-width: 1rem;
     text-align: right;
 }
 
 .tm-section-body {
-    padding-bottom: 8px;
+    padding-bottom: var(--spacing-sm);
 }
 
 /* ===========================
@@ -667,15 +667,15 @@
 .tag-flags-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    padding-top: 4px;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-xs);
 }
 
 .flag-item {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 0.625rem;
+    padding: 0.625rem 0.75rem;
     border: 1px solid var(--border-primary);
     border-radius: var(--border-radius);
     cursor: pointer;
@@ -689,7 +689,7 @@
 }
 
 .flag-item input[type="checkbox"] {
-    margin-top: 2px;
+    margin-top: 0.125rem;
     flex-shrink: 0;
     cursor: pointer;
     accent-color: var(--color-primary);
@@ -698,11 +698,11 @@
 .flag-item-body {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--spacing-sm);
 }
 
 .flag-item-icon {
-    font-size: 15px;
+    font-size: 0.9375rem;
     line-height: 1.3;
     flex-shrink: 0;
 }
@@ -710,7 +710,7 @@
 .flag-item-text {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.125rem;
 }
 
 .flag-item-text strong {
@@ -730,13 +730,13 @@
    (parent / child selectors)
    =========================== */
 .tag-toggles-container {
-    padding: 8px 0 4px;
+    padding: var(--spacing-sm) 0 var(--spacing-xs);
 }
 
 .tag-toggles-empty {
     font-size: var(--font-size-xs);
     color: var(--text-muted);
-    padding: 6px 0;
+    padding: 0.375rem 0;
 }
 
 .tag-toggle {
@@ -756,12 +756,12 @@
 .tag-toggle span {
     display: inline-flex;
     align-items: center;
-    height: 28px;
+    height: 1.75rem;
     padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
     font-weight: 500;
     line-height: 1;
-    border-radius: 9999px;
+    border-radius: 624.938rem;
     border: 1px solid var(--border-primary);
     background: var(--surface-card);
     color: var(--text-secondary);
@@ -794,11 +794,11 @@
 .tag-toggle-tree.level-2,
 .tag-toggle-tree.level-3,
 .tag-toggle-tree.level-4 {
-    padding-left: 20px;
+    padding-left: 1.25rem;
     border-left: 1px dashed var(--border-primary);
-    margin-left: 8px;
-    margin-top: 1px;
-    margin-bottom: 1px;
+    margin-left: var(--spacing-sm);
+    margin-top: 0.0625rem;
+    margin-bottom: 0.0625rem;
 }
 
 .tag-toggle-node {
@@ -809,8 +809,8 @@
 .tag-toggle-row {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 6px;
+    gap: var(--spacing-xs);
+    padding: 0.1875rem 0.375rem;
     border-radius: var(--border-radius);
 }
 
@@ -820,8 +820,8 @@
 
 .tag-toggle-btn {
     flex-shrink: 0;
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -829,7 +829,7 @@
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: 8px;
+    font-size: 0.5rem;
     border-radius: var(--border-radius-sm);
     padding: 0;
     transition: background-color var(--transition-fast), color var(--transition-fast);
@@ -842,7 +842,7 @@
 
 .tag-toggle-btn-spacer {
     flex-shrink: 0;
-    width: 18px;
+    width: 1.125rem;
 }
 
 /* Indeterminate pill: not checked, but a descendant is checked */
@@ -857,7 +857,7 @@
    Multi-parent & relation badges
    =========================== */
 .tm-multi-parent {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     opacity: 0.75;
     flex-shrink: 0;
@@ -866,12 +866,12 @@
 
 .tm-rel-badge {
     display: inline-block;
-    padding: 2px 7px;
+    padding: 0.125rem 0.4375rem;
     border-radius: var(--border-radius-sm);
     font-size: var(--font-size-xs);
     background: var(--color-primary-light);
     color: var(--color-primary);
-    margin-right: 4px;
+    margin-right: var(--spacing-xs);
     white-space: nowrap;
 }
 
@@ -893,8 +893,8 @@
 
 .tm-system-badge {
     display: inline-block;
-    margin-left: 5px;
-    font-size: 11px;
+    margin-left: 0.3125rem;
+    font-size: 0.6875rem;
     opacity: 0.75;
     vertical-align: middle;
 }
@@ -924,16 +924,16 @@
 
 /* Inline flag strip below Description in the tag editor modal */
 .tm-flags-inline-strip {
-    margin-top: 6px;
-    margin-bottom: 2px;
+    margin-top: 0.375rem;
+    margin-bottom: 0.125rem;
 }
 
 /* System tag pill strip inside parent/child selector */
 .tag-toggle-system-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    padding: 4px 0 6px;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) 0 0.375rem;
 }
 
 .tag-toggle-system-item {
@@ -943,7 +943,7 @@
 .tag-toggle-divider {
     border: none;
     border-top: 1px solid var(--border-primary);
-    margin: 6px 0;
+    margin: 0.375rem 0;
 }
 
 /* ===========================
@@ -951,9 +951,9 @@
    =========================== */
 .tm-toggle-search {
     width: 100%;
-    padding: 5px 10px;
+    padding: 0.3125rem 0.625rem;
     font-size: var(--font-size-sm);
-    margin-bottom: 6px;
+    margin-bottom: 0.375rem;
     box-sizing: border-box;
 }
 
@@ -963,35 +963,35 @@
 .tm-list-filter-bar {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-bottom: 12px;
+    gap: 0.375rem;
+    margin-bottom: 0.75rem;
 }
 
 .tm-list-search-row {
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-sm);
     align-items: center;
 }
 
 .tm-list-search {
     flex: 1;
-    padding: 6px 12px;
+    padding: 0.375rem 0.75rem;
     font-size: var(--font-size-sm);
 }
 
 .tm-filter-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 0.375rem;
     min-height: 0;
 }
 
 .tm-filter-chip {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
-    border-radius: 9999px;
+    gap: 0.3125rem;
+    padding: 0.1875rem 0.625rem;
+    border-radius: 624.938rem;
     font-size: var(--font-size-xs);
     font-weight: 500;
     background: var(--color-primary);
@@ -1006,7 +1006,7 @@
 }
 
 .tm-chip-remove {
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1;
     opacity: 0.8;
 }
