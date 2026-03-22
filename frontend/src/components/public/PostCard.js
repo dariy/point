@@ -14,7 +14,8 @@ import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
 import { LOCK_SVG } from '../../utils/icons.js';
-import { renderTagLink } from '../../utils/tags.js';
+import { store } from '../../store.js';
+import { renderTagLink, buildTagIndex, getTagAncestors } from '../../utils/tags.js';
 
 export class PostCard extends Component {
   render() {
@@ -42,7 +43,14 @@ export class PostCard extends Component {
         </svg>
       </div>` : '';
 
-    const tags = (post.tags || []).map((t) => renderTagLink(t)).join('');
+    const navTags = store.get('navTags') || [];
+    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    const visibleTags = (post.tags || []).filter((t) => {
+      if (!tagIndex) return true;           // navTags not loaded — show all
+      const entry = tagIndex.get(t.slug);
+      return !entry || entry.isLeaf;        // not in tree → treat as leaf
+    });
+    const tags = visibleTags.map((t) => renderTagLink(t)).join('');
 
     const viewCount = showViewCount && post.view_count != null
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
