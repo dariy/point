@@ -18,8 +18,7 @@ let _flyoutShowTime = 0; // timestamp of last _showFlyout() call — guards scro
 function _getFlyoutEl() {
   if (!_flyoutEl) {
     _flyoutEl = document.createElement('div');
-    _flyoutEl.className = 'post-card-tag-flyout';
-    _flyoutEl.style.display = 'none';
+    _flyoutEl.className = 'post-card-tag-flyout hidden';
     document.body.appendChild(_flyoutEl);
   }
   return _flyoutEl;
@@ -37,7 +36,7 @@ function _showFlyout(anchorEl, ancestors) {
   });
 
   flyout.style.visibility = 'hidden';
-  flyout.style.display = 'flex';
+  flyout.classList.remove('hidden');
   const flyH = flyout.offsetHeight;
   const flyW = flyout.offsetWidth;
 
@@ -56,7 +55,7 @@ function _showFlyout(anchorEl, ancestors) {
 }
 
 function _hideFlyout() {
-  if (_flyoutEl) _flyoutEl.style.display = 'none';
+  if (_flyoutEl) _flyoutEl.classList.add('hidden');
   _activeLink = null;
 }
 
@@ -89,7 +88,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
       e.stopPropagation();
 
       const flyoutOpenForThisLink =
-        _activeLink === link && _flyoutEl && _flyoutEl.style.display !== 'none';
+        _activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden');
       if (flyoutOpenForThisLink) {
         _hideFlyout();
         navigateFn(`/tag/${slug}`);
