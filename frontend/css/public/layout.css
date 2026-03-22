@@ -38,6 +38,7 @@ body {
 }
 
 .main-container {
+    width: 100%;
     max-width: var(--content-max-width);
     margin: 0 auto;
     padding: 0 var(--spacing-md);
@@ -50,10 +51,12 @@ body {
 /* Home page: expand post cards to fill viewport when content is short */
 .grid-expand-mount {
     flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .grid-expand-mount .posts-grid {
-    height: 100%;
+    flex: 1;
     grid-auto-rows: minmax(min-content, 1fr);
     align-content: stretch;
 }
