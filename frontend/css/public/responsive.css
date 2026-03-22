@@ -1,7 +1,7 @@
 /* ===========================
    Public Responsive
    =========================== */
-@media (max-width: 1024px) {
+@media (max-width: 64em) {
     .posts-layout {
         grid-template-columns: 1fr;
     }
@@ -15,9 +15,9 @@
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 48em) {
     :root {
-        --header-height: 64px;
+        --header-height: 4rem;
     }
 
     /*.site-nav {
@@ -52,7 +52,7 @@
     }
 }
 
-@media (max-width: 499px) {
+@media (max-width: 31.1875em) {
     .posts-grid {
         grid-template-columns: 1fr;
     }
@@ -89,7 +89,7 @@
     }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 30em) {
     .tags-grid {
         grid-template-columns: 1fr;
     }

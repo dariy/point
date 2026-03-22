@@ -6,8 +6,8 @@
     inset: 0;
     z-index: 9999;
     background: rgba(37, 99, 235, 0.95);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(0.5rem);
+    -webkit-backdrop-filter: blur(0.5rem);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -31,12 +31,12 @@
     text-align: center;
     color: white;
     padding: var(--spacing-2xl);
-    max-width: 400px;
+    max-width: 25rem;
 }
 
 .drop-zone-icon {
-    width: 80px;
-    height: 80px;
+    width: 5rem;
+    height: 5rem;
     margin-bottom: var(--spacing-lg);
     animation: dropZoneBounce 1s ease infinite;
 }
@@ -53,7 +53,7 @@
     }
 
     50% {
-        transform: translateY(-10px);
+        transform: translateY(-0.625rem);
     }
 }
 
@@ -108,7 +108,7 @@ body.drag-over::after {
     content: '';
     position: fixed;
     inset: 0;
-    border: 4px dashed var(--color-primary);
+    border: 0.25rem dashed var(--color-primary);
     pointer-events: none;
     z-index: 9998;
 }
