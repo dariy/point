@@ -298,10 +298,19 @@
 .post-card-tags {
     display: flex;
     justify-content: flex-end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: var(--spacing-sm);
     margin-top: auto;
-    /* Push to bottom in flex container */
+    overflow-x: auto;
+    scrollbar-width: none;          /* Firefox */
+    -webkit-overflow-scrolling: touch;
+    /* Right-edge fade signals scrollability */
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+
+.post-card-tags::-webkit-scrollbar {
+    display: none;                  /* Chrome/Safari */
 }
 
 .post-card-tags .tag-link {
@@ -349,6 +358,31 @@
     color: var(--text-immersive);
     border: 1px solid rgba(0, 0, 0, 0.1);
 }*/
+
+/* ===========================
+   Post Card Tag Flyout
+   (ancestor chain, upward flyout on first tap)
+   =========================== */
+.post-card-tag-flyout {
+    position: fixed;
+    z-index: 500;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: flyout-up 150ms ease;
+}
+
+@keyframes flyout-up {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ===========================
    Featured Post
