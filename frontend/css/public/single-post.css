@@ -161,7 +161,6 @@
     background-color: var(--color-primary);
     color: white;
     border-color: var(--color-primary);
-    transform: translateY(-2px);
 }
 
 [data-theme="light"] .post-tags .tag-link {

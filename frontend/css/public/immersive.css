@@ -231,7 +231,6 @@
     background: var(--bg-overlay-hover);
     color: white;
     border-color: var(--color-primary);
-    transform: translateY(-2px);
 }
 
 [data-theme="light"].immersive-layout .immersive-tags .tag-link {

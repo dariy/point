@@ -306,6 +306,7 @@
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x;            /* horizontal swipe stays on the strip */
     overscroll-behavior-x: contain; /* prevent scroll chaining to page */
+    padding-block: 3px;             /* room for tag borders/shadows at top & bottom */
 }
 
 .post-card-tags::-webkit-scrollbar {
@@ -335,7 +336,6 @@
     background-color: var(--bg-overlay-hover);
     border-color: var(--color-primary);
     color: white;
-    transform: translateY(-2px);
 }
 
 /* Light theme tag style */
