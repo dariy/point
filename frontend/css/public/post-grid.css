@@ -371,8 +371,8 @@
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
     background: var(--bg-overlay);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-sm);
     box-shadow: var(--shadow-md);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
