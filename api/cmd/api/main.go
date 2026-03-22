@@ -84,6 +84,7 @@ type AppServices struct {
 	Post      *services.PostService
 	Media     *services.MediaService
 	System    *services.SystemService
+	Cache     *services.CacheService
 	Scheduler *services.SchedulerService
 }
 
@@ -94,6 +95,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	postService := services.NewPostService(repo)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
+	cacheService := services.NewCacheService(cfg.StoragePath)
 	schedulerService := services.NewSchedulerService(authService, postService, systemService)
 
 	return &AppServices{
@@ -103,6 +105,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 		Post:      postService,
 		Media:     mediaService,
 		System:    systemService,
+		Cache:     cacheService,
 		Scheduler: schedulerService,
 	}
 }
@@ -120,9 +123,9 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, cfg.StoragePath, cfg.AppVersion)
-	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings)
-	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
+	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
+	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 
 	// Global middleware
@@ -376,6 +379,10 @@ func main() {
 		{
 			"add_media_is_public",
 			`ALTER TABLE media ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`,
+		},
+		{
+			"add_media_metadata",
+			`ALTER TABLE media ADD COLUMN metadata TEXT`,
 		},
 		{
 			"create_media_visibility_log",

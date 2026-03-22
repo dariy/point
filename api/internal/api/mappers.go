@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"regexp"
 	"strings"
 
@@ -225,6 +226,11 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		thumbPath = mediaPath + "?thumb"
 	}
 
+	var metadata map[string]interface{}
+	if m.Metadata.Valid && m.Metadata.String != "" {
+		_ = json.Unmarshal([]byte(m.Metadata.String), &metadata)
+	}
+
 	return map[string]interface{}{
 		"id":             m.ID,
 		"filename":       m.Filename,
@@ -239,6 +245,7 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		"uploaded_at":    m.UploadedAt,
 		"alt_text":       nullString(m.AltText),
 		"caption":        nullString(m.Caption),
+		"metadata":       metadata,
 		"is_public":      m.IsPublic,
 	}
 }

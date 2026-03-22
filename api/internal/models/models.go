@@ -39,6 +39,7 @@ type Medium struct {
 	Checksum      string         `json:"checksum"`
 	AltText       sql.NullString `json:"alt_text"`
 	Caption       sql.NullString `json:"caption"`
+	Metadata      sql.NullString `json:"metadata"`
 	IsPublic      int64          `json:"is_public"`
 }
 

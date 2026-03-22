@@ -317,7 +317,8 @@ func TestGetVersionHandlerBoost(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "2.0.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "2.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -398,7 +399,8 @@ func TestOfflineStatsWithData(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	// Insert public image media to exercise the inner loop
@@ -426,7 +428,8 @@ func TestOfflineSnapshotWithData(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)

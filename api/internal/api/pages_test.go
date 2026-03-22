@@ -19,7 +19,8 @@ func TestPagesHandler_GetHomePage(t *testing.T) {
 	postService := services.NewPostService(repo)
 	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postService, tagService, settingsService)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postService, tagService, settingsService, cacheService)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -46,7 +47,8 @@ func TestPagesHandler_TagPage(t *testing.T) {
 
 	postService := services.NewPostService(repo)
 	settingsService := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postService, tagSvc, settingsService)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postService, tagSvc, settingsService, cacheService)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/tag/news", nil)
@@ -72,7 +74,8 @@ func TestPagesHandler_TagsPage(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postService := services.NewPostService(repo)
 	settingsService := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postService, tagSvc, settingsService)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postService, tagSvc, settingsService, cacheService)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/tags", nil)
@@ -96,7 +99,8 @@ func TestPagesHandler_GetMapPage(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	// Public map (no user)
@@ -141,7 +145,8 @@ func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 	// Set post_count for city so it appears in ListTags
 	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
 
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/map", nil)
@@ -174,7 +179,8 @@ func TestPagesHandler_TagsPageAdmin(t *testing.T) {
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	// Admin mode
@@ -200,7 +206,8 @@ func TestPagesHandler_TagPageNotFound(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/tag/nonexistent", nil)
@@ -231,7 +238,8 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	// Public user requesting hidden tag should get 404
@@ -257,7 +265,8 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/tag/auth-tag", nil)

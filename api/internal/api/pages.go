@@ -2,10 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
@@ -18,14 +21,16 @@ type PagesHandler struct {
 	postService     *services.PostService
 	tagService      *services.TagService
 	settingsService *services.SettingsService
+	cacheService    *services.CacheService
 }
 
-func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService) *PagesHandler {
+func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
 	return &PagesHandler{
 		repo:            repo,
 		postService:     postService,
 		tagService:      tagService,
 		settingsService: settingsService,
+		cacheService:    cacheService,
 	}
 }
 
@@ -53,6 +58,14 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	if page < 1 {
 		page = 1
+	}
+
+	// Try cache for public requests (TTL 15 minutes)
+	cacheKey := fmt.Sprintf("homepage_p%d.json", page)
+	if publicOnly {
+		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
+			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
+		}
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
@@ -132,8 +145,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"posts": postResponses,
+	resp := map[string]interface{}{
+		"posts":      postResponses,
 		"pagination": map[string]interface{}{
 			"page":     page,
 			"per_page": perPage,
@@ -141,9 +154,17 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			"pages":    pages,
 		},
 		"tag_cloud": cloud,
-		"menu":  navTags,
+		"menu":      navTags,
 		"settings":  publicSettings,
-	})
+	}
+
+	if publicOnly {
+		if data, err := json.Marshal(resp); err == nil {
+			_ = h.cacheService.Set(ctx, cacheKey, data)
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetTagPage returns all data needed to render a tag archive page.
@@ -152,6 +173,19 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	slug := c.Param("slug")
 	user := c.Get("user")
 	publicOnly := user == nil
+
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	// Try cache for public requests (TTL 15 minutes)
+	cacheKey := fmt.Sprintf("tagpage_%s_p%d.json", slug, page)
+	if publicOnly {
+		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
+			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
+		}
+	}
 
 	tag, err := h.tagService.GetTagBySlug(ctx, slug)
 	if err != nil {
@@ -163,11 +197,6 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
-
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
@@ -286,7 +315,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	if !publicOnly {
 		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"tag":          tagResp,
 		"breadcrumbs":  breadcrumbs,
 		"posts":        postResponses,
@@ -298,7 +327,15 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 			"total":    total,
 			"pages":    pages,
 		},
-	})
+	}
+
+	if publicOnly {
+		if data, err := json.Marshal(resp); err == nil {
+			_ = h.cacheService.Set(ctx, cacheKey, data)
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetTagsPage returns data for the tags directory page.

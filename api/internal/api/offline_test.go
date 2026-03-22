@@ -26,7 +26,8 @@ func TestSystemHandler_OfflineStats(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/offline/stats", nil)
@@ -68,7 +69,8 @@ func TestSystemHandler_OfflineSnapshot(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/offline/snapshot", nil)
