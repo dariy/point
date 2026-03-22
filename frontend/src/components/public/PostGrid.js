@@ -41,5 +41,6 @@ export class PostGrid extends Component {
         this.mountChild(PostCard, slot, { post, showViewCount, useThumbnails, isHero: i === heroIndex, tagSlug, tagPage });
       }
     });
+
   }
 }
