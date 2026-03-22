@@ -575,6 +575,12 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 			OriginalPath:  m.OriginalPath,
 			ThumbnailPath: sql.NullString{String: thumbRel, Valid: true},
 		})
+
+		// Sync with posts: if a post used the original path as its thumbnail,
+		// update it to use the new thumbnail variant (with ?thumb suffix).
+		barePath := "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
+		_, _ = s.repo.UpdatePostThumbnailPath(ctx, barePath, barePath+"?thumb")
+
 		stats["processed"]++
 	}
 

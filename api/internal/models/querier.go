@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	AddPostViewCount(ctx context.Context, arg AddPostViewCountParams) error
 	AddTagRelationship(ctx context.Context, arg AddTagRelationshipParams) error
 	AddTagToPost(ctx context.Context, arg AddTagToPostParams) error
 	ClearPostTags(ctx context.Context, postID int64) error

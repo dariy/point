@@ -11,6 +11,22 @@ import (
 	"time"
 )
 
+const addPostViewCount = `-- name: AddPostViewCount :exec
+UPDATE posts
+SET view_count = view_count + ?
+WHERE id = ?
+`
+
+type AddPostViewCountParams struct {
+	ViewCount int64 `json:"view_count"`
+	ID        int64 `json:"id"`
+}
+
+func (q *Queries) AddPostViewCount(ctx context.Context, arg AddPostViewCountParams) error {
+	_, err := q.db.ExecContext(ctx, addPostViewCount, arg.ViewCount, arg.ID)
+	return err
+}
+
 const addTagRelationship = `-- name: AddTagRelationship :exec
 INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
 VALUES (?, ?)

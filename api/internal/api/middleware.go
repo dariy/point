@@ -66,3 +66,32 @@ func OptionalAuthMiddleware(authService *services.AuthService) echo.MiddlewareFu
 		}
 	}
 }
+
+// CustomHTTPErrorHandler handles Echo errors and returns them in a format
+// compatible with the frontend (JSON with a "detail" key).
+func CustomHTTPErrorHandler(err error, c echo.Context) {
+	code := http.StatusInternalServerError
+	var detail interface{}
+	detail = err.Error()
+
+	if he, ok := err.(*echo.HTTPError); ok {
+		code = he.Code
+		detail = he.Message
+	}
+
+	// For non-JSON requests (like direct browser navigation to a missing page),
+	// Echo's default behavior might be preferred, but here we enforce JSON
+	// for consistency across the API.
+	if !c.Response().Committed {
+		if c.Request().Method == http.MethodHead {
+			err = c.NoContent(code)
+		} else {
+			err = c.JSON(code, map[string]interface{}{
+				"detail": detail,
+			})
+		}
+		if err != nil {
+			c.Logger().Error(err)
+		}
+	}
+}
