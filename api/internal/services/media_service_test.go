@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -254,6 +255,11 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 		t.Fatalf("UploadFile failed: %v", err)
 	}
 
+	// Create a post using this media as thumbnail
+	barePath := "/" + strings.TrimPrefix(media.OriginalPath, "originals/")
+	_, _ = service.repo.DB().Exec(`INSERT OR IGNORE INTO users (id, username, email, password_hash, display_name) VALUES (1, 'u','e','h','D')`)
+	_, _ = service.repo.DB().Exec(`INSERT INTO posts (title, slug, content, status, author_id, thumbnail_path) VALUES ('PT','pt','C','published',1,?)`, barePath)
+
 	// Force delete thumbnail from disk but keep in DB
 	if media.ThumbnailPath.Valid {
 		_ = os.Remove(filepath.Join(tmpDir, "media", media.ThumbnailPath.String))
@@ -265,6 +271,16 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 	}
 	if stats["processed"] != 1 {
 		t.Errorf("expected 1 processed, got %d", stats["processed"])
+	}
+
+	// Verify post thumbnail_path was updated
+	var updatedPath string
+	err = service.repo.DB().QueryRowContext(ctx, "SELECT thumbnail_path FROM posts WHERE slug = 'pt'").Scan(&updatedPath)
+	if err != nil {
+		t.Fatalf("failed to query updated post: %v", err)
+	}
+	if updatedPath != barePath+"?thumb" {
+		t.Errorf("expected post thumbnail_path updated to %s, got %s", barePath+"?thumb", updatedPath)
 	}
 }
 

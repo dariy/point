@@ -1,9 +1,14 @@
 package main
 
 import (
+	"net/http"
+	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"point-api/internal/config"
+	"point-api/internal/repository"
 )
 
 // mkdirs creates subdirectories inside base and returns their paths.
@@ -64,5 +69,80 @@ func TestResolveJSDir_NonexistentFrontendDir(t *testing.T) {
 	got := resolveJSDir("/tmp/does-not-exist-point-test")
 	if got != "" {
 		t.Errorf("expected empty string for missing frontend dir, got %q", got)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	cfg := config.Config{
+		AppVersion:  "1.0.0",
+		FrontendDir: t.TempDir(),
+	}
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer repo.Close()
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	headers := rec.Header()
+	tests := []struct {
+		key   string
+		value string
+	}{
+		{"X-Content-Type-Options", "nosniff"},
+		{"X-Frame-Options", "DENY"},
+		{"X-Xss-Protection", "1; mode=block"},
+		{"Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'"},
+		{"Referrer-Policy", "strict-origin-when-cross-origin"},
+		{"Permissions-Policy", "geolocation=(), microphone=(), camera=()"},
+	}
+
+	for _, tt := range tests {
+		if got := headers.Get(tt.key); got != tt.value {
+			t.Errorf("header %s: expected %q, got %q", tt.key, tt.value, got)
+		}
+	}
+}
+
+func TestCustomErrorHandlerInMain(t *testing.T) {
+	cfg := config.Config{
+		AppVersion:  "1.0.0",
+		FrontendDir: t.TempDir(),
+	}
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer repo.Close()
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// Test error handler (hitting SPA fallback which returns 503 if index.html missing)
+	req := httptest.NewRequest(http.MethodGet, "/not-exists", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", rec.Code)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["detail"] == "" {
+		t.Errorf("expected detail in response, got empty")
 	}
 }

@@ -104,6 +104,10 @@ func (s *AuthService) ListSessions(ctx context.Context, userID int64) ([]models.
 	return s.repo.GetUserSessions(ctx, userID)
 }
 
+func (s *AuthService) CleanupExpiredSessions(ctx context.Context) error {
+	return s.repo.DeleteExpiredSessions(ctx)
+}
+
 func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
