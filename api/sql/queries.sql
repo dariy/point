@@ -172,6 +172,11 @@ UPDATE posts
 SET view_count = view_count + 1
 WHERE id = ?;
 
+-- name: AddPostViewCount :exec
+UPDATE posts
+SET view_count = view_count + ?
+WHERE id = ?;
+
 -- name: PublishPost :one
 UPDATE posts
 SET status = 'published', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP

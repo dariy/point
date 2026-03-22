@@ -34,7 +34,8 @@ func setupSystemHandler(t *testing.T) (*SystemHandler, func()) {
 		ThumbnailWidth:  400,
 		ThumbnailHeight: 300,
 	}, settingsSvc, tagSvc)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.2.3")
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.2.3")
 	return h, func() { repo.Close() }
 }
 
@@ -68,7 +69,9 @@ func TestScanMediaImport_PathNotExist(t *testing.T) {
 	_ = settingsSvc.SetSetting(ctx, "media_import_path", "/nonexistent/does/not/exist", "string")
 
 	// Rebuild handler with this settings service
-	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, t.TempDir(), "1.0")
+	tmpDir2 := t.TempDir()
+	systemSvc2 := services.NewSystemService(repo, tmpDir2)
+	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, systemSvc2, tmpDir2, "1.0")
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	if err := h2.ScanMediaImport(e.NewContext(req, rec)); err != nil {

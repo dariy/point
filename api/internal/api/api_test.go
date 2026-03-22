@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
 	"mime/multipart"
@@ -52,7 +53,8 @@ func TestFullWorkflow(t *testing.T) {
 	mediaH := NewMediaHandler(mediaSvc, settingsSvc)
 	postH := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	tagH := NewTagHandler(tagSvc, settingsSvc)
-	systemH := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.0.0")
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	systemH := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0.0")
 	pagesH := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
 
 	e := echo.New()
@@ -365,6 +367,53 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	}
 	if c.Get("user") == nil {
 		t.Error("user should be set in context")
+	}
+}
+
+func TestCustomHTTPErrorHandler(t *testing.T) {
+	e := echo.New()
+	e.HTTPErrorHandler = CustomHTTPErrorHandler
+
+	// 1. Standard HTTP error
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	
+	var err error
+	err = echo.NewHTTPError(http.StatusNotFound, "not found test")
+	e.HTTPErrorHandler(err, c)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rec.Code)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["detail"] != "not found test" {
+		t.Errorf("expected detail 'not found test', got '%s'", resp["detail"])
+	}
+
+	// 2. Generic error
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	
+	err = fmt.Errorf("generic error test")
+	e.HTTPErrorHandler(err, c)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rec.Code)
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["detail"] != "generic error test" {
+		t.Errorf("expected detail 'generic error test', got '%s'", resp["detail"])
 	}
 }
 
