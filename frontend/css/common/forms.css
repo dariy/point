@@ -46,13 +46,13 @@ input[type="password"] {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right var(--spacing-md) center;
-    background-size: 16px;
+    background-size: 1rem;
     padding-right: var(--spacing-2xl);
 }
 
 .form-select:hover:not(:disabled) {
     box-shadow: var(--shadow);
-    transform: translateY(-1px);
+    transform: translateY(-0.0625rem);
     border-color: var(--border-secondary);
 }
 
@@ -61,7 +61,7 @@ input[type="password"] {
 .form-select:focus {
     outline: none;
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
+    box-shadow: 0 0 0 0.1875rem var(--color-primary-light);
 }
 
 .form-select option {
@@ -71,7 +71,7 @@ input[type="password"] {
 
 .form-textarea {
     resize: vertical;
-    min-height: 120px;
+    min-height: 7.5rem;
 }
 
 .form-help {
@@ -107,8 +107,8 @@ input[type="password"] {
 }
 
 .form-checkbox-input {
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     cursor: pointer;
 }
 
