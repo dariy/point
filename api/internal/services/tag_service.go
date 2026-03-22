@@ -631,12 +631,13 @@ func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interf
 
 // NavTagNode is a tag node in the public navigation hierarchy with nested children.
 type NavTagNode struct {
-	ID        int64        `json:"id"`
-	Name      string       `json:"name"`
-	Slug      string       `json:"slug"`
-	PostCount int64        `json:"post_count"`
-	IsRelated bool         `json:"is_related"`
-	Children  []NavTagNode `json:"children"`
+	ID              int64        `json:"id"`
+	Name            string       `json:"name"`
+	Slug            string       `json:"slug"`
+	PostCount       int64        `json:"post_count"`
+	IsRelated       bool         `json:"is_related"`
+	ShowInAncestors bool         `json:"show_in_ancestors"`
+	Children        []NavTagNode `json:"children"`
 }
 
 // buildEffectivelyHiddenIDs computes the set of tag IDs that should not appear publicly.
@@ -839,14 +840,16 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
 	}
 
-	// Find system tag IDs for _root and _with_related.
-	var rootSystemID, withRelatedID int64
+	// Find system tag IDs for _root, _with_related, and _no_ancestors.
+	var rootSystemID, withRelatedID, noAncestorsID int64
 	for _, t := range allTags {
 		switch t.Slug {
 		case "_root":
 			rootSystemID = t.ID
 		case "_with_related":
 			withRelatedID = t.ID
+		case "_no_ancestors":
+			noAncestorsID = t.ID
 		}
 	}
 
@@ -855,6 +858,14 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	if withRelatedID != 0 {
 		for _, cid := range childrenOf[withRelatedID] {
 			withRelatedChildren[cid] = true
+		}
+	}
+
+	// Build set of _no_ancestors children — these tags are hidden from the ancestor flyout.
+	noAncestorsChildren := make(map[int64]bool)
+	if noAncestorsID != 0 {
+		for _, cid := range childrenOf[noAncestorsID] {
+			noAncestorsChildren[cid] = true
 		}
 	}
 
@@ -875,12 +886,13 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	build = func(id int64, visited map[int64]bool) NavTagNode {
 		t := tagByID[id]
 		node := NavTagNode{
-			ID:        t.ID,
-			Name:      t.Name,
-			Slug:      t.Slug,
-			PostCount: t.PostCount,
-			IsRelated: withRelatedChildren[t.ID],
-			Children:  []NavTagNode{},
+			ID:              t.ID,
+			Name:            t.Name,
+			Slug:            t.Slug,
+			PostCount:       t.PostCount,
+			IsRelated:       withRelatedChildren[t.ID],
+			ShowInAncestors: !noAncestorsChildren[t.ID],
+			Children:        []NavTagNode{},
 		}
 		childIDs := childrenOf[id]
 		sortedIDs := make([]int64, 0, len(childIDs))

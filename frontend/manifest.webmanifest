@@ -18,21 +18,31 @@
       "src": "/assets/images/favicon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/favicon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/assets/images/favicon-dark-128.png",
       "sizes": "128x128",
       "type": "image/png",
-      "purpose": "any",
-      "media": "(prefers-color-scheme: dark)"
+      "purpose": "any"
     },
     {
       "src": "/assets/images/favicon-dark-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable",
-      "media": "(prefers-color-scheme: dark)"
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/favicon-dark-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "share_target": {

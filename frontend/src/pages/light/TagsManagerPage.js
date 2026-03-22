@@ -255,7 +255,7 @@ export default class TagsManagerPage extends Component {
     // Only _root and _pending are shown as top-level nodes.
     // All other system tags (_system, _hidden, _hide_posts, etc.) are excluded.
     const VISIBLE_SYSTEM = new Set(['_root', '_pending']);
-    const HIDDEN_SYSTEM  = new Set(['_system', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related']);
+    const HIDDEN_SYSTEM  = new Set(['_system', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors']);
 
     // Build adjacency map across all tags so user-tag subtrees work correctly.
     const tagById = new Map(tags.map(t => [t.id, t]));
@@ -616,6 +616,14 @@ export default class TagsManagerPage extends Component {
       `        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description\u2026">${escapeHtml(f.description || '')}</textarea>`,
       '      </div>',
 
+      // show_in_ancestors toggle — hidden for system tags
+      ...(isSystem ? [] : [
+        '      <div class="form-group tm-checkbox-row">',
+        `        <label class="tm-checkbox-label"><input type="checkbox" name="show_in_ancestors"${f.show_in_ancestors !== false ? ' checked' : ''}> Show in ancestor flyout</label>`,
+        '        <p class="form-hint">Uncheck to hide this tag from the ancestor chain shown in post card flyouts.</p>',
+        '      </div>',
+      ]),
+
       // System flag tags — always inline, right below description
       this._renderSystemFlags(selParents),
 
@@ -776,7 +784,7 @@ export default class TagsManagerPage extends Component {
    * The checkboxes use name="parent_ids" so they're included in the save payload.
    */
   _renderSystemFlags(selectedIds) {
-    const FLAG_SLUGS = ['_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related'];
+    const FLAG_SLUGS = ['_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors'];
     const selectedSet = new Set(selectedIds);
     const flagTags = FLAG_SLUGS.map(s => this.state.tags.find(t => t.slug === s)).filter(Boolean);
     if (!flagTags.length) return '';
@@ -796,7 +804,7 @@ export default class TagsManagerPage extends Component {
    * Excluded: _system, _pending, and the four flag tags (shown inline above).
    */
   _renderTagToggles(inputName, allTags, selfId, selectedIds) {
-    const EXCLUDE = new Set(['_system', '_pending', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related']);
+    const EXCLUDE = new Set(['_system', '_pending', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors']);
 
     const available = allTags.filter(t => t.id !== selfId && !EXCLUDE.has(t.slug));
     if (!available.length) return '<span class="tag-toggles-empty">No other tags available.</span>';
@@ -1012,11 +1020,11 @@ export default class TagsManagerPage extends Component {
     const fd = new FormData(form);
 
     const payload = {
-      name:        (fd.get('name') || '').trim(),
-      slug:        (fd.get('slug') || '').trim(),
-      description: (fd.get('description') || '').trim(),
-      custom_url:  '',
-      sort_order:  null,
+      name:              (fd.get('name') || '').trim(),
+      slug:              (fd.get('slug') || '').trim(),
+      description:       (fd.get('description') || '').trim(),
+      custom_url:        '',
+      sort_order:        null,
       parent_ids:  fd.getAll('parent_ids').map(v => parseInt(v, 10)),
       child_ids:   fd.getAll('child_ids').map(v => parseInt(v, 10)),
       locations:   (() => {
