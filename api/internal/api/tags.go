@@ -63,6 +63,38 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		}
 	}
 
+	// For admin: non-system tags with no DB parents are virtually shown under _pending.
+	// This is a presentation-layer computation only — no DB relationships are written.
+	if !publicOnly {
+		var pendingTag *models.Tag
+		for i := range tags {
+			if tags[i].Slug == "_pending" {
+				pendingTag = &tags[i]
+				break
+			}
+		}
+		if pendingTag != nil {
+			pendingRef := map[string]interface{}{
+				"id":   pendingTag.ID,
+				"name": pendingTag.Name,
+				"slug": pendingTag.Slug,
+			}
+			for _, t := range tags {
+				if strings.HasPrefix(t.Slug, "_") {
+					continue // system tags have fixed parentage
+				}
+				if len(childParents[t.ID]) == 0 {
+					childParents[t.ID] = []map[string]interface{}{pendingRef}
+					parentChildren[pendingTag.ID] = append(parentChildren[pendingTag.ID], map[string]interface{}{
+						"id":   t.ID,
+						"name": t.Name,
+						"slug": t.Slug,
+					})
+				}
+			}
+		}
+	}
+
 	// Fetch locations for all tags.
 	tagIDs := make([]int64, len(tags))
 	for i, t := range tags {
