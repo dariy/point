@@ -18,7 +18,8 @@ func TestFeedsHandler_Sitemap(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
-	handler := NewFeedsHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewFeedsHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
@@ -55,7 +56,8 @@ func TestFeedsHandler_RSS(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
-	handler := NewFeedsHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewFeedsHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	// RSS with missing base_url setting (fallback logic)

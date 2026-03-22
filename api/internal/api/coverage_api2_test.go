@@ -29,14 +29,16 @@ type testHandlers struct {
 	postSvc     *services.PostService
 	authSvc     *services.AuthService
 	mediaSvc    *services.MediaService
+	cacheSvc    *services.CacheService
 	cfg         *config.Config
 }
 
 func setupHandlers(t *testing.T) *testHandlers {
 	t.Helper()
 	repo := setupTestDB(t)
+	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		StoragePath:     t.TempDir(),
+		StoragePath:     tmpDir,
 		ThumbnailWidth:  400,
 		ThumbnailHeight: 300,
 	}
@@ -45,7 +47,8 @@ func setupHandlers(t *testing.T) *testHandlers {
 	postSvc := services.NewPostService(repo)
 	authSvc := services.NewAuthService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	return &testHandlers{repo, settingsSvc, tagSvc, postSvc, authSvc, mediaSvc, cfg}
+	cacheSvc := services.NewCacheService(tmpDir)
+	return &testHandlers{repo, settingsSvc, tagSvc, postSvc, authSvc, mediaSvc, cacheSvc, cfg}
 }
 
 func (h *testHandlers) close() { h.repo.Close() }
@@ -305,7 +308,7 @@ func TestAuthHandler_DBErrors(t *testing.T) {
 func TestFeedsHandler_XForwardedHost(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -325,7 +328,7 @@ func TestFeedsHandler_RSSWithExcerpt(t *testing.T) {
 	insertUser(h.repo)
 	_, _ = h.repo.DB().Exec(`INSERT INTO posts (title,slug,content,excerpt,author_id,status,published_at) VALUES ('T','t','body','excerpt text',1,'published',datetime('now'))`)
 
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -340,7 +343,7 @@ func TestFeedsHandler_RSSWithExcerpt(t *testing.T) {
 func TestFeedsHandler_DBError(t *testing.T) {
 	h := setupHandlers(t)
 	h.repo.Close()
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -356,7 +359,7 @@ func TestFeedsHandler_SitemapWithTags(t *testing.T) {
 	defer h.close()
 	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug,post_count) VALUES (1,'Nature','nature',1)`)
 
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -371,7 +374,7 @@ func TestFeedsHandler_SitemapWithTags(t *testing.T) {
 func TestFeedsHandler_SitemapDBError(t *testing.T) {
 	h := setupHandlers(t)
 	h.repo.Close()
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -753,7 +756,8 @@ func TestSystemHandler_GetStats_DBError(t *testing.T) {
 	}, settingsSvc, tagSvc)
 	tmpDir2 := t.TempDir()
 	systemSvc2 := services.NewSystemService(repo, tmpDir2)
-	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, tmpDir2, "1.0")
+	cacheSvc2 := services.NewCacheService(tmpDir2)
+	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, cacheSvc2, tmpDir2, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -832,7 +836,8 @@ func TestSystemHandler_GetMigrations_OK(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -855,7 +860,8 @@ func TestSystemHandler_ClearCache_DBError(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -875,7 +881,8 @@ func TestSystemHandler_RecalculateMediaVisibility_DBError(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -895,7 +902,8 @@ func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, tmpDir, "1.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -912,7 +920,7 @@ func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 
 func setupPagesHandler(t *testing.T) (*PagesHandler, *testHandlers) {
 	h := setupHandlers(t)
-	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	return ph, h
 }
 
@@ -1081,7 +1089,8 @@ func TestOfflineStats_DBError(t *testing.T) {
 	h.repo.Close()
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(h.repo, tmpDir)
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, tmpDir, "1.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1096,7 +1105,8 @@ func TestOfflineSnapshot_DBError(t *testing.T) {
 	h.repo.Close()
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(h.repo, tmpDir)
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, tmpDir, "1.0")
+	cacheSvc := services.NewCacheService(tmpDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1135,7 +1145,7 @@ func TestAuthHandler_Login_SessionCreateError(t *testing.T) {
 func TestFeedsHandler_Sitemap_DBError(t *testing.T) {
 	h := setupHandlers(t)
 	h.repo.Close()
-	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1152,7 +1162,7 @@ func TestFeedsHandler_Sitemap_DBError(t *testing.T) {
 func TestFeedsHandler_Feed_TLS(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
-	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
 	// Simulate TLS by setting a non-nil TLS state
