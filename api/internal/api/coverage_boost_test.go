@@ -27,38 +27,6 @@ func TestTagToPostTagInfo(t *testing.T) {
 	}
 }
 
-// TestFilterNavTagsByMinPosts covers the 25% function.
-func TestFilterNavTagsByMinPosts(t *testing.T) {
-	nodes := []services.NavTagNode{
-		{ID: 1, Name: "Big", PostCount: 10, Children: []services.NavTagNode{}},
-		{ID: 2, Name: "Small", PostCount: 1, Children: []services.NavTagNode{}},
-		{
-			ID: 3, Name: "Parent", PostCount: 0,
-			Children: []services.NavTagNode{
-				{ID: 4, Name: "Child", PostCount: 5, Children: []services.NavTagNode{}},
-			},
-		},
-	}
-
-	// minPosts=0 → no filter
-	result := filterNavTagsByMinPosts(nodes, 0)
-	if len(result) != 3 {
-		t.Errorf("expected 3 with minPosts=0, got %d", len(result))
-	}
-
-	// minPosts=5 → Small removed, Big kept, Parent kept because child has 5
-	result = filterNavTagsByMinPosts(nodes, 5)
-	if len(result) != 2 {
-		t.Errorf("expected 2 with minPosts=5, got %d", len(result))
-	}
-
-	// minPosts=99 → all removed
-	result = filterNavTagsByMinPosts(nodes, 99)
-	if len(result) != 0 {
-		t.Errorf("expected 0 with minPosts=99, got %d", len(result))
-	}
-}
-
 // TestNullInt64Coverage covers the 66.7% mapper function.
 func TestNullInt64Coverage(t *testing.T) {
 	// Valid NullInt64

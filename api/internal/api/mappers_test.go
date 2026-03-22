@@ -42,20 +42,24 @@ func TestPostTagsOrEmpty(t *testing.T) {
 func TestPostByTagToResponse(t *testing.T) {
 	now := time.Now().UTC().Round(0)
 	p := models.Post{
-		ID:         1,
-		Title:      "My Post",
-		Slug:       "my-post",
-		Formatter:  "markdown",
-		Status:     "published",
-		
-		ViewCount:  5,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-		AuthorID:   1,
-	}
-	tags := []repository.PostTagInfo{{ID: 2, Name: "Tag", Slug: "tag"}}
+		ID:        1,
+		Title:     "My Post",
+		Slug:      "my-post",
+		Formatter: "markdown",
+		Status:    "published",
 
-	resp := postToResponse(p, tags)
+		ViewCount: 5,
+		CreatedAt: now,
+		UpdatedAt: now,
+		AuthorID:  1,
+	}
+	tags := []repository.PostTagInfo{
+		{ID: 2, Name: "Tag", Slug: "tag"},
+		{ID: 3, Name: "Exclude", Slug: "exclude"},
+	}
+	excludeIDs := map[int64]bool{3: true}
+
+	resp := postToResponse(p, tags, excludeIDs)
 	if resp["id"] != int64(1) {
 		t.Errorf("expected id=1, got %v", resp["id"])
 	}
@@ -64,7 +68,7 @@ func TestPostByTagToResponse(t *testing.T) {
 	}
 	tagList := resp["tags"].([]map[string]interface{})
 	if len(tagList) != 1 || tagList[0]["name"] != "Tag" {
-		t.Errorf("unexpected tags: %v", resp["tags"])
+		t.Errorf("unexpected tags (should be 1 and named 'Tag'): %v", resp["tags"])
 	}
 }
 

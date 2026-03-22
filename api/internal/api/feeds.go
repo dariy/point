@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -146,7 +147,11 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
+
+	settings, _ := h.settingsService.GetAllSettings(ctx)
+	minPostsStr := getSettingOr(settings, "min_tag_posts_to_show", "0")
+	minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+	excludeIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
 
 	var urls strings.Builder
 	writeURL := func(loc, lastmod, priority string) {
@@ -164,7 +169,7 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	}
 
 	for _, tag := range tags {
-		if !effectivelyHidden[tag.ID] {
+		if !excludeIDs[tag.ID] {
 			writeURL(base+"/tag/"+tag.Slug, today, "0.6")
 		}
 	}

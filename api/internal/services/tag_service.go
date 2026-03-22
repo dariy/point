@@ -128,7 +128,7 @@ func (s *TagService) GetTagParents(ctx context.Context, id int64) ([]models.Tag,
 	return s.repo.GetTagParents(ctx, id)
 }
 
-func (s *TagService) GetTagChildren(ctx context.Context, id int64, publicOnly bool) ([]models.Tag, error) {
+func (s *TagService) GetTagChildren(ctx context.Context, id int64, publicOnly bool, minPosts int64) ([]models.Tag, error) {
 	children, err := s.repo.GetTagChildren(ctx, id)
 	if err != nil {
 		return nil, err
@@ -138,10 +138,11 @@ func (s *TagService) GetTagChildren(ctx context.Context, id int64, publicOnly bo
 		return children, nil
 	}
 
-	effectivelyHidden, _ := s.EffectivelyHiddenIDs(ctx)
+	excludeIDs, _ := s.PublicHiddenTagIDs(ctx, minPosts)
+
 	result := make([]models.Tag, 0, len(children))
 	for _, ch := range children {
-		if !effectivelyHidden[ch.ID] {
+		if !excludeIDs[ch.ID] {
 			result = append(result, ch)
 		}
 	}
@@ -268,7 +269,7 @@ type TagCloudItem struct {
 	Weight float64 `json:"weight"`
 }
 
-func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool) ([]TagCloudItem, error) {
+func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool, minPosts int64) ([]TagCloudItem, error) {
 	tags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
@@ -280,9 +281,9 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 
 	var candidates []models.Tag
 	if publicOnly {
-		effectivelyHidden, _ := s.EffectivelyHiddenIDs(ctx)
+		excludeIDs, _ := s.PublicHiddenTagIDs(ctx, minPosts)
 		for _, t := range tags {
-			if !strings.HasPrefix(t.Slug, "_") && !effectivelyHidden[t.ID] {
+			if !strings.HasPrefix(t.Slug, "_") && !excludeIDs[t.ID] {
 				candidates = append(candidates, t)
 			}
 		}
@@ -301,8 +302,9 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 	// Fetch hierarchical counts (includes descendant posts).
 	effectiveCounts, _ := s.GetHierarchicalPostCounts(ctx, publicOnly)
 
-	// Filter to tags with at least one effective post.
 	var filtered []models.Tag
+	// Even for non-public, we might want to filter tags with 0 posts.
+	// But candidates already excludes system tags.
 	for _, t := range candidates {
 		if effectiveCounts[t.ID] > 0 {
 			filtered = append(filtered, t)
@@ -797,6 +799,123 @@ func (s *TagService) InBreadcrumbsIDs(ctx context.Context) (map[int64]bool, erro
 	return result, nil
 }
 
+// PageTagIDs returns the set of tag IDs that are descendants of the _page system tag.
+// These tags should be excluded from post grids.
+func (s *TagService) PageTagIDs(ctx context.Context) (map[int64]bool, error) {
+	allTags, err := s.repo.ListTags(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	relationships, err := s.repo.GetAllTagRelationships(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	childrenOf := make(map[int64][]int64, len(relationships))
+	for _, rel := range relationships {
+		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
+	}
+
+	var pageSystemID int64
+	for _, t := range allTags {
+		if t.Slug == "_page" {
+			pageSystemID = t.ID
+			break
+		}
+	}
+
+	result := make(map[int64]bool)
+	if pageSystemID == 0 {
+		return result, nil
+	}
+
+	result[pageSystemID] = true
+	queue := []int64{pageSystemID}
+	// We include the tag itself if it's considered a system tag that shouldn't show in grids.
+	// But usually we only want to hide descendants.
+	// The user said "descenders of _page".
+	
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, childID := range childrenOf[cur] {
+			if !result[childID] {
+				result[childID] = true
+				queue = append(queue, childID)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// PublicHiddenTagIDs returns the set of tag IDs that should be hidden from public view.
+// This includes:
+// 1. Descendants of the _hidden system tag (effectively hidden).
+// 2. Descendants of the _page system tag (excluded from grids).
+// 3. Tags with post counts below the minPosts threshold.
+func (s *TagService) PublicHiddenTagIDs(ctx context.Context, minPosts int64) (map[int64]bool, error) {
+	allTags, err := s.repo.ListTags(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	relationships, err := s.repo.GetAllTagRelationships(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	childrenOf := make(map[int64][]int64, len(relationships))
+	for _, rel := range relationships {
+		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
+	}
+
+	var hiddenSystemID, pageSystemID int64
+	for _, t := range allTags {
+		if t.Slug == "_hidden" {
+			hiddenSystemID = t.ID
+		} else if t.Slug == "_page" {
+			pageSystemID = t.ID
+		}
+	}
+
+	result := make(map[int64]bool)
+	queue := make([]int64, 0)
+
+	// Seed with _hidden and _page if they exist.
+	if hiddenSystemID != 0 {
+		result[hiddenSystemID] = true
+		queue = append(queue, hiddenSystemID)
+	}
+	if pageSystemID != 0 {
+		result[pageSystemID] = true
+		queue = append(queue, pageSystemID)
+	}
+
+	// BFS to find all descendants.
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, childID := range childrenOf[cur] {
+			if !result[childID] {
+				result[childID] = true
+				queue = append(queue, childID)
+			}
+		}
+	}
+
+	// Add tags below threshold.
+	if minPosts > 0 {
+		effectiveCounts, _ := s.GetHierarchicalPostCounts(ctx, true)
+		for _, t := range allTags {
+			if !result[t.ID] && effectiveCounts[t.ID] < minPosts {
+				result[t.ID] = true
+			}
+		}
+	}
+
+	return result, nil
+}
+
 // EffectivelyHiddenIDs returns the set of tag IDs that should not be shown publicly.
 func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, error) {
 	allTags, err := s.repo.ListTags(ctx, true)
@@ -814,7 +933,7 @@ func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, 
 // If rootID is nil, returns direct children of the _root system tag and their descendants.
 // If rootID is non-nil, returns children of that tag and their descendants (for tag pages).
 // System tags (slug starting with "_") and hidden/empty tags are excluded from output.
-func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, publicOnly bool) ([]NavTagNode, error) {
+func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, publicOnly bool, minPosts int64) ([]NavTagNode, error) {
 	allTags, err := s.repo.ListTags(ctx, true)
 	if err != nil {
 		return nil, err
@@ -830,9 +949,9 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 		return nil, err
 	}
 
-	var effectivelyHidden map[int64]bool
+	var excludeIDs map[int64]bool
 	if publicOnly {
-		effectivelyHidden = buildEffectivelyHiddenIDs(allTags, relationships)
+		excludeIDs, _ = s.PublicHiddenTagIDs(ctx, minPosts)
 	}
 
 	childrenOf := make(map[int64][]int64)
@@ -840,6 +959,10 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 		childrenOf[rel.ParentID] = append(childrenOf[rel.ParentID], rel.ChildID)
 	}
 
+	// Fetch hierarchical counts for filtering.
+	effectiveCounts, _ := s.GetHierarchicalPostCounts(ctx, publicOnly)
+
+	// ... [rest of variable setup stays same]
 	// Find system tag IDs for _root, _with_related, and _no_ancestors.
 	var rootSystemID, withRelatedID, noAncestorsID int64
 	for _, t := range allTags {
@@ -882,18 +1005,19 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 		return a.Name < b.Name
 	}
 
-	var build func(id int64, visited map[int64]bool) NavTagNode
-	build = func(id int64, visited map[int64]bool) NavTagNode {
+	var build func(id int64, visited map[int64]bool) (NavTagNode, bool)
+	build = func(id int64, visited map[int64]bool) (NavTagNode, bool) {
 		t := tagByID[id]
 		node := NavTagNode{
 			ID:              t.ID,
 			Name:            t.Name,
 			Slug:            t.Slug,
-			PostCount:       t.PostCount,
+			PostCount:       effectiveCounts[t.ID],
 			IsRelated:       withRelatedChildren[t.ID],
 			ShowInAncestors: !noAncestorsChildren[t.ID],
 			Children:        []NavTagNode{},
 		}
+
 		childIDs := childrenOf[id]
 		sortedIDs := make([]int64, 0, len(childIDs))
 		for _, cid := range childIDs {
@@ -905,10 +1029,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 			if strings.HasPrefix(ch.Slug, "_") {
 				continue
 			}
-			if publicOnly && effectivelyHidden[cid] {
-				continue
-			}
-			if ch.PostCount == 0 && len(childrenOf[cid]) == 0 {
+			if publicOnly && excludeIDs[cid] {
 				continue
 			}
 			if visited[cid] {
@@ -919,49 +1040,43 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 		sort.Slice(sortedIDs, func(i, j int) bool {
 			return tagLess(tagByID[sortedIDs[i]], tagByID[sortedIDs[j]])
 		})
+
+		hasVisibleChildren := false
 		for _, cid := range sortedIDs {
 			childVisited := make(map[int64]bool, len(visited)+1)
 			for k := range visited {
 				childVisited[k] = true
 			}
 			childVisited[cid] = true
-			node.Children = append(node.Children, build(cid, childVisited))
+			childNode, visible := build(cid, childVisited)
+			if visible {
+				node.Children = append(node.Children, childNode)
+				hasVisibleChildren = true
+			}
 		}
-		return node
+
+		// A node is visible if its count >= threshold, or it has visible children,
+		// or it is a "related" entry (special handling for nav context).
+		isVisible := node.IsRelated || hasVisibleChildren
+		if !isVisible {
+			threshold := int64(1)
+			if publicOnly && minPosts > 0 {
+				threshold = minPosts
+			}
+			isVisible = node.PostCount >= threshold
+		}
+
+		return node, isVisible
 	}
 
 	var navRootIDs []int64
 	if rootID == nil {
 		// Use direct children of _root system tag as nav roots.
 		if rootSystemID != 0 {
-			for _, cid := range childrenOf[rootSystemID] {
-				ch, ok := tagByID[cid]
-				if !ok || strings.HasPrefix(ch.Slug, "_") {
-					continue
-				}
-				if publicOnly && effectivelyHidden[cid] {
-					continue
-				}
-				if ch.PostCount == 0 && len(childrenOf[cid]) == 0 {
-					continue
-				}
-				navRootIDs = append(navRootIDs, cid)
-			}
+			navRootIDs = childrenOf[rootSystemID]
 		}
 	} else {
-		for _, cid := range childrenOf[*rootID] {
-			ch, ok := tagByID[cid]
-			if !ok || strings.HasPrefix(ch.Slug, "_") {
-				continue
-			}
-			if publicOnly && effectivelyHidden[cid] {
-				continue
-			}
-			if ch.PostCount == 0 && len(childrenOf[cid]) == 0 {
-				continue
-			}
-			navRootIDs = append(navRootIDs, cid)
-		}
+		navRootIDs = childrenOf[*rootID]
 	}
 
 	sort.Slice(navRootIDs, func(i, j int) bool {
@@ -970,7 +1085,17 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 
 	result := make([]NavTagNode, 0, len(navRootIDs))
 	for _, id := range navRootIDs {
-		result = append(result, build(id, map[int64]bool{id: true}))
+		ch, ok := tagByID[id]
+		if !ok || strings.HasPrefix(ch.Slug, "_") {
+			continue
+		}
+		if publicOnly && excludeIDs[id] {
+			continue
+		}
+		node, visible := build(id, map[int64]bool{id: true})
+		if visible {
+			result = append(result, node)
+		}
 	}
 	return result, nil
 }
