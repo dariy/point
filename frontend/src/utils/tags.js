@@ -105,11 +105,11 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
   };
   const dismissOnScroll = () => _hideFlyout();
 
-  document.addEventListener('click', dismiss, true);
+  document.addEventListener('click', dismiss);
   window.addEventListener('scroll', dismissOnScroll, { passive: true });
 
   return () => {
-    document.removeEventListener('click', dismiss, true);
+    document.removeEventListener('click', dismiss);
     window.removeEventListener('scroll', dismissOnScroll, { passive: true });
     _hideFlyout();
   };

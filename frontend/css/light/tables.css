@@ -47,8 +47,8 @@
 
 /* Table action buttons - square and elevated */
 .table .actions .btn {
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     padding: 0;
     display: flex;
     align-items: center;
@@ -65,7 +65,7 @@
     color: var(--text-primary);
     border-color: var(--border-secondary);
     box-shadow: var(--shadow);
-    transform: translateY(-1px);
+    transform: translateY(-0.0625rem);
 }
 
 .table .actions .btn-danger:hover {
@@ -75,8 +75,8 @@
 }
 
 .table .actions .btn svg {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
 }
 
 /* Multi-row item grouping (Posts Table) */
@@ -112,40 +112,40 @@ td.title-col {
 
 td.updated-col {
     white-space: nowrap;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
 }
 
 .preview-col {
-    width: 48px;
+    width: 3rem;
     padding-right: 0 !important;
     border-bottom: 1px solid var(--border-primary) !important;
     vertical-align: middle;
 }
 
 .post-preview-img {
-    min-width: 80px;
-    min-height: 80px;
+    min-width: 5rem;
+    min-height: 5rem;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
     display: block;
 }
 
 .post-preview-placeholder {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
     display: flex;
     align-items: center;
     justify-content: center;
     border: 1px dashed var(--border-primary);
     color: var(--text-muted);
-    font-size: 16px;
+    font-size: var(--font-size-base);
 }
 
 /* No special padding for first header since we added a preview column */
 /* vertically align "Status" with "Published" */
 th.status-col {
-    padding-left: 25px;
+    padding-left: 1.5625rem;
 }

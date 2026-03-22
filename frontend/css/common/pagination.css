@@ -21,8 +21,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 36px;
-    height: 36px;
+    min-width: 2.25rem;
+    height: 2.25rem;
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -62,8 +62,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 36px;
-    height: 36px;
+    min-width: 2.25rem;
+    height: 2.25rem;
     color: var(--text-muted);
     user-select: none;
 }
