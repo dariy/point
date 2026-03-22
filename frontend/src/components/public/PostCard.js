@@ -20,6 +20,7 @@ import { renderTagLink, buildTagIndex, getTagAncestors } from '../../utils/tags.
 // Single shared flyout element reused across all PostCard instances.
 // Built with DOM methods to avoid XSS risks.
 let _flyoutEl = null;
+let _activeLink = null;
 
 function getFlyoutEl() {
   if (!_flyoutEl) {
@@ -44,13 +45,15 @@ function showFlyout(anchorEl, ancestors) {
     flyout.appendChild(a);
   });
 
+  // Measure while hidden to get correct dimensions before positioning.
+  flyout.style.visibility = 'hidden';
   flyout.style.display = 'flex';
+  const flyH = flyout.offsetHeight;  // forces synchronous layout
+  const flyW = flyout.offsetWidth;
 
   // Position above the anchor tag.
   const anchorRect = anchorEl.getBoundingClientRect();
   const gap = 6;
-  const flyH = flyout.offsetHeight;
-  const flyW = flyout.offsetWidth;
 
   let top = anchorRect.top - flyH - gap;
   top = Math.max(8, top);  // clamp — don't overflow above viewport
@@ -60,10 +63,15 @@ function showFlyout(anchorEl, ancestors) {
 
   flyout.style.top = `${top}px`;
   flyout.style.left = `${left}px`;
+  flyout.style.visibility = '';  // reveal at correct position
 }
 
 function hideFlyout() {
   if (_flyoutEl) _flyoutEl.style.display = 'none';
+  if (_activeLink) {
+    _activeLink._flyoutShown = false;
+    _activeLink = null;
+  }
 }
 
 export class PostCard extends Component {
@@ -209,6 +217,7 @@ export class PostCard extends Component {
           // First click — show the ancestor flyout.
           // Clear any other open flyout on this card first.
           card.querySelectorAll('.post-card-tags .tag-link').forEach((l) => { l._flyoutShown = false; });
+          _activeLink = link;
           link._flyoutShown = true;
           showFlyout(link, ancestors);
         }
@@ -235,7 +244,7 @@ export class PostCard extends Component {
       document.removeEventListener('click', this._dismissFlyout, true);
     }
     if (this._dismissFlyoutOnScroll) {
-      window.removeEventListener('scroll', this._dismissFlyoutOnScroll);
+      window.removeEventListener('scroll', this._dismissFlyoutOnScroll, { passive: true });
     }
     hideFlyout();
   }
