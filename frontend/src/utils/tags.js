@@ -13,6 +13,7 @@ import { escapeHtml } from './helpers.js';
 
 let _flyoutEl = null;
 let _activeLink = null;
+let _flyoutShowTime = 0; // timestamp of last _showFlyout() call — guards scroll dismiss
 
 function _getFlyoutEl() {
   if (!_flyoutEl) {
