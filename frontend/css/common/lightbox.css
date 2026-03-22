@@ -33,6 +33,10 @@
     border-radius: var(--border-radius, var(--border-radius-lg));
 }
 
+.lightbox-content img.loading {
+    opacity: 0;
+}
+
 .lightbox-caption {
     text-align: center;
     padding: var(--spacing-md);

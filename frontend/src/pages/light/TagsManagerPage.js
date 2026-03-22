@@ -174,7 +174,7 @@ export default class TagsManagerPage extends Component {
         row.dataset.parentNames.includes(q);
       const rowParentIds = row.dataset.parentIds ? row.dataset.parentIds.split(',').map(Number) : [];
       const parentMatch = filterIds.length === 0 || filterIds.every(id => rowParentIds.includes(id));
-      row.style.display = (textMatch && parentMatch) ? '' : 'none';
+      row.classList.toggle('hidden', !(textMatch && parentMatch));
     });
   }
 
@@ -199,7 +199,7 @@ export default class TagsManagerPage extends Component {
     const btn = this.$('.tm-clear-filters');
     const hasFilters = (this._listSearch || '') || this._listFilterParents.length > 0;
     if (btn) {
-      btn.style.display = hasFilters ? '' : 'none';
+      btn.classList.toggle('hidden', !hasFilters);
     } else if (hasFilters) {
       // Re-render list to show the clear button
       const listWrap = this.$('.tm-list-filter-bar');
@@ -225,7 +225,7 @@ export default class TagsManagerPage extends Component {
     this._updateFilterChips();
     this._applyListFilter();
     const btn = this.$('.tm-clear-filters');
-    if (btn) btn.style.display = 'none';
+    if (btn) btn.classList.add('hidden');
   }
 
   _renderSortHeader(field, label, className = '', title = '') {
@@ -634,7 +634,7 @@ export default class TagsManagerPage extends Component {
         `          <span class="tm-section-arrow">\u25b6</span> Parents`,
         `          <span class="tm-section-count">${visibleParentCount > 0 ? visibleParentCount : ''}</span>`,
         '        </button>',
-        '        <div class="tm-section-body" id="parents-body" style="display:none">',
+        '        <div class="tm-section-body hidden" id="parents-body">',
         '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags\u2026" autocomplete="off">',
         '          <div class="tag-toggles-container">',
         this._renderTagToggles('parent_ids', this.state.tags, selfId, selParents),
@@ -649,7 +649,7 @@ export default class TagsManagerPage extends Component {
       `          <span class="tm-section-arrow">\u25b6</span> Children`,
       `          <span class="tm-section-count">${selChildren.length > 0 ? selChildren.length : ''}</span>`,
       '        </button>',
-      '        <div class="tm-section-body" id="children-body" style="display:none">',
+      '        <div class="tm-section-body hidden" id="children-body">',
       '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags\u2026" autocomplete="off">',
       '          <div class="tag-toggles-container">',
       this._renderTagToggles('child_ids', this.state.tags.filter(t => !t.is_system), selfId, selChildren),
@@ -664,7 +664,7 @@ export default class TagsManagerPage extends Component {
         '          <span class="tm-section-arrow">\u25b6</span> Map Coordinates',
         `          <span class="tm-section-count">${existingLoc ? '\ud83d\udccd' : ''}</span>`,
         '        </button>',
-        '        <div class="tm-section-body" id="coords-body" style="display:none">',
+        '        <div class="tm-section-body hidden" id="coords-body">',
         '          <div class="input-with-btn">',
         `            <input type="text" id="coordinates-input" class="form-input" placeholder="Paste a Maps link, \u201c45.507\u00b0 N, 73.554\u00b0 W\u201d, or leave blank to geocode by name">`,
         `            <button type="button" id="gmaps-parse-btn" class="btn btn-secondary">${isEdit ? 'Parse / Geocode' : 'Parse'}</button>`,
@@ -720,8 +720,8 @@ export default class TagsManagerPage extends Component {
         const targetId = btn.dataset.target;
         const body = modal.querySelector(`#${targetId}`);
         const arrow = btn.querySelector('.tm-section-arrow');
-        const isOpen = body.style.display !== 'none';
-        body.style.display = isOpen ? 'none' : 'block';
+        const isOpen = !body.classList.contains('hidden');
+        body.classList.toggle('hidden', isOpen);
         arrow.textContent = isOpen ? '\u25b6' : '\u25bc';
       });
     });
@@ -859,7 +859,7 @@ export default class TagsManagerPage extends Component {
         ? `<button type="button" class="tag-toggle-btn" data-tt-toggle="${nodeId}" aria-expanded="${expanded}">${expanded ? '\u25bc' : '\u25b6'}</button>`
         : `<span class="tag-toggle-btn-spacer"></span>`;
       const childList = hasKids
-        ? `<ul class="tag-toggle-tree level-${level + 1}" id="${nodeId}"${expanded ? '' : ' style="display:none"'}>${kids.map(k => renderNode(k, level + 1)).join('')}</ul>`
+        ? `<ul class="tag-toggle-tree level-${level + 1}${expanded ? '' : ' hidden'}" id="${nodeId}">${kids.map(k => renderNode(k, level + 1)).join('')}</ul>`
         : '';
       return `<li class="tag-toggle-node${t.is_system ? ' tm-system-node' : ''}">
         <div class="tag-toggle-row">
@@ -903,8 +903,8 @@ export default class TagsManagerPage extends Component {
       btn.addEventListener('click', () => {
         const list = modal.querySelector(`#${btn.dataset.ttToggle}`);
         if (!list) return;
-        const open = list.style.display !== 'none';
-        list.style.display = open ? 'none' : '';
+        const open = !list.classList.contains('hidden');
+        list.classList.toggle('hidden', open);
         btn.setAttribute('aria-expanded', String(!open));
         btn.textContent = open ? '\u25b6' : '\u25bc';
       });
@@ -931,12 +931,12 @@ export default class TagsManagerPage extends Component {
         const allNodes = Array.from(container.querySelectorAll('.tag-toggle-node'));
         const allLists = Array.from(container.querySelectorAll('.tag-toggle-tree'));
         if (!q) {
-          allNodes.forEach(n => (n.style.display = ''));
-          allLists.forEach(l => (l.style.display = ''));
+          allNodes.forEach(n => n.classList.remove('hidden'));
+          allLists.forEach(l => l.classList.remove('hidden'));
           return;
         }
-        allNodes.forEach(n => (n.style.display = 'none'));
-        allLists.forEach(l => (l.style.display = 'none'));
+        allNodes.forEach(n => n.classList.add('hidden'));
+        allLists.forEach(l => l.classList.add('hidden'));
         // Show matching nodes and all their ancestors.
         allNodes.forEach(n => {
           const label = n.querySelector(':scope > .tag-toggle-row .tag-toggle span');
@@ -944,7 +944,7 @@ export default class TagsManagerPage extends Component {
             let el = n;
             while (el && el !== container) {
               if (el.classList.contains('tag-toggle-node') || el.classList.contains('tag-toggle-tree')) {
-                el.style.display = '';
+                el.classList.remove('hidden');
               }
               el = el.parentElement;
             }

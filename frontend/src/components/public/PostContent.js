@@ -626,7 +626,7 @@ export class PostContent extends Component {
         (img) => !img.closest('a[href]')
       );
       images.forEach((img, i) => {
-        img.style.cursor = 'zoom-in';
+        img.classList.add('zoomable');
         img.setAttribute('tabindex', '0');
         const enter = () => onEnterImmersive(i);
         img.addEventListener('click', enter);

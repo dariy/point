@@ -19,14 +19,14 @@ export default class SetupPage extends Component {
     const { loading, error, blog_title, author_name, username } = this.state;
 
     return `
-      <div class="setup-page-container" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: var(--spacing-lg); background-color: var(--bg-primary);">
-        <div class="card" style="width: 100%; max-width: 480px; box-shadow: var(--shadow-lg);">
-          <div class="card-header" style="text-align: center; padding: var(--spacing-xl) var(--spacing-lg);">
-            <h2 style="margin-bottom: var(--spacing-xs);">Welcome to Point</h2>
+      <div class="setup-page-container">
+        <div class="card">
+          <div class="card-header">
+            <h2>Welcome to Point</h2>
             <p class="text-muted text-small">Complete this one-time setup to create your blog.</p>
           </div>
-          <div class="card-body" style="padding: var(--spacing-xl);">
-            ${error ? `<div class="error-message" style="margin-bottom: var(--spacing-lg);" role="alert">${escapeHtml(error)}</div>` : ''}
+          <div class="card-body">
+            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ''}
 
             <form id="setup-form" novalidate>
               <div class="form-group">
@@ -67,8 +67,8 @@ export default class SetupPage extends Component {
                        ${loading ? 'disabled' : ''}>
               </div>
 
-              <div style="margin-top: var(--spacing-xl);">
-                <button type="submit" class="btn btn-primary" style="width: 100%; height: 44px; font-weight: 600;" ${loading ? 'disabled' : ''}>
+              <div class="setup-submit-wrapper">
+                <button type="submit" class="btn btn-primary setup-submit-btn" ${loading ? 'disabled' : ''}>
                   ${loading ? 'Setting up...' : 'Finish Setup'}
                 </button>
               </div>
