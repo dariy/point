@@ -17,8 +17,8 @@ To achieve full parity with the Python API and enable a seamless frontend switch
 
 ## 3. Media & Content Management
 - [x] **Thumbnail Synchronization:** Update `RebuildThumbnails` in `MediaService` to also update the `thumbnail_path` for all posts referencing the processed images.
-- [ ] **Metadata Extraction:** Ensure `MediaService` extracts and stores all relevant metadata (dimensions, file type, etc.) during upload, maintaining parity with Python's `ImageProcessor`.
-- [ ] **File-Based Caching:** Implement a caching layer for feeds (`/feed.xml`, `/sitemap.xml`) and potentially homepage data to improve performance, similar to Python's `CacheService`.
+- [x] **Metadata Extraction:** Ensure `MediaService` extracts and stores all relevant metadata (dimensions, file type, EXIF) during upload, maintaining parity with Python's `ImageProcessor`.
+- [x] **File-Based Caching:** Implement a caching layer for feeds (`/feed.xml`, `/sitemap.xml`) and potentially homepage data to improve performance, similar to Python's `CacheService`.
 
 ## 4. Infrastructure & Validation
 - [ ] **Database Migration Compatibility:** Migrations are currently applied inline at startup in `cmd/api/main.go`. Verify schema compatibility and consider moving to file-based migrations for better auditability.

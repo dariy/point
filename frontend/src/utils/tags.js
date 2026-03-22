@@ -1,9 +1,119 @@
 /**
  * Unified tag link renderer — the single source of truth for rendering
  * public-facing tag <a> elements across all components.
+ *
+ * Also owns the singleton flyout used for ancestor-chain display
+ * (setupTagFlyout — shared across PostCard, PostContent, PublicFooter).
  */
 
 import { escapeHtml } from './helpers.js';
+
+// ── Flyout singleton ─────────────────────────────────────────────────────────
+// One flyout element lives on <body> and is reused by every call site.
+
+let _flyoutEl = null;
+let _activeLink = null;
+
+function _getFlyoutEl() {
+  if (!_flyoutEl) {
+    _flyoutEl = document.createElement('div');
+    _flyoutEl.className = 'post-card-tag-flyout';
+    _flyoutEl.style.display = 'none';
+    document.body.appendChild(_flyoutEl);
+  }
+  return _flyoutEl;
+}
+
+function _showFlyout(anchorEl, ancestors) {
+  const flyout = _getFlyoutEl();
+  while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
+  ancestors.forEach((t) => {
+    const a = document.createElement('a');
+    a.href = `/tag/${encodeURIComponent(t.slug)}`;
+    a.className = 'tag-link';
+    a.textContent = t.name;
+    flyout.appendChild(a);
+  });
+
+  flyout.style.visibility = 'hidden';
+  flyout.style.display = 'flex';
+  const flyH = flyout.offsetHeight;
+  const flyW = flyout.offsetWidth;
+
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const gap = 6;
+  let top = anchorRect.top - flyH - gap;
+  top = Math.max(8, top);
+  let left = anchorRect.left;
+  left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
+
+  flyout.style.top = `${top}px`;
+  flyout.style.left = `${left}px`;
+  flyout.style.visibility = '';
+}
+
+function _hideFlyout() {
+  if (_flyoutEl) _flyoutEl.style.display = 'none';
+  _activeLink = null;
+}
+
+/**
+ * Attach ancestor-flyout behaviour to all .tag-link elements in containerEl.
+ *
+ * First click on a tag with ancestors → show flyout listing ancestors.
+ * Second click on the same tag       → navigate to the tag page.
+ * Tags with no ancestors             → navigate normally on first click.
+ *
+ * @param {HTMLElement} containerEl  Element containing .tag-link anchors.
+ * @param {Map|null}    tagIndex     From buildTagIndex(). null = no hierarchy, links navigate directly.
+ * @param {Function}    navigateFn  SPA navigate(url) function.
+ * @param {HTMLElement} [hostEl]    Clicks inside this element won't dismiss the flyout.
+ *                                  Defaults to containerEl.
+ * @returns {Function}  Cleanup — call in beforeUnmount.
+ */
+export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
+  if (!tagIndex) return () => {};
+
+  const excludeEl = hostEl || containerEl;
+
+  containerEl.querySelectorAll('.tag-link').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      const slug = link.getAttribute('href').replace('/tag/', '');
+      const ancestors = getTagAncestors(slug, tagIndex);
+      if (!ancestors.length) return; // no ancestors — navigate normally
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const flyoutOpenForThisLink =
+        _activeLink === link && _flyoutEl && _flyoutEl.style.display !== 'none';
+      if (flyoutOpenForThisLink) {
+        _hideFlyout();
+        navigateFn(`/tag/${slug}`);
+      } else {
+        _hideFlyout();
+        _activeLink = link;
+        _showFlyout(link, ancestors);
+      }
+    });
+  });
+
+  const dismiss = (e) => {
+    if (_flyoutEl && !_flyoutEl.contains(e.target) && !excludeEl.contains(e.target)) {
+      _hideFlyout();
+    }
+  };
+  const dismissOnScroll = () => _hideFlyout();
+
+  document.addEventListener('click', dismiss, true);
+  window.addEventListener('scroll', dismissOnScroll, { passive: true });
+
+  return () => {
+    document.removeEventListener('click', dismiss, true);
+    window.removeEventListener('scroll', dismissOnScroll, { passive: true });
+    _hideFlyout();
+  };
+}
 
 /**
  * Render a tag link `<a>` element with consistent class structure

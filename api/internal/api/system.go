@@ -26,6 +26,7 @@ type SystemHandler struct {
 	settingsService *services.SettingsService
 	tagService      *services.TagService
 	systemService   *services.SystemService
+	cacheService    *services.CacheService
 	dataPath        string
 	logPath         string
 	appVersion      string
@@ -33,7 +34,7 @@ type SystemHandler struct {
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, dataPath string, appVersion string) *SystemHandler {
+func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
@@ -41,6 +42,7 @@ func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaS
 		settingsService: settingsService,
 		tagService:      tagService,
 		systemService:   systemService,
+		cacheService:    cacheService,
 		dataPath:        dataPath,
 		logPath:         filepath.Join(dataPath, "logs", "app.log"),
 		appVersion:      appVersion,
@@ -233,8 +235,9 @@ func (h *SystemHandler) GetMigrations(c echo.Context) error {
 }
 
 func (h *SystemHandler) ClearCache(c echo.Context) error {
-	// The Go API has no application-level cache, but we treat it as an
-	// opportunity to synchronize state. We recalculate media visibility
+	_ = h.cacheService.Clear(c.Request().Context())
+	// The Go API now has a file-based cache for feeds and some pages.
+	// We also treat this as an opportunity to synchronize state. We recalculate media visibility
 	// to ensure all media referenced in public posts is accessible to guests.
 	updated, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
 	if err != nil {
