@@ -111,7 +111,7 @@ WHERE
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
         WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
-        ELSE p.status IN ('published', 'page')
+        ELSE p.status = 'published'
     END)
 
     AND (CASE
@@ -134,7 +134,7 @@ WHERE
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
         WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
-        ELSE p.status IN ('published', 'page')
+        ELSE p.status = 'published'
     END)
 
     AND (CASE

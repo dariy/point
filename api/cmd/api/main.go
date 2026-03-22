@@ -415,6 +415,25 @@ func main() {
 			"normalize_post_status_case",
 			`UPDATE posts SET status = LOWER(status) WHERE status != LOWER(status)`,
 		},
+		{
+			"add_tags_show_in_ancestors",
+			`ALTER TABLE tags ADD COLUMN show_in_ancestors INTEGER NOT NULL DEFAULT 1`,
+		},
+		{
+			"drop_tags_show_in_ancestors",
+			`ALTER TABLE tags DROP COLUMN show_in_ancestors`,
+		},
+		{
+			"seed_no_ancestors_system_tag",
+			`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
+			 VALUES ('_no_ancestors', '_no_ancestors', NULL, 0, CURRENT_TIMESTAMP)`,
+		},
+		{
+			"link_no_ancestors_to_system",
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT s.id, c.id FROM tags s, tags c
+			 WHERE s.slug = '_system' AND c.slug = '_no_ancestors'`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
