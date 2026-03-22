@@ -14,7 +14,8 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
-import { renderTagLink } from '../../utils/tags.js';
+import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.js';
+import { store } from '../../store.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 import { getPostPageLocation } from '../../api/posts.js';
 
@@ -90,6 +91,13 @@ export class PostContent extends Component {
       const bodyEl = this.$('.post-content');
       if (bodyEl) this._enhanceMedia(bodyEl);
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
+
+      const tagsEl = this.$('.post-tags');
+      if (tagsEl) {
+        const navTagsAR = store.get('navTags') || [];
+        const tagIndexAR = navTagsAR.length ? buildTagIndex(navTagsAR) : null;
+        this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndexAR, navigate);
+      }
     }
   }
 
@@ -102,6 +110,7 @@ export class PostContent extends Component {
     clearTimeout(this._idleTimer);
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._cleanupFlyout?.();
   }
 
   // ── Immersive rendering ───────────────────────────────────────────────────
@@ -579,7 +588,14 @@ export class PostContent extends Component {
   // ── Normal layout ─────────────────────────────────────────────────────────
 
   _renderNormal(post, prevPost, nextPost) {
-    const tags = (post.tags || []).map((t) => renderTagLink(t)).join('');
+    const navTags = store.get('navTags') || [];
+    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    const visibleTags = (post.tags || []).filter((t) => {
+      if (!tagIndex) return true;
+      const entry = tagIndex.get(t.slug);
+      return !entry || entry.isLeaf;
+    });
+    const tags = visibleTags.map((t) => renderTagLink(t)).join('');
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
 
     return `

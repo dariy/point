@@ -345,9 +345,9 @@ WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') 
 
 -- name: CreateMedia :one
 INSERT INTO media (
-    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, uploaded_at
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, uploaded_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 

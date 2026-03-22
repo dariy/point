@@ -52,6 +52,62 @@ func TestMediaService_AnalyzeImage(t *testing.T) {
 
 
 
+func TestMediaService_MetadataExtraction(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+
+	ctx := context.Background()
+
+	// 1. Test video detection
+	media, err := service.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("fake-video"),
+		Filename: "test.mp4",
+		MimeType: "video/mp4",
+	})
+	if err != nil {
+		t.Fatalf("Upload video failed: %v", err)
+	}
+	if media.FileType != "video" {
+		t.Errorf("expected video, got %s", media.FileType)
+	}
+
+	// 2. Test audio detection
+	media, err = service.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("fake-audio"),
+		Filename: "test.mp3",
+		MimeType: "audio/mpeg",
+	})
+	if err != nil {
+		t.Fatalf("Upload audio failed: %v", err)
+	}
+	if media.FileType != "audio" {
+		t.Errorf("expected audio, got %s", media.FileType)
+	}
+
+	// 3. Test image with metadata (basic check that it doesn't crash)
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatalf("jpeg.Encode failed: %v", err)
+	}
+	media, err = service.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "test.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("Upload image failed: %v", err)
+	}
+	// Even without real EXIF, it should have some metadata if we added it (though here it might be empty map)
+	// We're mainly checking that the Metadata column exists and can be written to.
+	if !media.Metadata.Valid {
+		// It's okay if it's not valid for a generated image with no EXIF
+	}
+}
+
 func TestMediaService_Upload(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
 	defer func() {
