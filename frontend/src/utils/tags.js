@@ -42,15 +42,17 @@ function _showFlyout(anchorEl, ancestors) {
   const flyW = flyout.offsetWidth;
 
   const anchorRect = anchorEl.getBoundingClientRect();
+  const paddingLeft = parseFloat(getComputedStyle(flyout).paddingLeft) || 0;
   const gap = 6;
   let top = anchorRect.top - flyH - gap;
   top = Math.max(8, top);
-  let left = anchorRect.left;
+  let left = anchorRect.left - paddingLeft;
   left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
 
   flyout.style.top = `${top}px`;
   flyout.style.left = `${left}px`;
   flyout.style.visibility = '';
+  _flyoutShowTime = Date.now();
 }
 
 function _hideFlyout() {
@@ -104,7 +106,10 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
       _hideFlyout();
     }
   };
-  const dismissOnScroll = () => _hideFlyout();
+  const dismissOnScroll = () => {
+    if (Date.now() - _flyoutShowTime < 300) return;
+    _hideFlyout();
+  };
 
   document.addEventListener('click', dismiss);
   window.addEventListener('scroll', dismissOnScroll, { passive: true });
@@ -151,7 +156,8 @@ export function renderTagLink(tag, { active = false, extra = '', suffix = '' } =
 export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
   for (const tag of navTags) {
     const isLeaf = !tag.children?.length;
-    map.set(tag.slug, { tag: { name: tag.name, slug: tag.slug }, parentSlug, isLeaf });
+    const showInAncestors = tag.show_in_ancestors !== false;
+    map.set(tag.slug, { tag: { name: tag.name, slug: tag.slug }, parentSlug, isLeaf, showInAncestors });
     if (!isLeaf) buildTagIndex(tag.children, tag.slug, map);
   }
   return map;
@@ -173,7 +179,7 @@ export function getTagAncestors(slug, index) {
     if (visited.has(entry.parentSlug)) break;  // cycle guard
     visited.add(entry.parentSlug);
     entry = index.get(entry.parentSlug);
-    if (entry && !entry.tag.slug.startsWith('_')) {
+    if (entry && !entry.tag.slug.startsWith('_') && entry.showInAncestors !== false) {
       ancestors.unshift(entry.tag);
     }
   }
