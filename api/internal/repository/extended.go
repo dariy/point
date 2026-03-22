@@ -1768,6 +1768,64 @@ func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
 	return nil
 }
 
+// EnsurePendingSystemTag is an idempotent migration that guarantees the _pending
+// system tag exists with slug="_pending". It handles the case where a regular tag
+// was previously created with name="_pending" but slug="pending" (via Slugify),
+// which caused the system tag INSERT OR IGNORE to silently fail.
+func (r *Repository) EnsurePendingSystemTag(ctx context.Context) error {
+	if _, err := r.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS migration_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name VARCHAR(255) NOT NULL UNIQUE,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("create migration_history: %w", err)
+	}
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_history WHERE name = 'ensure_pending_system_tag'`,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("check migration_history: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	// Rename any tag with name='_pending' but wrong slug (e.g. 'pending').
+	// This clears the UNIQUE name constraint so the correct system tag can be inserted.
+	if _, err := r.db.ExecContext(ctx,
+		`UPDATE tags SET name = slug WHERE name = '_pending' AND slug != '_pending'`,
+	); err != nil {
+		return fmt.Errorf("rename conflicting _pending tag: %w", err)
+	}
+
+	// Create the _pending system tag if it doesn't exist yet.
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
+		 VALUES ('_pending', '_pending', NULL, 0, CURRENT_TIMESTAMP)`,
+	); err != nil {
+		return fmt.Errorf("create _pending system tag: %w", err)
+	}
+
+	// Make _pending a child of _system (no-op if _system doesn't exist or already linked).
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+		 SELECT s.id, c.id FROM tags s, tags c
+		 WHERE s.slug = '_system' AND c.slug = '_pending'`,
+	); err != nil {
+		return fmt.Errorf("link _pending to _system: %w", err)
+	}
+
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO migration_history (name) VALUES ('ensure_pending_system_tag')`,
+	); err != nil {
+		return fmt.Errorf("record ensure_pending_system_tag: %w", err)
+	}
+	return nil
+}
+
 // DeleteSession removes a session and returns an error if not found.
 func (r *Repository) DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error {
 	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ? AND user_id = ?`, arg.ID, arg.UserID)
