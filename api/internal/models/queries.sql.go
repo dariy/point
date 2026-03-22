@@ -107,7 +107,7 @@ WHERE
     AND (CASE
         WHEN ?4 THEN 1=1
         WHEN ?5 THEN p.status IN ('published', 'hidden', 'page')
-        ELSE p.status IN ('published', 'page')
+        ELSE p.status = 'published'
     END)
 
     AND (CASE
@@ -1178,7 +1178,7 @@ WHERE
     AND (CASE
         WHEN ?4 THEN 1=1
         WHEN ?5 THEN p.status IN ('published', 'hidden', 'page')
-        ELSE p.status IN ('published', 'page')
+        ELSE p.status = 'published'
     END)
 
     AND (CASE

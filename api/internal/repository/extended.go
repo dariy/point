@@ -26,7 +26,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
         SELECT pt.post_id FROM post_tags pt 
@@ -79,7 +79,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
         SELECT pt.post_id FROM post_tags pt 
@@ -118,7 +118,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
 
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
@@ -190,7 +190,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
 
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
