@@ -33,12 +33,29 @@ body {
 .site-main {
     flex: 1;
     padding: var(--spacing-lg) 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .main-container {
     max-width: var(--content-max-width);
     margin: 0 auto;
     padding: 0 var(--spacing-md);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Home page: expand post cards to fill viewport when content is short */
+.grid-expand-mount {
+    flex: 1;
+}
+
+.grid-expand-mount .posts-grid {
+    height: 100%;
+    grid-auto-rows: minmax(min-content, 1fr);
+    align-content: stretch;
 }
 
 /* Page Headers */

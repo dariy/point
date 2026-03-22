@@ -1,6 +1,12 @@
 /* ===========================
    Single Post
    =========================== */
+
+/* Images that open in immersive mode on click */
+.post-content img.zoomable {
+    cursor: zoom-in;
+}
+
 .post-single {
     max-width: var(--content-narrow);
     margin: 0 auto;

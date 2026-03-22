@@ -60,7 +60,7 @@ export class PostCard extends Component {
 
     return `
       <article class="${cardClass}" role="button" tabindex="0"
-               data-post-slug="${escapeHtml(post.slug)}" style="cursor:pointer">
+               data-post-slug="${escapeHtml(post.slug)}">
         <div class="post-card-background"${bgStyle}>${bgVideo}</div>
         ${playIndicator}
         <div class="post-card-content${hasMedia ? ' overlay' : ''}">

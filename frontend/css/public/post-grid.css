@@ -446,6 +446,9 @@
    Grid Preview (Swipe)
    =========================== */
 .grid-preview-placeholder {
+    position: absolute;
+    top: 0;
+    width: 100%;
     pointer-events: none;
     z-index: 10;
 }
