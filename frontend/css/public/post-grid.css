@@ -304,6 +304,8 @@
     overflow-x: auto;
     scrollbar-width: none;          /* Firefox */
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;            /* horizontal swipe stays on the strip */
+    overscroll-behavior-x: contain; /* prevent scroll chaining to page */
     /* Right-edge fade signals scrollability */
     mask-image: linear-gradient(to right, black 85%, transparent 100%);
     -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
