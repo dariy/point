@@ -17,6 +17,55 @@ import { LOCK_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
 import { renderTagLink, buildTagIndex, getTagAncestors } from '../../utils/tags.js';
 
+// Single shared flyout element reused across all PostCard instances.
+// Built with DOM methods to avoid XSS risks.
+let _flyoutEl = null;
+
+function getFlyoutEl() {
+  if (!_flyoutEl) {
+    _flyoutEl = document.createElement('div');
+    _flyoutEl.className = 'post-card-tag-flyout';
+    _flyoutEl.style.display = 'none';
+    document.body.appendChild(_flyoutEl);
+  }
+  return _flyoutEl;
+}
+
+function showFlyout(anchorEl, ancestors) {
+  const flyout = getFlyoutEl();
+
+  // Rebuild links using safe DOM construction (no innerHTML with user data).
+  while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
+  ancestors.forEach((t) => {
+    const a = document.createElement('a');
+    a.href = `/tag/${encodeURIComponent(t.slug)}`;
+    a.className = 'tag-link';
+    a.textContent = t.name;
+    flyout.appendChild(a);
+  });
+
+  flyout.style.display = 'flex';
+
+  // Position above the anchor tag.
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const gap = 6;
+  const flyH = flyout.offsetHeight;
+  const flyW = flyout.offsetWidth;
+
+  let top = anchorRect.top - flyH - gap;
+  top = Math.max(8, top);  // clamp — don't overflow above viewport
+
+  let left = anchorRect.left;
+  left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
+
+  flyout.style.top = `${top}px`;
+  flyout.style.left = `${left}px`;
+}
+
+function hideFlyout() {
+  if (_flyoutEl) _flyoutEl.style.display = 'none';
+}
+
 export class PostCard extends Component {
   render() {
     const { post, showViewCount = false, useThumbnails = true, isHero = false } = this.props;
@@ -135,5 +184,59 @@ export class PostCard extends Component {
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
     });
+
+    // Tag flyout: first click shows ancestors, second click navigates.
+    const navTagsAR = store.get('navTags') || [];
+    const tagIndexAR = navTagsAR.length ? buildTagIndex(navTagsAR) : null;
+
+    card.querySelectorAll('.post-card-tags .tag-link').forEach((link) => {
+      link.addEventListener('click', (e) => {
+        if (!tagIndexAR) return; // no hierarchy — navigate normally
+
+        const slug = link.getAttribute('href').replace('/tag/', '');
+        const ancestors = getTagAncestors(slug, tagIndexAR);
+        if (!ancestors.length) return; // no ancestors — navigate normally
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (link._flyoutShown) {
+          // Second click — navigate to the leaf tag page.
+          link._flyoutShown = false;
+          hideFlyout();
+          navigate(`/tag/${slug}`);
+        } else {
+          // First click — show the ancestor flyout.
+          // Clear any other open flyout on this card first.
+          card.querySelectorAll('.post-card-tags .tag-link').forEach((l) => { l._flyoutShown = false; });
+          link._flyoutShown = true;
+          showFlyout(link, ancestors);
+        }
+      });
+    });
+
+    this._dismissFlyout = (e) => {
+      if (_flyoutEl && !_flyoutEl.contains(e.target) && !card.contains(e.target)) {
+        hideFlyout();
+        card.querySelectorAll('.post-card-tags .tag-link').forEach((l) => { l._flyoutShown = false; });
+      }
+    };
+    this._dismissFlyoutOnScroll = () => {
+      hideFlyout();
+      card.querySelectorAll('.post-card-tags .tag-link').forEach((l) => { l._flyoutShown = false; });
+    };
+
+    document.addEventListener('click', this._dismissFlyout, true);
+    window.addEventListener('scroll', this._dismissFlyoutOnScroll, { passive: true });
+  }
+
+  beforeUnmount() {
+    if (this._dismissFlyout) {
+      document.removeEventListener('click', this._dismissFlyout, true);
+    }
+    if (this._dismissFlyoutOnScroll) {
+      window.removeEventListener('scroll', this._dismissFlyoutOnScroll);
+    }
+    hideFlyout();
   }
 }
