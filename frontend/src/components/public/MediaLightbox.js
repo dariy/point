@@ -133,14 +133,14 @@ export class MediaLightbox {
     const { src, alt } = this._images[this._index] || {};
 
     // Hide old image immediately so it doesn't flash while the new one loads
-    this._imgEl.style.opacity = '0';
+    this._imgEl.classList.add('loading');
     this._imgEl.src = '';
     this._imgEl.alt = alt || '';
     this._captionEl.textContent = alt || '';
 
     if (src) {
-      this._imgEl.onload = () => { this._imgEl.style.opacity = '1'; };
-      this._imgEl.onerror = () => { this._imgEl.style.opacity = '1'; };
+      this._imgEl.onload = () => { this._imgEl.classList.remove('loading'); };
+      this._imgEl.onerror = () => { this._imgEl.classList.remove('loading'); };
       this._imgEl.src = src;
     }
 

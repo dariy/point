@@ -34,7 +34,7 @@ export class PromptDialog extends Component {
     if (body) {
       if (message) {
         const p = document.createElement('p');
-        p.style.marginBottom = '1rem';
+        p.className = 'prompt-message';
         p.textContent = message;
         body.appendChild(p);
       }
@@ -44,7 +44,6 @@ export class PromptDialog extends Component {
       input.className = 'form-input';
       input.value = defaultValue;
       input.id = 'prompt-input';
-      input.style.width = '100%';
       body.appendChild(input);
 
       // Focus input shortly after render

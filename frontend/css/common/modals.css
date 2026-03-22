@@ -84,6 +84,14 @@
     white-space: pre-wrap;
 }
 
+.modal-body .prompt-message {
+    margin-bottom: 1rem;
+}
+
+#prompt-input {
+    width: 100%;
+}
+
 .modal-footer {
     padding: var(--spacing-md) var(--spacing-lg);
     border-top: 1px solid var(--border-primary);
