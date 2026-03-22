@@ -108,7 +108,7 @@ export class GestureController {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               _onStart(e) {
     if (e.touches.length === 1) {
       // Ignore touches starting in a scrollable tags bar
-      if (e.target.closest('.tags-filters')) {
+      if (e.target.closest('.tags-filters') || e.target.closest('.post-card-tags')) {
         this._state = STATE.IDLE;
         return;
       }
@@ -277,7 +277,7 @@ export class TrackpadDetector {
     const now = Date.now();
     if (now - this._lastFired < this.cooldownMs) return;
     // Ignore events in the scrollable tags bar
-    if (e.target.closest('.tags-filters')) return;
+    if (e.target.closest('.tags-filters') || e.target.closest('.post-card-tags')) return;
     const absDx = Math.abs(e.deltaX);
     const absDy = Math.abs(e.deltaY);
     if (absDx > this.thresholdDeltaX && absDy < this.maxDeltaY) {

@@ -297,7 +297,7 @@
 
 .post-card-tags {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     flex-wrap: nowrap;
     gap: var(--spacing-sm);
     margin-top: auto;
@@ -306,13 +306,24 @@
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x;            /* horizontal swipe stays on the strip */
     overscroll-behavior-x: contain; /* prevent scroll chaining to page */
-    /* Right-edge fade signals scrollability */
-    mask-image: linear-gradient(to right, black 85%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
 }
 
 .post-card-tags::-webkit-scrollbar {
     display: none;                  /* Chrome/Safari */
+}
+
+/* Dynamic edge fades — JS adds these classes based on scroll position */
+.post-card-tags.can-scroll-right {
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+.post-card-tags.can-scroll-left {
+    mask-image: linear-gradient(to right, transparent 0%, black 15%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%);
+}
+.post-card-tags.can-scroll-left.can-scroll-right {
+    mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
 }
 
 .post-card-tags .tag-link {
