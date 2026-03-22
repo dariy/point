@@ -27,3 +27,41 @@ export function renderTagLink(tag, { active = false, extra = '', suffix = '' } =
 
   return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${escapeHtml(name)}${suffix}</a>`;
 }
+
+/**
+ * Build a flat lookup map from the navTags tree.
+ * navTags is a strict tree (each node has exactly one parent).
+ *
+ * @param {object[]} navTags  Root-level tag nodes with nested .children[]
+ * @param {string|null} [parentSlug]  Internal — parent slug for recursive calls
+ * @param {Map} [map]  Internal — accumulator
+ * @returns {Map<string, { tag: {name:string,slug:string}, parentSlug: string|null, isLeaf: boolean }>}
+ */
+export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
+  for (const tag of navTags) {
+    const isLeaf = !tag.children?.length;
+    map.set(tag.slug, { tag: { name: tag.name, slug: tag.slug }, parentSlug, isLeaf });
+    if (!isLeaf) buildTagIndex(tag.children, tag.slug, map);
+  }
+  return map;
+}
+
+/**
+ * Return the ancestor chain of a tag in root-first order,
+ * skipping system tags (slug starts with '_').
+ *
+ * @param {string} slug  The leaf tag's slug
+ * @param {Map} index    Result of buildTagIndex()
+ * @returns {{ name: string, slug: string }[]}  Root-first, immediate parent last
+ */
+export function getTagAncestors(slug, index) {
+  const ancestors = [];
+  let entry = index.get(slug);
+  while (entry?.parentSlug) {
+    entry = index.get(entry.parentSlug);
+    if (entry && !entry.tag.slug.startsWith('_')) {
+      ancestors.unshift(entry.tag);
+    }
+  }
+  return ancestors;
+}
