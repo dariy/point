@@ -193,6 +193,22 @@ export class PostCard extends Component {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
     });
 
+    // Prevent the page from scrolling while the user swipes the tags strip
+    // horizontally. touch-action CSS alone is unreliable on iOS Safari.
+    const tagsEl = card.querySelector('.post-card-tags');
+    if (tagsEl) {
+      let _touchStartX = 0, _touchStartY = 0;
+      tagsEl.addEventListener('touchstart', (e) => {
+        _touchStartX = e.touches[0].clientX;
+        _touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+      tagsEl.addEventListener('touchmove', (e) => {
+        const dx = Math.abs(e.touches[0].clientX - _touchStartX);
+        const dy = Math.abs(e.touches[0].clientY - _touchStartY);
+        if (dx > dy) e.preventDefault(); // horizontal swipe — keep scroll in strip
+      }, { passive: false });
+    }
+
     // Tag flyout: first click shows ancestors, second click navigates.
     const navTagsAR = store.get('navTags') || [];
     const tagIndexAR = navTagsAR.length ? buildTagIndex(navTagsAR) : null;
