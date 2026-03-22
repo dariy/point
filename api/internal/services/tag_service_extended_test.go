@@ -134,7 +134,7 @@ func TestTagService_NavTree(t *testing.T) {
 		INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
 		SELECT id, ? FROM tags WHERE slug = '_root'`, featured.ID)
 
-	nodes, err := service.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err := service.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestTagService_NavTree(t *testing.T) {
 
 	// Regular tag with no posts and not under _root should NOT appear.
 	regular, _ := service.CreateTag(ctx, CreateTagParams{Name: "Regular"})
-	nodes, _ = service.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, _ = service.GetHierarchicalNavTags(ctx, nil, true, 0)
 	for _, n := range nodes {
 		if n.ID == regular.ID {
 			t.Error("regular tag with 0 posts and not under _root should NOT appear in nav")

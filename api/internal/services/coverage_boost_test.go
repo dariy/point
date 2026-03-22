@@ -609,7 +609,7 @@ func TestTagService_GetHierarchicalNavTagsWithHidden(t *testing.T) {
 	// _hidden → Hidden tag (makes it effectively hidden)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (3,5)`)
 
-	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (hidden) failed: %v", err)
 	}
@@ -709,7 +709,7 @@ func TestTagService_GetHierarchicalNavTagsBoost(t *testing.T) {
 	ctx := context.Background()
 
 	// No data - empty result
-	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags failed: %v", err)
 	}
@@ -719,14 +719,14 @@ func TestTagService_GetHierarchicalNavTagsBoost(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count) VALUES (1,'_root','_root',0),(2,'Nature','nature',5)`)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`)
 
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
 	}
 	_ = nodes
 
 	id := int64(1)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, &id, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, &id, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (with rootID) failed: %v", err)
 	}
@@ -948,14 +948,14 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 
 	// nil rootID: exercises _root detection, _with_related, system slug skip,
 	// Gamma skip (0 posts + no children), sort_order comparison
-	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags deep: %v", err)
 	}
 	_ = nodes
 
 	// publicOnly=true: exercises effectivelyHidden map path
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags publicOnly: %v", err)
 	}
@@ -963,7 +963,7 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 
 	// With explicit rootID → uses else branch with actual children
 	rootID := int64(1)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, &rootID, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, &rootID, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags rootID: %v", err)
 	}
@@ -971,7 +971,7 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 
 	// Cycle: Alpha points to itself → visited[cid] triggers continue
 	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id) VALUES (4,4)`)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags cycle: %v", err)
 	}
@@ -1193,7 +1193,7 @@ func TestServiceDBErrors(t *testing.T) {
 	if _, err := svc.GetTagByID(ctx, 1); err == nil {
 		t.Error("GetTagByID: expected error")
 	}
-	if _, err := svc.GetTagCloud(ctx, 10, false); err == nil {
+	if _, err := svc.GetTagCloud(ctx, 10, false, 0); err == nil {
 		t.Error("GetTagCloud: expected error")
 	}
 	if _, err := svc.EffectivelyHiddenIDs(ctx); err == nil {
@@ -1208,7 +1208,7 @@ func TestServiceDBErrors(t *testing.T) {
 	if _, err := svc.WithRelatedIDs(ctx); err == nil {
 		t.Error("WithRelatedIDs: expected error")
 	}
-	if _, err := svc.GetHierarchicalNavTags(ctx, nil, true); err == nil {
+	if _, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0); err == nil {
 		t.Error("GetHierarchicalNavTags: expected error")
 	}
 }
@@ -1400,21 +1400,21 @@ func TestTagService_GetTagCloud_Branches(t *testing.T) {
 	ctx := context.Background()
 
 	// Empty DB → len(tags)==0 → return []
-	items, err := svc.GetTagCloud(ctx, 10, false)
+	items, err := svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil || len(items) != 0 {
 		t.Errorf("empty DB: expected [], got %v %v", items, err)
 	}
 
 	// Only system tags → candidates is empty
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1, 'Sys', '_sys')`)
-	items, err = svc.GetTagCloud(ctx, 10, false)
+	items, err = svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil || len(items) != 0 {
 		t.Errorf("only system tags: expected [], got %v %v", items, err)
 	}
 
 	// Regular tag with no posts → filtered is empty (effectiveCounts[id]==0)
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count) VALUES (2, 'Regular', 'regular', 0)`)
-	items, err = svc.GetTagCloud(ctx, 10, false)
+	items, err = svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil || len(items) != 0 {
 		t.Errorf("no posts: expected [], got %v %v", items, err)
 	}
@@ -1516,7 +1516,7 @@ func TestTagService_DBErrors3(t *testing.T) {
 
 	repo.Close()
 
-	if _, err := svc.GetTagChildren(ctx, 1, false); err == nil {
+	if _, err := svc.GetTagChildren(ctx, 1, false, 0); err == nil {
 		t.Error("GetTagChildren DB error: expected error")
 	}
 	if _, err := svc.UpdateMissingCoords(ctx); err == nil {
