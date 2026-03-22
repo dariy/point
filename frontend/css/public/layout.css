@@ -16,6 +16,7 @@ body {
 
 .site-wrapper {
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
 }
@@ -26,6 +27,7 @@ body {
     width: 100%;
     z-index: 110;
     background: var(--header-bg);
+    padding-top: env(safe-area-inset-top, 0px);
 }
 
 .site-main {
