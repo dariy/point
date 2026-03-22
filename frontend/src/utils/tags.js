@@ -56,8 +56,11 @@ export function buildTagIndex(navTags, parentSlug = null, map = new Map()) {
  */
 export function getTagAncestors(slug, index) {
   const ancestors = [];
+  const visited = new Set([slug]);
   let entry = index.get(slug);
   while (entry?.parentSlug) {
+    if (visited.has(entry.parentSlug)) break;  // cycle guard
+    visited.add(entry.parentSlug);
     entry = index.get(entry.parentSlug);
     if (entry && !entry.tag.slug.startsWith('_')) {
       ancestors.unshift(entry.tag);
