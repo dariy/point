@@ -26,17 +26,20 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 
 	ctx := context.Background()
 
+	// 0. Create user
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{Username: "admin", PasswordHash: "hash", DisplayName: "Admin"})
+
 	// 1. Create two tags
 	t1, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "Tag High", Slug: "tag-high"})
 	t2, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "Tag Low", Slug: "tag-low"})
 
 	// 2. Add posts to make Tag High have 5 posts and Tag Low have 2 posts
 	for i := 1; i <= 5; i++ {
-		p, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "P", Slug: "p-h-" + strconv.Itoa(i), Status: "published"})
+		p, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "P", Slug: "p-h-" + strconv.Itoa(i), Status: "published", AuthorID: user.ID})
 		_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: p.ID, TagID: t1.ID})
 	}
 	for i := 1; i <= 2; i++ {
-		p, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "P", Slug: "p-l-" + strconv.Itoa(i), Status: "published"})
+		p, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "P", Slug: "p-l-" + strconv.Itoa(i), Status: "published", AuthorID: user.ID})
 		_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: p.ID, TagID: t2.ID})
 	}
 
@@ -104,7 +107,7 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 
 	// 5b. Test GetPostBySlug as Guest - check if tag-low is in tags list
 	// Create a post with both tags
-	post, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "Test Post", Slug: "test-post", Status: "published", AuthorID: 1})
+	post, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "Test Post", Slug: "test-post", Status: "published", AuthorID: user.ID})
 	_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: t1.ID})
 	_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: t2.ID})
 
