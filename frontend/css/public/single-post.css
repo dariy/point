@@ -1,6 +1,12 @@
 /* ===========================
    Single Post
    =========================== */
+
+/* Images that open in immersive mode on click */
+.post-content img.zoomable {
+    cursor: zoom-in;
+}
+
 .post-single {
     max-width: var(--content-narrow);
     margin: 0 auto;
@@ -20,8 +26,8 @@
 }
 
 .post-meta-divider {
-    width: 4px;
-    height: 4px;
+    width: 0.25rem;
+    height: 0.25rem;
     background-color: var(--border-secondary);
     border-radius: 50%;
 }
@@ -83,7 +89,7 @@
 }
 
 .post-content blockquote {
-    border-left: 4px solid var(--color-primary);
+    border-left: var(--spacing-xs) solid var(--color-primary);
     padding-left: var(--spacing-lg);
     margin: var(--spacing-xl) 0;
     font-style: italic;
@@ -107,10 +113,9 @@
     font-size: 0.9em;
     background-color: var(--inline-code-bg);
     color: var(--inline-code-text);
-    padding: 2px 6px;
+    padding: 0.125rem 0.375rem;
     border-radius: var(--border-radius-sm);
-    transition:
-        background-color var(--transition-theme),
+    transition: background-color var(--transition-theme),
         color var(--transition-theme);
 }
 
@@ -133,7 +138,7 @@
 .post-content a {
     color: var(--color-primary);
     text-decoration: underline;
-    text-underline-offset: 2px;
+    text-underline-offset: 0.125rem;
 }
 
 /* Post Footer */
@@ -153,15 +158,14 @@
 
 .post-tags .tag-link {
     background-color: var(--bg-tertiary);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(0.5rem);
+    -webkit-backdrop-filter: blur(0.5rem);
 }
 
 .post-tags .tag-link:hover {
     background-color: var(--color-primary);
     color: white;
     border-color: var(--color-primary);
-    transform: translateY(-2px);
 }
 
 [data-theme="light"] .post-tags .tag-link {

@@ -23,8 +23,8 @@ func NewTagHandler(tagService *services.TagService, settingsService *services.Se
 	}
 }
 
-func tagResponse(tag models.Tag, parents, children []models.Tag, loc *models.TagLocation) map[string]interface{} {
-	return tagToFullResponse(tag, parents, children, loc)
+func tagResponse(tag models.Tag, parents, children []models.Tag, loc *models.TagLocation, excludeIDs map[int64]bool) map[string]interface{} {
+	return tagToFullResponse(tag, parents, children, loc, excludeIDs)
 }
 
 func (h *TagHandler) ListTags(c echo.Context) error {
@@ -106,8 +106,23 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 	// publishedOnly=true for public users, false for admin (includes hidden-status posts).
 	effectiveCounts, _ := h.tagService.GetHierarchicalPostCounts(c.Request().Context(), publicOnly)
 
-	tagItems := make([]map[string]interface{}, len(tags))
-	for i, t := range tags {
+	// Fetch min_tag_posts_to_show setting for guests.
+	var minPosts int64
+	if publicOnly {
+		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
+		if minPosts < 0 {
+			minPosts = 0
+		}
+	}
+
+	tagItems := make([]map[string]interface{}, 0, len(tags))
+	for _, t := range tags {
+		// Apply threshold filter for guests.
+		if publicOnly && minPosts > 0 && effectiveCounts[t.ID] < minPosts {
+			continue
+		}
+
 		parents := childParents[t.ID]
 		if parents == nil {
 			parents = []map[string]interface{}{}
@@ -120,7 +135,7 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		if l, ok := locationMap[t.ID]; ok {
 			loc = &l
 		}
-		tagItems[i] = map[string]interface{}{
+		tagItems = append(tagItems, map[string]interface{}{
 			"id":          t.ID,
 			"name":        t.Name,
 			"slug":        t.Slug,
@@ -132,7 +147,7 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 			"parents":     parents,
 			"children":    children,
 			"locations":   tagLocationsResponse(loc),
-		}
+		})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -148,7 +163,17 @@ func (h *TagHandler) GetTagCloud(c echo.Context) error {
 	}
 	publicOnly := c.Get("user") == nil
 
-	cloud, err := h.tagService.GetTagCloud(c.Request().Context(), limit, publicOnly)
+	// Fetch min_tag_posts_to_show threshold for guests.
+	var minPosts int64
+	if publicOnly {
+		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
+		if minPosts < 0 {
+			minPosts = 0
+		}
+	}
+
+	cloud, err := h.tagService.GetTagCloud(c.Request().Context(), limit, publicOnly, minPosts)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -168,18 +193,28 @@ func (h *TagHandler) GetTagByID(c echo.Context) error {
 	}
 
 	publicOnly := c.Get("user") == nil
+	var minPosts int64
 	if publicOnly {
+		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
+		if minPosts < 0 {
+			minPosts = 0
+		}
+
 		effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(c.Request().Context())
-		if effectivelyHidden[tag.ID] {
+		effectiveCounts, _ := h.tagService.GetHierarchicalPostCounts(c.Request().Context(), publicOnly)
+
+		if effectivelyHidden[tag.ID] || (minPosts > 0 && effectiveCounts[tag.ID] < minPosts) {
 			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 		}
 	}
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
-	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, publicOnly)
+	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, publicOnly, minPosts)
 	loc := h.tagLocation(c, tag.ID)
 
-	resp := tagResponse(tag, parents, children, loc)
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(c.Request().Context(), minPosts)
+	resp := tagResponse(tag, parents, children, loc, excludeTagIDs)
 	if !publicOnly {
 		effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
 		injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
@@ -189,25 +224,34 @@ func (h *TagHandler) GetTagByID(c echo.Context) error {
 
 func (h *TagHandler) GetTagBySlug(c echo.Context) error {
 	slug := c.Param("slug")
-
 	tag, err := h.tagService.GetTagBySlug(c.Request().Context(), slug)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
 	publicOnly := c.Get("user") == nil
+	var minPosts int64
 	if publicOnly {
+		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
+		if minPosts < 0 {
+			minPosts = 0
+		}
+
 		effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(c.Request().Context())
-		if effectivelyHidden[tag.ID] {
+		effectiveCounts, _ := h.tagService.GetHierarchicalPostCounts(c.Request().Context(), publicOnly)
+
+		if effectivelyHidden[tag.ID] || (minPosts > 0 && effectiveCounts[tag.ID] < minPosts) {
 			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 		}
 	}
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
-	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, publicOnly)
+	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, publicOnly, minPosts)
 	loc := h.tagLocation(c, tag.ID)
 
-	resp := tagResponse(tag, parents, children, loc)
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(c.Request().Context(), minPosts)
+	resp := tagResponse(tag, parents, children, loc, excludeTagIDs)
 	if !publicOnly {
 		effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
 		injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
@@ -265,10 +309,11 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 	_ = h.tagService.SetTagLocations(c.Request().Context(), tag.ID, toServiceLocations(req.Locations))
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
-	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, false)
+	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, false, 0)
 	loc := h.tagLocation(c, tag.ID)
 
-	resp := tagResponse(tag, parents, children, loc)
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(c.Request().Context(), 0)
+	resp := tagResponse(tag, parents, children, loc, excludeTagIDs)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
 	injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
 	return c.JSON(http.StatusCreated, resp)
@@ -303,10 +348,11 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 	_ = h.tagService.SetTagLocations(c.Request().Context(), tag.ID, toServiceLocations(req.Locations))
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
-	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, false)
+	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, false, 0)
 	loc := h.tagLocation(c, tag.ID)
 
-	resp := tagResponse(tag, parents, children, loc)
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(c.Request().Context(), 0)
+	resp := tagResponse(tag, parents, children, loc, excludeTagIDs)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
 	injectTagHiddenFields(resp, tag, effectiveHiddenPosts)
 	return c.JSON(http.StatusOK, resp)
@@ -400,13 +446,25 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	}
 
 	publicOnly := c.Get("user") == nil
-	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(c.Request().Context())
-	if publicOnly && effectivelyHidden[tag.ID] {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
-	}
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
-	if publicOnly && effectiveHiddenPosts[tag.ID] {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	var minPosts int64
+	if publicOnly {
+		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
+		if minPosts < 0 {
+			minPosts = 0
+		}
+
+		effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(c.Request().Context())
+		effectiveCounts, _ := h.tagService.GetHierarchicalPostCounts(c.Request().Context(), publicOnly)
+
+		if effectivelyHidden[tag.ID] || (minPosts > 0 && effectiveCounts[tag.ID] < minPosts) {
+			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		}
+
+		effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+		if effectiveHiddenPosts[tag.ID] {
+			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		}
 	}
 
 	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, int32(page), int32(perPage), publicOnly, false)
@@ -421,9 +479,11 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	postTagsMap, _ := h.tagService.GetTagsByPostIDs(c.Request().Context(), postIDs)
 
 	isAdmin := !publicOnly
+	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(c.Request().Context(), minPosts)
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		resp := postToResponse(p, postTagsMap[p.ID])
+		resp := postToResponse(p, postTagsMap[p.ID], excludeTagIDs)
 		if isAdmin {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}

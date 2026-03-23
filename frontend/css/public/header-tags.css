@@ -1,125 +1,26 @@
 /* ===========================
    Header Tags Bar
+   (Extends .tag-strip-track / .tag-strip-scroll)
    =========================== */
 .header-tags-bar {
     overflow: visible;
     z-index: 100;
 }
 
-.tags-bar-track {
-    position: relative;
+/* Specific header adjustments for the unified track */
+.header-tags-bar .tag-strip-track {
     max-width: var(--content-max-width);
     margin: 0 auto;
-    width: 100%;
-    overflow: hidden;
 }
 
-.tags-bar-track::before,
-.tags-bar-track::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    z-index: 2;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.tags-bar-track::before {
-    left: 0;
-    background: linear-gradient(to right, var(--header-bg), transparent);
-}
-
-.tags-bar-track::after {
-    right: 0;
-    background: linear-gradient(to left, var(--header-bg), transparent);
-}
-
-.tags-bar-track.has-scroll-left::before {
-    opacity: 1;
-}
-
-.tags-bar-track.has-scroll-right::after {
-    opacity: 1;
-}
-
-.tags-scroll-btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--surface-card);
-    border: 1px solid var(--border-primary);
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 3;
-    opacity: 0;
-    pointer-events: none;
-    transition: all 0.2s ease;
-}
-
-.tags-scroll-btn svg {
-    width: 14px;
-    height: 14px;
-}
-
-.tags-scroll-btn--left {
-    left: var(--spacing-xs);
-}
-
-.tags-scroll-btn--left svg {
-    transform: rotate(90deg);
-}
-
-.tags-scroll-btn--right {
-    right: var(--spacing-xs);
-}
-
-.tags-scroll-btn--right svg {
-    transform: rotate(-90deg);
-}
-
-.tags-bar-track.has-scroll-left .tags-scroll-btn--left,
-.tags-bar-track.has-scroll-right .tags-scroll-btn--right {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.tags-scroll-btn:hover {
-    color: var(--color-primary);
-    border-color: var(--color-primary);
-    box-shadow: var(--shadow-sm);
-}
-
-.header-tags-bar .tags-filters {
-    width: 100%;
+.header-tags-bar .tag-strip-scroll {
     padding: var(--spacing-xs) var(--spacing-md);
-    display: flex;
-    align-items: center;
     justify-content: safe center;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: visible;
-    overscroll-behavior: contain;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    /* Allow dropdowns */
     opacity: 0;
     transition: opacity 0.2s ease;
 }
 
-.header-tags-bar .tags-filters::-webkit-scrollbar {
-    display: none;
-}
-
-.header-tags-bar .tags-filters.is-ready {
+.header-tags-bar .tag-strip-scroll.is-ready {
     opacity: 1;
 }
 
@@ -142,7 +43,7 @@
     align-items: center;
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
-    border-radius: 9999px;
+    border-radius: 624.938rem;
     height: 2rem;
     padding: 0 var(--spacing-md);
     color: var(--text-secondary);
@@ -151,7 +52,6 @@
     line-height: normal;
     transition: all var(--transition-fast);
     box-sizing: border-box;
-    white-space: nowrap;
     text-rendering: optimizeLegibility;
 }
 
@@ -164,7 +64,7 @@
     align-items: center;
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
-    border-radius: 9999px;
+    border-radius: 624.938rem;
     height: 2rem;
     transition: all var(--transition-fast);
     box-sizing: border-box;
@@ -250,7 +150,7 @@
     position: absolute;
     inset: 0;
     background: var(--surface-card);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(0.75rem);
     border-radius: inherit;
     z-index: -1;
     pointer-events: none;
@@ -259,10 +159,10 @@
 .header-tags-bar .tag-children::before {
     content: '';
     position: absolute;
-    top: -8px;
+    top: -0.5rem;
     left: 0;
     right: 0;
-    height: 8px;
+    height: 0.5rem;
     background: transparent;
 }
 
@@ -284,7 +184,7 @@
 @keyframes dropdownFadeIn {
     from {
         opacity: 0;
-        margin-top: -10px;
+        margin-top: -0.625rem;
     }
 
     to {
@@ -310,18 +210,12 @@
 }
 
 /* Tag Switcher Logic - keep these with high specificity to prevent display override */
-.header-tags-bar .tags-filters[data-mode="featured"]>.category-tag,
-.header-tags-bar .tags-filters[data-mode="featured"]>.tag-group.category-tag {
+.header-tags-bar .tag-strip-scroll[data-mode="featured"]>.category-tag,
+.header-tags-bar .tag-strip-scroll[data-mode="featured"]>.tag-group.category-tag {
     display: none;
 }
 
-.header-tags-bar .tags-filters[data-mode="categories"]>.featured-tag,
-.header-tags-bar .tags-filters[data-mode="categories"]>.tag-group.featured-tag {
+.header-tags-bar .tag-strip-scroll[data-mode="categories"]>.featured-tag,
+.header-tags-bar .tag-strip-scroll[data-mode="categories"]>.tag-group.featured-tag {
     display: none;
 }
-
-/*.header-tags-bar .switcher-btn.active {
-    background-color: var(--color-primary);
-    color: var(--text-inverted);
-}*/
-

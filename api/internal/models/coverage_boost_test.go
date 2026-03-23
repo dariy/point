@@ -11,7 +11,7 @@ import (
 // to cover the rows.Next() loop bodies that are missed when Limit=0.
 func TestQueryScanBodies(t *testing.T) {
 	q, db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
 	// Seed user
@@ -133,7 +133,7 @@ func TestQueryScanBodies(t *testing.T) {
 // TestGetPostsByTagWithData covers the GetPostsByTag scan loop with actual matching rows.
 func TestGetPostsByTagWithData(t *testing.T) {
 	q, db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
 	// Create user, tag, published post with that tag.
@@ -188,7 +188,7 @@ func TestScanFunctionErrors(t *testing.T) {
 	_, _ = q.UpdateSetting(ctx, UpdateSettingParams{Key: "k", Value: sql.NullString{String: "v", Valid: true}, ValueType: "string"})
 
 	// Now close the DB to force all subsequent queries to fail.
-	db.Close()
+	_ = db.Close()
 
 	// Each of these should return an error (QueryContext fails on closed DB).
 	if _, err := q.GetMediaByPostID(ctx, sql.NullInt64{Int64: post.ID, Valid: true}); err == nil {

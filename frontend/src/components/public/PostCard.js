@@ -14,7 +14,8 @@ import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
 import { LOCK_SVG } from '../../utils/icons.js';
-import { renderTagLink } from '../../utils/tags.js';
+import { store } from '../../store.js';
+import { buildTagIndex, renderTagStrip, setupTagStrip } from '../../utils/tags.js';
 
 export class PostCard extends Component {
   render() {
@@ -42,7 +43,9 @@ export class PostCard extends Component {
         </svg>
       </div>` : '';
 
-    const tags = (post.tags || []).map((t) => renderTagLink(t)).join('');
+    const navTags = store.get('navTags') || [];
+    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    const tags = renderTagStrip(post.tags, tagIndex);
 
     const viewCount = showViewCount && post.view_count != null
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
@@ -52,7 +55,7 @@ export class PostCard extends Component {
 
     return `
       <article class="${cardClass}" role="button" tabindex="0"
-               data-post-slug="${escapeHtml(post.slug)}" style="cursor:pointer">
+               data-post-slug="${escapeHtml(post.slug)}">
         <div class="post-card-background"${bgStyle}>${bgVideo}</div>
         ${playIndicator}
         <div class="post-card-content${hasMedia ? ' overlay' : ''}">
@@ -66,7 +69,7 @@ export class PostCard extends Component {
             </time>
             ${viewCount}
           </div>
-          ${tags ? `<div class="post-card-tags" aria-label="Tags">${tags}</div>` : ''}
+          ${tags}
         </div>
       </article>`;
   }
@@ -76,6 +79,13 @@ export class PostCard extends Component {
     if (!post) return;
     const card = this.$('.post-card');
     if (!card) return;
+
+    this._cleanupStrip?.();
+
+    if (!this._subscribed) {
+      this.subscribeStore(store, 'navTags', () => this._rerender());
+      this._subscribed = true;
+    }
 
     const go = () => {
       if (tagSlug) {
@@ -127,5 +137,14 @@ export class PostCard extends Component {
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
     });
+
+    // Unified tag strip scrolling and flyout setup
+    const navTags = store.get('navTags') || [];
+    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    this._cleanupStrip = setupTagStrip(card, tagIndex, navigate, card);
+  }
+
+  beforeUnmount() {
+    this._cleanupStrip?.();
   }
 }

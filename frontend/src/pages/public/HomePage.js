@@ -55,7 +55,7 @@ export default class HomePage extends Component {
         <div id="tag-cloud-mount"></div>
         <main class="site-main">
           <div class="main-container">
-            <div id="grid-mount"></div>
+            <div id="grid-mount" class="grid-expand-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
@@ -122,10 +122,6 @@ export default class HomePage extends Component {
                   <div class="post-card-slot"></div>
                 </div>
               `;
-              previewEl.style.position = 'absolute';
-              previewEl.style.top = '0';
-              previewEl.style.width = '100%';
-              gridMount.parentElement.style.position = 'relative';
               gridMount.parentElement.appendChild(previewEl);
               
               // Start prefetching the next page data in parallel

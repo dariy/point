@@ -27,38 +27,6 @@ func TestTagToPostTagInfo(t *testing.T) {
 	}
 }
 
-// TestFilterNavTagsByMinPosts covers the 25% function.
-func TestFilterNavTagsByMinPosts(t *testing.T) {
-	nodes := []services.NavTagNode{
-		{ID: 1, Name: "Big", PostCount: 10, Children: []services.NavTagNode{}},
-		{ID: 2, Name: "Small", PostCount: 1, Children: []services.NavTagNode{}},
-		{
-			ID: 3, Name: "Parent", PostCount: 0,
-			Children: []services.NavTagNode{
-				{ID: 4, Name: "Child", PostCount: 5, Children: []services.NavTagNode{}},
-			},
-		},
-	}
-
-	// minPosts=0 → no filter
-	result := filterNavTagsByMinPosts(nodes, 0)
-	if len(result) != 3 {
-		t.Errorf("expected 3 with minPosts=0, got %d", len(result))
-	}
-
-	// minPosts=5 → Small removed, Big kept, Parent kept because child has 5
-	result = filterNavTagsByMinPosts(nodes, 5)
-	if len(result) != 2 {
-		t.Errorf("expected 2 with minPosts=5, got %d", len(result))
-	}
-
-	// minPosts=99 → all removed
-	result = filterNavTagsByMinPosts(nodes, 99)
-	if len(result) != 0 {
-		t.Errorf("expected 0 with minPosts=99, got %d", len(result))
-	}
-}
-
 // TestNullInt64Coverage covers the 66.7% mapper function.
 func TestNullInt64Coverage(t *testing.T) {
 	// Valid NullInt64
@@ -115,7 +83,7 @@ func TestBaseURL(t *testing.T) {
 // TestMediaHandler_AnalyzeImageBoost covers additional AnalyzeImage path (with file).
 func TestMediaHandler_AnalyzeImageBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
@@ -129,7 +97,7 @@ func TestMediaHandler_AnalyzeImageBoost(t *testing.T) {
 	writer := multipart.NewWriter(body)
 	part, _ := writer.CreateFormFile("image", "test.jpg")
 	_, _ = part.Write([]byte("fake image data"))
-	writer.Close()
+	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -144,7 +112,7 @@ func TestMediaHandler_AnalyzeImageBoost(t *testing.T) {
 // TestMediaHandler_AnalyzeImageByPathBoost covers additional AnalyzeImageByPath paths.
 func TestMediaHandler_AnalyzeImageByPathBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
@@ -168,7 +136,7 @@ func TestMediaHandler_AnalyzeImageByPathBoost(t *testing.T) {
 // TestTagHandler_GetTagByIDBoost covers GetTagByID error paths.
 func TestTagHandler_GetTagByIDBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -201,7 +169,7 @@ func TestTagHandler_GetTagByIDBoost(t *testing.T) {
 // TestTagHandler_DeleteTagBoost covers DeleteTag error paths.
 func TestTagHandler_DeleteTagBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -223,7 +191,7 @@ func TestTagHandler_DeleteTagBoost(t *testing.T) {
 // TestTagHandler_RecalculateCounts covers 66.7% handler.
 func TestTagHandler_RecalculateCounts(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -243,7 +211,7 @@ func TestTagHandler_RecalculateCounts(t *testing.T) {
 // TestTagHandler_GetTagByIDWithLocation covers tagLocation "found" path.
 func TestTagHandler_GetTagByIDWithLocation(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -290,7 +258,7 @@ func TestTagHandler_ParseMapsCoordsCoverage(t *testing.T) {
 // TestFetchAncestorsMapDirect covers fetchAncestorsMap via direct call.
 func TestFetchAncestorsMapDirect(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'A','a'),(2,'B','b')`)
@@ -308,14 +276,17 @@ func TestFetchAncestorsMapDirect(t *testing.T) {
 // TestGetVersionHandlerBoost covers GetVersion.
 func TestGetVersionHandlerBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	postSvc := services.NewPostService(repo)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, t.TempDir(), "2.0.0")
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "2.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -387,7 +358,7 @@ func TestGetMinTagPostsSetting(t *testing.T) {
 // TestOfflineStatsWithData covers GetOfflineStats with actual media.
 func TestOfflineStatsWithData(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{StoragePath: tmpDir}
@@ -395,7 +366,9 @@ func TestOfflineStatsWithData(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.0.0")
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	// Insert public image media to exercise the inner loop
@@ -414,7 +387,7 @@ func TestOfflineStatsWithData(t *testing.T) {
 // TestOfflineSnapshotWithData covers GetOfflineSnapshot with actual data.
 func TestOfflineSnapshotWithData(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{StoragePath: tmpDir}
@@ -422,7 +395,9 @@ func TestOfflineSnapshotWithData(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.0.0")
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -442,7 +417,7 @@ func TestOfflineSnapshotWithData(t *testing.T) {
 // TestMediaHandler_UploadFileErrors covers upload error paths.
 func TestMediaHandler_UploadFileErrors(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}
 	settingsSvc := services.NewSettingsService(repo)

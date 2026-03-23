@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -50,6 +51,60 @@ func TestMediaService_AnalyzeImage(t *testing.T) {
 
 
 
+
+func TestMediaService_MetadataExtraction(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+
+	ctx := context.Background()
+
+	// 1. Test video detection
+	media, err := service.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("fake-video"),
+		Filename: "test.mp4",
+		MimeType: "video/mp4",
+	})
+	if err != nil {
+		t.Fatalf("Upload video failed: %v", err)
+	}
+	if media.FileType != "video" {
+		t.Errorf("expected video, got %s", media.FileType)
+	}
+
+	// 2. Test audio detection
+	media, err = service.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("fake-audio"),
+		Filename: "test.mp3",
+		MimeType: "audio/mpeg",
+	})
+	if err != nil {
+		t.Fatalf("Upload audio failed: %v", err)
+	}
+	if media.FileType != "audio" {
+		t.Errorf("expected audio, got %s", media.FileType)
+	}
+
+	// 3. Test image with metadata (basic check that it doesn't crash)
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatalf("jpeg.Encode failed: %v", err)
+	}
+	media, err = service.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "test.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("Upload image failed: %v", err)
+	}
+	// Even without real EXIF, it should have some metadata if we added it (though here it might be empty map)
+	// We're mainly checking that the Metadata column exists and can be written to.
+	_ = media.Metadata.Valid
+}
 
 func TestMediaService_Upload(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
@@ -254,6 +309,11 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 		t.Fatalf("UploadFile failed: %v", err)
 	}
 
+	// Create a post using this media as thumbnail
+	barePath := "/" + strings.TrimPrefix(media.OriginalPath, "originals/")
+	_, _ = service.repo.DB().Exec(`INSERT OR IGNORE INTO users (id, username, email, password_hash, display_name) VALUES (1, 'u','e','h','D')`)
+	_, _ = service.repo.DB().Exec(`INSERT INTO posts (title, slug, content, status, author_id, thumbnail_path) VALUES ('PT','pt','C','published',1,?)`, barePath)
+
 	// Force delete thumbnail from disk but keep in DB
 	if media.ThumbnailPath.Valid {
 		_ = os.Remove(filepath.Join(tmpDir, "media", media.ThumbnailPath.String))
@@ -265,6 +325,16 @@ func TestMediaService_RebuildThumbnails(t *testing.T) {
 	}
 	if stats["processed"] != 1 {
 		t.Errorf("expected 1 processed, got %d", stats["processed"])
+	}
+
+	// Verify post thumbnail_path was updated
+	var updatedPath string
+	err = service.repo.DB().QueryRowContext(ctx, "SELECT thumbnail_path FROM posts WHERE slug = 'pt'").Scan(&updatedPath)
+	if err != nil {
+		t.Fatalf("failed to query updated post: %v", err)
+	}
+	if updatedPath != barePath+"?thumb" {
+		t.Errorf("expected post thumbnail_path updated to %s, got %s", barePath+"?thumb", updatedPath)
 	}
 }
 

@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,14 +17,16 @@ type FeedsHandler struct {
 	postService     *services.PostService
 	settingsService *services.SettingsService
 	tagService      *services.TagService
+	cacheService    *services.CacheService
 }
 
-func NewFeedsHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService) *FeedsHandler {
+func NewFeedsHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService, cacheService *services.CacheService) *FeedsHandler {
 	return &FeedsHandler{
 		repo:            repo,
 		postService:     postService,
 		settingsService: settingsService,
 		tagService:      tagService,
+		cacheService:    cacheService,
 	}
 }
 
@@ -53,6 +56,11 @@ func baseURL(c echo.Context) string {
 
 func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	ctx := c.Request().Context()
+
+	// Try cache first (TTL 1 hour)
+	if data, err := h.cacheService.GetWithTTL(ctx, "rss_feed.xml", 1*time.Hour); err == nil {
+		return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", data)
+	}
 
 	settings, _ := h.settingsService.GetAllSettings(ctx)
 	blogTitle := getSettingOr(settings, "blog_title", "Blog")
@@ -113,11 +121,20 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 		items.String(),
 	)
 
+	// Save to cache
+	_ = h.cacheService.Set(ctx, "rss_feed.xml", []byte(xml))
+
 	return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", []byte(xml))
 }
 
 func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	ctx := c.Request().Context()
+
+	// Try cache first (TTL 6 hours)
+	if data, err := h.cacheService.GetWithTTL(ctx, "sitemap.xml", 6*time.Hour); err == nil {
+		return c.Blob(http.StatusOK, "application/xml; charset=utf-8", data)
+	}
+
 	base := baseURL(c)
 	today := time.Now().Format("2006-01-02")
 
@@ -130,7 +147,11 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
+
+	settings, _ := h.settingsService.GetAllSettings(ctx)
+	minPostsStr := getSettingOr(settings, "min_tag_posts_to_show", "0")
+	minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+	excludeIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
 
 	var urls strings.Builder
 	writeURL := func(loc, lastmod, priority string) {
@@ -148,7 +169,7 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	}
 
 	for _, tag := range tags {
-		if !effectivelyHidden[tag.ID] {
+		if !excludeIDs[tag.ID] {
 			writeURL(base+"/tag/"+tag.Slug, today, "0.6")
 		}
 	}
@@ -156,6 +177,9 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 %s</urlset>`, urls.String())
+
+	// Save to cache
+	_ = h.cacheService.Set(ctx, "sitemap.xml", []byte(xml))
 
 	return c.Blob(http.StatusOK, "application/xml; charset=utf-8", []byte(xml))
 }

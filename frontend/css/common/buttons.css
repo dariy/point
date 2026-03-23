@@ -19,7 +19,7 @@
 
 .btn:hover:not(:disabled) {
     box-shadow: var(--shadow);
-    transform: translateY(-1px);
+    transform: translateY(-0.0625rem);
 }
 
 .btn:active:not(:disabled) {

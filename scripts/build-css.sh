@@ -57,6 +57,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/public/header.css \
     "$CSS_DIR"/public/header-tags.css \
     "$CSS_DIR"/public/footer.css \
+    "$CSS_DIR"/public/tag-strip.css \
     "$CSS_DIR"/public/post-grid.css \
     "$CSS_DIR"/public/sidebar.css \
     "$CSS_DIR"/public/single-post.css \

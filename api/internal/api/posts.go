@@ -29,10 +29,13 @@ func NewPostHandler(postService *services.PostService, settingsService *services
 	}
 }
 
-func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string) map[string]interface{} {
-	tagObjs := make([]map[string]interface{}, len(tags))
-	for i, t := range tags {
-		tagObjs[i] = map[string]interface{}{"name": t.Name, "slug": t.Slug}
+func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, excludeIDs map[int64]bool) map[string]interface{} {
+	tagObjs := make([]map[string]interface{}, 0, len(tags))
+	for _, t := range tags {
+		if excludeIDs != nil && excludeIDs[t.ID] {
+			continue
+		}
+		tagObjs = append(tagObjs, map[string]interface{}{"name": t.Name, "slug": t.Slug})
 	}
 	return map[string]interface{}{
 		"id":               post.ID,
@@ -64,7 +67,18 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	}
 	tags, _ := h.postService.GetTagsForPost(ctx, postID)
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	resp := buildPostResponse(post, tags, htmlContent)
+
+	isAdmin := c.Get("user") != nil
+	var excludeTagIDs map[int64]bool
+	if !isAdmin {
+		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
+		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	} else {
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, 0)
+	}
+
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	return resp, nil
@@ -110,9 +124,24 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	if isAdmin {
 		effectiveHiddenPosts, _ = h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
 	}
+
+	var excludeTagIDs map[int64]bool
+	if !isAdmin {
+		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(c.Request().Context(), minPosts)
+	} else {
+		// Even for admin, we might want to exclude _page descendants from grids if requested.
+		// But usually admins see everything. Let's stick to user's "public part" request.
+		// However, the previous change for _page applied to everyone.
+		// I will keep the _page exclusion for everyone if it's considered a grid-only thing.
+		// Actually, let's just use PublicHiddenTagIDs with minPosts=0 for admins to get the _page/hidden logic.
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(c.Request().Context(), 0)
+	}
+
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		resp := postToResponse(p, postTagsMap[p.ID])
+		resp := postToResponse(p, postTagsMap[p.ID], excludeTagIDs)
 		if isAdmin {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}
@@ -144,8 +173,9 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
-	if c.Get("user") == nil {
-		if (strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden")) {
+	isAdmin := c.Get("user") != nil
+	if !isAdmin {
+		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
@@ -159,10 +189,18 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		_ = h.postService.IncrementViewCount(ctx, post.ID)
 	}
 
-	htmlContent, _ := h.postService.RenderContent(post.Content)
+	var excludeTagIDs map[int64]bool
+	if !isAdmin {
+		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
+		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	} else {
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, 0)
+	}
 
-	resp := buildPostResponse(post, tags, htmlContent)
-	if c.Get("user") != nil {
+	htmlContent, _ := h.postService.RenderContent(post.Content)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
+	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
 	return c.JSON(http.StatusOK, resp)
@@ -274,8 +312,9 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
-	if c.Get("user") == nil {
-		if (strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden")) {
+	isAdmin := c.Get("user") != nil
+	if !isAdmin {
+		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
@@ -285,12 +324,21 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 		}
 	}
 
-	htmlContent, _ := h.postService.RenderContent(post.Content)
+	var excludeTagIDs map[int64]bool
+	if !isAdmin {
+		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
+		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	} else {
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, 0)
+	}
 
-	resp := buildPostResponse(post, tags, htmlContent)
-	if c.Get("user") != nil {
+	htmlContent, _ := h.postService.RenderContent(post.Content)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
+	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
+
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -531,7 +579,7 @@ func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
 
 	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	resp := buildPostResponse(post, tags, htmlContent)
+	resp := buildPostResponse(post, tags, htmlContent, nil)
 	resp["preview_mode"] = true
 
 	return c.JSON(http.StatusOK, resp)

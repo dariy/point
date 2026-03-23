@@ -2,7 +2,7 @@
 .tree-view {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.125rem;
 }
 
 .tree-node {
@@ -13,7 +13,7 @@
 .tree-row {
     display: flex;
     align-items: center;
-    padding: 8px 12px;
+    padding: var(--spacing-sm) 0.75rem;
     border-radius: var(--border-radius-sm);
     transition: background-color var(--transition-fast);
     border-bottom: 1px solid var(--border-primary);
@@ -26,14 +26,14 @@
 .tree-toggle {
     background: none;
     border: none;
-    padding: 4px;
+    padding: var(--spacing-xs);
     cursor: pointer;
     color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
     transition: transform var(--transition-fast);
-    width: 24px;
+    width: 1.5rem;
 }
 
 .tree-toggle.expanded {
@@ -41,7 +41,7 @@
 }
 
 .tree-indent {
-    width: 24px;
+    width: 1.5rem;
     flex-shrink: 0;
 }
 
@@ -49,23 +49,23 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--spacing-sm);
 }
 
 .tree-tag-meta {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-right: 16px;
+    gap: var(--spacing-md);
+    margin-right: var(--spacing-md);
     color: var(--text-muted);
     font-size: var(--font-size-xs);
 }
 
 .tree-children {
-    padding-left: 24px;
+    padding-left: var(--spacing-lg);
     display: none;
     border-left: 1px dashed var(--border-primary);
-    margin-left: 11px;
+    margin-left: 0.6875rem;
 }
 
 .tree-children.expanded {
@@ -74,24 +74,24 @@
 
 .tree-actions {
     display: flex;
-    gap: 4px;
+    gap: var(--spacing-xs);
 }
 
 /* Tabs styles if not already present elsewhere */
 .tabs {
     display: flex;
-    gap: 4px;
+    gap: var(--spacing-xs);
     border-bottom: 1px solid var(--border-primary);
     margin-bottom: 1rem;
 }
 
 .tab-link {
-    padding: 8px 16px;
+    padding: var(--spacing-sm) var(--spacing-md);
     border: none;
     background: none;
     cursor: pointer;
     color: var(--text-secondary);
-    border-bottom: 2px solid transparent;
+    border-bottom: 0.125rem solid transparent;
     font-weight: 500;
 }
 

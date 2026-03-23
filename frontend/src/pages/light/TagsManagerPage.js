@@ -174,7 +174,7 @@ export default class TagsManagerPage extends Component {
         row.dataset.parentNames.includes(q);
       const rowParentIds = row.dataset.parentIds ? row.dataset.parentIds.split(',').map(Number) : [];
       const parentMatch = filterIds.length === 0 || filterIds.every(id => rowParentIds.includes(id));
-      row.style.display = (textMatch && parentMatch) ? '' : 'none';
+      row.classList.toggle('hidden', !(textMatch && parentMatch));
     });
   }
 
@@ -199,7 +199,7 @@ export default class TagsManagerPage extends Component {
     const btn = this.$('.tm-clear-filters');
     const hasFilters = (this._listSearch || '') || this._listFilterParents.length > 0;
     if (btn) {
-      btn.style.display = hasFilters ? '' : 'none';
+      btn.classList.toggle('hidden', !hasFilters);
     } else if (hasFilters) {
       // Re-render list to show the clear button
       const listWrap = this.$('.tm-list-filter-bar');
@@ -225,7 +225,7 @@ export default class TagsManagerPage extends Component {
     this._updateFilterChips();
     this._applyListFilter();
     const btn = this.$('.tm-clear-filters');
-    if (btn) btn.style.display = 'none';
+    if (btn) btn.classList.add('hidden');
   }
 
   _renderSortHeader(field, label, className = '', title = '') {
@@ -254,8 +254,8 @@ export default class TagsManagerPage extends Component {
   _buildTree(tags) {
     // Only _root and _pending are shown as top-level nodes.
     // All other system tags (_system, _hidden, _hide_posts, etc.) are excluded.
-    const VISIBLE_SYSTEM = new Set(['_root', '_pending']);
-    const HIDDEN_SYSTEM  = new Set(['_system', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related']);
+    // const VISIBLE_SYSTEM = new Set(['_root', '_pending']);
+    const HIDDEN_SYSTEM  = new Set(['_system', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors']);
 
     // Build adjacency map across all tags so user-tag subtrees work correctly.
     const tagById = new Map(tags.map(t => [t.id, t]));
@@ -616,8 +616,8 @@ export default class TagsManagerPage extends Component {
       `        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description\u2026">${escapeHtml(f.description || '')}</textarea>`,
       '      </div>',
 
-      // System flag tags — always inline, right below description
-      this._renderSystemFlags(selParents),
+      // Features section — hidden for system tags
+      ...(isSystem ? [] : [this._renderFeaturesSection(selParents)]),
 
       // Parents (collapsible) — hidden for system tags (parents are fixed)
       ...(isSystem ? [] : [
@@ -626,7 +626,7 @@ export default class TagsManagerPage extends Component {
         `          <span class="tm-section-arrow">\u25b6</span> Parents`,
         `          <span class="tm-section-count">${visibleParentCount > 0 ? visibleParentCount : ''}</span>`,
         '        </button>',
-        '        <div class="tm-section-body" id="parents-body" style="display:none">',
+        '        <div class="tm-section-body hidden" id="parents-body">',
         '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags\u2026" autocomplete="off">',
         '          <div class="tag-toggles-container">',
         this._renderTagToggles('parent_ids', this.state.tags, selfId, selParents),
@@ -641,7 +641,7 @@ export default class TagsManagerPage extends Component {
       `          <span class="tm-section-arrow">\u25b6</span> Children`,
       `          <span class="tm-section-count">${selChildren.length > 0 ? selChildren.length : ''}</span>`,
       '        </button>',
-      '        <div class="tm-section-body" id="children-body" style="display:none">',
+      '        <div class="tm-section-body hidden" id="children-body">',
       '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags\u2026" autocomplete="off">',
       '          <div class="tag-toggles-container">',
       this._renderTagToggles('child_ids', this.state.tags.filter(t => !t.is_system), selfId, selChildren),
@@ -656,7 +656,7 @@ export default class TagsManagerPage extends Component {
         '          <span class="tm-section-arrow">\u25b6</span> Map Coordinates',
         `          <span class="tm-section-count">${existingLoc ? '\ud83d\udccd' : ''}</span>`,
         '        </button>',
-        '        <div class="tm-section-body" id="coords-body" style="display:none">',
+        '        <div class="tm-section-body hidden" id="coords-body">',
         '          <div class="input-with-btn">',
         `            <input type="text" id="coordinates-input" class="form-input" placeholder="Paste a Maps link, \u201c45.507\u00b0 N, 73.554\u00b0 W\u201d, or leave blank to geocode by name">`,
         `            <button type="button" id="gmaps-parse-btn" class="btn btn-secondary">${isEdit ? 'Parse / Geocode' : 'Parse'}</button>`,
@@ -712,8 +712,8 @@ export default class TagsManagerPage extends Component {
         const targetId = btn.dataset.target;
         const body = modal.querySelector(`#${targetId}`);
         const arrow = btn.querySelector('.tm-section-arrow');
-        const isOpen = body.style.display !== 'none';
-        body.style.display = isOpen ? 'none' : 'block';
+        const isOpen = !body.classList.contains('hidden');
+        body.classList.toggle('hidden', isOpen);
         arrow.textContent = isOpen ? '\u25b6' : '\u25bc';
       });
     });
@@ -775,20 +775,34 @@ export default class TagsManagerPage extends Component {
    * as an inline pill strip, positioned below Description in the modal.
    * The checkboxes use name="parent_ids" so they're included in the save payload.
    */
-  _renderSystemFlags(selectedIds) {
-    const FLAG_SLUGS = ['_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related'];
+  _renderFeaturesSection(selectedIds) {
+    const FLAGS = [
+      { slug: '_no_ancestors',      label: 'Hide from ancestor flyout', help: 'Check to exclude this tag from the ancestor chain shown in post card flyouts.' },
+      { slug: '_hidden',            label: 'Hidden',                    help: 'Hide this tag from public views (tag cloud, tag pages).' },
+      { slug: '_hide_posts',        label: 'Hide posts',                help: 'Hide all posts tagged with this from public views.' },
+      { slug: '_is_in_breadcrumbs', label: 'Include in breadcrumbs',    help: 'Show this tag in the breadcrumb navigation path.' },
+      { slug: '_with_related',      label: 'Show related tags',         help: 'Display related tags as children in the post sidebar.' },
+    ];
     const selectedSet = new Set(selectedIds);
-    const flagTags = FLAG_SLUGS.map(s => this.state.tags.find(t => t.slug === s)).filter(Boolean);
-    if (!flagTags.length) return '';
-    const pills = flagTags.map(t =>
-      `<span class="tag-toggle-system-item tm-system-node">
-        <label class="tag-toggle">
-          <input type="checkbox" name="parent_ids" value="${t.id}"${selectedSet.has(t.id) ? ' checked' : ''}>
-          <span>${escapeHtml(t.name)}</span>
+    const rows = FLAGS
+      .map(f => {
+        const tag = this.state.tags.find(t => t.slug === f.slug);
+        if (!tag) return '';
+        return `<div class="tm-feature-row">
+        <label class="tm-checkbox-label">
+          <input type="checkbox" name="parent_ids" value="${tag.id}"${selectedSet.has(tag.id) ? ' checked' : ''}>
+          ${escapeHtml(f.label)}
+          <span class="tm-help-icon" title="${escapeHtml(f.help)}">?</span>
         </label>
-      </span>`
-    ).join('');
-    return `<div class="tag-toggle-system-strip tm-flags-inline-strip">${pills}</div>`;
+      </div>`;
+      })
+      .filter(Boolean)
+      .join('');
+    if (!rows) return '';
+    return `<div class="tm-features-section">
+      <p class="tm-features-heading">Features</p>
+      ${rows}
+    </div>`;
   }
 
   /** Render tag-badge toggle checkboxes for parent/children selection (tree only).
@@ -796,7 +810,7 @@ export default class TagsManagerPage extends Component {
    * Excluded: _system, _pending, and the four flag tags (shown inline above).
    */
   _renderTagToggles(inputName, allTags, selfId, selectedIds) {
-    const EXCLUDE = new Set(['_system', '_pending', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related']);
+    const EXCLUDE = new Set(['_system', '_pending', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors']);
 
     const available = allTags.filter(t => t.id !== selfId && !EXCLUDE.has(t.slug));
     if (!available.length) return '<span class="tag-toggles-empty">No other tags available.</span>';
@@ -851,7 +865,7 @@ export default class TagsManagerPage extends Component {
         ? `<button type="button" class="tag-toggle-btn" data-tt-toggle="${nodeId}" aria-expanded="${expanded}">${expanded ? '\u25bc' : '\u25b6'}</button>`
         : `<span class="tag-toggle-btn-spacer"></span>`;
       const childList = hasKids
-        ? `<ul class="tag-toggle-tree level-${level + 1}" id="${nodeId}"${expanded ? '' : ' style="display:none"'}>${kids.map(k => renderNode(k, level + 1)).join('')}</ul>`
+        ? `<ul class="tag-toggle-tree level-${level + 1}${expanded ? '' : ' hidden'}" id="${nodeId}">${kids.map(k => renderNode(k, level + 1)).join('')}</ul>`
         : '';
       return `<li class="tag-toggle-node${t.is_system ? ' tm-system-node' : ''}">
         <div class="tag-toggle-row">
@@ -895,8 +909,8 @@ export default class TagsManagerPage extends Component {
       btn.addEventListener('click', () => {
         const list = modal.querySelector(`#${btn.dataset.ttToggle}`);
         if (!list) return;
-        const open = list.style.display !== 'none';
-        list.style.display = open ? 'none' : '';
+        const open = !list.classList.contains('hidden');
+        list.classList.toggle('hidden', open);
         btn.setAttribute('aria-expanded', String(!open));
         btn.textContent = open ? '\u25b6' : '\u25bc';
       });
@@ -923,12 +937,12 @@ export default class TagsManagerPage extends Component {
         const allNodes = Array.from(container.querySelectorAll('.tag-toggle-node'));
         const allLists = Array.from(container.querySelectorAll('.tag-toggle-tree'));
         if (!q) {
-          allNodes.forEach(n => (n.style.display = ''));
-          allLists.forEach(l => (l.style.display = ''));
+          allNodes.forEach(n => n.classList.remove('hidden'));
+          allLists.forEach(l => l.classList.remove('hidden'));
           return;
         }
-        allNodes.forEach(n => (n.style.display = 'none'));
-        allLists.forEach(l => (l.style.display = 'none'));
+        allNodes.forEach(n => n.classList.add('hidden'));
+        allLists.forEach(l => l.classList.add('hidden'));
         // Show matching nodes and all their ancestors.
         allNodes.forEach(n => {
           const label = n.querySelector(':scope > .tag-toggle-row .tag-toggle span');
@@ -936,7 +950,7 @@ export default class TagsManagerPage extends Component {
             let el = n;
             while (el && el !== container) {
               if (el.classList.contains('tag-toggle-node') || el.classList.contains('tag-toggle-tree')) {
-                el.style.display = '';
+                el.classList.remove('hidden');
               }
               el = el.parentElement;
             }
@@ -1012,11 +1026,11 @@ export default class TagsManagerPage extends Component {
     const fd = new FormData(form);
 
     const payload = {
-      name:        (fd.get('name') || '').trim(),
-      slug:        (fd.get('slug') || '').trim(),
-      description: (fd.get('description') || '').trim(),
-      custom_url:  '',
-      sort_order:  null,
+      name:              (fd.get('name') || '').trim(),
+      slug:              (fd.get('slug') || '').trim(),
+      description:       (fd.get('description') || '').trim(),
+      custom_url:        '',
+      sort_order:        null,
       parent_ids:  fd.getAll('parent_ids').map(v => parseInt(v, 10)),
       child_ids:   fd.getAll('child_ids').map(v => parseInt(v, 10)),
       locations:   (() => {

@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"sync"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -24,8 +25,10 @@ import (
 )
 
 type PostService struct {
-	repo *repository.Repository
-	md   goldmark.Markdown
+	repo       *repository.Repository
+	md         goldmark.Markdown
+	viewBuffer map[int64]int
+	viewMu     sync.Mutex
 }
 
 func NewPostService(repo *repository.Repository) *PostService {
@@ -47,8 +50,9 @@ func NewPostService(repo *repository.Repository) *PostService {
 	)
 
 	return &PostService{
-		repo: repo,
-		md:   md,
+		repo:       repo,
+		md:         md,
+		viewBuffer: make(map[int64]int),
 	}
 }
 
@@ -219,7 +223,34 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 }
 
 func (s *PostService) IncrementViewCount(ctx context.Context, id int64) error {
-	return s.repo.IncrementPostViewCount(ctx, id)
+	s.viewMu.Lock()
+	defer s.viewMu.Unlock()
+	s.viewBuffer[id]++
+	return nil
+}
+
+func (s *PostService) FlushViewCounts(ctx context.Context) error {
+	s.viewMu.Lock()
+	if len(s.viewBuffer) == 0 {
+		s.viewMu.Unlock()
+		return nil
+	}
+	// Copy and clear the buffer to minimize lock time
+	toFlush := s.viewBuffer
+	s.viewBuffer = make(map[int64]int)
+	s.viewMu.Unlock()
+
+	for id, count := range toFlush {
+		if err := s.repo.AddPostViewCount(ctx, models.AddPostViewCountParams{
+			ID:        id,
+			ViewCount: int64(count),
+		}); err != nil {
+			// On error, we might lose these counts or we could try to re-add them to the buffer
+			// For now, just log the error.
+			fmt.Printf("failed to flush view count for post %d: %v\n", id, err)
+		}
+	}
+	return nil
 }
 
 func (s *PostService) GetTagsForPost(ctx context.Context, postID int64) ([]models.Tag, error) {
