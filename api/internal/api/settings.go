@@ -29,9 +29,10 @@ var publicSettingKeys = map[string]bool{
 	"use_thumbnails":      true,
 	"about_post_id":       true,
 	"multi_user_mode":     true,
-	"show_tag_cloud":      true,
-	"enable_map":          true,
-	"enable_backup":       true,
+	"show_tag_cloud":          true,
+	"enable_map":              true,
+	"enable_backup":           true,
+	"immersive_nav_direction": true,
 }
 
 func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
