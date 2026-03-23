@@ -294,82 +294,10 @@
     margin-bottom: var(--spacing-sm);
 }
 
-.post-card-tags {
-    display: flex;
-    justify-content: flex-start;
-    flex-wrap: nowrap;
-    gap: var(--spacing-sm);
-    margin-top: auto;
-    overflow-x: auto;
-    scrollbar-width: none;          /* Firefox */
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;            /* horizontal swipe stays on the strip */
-    overscroll-behavior-x: contain; /* prevent scroll chaining to page */
-    padding-block: 0.1875rem;             /* room for tag borders/shadows at top & bottom */
+/* Track wrapper — provides the relative-positioning context for scroll arrow buttons */
+.post-card-tags-track {
+    margin-top: auto;               /* push tags to bottom of card flex */
 }
-
-.post-card-tags::-webkit-scrollbar {
-    display: none;                  /* Chrome/Safari */
-}
-
-/* Dynamic edge fades — JS adds these classes based on scroll position */
-.post-card-tags.can-scroll-right {
-    mask-image: linear-gradient(to right, black 85%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-}
-.post-card-tags.can-scroll-left {
-    mask-image: linear-gradient(to right, transparent 0%, black 15%);
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%);
-}
-.post-card-tags.can-scroll-left.can-scroll-right {
-    mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
-}
-
-.post-card-tags .tag-link {
-    backdrop-filter: blur(0.5rem);
-    -webkit-backdrop-filter: blur(0.5rem);
-}
-
-.post-card-tags .tag-link:hover {
-    background-color: var(--bg-overlay-hover);
-    border-color: var(--color-primary);
-    color: white;
-}
-
-/* Light theme tag style */
-[data-theme="light"] .post-card-tags .tag-link {
-    background-color: var(--bg-overlay);
-    color: var(--text-primary);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* Dark theme tag style */
-[data-theme="dark"] .post-card-tags .tag-link {
-    background-color: var(--bg-overlay);
-    color: var(--text-immersive);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Overlay style (on images) */
-.post-card-content.overlay .post-card-tags .tag-link {
-    background-color: var(--bg-overlay);
-    color: var(--text-immersive);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.post-card-content.overlay .post-card-tags .tag-link:hover {
-    background-color: var(--bg-overlay-hover);
-    border-color: var(--color-primary);
-    color: white;
-}
-
-/* Light theme overlay style */
-/*[data-theme="light"] .post-card-content.overlay .post-card-tags .tag-link {
-    background-color: var(--bg-overlay);
-    color: var(--text-immersive);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-}*/
 
 /* ===========================
    Post Card Tag Flyout

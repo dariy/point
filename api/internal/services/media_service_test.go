@@ -103,9 +103,7 @@ func TestMediaService_MetadataExtraction(t *testing.T) {
 	}
 	// Even without real EXIF, it should have some metadata if we added it (though here it might be empty map)
 	// We're mainly checking that the Metadata column exists and can be written to.
-	if !media.Metadata.Valid {
-		// It's okay if it's not valid for a generated image with no EXIF
-	}
+	_ = media.Metadata.Valid
 }
 
 func TestMediaService_Upload(t *testing.T) {

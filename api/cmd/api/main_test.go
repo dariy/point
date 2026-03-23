@@ -81,7 +81,7 @@ func TestSecurityHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create repo: %v", err)
 	}
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
@@ -123,7 +123,7 @@ func TestCustomErrorHandlerInMain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create repo: %v", err)
 	}
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)

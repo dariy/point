@@ -83,7 +83,7 @@ func TestBaseURL(t *testing.T) {
 // TestMediaHandler_AnalyzeImageBoost covers additional AnalyzeImage path (with file).
 func TestMediaHandler_AnalyzeImageBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
@@ -97,7 +97,7 @@ func TestMediaHandler_AnalyzeImageBoost(t *testing.T) {
 	writer := multipart.NewWriter(body)
 	part, _ := writer.CreateFormFile("image", "test.jpg")
 	_, _ = part.Write([]byte("fake image data"))
-	writer.Close()
+	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -112,7 +112,7 @@ func TestMediaHandler_AnalyzeImageBoost(t *testing.T) {
 // TestMediaHandler_AnalyzeImageByPathBoost covers additional AnalyzeImageByPath paths.
 func TestMediaHandler_AnalyzeImageByPathBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
@@ -136,7 +136,7 @@ func TestMediaHandler_AnalyzeImageByPathBoost(t *testing.T) {
 // TestTagHandler_GetTagByIDBoost covers GetTagByID error paths.
 func TestTagHandler_GetTagByIDBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -169,7 +169,7 @@ func TestTagHandler_GetTagByIDBoost(t *testing.T) {
 // TestTagHandler_DeleteTagBoost covers DeleteTag error paths.
 func TestTagHandler_DeleteTagBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -191,7 +191,7 @@ func TestTagHandler_DeleteTagBoost(t *testing.T) {
 // TestTagHandler_RecalculateCounts covers 66.7% handler.
 func TestTagHandler_RecalculateCounts(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -211,7 +211,7 @@ func TestTagHandler_RecalculateCounts(t *testing.T) {
 // TestTagHandler_GetTagByIDWithLocation covers tagLocation "found" path.
 func TestTagHandler_GetTagByIDWithLocation(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
@@ -258,7 +258,7 @@ func TestTagHandler_ParseMapsCoordsCoverage(t *testing.T) {
 // TestFetchAncestorsMapDirect covers fetchAncestorsMap via direct call.
 func TestFetchAncestorsMapDirect(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'A','a'),(2,'B','b')`)
@@ -276,7 +276,7 @@ func TestFetchAncestorsMapDirect(t *testing.T) {
 // TestGetVersionHandlerBoost covers GetVersion.
 func TestGetVersionHandlerBoost(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir()}
 	settingsSvc := services.NewSettingsService(repo)
@@ -358,7 +358,7 @@ func TestGetMinTagPostsSetting(t *testing.T) {
 // TestOfflineStatsWithData covers GetOfflineStats with actual media.
 func TestOfflineStatsWithData(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{StoragePath: tmpDir}
@@ -387,7 +387,7 @@ func TestOfflineStatsWithData(t *testing.T) {
 // TestOfflineSnapshotWithData covers GetOfflineSnapshot with actual data.
 func TestOfflineSnapshotWithData(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{StoragePath: tmpDir}
@@ -417,7 +417,7 @@ func TestOfflineSnapshotWithData(t *testing.T) {
 // TestMediaHandler_UploadFileErrors covers upload error paths.
 func TestMediaHandler_UploadFileErrors(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}
 	settingsSvc := services.NewSettingsService(repo)
