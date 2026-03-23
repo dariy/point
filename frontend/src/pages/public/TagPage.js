@@ -209,10 +209,6 @@ export default class TagPage extends Component {
                     <div class="post-card-slot"></div>
                   </div>
                 `;
-                previewEl.style.position = 'absolute';
-                previewEl.style.top = '0';
-                previewEl.style.width = '100%';
-                gridMount.parentElement.style.position = 'relative';
                 gridMount.parentElement.appendChild(previewEl);
                 
                 const targetPage = dx < 0 ? pagination.page + 1 : pagination.page - 1;

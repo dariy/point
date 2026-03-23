@@ -77,131 +77,56 @@ func ensureSecretKey(ctx context.Context, cfg *config.Config, repo *repository.R
 	return nil
 }
 
-func main() {
-	// Load configuration
-	cfg, err := config.LoadConfig(".")
-	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
-	}
+type AppServices struct {
+	Settings  *services.SettingsService
+	Auth      *services.AuthService
+	Tag       *services.TagService
+	Post      *services.PostService
+	Media     *services.MediaService
+	System    *services.SystemService
+	Cache     *services.CacheService
+	Scheduler *services.SchedulerService
+}
 
-	// Initialize repository
-	repo, err := repository.NewRepository(cfg.DatabaseURL)
-	if err != nil {
-		log.Fatalf("failed to initialize repository: %v", err)
-	}
-	defer func() {
-		if err := repo.Close(); err != nil {
-			log.Printf("error closing repository: %v", err)
-		}
-	}()
-
-	// Ensure media directories exist
-	for _, dir := range []string{"originals", "thumbnails"} {
-		path := filepath.Join(cfg.StoragePath, "media", dir)
-		if err := os.MkdirAll(path, 0755); err != nil {
-			log.Printf("warning: could not create media dir %s: %v", path, err)
-		}
-	}
-
-	// Apply pending DB migrations.
-	ctx := context.Background()
-	migrations := []struct{ name, sql string }{
-		{
-			"add_tags_include_in_breadcrumbs",
-			`ALTER TABLE tags ADD COLUMN include_in_breadcrumbs BOOLEAN NOT NULL DEFAULT 1`,
-		},
-		{
-			"add_tags_sort_order",
-			`ALTER TABLE tags ADD COLUMN sort_order INTEGER`,
-		},
-		{
-			"add_media_is_public",
-			`ALTER TABLE media ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`,
-		},
-		{
-			"create_media_visibility_log",
-			`CREATE TABLE IF NOT EXISTS media_visibility_log (
-				id         INTEGER PRIMARY KEY AUTOINCREMENT,
-				media_id   INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
-				is_public  INTEGER NOT NULL,
-				changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				post_id    INTEGER REFERENCES posts(id) ON DELETE SET NULL
-			)`,
-		},
-		{
-			"create_media_visibility_log_index",
-			`CREATE INDEX IF NOT EXISTS idx_media_visibility_log_media_id ON media_visibility_log(media_id)`,
-		},
-		{
-			"create_tag_locations_table",
-			`CREATE TABLE IF NOT EXISTS tag_locations (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				tag_id INTEGER NOT NULL UNIQUE REFERENCES tags(id) ON DELETE CASCADE,
-				latitude FLOAT NOT NULL,
-				longitude FLOAT NOT NULL
-			)`,
-		},
-		{
-			"create_tag_locations_index",
-			`CREATE INDEX IF NOT EXISTS idx_tag_locations_tag_id ON tag_locations(tag_id)`,
-		},
-		{
-			"normalize_post_status_case",
-			`UPDATE posts SET status = LOWER(status) WHERE status != LOWER(status)`,
-		},
-	}
-	for _, m := range migrations {
-		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
-			log.Printf("warning: migration %q: %v", m.name, err)
-		}
-	}
-
-	// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
-	if err := repo.MigrateFlagsToSystemTags(ctx); err != nil {
-		log.Printf("warning: system_tags_phase_a: %v", err)
-	}
-	// Phase B: rebuild tags table to drop the now-migrated boolean columns.
-	if err := repo.RebuildTagsTableDropBooleans(ctx); err != nil {
-		log.Printf("warning: system_tags_phase_b: %v", err)
-	}
-
-	// Ensure the _pending system tag exists (handles name-conflict from pre-system-tags era).
-	if err := repo.EnsurePendingSystemTag(ctx); err != nil {
-		log.Printf("warning: ensure_pending_system_tag: %v", err)
-	}
-
-	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
-	if err := repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
-		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
-		log.Printf("warning: migration %q: %v", "rename_system_tags_to_slug", err)
-	}
-
-	// Ensure a secret key is available for session signing.
-	if err := ensureSecretKey(ctx, &cfg, repo); err != nil {
-		log.Fatalf("failed to ensure secret key: %v", err)
-	}
-
-	// Initialize Echo
-	e := echo.New()
-	e.HideBanner = true
-
-	// Services
+func initServices(cfg *config.Config, repo *repository.Repository) *AppServices {
 	settingsService := services.NewSettingsService(repo)
 	authService := services.NewAuthService(repo)
 	tagService := services.NewTagService(repo)
 	postService := services.NewPostService(repo)
-	mediaService := services.NewMediaService(repo, &cfg, settingsService, tagService)
+	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
+	systemService := services.NewSystemService(repo, cfg.StoragePath)
+	cacheService := services.NewCacheService(cfg.StoragePath)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService)
+
+	return &AppServices{
+		Settings:  settingsService,
+		Auth:      authService,
+		Tag:       tagService,
+		Post:      postService,
+		Media:     mediaService,
+		System:    systemService,
+		Cache:     cacheService,
+		Scheduler: schedulerService,
+	}
+}
+
+func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices) *echo.Echo {
+	// Initialize Echo
+
+	e := echo.New()
+	e.HideBanner = true
+	e.HTTPErrorHandler = api.CustomHTTPErrorHandler
 
 	// Handlers
-	authHandler := api.NewAuthHandler(authService, &cfg)
-	tagHandler := api.NewTagHandler(tagService, settingsService)
-	postHandler := api.NewPostHandler(postService, settingsService, mediaService, tagService)
-	mediaHandler := api.NewMediaHandler(mediaService, settingsService)
-	settingsHandler := api.NewSettingsHandler(settingsService)
-	systemHandler := api.NewSystemHandler(repo, mediaService, postService, settingsService, tagService, cfg.StoragePath, cfg.AppVersion)
-	feedsHandler := api.NewFeedsHandler(repo, postService, tagService, settingsService)
-	pagesHandler := api.NewPagesHandler(repo, postService, tagService, settingsService)
-	setupHandler := api.NewSetupHandler(authService, settingsService, repo)
+	authHandler := api.NewAuthHandler(svcs.Auth, &cfg)
+	tagHandler := api.NewTagHandler(svcs.Tag, svcs.Settings)
+	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
+	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
+	settingsHandler := api.NewSettingsHandler(svcs.Settings)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
+	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
+	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
+	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 
 	// Global middleware
 	e.Use(middleware.RequestLogger())
@@ -213,10 +138,19 @@ func main() {
 		AllowCredentials: true,
 	}))
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:      "1; mode=block",
-		ContentTypeNosniff: "nosniff",
-		XFrameOptions:      "DENY",
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "DENY",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'",
+		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
+	// Extra security headers not covered by middleware.Secure
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Response().Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+			return next(c)
+		}
+	})
 	// Prevent Safari on iOS from serving stale JS/CSS after a redeploy.
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -249,7 +183,7 @@ func main() {
 
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(authService))
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(svcs.Auth))
 
 	// ── Setup Routes (unauthenticated — first-run wizard) ──────────────────────
 	e.GET("/api/setup/status", setupHandler.SetupStatus)
@@ -259,97 +193,97 @@ func main() {
 	authGroup := e.Group("/api/auth")
 	authGroup.POST("/login", authHandler.Login)
 	authGroup.POST("/logout", authHandler.Logout)
-	authGroup.GET("/me", authHandler.Me, api.AuthMiddleware(authService))
-	authGroup.POST("/change-password", authHandler.ChangePassword, api.AuthMiddleware(authService))
-	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(authService))
-	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(authService))
-	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(authService))
+	authGroup.GET("/me", authHandler.Me, api.AuthMiddleware(svcs.Auth))
+	authGroup.POST("/change-password", authHandler.ChangePassword, api.AuthMiddleware(svcs.Auth))
+	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(svcs.Auth))
+	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(svcs.Auth))
+	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth))
 
 	// ── Post Routes ────────────────────────────────────────────────────────────
 	postsGroup := e.Group("/api/posts")
-	postsGroup.GET("", postHandler.ListPosts, api.OptionalAuthMiddleware(authService))
-	postsGroup.POST("", postHandler.CreatePost, api.AuthMiddleware(authService))
-	postsGroup.POST("/audio", postHandler.CreateAudioPost, api.AuthMiddleware(authService))
-	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(authService))
-	postsGroup.GET("/:slug/page", postHandler.GetPostPage, api.OptionalAuthMiddleware(authService))
-	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(authService))
-	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(authService))
-	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(authService))
-	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(authService))
-	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(authService))
-	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(authService))
-	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(authService))
-	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(authService))
+	postsGroup.GET("", postHandler.ListPosts, api.OptionalAuthMiddleware(svcs.Auth))
+	postsGroup.POST("", postHandler.CreatePost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.POST("/audio", postHandler.CreateAudioPost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(svcs.Auth))
+	postsGroup.GET("/:slug/page", postHandler.GetPostPage, api.OptionalAuthMiddleware(svcs.Auth))
+	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(svcs.Auth))
+	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(svcs.Auth))
+	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth))
+	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth))
 
 		// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")
-	tagsGroup.GET("", tagHandler.ListTags, api.OptionalAuthMiddleware(authService))
-	tagsGroup.GET("/cloud", tagHandler.GetTagCloud, api.OptionalAuthMiddleware(authService))
-	tagsGroup.POST("", tagHandler.CreateTag, api.AuthMiddleware(authService))
-	tagsGroup.POST("/recalculate-counts", tagHandler.RecalculateCounts, api.AuthMiddleware(authService))
-	tagsGroup.GET("/id/:id", tagHandler.GetTagByID, api.OptionalAuthMiddleware(authService))
-	tagsGroup.GET("/slug/:slug", tagHandler.GetTagBySlug, api.OptionalAuthMiddleware(authService))
-	tagsGroup.GET("/slug/:slug/posts", tagHandler.GetPostsByTag, api.OptionalAuthMiddleware(authService))
-	tagsGroup.PUT("/:id", tagHandler.UpdateTag, api.AuthMiddleware(authService))
-	tagsGroup.DELETE("/:id", tagHandler.DeleteTag, api.AuthMiddleware(authService))
-	tagsGroup.POST("/:id/reorder", tagHandler.ReorderTag, api.AuthMiddleware(authService))
-	tagsGroup.POST("/:id/geocode", tagHandler.GeocodeTag, api.AuthMiddleware(authService))
+	tagsGroup.GET("", tagHandler.ListTags, api.OptionalAuthMiddleware(svcs.Auth))
+	tagsGroup.GET("/cloud", tagHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth))
+	tagsGroup.POST("", tagHandler.CreateTag, api.AuthMiddleware(svcs.Auth))
+	tagsGroup.POST("/recalculate-counts", tagHandler.RecalculateCounts, api.AuthMiddleware(svcs.Auth))
+	tagsGroup.GET("/id/:id", tagHandler.GetTagByID, api.OptionalAuthMiddleware(svcs.Auth))
+	tagsGroup.GET("/slug/:slug", tagHandler.GetTagBySlug, api.OptionalAuthMiddleware(svcs.Auth))
+	tagsGroup.GET("/slug/:slug/posts", tagHandler.GetPostsByTag, api.OptionalAuthMiddleware(svcs.Auth))
+	tagsGroup.PUT("/:id", tagHandler.UpdateTag, api.AuthMiddleware(svcs.Auth))
+	tagsGroup.DELETE("/:id", tagHandler.DeleteTag, api.AuthMiddleware(svcs.Auth))
+	tagsGroup.POST("/:id/reorder", tagHandler.ReorderTag, api.AuthMiddleware(svcs.Auth))
+	tagsGroup.POST("/:id/geocode", tagHandler.GeocodeTag, api.AuthMiddleware(svcs.Auth))
 
 	// ── Media Routes ───────────────────────────────────────────────────────────
 	mediaGroup := e.Group("/api/media")
-	mediaGroup.GET("", mediaHandler.ListMedia, api.AuthMiddleware(authService))
-	mediaGroup.GET("/folders", mediaHandler.GetMediaFolders, api.AuthMiddleware(authService))
-	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(authService))
-	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(authService))
-	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(authService))
-	mediaGroup.POST("/analyze-path", mediaHandler.AnalyzeImageByPath, api.AuthMiddleware(authService))
-	mediaGroup.GET("/stats", mediaHandler.GetStorageStats, api.AuthMiddleware(authService))
-	mediaGroup.GET("/orphaned", mediaHandler.ListOrphanedMedia, api.AuthMiddleware(authService))
-	mediaGroup.DELETE("/orphaned", mediaHandler.DeleteOrphanedMedia, api.AuthMiddleware(authService))
-	mediaGroup.POST("/bulk-delete", mediaHandler.BulkDeleteMedia, api.AuthMiddleware(authService))
-	mediaGroup.POST("/thumbnails/rebuild", mediaHandler.RebuildThumbnails, api.AuthMiddleware(authService))
-	mediaGroup.GET("/:id", mediaHandler.GetMedia, api.AuthMiddleware(authService))
-	mediaGroup.PUT("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(authService))
-	mediaGroup.PATCH("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(authService))
-	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(authService))
-	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(authService))
-	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(authService))
+	mediaGroup.GET("", mediaHandler.ListMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.GET("/folders", mediaHandler.GetMediaFolders, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/analyze-path", mediaHandler.AnalyzeImageByPath, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.GET("/stats", mediaHandler.GetStorageStats, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.GET("/orphaned", mediaHandler.ListOrphanedMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.DELETE("/orphaned", mediaHandler.DeleteOrphanedMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/bulk-delete", mediaHandler.BulkDeleteMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/thumbnails/rebuild", mediaHandler.RebuildThumbnails, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.GET("/:id", mediaHandler.GetMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.PUT("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.PATCH("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(svcs.Auth))
 
 	// ── Settings Routes ────────────────────────────────────────────────────────
 	settingsGroup := e.Group("/api/settings")
 	settingsGroup.GET("/public", settingsHandler.GetPublicSettings)
-	settingsGroup.GET("", settingsHandler.GetSettings, api.AuthMiddleware(authService))
-	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(authService))
-	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(authService))
-	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(authService))
+	settingsGroup.GET("", settingsHandler.GetSettings, api.AuthMiddleware(svcs.Auth))
+	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth))
+	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
+	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
 
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")
-	systemGroup.GET("/stats", systemHandler.GetStats, api.AuthMiddleware(authService))
-	systemGroup.GET("/logs", systemHandler.GetLogs, api.AuthMiddleware(authService))
-	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(authService))
-	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(authService))
-	systemGroup.POST("/map/update-coords", systemHandler.UpdateMapCoords, api.AuthMiddleware(authService))
-	systemGroup.POST("/media/recalculate-visibility", systemHandler.RecalculateMediaVisibility, api.AuthMiddleware(authService))
-	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(authService))
-	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(authService))
-	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(authService))
-	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(authService))
-	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(authService))
-	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(authService))
-	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(authService))
-	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(authService))
+	systemGroup.GET("/stats", systemHandler.GetStats, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/logs", systemHandler.GetLogs, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(svcs.Auth))
+	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(svcs.Auth))
+	systemGroup.POST("/map/update-coords", systemHandler.UpdateMapCoords, api.AuthMiddleware(svcs.Auth))
+	systemGroup.POST("/media/recalculate-visibility", systemHandler.RecalculateMediaVisibility, api.AuthMiddleware(svcs.Auth))
+	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(svcs.Auth))
+	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(svcs.Auth))
+	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth))
+	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(svcs.Auth))
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")
-	utilGroup.GET("/parse-maps-coords", api.ParseMapsCoords, api.AuthMiddleware(authService))
+	utilGroup.GET("/parse-maps-coords", api.ParseMapsCoords, api.AuthMiddleware(svcs.Auth))
 
 	// ── Page compound data Routes (for SPA) ────────────────────────────────────
 	pagesGroup := e.Group("/api/pages")
-	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(authService))
-	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(authService))
-	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(authService))
-	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(authService))
+	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth))
+	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth))
+	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth))
+	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth))
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
@@ -399,6 +333,144 @@ func main() {
 			"detail": "Frontend not available — build the frontend first",
 		})
 	})
+
+	
+	return e
+}
+
+func main() {
+
+	// Load configuration
+	cfg, err := config.LoadConfig(".")
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+
+	// Initialize repository
+	repo, err := repository.NewRepository(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("failed to initialize repository: %v", err)
+	}
+	defer func() {
+		if err := repo.Close(); err != nil {
+			log.Printf("error closing repository: %v", err)
+		}
+	}()
+
+	// Ensure media directories exist
+	for _, dir := range []string{"originals", "thumbnails"} {
+		path := filepath.Join(cfg.StoragePath, "media", dir)
+		if err := os.MkdirAll(path, 0755); err != nil {
+			log.Printf("warning: could not create media dir %s: %v", path, err)
+		}
+	}
+
+	// Apply pending DB migrations.
+	ctx := context.Background()
+	migrations := []struct{ name, sql string }{
+		{
+			"add_tags_include_in_breadcrumbs",
+			`ALTER TABLE tags ADD COLUMN include_in_breadcrumbs BOOLEAN NOT NULL DEFAULT 1`,
+		},
+		{
+			"add_tags_sort_order",
+			`ALTER TABLE tags ADD COLUMN sort_order INTEGER`,
+		},
+		{
+			"add_media_is_public",
+			`ALTER TABLE media ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`,
+		},
+		{
+			"add_media_metadata",
+			`ALTER TABLE media ADD COLUMN metadata TEXT`,
+		},
+		{
+			"create_media_visibility_log",
+			`CREATE TABLE IF NOT EXISTS media_visibility_log (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				media_id   INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+				is_public  INTEGER NOT NULL,
+				changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				post_id    INTEGER REFERENCES posts(id) ON DELETE SET NULL
+			)`,
+		},
+		{
+			"create_media_visibility_log_index",
+			`CREATE INDEX IF NOT EXISTS idx_media_visibility_log_media_id ON media_visibility_log(media_id)`,
+		},
+		{
+			"create_tag_locations_table",
+			`CREATE TABLE IF NOT EXISTS tag_locations (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				tag_id INTEGER NOT NULL UNIQUE REFERENCES tags(id) ON DELETE CASCADE,
+				latitude FLOAT NOT NULL,
+				longitude FLOAT NOT NULL
+			)`,
+		},
+		{
+			"create_tag_locations_index",
+			`CREATE INDEX IF NOT EXISTS idx_tag_locations_tag_id ON tag_locations(tag_id)`,
+		},
+		{
+			"normalize_post_status_case",
+			`UPDATE posts SET status = LOWER(status) WHERE status != LOWER(status)`,
+		},
+		{
+			"add_tags_show_in_ancestors",
+			`ALTER TABLE tags ADD COLUMN show_in_ancestors INTEGER NOT NULL DEFAULT 1`,
+		},
+		{
+			"drop_tags_show_in_ancestors",
+			`ALTER TABLE tags DROP COLUMN show_in_ancestors`,
+		},
+		{
+			"seed_no_ancestors_system_tag",
+			`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
+			 VALUES ('_no_ancestors', '_no_ancestors', NULL, 0, CURRENT_TIMESTAMP)`,
+		},
+		{
+			"link_no_ancestors_to_system",
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT s.id, c.id FROM tags s, tags c
+			 WHERE s.slug = '_system' AND c.slug = '_no_ancestors'`,
+		},
+	}
+	for _, m := range migrations {
+		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
+			log.Printf("warning: migration %q: %v", m.name, err)
+		}
+	}
+
+	// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
+	if err := repo.MigrateFlagsToSystemTags(ctx); err != nil {
+		log.Printf("warning: system_tags_phase_a: %v", err)
+	}
+	// Phase B: rebuild tags table to drop the now-migrated boolean columns.
+	if err := repo.RebuildTagsTableDropBooleans(ctx); err != nil {
+		log.Printf("warning: system_tags_phase_b: %v", err)
+	}
+
+	// Ensure the _pending system tag exists (handles name-conflict from pre-system-tags era).
+	if err := repo.EnsurePendingSystemTag(ctx); err != nil {
+		log.Printf("warning: ensure_pending_system_tag: %v", err)
+	}
+
+	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
+	if err := repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
+		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
+		log.Printf("warning: migration %q: %v", "rename_system_tags_to_slug", err)
+	}
+
+	// Ensure a secret key is available for session signing.
+	if err := ensureSecretKey(ctx, &cfg, repo); err != nil {
+		log.Fatalf("failed to ensure secret key: %v", err)
+	}
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// Start background scheduler
+	svcs.Scheduler.Start(ctx)
 
 	// Start server
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)

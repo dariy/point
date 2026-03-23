@@ -141,7 +141,7 @@ func TestTagService_TagCloud(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, p2, t1.ID)
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, p3, t2.ID)
 
-	cloud, err := service.GetTagCloud(ctx, 10, false)
+	cloud, err := service.GetTagCloud(ctx, 10, false, 0)
 	if err != nil {
 		t.Fatalf("GetTagCloud failed: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestTagService_Hierarchy(t *testing.T) {
 	}
 
 	// Test GetChildren
-	children, err := service.GetTagChildren(ctx, parent.ID, false)
+	children, err := service.GetTagChildren(ctx, parent.ID, false, 0)
 	if err != nil {
 		t.Errorf("GetTagChildren failed: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestTagService_SetRelationships(t *testing.T) {
 	}
 
 	// Verify via GetTagChildren
-	children, err := svc.GetTagChildren(ctx, parent.ID, false)
+	children, err := svc.GetTagChildren(ctx, parent.ID, false, 0)
 	if err != nil || len(children) != 1 || children[0].ID != child.ID {
 		t.Errorf("GetTagChildren after SetTagParents: got %v, err %v", children, err)
 	}
@@ -240,7 +240,7 @@ func TestTagService_SetRelationships(t *testing.T) {
 		t.Fatalf("SetTagChildren failed: %v", err)
 	}
 
-	children, _ = svc.GetTagChildren(ctx, parent.ID, false)
+	children, _ = svc.GetTagChildren(ctx, parent.ID, false, 0)
 	if len(children) != 2 {
 		t.Errorf("expected 2 children after SetTagChildren, got %d", len(children))
 	}
@@ -507,7 +507,7 @@ func TestTagService_GetHierarchicalNavTags(t *testing.T) {
 	ctx := context.Background()
 
 	// Empty DB
-	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (empty) failed: %v", err)
 	}
@@ -521,28 +521,28 @@ func TestTagService_GetHierarchicalNavTags(t *testing.T) {
 	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 
 	// Public mode (no hidden)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
 	}
 	_ = nodes
 
 	// Admin mode
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (admin) failed: %v", err)
 	}
 	_ = nodes
 
 	// With rootID (children of parent)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, &parent.ID, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, &parent.ID, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (rootID) failed: %v", err)
 	}
 	_ = nodes
 
 	// Public mode (filtering hidden)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
 	}
@@ -606,14 +606,14 @@ func TestTagService_GetTagChildrenPublicOnly(t *testing.T) {
 	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 
 	// Without publicOnly
-	children, err := svc.GetTagChildren(ctx, parent.ID, false)
+	children, err := svc.GetTagChildren(ctx, parent.ID, false, 0)
 	if err != nil {
 		t.Fatalf("GetTagChildren failed: %v", err)
 	}
 	_ = children
 
 	// With publicOnly
-	pubChildren, err := svc.GetTagChildren(ctx, parent.ID, true)
+	pubChildren, err := svc.GetTagChildren(ctx, parent.ID, true, 0)
 	if err != nil {
 		t.Fatalf("GetTagChildren (public) failed: %v", err)
 	}
@@ -639,7 +639,7 @@ func TestTagService_GetHierarchicalNavTagsWithPosts(t *testing.T) {
 	_ = svc.UpdateAllPostCounts(ctx)
 
 	// Admin mode with rootID — child has posts so it appears.
-	nodes, err := svc.GetHierarchicalNavTags(ctx, &parent.ID, false)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, &parent.ID, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags failed: %v", err)
 	}
@@ -648,7 +648,7 @@ func TestTagService_GetHierarchicalNavTagsWithPosts(t *testing.T) {
 	}
 
 	// Public mode - parent tag with child
-	nodes2, err := svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes2, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
 	}
@@ -674,7 +674,7 @@ func TestTagService_GetTagCloudWithData(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,?)`, pid, tag.ID)
 
 	// publicOnly=true with actual candidates (exercises the filtering loop)
-	cloud, err := svc.GetTagCloud(ctx, 10, true)
+	cloud, err := svc.GetTagCloud(ctx, 10, true, 0)
 	if err != nil {
 		t.Fatalf("GetTagCloud(public) failed: %v", err)
 	}
@@ -683,14 +683,14 @@ func TestTagService_GetTagCloudWithData(t *testing.T) {
 	}
 
 	// publicOnly=false
-	cloud2, err := svc.GetTagCloud(ctx, 10, false)
+	cloud2, err := svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil {
 		t.Fatalf("GetTagCloud(admin) failed: %v", err)
 	}
 	_ = cloud2
 
 	// With limit=1 (exercises limit branch)
-	cloud3, err := svc.GetTagCloud(ctx, 1, false)
+	cloud3, err := svc.GetTagCloud(ctx, 1, false, 0)
 	if err != nil {
 		t.Fatalf("GetTagCloud(limit=1) failed: %v", err)
 	}

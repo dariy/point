@@ -37,20 +37,19 @@
     background: rgba(0, 0, 0, 0.3);
     color: white;
     border: none;
-    width: 50px;
-    height: 50px;
+    width: 3.125rem;
+    height: 3.125rem;
     border-radius: 50%;
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     cursor: pointer;
     z-index: 20;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition:
-        background-color var(--transition-theme),
+    transition: background-color var(--transition-theme),
         color var(--transition-theme),
         transform 0.2s ease;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(0.25rem);
 }
 
 .carousel-prev:hover,
@@ -60,37 +59,36 @@
 }
 
 .carousel-prev {
-    left: 20px;
+    left: 1.25rem;
 }
 
 .carousel-next {
-    right: 20px;
+    right: 1.25rem;
 }
 
 .carousel-indicators {
     position: absolute;
-    bottom: 30px;
+    bottom: 1.875rem;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 10px;
+    gap: 0.625rem;
     z-index: 20;
     background: rgba(0, 0, 0, 0.3);
-    padding: 8px 12px;
-    border-radius: 20px;
-    backdrop-filter: blur(4px);
+    padding: var(--spacing-sm) 0.75rem;
+    border-radius: 1.25rem;
+    backdrop-filter: blur(0.25rem);
     transition: background-color var(--transition-theme);
 }
 
 .carousel-dot {
-    width: 10px;
-    height: 10px;
+    width: 0.625rem;
+    height: 0.625rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.5);
     border: none;
     cursor: pointer;
-    transition:
-        background-color var(--transition-theme),
+    transition: background-color var(--transition-theme),
         transform 0.2s ease;
     padding: 0;
 }

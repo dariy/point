@@ -18,7 +18,8 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)

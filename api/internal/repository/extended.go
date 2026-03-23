@@ -26,7 +26,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
         SELECT pt.post_id FROM post_tags pt 
@@ -79,7 +79,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
         SELECT pt.post_id FROM post_tags pt 
@@ -118,7 +118,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
 
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
@@ -190,7 +190,7 @@ WHERE
     AND (CASE
         WHEN ? THEN 1=1
         WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
-        ELSE LOWER(p.status) IN ('published', 'page')
+        ELSE LOWER(p.status) = 'published'
     END)
 
     AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
@@ -822,11 +822,63 @@ func (r *Repository) BackupDB(ctx context.Context, destPath string) error {
 }
 
 // ReplacePostContentPath replaces all occurrences of oldPath with newPath in
-// every post's content column. Returns the number of posts updated.
+// every post's content column, and also updates the thumbnail_path column.
+// Returns the number of posts updated.
 func (r *Repository) ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
+	// Handle content replacement and thumbnail_path replacement in one transaction
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Update content
+	res1, err := tx.ExecContext(ctx,
 		`UPDATE posts SET content = REPLACE(content, ?, ?) WHERE content LIKE '%' || ? || '%'`,
 		oldPath, newPath, oldPath,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	// Update thumbnail_path (exact match)
+	res2, err := tx.ExecContext(ctx,
+		`UPDATE posts SET thumbnail_path = ? WHERE thumbnail_path = ?`,
+		newPath, oldPath,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	// Also handle thumbnail_path with ?thumb suffix
+	oldThumb := oldPath + "?thumb"
+	newThumb := newPath + "?thumb"
+	res3, err := tx.ExecContext(ctx,
+		`UPDATE posts SET thumbnail_path = ? WHERE thumbnail_path = ?`,
+		newThumb, oldThumb,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	n1, _ := res1.RowsAffected()
+	n2, _ := res2.RowsAffected()
+	n3, _ := res3.RowsAffected()
+
+	// Return total affected (might count same post multiple times if both changed, but that's okay for return value)
+	return n1 + n2 + n3, nil
+}
+
+// UpdatePostThumbnailPath updates the thumbnail_path column for all posts
+// currently using oldPath to newPath. Returns number of posts updated.
+func (r *Repository) UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE posts SET thumbnail_path = ? WHERE thumbnail_path = ?`,
+		newPath, oldPath,
 	)
 	if err != nil {
 		return 0, err

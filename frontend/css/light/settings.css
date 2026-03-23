@@ -2,7 +2,7 @@
    Settings & Security
    =========================== */
 .settings-container {
-    max-width: 800px;
+    max-width: 50rem;
     margin: 0 auto;
 }
 
@@ -21,15 +21,15 @@
 .form-section {
     background: var(--surface-card);
     border: 1px solid var(--border-primary);
-    border-radius: 8px;
-    padding: 24px;
-    margin-bottom: 24px;
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
 }
 
 .section-title {
     margin-top: 0;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.625rem;
     border-bottom: 1px solid var(--border-primary);
     color: var(--text-primary);
 }
@@ -37,7 +37,7 @@
 /* Two-column field rows (label | input) */
 .settings-field {
     display: grid;
-    grid-template-columns: 180px 1fr;
+    grid-template-columns: 11.25rem 1fr;
     align-items: center;
     gap: var(--spacing-lg);
     padding: var(--spacing-sm) 0;
@@ -53,7 +53,7 @@
 }
 
 .settings-field-top .settings-field-label {
-    padding-top: calc(var(--spacing-sm) + 2px);
+    padding-top: calc(var(--spacing-sm) + 0.125rem);
 }
 
 .settings-field-label {
@@ -93,7 +93,7 @@
     align-items: center;
     padding: 0.35rem 0.8rem;
     background: var(--surface-card);
-    border: 1.5px solid var(--border-primary);
+    border: 0.09375rem solid var(--border-primary);
     border-radius: 2rem;
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -114,7 +114,7 @@
 }
 
 .setting-pill-input:focus-visible + .setting-pill-label {
-    box-shadow: 0 0 0 2px var(--color-primary-light);
+    box-shadow: 0 0 0 0.125rem var(--color-primary-light);
 }
 
 .save-status {
@@ -132,7 +132,7 @@
 /* Input with Button */
 .input-with-button {
     display: flex;
-    gap: 10px;
+    gap: 0.625rem;
     align-items: center;
 }
 
@@ -141,16 +141,16 @@
 }
 
 .btn-sm {
-    padding: 8px 16px;
+    padding: var(--spacing-sm) var(--spacing-md);
     font-size: 0.9em;
     white-space: nowrap;
 }
 
 /* Connection Test Result */
 .connection-test-result {
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 4px;
+    margin-top: 0.625rem;
+    padding: 0.625rem;
+    border-radius: var(--border-radius-sm);
     font-size: 0.9em;
     display: none;
 }
