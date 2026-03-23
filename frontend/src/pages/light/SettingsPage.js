@@ -15,15 +15,15 @@ import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js'
 const SETTING_GROUPS = [
   {
     title: 'General',
-    keys: ['blog_title', 'blog_subtitle', 'author_name', 'author_bio', 'footer_text', 'about_post_id']
+    keys: ['blog_title', 'blog_subtitle', 'author_name', 'about_post_id']
   },
   {
     title: 'Display',
-    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt']
+    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'immersive_nav_direction', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt']
   },
   {
     title: 'Storage & System',
-    keys: ['storage_quota_mb', 'enable_map', 'enable_backup', 'backup_interval_hours']
+    keys: ['storage_quota_mb', 'enable_map', 'enable_back`up', 'backup_interval_hours']
   },
   {
     title: 'Advanced',
@@ -109,14 +109,19 @@ export default class SettingsPage extends Component {
           </select>
           ${previewLink}
         </div>`;
-      } else if (key === 'author_bio' || key === 'footer_text') {
-        input = `<textarea name="${key}" id="${key}" class="form-textarea" rows="3">${escapeHtml(String(value))}</textarea>`;
       } else if (key === 'default_theme') {
         input = `
           <select name="${key}" id="${key}" class="form-select">
             <option value="light"${value === 'light' ? ' selected' : ''}>Light</option>
             <option value="dark"${value === 'dark' ? ' selected' : ''}>Dark</option>
             <option value="auto"${value === 'auto' ? ' selected' : ''}>Auto (System)</option>
+          </select>`;
+      } else if (key === 'immersive_nav_direction') {
+        const isFeed = value === 'feed';
+        input = `
+          <select name="${key}" id="${key}" class="form-select">
+            <option value="chronological"${!isFeed ? ' selected' : ''}>Chronological (◁ older, ▷ newer)</option>
+            <option value="feed"${isFeed ? ' selected' : ''}>Feed order (◁ newer, ▷ older)</option>
           </select>`;
       } else if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
         input = `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
@@ -129,9 +134,8 @@ export default class SettingsPage extends Component {
       }
 
       if (!isToggle) {
-        const isTextarea = key === 'author_bio' || key === 'footer_text';
         inputs.push(`
-          <div class="settings-field${isTextarea ? ' settings-field-top' : ''}">
+          <div class="settings-field">
             <label class="settings-field-label" for="${key}">${escapeHtml(label)}</label>
             ${input}
           </div>`);
