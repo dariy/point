@@ -11,19 +11,19 @@
 .ops-list {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 24px;
+    gap: 1.25rem;
+    padding: var(--spacing-lg);
 }
 
 .op-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 20px;
+    gap: 1.25rem;
 }
 
 .op-info h4 {
-    margin: 0 0 5px 0;
+    margin: 0 0 0.3125rem 0;
 }
 
 .op-info p {
@@ -35,8 +35,8 @@
 /* Backup Management Styles */
 .backups-list,
 .migrations-list {
-    padding: 16px 24px;
-    max-height: 400px;
+    padding: var(--spacing-md) var(--spacing-lg);
+    max-height: 25rem;
     overflow-y: auto;
 }
 
@@ -45,18 +45,18 @@
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 16px;
-    padding: 16px;
-    margin-bottom: 12px;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    margin-bottom: 0.75rem;
     background: var(--surface-input);
     border: 1px solid var(--border-primary);
-    border-radius: 6px;
+    border-radius: var(--border-radius);
     transition: all 0.2s;
 }
 
 .backup-item:hover {
     border-color: var(--color-primary);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.1);
 }
 
 .backup-item:last-child {
@@ -65,7 +65,7 @@
 
 .backup-info {
     flex: 1;
-    min-width: 250px;
+    min-width: 15.625rem;
 }
 
 .backup-filename {
@@ -73,7 +73,7 @@
     font-weight: 600;
     font-size: 0.95em;
     color: var(--text-primary);
-    margin-bottom: 6px;
+    margin-bottom: 0.375rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -81,7 +81,7 @@
 
 .backup-meta {
     display: flex;
-    gap: 16px;
+    gap: var(--spacing-md);
     font-size: 0.85em;
     color: var(--text-secondary);
 }
@@ -96,7 +96,7 @@
 
 .backup-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-sm);
 }
 
 /* Offline & Sync Styles */
@@ -106,9 +106,9 @@
 }
 
 .progress-bar-bg {
-    height: 8px;
+    height: 0.5rem;
     background: var(--surface-input);
-    border-radius: 4px;
+    border-radius: var(--border-radius-sm);
     overflow: hidden;
     margin-bottom: 0.5rem;
 }
@@ -127,14 +127,14 @@
 .sync-pill {
     display: inline-flex;
     align-items: center;
-    padding: 2px 10px;
-    border-radius: 12px;
+    padding: 0.125rem 0.625rem;
+    border-radius: var(--border-radius-xl);
     font-size: 0.75rem;
     font-weight: 600;
     border: none;
     cursor: pointer;
-    margin-left: 12px;
-    height: 24px;
+    margin-left: 0.75rem;
+    height: 1.5rem;
     white-space: nowrap;
 }
 
@@ -191,7 +191,7 @@
     font-size: 0.8rem;
     background: #fed7aa;
     padding: 0.1em 0.3em;
-    border-radius: 2px;
+    border-radius: 0.125rem;
 }
 
 .sync-error-msg {

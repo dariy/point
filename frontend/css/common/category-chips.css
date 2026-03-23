@@ -44,7 +44,7 @@
 }
 
 .category-chip .hidden-checkbox:focus+.chip-label {
-    box-shadow: 0 0 0 2px var(--color-primary-light);
+    box-shadow: 0 0 0 0.125rem var(--color-primary-light);
 }
 
 .category-chip .chip-label.sub-tag {

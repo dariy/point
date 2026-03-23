@@ -29,14 +29,16 @@ type testHandlers struct {
 	postSvc     *services.PostService
 	authSvc     *services.AuthService
 	mediaSvc    *services.MediaService
+	cacheSvc    *services.CacheService
 	cfg         *config.Config
 }
 
 func setupHandlers(t *testing.T) *testHandlers {
 	t.Helper()
 	repo := setupTestDB(t)
+	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		StoragePath:     t.TempDir(),
+		StoragePath:     tmpDir,
 		ThumbnailWidth:  400,
 		ThumbnailHeight: 300,
 	}
@@ -45,10 +47,11 @@ func setupHandlers(t *testing.T) *testHandlers {
 	postSvc := services.NewPostService(repo)
 	authSvc := services.NewAuthService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	return &testHandlers{repo, settingsSvc, tagSvc, postSvc, authSvc, mediaSvc, cfg}
+	cacheSvc := services.NewCacheService(tmpDir)
+	return &testHandlers{repo, settingsSvc, tagSvc, postSvc, authSvc, mediaSvc, cacheSvc, cfg}
 }
 
-func (h *testHandlers) close() { h.repo.Close() }
+func (h *testHandlers) close() { _ = h.repo.Close() }
 
 func echoCtx(method, target string, body string) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
@@ -155,7 +158,7 @@ func TestSetupHandler_SetupValidation(t *testing.T) {
 	t.Run("CreateUserDBError", func(t *testing.T) {
 		h := setupHandlers(t)
 		setupH := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-		h.repo.Close() // close DB so CreateUser fails
+		_ = h.repo.Close() // close DB so CreateUser fails
 		body := `{"username":"u","password":"password123","blog_title":"T","author_name":"A"}`
 		c, rec := echoCtx(http.MethodPost, "/", body)
 		if err := setupH.Setup(c); err != nil {
@@ -174,7 +177,7 @@ func TestSetupHandler_SetupValidation(t *testing.T) {
 
 func TestSettingsHandler_DBErrors(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	sh := NewSettingsHandler(h.settingsSvc)
 
@@ -271,7 +274,7 @@ func TestAuthHandler_ListSessions_WithData(t *testing.T) {
 
 func TestAuthHandler_DBErrors(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	authH := NewAuthHandler(h.authSvc, h.cfg)
 	e := echo.New()
 
@@ -305,7 +308,7 @@ func TestAuthHandler_DBErrors(t *testing.T) {
 func TestFeedsHandler_XForwardedHost(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -325,7 +328,7 @@ func TestFeedsHandler_RSSWithExcerpt(t *testing.T) {
 	insertUser(h.repo)
 	_, _ = h.repo.DB().Exec(`INSERT INTO posts (title,slug,content,excerpt,author_id,status,published_at) VALUES ('T','t','body','excerpt text',1,'published',datetime('now'))`)
 
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -339,8 +342,8 @@ func TestFeedsHandler_RSSWithExcerpt(t *testing.T) {
 
 func TestFeedsHandler_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	_ = h.repo.Close()
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -356,7 +359,7 @@ func TestFeedsHandler_SitemapWithTags(t *testing.T) {
 	defer h.close()
 	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug,post_count) VALUES (1,'Nature','nature',1)`)
 
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -370,8 +373,8 @@ func TestFeedsHandler_SitemapWithTags(t *testing.T) {
 
 func TestFeedsHandler_SitemapDBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
-	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	_ = h.repo.Close()
+	feedsH := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -387,7 +390,7 @@ func TestFeedsHandler_SitemapDBError(t *testing.T) {
 
 func TestTagHandler_ListTags_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -434,7 +437,7 @@ func TestTagHandler_GetTagByID_NotFound(t *testing.T) {
 
 func TestTagHandler_CreateTag_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 	c, _ := echoCtx(http.MethodPost, "/", `{"name":"New","slug":"new"}`)
 	err := th.CreateTag(c)
@@ -445,7 +448,7 @@ func TestTagHandler_CreateTag_DBError(t *testing.T) {
 
 func TestTagHandler_DeleteTag_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
@@ -461,7 +464,7 @@ func TestTagHandler_DeleteTag_DBError(t *testing.T) {
 
 func TestTagHandler_GeocodeTag_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -511,7 +514,7 @@ func TestTagHandler_ReorderTag_BadBind(t *testing.T) {
 
 func TestTagHandler_GetPostsByTag_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -537,7 +540,7 @@ func setupPostHandler(t *testing.T) (*PostHandler, *testHandlers) {
 
 func TestPostHandler_ListPosts_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -620,7 +623,7 @@ func TestPostHandler_GetPostByID_Admin_HiddenFields(t *testing.T) {
 
 func TestPostHandler_CreatePost_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodPost, "/", `{"title":"T","status":"draft"}`)
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	err := ph.CreatePost(c)
@@ -647,7 +650,7 @@ func TestPostHandler_UpdatePost_BadID(t *testing.T) {
 
 func TestPostHandler_DeletePost_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
@@ -663,7 +666,7 @@ func TestPostHandler_DeletePost_DBError(t *testing.T) {
 
 func TestPostHandler_PublishPost_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -678,7 +681,7 @@ func TestPostHandler_PublishPost_DBError(t *testing.T) {
 
 func TestPostHandler_WithdrawPost_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -693,7 +696,7 @@ func TestPostHandler_WithdrawPost_DBError(t *testing.T) {
 
 func TestPostHandler_GetPostByPreviewToken_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -708,7 +711,7 @@ func TestPostHandler_GetPostByPreviewToken_DBError(t *testing.T) {
 
 func TestPostHandler_UpdatePostTags_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodPut, "/", `{"tags":["a"]}`)
 	c.SetParamNames("id")
 	c.SetParamValues("1")
@@ -720,7 +723,7 @@ func TestPostHandler_UpdatePostTags_DBError(t *testing.T) {
 
 func TestPostHandler_GetPostNavigation_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -742,7 +745,7 @@ func TestSystemHandler_GetStats_DBError(t *testing.T) {
 	defer cleanup()
 	// Close the DB manually
 	repo := setupTestDB(t)
-	repo.Close()
+	_ = repo.Close()
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
@@ -751,7 +754,10 @@ func TestSystemHandler_GetStats_DBError(t *testing.T) {
 		ThumbnailWidth:  400,
 		ThumbnailHeight: 300,
 	}, settingsSvc, tagSvc)
-	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, t.TempDir(), "1.0")
+	tmpDir2 := t.TempDir()
+	systemSvc2 := services.NewSystemService(repo, tmpDir2)
+	cacheSvc2 := services.NewCacheService(tmpDir2)
+	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, cacheSvc2, tmpDir2, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -823,12 +829,15 @@ func TestSystemHandler_DeleteBackup_NotFound(t *testing.T) {
 
 func TestSystemHandler_GetMigrations_OK(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, t.TempDir(), "1.0")
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -844,12 +853,15 @@ func TestSystemHandler_GetMigrations_OK(t *testing.T) {
 
 func TestSystemHandler_ClearCache_DBError(t *testing.T) {
 	repo := setupTestDB(t)
-	repo.Close()
+	_ = repo.Close()
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, t.TempDir(), "1.0")
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -862,12 +874,15 @@ func TestSystemHandler_ClearCache_DBError(t *testing.T) {
 
 func TestSystemHandler_RecalculateMediaVisibility_DBError(t *testing.T) {
 	repo := setupTestDB(t)
-	repo.Close()
+	_ = repo.Close()
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, t.TempDir(), "1.0")
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -880,12 +895,15 @@ func TestSystemHandler_RecalculateMediaVisibility_DBError(t *testing.T) {
 
 func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 	repo := setupTestDB(t)
-	repo.Close()
+	_ = repo.Close()
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, t.TempDir(), "1.0")
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -902,7 +920,7 @@ func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 
 func setupPagesHandler(t *testing.T) (*PagesHandler, *testHandlers) {
 	h := setupHandlers(t)
-	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	return ph, h
 }
 
@@ -1068,8 +1086,11 @@ func mustJSON(v interface{}) string {
 
 func TestOfflineStats_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, t.TempDir(), "1.0")
+	_ = h.repo.Close()
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(h.repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1081,8 +1102,11 @@ func TestOfflineStats_DBError(t *testing.T) {
 
 func TestOfflineSnapshot_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, t.TempDir(), "1.0")
+	_ = h.repo.Close()
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(h.repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1105,7 +1129,7 @@ func TestAuthHandler_Login_SessionCreateError(t *testing.T) {
 		Username: "testlogin", Email: "", PasswordHash: hash, DisplayName: "Test",
 	})
 	// Now close DB so session creation fails
-	h.repo.Close()
+	_ = h.repo.Close()
 	ah := NewAuthHandler(h.authSvc, h.cfg)
 	body := `{"username":"testlogin","password":"password123"}`
 	c, _ := echoCtx(http.MethodPost, "/", body)
@@ -1120,8 +1144,8 @@ func TestAuthHandler_Login_SessionCreateError(t *testing.T) {
 
 func TestFeedsHandler_Sitemap_DBError(t *testing.T) {
 	h := setupHandlers(t)
-	h.repo.Close()
-	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	_ = h.repo.Close()
+	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1138,7 +1162,7 @@ func TestFeedsHandler_Sitemap_DBError(t *testing.T) {
 func TestFeedsHandler_Feed_TLS(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
-	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
 	// Simulate TLS by setting a non-nil TLS state

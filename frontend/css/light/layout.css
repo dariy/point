@@ -83,8 +83,8 @@ body {
     border: none;
     background: transparent;
     padding: 0;
-    width: 20px;
-    height: 20px;
+    width: 1.25rem;
+    height: 1.25rem;
 }
 
 .sidebar-header .homepage-link:hover {
@@ -114,7 +114,7 @@ body {
     background: transparent;
     color: var(--sidebar-text);
     padding: 0;
-    font-size: 14px;
+    font-size: 0.875rem;
 }
 
 .sidebar-footer .theme-toggle:hover {
@@ -146,8 +146,8 @@ body {
 }
 
 .nav-item.active a {
-    border-left: 3px solid var(--color-primary);
-    padding-left: calc(var(--spacing-lg) - 3px);
+    border-left: 0.1875rem solid var(--color-primary);
+    padding-left: calc(var(--spacing-lg) - 0.1875rem);
 }
 
 .nav-item svg {
@@ -174,7 +174,7 @@ body {
     cursor: pointer;
     display: flex;
     align-items: center;
-    height: 36px;
+    height: 2.25rem;
 }
 
 .logout-btn:hover {
@@ -207,7 +207,7 @@ body {
     justify-content: space-between;
     z-index: 50;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(0.25rem);
 }
 
 .header-title-row {
@@ -267,8 +267,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     padding: 0;
     background: transparent;
     border: 1px solid var(--border-primary);
@@ -286,8 +286,8 @@ body {
 }
 
 .homepage-link svg {
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
 }
 
 /* Theme Toggle (admin overrides) */
@@ -295,8 +295,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     padding: 0;
     background: transparent;
     border: 1px solid var(--border-primary);
@@ -320,6 +320,51 @@ body {
 }
 
 .theme-toggle svg {
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+/* ===========================
+   Setup Page
+   =========================== */
+.setup-page-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: var(--spacing-lg);
+    background-color: var(--bg-primary);
+}
+
+.setup-page-container .card {
+    width: 100%;
+    max-width: 30rem;
+    box-shadow: var(--shadow-lg);
+}
+
+.setup-page-container .card-header {
+    text-align: center;
+    padding: var(--spacing-xl) var(--spacing-lg);
+}
+
+.setup-page-container .card-header h2 {
+    margin-bottom: var(--spacing-xs);
+}
+
+.setup-page-container .card-body {
+    padding: var(--spacing-xl);
+}
+
+.setup-page-container .error-message {
+    margin-bottom: var(--spacing-lg);
+}
+
+.setup-page-container .setup-submit-wrapper {
+    margin-top: var(--spacing-xl);
+}
+
+.setup-page-container .setup-submit-btn {
+    width: 100%;
+    height: 2.75rem;
+    font-weight: 600;
 }

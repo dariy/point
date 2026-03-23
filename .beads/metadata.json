@@ -2,6 +2,5 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
-  "dolt_database": "point",
-  "project_id": "9f2163cd-6b68-4a6c-a1e9-49d364c4ff8c"
+  "dolt_database": "point"
 }

@@ -14,7 +14,8 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
-import { renderTagLink } from '../../utils/tags.js';
+import { buildTagIndex, renderTagStrip, setupTagStrip } from '../../utils/tags.js';
+import { store } from '../../store.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 import { getPostPageLocation } from '../../api/posts.js';
 
@@ -90,6 +91,19 @@ export class PostContent extends Component {
       const bodyEl = this.$('.post-content');
       if (bodyEl) this._enhanceMedia(bodyEl);
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
+
+      this._cleanupStrip?.();
+      if (!this._subscribed) {
+        this.subscribeStore(store, 'navTags', () => this._rerender());
+        this._subscribed = true;
+      }
+
+      const footer = this.$('.post-footer');
+      if (footer) {
+        const navTags = store.get('navTags') || [];
+        const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+        this._cleanupStrip = setupTagStrip(footer, tagIndex, navigate);
+      }
     }
   }
 
@@ -102,6 +116,7 @@ export class PostContent extends Component {
     clearTimeout(this._idleTimer);
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._cleanupStrip?.();
   }
 
   // ── Immersive rendering ───────────────────────────────────────────────────
@@ -195,7 +210,9 @@ export class PostContent extends Component {
     const carousel = this.$('#immersive-carousel');
     const slides = carousel ? Array.from(carousel.querySelectorAll('.carousel-slide')) : [];
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
-    let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));    const goToPost = (p) => {
+    let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));
+
+    const goToPost = (p) => {
       if (!p) return;
       const target = slides[index] ?? visuals;
       if (target) {
@@ -205,7 +222,9 @@ export class PostContent extends Component {
       setTimeout(() => {
         navigate(tagSlug ? `/tag/${tagSlug}?slug=${p.slug}` : `/post/${p.slug}`);
       }, 400);
-    };    const goTo = (i) => {
+    };
+
+    const goTo = (i) => {
       const n = slides.length;
       if (!n) {
         if (i < 0) goToPost(nextPost);
@@ -277,7 +296,9 @@ export class PostContent extends Component {
       if (!naturalWidth) return 2;
       const max = naturalWidth / rect.width;
       return max > 1 ? max : 1;
-    };    this._constrainZoom = (animate = false) => {
+    };
+
+    this._constrainZoom = (animate = false) => {
       const { scale } = this._zoomState;
       if (scale <= 1) {
         this._zoomState.x = 0;
@@ -328,7 +349,9 @@ export class PostContent extends Component {
         target.style.opacity = '1';
       }
       target.style.transition = 'none';
-    };    const dismiss = async () => {
+    };
+
+    const dismiss = async () => {
       try {
         const params = tagSlug ? { tag: tagSlug } : {};
         const data = await getPostPageLocation(post.slug, params);
@@ -391,7 +414,8 @@ export class PostContent extends Component {
         else if (dir === 'right') goTo(index - 1);
         else if (dir === 'down') dismiss();
         else this._updateVisuals();
-      },      onPanMove: (dx, dy) => {
+      },
+      onPanMove: (dx, dy) => {
         this._zoomState.x += dx;
         this._zoomState.y += dy;
         this._updateVisuals();
@@ -579,7 +603,9 @@ export class PostContent extends Component {
   // ── Normal layout ─────────────────────────────────────────────────────────
 
   _renderNormal(post, prevPost, nextPost) {
-    const tags = (post.tags || []).map((t) => renderTagLink(t)).join('');
+    const navTags = store.get('navTags') || [];
+    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    const tags = renderTagStrip(post.tags, tagIndex);
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
 
     return `
@@ -588,7 +614,7 @@ export class PostContent extends Component {
 
         ${tags
           ? `<footer class="post-footer">
-               <div class="post-tags" aria-label="Tags">${tags}</div>
+               ${tags}
              </footer>`
           : ''}
 
@@ -610,7 +636,7 @@ export class PostContent extends Component {
         (img) => !img.closest('a[href]')
       );
       images.forEach((img, i) => {
-        img.style.cursor = 'zoom-in';
+        img.classList.add('zoomable');
         img.setAttribute('tabindex', '0');
         const enter = () => onEnterImmersive(i);
         img.addEventListener('click', enter);

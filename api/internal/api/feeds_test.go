@@ -20,7 +20,8 @@ func TestFeedsHandler(t *testing.T) {
 	postService := services.NewPostService(repo)
 	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
-	handler := NewFeedsHandler(repo, postService, tagService, settingsService)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewFeedsHandler(repo, postService, tagService, settingsService, cacheService)
 
 	e := echo.New()
 

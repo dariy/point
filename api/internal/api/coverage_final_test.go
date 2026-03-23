@@ -71,11 +71,12 @@ func TestSetup_SeedSettingsError(t *testing.T) {
 func TestFeedsHandler_Sitemap_TagRelationsError(t *testing.T) {
 	h := setupHandlers(t)
 	_, _ = h.repo.DB().Exec(`DROP TABLE tag_relationships`)
-	fh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc)
+	cacheSvc := services.NewCacheService(t.TempDir())
+	sh := NewFeedsHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, cacheSvc)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
 	rec := httptest.NewRecorder()
-	err := fh.Sitemap(e.NewContext(req, rec))
+	err := sh.Sitemap(e.NewContext(req, rec))
 	if err == nil {
 		t.Error("expected error when tag_relationships is dropped")
 	}
@@ -88,7 +89,7 @@ func TestFeedsHandler_Sitemap_TagRelationsError(t *testing.T) {
 func setupTagHandlerClosed(t *testing.T) (*TagHandler, *testHandlers) {
 	h := setupHandlers(t)
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
-	h.repo.Close()
+	_ = h.repo.Close()
 	return th, h
 }
 
@@ -238,7 +239,9 @@ func TestSystemHandler_GetLogs_ManyLines(t *testing.T) {
 	logLines := strings.Repeat("log line entry\n", 150)
 	_ = os.WriteFile(filepath.Join(logsDir, "app.log"), []byte(logLines), 0644)
 
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, dataDir, "1.0")
+	systemSvc := services.NewSystemService(h.repo, dataDir)
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, dataDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/?lines=50", nil)
 	rec := httptest.NewRecorder()
@@ -291,7 +294,7 @@ func TestPostHandler_CreatePost_SlugConflict(t *testing.T) {
 
 func TestPostHandler_UpdatePost_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodPut, "/", `{"title":"Updated"}`)
 	c.SetParamNames("id")
 	c.SetParamValues("1")
@@ -316,7 +319,7 @@ func TestPostHandler_CreateAudioPost_NoFile(t *testing.T) {
 
 func TestPostHandler_CreateAudioPost_UploadError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 
 	boundary := "testboundary"
 	body := "--" + boundary + "\r\n" +
@@ -339,7 +342,7 @@ func TestPostHandler_CreateAudioPost_UploadError(t *testing.T) {
 
 func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodGet, "/", "")
 	c.SetParamNames("id")
 	c.SetParamValues("1")
@@ -355,7 +358,7 @@ func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 
 func TestPagesHandler_GetHomePage_DBError(t *testing.T) {
 	ph, h := setupPagesHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -427,7 +430,10 @@ func TestOfflineStats_NonImageMedia(t *testing.T) {
 		INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum, is_public, uploaded_at)
 		VALUES ('test.mp4', 'originals/test.mp4', 'video', 'video/mp4', 1024, 'abc123checksumvideo', 0, datetime('now'))
 	`)
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, t.TempDir(), "1.0")
+	tempDir := t.TempDir()
+	systemSvc := services.NewSystemService(h.repo, tempDir)
+	cacheSvc := services.NewCacheService(tempDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tempDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -814,7 +820,9 @@ func TestOfflineStats_WithThumbnail(t *testing.T) {
 		INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum, is_public, thumbnail_path, uploaded_at)
 		VALUES ('test.jpg', 'originals/test.jpg', 'image', 'image/jpeg', 2048, 'abc123thumbnail', 1, 'thumbnails/test_thumb.jpg', datetime('now'))
 	`)
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, dataDir, "1.0")
+	systemSvc := services.NewSystemService(h.repo, dataDir)
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, dataDir, "1.0")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

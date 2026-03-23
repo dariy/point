@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"regexp"
 	"strings"
 
@@ -84,9 +85,12 @@ func postTagsOrEmpty(tags []repository.PostTagInfo) []repository.PostTagInfo {
 	return tags
 }
 
-func postToResponse(p models.Post, tags []repository.PostTagInfo) map[string]interface{} {
+func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map[int64]bool) map[string]interface{} {
 	tagObjs := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
+		if excludeIDs != nil && excludeIDs[t.ID] {
+			continue
+		}
 		tagObjs = append(tagObjs, map[string]interface{}{
 			"name": t.Name,
 			"slug": t.Slug,
@@ -131,14 +135,20 @@ func tagLocationsResponse(loc *models.TagLocation) []map[string]interface{} {
 	}
 }
 
-func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models.TagLocation) map[string]interface{} {
-	parentItems := make([]map[string]interface{}, len(parents))
-	for i, p := range parents {
-		parentItems[i] = tagToListItem(p)
+func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models.TagLocation, excludeIDs map[int64]bool) map[string]interface{} {
+	parentItems := make([]map[string]interface{}, 0, len(parents))
+	for _, p := range parents {
+		if excludeIDs != nil && excludeIDs[p.ID] {
+			continue
+		}
+		parentItems = append(parentItems, tagToListItem(p))
 	}
-	childItems := make([]map[string]interface{}, len(children))
-	for i, ch := range children {
-		childItems[i] = tagToListItem(ch)
+	childItems := make([]map[string]interface{}, 0, len(children))
+	for _, ch := range children {
+		if excludeIDs != nil && excludeIDs[ch.ID] {
+			continue
+		}
+		childItems = append(childItems, tagToListItem(ch))
 	}
 
 	return map[string]interface{}{
@@ -147,9 +157,9 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 		"slug":        t.Slug,
 		"description": nullString(t.Description),
 		"custom_url":  nullString(t.CustomUrl),
-		"sort_order":  nullInt64(t.SortOrder),
-		"post_count":  t.PostCount,
-		"created_at":  t.CreatedAt,
+		"sort_order": nullInt64(t.SortOrder),
+		"post_count": t.PostCount,
+		"created_at": t.CreatedAt,
 		"parents":     parentItems,
 		"children":    childItems,
 		"locations":   tagLocationsResponse(loc),
@@ -225,6 +235,11 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		thumbPath = mediaPath + "?thumb"
 	}
 
+	var metadata map[string]interface{}
+	if m.Metadata.Valid && m.Metadata.String != "" {
+		_ = json.Unmarshal([]byte(m.Metadata.String), &metadata)
+	}
+
 	return map[string]interface{}{
 		"id":             m.ID,
 		"filename":       m.Filename,
@@ -239,6 +254,7 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		"uploaded_at":    m.UploadedAt,
 		"alt_text":       nullString(m.AltText),
 		"caption":        nullString(m.Caption),
+		"metadata":       metadata,
 		"is_public":      m.IsPublic,
 	}
 }
