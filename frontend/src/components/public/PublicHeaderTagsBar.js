@@ -10,7 +10,7 @@
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { CHEVRON_SVG } from '../../utils/icons.js';
-import { renderTagLink } from '../../utils/tags.js';
+import { renderTagLink, setupScrollableStrip } from '../../utils/tags.js';
 
 export class PublicHeaderTagsBar extends Component {
   render() {
@@ -22,11 +22,11 @@ export class PublicHeaderTagsBar extends Component {
       .join('');
 
     return `
-      <div class="tags-bar-track">
+      <div class="tag-strip-track">
         <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">
           ${CHEVRON_SVG}
         </button>
-        <div class="tags-filters is-ready" data-mode="categories">
+        <div class="tag-strip-scroll is-ready" data-mode="categories">
           ${chips}
         </div>
         <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">
@@ -44,9 +44,6 @@ export class PublicHeaderTagsBar extends Component {
    * @returns {string} HTML string
    */
   _renderTag(tag, currentTagSlug, isRoot = false) {
-    // Never render hidden tags in the public nav bar.
-    
-
     const relatedClass = tag.is_related ? ' is-related' : '';
     const rootClass = isRoot ? ' category-tag' : '';
 
@@ -110,28 +107,15 @@ export class PublicHeaderTagsBar extends Component {
       }
     });
 
-    const filters = this.container.querySelector('.tags-filters');
-    const btnLeft = this.container.querySelector('.tags-scroll-btn--left');
-    const btnRight = this.container.querySelector('.tags-scroll-btn--right');
-
-    this._boundScroll = () => this._updateScrollIndicators();
-
-    if (filters && btnLeft && btnRight) {
-      btnLeft.addEventListener('click', () => {
-        filters.scrollBy({ left: -200, behavior: 'smooth' });
-      });
-      btnRight.addEventListener('click', () => {
-        filters.scrollBy({ left: 200, behavior: 'smooth' });
-      });
-      filters.addEventListener('scroll', this._boundScroll, { passive: true });
-    }
+    const track   = this.container.querySelector('.tag-strip-track');
+    const filters = this.container.querySelector('.tag-strip-scroll');
+    this._cleanupStrip = setupScrollableStrip(track, filters);
 
     // Store bound refs so they can be removed in beforeUnmount
     this._boundOutside        = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
     this._boundCloseAll       = () => this._closeAll();
     this._boundCheckOverflow  = () => {
       this._checkOverflow();
-      this._updateScrollIndicators();
     };
 
     document.addEventListener('click',  this._boundOutside);
@@ -142,7 +126,6 @@ export class PublicHeaderTagsBar extends Component {
     // Defer one frame so the header's flex layout has settled before measuring.
     requestAnimationFrame(() => {
       this._checkOverflow();
-      this._updateScrollIndicators();
     });
   }
 
@@ -152,23 +135,7 @@ export class PublicHeaderTagsBar extends Component {
     window.removeEventListener('resize',   this._boundCloseAll);
     window.removeEventListener('resize',   this._boundCheckOverflow);
 
-    const filters = this.container.querySelector('.tags-filters');
-    if (filters && this._boundScroll) {
-      filters.removeEventListener('scroll', this._boundScroll);
-    }
-  }
-
-  /**
-   * Toggle visual indicators (fade + arrows) based on scroll position.
-   */
-  _updateScrollIndicators() {
-    const track = this.container.querySelector('.tags-bar-track');
-    const filters = this.container.querySelector('.tags-filters');
-    if (!track || !filters) return;
-
-    const { scrollLeft, scrollWidth, clientWidth } = filters;
-    track.classList.toggle('has-scroll-left', scrollLeft > 0);
-    track.classList.toggle('has-scroll-right', scrollLeft + clientWidth < scrollWidth - 2);
+    this._cleanupStrip?.();
   }
 
   /**
@@ -178,7 +145,7 @@ export class PublicHeaderTagsBar extends Component {
    */
   _checkOverflow() {
     const headerGroup = this.container.closest('.site-header-group');
-    const filters     = this.container.querySelector('.tags-filters');
+    const filters     = this.container.querySelector('.tag-strip-scroll');
     if (!headerGroup || !filters) return;
 
     // Measure in non-stacked state

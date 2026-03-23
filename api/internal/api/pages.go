@@ -2,10 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
@@ -18,14 +21,16 @@ type PagesHandler struct {
 	postService     *services.PostService
 	tagService      *services.TagService
 	settingsService *services.SettingsService
+	cacheService    *services.CacheService
 }
 
-func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService) *PagesHandler {
+func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
 	return &PagesHandler{
 		repo:            repo,
 		postService:     postService,
 		tagService:      tagService,
 		settingsService: settingsService,
+		cacheService:    cacheService,
 	}
 }
 
@@ -53,6 +58,14 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	if page < 1 {
 		page = 1
+	}
+
+	// Try cache for public requests (TTL 15 minutes)
+	cacheKey := fmt.Sprintf("homepage_p%d.json", page)
+	if publicOnly {
+		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
+			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
+		}
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
@@ -84,6 +97,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	ancestorsMap := fetchAncestorsMap(ctx, h.repo, postTagsMap)
 	postTagsMap = expandPostTagsWithAncestors(postTagsMap, ancestorsMap, publicOnly)
 
+	minPosts := getMinTagPostsSetting(allSettings)
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
@@ -91,7 +106,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		if publicOnly && !IsPostVisibleToPublic(postTagsMap[p.ID], effectiveHiddenPosts) {
 			continue
 		}
-		resp := postToResponse(p, postTagsMap[p.ID])
+		resp := postToResponse(p, postTagsMap[p.ID], excludeTagIDs)
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}
@@ -103,11 +118,9 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		pages = 1
 	}
 
-	// Tag cloud (non-empty tags)
-	cloud, _ := h.tagService.GetTagCloud(ctx, 20, publicOnly)
-
-	// Hierarchical tags for nav (root tags with nested children)
-	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly)
+	// Fetch hierarchical tags for nav and cloud with min_tag_posts_to_show filter.
+	cloud, _ := h.tagService.GetTagCloud(ctx, 20, publicOnly, minPosts)
+	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
 
 	// Public settings subset
 	publicSettings := make(map[string]string)
@@ -117,23 +130,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		}
 	}
 
-	// Apply min_tag_posts_to_show filter for public requests.
-	if publicOnly {
-		minPosts := getMinTagPostsSetting(allSettings)
-		navTags = filterNavTagsByMinPosts(navTags, minPosts)
-		if minPosts > 0 {
-			filteredCloud := make([]services.TagCloudItem, 0, len(cloud))
-			for _, item := range cloud {
-				if item.Count >= minPosts {
-					filteredCloud = append(filteredCloud, item)
-				}
-			}
-			cloud = filteredCloud
-		}
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"posts": postResponses,
+	resp := map[string]interface{}{
+		"posts":      postResponses,
 		"pagination": map[string]interface{}{
 			"page":     page,
 			"per_page": perPage,
@@ -141,9 +139,17 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			"pages":    pages,
 		},
 		"tag_cloud": cloud,
-		"menu":  navTags,
+		"menu":      navTags,
 		"settings":  publicSettings,
-	})
+	}
+
+	if publicOnly {
+		if data, err := json.Marshal(resp); err == nil {
+			_ = h.cacheService.Set(ctx, cacheKey, data)
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetTagPage returns all data needed to render a tag archive page.
@@ -152,6 +158,19 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	slug := c.Param("slug")
 	user := c.Get("user")
 	publicOnly := user == nil
+
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	// Try cache for public requests (TTL 15 minutes)
+	cacheKey := fmt.Sprintf("tagpage_%s_p%d.json", slug, page)
+	if publicOnly {
+		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
+			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
+		}
+	}
 
 	tag, err := h.tagService.GetTagBySlug(ctx, slug)
 	if err != nil {
@@ -163,11 +182,6 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
-
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
@@ -183,8 +197,10 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
 	inBreadcrumbs, _ := h.tagService.InBreadcrumbsIDs(ctx)
 
+	minPosts := getMinTagPostsSetting(allSettings)
+
 	// Direct children for tag detail response (exclude effectively hidden ones)
-	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly)
+	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly, minPosts)
 	children := make([]models.Tag, 0, len(allChildren))
 	for _, ch := range allChildren {
 		if !publicOnly || !effectivelyHidden[ch.ID] {
@@ -221,18 +237,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 			})
 		}
 	} else {
-		childItems, _ = h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly)
+		childItems, _ = h.tagService.GetHierarchicalNavTags(ctx, &tag.ID, publicOnly, minPosts)
 	}
 
 	// Root-level nav tags for global navigation
-	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly)
-
-	// Apply min_tag_posts_to_show for public nav.
-	if publicOnly {
-		minPosts := getMinTagPostsSetting(allSettings)
-		rootNavTags = filterNavTagsByMinPosts(rootNavTags, minPosts)
-		childItems = filterNavTagsByMinPosts(childItems, minPosts)
-	}
+	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
 
 	// Posts for this tag (published only)
 	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false)
@@ -248,12 +257,14 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	tagAncestorsMap := fetchAncestorsMap(ctx, h.repo, tagPostTagsMap)
 	tagPostTagsMap = expandPostTagsWithAncestors(tagPostTagsMap, tagAncestorsMap, publicOnly)
 
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
 		if publicOnly && !IsPostVisibleToPublic(tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs) {
 			continue
 		}
-		resp := postToResponse(p, tagPostTagsMap[p.ID])
+		resp := postToResponse(p, tagPostTagsMap[p.ID], excludeTagIDs)
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
 		}
@@ -267,7 +278,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
 	for _, a := range ancestors {
-		if !effectivelyHidden[a.ID] && inBreadcrumbs[a.ID] {
+		if !excludeTagIDs[a.ID] && inBreadcrumbs[a.ID] {
 			crumb := tagToListItem(a)
 			if !publicOnly {
 				crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
@@ -282,11 +293,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	if l, ok := locMap[tag.ID]; ok {
 		tagLoc = &l
 	}
-	tagResp := tagToFullResponse(tag, parents, children, tagLoc)
+	tagResp := tagToFullResponse(tag, parents, children, tagLoc, excludeTagIDs)
 	if !publicOnly {
 		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"tag":          tagResp,
 		"breadcrumbs":  breadcrumbs,
 		"posts":        postResponses,
@@ -298,7 +309,15 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 			"total":    total,
 			"pages":    pages,
 		},
-	})
+	}
+
+	if publicOnly {
+		if data, err := json.Marshal(resp); err == nil {
+			_ = h.cacheService.Set(ctx, cacheKey, data)
+		}
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetTagsPage returns data for the tags directory page.
@@ -319,18 +338,21 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	}
 	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, allTagIDs)
 
-	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	minPosts := getMinTagPostsSetting(allSettings)
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
 
 	// Filter hidden tags for public view
 	visible := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
-		if !publicOnly || !effectivelyHidden[t.ID] {
+		if !publicOnly || !excludeTagIDs[t.ID] {
 			parents, _ := h.tagService.GetTagParents(ctx, t.ID)
-			allChildren, _ := h.tagService.GetTagChildren(ctx, t.ID, publicOnly)
+			allChildren, _ := h.tagService.GetTagChildren(ctx, t.ID, publicOnly, minPosts)
 			children := make([]models.Tag, 0, len(allChildren))
 			for _, ch := range allChildren {
-				if !publicOnly || !effectivelyHidden[ch.ID] {
+				if !publicOnly || !excludeTagIDs[ch.ID] {
 					children = append(children, ch)
 				}
 			}
@@ -338,7 +360,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 			if l, ok := locMap[t.ID]; ok {
 				loc = &l
 			}
-			tagResp := tagToFullResponse(t, parents, children, loc)
+			tagResp := tagToFullResponse(t, parents, children, loc, excludeTagIDs)
 			if !publicOnly {
 				injectTagHiddenFields(tagResp, t, effectiveHiddenPostsTagIDs)
 			}
@@ -404,29 +426,18 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		yearMap, _ = h.repo.GetYearTagsByLocationTagIDs(ctx, tagIDs, yearTagID)
 	}
 
-	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
-
-	// Compute hierarchical post counts so that e.g. "Canada" reflects posts
-	// tagged with any of its descendants (Montreal, etc.) even when not directly tagged.
+	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minMapPosts)
 	hierarchicalCounts, _ := h.tagService.GetHierarchicalPostCounts(ctx, publicOnly)
+	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
 
 	mapTags := []map[string]interface{}{}
 	for _, t := range allTags {
-		if publicOnly && effectivelyHiddenMap[t.ID] {
+		if publicOnly && excludeTagIDs[t.ID] {
 			continue
 		}
 		loc, ok := locMap[t.ID]
 		if !ok {
 			continue
-		}
-		if minMapPosts > 0 {
-			cnt := hierarchicalCounts[t.ID]
-			if cnt == 0 {
-				cnt = int64(t.PostCount)
-			}
-			if cnt < minMapPosts {
-				continue
-			}
 		}
 		tagType := "other"
 		if cityDescIDs[t.ID] {
@@ -527,22 +538,6 @@ func fetchAncestorsMap(ctx context.Context, repo *repository.Repository, postTag
 		ancestorsMap[tagID] = infos
 	}
 	return ancestorsMap
-}
-
-// filterNavTagsByMinPosts removes NavTagNode entries (and their subtrees) whose PostCount
-// is below minPosts. Featured tags (is_featured) are always kept.
-func filterNavTagsByMinPosts(nodes []services.NavTagNode, minPosts int64) []services.NavTagNode {
-	if minPosts <= 0 {
-		return nodes
-	}
-	result := make([]services.NavTagNode, 0, len(nodes))
-	for _, n := range nodes {
-		n.Children = filterNavTagsByMinPosts(n.Children, minPosts)
-		if n.PostCount >= minPosts || n.IsRelated || len(n.Children) > 0 {
-			result = append(result, n)
-		}
-	}
-	return result
 }
 
 // getMinTagPostsSetting reads the min_tag_posts_to_show setting; returns 0 (no filter) when unset.

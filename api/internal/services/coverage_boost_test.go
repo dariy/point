@@ -19,7 +19,7 @@ import (
 // TestPostService_ListPublishedPostStubs covers the 0% function.
 func TestPostService_ListPublishedPostStubs(t *testing.T) {
 	svc, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	stubs, err := svc.ListPublishedPostStubs(ctx)
@@ -45,7 +45,7 @@ func TestPostService_ListPublishedPostStubs(t *testing.T) {
 // TestTagService_GetTagDescendants covers 0% function.
 func TestTagService_GetTagDescendants(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'P','parent'),(2,'C','child')`)
@@ -63,7 +63,7 @@ func TestTagService_GetTagDescendants(t *testing.T) {
 // TestTagService_GetTagByID covers 50% function.
 func TestTagService_GetTagByID(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
@@ -85,7 +85,7 @@ func TestTagService_GetTagByID(t *testing.T) {
 // TestTagService_WithRelatedIDs covers 0% function.
 func TestTagService_WithRelatedIDs(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// No _with_related system tag → returns empty map
@@ -113,7 +113,7 @@ func TestTagService_WithRelatedIDs(t *testing.T) {
 // TestTagService_InBreadcrumbsIDs covers 0% function.
 func TestTagService_InBreadcrumbsIDs(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// No _is_in_breadcrumbs → empty
@@ -140,7 +140,7 @@ func TestTagService_InBreadcrumbsIDs(t *testing.T) {
 // TestTagService_SetTagParentsAndChildren covers 66.7% functions.
 func TestTagService_SetTagParentsAndChildren(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'P','parent'),(2,'C','child')`)
@@ -173,7 +173,7 @@ func TestTagService_SetTagParentsAndChildren(t *testing.T) {
 // TestTagService_UpdateTag covers 64.3% function.
 func TestTagService_UpdateTag(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'Original','orig')`)
@@ -201,7 +201,7 @@ func TestTagService_UpdateTag(t *testing.T) {
 // TestTagService_DeleteTag covers 66.7% function.
 func TestTagService_DeleteTag(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
@@ -221,7 +221,7 @@ func TestTagService_DeleteTag(t *testing.T) {
 // TestTagService_GetTagBySlug covers 66.7% function.
 func TestTagService_GetTagBySlug(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','myslug')`)
@@ -245,8 +245,8 @@ func TestTagService_GetTagBySlug(t *testing.T) {
 func TestMediaService_ImportFromPath(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -288,8 +288,8 @@ func TestMediaService_ImportFromPath(t *testing.T) {
 func TestMediaService_BulkDeleteMedia(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -317,8 +317,8 @@ func TestMediaService_BulkDeleteMedia(t *testing.T) {
 func TestMediaService_ImportFromPathVideo(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -339,8 +339,8 @@ func TestMediaService_ImportFromPathVideo(t *testing.T) {
 func TestMediaService_ImportFromPathUnknownExt(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -362,8 +362,8 @@ func TestMediaService_ImportFromPathUnknownExt(t *testing.T) {
 func TestMediaService_UpdateMediaWithPostID(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -391,8 +391,8 @@ func TestMediaService_UpdateMediaWithPostID(t *testing.T) {
 func TestMediaService_RebuildThumbnailsOnlyMissing(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -416,8 +416,8 @@ func TestMediaService_RebuildThumbnailsOnlyMissing(t *testing.T) {
 func TestMediaService_RebuildThumbnailsSkip(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -436,8 +436,8 @@ func TestMediaService_RebuildThumbnailsSkip(t *testing.T) {
 func TestMediaService_AnalyzeMediaByIDSuccess(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -467,7 +467,7 @@ func TestMediaService_AnalyzeMediaByIDSuccess(t *testing.T) {
 // TestTagService_GetTagBySlugNotFound covers the not-found path.
 func TestTagService_GetTagBySlugNotFound(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Not found
@@ -490,7 +490,7 @@ func TestTagService_GetTagBySlugNotFound(t *testing.T) {
 // TestTagService_UpdateTagSystemSlug covers the system tag slug protection path.
 func TestTagService_UpdateTagSystemSlug(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Try to update with a system slug (starts with _)
@@ -514,7 +514,7 @@ func TestTagService_UpdateTagSystemSlug(t *testing.T) {
 // TestTagService_SetTagParentsWithInvalidID covers non-existent tag path.
 func TestTagService_SetTagParentsWithInvalidID(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Non-existent tag
@@ -528,8 +528,8 @@ func TestTagService_SetTagParentsWithInvalidID(t *testing.T) {
 func TestMediaService_CleanupOrphanedWithData(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -555,8 +555,8 @@ func TestMediaService_CleanupOrphanedWithData(t *testing.T) {
 func TestMediaService_ListOrphanedMediaWithData(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -578,8 +578,8 @@ func TestMediaService_ListOrphanedMediaWithData(t *testing.T) {
 func TestMediaService_RecalculateAllMediaVisibilityBoost(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -592,7 +592,7 @@ func TestMediaService_RecalculateAllMediaVisibilityBoost(t *testing.T) {
 // TestTagService_GetHierarchicalNavTagsWithHidden tests the publicOnly+hidden path.
 func TestTagService_GetHierarchicalNavTagsWithHidden(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Insert system tags needed for hierarchy
@@ -609,7 +609,7 @@ func TestTagService_GetHierarchicalNavTagsWithHidden(t *testing.T) {
 	// _hidden → Hidden tag (makes it effectively hidden)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (3,5)`)
 
-	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (hidden) failed: %v", err)
 	}
@@ -626,8 +626,8 @@ func TestTagService_GetHierarchicalNavTagsWithHidden(t *testing.T) {
 func TestMediaService_RebuildThumbnailsWithImages(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -648,7 +648,7 @@ func TestMediaService_RebuildThumbnailsWithImages(t *testing.T) {
 // TestTagService_EffectivelyHiddenBoost covers 71.4% functions.
 func TestTagService_EffectivelyHiddenBoost(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	ids, err := svc.EffectivelyHiddenPostsTagIDs(ctx)
@@ -672,7 +672,7 @@ func TestTagService_EffectivelyHiddenBoost(t *testing.T) {
 // exercises analyzeImageDirectly with a fake key (which will fail at the API call).
 func TestNewMediaServiceWithAPIKey(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
@@ -705,11 +705,11 @@ func TestNewMediaServiceWithAPIKey(t *testing.T) {
 // TestTagService_GetHierarchicalNavTagsBoost covers 58% function with rootID.
 func TestTagService_GetHierarchicalNavTagsBoost(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// No data - empty result
-	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags failed: %v", err)
 	}
@@ -719,14 +719,14 @@ func TestTagService_GetHierarchicalNavTagsBoost(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count) VALUES (1,'_root','_root',0),(2,'Nature','nature',5)`)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`)
 
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (public) failed: %v", err)
 	}
 	_ = nodes
 
 	id := int64(1)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, &id, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, &id, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags (with rootID) failed: %v", err)
 	}
@@ -736,7 +736,7 @@ func TestTagService_GetHierarchicalNavTagsBoost(t *testing.T) {
 // TestTagService_SetTagParentsSystemTag covers forbidden system tag path.
 func TestTagService_SetTagParentsSystemTag(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'_system','_system')`)
@@ -750,7 +750,7 @@ func TestTagService_SetTagParentsSystemTag(t *testing.T) {
 // TestTagService_SetTagChildrenSystemTag covers forbidden system child path.
 func TestTagService_SetTagChildrenSystemTag(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'Parent','parent'),(2,'_sys','_sys')`)
@@ -764,7 +764,7 @@ func TestTagService_SetTagChildrenSystemTag(t *testing.T) {
 // TestTagService_CreateTagErrors covers CreateTag error paths.
 func TestTagService_CreateTagErrors(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Slug starting with underscore should fail
@@ -787,8 +787,8 @@ func TestTagService_CreateTagErrors(t *testing.T) {
 func TestMediaService_UpdateMediaVisibilityForPathsBoost(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -807,8 +807,8 @@ func TestMediaService_UpdateMediaVisibilityForPathsBoost(t *testing.T) {
 func TestMediaService_ListMedia(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -832,7 +832,7 @@ func TestMediaService_ListMedia(t *testing.T) {
 // TestTagService_GetTagBySlugSystemPrefix covers the "_" prefix rejection path.
 func TestTagService_GetTagBySlugSystemPrefix(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, err := svc.GetTagBySlug(ctx, "_system")
@@ -844,7 +844,7 @@ func TestTagService_GetTagBySlugSystemPrefix(t *testing.T) {
 // TestSettingsService_GetConfigSettingEnvValue covers the envValue != 0 early return.
 func TestSettingsService_GetConfigSettingEnvValue(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	svc := NewSettingsService(repo)
@@ -865,8 +865,8 @@ func TestSettingsService_GetConfigSettingEnvValue(t *testing.T) {
 func TestMediaService_AnalyzeImageViaHTTP(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -899,8 +899,8 @@ func TestMediaService_AnalyzeImageViaHTTP(t *testing.T) {
 func TestMediaService_AnalyzeImageViaHTTPError(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -925,7 +925,7 @@ func TestMediaService_AnalyzeImageViaHTTPError(t *testing.T) {
 // _with_related detection, system slug filtering, sort_order comparison, cycle detection.
 func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// _root(1), _with_related(2), _sys-child(3, system slug), Alpha(4, sort=2, 3 posts),
@@ -948,14 +948,14 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 
 	// nil rootID: exercises _root detection, _with_related, system slug skip,
 	// Gamma skip (0 posts + no children), sort_order comparison
-	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false)
+	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags deep: %v", err)
 	}
 	_ = nodes
 
 	// publicOnly=true: exercises effectivelyHidden map path
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags publicOnly: %v", err)
 	}
@@ -963,7 +963,7 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 
 	// With explicit rootID → uses else branch with actual children
 	rootID := int64(1)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, &rootID, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, &rootID, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags rootID: %v", err)
 	}
@@ -971,7 +971,7 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 
 	// Cycle: Alpha points to itself → visited[cid] triggers continue
 	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id) VALUES (4,4)`)
-	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, false)
+	nodes, err = svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags cycle: %v", err)
 	}
@@ -982,7 +982,7 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 // and EffectivelyHiddenIDs when tags exist (exercises the build functions with data).
 func TestTagService_EffectivelyHiddenWithData(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count) VALUES
@@ -1005,7 +1005,7 @@ func TestTagService_EffectivelyHiddenWithData(t *testing.T) {
 // TestTagService_CreateTagSystemSlug covers the "_" prefix rejection.
 func TestTagService_CreateTagSystemSlug(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, err := svc.CreateTag(ctx, CreateTagParams{Name: "_bad", Slug: "_bad"})
@@ -1017,7 +1017,7 @@ func TestTagService_CreateTagSystemSlug(t *testing.T) {
 // TestTagService_CreateTagWithSortOrder covers the SortOrder != nil branch.
 func TestTagService_CreateTagWithSortOrder(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	sortOrder := int32(5)
@@ -1037,7 +1037,7 @@ func TestTagService_CreateTagWithSortOrder(t *testing.T) {
 // TestPostService_RenderContent covers the RenderContent function.
 func TestPostService_RenderContent(t *testing.T) {
 	svc, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	html, err := svc.RenderContent("# Hello\n\nWorld **bold**")
 	if err != nil {
@@ -1053,8 +1053,8 @@ func TestPostService_RenderContent(t *testing.T) {
 func TestUpdateMediaVisibilityForPaths_HiddenAndDuplicate(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 	repo := svc.repo
@@ -1087,7 +1087,7 @@ func TestUpdateMediaVisibilityForPaths_HiddenAndDuplicate(t *testing.T) {
 // TestTagService_ReorderTag_SameHierarchy covers the in-same-parent reorder path.
 func TestTagService_ReorderTag_SameHierarchy(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Create parent and two children.
@@ -1112,7 +1112,7 @@ func TestTagService_ReorderTag_SameHierarchy(t *testing.T) {
 // TestTagService_UpdateMissingCoords_AllHaveCoords covers the "all already have coords" path.
 func TestTagService_UpdateMissingCoords_AllHaveCoords(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Create "city" base tag and a child tag with a location already set.
@@ -1135,7 +1135,7 @@ func TestTagService_UpdateMissingCoords_AllHaveCoords(t *testing.T) {
 // TestPostService_ListPosts_WithSearch covers the search path in ListPosts.
 func TestPostService_ListPosts_WithSearch(t *testing.T) {
 	svc, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -1156,7 +1156,7 @@ func TestPostService_ListPosts_WithSearch(t *testing.T) {
 // TestPostService_GeneratePreviewLink covers the success path.
 func TestPostService_GeneratePreviewLink(t *testing.T) {
 	svc, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -1184,7 +1184,7 @@ func TestServiceDBErrors(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug,post_count) VALUES (1,'T1','t1',1)`)
 
 	// Close the DB — all service calls will fail.
-	repo.Close()
+	_ = repo.Close()
 
 	// Tag service errors.
 	if _, err := svc.ListTags(ctx, false, false); err == nil {
@@ -1193,7 +1193,7 @@ func TestServiceDBErrors(t *testing.T) {
 	if _, err := svc.GetTagByID(ctx, 1); err == nil {
 		t.Error("GetTagByID: expected error")
 	}
-	if _, err := svc.GetTagCloud(ctx, 10, false); err == nil {
+	if _, err := svc.GetTagCloud(ctx, 10, false, 0); err == nil {
 		t.Error("GetTagCloud: expected error")
 	}
 	if _, err := svc.EffectivelyHiddenIDs(ctx); err == nil {
@@ -1208,7 +1208,7 @@ func TestServiceDBErrors(t *testing.T) {
 	if _, err := svc.WithRelatedIDs(ctx); err == nil {
 		t.Error("WithRelatedIDs: expected error")
 	}
-	if _, err := svc.GetHierarchicalNavTags(ctx, nil, true); err == nil {
+	if _, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0); err == nil {
 		t.Error("GetHierarchicalNavTags: expected error")
 	}
 }
@@ -1219,7 +1219,7 @@ func TestSettingsService_GetSetting_Error(t *testing.T) {
 	svc := NewSettingsService(repo)
 	ctx := context.Background()
 
-	repo.Close()
+	_ = repo.Close()
 
 	// GetSetting on closed DB should return the default value (not error).
 	val, _ := svc.GetSetting(ctx, "any_key", "default")
@@ -1243,7 +1243,7 @@ func TestAuthService_ChangePassword_Error(t *testing.T) {
 		t.Error("ChangePassword with wrong old password: expected error")
 	}
 
-	repo.Close()
+	_ = repo.Close()
 }
 
 func setupAuthService(t *testing.T) (*AuthService, *repository.Repository) {
@@ -1254,7 +1254,7 @@ func setupAuthService(t *testing.T) (*AuthService, *repository.Repository) {
 // TestServiceDBErrors2 covers more DB error paths by closing the DB before service calls.
 func TestServiceDBErrors2(t *testing.T) {
 	mediaSvc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 	tagSvc := NewTagService(mediaSvc.repo)
 	authSvc := NewAuthService(mediaSvc.repo)
 	settingsSvc := NewSettingsService(mediaSvc.repo)
@@ -1268,7 +1268,7 @@ func TestServiceDBErrors2(t *testing.T) {
 	_, _ = mediaSvc.repo.DB().Exec(`UPDATE users SET password_hash=? WHERE id=1`, hash)
 
 	// Close DB — all calls from here return errors.
-	mediaSvc.repo.Close()
+	_ = mediaSvc.repo.Close()
 
 	// MediaService errors.
 	if _, err := mediaSvc.GetStorageUsage(ctx); err == nil {
@@ -1312,8 +1312,8 @@ func TestServiceDBErrors2(t *testing.T) {
 func TestMediaService_AnalyzeByPath_InvalidPath(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -1330,7 +1330,7 @@ func TestTagService_SetTagChildren_ClearError(t *testing.T) {
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'P','parent'),(2,'C','child')`)
-	repo.Close()
+	_ = repo.Close()
 
 	// Non-system child with closed DB → ClearTagChildren fails.
 	err := svc.SetTagChildren(ctx, 1, []int64{2})
@@ -1343,8 +1343,8 @@ func TestTagService_SetTagChildren_ClearError(t *testing.T) {
 func TestMediaService_GetStorageUsage_Valid(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 	ctx := context.Background()
 
@@ -1360,7 +1360,7 @@ func TestMediaService_GetStorageUsage_Valid(t *testing.T) {
 // TestSettingsService_GetSetting_NullValue covers the NULL-value path in GetSetting.
 func TestSettingsService_GetSetting_NullValue(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	svc := NewSettingsService(repo)
 	ctx := context.Background()
 
@@ -1375,7 +1375,7 @@ func TestSettingsService_GetSetting_NullValue(t *testing.T) {
 // TestTagService_SystemTagAccess covers GetTagByID and DeleteTag with system tags.
 func TestTagService_SystemTagAccess(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (99, 'System', '_system')`)
@@ -1396,25 +1396,25 @@ func TestTagService_SystemTagAccess(t *testing.T) {
 // TestTagService_GetTagCloud_Branches covers empty DB, no-candidates, and no-filtered paths.
 func TestTagService_GetTagCloud_Branches(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Empty DB → len(tags)==0 → return []
-	items, err := svc.GetTagCloud(ctx, 10, false)
+	items, err := svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil || len(items) != 0 {
 		t.Errorf("empty DB: expected [], got %v %v", items, err)
 	}
 
 	// Only system tags → candidates is empty
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1, 'Sys', '_sys')`)
-	items, err = svc.GetTagCloud(ctx, 10, false)
+	items, err = svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil || len(items) != 0 {
 		t.Errorf("only system tags: expected [], got %v %v", items, err)
 	}
 
 	// Regular tag with no posts → filtered is empty (effectiveCounts[id]==0)
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count) VALUES (2, 'Regular', 'regular', 0)`)
-	items, err = svc.GetTagCloud(ctx, 10, false)
+	items, err = svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil || len(items) != 0 {
 		t.Errorf("no posts: expected [], got %v %v", items, err)
 	}
@@ -1423,7 +1423,7 @@ func TestTagService_GetTagCloud_Branches(t *testing.T) {
 // TestTagService_SetTagParents_EmptyParentIDs covers the empty parentIDs → auto-assign _pending path.
 func TestTagService_SetTagParents_EmptyParentIDs(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1, 'Regular', 'regular')`)
@@ -1443,7 +1443,7 @@ func TestTagService_SetTagParents_EmptyParentIDs(t *testing.T) {
 // TestTagService_ReorderTag_CrossHierarchy covers draggedIdx==-1 (cross-hierarchy move).
 func TestTagService_ReorderTag_CrossHierarchy(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// parent1 (1), parent2 (2), dragTag (3, child of parent1), anotherTag (4, child of parent2)
@@ -1465,7 +1465,7 @@ func TestTagService_ReorderTag_CrossHierarchy(t *testing.T) {
 // TestPostService_getOrCreateTag_PendingAssign covers auto-assign to _pending via UpdatePost.
 func TestPostService_getOrCreateTag_PendingAssign(t *testing.T) {
 	svc, repo := setupPostService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -1493,7 +1493,7 @@ func TestPostService_DBErrors3(t *testing.T) {
 	svc, repo := setupPostService(t)
 	ctx := context.Background()
 
-	repo.Close()
+	_ = repo.Close()
 
 	if _, err := svc.CreatePost(ctx, CreatePostParams{Title: "T", Status: "draft", AuthorID: 1}); err == nil {
 		t.Error("CreatePost DB error: expected error")
@@ -1514,9 +1514,9 @@ func TestTagService_DBErrors3(t *testing.T) {
 	svc, repo := setupTagService(t)
 	ctx := context.Background()
 
-	repo.Close()
+	_ = repo.Close()
 
-	if _, err := svc.GetTagChildren(ctx, 1, false); err == nil {
+	if _, err := svc.GetTagChildren(ctx, 1, false, 0); err == nil {
 		t.Error("GetTagChildren DB error: expected error")
 	}
 	if _, err := svc.UpdateMissingCoords(ctx); err == nil {
@@ -1529,7 +1529,7 @@ func TestAuthService_ValidateSession_DBError(t *testing.T) {
 	svc, repo := setupAuthService(t)
 	ctx := context.Background()
 
-	repo.Close()
+	_ = repo.Close()
 
 	if _, err := svc.ValidateSession(ctx, "sometoken"); err == nil {
 		t.Error("ValidateSession DB closed: expected error")
@@ -1539,7 +1539,7 @@ func TestAuthService_ValidateSession_DBError(t *testing.T) {
 // TestAuthService_ChangePassword_LongPassword covers HashPassword bcrypt error.
 func TestAuthService_ChangePassword_LongPassword(t *testing.T) {
 	svc, repo := setupAuthService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	hash, _ := HashPassword("correct")
@@ -1556,7 +1556,7 @@ func TestAuthService_ChangePassword_LongPassword(t *testing.T) {
 func TestTagService_DropTable_SetTagErrors(t *testing.T) {
 	t.Run("SetTagParents_ClearParentsError", func(t *testing.T) {
 		svc, repo := setupTagService(t)
-		defer repo.Close()
+		defer func() { _ = repo.Close() }()
 		ctx := context.Background()
 
 		_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'T','regular')`)
@@ -1569,7 +1569,7 @@ func TestTagService_DropTable_SetTagErrors(t *testing.T) {
 
 	t.Run("SetTagChildren_ClearChildrenError", func(t *testing.T) {
 		svc, repo := setupTagService(t)
-		defer repo.Close()
+		defer func() { _ = repo.Close() }()
 		ctx := context.Background()
 
 		_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'P','parent'),(2,'C','child')`)
@@ -1587,7 +1587,7 @@ func TestTagService_GeocodeTag_HttpErrors(t *testing.T) {
 
 	t.Run("InvalidURL", func(t *testing.T) {
 		svc, repo := setupTagService(t)
-		defer repo.Close()
+		defer func() { _ = repo.Close() }()
 		_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'City','city')`)
 		svc.nominatimBaseURL = "http://\x00invalid"
 		if _, _, err := svc.GeocodeTag(ctx, 1); err == nil {
@@ -1597,7 +1597,7 @@ func TestTagService_GeocodeTag_HttpErrors(t *testing.T) {
 
 	t.Run("ConnectionRefused", func(t *testing.T) {
 		svc, repo := setupTagService(t)
-		defer repo.Close()
+		defer func() { _ = repo.Close() }()
 		_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'City','city')`)
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 		tsURL := ts.URL
@@ -1610,7 +1610,7 @@ func TestTagService_GeocodeTag_HttpErrors(t *testing.T) {
 
 	t.Run("EmptyResults", func(t *testing.T) {
 		svc, repo := setupTagService(t)
-		defer repo.Close()
+		defer func() { _ = repo.Close() }()
 		_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'City','city')`)
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`[]`)) //nolint:errcheck
@@ -1624,7 +1624,7 @@ func TestTagService_GeocodeTag_HttpErrors(t *testing.T) {
 
 	t.Run("UpsertError", func(t *testing.T) {
 		svc, repo := setupTagService(t)
-		defer repo.Close()
+		defer func() { _ = repo.Close() }()
 		_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'City','city')`)
 		_, _ = repo.DB().Exec(`DROP TABLE tag_locations`)
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1642,8 +1642,8 @@ func TestTagService_GeocodeTag_HttpErrors(t *testing.T) {
 func TestMediaService_parseAnalysisResult_YearTag(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
 	defer func() {
-		os.RemoveAll(tmpDir)
-		svc.repo.Close()
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
 	}()
 
 	// Year "2024" already in tags → found=true, no prepend
@@ -1664,7 +1664,7 @@ func TestMediaService_parseAnalysisResult_YearTag(t *testing.T) {
 // TestTagService_UpdateTag_WithSortOrder covers the non-nil SortOrder branch.
 func TestTagService_UpdateTag_WithSortOrder(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'Regular','regular')`)
@@ -1683,7 +1683,7 @@ func TestTagService_UpdateTag_WithSortOrder(t *testing.T) {
 // TestTagService_ReorderTag_GetSiblingsError covers the GetRootTags/GetChildrenOfTag error path.
 func TestTagService_ReorderTag_GetSiblingsError(t *testing.T) {
 	svc, repo := setupTagService(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'T','tag1')`)

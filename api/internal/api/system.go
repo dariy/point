@@ -1,9 +1,7 @@
 package api
 
 import (
-	"archive/tar"
 	"bufio"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -27,6 +25,8 @@ type SystemHandler struct {
 	postService     *services.PostService
 	settingsService *services.SettingsService
 	tagService      *services.TagService
+	systemService   *services.SystemService
+	cacheService    *services.CacheService
 	dataPath        string
 	logPath         string
 	appVersion      string
@@ -34,13 +34,15 @@ type SystemHandler struct {
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, dataPath string, appVersion string) *SystemHandler {
+func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
 		postService:     postService,
 		settingsService: settingsService,
 		tagService:      tagService,
+		systemService:   systemService,
+		cacheService:    cacheService,
 		dataPath:        dataPath,
 		logPath:         filepath.Join(dataPath, "logs", "app.log"),
 		appVersion:      appVersion,
@@ -164,23 +166,9 @@ func (h *SystemHandler) GetLogs(c echo.Context) error {
 }
 
 func (h *SystemHandler) CreateBackup(c echo.Context) error {
-	backupDir := filepath.Join(h.dataPath, "backups")
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create backup directory")
-	}
-
-	timestamp := time.Now().Format("20060102_150405")
-	backupName := fmt.Sprintf("backup_%s.tar.gz", timestamp)
-	backupPath := filepath.Join(backupDir, backupName)
-
-	if err := h.createTarGz(backupPath); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("backup failed: %v", err))
-	}
-
-	info, _ := os.Stat(backupPath)
-	size := int64(0)
-	if info != nil {
-		size = info.Size()
+	backupName, size, err := h.systemService.CreateBackup(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -228,17 +216,8 @@ func (h *SystemHandler) ListBackups(c echo.Context) error {
 
 func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 	filename := c.Param("filename")
-	if filename == "" || strings.Contains(filename, "/") || strings.Contains(filename, "..") {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid filename")
-	}
-
-	backupPath := filepath.Join(h.dataPath, "backups", filename)
-	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		return echo.NewHTTPError(http.StatusNotFound, "backup not found")
-	}
-
-	if err := h.extractTarGz(backupPath, h.dataPath); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("restore failed: %v", err))
+	if err := h.systemService.RestoreBackup(c.Request().Context(), filename); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
@@ -256,8 +235,9 @@ func (h *SystemHandler) GetMigrations(c echo.Context) error {
 }
 
 func (h *SystemHandler) ClearCache(c echo.Context) error {
-	// The Go API has no application-level cache, but we treat it as an
-	// opportunity to synchronize state. We recalculate media visibility
+	_ = h.cacheService.Clear(c.Request().Context())
+	// The Go API now has a file-based cache for feeds and some pages.
+	// We also treat this as an opportunity to synchronize state. We recalculate media visibility
 	// to ensure all media referenced in public posts is accessible to guests.
 	updated, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
 	if err != nil {
@@ -387,121 +367,3 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	})
 }
 
-func (h *SystemHandler) createTarGz(destPath string) error {
-	f, err := os.Create(destPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-
-	gz := gzip.NewWriter(f)
-	defer func() {
-		_ = gz.Close()
-	}()
-
-	tw := tar.NewWriter(gz)
-	defer func() {
-		_ = tw.Close()
-	}()
-
-	// Walk the data directory, excluding the backups dir itself
-	return filepath.Walk(h.dataPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // skip unreadable files
-		}
-
-		// Skip the backups directory to avoid recursive backup-of-backup
-		if info.IsDir() && filepath.Base(path) == "backups" {
-			return filepath.SkipDir
-		}
-
-		relPath, err := filepath.Rel(h.dataPath, path)
-		if err != nil {
-			return nil
-		}
-
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return nil
-		}
-		header.Name = relPath
-
-		if err := tw.WriteHeader(header); err != nil {
-			return err
-		}
-
-		if !info.IsDir() {
-			src, err := os.Open(path)
-			if err != nil {
-				return nil
-			}
-			defer func() {
-				_ = src.Close()
-			}()
-			_, _ = io.Copy(tw, src)
-		}
-
-		return nil
-	})
-}
-
-func (h *SystemHandler) extractTarGz(srcPath, destDir string) error {
-	f, err := os.Open(srcPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = gz.Close()
-	}()
-
-	tr := tar.NewReader(gz)
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		target := filepath.Join(destDir, header.Name)
-
-		// Security: prevent path traversal
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)) {
-			continue
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if mkErr := os.MkdirAll(target, 0755); mkErr != nil {
-				// Directory may already exist with restrictive permissions — try to loosen them.
-				_ = os.Chmod(target, 0755)
-			}
-		case tar.TypeReg:
-			parentDir := filepath.Dir(target)
-			if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
-				_ = os.Chmod(parentDir, 0755)
-			}
-			out, err := os.Create(target)
-			if err != nil {
-				return fmt.Errorf("restore: cannot write %s: %w", header.Name, err)
-			}
-			if _, copyErr := io.Copy(out, tr); copyErr != nil {
-				_ = out.Close()
-				return fmt.Errorf("restore: cannot write %s: %w", header.Name, copyErr)
-			}
-			_ = out.Close()
-		}
-	}
-	return nil
-}

@@ -111,7 +111,7 @@ WHERE
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
         WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
-        ELSE p.status IN ('published', 'page')
+        ELSE p.status = 'published'
     END)
 
     AND (CASE
@@ -134,7 +134,7 @@ WHERE
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
         WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
-        ELSE p.status IN ('published', 'page')
+        ELSE p.status = 'published'
     END)
 
     AND (CASE
@@ -170,6 +170,11 @@ WHERE id = ? AND author_id = ?;
 -- name: IncrementPostViewCount :exec
 UPDATE posts
 SET view_count = view_count + 1
+WHERE id = ?;
+
+-- name: AddPostViewCount :exec
+UPDATE posts
+SET view_count = view_count + ?
 WHERE id = ?;
 
 -- name: PublishPost :one
@@ -340,9 +345,9 @@ WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') 
 
 -- name: CreateMedia :one
 INSERT INTO media (
-    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, uploaded_at
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, uploaded_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 

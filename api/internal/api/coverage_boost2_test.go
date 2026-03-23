@@ -34,8 +34,10 @@ func setupSystemHandler(t *testing.T) (*SystemHandler, func()) {
 		ThumbnailWidth:  400,
 		ThumbnailHeight: 300,
 	}, settingsSvc, tagSvc)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, tmpDir, "1.2.3")
-	return h, func() { repo.Close() }
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.2.3")
+	return h, func() { _ = repo.Close() }
 }
 
 // TestScanMediaImport_NotConfigured covers the "not configured" early return.
@@ -63,12 +65,15 @@ func TestScanMediaImport_PathNotExist(t *testing.T) {
 
 	ctx := context.Background()
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	settingsSvc := services.NewSettingsService(repo)
 	_ = settingsSvc.SetSetting(ctx, "media_import_path", "/nonexistent/does/not/exist", "string")
 
 	// Rebuild handler with this settings service
-	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, t.TempDir(), "1.0")
+	tmpDir2 := t.TempDir()
+	systemSvc2 := services.NewSystemService(repo, tmpDir2)
+	cacheSvc2 := services.NewCacheService(tmpDir2)
+	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, systemSvc2, cacheSvc2, tmpDir2, "1.0")
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	if err := h2.ScanMediaImport(e.NewContext(req, rec)); err != nil {
@@ -177,7 +182,7 @@ func TestGetVersion_WithCache(t *testing.T) {
 // TestUpdatePost_Success covers the success path (post exists → update works).
 func TestUpdatePost_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	postSvc := services.NewPostService(repo)
@@ -222,7 +227,7 @@ func TestUpdatePost_Success(t *testing.T) {
 // TestUpdateSettings_InvalidBind covers the bind error path.
 func TestUpdateSettings_InvalidBind(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	settingsSvc := services.NewSettingsService(repo)
 	h := NewSettingsHandler(settingsSvc)
@@ -241,7 +246,7 @@ func TestUpdateSettings_InvalidBind(t *testing.T) {
 // TestUploadMultiple_WithPostID covers the post_id parsing branch.
 func TestUploadMultiple_WithPostID(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}
 	settingsSvc := services.NewSettingsService(repo)
@@ -271,7 +276,7 @@ func TestUploadMultiple_WithPostID(t *testing.T) {
 // TestGetStorageStats_Success covers GetStorageStats success path.
 func TestGetStorageStats_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
@@ -289,7 +294,7 @@ func TestGetStorageStats_Success(t *testing.T) {
 // TestDeleteOrphanedMedia_Success covers DeleteOrphanedMedia success path.
 func TestDeleteOrphanedMedia_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
@@ -307,7 +312,7 @@ func TestDeleteOrphanedMedia_Success(t *testing.T) {
 // TestGetMediaFolders_Success covers GetMediaFolders success path.
 func TestGetMediaFolders_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
@@ -325,7 +330,7 @@ func TestGetMediaFolders_Success(t *testing.T) {
 // TestRecalculateCounts_Success covers the RecalculateCounts success path.
 func TestRecalculateCounts_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc2 := services.NewSettingsService(repo)
@@ -342,7 +347,7 @@ func TestRecalculateCounts_Success(t *testing.T) {
 // TestPostHandler_PublishWithdraw_Success covers PublishPost and WithdrawPost success paths.
 func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	postSvc := services.NewPostService(repo)
@@ -388,7 +393,7 @@ func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
 // including the X-Forwarded-Proto header path.
 func TestPostHandler_GeneratePreviewLink_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	postSvc := services.NewPostService(repo)
@@ -424,7 +429,7 @@ func TestPostHandler_GeneratePreviewLink_Success(t *testing.T) {
 // TestSettingsHandler_GetSettingByKey_Success covers GetSettingByKey success path.
 func TestSettingsHandler_GetSettingByKey_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	settingsSvc := services.NewSettingsService(repo)
@@ -477,7 +482,7 @@ func TestSystemHandler_GetMigrations_Success(t *testing.T) {
 // TestCreateAudioPost_NoTitleWithTags covers the title-from-filename and tags parsing paths.
 func TestCreateAudioPost_NoTitleWithTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	postSvc := services.NewPostService(repo)
@@ -517,7 +522,7 @@ func TestCreateAudioPost_NoTitleWithTags(t *testing.T) {
 // TestUpdatePost_SlugConflict covers the UNIQUE constraint slug conflict path (409).
 func TestUpdatePost_SlugConflict(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	postSvc := services.NewPostService(repo)
@@ -562,7 +567,7 @@ func TestUpdatePost_SlugConflict(t *testing.T) {
 // TestUpdatePost_BadID covers the invalid ID parse error path.
 func TestUpdatePost_BadID(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
@@ -586,7 +591,7 @@ func TestUpdatePost_BadID(t *testing.T) {
 // TestGenerateToken_Success covers the GenerateToken utility and AuthHandler Login path.
 func TestGenerateToken_Success(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	authSvc := services.NewAuthService(repo)
 	h := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720})

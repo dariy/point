@@ -10,7 +10,7 @@ import (
 
 func TestRepository_ListPostsAndCountPosts(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -88,7 +88,7 @@ func TestRepository_ListPostsAndCountPosts(t *testing.T) {
 
 func TestRepository_GetCoOccurringTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -109,7 +109,7 @@ func TestRepository_GetCoOccurringTags(t *testing.T) {
 
 func TestRepository_MigrateFlagsToSystemTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	err := repo.MigrateFlagsToSystemTags(ctx)
@@ -126,7 +126,7 @@ func TestRepository_MigrateFlagsToSystemTags(t *testing.T) {
 
 func TestRepository_RebuildTagsTableDropBooleans(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	err := repo.RebuildTagsTableDropBooleans(ctx)
@@ -146,7 +146,7 @@ func TestRepository_RebuildTagsTableDropBooleans(t *testing.T) {
 // MigrateFlagsToSystemTags and RebuildTagsTableDropBooleans.
 func TestRepository_MigrateWithOldSchema(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Add the old boolean columns to the tags table so the migration code sees them.
@@ -189,7 +189,7 @@ func TestRepository_MigrateWithOldSchema(t *testing.T) {
 // TestRepository_ApplyMigrationBadSQL covers the "failed SQL" error return in ApplyMigration.
 func TestRepository_ApplyMigrationBadSQL(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	err := repo.ApplyMigration(ctx, "bad_migration_test", "INVALID SQL STATEMENT !!!")
@@ -202,7 +202,7 @@ func TestRepository_ApplyMigrationBadSQL(t *testing.T) {
 // that returns an empty list (not an error).
 func TestRepository_GetMigrationsNoTable(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// schema.sql doesn't create migration_history, so the table doesn't exist.
@@ -229,7 +229,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO tag_locations (tag_id, latitude, longitude) VALUES (1,1.0,2.0)`)
 
 	// Close the DB — all subsequent queries will fail.
-	repo.Close()
+	_ = repo.Close()
 
 	// The extended functions should all return errors.
 	if _, err := repo.ListPosts(ctx, models.ListPostsParams{}); err == nil {
@@ -321,7 +321,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 // TestRepository_UpsertTagLocation_InsertAndUpdate covers the UPDATE path (n > 0).
 func TestRepository_UpsertTagLocation_InsertAndUpdate(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
@@ -339,7 +339,7 @@ func TestRepository_UpsertTagLocation_InsertAndUpdate(t *testing.T) {
 // TestRepository_DeleteSessionPaths covers both n==0 (not found) and n>0 (deleted) paths.
 func TestRepository_DeleteSessionPaths(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Not found → error.
@@ -361,7 +361,7 @@ func TestRepository_DeleteSessionPaths(t *testing.T) {
 // TestRepository_GetMigrations_EmptyHistory covers the items==nil → [] assignment.
 func TestRepository_GetMigrations_EmptyHistory(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Create migration_history table with no records.
@@ -383,7 +383,7 @@ func TestRepository_GetMigrations_EmptyHistory(t *testing.T) {
 // TestRepository_GetMigrations_WithRecord covers the row-scan path in GetMigrations.
 func TestRepository_GetMigrations_WithRecord(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Apply a real migration so migration_history has a row.
@@ -403,7 +403,7 @@ func TestRepository_GetMigrations_WithRecord(t *testing.T) {
 // TestRepository_BranchCoverage covers various uncovered conditional branches.
 func TestRepository_BranchCoverage(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -486,7 +486,7 @@ func TestRepository_BranchCoverage(t *testing.T) {
 // TestRepository_GetPublishedPostsForSitemap_RFC3339 covers the alternative time parse branch.
 func TestRepository_GetPublishedPostsForSitemap_RFC3339(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
@@ -507,7 +507,7 @@ func TestRepository_ExecErrors(t *testing.T) {
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (id,filename,original_path,file_type,mime_type,file_size,checksum) VALUES (1,'f','p','image','image/jpeg',100,'c')`)
 
-	repo.Close()
+	_ = repo.Close()
 
 	if _, err := repo.GetMediaByIDs(ctx, []int64{1}); err == nil {
 		t.Error("GetMediaByIDs: expected error")
@@ -532,7 +532,7 @@ func TestNewRepository_MemorySharedCache(t *testing.T) {
 		t.Logf("NewRepository memory shared: %v (expected on some drivers)", err)
 		return
 	}
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	schema, _ := os.ReadFile("../../sql/schema.sql")
 	if len(schema) > 0 {
 		_, _ = repo.DB().Exec(string(schema))
@@ -549,5 +549,5 @@ func TestNewRepository_InvalidPath(t *testing.T) {
 		return
 	}
 	// If it somehow succeeded, close it.
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 }

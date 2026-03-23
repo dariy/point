@@ -89,13 +89,9 @@ export default class SettingsPage extends Component {
       const value = settings[key] ?? '';
       const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-      if (key.includes('enable') || key.includes('show') || key.includes('use')) {
-        const checked = value === 'true' || value === true || value === 1 || value === '1';
-        toggles.push({ key, label, checked });
-        continue;
-      }
-
       let input = '';
+      let isToggle = false;
+
       if (key === 'about_post_id') {
         const options = posts.map(p => {
           const slug = escapeHtml(p.slug);
@@ -124,16 +120,22 @@ export default class SettingsPage extends Component {
           </select>`;
       } else if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
         input = `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
+      } else if (key.includes('enable') || key.includes('show') || key.includes('use')) {
+        const checked = value === 'true' || value === true || value === 1 || value === '1';
+        toggles.push({ key, label, checked });
+        isToggle = true;
       } else {
         input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
 
-      const isTextarea = key === 'author_bio' || key === 'footer_text';
-      inputs.push(`
-        <div class="settings-field${isTextarea ? ' settings-field-top' : ''}">
-          <label class="settings-field-label" for="${key}">${escapeHtml(label)}</label>
-          ${input}
-        </div>`);
+      if (!isToggle) {
+        const isTextarea = key === 'author_bio' || key === 'footer_text';
+        inputs.push(`
+          <div class="settings-field${isTextarea ? ' settings-field-top' : ''}">
+            <label class="settings-field-label" for="${key}">${escapeHtml(label)}</label>
+            ${input}
+          </div>`);
+      }
     }
 
     const inputsHtml = inputs.join('');
@@ -273,8 +275,8 @@ export default class SettingsPage extends Component {
   }
 
   _getSettingType(key) {
-    if (key.includes('enable') || key.includes('show') || key.includes('use')) return 'boolean';
     if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) return 'number';
+    if (key.includes('enable') || key.includes('show') || key.includes('use')) return 'boolean';
     return 'string';
   }
 

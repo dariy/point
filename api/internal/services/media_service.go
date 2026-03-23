@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	"github.com/rwcarlsen/goexif/exif"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
 	"gopkg.in/yaml.v3"
@@ -99,6 +100,43 @@ func CalculateChecksum(data []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
+func (s *MediaService) extractEXIF(r io.Reader) map[string]interface{} {
+	metadata := make(map[string]interface{})
+	x, err := exif.Decode(r)
+	if err != nil {
+		return metadata
+	}
+
+	// Helper to extract string tags
+	getString := func(tag exif.FieldName) {
+		val, err := x.Get(tag)
+		if err == nil {
+			// val.String() often includes quotes for strings, or is a rational/int.
+			// For a generic metadata map, we just take the string representation.
+			metadata[string(tag)] = strings.Trim(val.String(), "\"")
+		}
+	}
+
+	getString(exif.Make)
+	getString(exif.Model)
+	getString(exif.Software)
+	getString(exif.DateTimeOriginal)
+	getString(exif.Orientation)
+	getString(exif.ExposureTime)
+	getString(exif.FNumber)
+	getString(exif.ISOSpeedRatings)
+	getString(exif.FocalLength)
+
+	// Lat/Long
+	lat, long, err := x.LatLong()
+	if err == nil {
+		metadata["GPSLatitude"] = lat
+		metadata["GPSLongitude"] = long
+	}
+
+	return metadata
+}
+
 // thumbnailWidth returns the effective thumbnail width, preferring env config
 // then DB setting then the hard-coded default.
 func (s *MediaService) thumbnailWidth(ctx context.Context) int {
@@ -162,14 +200,15 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	originalRelPath := filepath.Join("originals", datePath, uniqueFilename)
 	originalFullPath := filepath.Join(s.cfg.StoragePath, "media", originalRelPath)
 
-	// Process image
+	// Process media
 	var width, height sql.NullInt64
 	var thumbnailRelPath sql.NullString
+	var metadata map[string]interface{}
 	fileType := "file"
 
 	if strings.HasPrefix(p.MimeType, "image/") {
 		fileType = "image"
-		// Load image
+		// Load image for dimensions and thumbnail
 		src, err := imaging.Decode(bytes.NewReader(p.Content))
 		if err == nil {
 			bounds := src.Bounds()
@@ -185,6 +224,19 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
 				thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
 			}
+		}
+		// Extract EXIF
+		metadata = s.extractEXIF(bytes.NewReader(p.Content))
+	} else if strings.HasPrefix(p.MimeType, "video/") {
+		fileType = "video"
+	} else if strings.HasPrefix(p.MimeType, "audio/") {
+		fileType = "audio"
+	}
+
+	var metadataJSON sql.NullString
+	if len(metadata) > 0 {
+		if mj, err := json.Marshal(metadata); err == nil {
+			metadataJSON = sql.NullString{String: string(mj), Valid: true}
 		}
 	}
 
@@ -212,6 +264,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		Checksum:      checksum,
 		AltText:       sql.NullString{String: p.AltText, Valid: p.AltText != ""},
 		Caption:       sql.NullString{String: p.Caption, Valid: p.Caption != ""},
+		Metadata:      metadataJSON,
 		UploadedAt:    now,
 	})
 }
@@ -255,6 +308,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	var width, height sql.NullInt64
 	var thumbnailRelPath sql.NullString
+	var metadata map[string]interface{}
 	fileType := "file"
 
 	if strings.HasPrefix(mimeType, "image/") {
@@ -274,8 +328,19 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 				thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
 			}
 		}
+		// Extract EXIF
+		metadata = s.extractEXIF(bytes.NewReader(content))
 	} else if strings.HasPrefix(mimeType, "video/") {
 		fileType = "video"
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		fileType = "audio"
+	}
+
+	var metadataJSON sql.NullString
+	if len(metadata) > 0 {
+		if mj, err := json.Marshal(metadata); err == nil {
+			metadataJSON = sql.NullString{String: string(mj), Valid: true}
+		}
 	}
 
 	if err := os.WriteFile(originalFullPath, content, 0644); err != nil {
@@ -295,6 +360,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		Checksum:      checksum,
 		AltText:       sql.NullString{},
 		Caption:       sql.NullString{},
+		Metadata:      metadataJSON,
 		UploadedAt:    now,
 	})
 }
@@ -575,6 +641,12 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 			OriginalPath:  m.OriginalPath,
 			ThumbnailPath: sql.NullString{String: thumbRel, Valid: true},
 		})
+
+		// Sync with posts: if a post used the original path as its thumbnail,
+		// update it to use the new thumbnail variant (with ?thumb suffix).
+		barePath := "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
+		_, _ = s.repo.UpdatePostThumbnailPath(ctx, barePath, barePath+"?thumb")
+
 		stats["processed"]++
 	}
 
