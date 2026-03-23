@@ -7,6 +7,7 @@
  */
 
 import { escapeHtml } from './helpers.js';
+import { CHEVRON_SVG } from './icons.js';
 
 // ── Flyout singleton ─────────────────────────────────────────────────────────
 // One flyout element lives on <body> and is reused by every call site.
@@ -41,11 +42,11 @@ function _showFlyout(anchorEl, ancestors) {
   const flyW = flyout.offsetWidth;
 
   const anchorRect = anchorEl.getBoundingClientRect();
-  const paddingLeft = parseFloat(getComputedStyle(flyout).paddingLeft) || 0;
   const gap = 6;
   let top = anchorRect.top - flyH - gap;
   top = Math.max(8, top);
-  let left = anchorRect.left - paddingLeft;
+  // Centre the flyout over the anchor; clamp within the viewport.
+  let left = anchorRect.left + anchorRect.width / 2 - flyW / 2;
   left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
 
   flyout.style.top = `${top}px`;
@@ -85,7 +86,8 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
       if (!ancestors.length) return; // no ancestors — navigate normally
 
       e.preventDefault();
-      e.stopPropagation();
+      // We don't stop propagation here so that parent components (like PostCard)
+      // can also react to the click (e.g. to reveal an image card overlay).
 
       const flyoutOpenForThisLink =
         _activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden');
@@ -118,6 +120,104 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
     window.removeEventListener('scroll', dismissOnScroll, { passive: true });
     _hideFlyout();
   };
+}
+
+/**
+ * Set up scroll arrows for a horizontally-scrollable strip.
+ *
+ * Adds `.has-scroll-left` / `.has-scroll-right` to trackEl based on
+ * scrollEl's scroll position. Wires click handlers to the
+ * `.tags-scroll-btn--left` / `.tags-scroll-btn--right` buttons inside trackEl.
+ *
+ * @param {HTMLElement} trackEl   Wrapper — receives `has-scroll-*` classes
+ * @param {HTMLElement} scrollEl  The horizontally-scrollable child
+ * @returns {Function} cleanup — call in beforeUnmount
+ */
+export function setupScrollableStrip(trackEl, scrollEl) {
+  if (!trackEl || !scrollEl) return () => {};
+
+  const btnLeft  = trackEl.querySelector('.tags-scroll-btn--left');
+  const btnRight = trackEl.querySelector('.tags-scroll-btn--right');
+
+  const update = () => {
+    const { scrollLeft, scrollWidth, clientWidth } = scrollEl;
+    trackEl.classList.toggle('has-scroll-left',  scrollLeft > 1);
+    trackEl.classList.toggle('has-scroll-right', scrollLeft < scrollWidth - clientWidth - 1);
+  };
+
+  const onLeft  = () => scrollEl.scrollBy({ left: -200, behavior: 'smooth' });
+  const onRight = () => scrollEl.scrollBy({ left:  200, behavior: 'smooth' });
+
+  btnLeft?.addEventListener('click',  onLeft);
+  btnRight?.addEventListener('click', onRight);
+  scrollEl.addEventListener('scroll', update, { passive: true });
+
+  requestAnimationFrame(update);
+
+  return () => {
+    btnLeft?.removeEventListener('click',  onLeft);
+    btnRight?.removeEventListener('click', onRight);
+    scrollEl.removeEventListener('scroll', update);
+  };
+}
+
+/**
+ * Render a scrollable tag strip with scroll buttons and fades.
+ *
+ * @param {object[]} postTags  Array of {name, slug} from a post object
+ * @param {Map|null} tagIndex  From buildTagIndex() — if present, only shows leaf tags
+ * @returns {string} HTML string
+ */
+export function renderTagStrip(postTags, tagIndex) {
+  const visibleTags = (postTags || []).filter((t) => {
+    if (!tagIndex) return true;           // navTags not loaded — show all
+    const entry = tagIndex.get(t.slug);
+    return !entry || entry.isLeaf;        // not in tree → treat as leaf
+  });
+  const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
+  if (!tagsHtml) return '';
+
+  return `
+    <div class="tag-strip-track">
+      <button class="tags-scroll-btn tags-scroll-btn--left" aria-label="Scroll left" type="button">${CHEVRON_SVG}</button>
+      <div class="tag-strip-scroll" aria-label="Tags">${tagsHtml}</div>
+      <button class="tags-scroll-btn tags-scroll-btn--right" aria-label="Scroll right" type="button">${CHEVRON_SVG}</button>
+    </div>`;
+}
+
+/**
+ * Set up scrolling, touch suppression, and flyout behavior for a tag strip
+ * rendered via renderTagStrip.
+ *
+ * @param {HTMLElement} container  Element containing the `.tag-strip-track`
+ * @param {Map|null}    tagIndex   From buildTagIndex()
+ * @param {Function}    navigateFn navigate(url)
+ * @param {HTMLElement} [hostEl]   Ancestor for flyout dismissal (usually the card)
+ * @returns {Function} cleanup — call in beforeUnmount
+ */
+export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
+  const track = container.querySelector('.tag-strip-track');
+  const tagsEl = container.querySelector('.tag-strip-scroll');
+  if (!tagsEl) return () => {};
+
+  const cleanups = [];
+
+  // Stop propagation on horizontal touch moves to avoid interference from site gestures
+  const stop = (e) => e.stopPropagation();
+  tagsEl.addEventListener('touchstart', stop, { passive: true });
+  tagsEl.addEventListener('touchmove',  stop, { passive: true });
+  cleanups.push(() => {
+    tagsEl.removeEventListener('touchstart', stop);
+    tagsEl.removeEventListener('touchmove',  stop);
+  });
+
+  // Wiring scroll arrows and fades
+  cleanups.push(setupScrollableStrip(track, tagsEl));
+
+  // Ancestor flyout (first click/tap)
+  cleanups.push(setupTagFlyout(tagsEl, tagIndex, navigateFn, hostEl));
+
+  return () => cleanups.forEach(fn => fn());
 }
 
 /**

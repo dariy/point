@@ -384,9 +384,9 @@ func (s *TagService) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map
 // ReorderTagParams describes a drag-and-drop reorder request.
 type ReorderTagParams struct {
 	ID       int64
-	TargetID *int64  // nil = move to end
-	Position string  // "before" or "after"
-	ParentID *int64  // nil = root level
+	TargetID *int64 // nil = move to end
+	Position string // "before" or "after"
+	ParentID *int64 // nil = root level
 }
 
 // ReorderTag reorders a tag within its sibling group by updating sort_order values.
@@ -834,7 +834,7 @@ func (s *TagService) PageTagIDs(ctx context.Context) (map[int64]bool, error) {
 	// We include the tag itself if it's considered a system tag that shouldn't show in grids.
 	// But usually we only want to hide descendants.
 	// The user said "descenders of _page".
-	
+
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -871,9 +871,10 @@ func (s *TagService) PublicHiddenTagIDs(ctx context.Context, minPosts int64) (ma
 
 	var hiddenSystemID, pageSystemID int64
 	for _, t := range allTags {
-		if t.Slug == "_hidden" {
+		switch t.Slug {
+		case "_hidden":
 			hiddenSystemID = t.ID
-		} else if t.Slug == "_page" {
+		case "_page":
 			pageSystemID = t.ID
 		}
 	}

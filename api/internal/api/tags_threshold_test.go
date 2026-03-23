@@ -46,8 +46,8 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 	// Recalculate counts to be sure
 	_ = repo.UpdateAllTagPostCounts(ctx)
 
-	// 3. Set threshold to 3
-	_ = settingsSvc.SetSetting(ctx, "min_tag_posts_to_show", "3", "integer")
+	// 3. Set threshold to 4
+	_ = settingsSvc.SetSetting(ctx, "min_tag_posts_to_show", "4", "integer")
 
 	// 4. Test ListTags as Guest (publicOnly)
 	req := httptest.NewRequest(http.MethodGet, "/tags", nil)
