@@ -830,7 +830,7 @@ func (r *Repository) ReplacePostContentPath(ctx context.Context, oldPath, newPat
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Update content
 	res1, err := tx.ExecContext(ctx,

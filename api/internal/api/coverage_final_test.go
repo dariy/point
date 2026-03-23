@@ -89,7 +89,7 @@ func TestFeedsHandler_Sitemap_TagRelationsError(t *testing.T) {
 func setupTagHandlerClosed(t *testing.T) (*TagHandler, *testHandlers) {
 	h := setupHandlers(t)
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
-	h.repo.Close()
+	_ = h.repo.Close()
 	return th, h
 }
 
@@ -294,7 +294,7 @@ func TestPostHandler_CreatePost_SlugConflict(t *testing.T) {
 
 func TestPostHandler_UpdatePost_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodPut, "/", `{"title":"Updated"}`)
 	c.SetParamNames("id")
 	c.SetParamValues("1")
@@ -319,7 +319,7 @@ func TestPostHandler_CreateAudioPost_NoFile(t *testing.T) {
 
 func TestPostHandler_CreateAudioPost_UploadError(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 
 	boundary := "testboundary"
 	body := "--" + boundary + "\r\n" +
@@ -342,7 +342,7 @@ func TestPostHandler_CreateAudioPost_UploadError(t *testing.T) {
 
 func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 	ph, h := setupPostHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodGet, "/", "")
 	c.SetParamNames("id")
 	c.SetParamValues("1")
@@ -358,7 +358,7 @@ func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 
 func TestPagesHandler_GetHomePage_DBError(t *testing.T) {
 	ph, h := setupPagesHandler(t)
-	h.repo.Close()
+	_ = h.repo.Close()
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

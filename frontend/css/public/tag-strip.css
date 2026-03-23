@@ -1,0 +1,107 @@
+/**
+ * Unified Tag Strip Control
+ * Used in PostCard, PostContent, and PublicHeaderTagsBar.
+ */
+
+.tag-strip-track {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+.tag-strip-scroll {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: var(--spacing-sm);
+    overflow-x: auto;
+    overflow-y: visible;            /* Allow dropdowns to overflow vertically */
+    scrollbar-width: none;          /* Firefox */
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    padding-block: 0.1875rem;       /* Room for borders/shadows */
+}
+
+.tag-strip-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* 
+ * Dynamic Edge Fades 
+ * Uses mask-image for background-agnostic transparency fades.
+ * The .has-scroll-* classes are toggled by setupScrollableStrip JS.
+ */
+.tag-strip-track.has-scroll-right .tag-strip-scroll {
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+.tag-strip-track.has-scroll-left .tag-strip-scroll {
+    mask-image: linear-gradient(to left, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to left, black 85%, transparent 100%);
+}
+.tag-strip-track.has-scroll-left.has-scroll-right .tag-strip-scroll {
+    mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+}
+
+/* Scroll Arrow Buttons */
+.tags-scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.tags-scroll-btn svg {
+    width: 0.875rem;
+    height: 0.875rem;
+}
+
+.tags-scroll-btn--left {
+    left: var(--spacing-xs);
+}
+.tags-scroll-btn--left svg {
+    transform: rotate(90deg);
+}
+
+.tags-scroll-btn--right {
+    right: var(--spacing-xs);
+}
+.tags-scroll-btn--right svg {
+    transform: rotate(-90deg);
+}
+
+.tag-strip-track.has-scroll-left .tags-scroll-btn--left,
+.tag-strip-track.has-scroll-right .tags-scroll-btn--right {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.tags-scroll-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Base tag link style within a strip */
+.tag-strip-scroll .tag-link {
+    backdrop-filter: blur(0.5rem);
+    -webkit-backdrop-filter: blur(0.5rem);
+    white-space: nowrap;
+}

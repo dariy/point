@@ -254,7 +254,7 @@ export default class TagsManagerPage extends Component {
   _buildTree(tags) {
     // Only _root and _pending are shown as top-level nodes.
     // All other system tags (_system, _hidden, _hide_posts, etc.) are excluded.
-    const VISIBLE_SYSTEM = new Set(['_root', '_pending']);
+    // const VISIBLE_SYSTEM = new Set(['_root', '_pending']);
     const HIDDEN_SYSTEM  = new Set(['_system', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors']);
 
     // Build adjacency map across all tags so user-tag subtrees work correctly.
@@ -616,16 +616,8 @@ export default class TagsManagerPage extends Component {
       `        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description\u2026">${escapeHtml(f.description || '')}</textarea>`,
       '      </div>',
 
-      // show_in_ancestors toggle — hidden for system tags
-      ...(isSystem ? [] : [
-        '      <div class="form-group tm-checkbox-row">',
-        `        <label class="tm-checkbox-label"><input type="checkbox" name="show_in_ancestors"${f.show_in_ancestors !== false ? ' checked' : ''}> Show in ancestor flyout</label>`,
-        '        <p class="form-hint">Uncheck to hide this tag from the ancestor chain shown in post card flyouts.</p>',
-        '      </div>',
-      ]),
-
-      // System flag tags — always inline, right below description
-      this._renderSystemFlags(selParents),
+      // Features section — hidden for system tags
+      ...(isSystem ? [] : [this._renderFeaturesSection(selParents)]),
 
       // Parents (collapsible) — hidden for system tags (parents are fixed)
       ...(isSystem ? [] : [
@@ -783,20 +775,34 @@ export default class TagsManagerPage extends Component {
    * as an inline pill strip, positioned below Description in the modal.
    * The checkboxes use name="parent_ids" so they're included in the save payload.
    */
-  _renderSystemFlags(selectedIds) {
-    const FLAG_SLUGS = ['_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors'];
+  _renderFeaturesSection(selectedIds) {
+    const FLAGS = [
+      { slug: '_no_ancestors',      label: 'Hide from ancestor flyout', help: 'Check to exclude this tag from the ancestor chain shown in post card flyouts.' },
+      { slug: '_hidden',            label: 'Hidden',                    help: 'Hide this tag from public views (tag cloud, tag pages).' },
+      { slug: '_hide_posts',        label: 'Hide posts',                help: 'Hide all posts tagged with this from public views.' },
+      { slug: '_is_in_breadcrumbs', label: 'Include in breadcrumbs',    help: 'Show this tag in the breadcrumb navigation path.' },
+      { slug: '_with_related',      label: 'Show related tags',         help: 'Display related tags as children in the post sidebar.' },
+    ];
     const selectedSet = new Set(selectedIds);
-    const flagTags = FLAG_SLUGS.map(s => this.state.tags.find(t => t.slug === s)).filter(Boolean);
-    if (!flagTags.length) return '';
-    const pills = flagTags.map(t =>
-      `<span class="tag-toggle-system-item tm-system-node">
-        <label class="tag-toggle">
-          <input type="checkbox" name="parent_ids" value="${t.id}"${selectedSet.has(t.id) ? ' checked' : ''}>
-          <span>${escapeHtml(t.name)}</span>
+    const rows = FLAGS
+      .map(f => {
+        const tag = this.state.tags.find(t => t.slug === f.slug);
+        if (!tag) return '';
+        return `<div class="tm-feature-row">
+        <label class="tm-checkbox-label">
+          <input type="checkbox" name="parent_ids" value="${tag.id}"${selectedSet.has(tag.id) ? ' checked' : ''}>
+          ${escapeHtml(f.label)}
+          <span class="tm-help-icon" title="${escapeHtml(f.help)}">?</span>
         </label>
-      </span>`
-    ).join('');
-    return `<div class="tag-toggle-system-strip tm-flags-inline-strip">${pills}</div>`;
+      </div>`;
+      })
+      .filter(Boolean)
+      .join('');
+    if (!rows) return '';
+    return `<div class="tm-features-section">
+      <p class="tm-features-heading">Features</p>
+      ${rows}
+    </div>`;
   }
 
   /** Render tag-badge toggle checkboxes for parent/children selection (tree only).

@@ -15,7 +15,7 @@ import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
-import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.js';
+import { buildTagIndex, renderTagStrip, setupTagStrip } from '../../utils/tags.js';
 
 export class PostCard extends Component {
   render() {
@@ -45,12 +45,7 @@ export class PostCard extends Component {
 
     const navTags = store.get('navTags') || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-    const visibleTags = (post.tags || []).filter((t) => {
-      if (!tagIndex) return true;           // navTags not loaded — show all
-      const entry = tagIndex.get(t.slug);
-      return !entry || entry.isLeaf;        // not in tree → treat as leaf
-    });
-    const tags = visibleTags.map((t) => renderTagLink(t)).join('');
+    const tags = renderTagStrip(post.tags, tagIndex);
 
     const viewCount = showViewCount && post.view_count != null
       ? `<span class="view-count">${escapeHtml(String(post.view_count))} views</span>` : '';
@@ -74,7 +69,7 @@ export class PostCard extends Component {
             </time>
             ${viewCount}
           </div>
-          ${tags ? `<div class="post-card-tags" aria-label="Tags">${tags}</div>` : ''}
+          ${tags}
         </div>
       </article>`;
   }
@@ -84,6 +79,13 @@ export class PostCard extends Component {
     if (!post) return;
     const card = this.$('.post-card');
     if (!card) return;
+
+    this._cleanupStrip?.();
+
+    if (!this._subscribed) {
+      this.subscribeStore(store, 'navTags', () => this._rerender());
+      this._subscribed = true;
+    }
 
     const go = () => {
       if (tagSlug) {
@@ -136,34 +138,13 @@ export class PostCard extends Component {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
     });
 
-    // Stop touch events from reaching the GestureController's non-passive
-    // touchmove on .site-main. Without this, the browser is forced to use
-    // main-thread scroll (waiting for that listener), which blocks the strip
-    // from scrolling. Stopping propagation here enables compositor-thread
-    // scrolling. We never call preventDefault() so native scroll proceeds.
-    const tagsEl = card.querySelector('.post-card-tags');
-    if (tagsEl) {
-      tagsEl.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
-      tagsEl.addEventListener('touchmove',  (e) => e.stopPropagation(), { passive: true });
-
-      const updateFade = () => {
-        const hasOverflow = tagsEl.scrollWidth > tagsEl.clientWidth;
-        tagsEl.classList.toggle('can-scroll-left',  hasOverflow && tagsEl.scrollLeft > 1);
-        tagsEl.classList.toggle('can-scroll-right', hasOverflow && tagsEl.scrollLeft < tagsEl.scrollWidth - tagsEl.clientWidth - 1);
-      };
-      updateFade();
-      tagsEl.addEventListener('scroll', updateFade, { passive: true });
-    }
-
-    // Tag flyout: first click shows ancestors, second click navigates.
-    const navTagsAR = store.get('navTags') || [];
-    const tagIndexAR = navTagsAR.length ? buildTagIndex(navTagsAR) : null;
-    if (tagsEl) {
-      this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndexAR, navigate, card);
-    }
+    // Unified tag strip scrolling and flyout setup
+    const navTags = store.get('navTags') || [];
+    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    this._cleanupStrip = setupTagStrip(card, tagIndex, navigate, card);
   }
 
   beforeUnmount() {
-    this._cleanupFlyout?.();
+    this._cleanupStrip?.();
   }
 }
