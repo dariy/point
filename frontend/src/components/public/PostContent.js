@@ -206,6 +206,13 @@ export class PostContent extends Component {
   _initImmersive() {
     const { prevPost = null, nextPost = null, tagSlug, post } = this.props;
 
+    // Direction aliases: backPost = ◁/ArrowLeft target; fwdPost = ▷/ArrowRight target.
+    // 'feed' mode reverses so left→newer (matches top-left grid order).
+    const settings = store.get('settings') || {};
+    const feedMode = settings.immersive_nav_direction === 'feed';
+    const backPost = feedMode ? nextPost : prevPost;
+    const fwdPost  = feedMode ? prevPost : nextPost;
+
     // ── Carousel helpers ──
     const carousel = this.$('#immersive-carousel');
     const slides = carousel ? Array.from(carousel.querySelectorAll('.carousel-slide')) : [];
@@ -227,16 +234,16 @@ export class PostContent extends Component {
     const goTo = (i) => {
       const n = slides.length;
       if (!n) {
-        if (i < 0) goToPost(nextPost);
-        else if (i > 0) goToPost(prevPost);
+        if (i < 0) goToPost(backPost);
+        else if (i > 0) goToPost(fwdPost);
         return;
       }
       const newIndex = ((i % n) + n) % n;
       if (i < 0 && newIndex === n - 1 && slides.length > 1) {
-        if (nextPost) { goToPost(nextPost); return; }
+        if (backPost) { goToPost(backPost); return; }
       }
       if (i >= n && newIndex === 0 && slides.length > 1) {
-        if (prevPost) { goToPost(prevPost); return; }
+        if (fwdPost) { goToPost(fwdPost); return; }
       }
 
       const oldIndex = index;
@@ -370,8 +377,8 @@ export class PostContent extends Component {
           const n = slides.length;
           const atLastSlide  = n === 0 || index === n - 1;
           const atFirstSlide = n === 0 || index === 0;
-          const blockedLeft  = dx < 0 && atLastSlide  && !prevPost;
-          const blockedRight = dx > 0 && atFirstSlide && !nextPost;
+          const blockedLeft  = dx < 0 && atLastSlide  && !fwdPost;
+          const blockedRight = dx > 0 && atFirstSlide && !backPost;
           const blocked = blockedLeft || blockedRight;
           const tx = blocked ? rubberBand(dx) : dx;
           this._updateVisuals(tx, dy);
@@ -396,8 +403,8 @@ export class PostContent extends Component {
           const n = slides.length;
           const atLastSlide  = n === 0 || index === n - 1;
           const atFirstSlide = n === 0 || index === 0;
-          const blocked = (dir === 'left'  && atLastSlide  && !prevPost)
-                       || (dir === 'right' && atFirstSlide && !nextPost);
+          const blocked = (dir === 'left'  && atLastSlide  && !fwdPost)
+                       || (dir === 'right' && atFirstSlide && !backPost);
           if (blocked) {
             // Spring back — same as onSwipeCancel
             const target = slides[index] ?? visuals;
@@ -409,7 +416,7 @@ export class PostContent extends Component {
             return;
           }
         }
-        // Reversed horizontal direction: left (dx<0) -> next (older)
+        // Swipe left = advance slide (index+1); at last slide crosses to nextPost (newer)
         if (dir === 'left') goTo(index + 1);
         else if (dir === 'right') goTo(index - 1);
         else if (dir === 'down') dismiss();
@@ -531,7 +538,7 @@ export class PostContent extends Component {
         e.preventDefault(); goTo(index - 1);
       } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
         e.preventDefault(); goTo(index + 1);
-      } else if (e.key === 'ArrowDown') {
+      } else if (e.key === 'Escape' || e.key === 'ArrowDown') {
         e.preventDefault(); dismiss();
       } else if (e.key === 'Home') {
         e.preventDefault(); goTo(0);
@@ -558,37 +565,24 @@ export class PostContent extends Component {
   }
 
   _initNormal(prevPost, nextPost) {
+    // Direction aliases — same setting as immersive mode.
+    const settings = store.get('settings') || {};
+    const feedMode = settings.immersive_nav_direction === 'feed';
+    const backPost = feedMode ? nextPost : prevPost;  // left swipe / ◁
+    const fwdPost  = feedMode ? prevPost : nextPost;  // right swipe / ▷
+
+    // No drag-transform feedback on a scrollable page — it fights browser scroll.
+    // Just commit on a clean horizontal swipe.
     this._gesture = new GestureController(this.container, {
-      onSwipeMove: (dx, dy) => {
-        if (Math.abs(dx) > Math.abs(dy)) {
-          const blocked = (dx < 0 && !prevPost) || (dx > 0 && !nextPost);
-          const tx = blocked ? rubberBand(dx) : dx;
-          this.container.style.transform = `translateX(${tx}px)`;
-          this.container.style.transition = 'none';
-          this.container.style.opacity = blocked
-            ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
-            : Math.max(0.3, 1 - Math.abs(tx) / (window.innerWidth || 500));
-        }
-      },
-      onSwipeCancel: () => {
-        this.container.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-        this.container.style.transform = '';
-        this.container.style.opacity = '1';
-      },
       onSwipeCommit: (dir) => {
-        if (dir === 'left' && prevPost) navigate('/post/' + prevPost.slug);
-        else if (dir === 'right' && nextPost) navigate('/post/' + nextPost.slug);
-        else {
-          this.container.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-          this.container.style.transform = '';
-          this.container.style.opacity = '1';
-        }
+        if (dir === 'left'  && backPost) navigate('/post/' + backPost.slug);
+        else if (dir === 'right' && fwdPost)  navigate('/post/' + fwdPost.slug);
       }
     });
     this._trackpad = new TrackpadDetector(this.container, {
       onHorizontal: (dir) => {
-        if (dir === 'left' && prevPost) navigate('/post/' + prevPost.slug);
-        else if (dir === 'right' && nextPost) navigate('/post/' + nextPost.slug);
+        if (dir === 'left'  && backPost) navigate('/post/' + backPost.slug);
+        else if (dir === 'right' && fwdPost)  navigate('/post/' + fwdPost.slug);
       }
     });
   }
