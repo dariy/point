@@ -115,6 +115,10 @@
     margin-top: var(--spacing-xs);
 }
 
+.tags-suggestions.show {
+    display: block;
+}
+
 .suggestion-item {
     padding: var(--spacing-sm) var(--spacing-md);
     cursor: pointer;
