@@ -112,6 +112,7 @@ class Router {
 
   /** Intercept clicks on same-origin <a> elements. */
   _onLinkClick(event) {
+    if (event.defaultPrevented) return;
     const anchor = event.target.closest('a[href]');
     if (!anchor) return;
     const href = anchor.getAttribute('href');

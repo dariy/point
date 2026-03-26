@@ -15,6 +15,7 @@ import { getMapPage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { router } from '../../router.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { LOCK_SVG } from '../../utils/icons.js';
 
 
 const LEAFLET_JS       = '/assets/vendor/leaflet/leaflet.js';
@@ -228,8 +229,9 @@ export default class MapPage extends Component {
               tag.years.map(y => `<a href="/tag/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`).join(' ') +
               `</div>`
             : '';
+          const lockIcon = tag.is_hidden ? LOCK_SVG : '';
           layer.bindPopup(
-            `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag">${escapeHtml(tag.name)}</a>` +
+            `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? ' is-hidden' : ''}">${lockIcon}${escapeHtml(tag.name)}</a>` +
             `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}</div>` +
             yearsHtml
           );
@@ -267,8 +269,9 @@ export default class MapPage extends Component {
           tag.years.map(y => `<a href="/tag/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`).join(' ') +
           `</div>`
         : '';
+      const lockIcon = tag.is_hidden ? LOCK_SVG : '';
       marker.bindPopup(
-        `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag">${escapeHtml(tag.name)}</a>` +
+        `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? ' is-hidden' : ''}">${lockIcon}${escapeHtml(tag.name)}</a>` +
         `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? 's' : ''}</div>` +
         yearsHtml
       );

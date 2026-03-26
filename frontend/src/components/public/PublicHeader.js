@@ -13,7 +13,7 @@ import { Component } from '../Component.js';
 import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG } from '../../utils/icons.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -39,16 +39,17 @@ export class PublicHeader extends Component {
           const isLast = i === breadcrumb.length - 1;
           
 
+          const lockIcon = crumb.is_hidden ? LOCK_SVG : '';
           if (isLast) {
             const tooltipAttr = crumb.tooltip ? ` title="${escapeHtml(crumb.tooltip)}"` : '';
             if (crumb.slug) {
               const href = `/tag/${escapeHtml(crumb.slug)}`;
-              return `<a href="${href}" class="breadcrumb-current"${tooltipAttr}>${escapeHtml(crumb.name)}</a>`;
+              return `<a href="${href}" class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</a>`;
             }
-            return `<span class="breadcrumb-current"${tooltipAttr}>${escapeHtml(crumb.name)}</span>`;
+            return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
           }
           const href = crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/';
-          return `<a href="${href}" class="breadcrumb-link">${escapeHtml(crumb.name)}</a>
+          return `<a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}">${lockIcon}${escapeHtml(crumb.name)}</a>
                   <span class="breadcrumb-separator" aria-hidden="true">/</span>`;
         }),
       ].join('');
