@@ -74,9 +74,8 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
 		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
-	} else {
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, 0)
 	}
+	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
@@ -130,14 +129,8 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
 		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(c.Request().Context(), minPosts)
-	} else {
-		// Even for admin, we might want to exclude _page descendants from grids if requested.
-		// But usually admins see everything. Let's stick to user's "public part" request.
-		// However, the previous change for _page applied to everyone.
-		// I will keep the _page exclusion for everyone if it's considered a grid-only thing.
-		// Actually, let's just use PublicHiddenTagIDs with minPosts=0 for admins to get the _page/hidden logic.
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(c.Request().Context(), 0)
 	}
+	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
@@ -194,9 +187,8 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
 		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
-	} else {
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, 0)
 	}
+	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
@@ -329,9 +321,8 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
 		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
-	} else {
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, 0)
 	}
+	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
