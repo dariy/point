@@ -9,6 +9,7 @@
 import { Component } from '../Component.js';
 import { listTags } from '../../api/tags.js';
 import { escapeHtml, debounce } from '../../utils/helpers.js';
+import { store } from '../../store.js';
 
 let _tagInputCounter = 0;
 
@@ -116,14 +117,13 @@ export class TagsInput extends Component {
 
   /** Add a tag if it isn't already present. */
   _addTag(name) {
-    console.log('[TagsInput] _addTag called', { name, currentTags: this.state.tags, hasOnChange: !!this.props.onChange });
     if (!name || this.state.tags.includes(name)) {
-      console.log('[TagsInput] _addTag early return', { noName: !name, alreadyIn: this.state.tags.includes(name) });
+      store.set('toast', { message: `DBG: skip "${name}" (empty=${!name}, dup=${this.state.tags.includes(name)})`, type: 'error' });
       return;
     }
     const tags = [...this.state.tags, name];
     this.setState({ tags });
-    console.log('[TagsInput] calling onChange with', tags);
+    store.set('toast', { message: `DBG: onChange(${JSON.stringify(tags)}) onChange=${!!this.props.onChange}`, type: 'success' });
     this.props.onChange?.(tags);
 
     const input = this.$(`#${this._uid}-text`);
