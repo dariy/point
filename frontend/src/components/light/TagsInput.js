@@ -116,9 +116,14 @@ export class TagsInput extends Component {
 
   /** Add a tag if it isn't already present. */
   _addTag(name) {
-    if (!name || this.state.tags.includes(name)) return;
+    console.log('[TagsInput] _addTag called', { name, currentTags: this.state.tags, hasOnChange: !!this.props.onChange });
+    if (!name || this.state.tags.includes(name)) {
+      console.log('[TagsInput] _addTag early return', { noName: !name, alreadyIn: this.state.tags.includes(name) });
+      return;
+    }
     const tags = [...this.state.tags, name];
     this.setState({ tags });
+    console.log('[TagsInput] calling onChange with', tags);
     this.props.onChange?.(tags);
 
     const input = this.$(`#${this._uid}-text`);
