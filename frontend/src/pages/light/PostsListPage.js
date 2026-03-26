@@ -321,9 +321,11 @@ export default class PostsListPage extends Component {
           const updated = await updatePostTags(post.id, tags);
           // Update local state silently so re-render preserves the new tags
           post.tags = updated.tags || tags.map(n => ({ name: n, slug: n }));
-          store.set('toast', { message: 'Tags saved.', type: 'success' });
+          const returnedTags = (updated.tags || []).map(t => t.name || t);
+          const offline = !navigator.onLine;
+          store.set('toast', { message: `DBG saved: sent=${tags.length} got=${returnedTags.length} offline=${offline} [${returnedTags.join(',')}]`, type: 'success' });
         } catch (err) {
-          store.set('toast', { message: err.message || 'Failed to save tags.', type: 'error' });
+          store.set('toast', { message: `DBG err: ${err.message || 'Failed'}`, type: 'error' });
         }
       },
     });
