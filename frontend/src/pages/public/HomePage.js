@@ -65,8 +65,7 @@ export default class HomePage extends Component {
     this._gesture?.destroy();
     this._trackpad?.destroy();
     const settings = store.get('settings') || {};
-    const navTags = (this.state.data?.menu) || store.get('navTags') || [];
-    if (navTags.length) store.set('navTags', navTags);
+    const navTags = store.get('navTags') || [];
     this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '/', navTags });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
