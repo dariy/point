@@ -16,6 +16,7 @@ import { store } from './store.js';
 import { router } from './router.js';
 import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
+import { getNavMenu } from './api/pages.js';
 import { normalizeSettings } from './utils/helpers.js';
 import { ToastContainer } from './components/shared/Toast.js';
 import { NotificationLogButton } from './components/shared/NotificationLogButton.js';
@@ -169,6 +170,12 @@ async function bootstrap() {
   }
   store.set('user', user);
 
+  // 3.5 Load auth-scoped nav tag hierarchy so all pages have it from first render.
+  try {
+    const navData = await getNavMenu();
+    store.set('navTags', navData.menu || []);
+  } catch { /* ignore — pages fall back to store or empty */ }
+
   // 4. Mount toast container and initialise the notification log.
   const toastsEl = document.getElementById('toasts');
   if (toastsEl) {
@@ -189,6 +196,14 @@ async function bootstrap() {
     mountPoint: document.getElementById('app'),
     authGuard: () => !!store.get('user'),
     loginPath: '/light/login',
+  });
+
+  // 6.5 Refresh auth-scoped nav tags on login/logout.
+  store.subscribe('user', async () => {
+    try {
+      const navData = await getNavMenu();
+      store.set('navTags', navData.menu || []);
+    } catch { /* ignore */ }
   });
 
   // 7. Sync queue when online
