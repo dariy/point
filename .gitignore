@@ -151,3 +151,5 @@ node_modules/**
 # Dolt database files (added by bd init)
 .dolt/
 .beads/
+
+build/gemini*

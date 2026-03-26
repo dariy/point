@@ -27,13 +27,15 @@ elif [ ! -f .env ]; then
     touch .env
 fi
 
-# Inject GEMINI_API_KEY from the system keyring for the deployment.
+# Inject GEMINI_API_KEY from an age-encrypted file if it exists.
 # The key is appended to .env now and stripped on EXIT (success or failure).
-_GEMINI_KEY=$(secret-tool lookup service gemini account light 2>/dev/null)
-if [ -n "$_GEMINI_KEY" ]; then
-    sed -i '/^GEMINI_API_KEY=/d' .env          # remove any stale entry
-    echo "GEMINI_API_KEY=$_GEMINI_KEY" >> .env
-    trap 'sed -i "/^GEMINI_API_KEY=/d" .env' EXIT
+if [ -f gemini_api_key.age ]; then
+    _GEMINI_KEY=$(age -d -i ~/.age/key gemini_api_key.age 2>/dev/null)
+    if [ -n "$_GEMINI_KEY" ]; then
+        sed -i '/^GEMINI_API_KEY=/d' .env          # remove any stale entry
+        echo "GEMINI_API_KEY=$_GEMINI_KEY" >> .env
+        trap 'sed -i "/^GEMINI_API_KEY=/d" .env' EXIT
+    fi
 fi
 unset _GEMINI_KEY
 
