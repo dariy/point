@@ -228,11 +228,12 @@ export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
  * @param {object}  [opts]
  * @param {boolean} [opts.active=false]  Add `active` class (nav-bar active state).
  * @param {string}  [opts.extra='']      Extra CSS classes appended to `tag-link`.
+ * @param {string}  [opts.prefix='']     Raw HTML prepended inside the link before the name (e.g. a lock icon).
  * @param {string}  [opts.suffix='']     Raw HTML appended inside the link after the name
  *                                       (e.g. a `<span class="tag-count">` badge).
  * @returns {string} HTML string
  */
-export function renderTagLink(tag, { active = false, extra = '', suffix = '' } = {}) {
+export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
 
@@ -240,7 +241,7 @@ export function renderTagLink(tag, { active = false, extra = '', suffix = '' } =
     .filter(Boolean)
     .join(' ');
 
-  return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${escapeHtml(name)}${suffix}</a>`;
+  return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${prefix}${escapeHtml(name)}${suffix}</a>`;
 }
 
 /**

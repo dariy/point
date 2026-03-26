@@ -98,7 +98,10 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	postTagsMap = expandPostTagsWithAncestors(postTagsMap, ancestorsMap, publicOnly)
 
 	minPosts := getMinTagPostsSetting(allSettings)
-	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	var excludeTagIDs map[int64]bool
+	if publicOnly {
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	}
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
@@ -257,7 +260,10 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	tagAncestorsMap := fetchAncestorsMap(ctx, h.repo, tagPostTagsMap)
 	tagPostTagsMap = expandPostTagsWithAncestors(tagPostTagsMap, tagAncestorsMap, publicOnly)
 
-	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	var excludeTagIDs map[int64]bool
+	if publicOnly {
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	}
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
@@ -276,12 +282,14 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		pages = 1
 	}
 
+	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
 	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
 	for _, a := range ancestors {
 		if !excludeTagIDs[a.ID] && inBreadcrumbs[a.ID] {
 			crumb := tagToListItem(a)
 			if !publicOnly {
 				crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
+				crumb["is_hidden"] = effectivelyHiddenMap[a.ID]
 			}
 			breadcrumbs = append(breadcrumbs, crumb)
 		}
@@ -296,6 +304,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	tagResp := tagToFullResponse(tag, parents, children, tagLoc, excludeTagIDs)
 	if !publicOnly {
 		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
+		tagResp["is_hidden"] = effectivelyHiddenMap[tag.ID]
 	}
 	resp := map[string]interface{}{
 		"tag":          tagResp,
@@ -342,7 +351,13 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	minPosts := getMinTagPostsSetting(allSettings)
-	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	var excludeTagIDs map[int64]bool
+	var effectivelyHiddenMap map[int64]bool
+	if publicOnly {
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	} else {
+		effectivelyHiddenMap, _ = h.tagService.EffectivelyHiddenIDs(ctx)
+	}
 
 	// Filter hidden tags for public view
 	visible := make([]map[string]interface{}, 0, len(tags))
@@ -363,6 +378,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 			tagResp := tagToFullResponse(t, parents, children, loc, excludeTagIDs)
 			if !publicOnly {
 				injectTagHiddenFields(tagResp, t, effectiveHiddenPostsTagIDs)
+				tagResp["is_hidden"] = effectivelyHiddenMap[t.ID]
 			}
 			visible = append(visible, tagResp)
 		}
@@ -547,4 +563,21 @@ func getMinTagPostsSetting(settings map[string]string) int64 {
 		return 0
 	}
 	return v
+}
+
+// GetNavMenu returns the hierarchical tag tree for navigation, scoped to the
+// current user's auth level (public = visible tags only; admin = all tags).
+// GET /api/pages/nav
+func (h *PagesHandler) GetNavMenu(c echo.Context) error {
+	ctx := c.Request().Context()
+	publicOnly := c.Get("user") == nil
+
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	minPosts := int64(0)
+	if publicOnly {
+		minPosts = getMinTagPostsSetting(allSettings)
+	}
+
+	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
+	return c.JSON(http.StatusOK, map[string]interface{}{"menu": navTags})
 }

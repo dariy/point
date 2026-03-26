@@ -10,8 +10,9 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { getTagsPage } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
-import { renderTagLink } from '../../utils/tags.js';
+import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { buildTagIndex, renderTagLink, setupTagFlyout } from '../../utils/tags.js';
+import { LOCK_SVG } from '../../utils/icons.js';
 
 export default class TagsPage extends Component {
   constructor(container, props = {}) {
@@ -69,6 +70,17 @@ export default class TagsPage extends Component {
     const navTags = store.get('navTags') || [];
     this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '/tags' });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
+
+    this._cleanupFlyout?.();
+    const tree = this.$('.tags-tree');
+    if (tree) {
+      const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+      this._cleanupFlyout = setupTagFlyout(tree, tagIndex, navigate);
+    }
+  }
+
+  beforeUnmount() {
+    this._cleanupFlyout?.();
   }
 
   mount() {
@@ -90,9 +102,8 @@ export default class TagsPage extends Component {
       .join('');
 
     const count = tag.post_count ? ` <span class="tag-count">(${escapeHtml(String(tag.post_count))})</span>` : '';
-    
-    
-    const link = renderTagLink(tag, { extra: 'tags-tree-link', suffix: count });
+    const lockPrefix = tag.is_hidden ? LOCK_SVG : '';
+    const link = renderTagLink(tag, { extra: `tags-tree-link${tag.is_hidden ? ' is-hidden' : ''}`, suffix: count, prefix: lockPrefix });
 
     return `
       <li class="tags-tree-item" role="treeitem" aria-expanded="${children ? 'true' : 'false'}">
