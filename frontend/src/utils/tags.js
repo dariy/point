@@ -60,6 +60,9 @@ function _hideFlyout() {
   _activeLink = null;
 }
 
+/** Close the ancestor flyout from outside this module (e.g. immersive hide-UI). */
+export function hideFlyout() { _hideFlyout(); }
+
 /**
  * Attach ancestor-flyout behaviour to all .tag-link elements in containerEl.
  *
