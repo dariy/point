@@ -241,6 +241,32 @@
     border-color: var(--color-primary);
 }
 
+/* Ancestor flyout states — must beat .immersive-tags .tag-link (0,2,0)
+   and the light-theme variant (0,4,0) */
+.immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+.immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+.immersive-tags .tag-link.is-flyout-open:hover {
+    color: white;
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
 video.immersive-bg-image {
     margin-bottom: 6em;
 }
