@@ -14,7 +14,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
-import { buildTagIndex, renderTagStrip, setupTagStrip } from '../../utils/tags.js';
+import { buildTagIndex, renderTagStrip, setupTagStrip, hideFlyout } from '../../utils/tags.js';
 import { store } from '../../store.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 import { getPostPageLocation } from '../../api/posts.js';
@@ -486,7 +486,7 @@ export class PostContent extends Component {
       clearTimeout(this._idleTimer);
       this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
-    const hideUI = () => document.body.classList.add('ui-hidden');
+    const hideUI = () => { hideFlyout(); document.body.classList.add('ui-hidden'); };
 
     const resetIdle = (e) => {
       const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
