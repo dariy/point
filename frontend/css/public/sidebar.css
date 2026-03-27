@@ -98,12 +98,8 @@
 }
 
 /* Tag has ancestors — first click opens flyout */
-.tag-link.has-flyout::after {
-    content: '\2303'; /* ⌃ UP ARROWHEAD */
-    margin-left: 0.2em;
-    font-size: 0.65em;
-    opacity: 0.4;
-    vertical-align: 0.05em;
+.tag-link.has-flyout {
+    border-color: var(--color-primary);
 }
 
 /* Flyout open — next click navigates to the tag page */
@@ -113,9 +109,8 @@
     color: white;
 }
 
-.tag-link.is-flyout-open::after {
-    content: '\2192'; /* → RIGHT ARROW */
-    opacity: 0.85;
+.tag-link.is-flyout-open:hover {
+    color: white;
 }
 
 .tag-group-inline {
