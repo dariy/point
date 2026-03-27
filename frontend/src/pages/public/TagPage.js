@@ -76,7 +76,7 @@ export default class TagPage extends Component {
         <div id="header-mount"></div>
         <main class="site-main">
           <div class="main-container">
-            <div id="grid-mount"></div>
+            <div id="grid-mount" class="grid-expand-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
