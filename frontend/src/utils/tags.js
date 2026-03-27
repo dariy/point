@@ -52,10 +52,12 @@ function _showFlyout(anchorEl, ancestors) {
   flyout.style.top = `${top}px`;
   flyout.style.left = `${left}px`;
   flyout.style.visibility = '';
+  anchorEl.classList.add('is-flyout-open');
   _flyoutShowTime = Date.now();
 }
 
 function _hideFlyout() {
+  _activeLink?.classList.remove('is-flyout-open');
   if (_flyoutEl) _flyoutEl.classList.add('hidden');
   _activeLink = null;
 }
@@ -83,9 +85,11 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
   const excludeEl = hostEl || containerEl;
 
   containerEl.querySelectorAll('.tag-link').forEach((link) => {
+    const slug = link.getAttribute('href').replace('/tag/', '');
+    const ancestors = getTagAncestors(slug, tagIndex);
+    if (ancestors.length) link.classList.add('has-flyout');
+
     link.addEventListener('click', (e) => {
-      const slug = link.getAttribute('href').replace('/tag/', '');
-      const ancestors = getTagAncestors(slug, tagIndex);
       if (!ancestors.length) return; // no ancestors — navigate normally
 
       e.preventDefault();
