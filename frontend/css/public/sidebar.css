@@ -102,11 +102,35 @@
     border-color: var(--color-primary);
 }
 
+/* Flyout indicator chevron — points UP to signal ancestors appear above the pill.
+   Opposite of the .toggle-children chevron in tags-filters (which points DOWN for children). */
+.tag-link .flyout-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.125rem;
+    color: var(--color-primary);
+}
+
+.tag-link .flyout-indicator svg {
+    width: 0.75rem;
+    height: 0.75rem;
+    transform: rotate(180deg); /* Default: points up */
+    transition: transform var(--transition-fast);
+}
+
 /* Flyout open — next click navigates to the tag page */
 .tag-link.is-flyout-open {
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: white;
+}
+
+.tag-link.is-flyout-open .flyout-indicator {
+    color: white;
+}
+
+.tag-link.is-flyout-open .flyout-indicator svg {
+    transform: rotate(0deg); /* Points down when open — signals second click navigates */
 }
 
 .tag-link.is-flyout-open:hover {
