@@ -1111,13 +1111,14 @@ func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPa
 		tagIDs = append(tagIDs, d.ID)
 	}
 
+	includeHidden := !publicOnly
 	offset := (page - 1) * perPage
-	posts, err := s.repo.GetPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, int64(perPage), int64(offset))
+	posts, err := s.repo.GetPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, includeHidden, int64(perPage), int64(offset))
 	if err != nil {
 		return nil, 0, err
 	}
 
-	total, err := s.repo.CountPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts)
+	total, err := s.repo.CountPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, includeHidden)
 	if err != nil {
 		return nil, 0, err
 	}
