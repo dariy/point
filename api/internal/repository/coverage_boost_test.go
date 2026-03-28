@@ -286,7 +286,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	if _, err := repo.GetHierarchicalPostCounts(ctx, true); err == nil {
 		t.Error("GetHierarchicalPostCounts: expected error")
 	}
-	if _, err := repo.GetPostsByTagIDs(ctx, []int64{1}, true, false, 10, 0); err == nil {
+	if _, err := repo.GetPostsByTagIDs(ctx, []int64{1}, true, false, false, 10, 0); err == nil {
 		t.Error("GetPostsByTagIDs: expected error")
 	}
 	if err := repo.DeleteSession(ctx, models.DeleteSessionParams{ID: 99, UserID: 1}); err == nil {
@@ -313,7 +313,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	if _, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "test", 10, 0); err == nil {
 		t.Error("ListPostsWithSearch: expected error")
 	}
-	if _, err := repo.CountPostsByTagIDs(ctx, []int64{1}, true, false); err == nil {
+	if _, err := repo.CountPostsByTagIDs(ctx, []int64{1}, true, false, false); err == nil {
 		t.Error("CountPostsByTagIDs: expected error")
 	}
 }
@@ -424,27 +424,39 @@ func TestRepository_BranchCoverage(t *testing.T) {
 	}
 
 	// GetPostsByTagIDs with includeDrafts=true (covers statusClause = "1=1" branch).
-	_, err = repo.GetPostsByTagIDs(ctx, []int64{1}, false, true, 10, 0)
+	_, err = repo.GetPostsByTagIDs(ctx, []int64{1}, false, true, false, 10, 0)
 	if err != nil {
 		t.Fatalf("GetPostsByTagIDs (includeDrafts): %v", err)
 	}
 
 	// GetPostsByTagIDs with publishedOnly=false, includeDrafts=false (covers IN ('published','hidden') branch).
-	_, err = repo.GetPostsByTagIDs(ctx, []int64{1}, false, false, 10, 0)
+	_, err = repo.GetPostsByTagIDs(ctx, []int64{1}, false, false, false, 10, 0)
 	if err != nil {
 		t.Fatalf("GetPostsByTagIDs (not published only): %v", err)
 	}
 
+	// GetPostsByTagIDs with includeHidden=true (covers authenticated user branch).
+	_, err = repo.GetPostsByTagIDs(ctx, []int64{1}, false, false, true, 10, 0)
+	if err != nil {
+		t.Fatalf("GetPostsByTagIDs (includeHidden): %v", err)
+	}
+
 	// CountPostsByTagIDs with includeDrafts=true.
-	_, err = repo.CountPostsByTagIDs(ctx, []int64{1}, false, true)
+	_, err = repo.CountPostsByTagIDs(ctx, []int64{1}, false, true, false)
 	if err != nil {
 		t.Fatalf("CountPostsByTagIDs (includeDrafts): %v", err)
 	}
 
 	// CountPostsByTagIDs with publishedOnly=false.
-	_, err = repo.CountPostsByTagIDs(ctx, []int64{1}, false, false)
+	_, err = repo.CountPostsByTagIDs(ctx, []int64{1}, false, false, false)
 	if err != nil {
 		t.Fatalf("CountPostsByTagIDs (not published only): %v", err)
+	}
+
+	// CountPostsByTagIDs with includeHidden=true (covers authenticated user branch).
+	_, err = repo.CountPostsByTagIDs(ctx, []int64{1}, false, false, true)
+	if err != nil {
+		t.Fatalf("CountPostsByTagIDs (includeHidden): %v", err)
 	}
 
 	// ListOrphanedMediaByPage with data.
@@ -454,23 +466,23 @@ func TestRepository_BranchCoverage(t *testing.T) {
 	}
 
 	// CountPostsByTagIDs with empty tagIDs → early return nil path.
-	n, err := repo.CountPostsByTagIDs(ctx, []int64{}, false, false)
+	n, err := repo.CountPostsByTagIDs(ctx, []int64{}, false, false, false)
 	if err != nil || n != 0 {
 		t.Errorf("CountPostsByTagIDs empty: err=%v n=%d", err, n)
 	}
 
 	// CountPostsByTagIDs with 2 tagIDs → covers the `placeholders += ","` branch.
-	_, _ = repo.CountPostsByTagIDs(ctx, []int64{1, 2}, false, false)
+	_, _ = repo.CountPostsByTagIDs(ctx, []int64{1, 2}, false, false, false)
 
 	// GetPostsByTagIDs with empty tagIDs → early return nil path.
-	posts, err := repo.GetPostsByTagIDs(ctx, []int64{}, false, false, 10, 0)
+	posts, err := repo.GetPostsByTagIDs(ctx, []int64{}, false, false, false, 10, 0)
 	if err != nil || len(posts) != 0 {
 		t.Errorf("GetPostsByTagIDs empty: err=%v len=%d", err, len(posts))
 	}
 
 	// GetPostsByTagIDs with 2 tagIDs → covers comma separator path; no matching posts → items nil → items=[].
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug,post_count) VALUES (2,'T2','t2',0)`)
-	_, err = repo.GetPostsByTagIDs(ctx, []int64{1, 2}, false, false, 10, 0)
+	_, err = repo.GetPostsByTagIDs(ctx, []int64{1, 2}, false, false, false, 10, 0)
 	if err != nil {
 		t.Fatalf("GetPostsByTagIDs multi-tag: %v", err)
 	}
