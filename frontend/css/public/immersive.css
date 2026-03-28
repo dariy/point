@@ -215,17 +215,16 @@
 }
 
 .immersive-tags .tag-link {
-    background: var(--bg-overlay);
-    color: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--text-secondary);
     backdrop-filter: blur(0.75rem);
     -webkit-backdrop-filter: blur(0.75rem);
     pointer-events: auto;
 }
 
 .immersive-tags .tag-link:hover {
-    background: var(--bg-overlay-hover);
-    color: white;
+    color: var(--text-secondary);
     border-color: var(--color-primary);
 }
 
@@ -239,6 +238,32 @@
     background: var(--bg-overlay-hover);
     color: white;
     border-color: var(--color-primary);
+}
+
+/* Ancestor flyout states — must beat .immersive-tags .tag-link (0,2,0)
+   and the light-theme variant (0,4,0) */
+.immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+.immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+.immersive-tags .tag-link.is-flyout-open:hover {
+    color: white;
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
 }
 
 video.immersive-bg-image {

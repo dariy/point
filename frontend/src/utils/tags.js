@@ -11,10 +11,14 @@ import { CHEVRON_SVG } from './icons.js';
 
 // ── Flyout singleton ─────────────────────────────────────────────────────────
 // One flyout element lives on <body> and is reused by every call site.
+// The dismiss listener is also a singleton — replaced on each open — so that
+// multiple setupTagFlyout call sites (one per PostCard) don't each add their own
+// document-level dismiss that would immediately hide a flyout opened in another card.
 
 let _flyoutEl = null;
 let _activeLink = null;
-let _flyoutShowTime = 0; // timestamp of last _showFlyout() call — guards scroll dismiss
+let _flyoutShowTime = 0;    // timestamp of last _showFlyout() call — guards scroll dismiss
+let _flyoutDismiss = null;  // singleton dismiss handler, replaced on each open
 
 function _getFlyoutEl() {
   if (!_flyoutEl) {
@@ -25,7 +29,28 @@ function _getFlyoutEl() {
   return _flyoutEl;
 }
 
-function _showFlyout(anchorEl, ancestors) {
+function _makeChevronIndicator() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const span = document.createElement('span');
+  span.className = 'flyout-indicator';
+  span.setAttribute('aria-hidden', 'true');
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('width', '10');
+  svg.setAttribute('height', '10');
+  svg.setAttribute('viewBox', '0 0 10 10');
+  svg.setAttribute('fill', 'none');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', 'M2 3.5L5 6.5L8 3.5');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '1.5');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(path);
+  span.appendChild(svg);
+  return span;
+}
+
+function _showFlyout(anchorEl, ancestors, excludeEl) {
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
   ancestors.forEach((t) => {
@@ -52,13 +77,34 @@ function _showFlyout(anchorEl, ancestors) {
   flyout.style.top = `${top}px`;
   flyout.style.left = `${left}px`;
   flyout.style.visibility = '';
+  anchorEl.classList.add('is-flyout-open');
   _flyoutShowTime = Date.now();
+
+  // Replace the singleton dismiss listener so it uses the correct excludeEl for
+  // whichever card/container just opened the flyout.  A per-setupTagFlyout-instance
+  // dismiss would fire for every other card on the page and immediately hide the flyout.
+  if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss);
+  _flyoutDismiss = (e) => {
+    if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
+    if (_flyoutEl.contains(e.target)) return;
+    if (excludeEl && excludeEl.contains(e.target)) return;
+    _hideFlyout();
+  };
+  document.addEventListener('click', _flyoutDismiss);
 }
 
 function _hideFlyout() {
+  _activeLink?.classList.remove('is-flyout-open');
   if (_flyoutEl) _flyoutEl.classList.add('hidden');
   _activeLink = null;
+  if (_flyoutDismiss) {
+    document.removeEventListener('click', _flyoutDismiss);
+    _flyoutDismiss = null;
+  }
 }
+
+/** Close the ancestor flyout from outside this module (e.g. immersive hide-UI). */
+export function hideFlyout() { _hideFlyout(); }
 
 /**
  * Attach ancestor-flyout behaviour to all .tag-link elements in containerEl.
@@ -80,9 +126,14 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
   const excludeEl = hostEl || containerEl;
 
   containerEl.querySelectorAll('.tag-link').forEach((link) => {
+    const slug = link.getAttribute('href').replace('/tag/', '');
+    const ancestors = getTagAncestors(slug, tagIndex);
+    if (ancestors.length && !link.classList.contains('has-flyout')) {
+      link.classList.add('has-flyout');
+      link.appendChild(_makeChevronIndicator());
+    }
+
     link.addEventListener('click', (e) => {
-      const slug = link.getAttribute('href').replace('/tag/', '');
-      const ancestors = getTagAncestors(slug, tagIndex);
       if (!ancestors.length) return; // no ancestors — navigate normally
 
       e.preventDefault();
@@ -97,26 +148,20 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
       } else {
         _hideFlyout();
         _activeLink = link;
-        _showFlyout(link, ancestors);
+        _showFlyout(link, ancestors, excludeEl);
       }
     });
   });
 
-  const dismiss = (e) => {
-    if (_flyoutEl && !_flyoutEl.contains(e.target) && !excludeEl.contains(e.target)) {
-      _hideFlyout();
-    }
-  };
+  // Dismiss on scroll — still per-instance, but _hideFlyout is idempotent so
+  // multiple scroll listeners from different cards are harmless.
   const dismissOnScroll = () => {
     if (Date.now() - _flyoutShowTime < 300) return;
     _hideFlyout();
   };
-
-  document.addEventListener('click', dismiss);
   window.addEventListener('scroll', dismissOnScroll, { passive: true });
 
   return () => {
-    document.removeEventListener('click', dismiss);
     window.removeEventListener('scroll', dismissOnScroll, { passive: true });
     _hideFlyout();
   };
@@ -228,11 +273,12 @@ export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
  * @param {object}  [opts]
  * @param {boolean} [opts.active=false]  Add `active` class (nav-bar active state).
  * @param {string}  [opts.extra='']      Extra CSS classes appended to `tag-link`.
+ * @param {string}  [opts.prefix='']     Raw HTML prepended inside the link before the name (e.g. a lock icon).
  * @param {string}  [opts.suffix='']     Raw HTML appended inside the link after the name
  *                                       (e.g. a `<span class="tag-count">` badge).
  * @returns {string} HTML string
  */
-export function renderTagLink(tag, { active = false, extra = '', suffix = '' } = {}) {
+export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
 
@@ -240,7 +286,7 @@ export function renderTagLink(tag, { active = false, extra = '', suffix = '' } =
     .filter(Boolean)
     .join(' ');
 
-  return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${escapeHtml(name)}${suffix}</a>`;
+  return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${prefix}${escapeHtml(name)}${suffix}</a>`;
 }
 
 /**

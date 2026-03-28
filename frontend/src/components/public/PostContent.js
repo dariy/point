@@ -14,7 +14,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
-import { buildTagIndex, renderTagStrip, setupTagStrip } from '../../utils/tags.js';
+import { buildTagIndex, renderTagStrip, setupTagStrip, hideFlyout } from '../../utils/tags.js';
 import { store } from '../../store.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 import { getPostPageLocation } from '../../api/posts.js';
@@ -451,7 +451,8 @@ export class PostContent extends Component {
       onTap: (_x, _y) => {
         if (document.body.classList.contains('ui-hidden')) {
           showUI();
-        } else if (Date.now() - this._lastShowTime >= 150) {
+        } else {
+          _hideFromClickTime = Date.now();
           hideUI();
           clearTimeout(this._idleTimer);
         }
@@ -478,6 +479,8 @@ export class PostContent extends Component {
     });
 
     // ── UI show / hide ──
+    let _hideFromClickTime = 0;
+
     const showUI = () => {
       if (document.body.classList.contains('ui-hidden')) {
         document.body.classList.remove('ui-hidden');
@@ -486,11 +489,15 @@ export class PostContent extends Component {
       clearTimeout(this._idleTimer);
       this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
-    const hideUI = () => document.body.classList.add('ui-hidden');
+    const hideUI = () => { hideFlyout(); document.body.classList.add('ui-hidden'); };
 
     const resetIdle = (e) => {
       const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
       if (e?.type === 'keydown' && navKeys.includes(e.key)) return;
+      // Suppress mousemove-triggered show for a short window after a deliberate click/tap hide,
+      // otherwise the natural hand-wobble after clicking immediately re-shows the overlay.
+      if (e?.type === 'mousemove' && document.body.classList.contains('ui-hidden')
+          && Date.now() - _hideFromClickTime < 600) return;
       showUI();
     };
 
@@ -515,7 +522,8 @@ export class PostContent extends Component {
       if (e.target.closest('a, button, input, .post-info-card')) return;
       if (document.body.classList.contains('ui-hidden')) {
         showUI();
-      } else if (Date.now() - this._lastShowTime >= 150) {
+      } else {
+        _hideFromClickTime = Date.now();
         hideUI();
         clearTimeout(this._idleTimer);
       }
