@@ -151,3 +151,11 @@ node_modules/**
 # Dolt database files (added by bd init)
 .dolt/
 .beads/
+
+build/gemini*
+.worktrees/
+
+# Beads / Dolt files (added by bd init)
+.beads-credential-key
+.sqlhistory
+test-connection.sh

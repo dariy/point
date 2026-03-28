@@ -310,7 +310,7 @@
     flex-direction: column;
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
-    background: var(--bg-overlay);
+    background: var(--surface-card);
     border: 1px solid var(--border-primary);
     border-radius: var(--border-radius-xl);
     box-shadow: var(--shadow-md);
@@ -329,6 +329,26 @@
    =========================== */
 .featured-post {
     grid-column: 1 / -1;
+}
+
+/* Orphan expansion: last card fills remaining columns in an incomplete row.
+   Featured post spans a full row, shifting the orphan parity by 1.
+   Grid is 2-col below 66rem viewport, 3-col at 66rem+ (max-width: 75rem). */
+
+@media (max-width: 65.9375rem) {
+    /* 2-col: orphan lands on an odd position (even with a featured-post offset) */
+    .posts-grid:not(:has(.featured-post)) .post-card-slot:last-child:nth-child(odd),
+    .posts-grid:has(.featured-post) .post-card-slot:last-child:nth-child(even) {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (min-width: 66rem) {
+    /* 3-col: orphan lands on 3n+1 (or 3n+2 with featured-post offset) */
+    .posts-grid:not(:has(.featured-post)) .post-card-slot:last-child:nth-child(3n+1),
+    .posts-grid:has(.featured-post) .post-card-slot:last-child:nth-child(3n+2) {
+        grid-column: 1 / -1;
+    }
 }
 
 /* Reset grid for featured post if using new card style */
