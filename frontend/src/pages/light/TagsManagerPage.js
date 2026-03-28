@@ -14,6 +14,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, updateTag, deleteTag, recalculateCounts, reorderTag, geocodeTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { logout } from '../../api/auth.js';
+import { getNavMenu } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 
@@ -562,6 +563,7 @@ export default class TagsManagerPage extends Component {
             });
           }
           this._load();
+          this._refreshNavTags();
         } catch (err) {
           store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
         }
@@ -1055,6 +1057,7 @@ export default class TagsManagerPage extends Component {
       }
       this._closeModal();
       this._load();
+      this._refreshNavTags();
     } catch (err) {
       store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
       submitBtn.disabled = false;
@@ -1081,6 +1084,7 @@ export default class TagsManagerPage extends Component {
       await deleteTag(id);
       store.set('toast', { message: 'Tag deleted.', type: 'success' });
       this._load();
+      this._refreshNavTags();
     } catch (err) {
       store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
     }
@@ -1094,6 +1098,13 @@ export default class TagsManagerPage extends Component {
     } catch (err) {
       store.set('toast', { message: err.message || 'Recalculation failed.', type: 'error' });
     }
+  }
+
+  async _refreshNavTags() {
+    try {
+      const fresh = await getNavMenu();
+      store.set('navTags', fresh.menu || []);
+    } catch { /* ignore */ }
   }
 
   async _handleLogout() {

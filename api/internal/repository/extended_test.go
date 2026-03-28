@@ -579,7 +579,7 @@ func TestRepository_PostsByTagIDs(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?,1)`, pid)
 
-	posts, err := repo.GetPostsByTagIDs(ctx, []int64{1}, true, false, 10, 0)
+	posts, err := repo.GetPostsByTagIDs(ctx, []int64{1}, true, false, false, 10, 0)
 	if err != nil {
 		t.Fatalf("GetPostsByTagIDs failed: %v", err)
 	}
@@ -587,17 +587,17 @@ func TestRepository_PostsByTagIDs(t *testing.T) {
 		t.Errorf("expected 1 post, got %d", len(posts))
 	}
 
-	count, err := repo.CountPostsByTagIDs(ctx, []int64{1}, true, false)
+	count, err := repo.CountPostsByTagIDs(ctx, []int64{1}, true, false, false)
 	if err != nil || count != 1 {
 		t.Errorf("CountPostsByTagIDs: err=%v count=%d", err, count)
 	}
 
 	// empty tag IDs
-	posts2, _ := repo.GetPostsByTagIDs(ctx, nil, true, false, 10, 0)
+	posts2, _ := repo.GetPostsByTagIDs(ctx, nil, true, false, false, 10, 0)
 	if len(posts2) != 0 {
 		t.Errorf("expected empty for nil tagIDs")
 	}
-	count2, _ := repo.CountPostsByTagIDs(ctx, nil, true, false)
+	count2, _ := repo.CountPostsByTagIDs(ctx, nil, true, false, false)
 	if count2 != 0 {
 		t.Errorf("expected 0 count for nil tagIDs")
 	}

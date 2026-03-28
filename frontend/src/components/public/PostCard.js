@@ -104,6 +104,10 @@ export class PostCard extends Component {
     if (hasOverlay) {
       card.addEventListener('click', (e) => {
         if (!card.classList.contains('is-touched')) {
+          // Tag links with ancestor flyouts manage their own first-click behavior.
+          // Don't intercept — let setupTagFlyout handle it cleanly.
+          if (e.target.closest('.has-flyout')) return;
+
           // First click — reveal the overlay.
           e.preventDefault();
           e.stopPropagation();

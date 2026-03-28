@@ -284,6 +284,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth))
+	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth))
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
