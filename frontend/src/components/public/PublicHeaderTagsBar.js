@@ -77,34 +77,44 @@ export class PublicHeaderTagsBar extends Component {
       const btn = group.querySelector('.toggle-children');
       if (!btn) return;
 
-      // Touch / keyboard: toggle on chevron click.
-      // Close sibling groups only — do NOT close ancestor groups so that
-      // parent dropdowns stay open when a nested chevron is tapped.
+      // Click / tap: explicit toggle.
+      // Toggle decision uses _openedByClick (not the CSS is-open class) so
+      // that the synthesized mouseenter touch browsers fire before click
+      // does not trick the handler into seeing the menu as already-open.
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const isOpen = group.classList.contains('is-open');
+        clearTimeout(group._openTimer);
+        const wasClickOpen = group._openedByClick;
         this._closeAllExcept(group);
-        if (!isOpen) this._open(group);
+        if (wasClickOpen) {
+          this._close(group);
+        } else {
+          group._openedByClick = true;
+          this._open(group);
+        }
       });
 
-      // Pointer devices: open on hover; delay close so the cursor can travel
-      // from the narrow tag pill to the (often wider) fixed dropdown without
-      // triggering mouseleave on the group's layout box first.
+      // Hover open: 300 ms intent delay.
+      // – Long enough that navigating between chips doesn't trigger spurious
+      //   opens; short enough to feel instant on deliberate hover.
+      // – Touch: synthesized mouseenter fires < 5 ms before click, so the
+      //   click handler always wins the race and cancels the timer.
+      // – Close same-level siblings immediately on enter so there is never
+      //   a lag where two dropdowns are visible at once.
       group.addEventListener('mouseenter', () => {
-        clearTimeout(group._hoverTimer);
-        this._open(group);
+        clearTimeout(group._openTimer);
+        this._closeSiblings(group);
+        if (!group._openedByClick) {
+          group._openTimer = setTimeout(() => this._open(group), 300);
+        }
       });
+
+      // Cancel a pending open if cursor leaves before the 300 ms are up.
+      // Closing an already-open menu is handled by the hot zone, not here.
       group.addEventListener('mouseleave', () => {
-        group._hoverTimer = setTimeout(() => this._close(group), 150);
+        clearTimeout(group._openTimer);
       });
-      const dropdown = group.querySelector('.tag-children');
-      if (dropdown) {
-        dropdown.addEventListener('mouseenter', () => clearTimeout(group._hoverTimer));
-        dropdown.addEventListener('mouseleave', () => {
-          group._hoverTimer = setTimeout(() => this._close(group), 150);
-        });
-      }
     });
 
     const track   = this.container.querySelector('.tag-strip-track');
@@ -112,24 +122,23 @@ export class PublicHeaderTagsBar extends Component {
     this._cleanupStrip = setupScrollableStrip(track, filters);
 
     // Store bound refs so they can be removed in beforeUnmount
-    this._boundOutside        = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
-    this._boundCloseAll       = () => this._closeAll();
-    this._boundCheckOverflow  = () => {
-      this._checkOverflow();
-    };
+    this._boundOutside       = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
+    this._boundCloseAll      = () => this._closeAll();
+    this._boundCheckOverflow = () => this._checkOverflow();
 
     document.addEventListener('click',  this._boundOutside);
-    window.addEventListener('scroll',   this._boundCloseAll, { passive: true });
-    window.addEventListener('resize',   this._boundCloseAll, { passive: true });
+    window.addEventListener('scroll',   this._boundCloseAll,      { passive: true });
+    window.addEventListener('resize',   this._boundCloseAll,      { passive: true });
     window.addEventListener('resize',   this._boundCheckOverflow, { passive: true });
 
     // Defer one frame so the header's flex layout has settled before measuring.
-    requestAnimationFrame(() => {
-      this._checkOverflow();
-    });
+    requestAnimationFrame(() => this._checkOverflow());
   }
 
   beforeUnmount() {
+    // Close all groups first so their hot-zone mousemove listeners are removed.
+    this._closeAll();
+
     document.removeEventListener('click',  this._boundOutside);
     window.removeEventListener('scroll',   this._boundCloseAll);
     window.removeEventListener('resize',   this._boundCloseAll);
@@ -148,35 +157,31 @@ export class PublicHeaderTagsBar extends Component {
     const filters     = this.container.querySelector('.tag-strip-scroll');
     if (!headerGroup || !filters) return;
 
-    // Measure in non-stacked state
     headerGroup.classList.remove('tags-stacked');
-    // Reading scrollWidth forces a synchronous layout recalculation
     const overflows = filters.scrollWidth > filters.clientWidth + 2;
     headerGroup.classList.toggle('tags-stacked', overflows);
   }
 
   // Open a dropdown, positioning it with position:fixed so it escapes
   // any overflow:auto ancestor (the horizontal-scroll tags bar).
+  // After opening, attaches a hot-zone tracker on document mousemove.
   _open(group) {
     const dropdown = group.querySelector('.tag-children');
     const anchor   = group.querySelector('.tag-group-header') || group;
     if (!dropdown || !anchor) return;
 
-    // Measure dropdown dimensions while invisible
+    // Measure dropdown width while invisible.
     dropdown.classList.add('is-measuring');
     const anchorRect = anchor.getBoundingClientRect();
     const dropW = dropdown.offsetWidth;
     dropdown.classList.remove('is-measuring');
 
-    const gap = 0;
-
-    // Horizontal: always centre on the anchor tag, clamped to viewport edges
+    // Horizontal: centre on the anchor chip, clamped to viewport edges.
     let left = anchorRect.left + anchorRect.width / 2 - dropW / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - dropW - 8));
 
-    // Vertical: always open directly below the hovered tag's header pill,
-    // regardless of nesting level.
-    const top = anchorRect.bottom + gap;
+    // Vertical: flush below the chip.
+    const top = anchorRect.bottom;
 
     dropdown.style.position  = 'fixed';
     dropdown.style.top       = `${top}px`;
@@ -185,9 +190,71 @@ export class PublicHeaderTagsBar extends Component {
 
     group.classList.add('is-open');
     group.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'true');
+
+    this._startHotZone(group);
+  }
+
+  // Install a passive mousemove listener on the document.
+  //
+  // The check is intentionally dynamic: at every mouse move it reads the
+  // live getBoundingClientRect() of the chip, the group's own dropdown, and
+  // every nested open dropdown inside the group.  This means a nested
+  // sub-menu that opens (and is wider or taller than the parent dropdown)
+  // is automatically included in the safe zone — no race, no stale coords.
+  _startHotZone(group) {
+    this._stopHotZone(group);
+
+    const check = (e) => {
+      if (this._isInHotZone(group, e.clientX, e.clientY)) return;
+      this._stopHotZone(group);
+      if (!group._openedByClick) this._close(group);
+    };
+
+    group._hotZoneCheck = check;
+    document.addEventListener('mousemove', check, { passive: true });
+  }
+
+  // Returns true when (x, y) is inside any part of the group's interactive
+  // area: its chip header, its own dropdown, or any nested open dropdown.
+  _isInHotZone(group, x, y) {
+    const pad = 8;
+    const hit = (r) =>
+      x >= r.left - pad && x <= r.right  + pad &&
+      y >= r.top  - pad && y <= r.bottom + pad;
+
+    // Chip / header pill
+    const header = group.querySelector('.tag-group-header') || group;
+    if (hit(header.getBoundingClientRect())) return true;
+
+    // This group's direct dropdown
+    const dropdown = group.querySelector(':scope > .tag-children');
+    if (dropdown && hit(dropdown.getBoundingClientRect())) return true;
+
+    // Any nested open dropdown — these may be positioned outside the parent
+    // dropdown rect when the sub-menu is wider or offset to the side.
+    for (const el of group.querySelectorAll('.tag-group.is-open > .tag-children')) {
+      if (hit(el.getBoundingClientRect())) return true;
+    }
+
+    return false;
+  }
+
+  _stopHotZone(group) {
+    if (group._hotZoneCheck) {
+      document.removeEventListener('mousemove', group._hotZoneCheck);
+      group._hotZoneCheck = null;
+    }
   }
 
   _close(group) {
+    this._stopHotZone(group);
+    clearTimeout(group._openTimer);
+    group._openedByClick = false;
+
+    // Close any open descendants before removing our own is-open so that
+    // their hot-zone listeners are also cleaned up.
+    group.querySelectorAll('.tag-group.is-open').forEach((g) => this._close(g));
+
     const dropdown = group.querySelector('.tag-children');
     if (dropdown) {
       dropdown.style.position  = '';
@@ -201,6 +268,14 @@ export class PublicHeaderTagsBar extends Component {
 
   _closeAll() {
     this.container.querySelectorAll('.tag-group.is-open').forEach((g) => this._close(g));
+  }
+
+  // Close open groups that are direct siblings of `group` at the same DOM
+  // level.  Called on mouseenter so the previous chip closes immediately.
+  _closeSiblings(group) {
+    group.parentElement?.querySelectorAll(':scope > .tag-group.is-open').forEach((g) => {
+      if (g !== group) this._close(g);
+    });
   }
 
   // Close all open groups except `group` and its ancestors.
