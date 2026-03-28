@@ -310,7 +310,7 @@
     flex-direction: column;
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
-    background: var(--bg-overlay);
+    background: var(--surface-card);
     border: 1px solid var(--border-primary);
     border-radius: var(--border-radius-xl);
     box-shadow: var(--shadow-md);
