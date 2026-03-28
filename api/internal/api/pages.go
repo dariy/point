@@ -335,7 +335,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	tags, err := h.tagService.ListTags(ctx, false, publicOnly)
+	tags, err := h.tagService.ListTags(ctx, true, publicOnly)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
