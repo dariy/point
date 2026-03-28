@@ -45,8 +45,10 @@ export default class TagsPage extends Component {
         </div>`;
     }
 
-    // Render only top-level tags (no parents); children rendered recursively.
-    const rootTags = tags.filter((t) => !t.parents?.length);
+    // Render only top-level tags (those whose parents are not in the current list);
+    // children are rendered recursively.
+    const tagIds = new Set(tags.map((t) => t.id));
+    const rootTags = tags.filter((t) => !t.parents?.some((p) => tagIds.has(p.id)));
     const tree = rootTags.map((t) => this._renderTag(t, tags, 0)).join('');
 
     return `
