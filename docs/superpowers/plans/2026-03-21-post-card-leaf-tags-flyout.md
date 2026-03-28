@@ -167,7 +167,7 @@ After the commented-out light overlay block (around line 351), add:
     flex-wrap: wrap;
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
-    background: var(--bg-overlay);
+    background: var(--surface-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-md);
