@@ -25,11 +25,11 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
-    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt 
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
                 SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -44,7 +44,7 @@ LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
 		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
-		arg.IncludeDrafts,
+		arg.IncludeDrafts, arg.IncludeHidden,
 		arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
@@ -78,11 +78,11 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
-    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt 
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
                 SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -96,7 +96,7 @@ WHERE
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
 		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
-		arg.IncludeDrafts,
+		arg.IncludeDrafts, arg.IncludeHidden,
 	).Scan(&count)
 	return count, err
 }
@@ -117,12 +117,12 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
 
-    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt 
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
                 SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -148,7 +148,7 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
-statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts,
+		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
 		search, search, search, search, search,
 		limit, offset)
 	if err != nil {
@@ -189,12 +189,12 @@ WHERE
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden', 'page')
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
         ELSE LOWER(p.status) = 'published'
     END)
 
-    AND (CASE WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt 
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
                 SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -219,7 +219,7 @@ WHERE
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
-statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts,
+		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
 		search, search, search, search, search,
 	).Scan(&count)
 	return count, err
@@ -1269,7 +1269,7 @@ func (r *Repository) GetMigrations(ctx context.Context) ([]MigrationRecord, erro
 
 // GetPostsByTagIDs returns paginated posts that have at least one tag from the
 // given set of tag IDs. The status filter mirrors CountPostsByTag / GetPostsByTag.
-func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, limit, offset int64) ([]models.Post, error) {
+func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
 	if len(tagIDs) == 0 {
 		return []models.Post{}, nil
 	}
@@ -1287,6 +1287,9 @@ func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publi
 var statusClause string
 	if includeDrafts {
 		statusClause = "1=1"
+	} else if includeHidden {
+		// Authenticated users see published + hidden, _hide_posts exclusion not applied.
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 	} else {
 		if publishedOnly {
 			statusClause = "LOWER(p.status) = 'published'"
@@ -1294,7 +1297,7 @@ var statusClause string
 			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 		}
 		statusClause += ` AND p.id NOT IN (
-			SELECT pt.post_id FROM post_tags pt 
+			SELECT pt.post_id FROM post_tags pt
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
 					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -1306,6 +1309,7 @@ var statusClause string
 		)`
 	}
 
+	bypassEHP := includeDrafts || includeHidden
 	q := `
 WITH RECURSIVE ehp(id) AS (
     SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -1325,8 +1329,8 @@ AND (? OR NOT EXISTS (
 ))
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
-	// add includeDrafts as the ? for the visibility check, then limit and offset
-	args = append(args, includeDrafts, limit, offset)
+	// bypassEHP controls the EHP visibility check, then limit and offset
+	args = append(args, bypassEHP, limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -1356,7 +1360,7 @@ LIMIT ? OFFSET ?`
 
 // CountPostsByTagIDs returns the total number of distinct posts that have at
 // least one tag from the given set of tag IDs.
-func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool) (int64, error) {
+func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error) {
 	if len(tagIDs) == 0 {
 		return 0, nil
 	}
@@ -1375,6 +1379,8 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 	var statusClause string
 	if includeDrafts {
 		statusClause = "1=1"
+	} else if includeHidden {
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 	} else {
 		if publishedOnly {
 			statusClause = "LOWER(p.status) = 'published'"
@@ -1382,7 +1388,7 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 		}
 		statusClause += ` AND p.id NOT IN (
-			SELECT pt.post_id FROM post_tags pt 
+			SELECT pt.post_id FROM post_tags pt
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
 					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -1394,6 +1400,7 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 		)`
 	}
 
+	bypassEHP := includeDrafts || includeHidden
 	q := `
 WITH RECURSIVE ehp(id) AS (
     SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -1408,8 +1415,7 @@ AND (` + statusClause + `)
 AND (? OR NOT EXISTS (
     SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
 ))`
-	// add includeDrafts as the ? for the visibility check
-	args = append(args, includeDrafts)
+	args = append(args, bypassEHP)
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)

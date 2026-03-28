@@ -110,12 +110,13 @@ WHERE
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
+        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published'
     END)
 
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
+        WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
             WHERE pt.tag_id IN (
@@ -133,12 +134,13 @@ WHERE
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
-        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden', 'page')
+        WHEN sqlc.arg('include_hidden') THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published'
     END)
 
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
+        WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
             WHERE pt.tag_id IN (

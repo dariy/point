@@ -88,6 +88,13 @@
     text-rendering: optimizeLegibility;
     border-radius: 0;
     box-shadow: none;
+    /* Prevent transition: all (from base .tag-link) from animating background/border-radius
+       when hover state changes — that would flash a surface-card rectangle on hover. */
+    transition: color var(--transition-fast);
+    /* tag-strip.css applies backdrop-filter: blur to .tag-strip-scroll .tag-link (descendant selector),
+       which would bleed through this transparent link and blur the parent pill's border into a rectangle. */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 

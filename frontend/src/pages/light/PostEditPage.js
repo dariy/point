@@ -249,7 +249,7 @@ export default class PostEditPage extends Component {
     // Tags input
     this._tagsInputRef = this.mountChild(TagsInput, '#tags-input-mount', {
       tags: toTagNames(this.state.post?.tags),
-      onChange: (tags) => { this._tags = tags; },
+      onChange: (tags) => { this._tags = tags; this._debouncedAutosave(); },
     });
     this._tags = toTagNames(this.state.post?.tags);
 

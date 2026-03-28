@@ -44,3 +44,13 @@ export function getTagsPage() {
 export function getMapPage() {
   return api.get('/api/pages/map');
 }
+
+/**
+ * Navigation menu: hierarchical tag tree scoped to the current user's auth level.
+ * Guests receive only public/visible tags; admins receive all tags.
+ *
+ * @returns {Promise<{ menu: object[] }>}
+ */
+export function getNavMenu() {
+  return api.get('/api/pages/nav');
+}
