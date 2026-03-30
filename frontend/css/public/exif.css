@@ -1,4 +1,4 @@
-/* ── Public EXIF overlay (normal mode) ─────────────────── */
+/* ── Public EXIF overlay — normal mode ─────────────────── */
 .media-exif-wrapper {
   position: relative;
   display: inline-block;
@@ -12,46 +12,76 @@
 
 .exif-info-btn {
   position: absolute;
-  top: var(--spacing-xs);
-  right: var(--spacing-xs);
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  border: none;
+  top: 8px;
+  right: 8px;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 50%;
-  width: 1.5rem;
-  height: 1.5rem;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.2s;
+  transform: scale(0.85);
+  transition: opacity 0.2s ease, transform 0.2s ease;
   z-index: 2;
+  line-height: 1;
 }
 
 .media-exif-wrapper:hover .exif-info-btn,
 .media-exif-wrapper:focus-within .exif-info-btn {
   opacity: 1;
+  transform: scale(1);
+}
+
+.exif-info-btn.is-active {
+  opacity: 1;
+  transform: scale(1);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .exif-overlay {
-  display: none;
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.72) 100%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: #fff;
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-xs);
-  max-height: 50%;
+  padding: 10px 14px 12px;
+  font-size: 0.72rem;
+  max-height: 55%;
   overflow-y: auto;
   z-index: 3;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) transparent;
 }
 
 .exif-overlay.is-visible {
-  display: block;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.exif-overlay-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 6px;
 }
 
 .exif-overlay table {
@@ -60,25 +90,41 @@
 }
 
 .exif-overlay td {
-  padding: 2px var(--spacing-xs);
+  padding: 2px 0;
   vertical-align: top;
+  line-height: 1.45;
 }
 
 .exif-overlay td:first-child {
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
-  padding-right: var(--spacing-sm);
+  padding-right: 10px;
+  min-width: 6rem;
+  font-size: 0.68rem;
+}
+
+.exif-overlay td:last-child {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* ── EXIF panel in immersive info overlay ───────────────── */
 .immersive-exif-panel {
   margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
   border-top: 1px solid var(--border-primary);
 }
 
 .immersive-exif-panel:empty {
   display: none;
+}
+
+.immersive-exif-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xs);
 }
 
 .immersive-exif-panel table {
@@ -88,13 +134,15 @@
 }
 
 .immersive-exif-panel td {
-  padding: 2px 0;
+  padding: 3px 0;
   vertical-align: top;
+  line-height: 1.45;
 }
 
 .immersive-exif-panel td:first-child {
   color: var(--text-secondary);
   padding-right: var(--spacing-md);
   white-space: nowrap;
-  width: 40%;
+  width: 38%;
+  font-size: 0.8em;
 }

@@ -222,6 +222,9 @@ export class MediaBrowser extends Component {
 
     return `
       <div class="exif-panel" id="exif-panel-${escapeHtml(String(m.id))}" hidden>
+        <div class="exif-panel-heading">
+          <span class="exif-panel-title">EXIF / Camera data</span>
+        </div>
         <table class="exif-table">
           <thead><tr><th>Field</th><th>Value</th><th></th></tr></thead>
           <tbody class="exif-rows">${rows}</tbody>

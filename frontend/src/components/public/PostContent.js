@@ -261,6 +261,10 @@ export class PostContent extends Component {
       while (exifPanel.firstChild) exifPanel.removeChild(exifPanel.firstChild);
       const entries = Object.entries(metadata);
       if (entries.length) {
+        const label = document.createElement('div');
+        label.className = 'immersive-exif-label';
+        label.textContent = 'Camera data';
+        exifPanel.appendChild(label);
         const table = document.createElement('table');
         const tbody = document.createElement('tbody');
         entries.forEach(([k, v]) => {
@@ -742,6 +746,10 @@ export class PostContent extends Component {
         overlay.className = 'exif-overlay';
         overlay.setAttribute('role', 'complementary');
         overlay.setAttribute('aria-label', 'EXIF data');
+        const title = document.createElement('div');
+        title.className = 'exif-overlay-title';
+        title.textContent = 'Camera data';
+        overlay.appendChild(title);
         const table = document.createElement('table');
         const tbody = document.createElement('tbody');
         Object.entries(media.metadata).forEach(([k, v]) => {
@@ -761,6 +769,7 @@ export class PostContent extends Component {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const isVisible = overlay.classList.toggle('is-visible');
+          btn.classList.toggle('is-active', isVisible);
           btn.setAttribute('aria-expanded', String(isVisible));
         });
       });
