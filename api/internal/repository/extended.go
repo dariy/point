@@ -769,7 +769,7 @@ func (r *Repository) ListMediaFiltered(ctx context.Context, fileType, folder str
 	}
 	const q = `
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
-       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public, metadata
 FROM media
 WHERE (? = '' OR LOWER(file_type) = LOWER(?))
   AND (? = '' OR original_path LIKE ? || '%')
@@ -790,7 +790,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
 			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
-			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic, &m.Metadata,
 		); err != nil {
 			return nil, err
 		}

@@ -678,3 +678,103 @@ func TestMediaHandler_ReextractEXIF(t *testing.T) {
 		t.Error("expected error for invalid id")
 	}
 }
+
+// Regression: ListMedia must return metadata so the EXIF panel renders on page load.
+// Before the fix, ListMediaFiltered selected 15 columns and omitted metadata.
+func TestMediaHandler_ListMedia_IncludesMetadata(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	tmpDir, _ := os.MkdirTemp("", "media-list-meta-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	media, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("data"), Filename: "meta.txt", MimeType: "text/plain",
+	})
+	initialMeta := map[string]interface{}{"Make": "Nikon"}
+	_, err := mediaSvc.UpdateMedia(ctx, services.UpdateMediaParams{
+		ID: media.ID, AltText: "alt", Metadata: &initialMeta,
+	})
+	if err != nil {
+		t.Fatalf("set metadata: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/media", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if err := handler.ListMedia(c); err != nil {
+		t.Fatalf("ListMedia: %v", err)
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	items := resp["media"].([]interface{})
+	if len(items) == 0 {
+		t.Fatal("expected at least one media item")
+	}
+	item := items[0].(map[string]interface{})
+	meta, ok := item["metadata"].(map[string]interface{})
+	if !ok || meta["Make"] != "Nikon" {
+		t.Errorf("ListMedia did not return metadata: got %v", item["metadata"])
+	}
+}
+
+// Regression: PATCH /api/media/:id with only metadata must not wipe alt_text/caption/post_id.
+// Before the fix, UpdateMedia SQL used unconditional SET (not COALESCE) for those fields.
+func TestMediaHandler_UpdateMedia_MetadataOnly_PreservesOtherFields(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	tmpDir, _ := os.MkdirTemp("", "media-preserve-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	media, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("data"), Filename: "preserve.txt", MimeType: "text/plain",
+	})
+	// Set initial alt_text and caption
+	_, err := mediaSvc.UpdateMedia(ctx, services.UpdateMediaParams{
+		ID: media.ID, AltText: "my alt", Caption: "my caption",
+	})
+	if err != nil {
+		t.Fatalf("set initial fields: %v", err)
+	}
+
+	// PATCH with only metadata — must preserve alt_text and caption
+	metaOnly := map[string]interface{}{"ISO": "400"}
+	body, _ := json.Marshal(map[string]interface{}{"metadata": metaOnly})
+	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	if err := handler.UpdateMedia(c); err != nil {
+		t.Fatalf("UpdateMedia: %v", err)
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+
+	if resp["alt_text"] != "my alt" {
+		t.Errorf("alt_text wiped: got %v", resp["alt_text"])
+	}
+	if resp["caption"] != "my caption" {
+		t.Errorf("caption wiped: got %v", resp["caption"])
+	}
+	meta, ok := resp["metadata"].(map[string]interface{})
+	if !ok || meta["ISO"] != "400" {
+		t.Errorf("metadata not saved: got %v", resp["metadata"])
+	}
+}

@@ -1420,7 +1420,10 @@ func (q *Queries) UpdateAllTagPostCounts(ctx context.Context) error {
 
 const updateMedia = `-- name: UpdateMedia :one
 UPDATE media
-SET alt_text = ?, caption = ?, post_id = ?, metadata = COALESCE(?, metadata)
+SET alt_text = COALESCE(?, alt_text),
+    caption = COALESCE(?, caption),
+    post_id = COALESCE(?, post_id),
+    metadata = COALESCE(?, metadata)
 WHERE id = ?
 RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
 `
