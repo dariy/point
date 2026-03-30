@@ -273,8 +273,8 @@ This project uses [metaswarm](https://github.com/dsifry/metaswarm) for multi-age
 
 ## MCP
 Use 
-- serena-go for semantic code retrieval and editing tools for `api` sub-project; 
-- serena-js for semantic code retrieval and editing tools for `frontend` sub-project. 
+- serena-go for semantic code retrieval and editing tools for `api` sub-project. **Note:** Paths passed to `serena-go` tools must be relative to the `api/` directory (e.g., use `internal/main.go`, not `api/internal/main.go`).
+- serena-js for semantic code retrieval and editing tools for `frontend` sub-project. **Note:** Paths passed to `serena-js` tools must be relative to the `frontend/` directory (e.g., use `src/app.js`, not `frontend/src/app.js`).
 - context7 for up to date documentation on third party code
 - sqlite for database access
 
