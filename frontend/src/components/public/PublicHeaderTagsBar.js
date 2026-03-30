@@ -8,9 +8,9 @@
  */
 
 import { Component } from '../Component.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { CHEVRON_SVG } from '../../utils/icons.js';
-import { renderTagLink, setupScrollableStrip } from '../../utils/tags.js';
+import { renderTagLink, setupScrollableStrip, createHotZone } from '../../utils/tags.js';
 
 export class PublicHeaderTagsBar extends Component {
   render() {
@@ -95,6 +95,27 @@ export class PublicHeaderTagsBar extends Component {
         }
       });
 
+      // Tapping/clicking the pill text:
+      //   closed → open the dropdown (preventDefault stops browser navigation)
+      //   open   → navigate to the tag page via SPA router
+      // Always calling e.preventDefault() and driving navigation explicitly
+      // avoids all iOS/Android touch-event race conditions.
+      const headerLink = group.querySelector('.tag-group-header > .tag-link');
+      if (headerLink) {
+        headerLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          const recentlyOpened = Date.now() - (this._lastOpenTime || 0) < 300;
+          if (group.classList.contains('is-open') && !recentlyOpened) {
+            navigate(headerLink.getAttribute('href'));
+          } else {
+            clearTimeout(group._openTimer);
+            this._closeAllExcept(group);
+            group._openedByClick = true;
+            this._open(group);
+          }
+        });
+      }
+
       // Hover open: 300 ms intent delay.
       // – Long enough that navigating between chips doesn't trigger spurious
       //   opens; short enough to feel instant on deliberate hover.
@@ -123,7 +144,10 @@ export class PublicHeaderTagsBar extends Component {
 
     // Store bound refs so they can be removed in beforeUnmount
     this._boundOutside       = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
-    this._boundCloseAll      = () => this._closeAll();
+    this._boundCloseAll      = () => {
+      if (Date.now() - (this._lastOpenTime || 0) < 300) return;
+      this._closeAll();
+    };
     this._boundCheckOverflow = () => this._checkOverflow();
 
     document.addEventListener('click',  this._boundOutside);
@@ -190,60 +214,30 @@ export class PublicHeaderTagsBar extends Component {
 
     group.classList.add('is-open');
     group.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'true');
+    this.container.querySelector('.tag-strip-track')?.classList.add('is-dropdown-open');
 
+    this._lastOpenTime = Date.now();
     this._startHotZone(group);
   }
 
-  // Install a passive mousemove listener on the document.
-  //
-  // The check is intentionally dynamic: at every mouse move it reads the
-  // live getBoundingClientRect() of the chip, the group's own dropdown, and
-  // every nested open dropdown inside the group.  This means a nested
-  // sub-menu that opens (and is wider or taller than the parent dropdown)
-  // is automatically included in the safe zone — no race, no stale coords.
+  // The hot zone covers the chip header, its own dropdown, and any nested
+  // open dropdowns — evaluated live on every mousemove so newly-opened
+  // sub-menus are automatically included without any stale-coord race.
   _startHotZone(group) {
     this._stopHotZone(group);
-
-    const check = (e) => {
-      if (this._isInHotZone(group, e.clientX, e.clientY)) return;
-      this._stopHotZone(group);
-      if (!group._openedByClick) this._close(group);
-    };
-
-    group._hotZoneCheck = check;
-    document.addEventListener('mousemove', check, { passive: true });
-  }
-
-  // Returns true when (x, y) is inside any part of the group's interactive
-  // area: its chip header, its own dropdown, or any nested open dropdown.
-  _isInHotZone(group, x, y) {
-    const pad = 8;
-    const hit = (r) =>
-      x >= r.left - pad && x <= r.right  + pad &&
-      y >= r.top  - pad && y <= r.bottom + pad;
-
-    // Chip / header pill
-    const header = group.querySelector('.tag-group-header') || group;
-    if (hit(header.getBoundingClientRect())) return true;
-
-    // This group's direct dropdown
-    const dropdown = group.querySelector(':scope > .tag-children');
-    if (dropdown && hit(dropdown.getBoundingClientRect())) return true;
-
-    // Any nested open dropdown — these may be positioned outside the parent
-    // dropdown rect when the sub-menu is wider or offset to the side.
-    for (const el of group.querySelectorAll('.tag-group.is-open > .tag-children')) {
-      if (hit(el.getBoundingClientRect())) return true;
-    }
-
-    return false;
+    group._hotZone = createHotZone(
+      () => [
+        group.querySelector('.tag-group-header') || group,
+        group.querySelector(':scope > .tag-children'),
+        ...Array.from(group.querySelectorAll('.tag-group.is-open > .tag-children')),
+      ],
+      () => { if (!group._openedByClick) this._close(group); }
+    );
   }
 
   _stopHotZone(group) {
-    if (group._hotZoneCheck) {
-      document.removeEventListener('mousemove', group._hotZoneCheck);
-      group._hotZoneCheck = null;
-    }
+    group._hotZone?.stop();
+    group._hotZone = null;
   }
 
   _close(group) {
@@ -264,6 +258,11 @@ export class PublicHeaderTagsBar extends Component {
     }
     group.classList.remove('is-open');
     group.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'false');
+
+    // If no more dropdowns are open in the track, remove the masking override
+    if (!this.container.querySelector('.tag-group.is-open')) {
+      this.container.querySelector('.tag-strip-track')?.classList.remove('is-dropdown-open');
+    }
   }
 
   _closeAll() {
