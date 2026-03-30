@@ -40,6 +40,10 @@
     background-color: var(--color-primary-light, rgba(37, 99, 235, 0.05));
 }
 
+.page-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
 .page-btn.active {
     background-color: var(--color-primary);
     border-color: var(--color-primary);
