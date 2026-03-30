@@ -1,0 +1,72 @@
+/* ── Admin EXIF panel ───────────────────────────────────── */
+.exif-panel {
+  margin-top: var(--spacing-md);
+  border-top: 1px solid var(--border-primary);
+  padding-top: var(--spacing-md);
+}
+
+.exif-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+.exif-table th {
+  text-align: left;
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.exif-table td {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: 1px solid var(--border-secondary);
+  vertical-align: middle;
+}
+
+.exif-table input {
+  width: 100%;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--border-radius-sm);
+  padding: 2px var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.exif-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-danger);
+  font-size: 1rem;
+  padding: 0 var(--spacing-xs);
+  line-height: 1;
+}
+
+.exif-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+/* Inline EXIF panel inside VisualEditor cards */
+.ve-exif-panel {
+  border-top: 1px solid var(--border-primary);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: 0 0 var(--border-radius-sm) var(--border-radius-sm);
+}
+
+.ve-exif-toggle {
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  padding: 2px var(--spacing-xs);
+}
