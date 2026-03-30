@@ -32,16 +32,18 @@
  * Dynamic Edge Fades 
  * Uses mask-image for background-agnostic transparency fades.
  * The .has-scroll-* classes are toggled by setupScrollableStrip JS.
+ * We disable the mask when a dropdown is open (.is-dropdown-open) because
+ * mask-image clips fixed-positioned dropdowns that overflow the strip on mobile.
  */
-.tag-strip-track.has-scroll-right .tag-strip-scroll {
+.tag-strip-track.has-scroll-right:not(.is-dropdown-open) .tag-strip-scroll {
     mask-image: linear-gradient(to right, black 85%, transparent 100%);
     -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
 }
-.tag-strip-track.has-scroll-left .tag-strip-scroll {
+.tag-strip-track.has-scroll-left:not(.is-dropdown-open) .tag-strip-scroll {
     mask-image: linear-gradient(to left, black 85%, transparent 100%);
     -webkit-mask-image: linear-gradient(to left, black 85%, transparent 100%);
 }
-.tag-strip-track.has-scroll-left.has-scroll-right .tag-strip-scroll {
+.tag-strip-track.has-scroll-left.has-scroll-right:not(.is-dropdown-open) .tag-strip-scroll {
     mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
     -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
 }
@@ -104,4 +106,26 @@
     backdrop-filter: blur(0.5rem);
     -webkit-backdrop-filter: blur(0.5rem);
     white-space: nowrap;
+    /* Prevent Android Chrome from absorbing taps as scroll gestures:
+       touch-action: manipulation fires click immediately for any tap. */
+    touch-action: manipulation;
+}
+
+/* Current-filter state — emitted by renderTagLink(tag, { active: true }) */
+.tag-link.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+/* Menu-open / first-tap activated state */
+.tag-link.is-active {
+    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+/* Press feedback for touch */
+.tag-link:active {
+    transform: scale(0.97);
 }
