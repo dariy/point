@@ -431,6 +431,14 @@ func (s *MediaService) GetMediaByPostID(ctx context.Context, postID int64) ([]mo
 	return s.repo.GetMediaByPostID(ctx, sql.NullInt64{Int64: postID, Valid: true})
 }
 
+// GetMediaByContent fetches media records referenced in post content (and
+// optional thumbnailPath) by looking up their original_path in the DB.
+// This works regardless of whether media.post_id has been explicitly set.
+func (s *MediaService) GetMediaByContent(ctx context.Context, content, thumbnailPath string) ([]models.Medium, error) {
+	paths := ExtractMediaPaths(content, thumbnailPath)
+	return s.repo.GetMediaByPaths(ctx, paths)
+}
+
 // ReextractEXIF re-reads the original file from disk, runs extractEXIF, and
 // overwrites media.metadata. Returns the updated media record.
 func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medium, error) {

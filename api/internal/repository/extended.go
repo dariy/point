@@ -1900,3 +1900,38 @@ func (r *Repository) DeleteSession(ctx context.Context, arg models.DeleteSession
 	return nil
 }
 
+// GetMediaByPaths returns media records whose original_path is in the given
+// list (DB format: "originals/YYYY/MM/file"). Order is not guaranteed.
+// Returns an empty slice (not an error) when paths is empty.
+func (r *Repository) GetMediaByPaths(ctx context.Context, paths []string) ([]models.Medium, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.Repeat("?,", len(paths))
+	placeholders = placeholders[:len(placeholders)-1]
+	q := `SELECT * FROM media WHERE original_path IN (` + placeholders + `)`
+	args := make([]interface{}, len(paths))
+	for i, p := range paths {
+		args[i] = p
+	}
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var items []models.Medium
+	for rows.Next() {
+		var m models.Medium
+		if err := rows.Scan(
+			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
+			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption,
+			&m.Metadata, &m.IsPublic,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return items, rows.Err()
+}
+
