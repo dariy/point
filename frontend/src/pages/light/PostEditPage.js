@@ -374,6 +374,7 @@ export default class PostEditPage extends Component {
     }
     this._visualEditorRef = this.mountChild(VisualEditor, '#visual-editor-mount', {
       nodes: this._nodes,
+      mediaByPath: this._mediaByPath || {},
       onChange: (nodes) => {
         this._nodes = nodes;
         this._visualEditorRef?.setProps({ nodes });
@@ -515,6 +516,16 @@ export default class PostEditPage extends Component {
       this._tags = toTagNames(post.tags);
       const nodes = parseNodes(post.content);
       this._nodes = nodes;
+
+      // Build mediaByPath map for VisualEditor EXIF panels
+      this._mediaByPath = {};
+      try {
+        const result = await listMedia({ post_id: post.id, per_page: 200 });
+        for (const m of (result.media || [])) {
+          if (m.path) this._mediaByPath[m.path] = m;
+        }
+      } catch { /* non-critical */ }
+
       this.setState({ loading: false, post, error: null, editorMode: 'visual' });
     } catch (err) {
       console.error('[PostEditPage] load error:', err);

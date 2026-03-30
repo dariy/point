@@ -10,6 +10,8 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { updateMedia, reextractMediaEXIF } from '../../api/media.js';
+import { store } from '../../store.js';
 
 export class VisualEditor extends Component {
   render() {
@@ -27,6 +29,24 @@ export class VisualEditor extends Component {
       if (node.type === 'image') {
         const thumb = `${node.path}?thumb`;
         const filename = node.path.split('/').pop();
+        const mediaByPath = this.props.mediaByPath || {};
+        const media = mediaByPath[node.path];
+        const mediaId = media ? escapeHtml(String(media.id)) : '';
+
+        const exifBtn = mediaId
+          ? `<button class="ve-exif-toggle btn btn-sm" data-media-id="${mediaId}" type="button" title="Edit EXIF">\u2139 EXIF</button>`
+          : '';
+        const exifPanel = mediaId
+          ? `<div class="ve-exif-panel" data-media-id="${mediaId}" hidden>
+               ${this._renderVeExifRows(media)}
+               <div class="exif-actions">
+                 <button class="btn btn-sm ve-exif-add-btn" type="button">+ Add field</button>
+                 <button class="btn btn-sm ve-exif-save-btn" data-media-id="${mediaId}" type="button">Save EXIF</button>
+                 <button class="btn btn-sm ve-exif-reextract-btn" data-media-id="${mediaId}" type="button">Re-extract</button>
+               </div>
+             </div>`
+          : '';
+
         return `
           ${insertZone(i)}
           <div class="ve-card" data-index="${i}">
@@ -37,9 +57,13 @@ export class VisualEditor extends Component {
                  alt="${escapeHtml(filename)}"
                  data-full="${escapeHtml(node.path)}"
                  loading="lazy">
-            <span class="ve-path">${escapeHtml(node.path)}</span>
-            <button class="ve-remove" data-index="${i}" type="button"
-                    aria-label="Remove image" title="Remove">&times;</button>
+            <div class="ve-card-row">
+              <span class="ve-path">${escapeHtml(node.path)}</span>
+              ${exifBtn}
+              <button class="ve-remove" data-index="${i}" type="button"
+                      aria-label="Remove image" title="Remove">&times;</button>
+            </div>
+            ${exifPanel}
           </div>`;
       } else {
         return `
@@ -77,6 +101,121 @@ export class VisualEditor extends Component {
     this._bindInlineRename();
     this._bindInsertZones();
     this._bindTextCards();
+    this._bindVeExif();
+  }
+
+  _renderVeExifRows(media) {
+    const metadata = (media && media.metadata) || {};
+    const rows = Object.entries(metadata).map(([k, v]) =>
+      `<tr>
+        <td><input class="exif-key" value="${escapeHtml(String(k))}" placeholder="Field name" aria-label="EXIF field name"></td>
+        <td><input class="exif-val" value="${escapeHtml(String(v))}" placeholder="Value" aria-label="EXIF value"></td>
+        <td><button class="exif-delete-btn" type="button" title="Remove">\u00d7</button></td>
+      </tr>`
+    ).join('');
+    return `<table class="exif-table"><thead><tr><th>Field</th><th>Value</th><th></th></tr></thead><tbody class="exif-rows">${rows}</tbody></table>`;
+  }
+
+  _bindVeExif() {
+    this.container.querySelectorAll('.ve-exif-toggle').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const panel = btn.closest('.ve-card').querySelector('.ve-exif-panel');
+        if (panel) panel.hidden = !panel.hidden;
+      });
+    });
+
+    const bindDelete = (scope) => {
+      scope.querySelectorAll('.exif-delete-btn').forEach((b) => {
+        b.addEventListener('click', () => b.closest('tr').remove());
+      });
+    };
+    bindDelete(this.container);
+
+    this.container.querySelectorAll('.ve-exif-add-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tbody = btn.closest('.ve-exif-panel').querySelector('.exif-rows');
+        const tr = document.createElement('tr');
+        ['Field name', 'Value'].forEach((placeholder, colIdx) => {
+          const td = document.createElement('td');
+          const input = document.createElement('input');
+          input.className = colIdx === 0 ? 'exif-key' : 'exif-val';
+          input.placeholder = placeholder;
+          input.setAttribute('aria-label', `EXIF ${placeholder.toLowerCase()}`);
+          td.appendChild(input);
+          tr.appendChild(td);
+        });
+        const tdDel = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'exif-delete-btn';
+        delBtn.title = 'Remove';
+        delBtn.textContent = '\u00d7';
+        delBtn.addEventListener('click', () => tr.remove());
+        tdDel.appendChild(delBtn);
+        tr.appendChild(tdDel);
+        tbody.appendChild(tr);
+      });
+    });
+
+    this.container.querySelectorAll('.ve-exif-save-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = parseInt(btn.dataset.mediaId, 10);
+        const panel = btn.closest('.ve-exif-panel');
+        const metadata = {};
+        panel.querySelectorAll('.exif-rows tr').forEach((tr) => {
+          const key = tr.querySelector('.exif-key')?.value.trim();
+          const val = tr.querySelector('.exif-val')?.value.trim();
+          if (key) metadata[key] = val;
+        });
+        try {
+          await updateMedia(id, { metadata });
+          store.set('toast', { message: 'EXIF saved.', type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
+        }
+      });
+    });
+
+    this.container.querySelectorAll('.ve-exif-reextract-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Re-extract will overwrite manual EXIF edits. Continue?')) return;
+        const id = parseInt(btn.dataset.mediaId, 10);
+        try {
+          const updated = await reextractMediaEXIF(id);
+          const metadata = updated.metadata || {};
+          const panel = btn.closest('.ve-exif-panel');
+          const tbody = panel.querySelector('.exif-rows');
+          while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+          Object.entries(metadata).forEach(([k, v]) => {
+            const tr = document.createElement('tr');
+            ['exif-key', 'exif-val'].forEach((cls, i) => {
+              const td = document.createElement('td');
+              const input = document.createElement('input');
+              input.className = cls;
+              input.value = String(i === 0 ? k : v);
+              input.placeholder = i === 0 ? 'Field name' : 'Value';
+              td.appendChild(input);
+              tr.appendChild(td);
+            });
+            const tdDel = document.createElement('td');
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'exif-delete-btn';
+            delBtn.title = 'Remove';
+            delBtn.textContent = '\u00d7';
+            delBtn.addEventListener('click', () => tr.remove());
+            tdDel.appendChild(delBtn);
+            tr.appendChild(tdDel);
+            tbody.appendChild(tr);
+          });
+          const msg = Object.keys(metadata).length ? 'EXIF re-extracted.' : 'No EXIF data found in this file.';
+          store.set('toast', { message: msg, type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Re-extract failed.', type: 'error' });
+        }
+      });
+    });
   }
 
   /**
