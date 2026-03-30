@@ -8,7 +8,7 @@
  */
 
 import { Component } from '../Component.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { CHEVRON_SVG } from '../../utils/icons.js';
 import { renderTagLink, setupScrollableStrip, createHotZone } from '../../utils/tags.js';
 
@@ -95,44 +95,24 @@ export class PublicHeaderTagsBar extends Component {
         }
       });
 
-      // Touch / first-click: tapping the chip's tag link opens the dropdown
-      // instead of navigating (on desktop the hover timer already opened it).
-      // Second tap navigates normally since the dropdown is already open.
+      // Tapping/clicking the pill text:
+      //   closed → open the dropdown (preventDefault stops browser navigation)
+      //   open   → navigate to the tag page via SPA router
+      // Always calling e.preventDefault() and driving navigation explicitly
+      // avoids all iOS/Android touch-event race conditions.
       const headerLink = group.querySelector('.tag-group-header > .tag-link');
       if (headerLink) {
-        // touchend fires before click on all touch platforms.
-        // On iOS: e.preventDefault() on touchend suppresses the click entirely.
-        // On Android: preventDefault is unreliable — click still fires.
-        // Fix: set group._touchHandled so the click handler knows to stand down.
-        headerLink.addEventListener('touchend', (e) => {
-          if (!group.classList.contains('is-open')) {
-            e.preventDefault();
-            clearTimeout(group._openTimer);
-            this._closeAllExcept(group);
-            group._openedByClick = true;
-            group._touchHandled = true;
-            setTimeout(() => { group._touchHandled = false; }, 600);
-            this._open(group);
-          }
-          // If already open: let click fire so router navigates.
-        });
-
         headerLink.addEventListener('click', (e) => {
-          // Android: touchend already opened the menu but click fired anyway — suppress.
-          if (group._touchHandled) {
-            e.preventDefault();
-            group._touchHandled = false;
-            return;
-          }
-          // Desktop: intercept click when menu is closed.
-          if (!group.classList.contains('is-open')) {
-            e.preventDefault();
+          e.preventDefault();
+          const recentlyOpened = Date.now() - (this._lastOpenTime || 0) < 300;
+          if (group.classList.contains('is-open') && !recentlyOpened) {
+            navigate(headerLink.getAttribute('href'));
+          } else {
             clearTimeout(group._openTimer);
             this._closeAllExcept(group);
             group._openedByClick = true;
             this._open(group);
           }
-          // If open: default behavior (SPA navigation) proceeds.
         });
       }
 
@@ -164,7 +144,10 @@ export class PublicHeaderTagsBar extends Component {
 
     // Store bound refs so they can be removed in beforeUnmount
     this._boundOutside       = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
-    this._boundCloseAll      = () => this._closeAll();
+    this._boundCloseAll      = () => {
+      if (Date.now() - (this._lastOpenTime || 0) < 300) return;
+      this._closeAll();
+    };
     this._boundCheckOverflow = () => this._checkOverflow();
 
     document.addEventListener('click',  this._boundOutside);
@@ -231,7 +214,9 @@ export class PublicHeaderTagsBar extends Component {
 
     group.classList.add('is-open');
     group.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'true');
+    this.container.querySelector('.tag-strip-track')?.classList.add('is-dropdown-open');
 
+    this._lastOpenTime = Date.now();
     this._startHotZone(group);
   }
 
@@ -273,6 +258,11 @@ export class PublicHeaderTagsBar extends Component {
     }
     group.classList.remove('is-open');
     group.querySelector('.toggle-children')?.setAttribute('aria-expanded', 'false');
+
+    // If no more dropdowns are open in the track, remove the masking override
+    if (!this.container.querySelector('.tag-group.is-open')) {
+      this.container.querySelector('.tag-strip-track')?.classList.remove('is-dropdown-open');
+    }
   }
 
   _closeAll() {
