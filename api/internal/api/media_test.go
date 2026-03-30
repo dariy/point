@@ -582,9 +582,9 @@ func TestMediaHandler_AnalyzeImage(t *testing.T) {
 
 func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	tmpDir, _ := os.MkdirTemp("", "media-meta-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -615,7 +615,7 @@ func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
 		t.Fatalf("expected 200 got %d: %s", rec.Code, rec.Body.String())
 	}
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	meta, ok := resp["metadata"].(map[string]interface{})
 	if !ok || meta["Make"] != "Sony" {
 		t.Errorf("metadata not updated: %v", resp["metadata"])
@@ -632,7 +632,7 @@ func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
 		t.Fatalf("UpdateMedia2: %v", err)
 	}
 	var resp2 map[string]interface{}
-	json.Unmarshal(rec2.Body.Bytes(), &resp2)
+	_ = json.Unmarshal(rec2.Body.Bytes(), &resp2)
 	meta2, ok2 := resp2["metadata"].(map[string]interface{})
 	if !ok2 || meta2["Make"] != "Sony" {
 		t.Errorf("metadata wiped on nil: %v", resp2["metadata"])
@@ -641,9 +641,9 @@ func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
 
 func TestMediaHandler_ReextractEXIF(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	tmpDir, _ := os.MkdirTemp("", "media-reextract-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)

@@ -449,9 +449,9 @@ func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medi
 	if err != nil {
 		return models.Medium{}, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
 
 	extracted := s.extractEXIF(f)
+	_ = f.Close()
 	metadata := map[string]interface{}(extracted)
 	return s.UpdateMedia(ctx, UpdateMediaParams{
 		ID:       id,
