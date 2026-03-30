@@ -106,12 +106,13 @@ WHERE
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ?4 THEN 1=1
-        WHEN ?5 THEN p.status IN ('published', 'hidden', 'page')
+        WHEN ?5 THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published'
     END)
 
     AND (CASE
         WHEN ?4 THEN 1=1
+        WHEN ?5 THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
             WHERE pt.tag_id IN (
@@ -1177,12 +1178,13 @@ WHERE
     AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ?4 THEN 1=1
-        WHEN ?5 THEN p.status IN ('published', 'hidden', 'page')
+        WHEN ?5 THEN p.status IN ('published', 'hidden')
         ELSE p.status = 'published'
     END)
 
     AND (CASE
         WHEN ?4 THEN 1=1
+        WHEN ?5 THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
             WHERE pt.tag_id IN (
@@ -1418,16 +1420,17 @@ func (q *Queries) UpdateAllTagPostCounts(ctx context.Context) error {
 
 const updateMedia = `-- name: UpdateMedia :one
 UPDATE media
-SET alt_text = ?, caption = ?, post_id = ?
+SET alt_text = ?, caption = ?, post_id = ?, metadata = COALESCE(?, metadata)
 WHERE id = ?
 RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
 `
 
 type UpdateMediaParams struct {
-	AltText sql.NullString `json:"alt_text"`
-	Caption sql.NullString `json:"caption"`
-	PostID  sql.NullInt64  `json:"post_id"`
-	ID      int64          `json:"id"`
+	AltText  sql.NullString `json:"alt_text"`
+	Caption  sql.NullString `json:"caption"`
+	PostID   sql.NullInt64  `json:"post_id"`
+	Metadata sql.NullString `json:"metadata"`
+	ID       int64          `json:"id"`
 }
 
 func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error) {
@@ -1435,6 +1438,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		arg.AltText,
 		arg.Caption,
 		arg.PostID,
+		arg.Metadata,
 		arg.ID,
 	)
 	var i Medium

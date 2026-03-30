@@ -579,3 +579,102 @@ func TestMediaHandler_AnalyzeImage(t *testing.T) {
 		t.Error("expected error for missing image file")
 	}
 }
+
+func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	tmpDir, _ := os.MkdirTemp("", "media-meta-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	media, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("data"), Filename: "up.txt", MimeType: "text/plain",
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"alt_text": "alt",
+		"metadata": map[string]interface{}{"Make": "Sony"},
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	if err := handler.UpdateMedia(c); err != nil {
+		t.Fatalf("UpdateMedia: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	meta, ok := resp["metadata"].(map[string]interface{})
+	if !ok || meta["Make"] != "Sony" {
+		t.Errorf("metadata not updated: %v", resp["metadata"])
+	}
+
+	body2, _ := json.Marshal(map[string]interface{}{"alt_text": "alt2"})
+	req2 := httptest.NewRequest(http.MethodPatch, "/", bytes.NewReader(body2))
+	req2.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	c2.SetParamNames("id")
+	c2.SetParamValues(strconv.FormatInt(media.ID, 10))
+	if err := handler.UpdateMedia(c2); err != nil {
+		t.Fatalf("UpdateMedia2: %v", err)
+	}
+	var resp2 map[string]interface{}
+	json.Unmarshal(rec2.Body.Bytes(), &resp2)
+	meta2, ok2 := resp2["metadata"].(map[string]interface{})
+	if !ok2 || meta2["Make"] != "Sony" {
+		t.Errorf("metadata wiped on nil: %v", resp2["metadata"])
+	}
+}
+
+func TestMediaHandler_ReextractEXIF(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	tmpDir, _ := os.MkdirTemp("", "media-reextract-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	media, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("data"), Filename: "up.txt", MimeType: "text/plain",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	if err := handler.ReextractEXIF(c); err != nil {
+		t.Fatalf("ReextractEXIF: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 got %d", rec.Code)
+	}
+
+	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	c2.SetParamNames("id")
+	c2.SetParamValues("nope")
+	if handler.ReextractEXIF(c2) == nil {
+		t.Error("expected error for invalid id")
+	}
+}

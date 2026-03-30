@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"point-api/internal/config"
 )
 
 func TestMediaService_AnalyzeImage(t *testing.T) {
@@ -598,3 +600,51 @@ func TestMediaService_ThumbnailBranches(t *testing.T) {
 	}
 }
 
+
+func TestMediaService_UpdateMedia_Metadata(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	cfg := &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := NewSettingsService(repo)
+	tagSvc := NewTagService(repo)
+	svc := NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	ctx := context.Background()
+
+	media, err := svc.UploadFile(ctx, UploadFileParams{
+		Content: []byte("data"), Filename: "test.txt", MimeType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+
+	initial := map[string]interface{}{"Make": "Canon"}
+	_, err = svc.UpdateMedia(ctx, UpdateMediaParams{
+		ID: media.ID, AltText: "alt", Caption: "cap", Metadata: &initial,
+	})
+	if err != nil {
+		t.Fatalf("set metadata: %v", err)
+	}
+
+	_, err = svc.UpdateMedia(ctx, UpdateMediaParams{
+		ID: media.ID, AltText: "alt2", Caption: "cap2", Metadata: nil,
+	})
+	if err != nil {
+		t.Fatalf("nil metadata update: %v", err)
+	}
+	got, _ := svc.GetMediaByID(ctx, media.ID)
+	if !got.Metadata.Valid || got.Metadata.String == "" {
+		t.Errorf("nil Metadata wiped existing: got %v", got.Metadata)
+	}
+
+	empty := map[string]interface{}{}
+	_, err = svc.UpdateMedia(ctx, UpdateMediaParams{
+		ID: media.ID, Metadata: &empty,
+	})
+	if err != nil {
+		t.Fatalf("empty map metadata: %v", err)
+	}
+	got2, _ := svc.GetMediaByID(ctx, media.ID)
+	if got2.Metadata.Valid && got2.Metadata.String != "{}" {
+		t.Errorf("expected {} got %q", got2.Metadata.String)
+	}
+}
