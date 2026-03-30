@@ -33,6 +33,7 @@ var publicSettingKeys = map[string]bool{
 	"enable_map":              true,
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
+	"exif_visibility":         true,
 }
 
 func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
