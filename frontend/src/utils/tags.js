@@ -200,44 +200,19 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
       link.addEventListener('mouseleave', () => clearTimeout(_openTimer));
     }
 
-    if (ancestors.length) {
-      // touchend fires before click on all touch platforms.
-      // On iOS: e.preventDefault() suppresses the subsequent click.
-      // On Android: click still fires after touchend — use _touchHandled flag.
-      link.addEventListener('touchend', (e) => {
-        clearTimeout(_openTimer);
-        e.preventDefault();
-        const flyoutOpenForThisLink =
-          _activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden');
-        link._touchHandled = true;
-        setTimeout(() => { link._touchHandled = false; }, 600);
-        if (flyoutOpenForThisLink) {
-          _hideFlyout();
-          navigateFn('/tag/' + slug);
-        } else {
-          _hideFlyout();
-          _activeLink = link;
-          _showFlyout(link, ancestors, excludeEl);
-        }
-      });
-    }
-
     link.addEventListener('click', (e) => {
       if (!ancestors.length) return; // no ancestors — navigate normally
 
       clearTimeout(_openTimer);
       e.preventDefault();
-      // Android: touchend already handled this — suppress double-fire.
-      if (link._touchHandled) {
-        link._touchHandled = false;
-        return;
-      }
       // We don't stop propagation here so that parent components (like PostCard)
       // can also react to the click (e.g. to reveal an image card overlay).
 
       const flyoutOpenForThisLink =
         _activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden');
-      if (flyoutOpenForThisLink) {
+      const recentlyOpened = Date.now() - _flyoutShowTime < 300;
+      
+      if (flyoutOpenForThisLink && !recentlyOpened) {
         _hideFlyout();
         navigateFn(`/tag/${slug}`);
       } else {

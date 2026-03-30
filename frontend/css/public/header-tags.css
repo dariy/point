@@ -68,6 +68,9 @@
     height: 2rem;
     transition: all var(--transition-fast);
     box-sizing: border-box;
+    /* Prevent Android Chrome from absorbing taps-on-pills as scroll gestures
+       when the header strip has touch-action: pan-x on its scroll container. */
+    touch-action: manipulation;
 }
 
 .header-tags-bar .tag-group-header:hover {
