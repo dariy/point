@@ -1,0 +1,100 @@
+/* ── Public EXIF overlay (normal mode) ─────────────────── */
+.media-exif-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.media-exif-wrapper img {
+  display: block;
+  max-width: 100%;
+}
+
+.exif-info-btn {
+  position: absolute;
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+
+.media-exif-wrapper:hover .exif-info-btn,
+.media-exif-wrapper:focus-within .exif-info-btn {
+  opacity: 1;
+}
+
+.exif-overlay {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-xs);
+  max-height: 50%;
+  overflow-y: auto;
+  z-index: 3;
+}
+
+.exif-overlay.is-visible {
+  display: block;
+}
+
+.exif-overlay table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.exif-overlay td {
+  padding: 2px var(--spacing-xs);
+  vertical-align: top;
+}
+
+.exif-overlay td:first-child {
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+  padding-right: var(--spacing-sm);
+}
+
+/* ── EXIF panel in immersive info overlay ───────────────── */
+.immersive-exif-panel {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-primary);
+}
+
+.immersive-exif-panel:empty {
+  display: none;
+}
+
+.immersive-exif-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.immersive-exif-panel td {
+  padding: 2px 0;
+  vertical-align: top;
+}
+
+.immersive-exif-panel td:first-child {
+  color: var(--text-secondary);
+  padding-right: var(--spacing-md);
+  white-space: nowrap;
+  width: 40%;
+}

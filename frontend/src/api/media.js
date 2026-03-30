@@ -131,3 +131,13 @@ export function analyzeMedia(id) {
 export function analyzeMediaByPath(path) {
   return api.post('/api/media/analyze-path', { path });
 }
+
+/**
+ * Re-extract EXIF data from the original file on disk.
+ * Overwrites any manually edited EXIF with camera-extracted values.
+ * @param {number} id
+ * @returns {Promise<object>} Updated media object
+ */
+export function reextractMediaEXIF(id) {
+  return api.post(`/api/media/${id}/reextract`, {});
+}
