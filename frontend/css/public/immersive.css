@@ -261,7 +261,7 @@
 }
 
 [data-theme="light"].immersive-layout .immersive-tags .tag-link.is-flyout-open {
-    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    background: var(--color-primary);
     border-color: var(--color-primary);
     color: white;
 }
