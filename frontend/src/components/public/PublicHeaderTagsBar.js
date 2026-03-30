@@ -10,7 +10,7 @@
 import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { CHEVRON_SVG } from '../../utils/icons.js';
-import { renderTagLink, setupScrollableStrip } from '../../utils/tags.js';
+import { renderTagLink, setupScrollableStrip, createHotZone } from '../../utils/tags.js';
 
 export class PublicHeaderTagsBar extends Component {
   render() {
@@ -94,6 +94,47 @@ export class PublicHeaderTagsBar extends Component {
           this._open(group);
         }
       });
+
+      // Touch / first-click: tapping the chip's tag link opens the dropdown
+      // instead of navigating (on desktop the hover timer already opened it).
+      // Second tap navigates normally since the dropdown is already open.
+      const headerLink = group.querySelector('.tag-group-header > .tag-link');
+      if (headerLink) {
+        // touchend fires before click on all touch platforms.
+        // On iOS: e.preventDefault() on touchend suppresses the click entirely.
+        // On Android: preventDefault is unreliable — click still fires.
+        // Fix: set group._touchHandled so the click handler knows to stand down.
+        headerLink.addEventListener('touchend', (e) => {
+          if (!group.classList.contains('is-open')) {
+            e.preventDefault();
+            clearTimeout(group._openTimer);
+            this._closeAllExcept(group);
+            group._openedByClick = true;
+            group._touchHandled = true;
+            setTimeout(() => { group._touchHandled = false; }, 600);
+            this._open(group);
+          }
+          // If already open: let click fire so router navigates.
+        });
+
+        headerLink.addEventListener('click', (e) => {
+          // Android: touchend already opened the menu but click fired anyway — suppress.
+          if (group._touchHandled) {
+            e.preventDefault();
+            group._touchHandled = false;
+            return;
+          }
+          // Desktop: intercept click when menu is closed.
+          if (!group.classList.contains('is-open')) {
+            e.preventDefault();
+            clearTimeout(group._openTimer);
+            this._closeAllExcept(group);
+            group._openedByClick = true;
+            this._open(group);
+          }
+          // If open: default behavior (SPA navigation) proceeds.
+        });
+      }
 
       // Hover open: 300 ms intent delay.
       // – Long enough that navigating between chips doesn't trigger spurious
@@ -194,56 +235,24 @@ export class PublicHeaderTagsBar extends Component {
     this._startHotZone(group);
   }
 
-  // Install a passive mousemove listener on the document.
-  //
-  // The check is intentionally dynamic: at every mouse move it reads the
-  // live getBoundingClientRect() of the chip, the group's own dropdown, and
-  // every nested open dropdown inside the group.  This means a nested
-  // sub-menu that opens (and is wider or taller than the parent dropdown)
-  // is automatically included in the safe zone — no race, no stale coords.
+  // The hot zone covers the chip header, its own dropdown, and any nested
+  // open dropdowns — evaluated live on every mousemove so newly-opened
+  // sub-menus are automatically included without any stale-coord race.
   _startHotZone(group) {
     this._stopHotZone(group);
-
-    const check = (e) => {
-      if (this._isInHotZone(group, e.clientX, e.clientY)) return;
-      this._stopHotZone(group);
-      if (!group._openedByClick) this._close(group);
-    };
-
-    group._hotZoneCheck = check;
-    document.addEventListener('mousemove', check, { passive: true });
-  }
-
-  // Returns true when (x, y) is inside any part of the group's interactive
-  // area: its chip header, its own dropdown, or any nested open dropdown.
-  _isInHotZone(group, x, y) {
-    const pad = 8;
-    const hit = (r) =>
-      x >= r.left - pad && x <= r.right  + pad &&
-      y >= r.top  - pad && y <= r.bottom + pad;
-
-    // Chip / header pill
-    const header = group.querySelector('.tag-group-header') || group;
-    if (hit(header.getBoundingClientRect())) return true;
-
-    // This group's direct dropdown
-    const dropdown = group.querySelector(':scope > .tag-children');
-    if (dropdown && hit(dropdown.getBoundingClientRect())) return true;
-
-    // Any nested open dropdown — these may be positioned outside the parent
-    // dropdown rect when the sub-menu is wider or offset to the side.
-    for (const el of group.querySelectorAll('.tag-group.is-open > .tag-children')) {
-      if (hit(el.getBoundingClientRect())) return true;
-    }
-
-    return false;
+    group._hotZone = createHotZone(
+      () => [
+        group.querySelector('.tag-group-header') || group,
+        group.querySelector(':scope > .tag-children'),
+        ...Array.from(group.querySelectorAll('.tag-group.is-open > .tag-children')),
+      ],
+      () => { if (!group._openedByClick) this._close(group); }
+    );
   }
 
   _stopHotZone(group) {
-    if (group._hotZoneCheck) {
-      document.removeEventListener('mousemove', group._hotZoneCheck);
-      group._hotZoneCheck = null;
-    }
+    group._hotZone?.stop();
+    group._hotZone = null;
   }
 
   _close(group) {

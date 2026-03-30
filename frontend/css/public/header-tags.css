@@ -70,9 +70,15 @@
     box-sizing: border-box;
 }
 
-.header-tags-bar .tag-group-header:hover,
-.header-tags-bar .tag-group.is-open>.tag-group-header {
+.header-tags-bar .tag-group-header:hover {
     border-color: var(--color-primary);
+}
+.header-tags-bar .tag-group.is-open > .tag-group-header {
+    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    border-color: var(--color-primary);
+}
+.header-tags-bar .tag-link:active {
+    transform: scale(0.97);
 }
 
 /* Override filter-btn styles when inside tag-group-header - use higher specificity */
