@@ -120,7 +120,7 @@
 
 /* Flyout open — next click navigates to the tag page */
 .tag-link.is-flyout-open {
-    background: var(--color-primary);
+    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
     border-color: var(--color-primary);
     color: white;
 }
