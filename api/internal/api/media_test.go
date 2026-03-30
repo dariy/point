@@ -9,10 +9,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
+	"point-api/internal/models"
 	"point-api/internal/services"
 )
 
@@ -676,6 +678,65 @@ func TestMediaHandler_ReextractEXIF(t *testing.T) {
 	c2.SetParamValues("nope")
 	if handler.ReextractEXIF(c2) == nil {
 		t.Error("expected error for invalid id")
+	}
+}
+
+// Regression: post response must include media array populated via content paths, not
+// media.post_id. Images added via the VisualEditor never have post_id set, so the old
+// GetMediaByPostID-based lookup always returned an empty array.
+func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	tmpDir, _ := os.MkdirTemp("", "post-media-paths-test")
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	postSvc := services.NewPostService(repo)
+	handler := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "exiftest", Email: "exif@test.com", PasswordHash: "h", DisplayName: "T",
+	})
+
+	// Upload a media item — post_id intentionally NOT set (simulates VisualEditor use)
+	media, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("data"), Filename: "shot.jpg", MimeType: "image/jpeg",
+	})
+	meta := map[string]interface{}{"Make": "Canon"}
+	_, _ = mediaSvc.UpdateMedia(ctx, services.UpdateMediaParams{
+		ID: media.ID, Metadata: &meta,
+	})
+
+	// Create a post whose content references the media path (no post_id on media)
+	mediaPath := "/" + strings.TrimPrefix(media.OriginalPath, "originals/")
+	post, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Photo Post", Content: mediaPath, Status: "published", AuthorID: user.ID,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues(post.Slug)
+	c.Set("user", "admin")
+	if err := handler.GetPostBySlug(c); err != nil {
+		t.Fatalf("GetPostBySlug: %v", err)
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	mediaArr, ok := resp["media"].([]interface{})
+	if !ok || len(mediaArr) == 0 {
+		t.Fatalf("expected non-empty media array, got %v", resp["media"])
+	}
+	item := mediaArr[0].(map[string]interface{})
+	m, ok := item["metadata"].(map[string]interface{})
+	if !ok || m["Make"] != "Canon" {
+		t.Errorf("expected EXIF metadata in media item, got %v", item["metadata"])
 	}
 }
 
