@@ -74,11 +74,11 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 	}
 }
 
-func (h *PostHandler) fetchPostMedia(ctx context.Context, postID int64) []models.Medium {
+func (h *PostHandler) fetchPostMedia(ctx context.Context, post models.Post) []models.Medium {
 	if h.mediaService == nil {
 		return nil
 	}
-	media, _ := h.mediaService.GetMediaByPostID(ctx, postID)
+	media, _ := h.mediaService.GetMediaByContent(ctx, post.Content, post.ThumbnailPath.String)
 	return media
 }
 
@@ -102,7 +102,7 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
-	postMedia := h.fetchPostMedia(ctx, post.ID)
+	postMedia := h.fetchPostMedia(ctx, post)
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
@@ -217,7 +217,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	postMedia := h.fetchPostMedia(ctx, post.ID)
+	postMedia := h.fetchPostMedia(ctx, post)
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
@@ -352,7 +352,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	postMedia := h.fetchPostMedia(ctx, post.ID)
+	postMedia := h.fetchPostMedia(ctx, post)
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
@@ -598,7 +598,7 @@ func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
 
 	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	postMedia := h.fetchPostMedia(c.Request().Context(), post.ID)
+	postMedia := h.fetchPostMedia(c.Request().Context(), post)
 	resp := buildPostResponse(post, tags, htmlContent, nil, postMedia)
 	resp["preview_mode"] = true
 
