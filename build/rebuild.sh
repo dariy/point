@@ -44,12 +44,14 @@ unset _GEMINI_KEY
 # We tag the builder stage to avoid dangling images and reuse it
 echo "Starting container build..."
 podman build $PULL_FLAG \
+    --format docker \
     --target builder \
     -t point-builder:latest \
     -f Dockerfile \
     ..
 
 podman build $PULL_FLAG \
+    --format docker \
     -t point:dev \
     -f Dockerfile \
     --cache-from point-builder \
