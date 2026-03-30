@@ -337,6 +337,14 @@
     box-shadow: var(--shadow-md);
 }
 
+.header-action-btn:active,
+.theme-toggle:active,
+.create-post:active,
+.light-link:active {
+    transform: scale(0.97);
+    background-color: var(--surface-hover);
+}
+
 .header-action-btn svg,
 .theme-toggle svg,
 .create-post svg,

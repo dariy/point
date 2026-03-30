@@ -9,6 +9,39 @@
 import { escapeHtml } from './helpers.js';
 import { CHEVRON_SVG } from './icons.js';
 
+// ── Hot-zone tracker ─────────────────────────────────────────────────────────
+// Shared by the ancestor flyout (post-cards) and the header tag menu.
+// Fires onLeave once the cursor moves outside every element in the live set.
+
+/**
+ * Track document mousemove and fire onLeave once the cursor exits all elements
+ * returned by getEls (with optional padding).
+ *
+ * @param {function(): (Element|null)[]} getEls  Called on every mousemove; return
+ *   the live set of elements that form the hot zone (nulls are skipped).
+ * @param {function()}  onLeave  Called when cursor exits the hot zone.
+ * @param {number}      [pad=8]  Extra px added to each edge of every element.
+ * @returns {{ stop: function() }}  Call stop() to cancel without firing onLeave.
+ */
+export function createHotZone(getEls, onLeave, pad = 8) {
+  const check = (e) => {
+    const inside = getEls().some((el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return (
+        e.clientX >= r.left  - pad &&
+        e.clientX <= r.right + pad &&
+        e.clientY >= r.top   - pad &&
+        e.clientY <= r.bottom + pad
+      );
+    });
+    if (!inside) { stop(); onLeave(); }
+  };
+  document.addEventListener('mousemove', check, { passive: true });
+  function stop() { document.removeEventListener('mousemove', check); }
+  return { stop };
+}
+
 // ── Flyout singleton ─────────────────────────────────────────────────────────
 // One flyout element lives on <body> and is reused by every call site.
 // The dismiss listener is also a singleton — replaced on each open — so that
@@ -17,6 +50,9 @@ import { CHEVRON_SVG } from './icons.js';
 
 let _flyoutEl = null;
 let _activeLink = null;
+let _activeCard = null;     // card that owns the currently-open flyout
+let _hotZone    = null;     // active hot-zone tracker (card + flyout)
+let _openTimer  = null;     // pending hover-open timer (singleton — one flyout at a time)
 let _flyoutShowTime = 0;    // timestamp of last _showFlyout() call — guards scroll dismiss
 let _flyoutDismiss = null;  // singleton dismiss handler, replaced on each open
 
@@ -78,7 +114,15 @@ function _showFlyout(anchorEl, ancestors, excludeEl) {
   flyout.style.left = `${left}px`;
   flyout.style.visibility = '';
   anchorEl.classList.add('is-flyout-open');
+  anchorEl.classList.add('is-active');
   _flyoutShowTime = Date.now();
+  _activeCard = anchorEl.closest('.post-card');
+  if (_activeCard) _activeCard.classList.add('has-flyout-open');
+
+  // Hot-zone: keep overlay + flyout alive while cursor is over either element.
+  _hotZone?.stop();
+  const card = _activeCard;
+  _hotZone = createHotZone(() => [card, _flyoutEl], () => _hideFlyout());
 
   // Replace the singleton dismiss listener so it uses the correct excludeEl for
   // whichever card/container just opened the flyout.  A per-setupTagFlyout-instance
@@ -95,8 +139,15 @@ function _showFlyout(anchorEl, ancestors, excludeEl) {
 
 function _hideFlyout() {
   _activeLink?.classList.remove('is-flyout-open');
+  _activeLink?.classList.remove('is-active');
   if (_flyoutEl) _flyoutEl.classList.add('hidden');
   _activeLink = null;
+  if (_activeCard) {
+    _activeCard.classList.remove('has-flyout-open');
+    _activeCard = null;
+  }
+  _hotZone?.stop();
+  _hotZone = null;
   if (_flyoutDismiss) {
     document.removeEventListener('click', _flyoutDismiss);
     _flyoutDismiss = null;
@@ -133,16 +184,35 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
       link.appendChild(_makeChevronIndicator());
     }
 
+    // Hover open (mouse only — touch uses click below).
+    // Same intent-delay pattern as the tags-filters header menu.
+    if (ancestors.length) {
+      link.addEventListener('mouseenter', () => {
+        clearTimeout(_openTimer);
+        _openTimer = setTimeout(() => {
+          _openTimer = null;
+          if (_activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden')) return;
+          _hideFlyout();
+          _activeLink = link;
+          _showFlyout(link, ancestors, excludeEl);
+        }, 300);
+      });
+      link.addEventListener('mouseleave', () => clearTimeout(_openTimer));
+    }
+
     link.addEventListener('click', (e) => {
       if (!ancestors.length) return; // no ancestors — navigate normally
 
+      clearTimeout(_openTimer);
       e.preventDefault();
       // We don't stop propagation here so that parent components (like PostCard)
       // can also react to the click (e.g. to reveal an image card overlay).
 
       const flyoutOpenForThisLink =
         _activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden');
-      if (flyoutOpenForThisLink) {
+      const recentlyOpened = Date.now() - _flyoutShowTime < 300;
+      
+      if (flyoutOpenForThisLink && !recentlyOpened) {
         _hideFlyout();
         navigateFn(`/tag/${slug}`);
       } else {
@@ -162,6 +232,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
   window.addEventListener('scroll', dismissOnScroll, { passive: true });
 
   return () => {
+    clearTimeout(_openTimer);
     window.removeEventListener('scroll', dismissOnScroll, { passive: true });
     _hideFlyout();
   };
