@@ -296,7 +296,7 @@
 }
 
 /* Track wrapper — provides the relative-positioning context for scroll arrow buttons */
-.post-card-tags-track {
+.post-card-content .tag-strip-track {
     margin-top: auto;               /* push tags to bottom of card flex */
 }
 
