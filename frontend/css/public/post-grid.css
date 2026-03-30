@@ -133,7 +133,8 @@
 }
 
 .post-card:hover .post-card-content.overlay,
-.post-card.is-touched .post-card-content.overlay {
+.post-card.is-touched .post-card-content.overlay,
+.post-card.has-flyout-open .post-card-content.overlay {
     opacity: 1;
 }
 

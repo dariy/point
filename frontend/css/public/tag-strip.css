@@ -105,3 +105,22 @@
     -webkit-backdrop-filter: blur(0.5rem);
     white-space: nowrap;
 }
+
+/* Current-filter state — emitted by renderTagLink(tag, { active: true }) */
+.tag-link.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+/* Menu-open / first-tap activated state */
+.tag-link.is-active {
+    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+/* Press feedback for touch */
+.tag-link:active {
+    transform: scale(0.97);
+}
