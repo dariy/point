@@ -151,15 +151,10 @@ export class PostContent extends Component {
       ? `<div class="post-excerpt-card">${escapeHtml(post.excerpt)}</div>`
       : '';
 
-    const exifPanelHtml = this._exifVisible()
-      ? `<div class="immersive-exif-panel" id="immersive-exif-panel"></div>`
-      : '';
-
     return `
       <div class="immersive-wrapper">
         <div class="immersive-visuals">${visuals}</div>
         ${excerptHtml}
-        ${exifPanelHtml}
       </div>`;
   }
 
@@ -241,49 +236,6 @@ export class PostContent extends Component {
     const dots   = carousel ? Array.from(carousel.querySelectorAll('.carousel-dot'))   : [];
     let index = Math.min(this.props.startIndex || 0, Math.max(0, slides.length - 1));
 
-    // Build path→metadata map for EXIF panel refresh
-    const exifMap = {};
-    for (const m of (post.media || [])) {
-      if (m.path) exifMap[m.path] = m.metadata || {};
-    }
-    const getSlideMetadata = (slideEl) => {
-      const img = slideEl?.querySelector('img');
-      if (!img) return {};
-      let src = img.src || '';
-      try { src = new URL(src).pathname; } catch { /* already relative */ }
-      src = src.replace(/\?(?:thumb)$/, '');
-      return exifMap[src] || {};
-    };
-    const refreshExifPanel = (slideEl) => {
-      const exifPanel = this.$('#immersive-exif-panel');
-      if (!exifPanel) return;
-      // For single-image posts (no carousel), fall back to the visuals img
-      const resolvedEl = slideEl || this.$('.immersive-visuals');
-      const metadata = getSlideMetadata(resolvedEl);
-      while (exifPanel.firstChild) exifPanel.removeChild(exifPanel.firstChild);
-      const entries = Object.entries(metadata);
-      if (entries.length) {
-        const label = document.createElement('div');
-        label.className = 'immersive-exif-label';
-        label.textContent = 'Camera data';
-        exifPanel.appendChild(label);
-        const table = document.createElement('table');
-        const tbody = document.createElement('tbody');
-        entries.forEach(([k, v]) => {
-          const tr = document.createElement('tr');
-          const tdKey = document.createElement('td');
-          tdKey.textContent = String(k);
-          const tdVal = document.createElement('td');
-          tdVal.textContent = String(v);
-          tr.appendChild(tdKey);
-          tr.appendChild(tdVal);
-          tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        exifPanel.appendChild(table);
-      }
-    };
-
     const goToPost = (p) => {
       if (!p) return;
       const target = slides[index] ?? visuals;
@@ -333,12 +285,8 @@ export class PostContent extends Component {
       }
 
       dots.forEach((d, j) => d.classList.toggle('active', j === index));
-      if (newSlide) refreshExifPanel(newSlide);
       this._resetZoom();
     };
-
-    // Populate EXIF panel for initial slide (or single-image post)
-    refreshExifPanel(slides[index] || null);
 
     if (carousel) {
       this._on(carousel.querySelector('.carousel-prev'), 'click',
