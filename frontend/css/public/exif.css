@@ -107,55 +107,37 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* ── EXIF panel in immersive info overlay ───────────────── */
-.immersive-exif-panel {
-  position: absolute;
-  bottom: var(--spacing-lg);
-  right: var(--spacing-lg);
-  z-index: 25;
-  max-width: min(18rem, calc(100vw - var(--spacing-xl) * 2));
-  max-height: 50vh;
+/* ── EXIF flyout content (inside .post-card-tag-flyout.exif-flyout) ── */
+.exif-flyout {
+  max-width: min(20rem, calc(100vw - 1rem));
+  max-height: 60vh;
   overflow-y: auto;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--bg-overlay);
-  color: rgba(255, 255, 255, 0.9);
-  border-radius: var(--border-radius);
-  backdrop-filter: blur(0.625rem);
-  -webkit-backdrop-filter: blur(0.625rem);
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.3) transparent;
-  pointer-events: auto;
 }
 
-.immersive-exif-panel:empty {
-  display: none;
-}
-
-.immersive-exif-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: var(--spacing-xs);
-}
-
-.immersive-exif-panel table {
+.exif-flyout-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--font-size-sm);
+  font-size: 0.72rem;
 }
 
-.immersive-exif-panel td {
-  padding: 3px 0;
+.exif-flyout-table td {
+  padding: 2px 0;
   vertical-align: top;
   line-height: 1.45;
 }
 
-.immersive-exif-panel td:first-child {
-  color: rgba(255, 255, 255, 0.55);
-  padding-right: var(--spacing-md);
+.exif-flyout-table td:first-child {
+  color: var(--text-secondary);
+  padding-right: 10px;
   white-space: nowrap;
-  width: 38%;
-  font-size: 0.8em;
+  width: 40%;
+  font-size: 0.68rem;
+}
+
+.exif-flyout-sep {
+  border: none;
+  border-top: 1px solid var(--border-primary);
+  margin: var(--spacing-xs) 0;
 }
