@@ -1909,7 +1909,9 @@ func (r *Repository) GetMediaByPaths(ctx context.Context, paths []string) ([]mod
 	}
 	placeholders := strings.Repeat("?,", len(paths))
 	placeholders = placeholders[:len(placeholders)-1]
-	q := `SELECT * FROM media WHERE original_path IN (` + placeholders + `)`
+	q := `SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
+		file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption,
+		is_public, metadata FROM media WHERE original_path IN (` + placeholders + `)`
 	args := make([]interface{}, len(paths))
 	for i, p := range paths {
 		args[i] = p
@@ -1926,7 +1928,7 @@ func (r *Repository) GetMediaByPaths(ctx context.Context, paths []string) ([]mod
 			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
 			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
 			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption,
-			&m.Metadata, &m.IsPublic,
+			&m.IsPublic, &m.Metadata,
 		); err != nil {
 			return nil, err
 		}
