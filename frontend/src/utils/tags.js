@@ -177,6 +177,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
   const excludeEl = hostEl || containerEl;
 
   containerEl.querySelectorAll('.tag-link').forEach((link) => {
+    if (!link.getAttribute('href')) return;
     const slug = link.getAttribute('href').replace('/tag/', '');
     const ancestors = getTagAncestors(slug, tagIndex);
     if (ancestors.length && !link.classList.contains('has-flyout')) {
