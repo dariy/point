@@ -257,7 +257,9 @@ export class PostContent extends Component {
     const refreshExifPanel = (slideEl) => {
       const exifPanel = this.$('#immersive-exif-panel');
       if (!exifPanel) return;
-      const metadata = getSlideMetadata(slideEl);
+      // For single-image posts (no carousel), fall back to the visuals img
+      const resolvedEl = slideEl || this.$('.immersive-visuals');
+      const metadata = getSlideMetadata(resolvedEl);
       while (exifPanel.firstChild) exifPanel.removeChild(exifPanel.firstChild);
       const entries = Object.entries(metadata);
       if (entries.length) {
@@ -335,8 +337,8 @@ export class PostContent extends Component {
       this._resetZoom();
     };
 
-    // Populate EXIF panel for initial slide
-    if (slides.length > 0) refreshExifPanel(slides[index]);
+    // Populate EXIF panel for initial slide (or single-image post)
+    refreshExifPanel(slides[index] || null);
 
     if (carousel) {
       this._on(carousel.querySelector('.carousel-prev'), 'click',
