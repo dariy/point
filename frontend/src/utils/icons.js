@@ -171,3 +171,63 @@ export const EXTERNAL_LINK_SVG = `<svg width="14" height="14" viewBox="0 0 24 24
   <line x1="10" y1="14" x2="21" y2="3" stroke="currentColor" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
+
+/* ── Camera / EXIF icons ─────────────────────────────────────────────────── */
+
+/** Shutter speed (ExposureTime) — clock face */
+export const EXIF_SHUTTER_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75"/>
+  <path d="M12 7v5.5l3.5 2" stroke="currentColor" stroke-width="1.75"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+/** Aperture (FNumber) — iris / f-stop */
+export const EXIF_APERTURE_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75"/>
+  <circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+  <line x1="12" y1="3" x2="10" y2="8.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+  <line x1="12" y1="21" x2="14" y2="15.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+  <line x1="3" y1="12" x2="8.5" y2="14" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+  <line x1="21" y1="12" x2="15.5" y2="10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+</svg>`;
+
+/** Focal length — lens cross-section with convergent rays */
+export const EXIF_FOCAL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <ellipse cx="12" cy="12" rx="4" ry="9" stroke="currentColor" stroke-width="1.75"/>
+  <line x1="3" y1="7" x2="21" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="3" y1="17" x2="21" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+</svg>`;
+
+/** ISO / sensitivity — sun with centre dot */
+export const EXIF_ISO_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75"/>
+  <line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <line x1="2" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <line x1="4.93" y1="4.93" x2="7.05" y2="7.05" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <line x1="16.95" y1="16.95" x2="19.07" y2="19.07" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <line x1="19.07" y1="4.93" x2="16.95" y2="7.05" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <line x1="7.05" y1="16.95" x2="4.93" y2="19.07" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+</svg>`;
+
+/** Camera make (brand) — camera body */
+export const EXIF_CAMERA_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.75"/>
+</svg>`;
+
+/** Camera model — camera with lens detail */
+export const EXIF_MODEL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.75"/>
+  <circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.5"/>
+</svg>`;
