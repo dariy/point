@@ -27,7 +27,15 @@ func (s *CacheService) Get(ctx context.Context, key string) ([]byte, error) {
 		return nil, err
 	}
 
-	return os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("cache file empty")
+	}
+	return data, nil
 }
 
 func (s *CacheService) Set(ctx context.Context, key string, data []byte) error {
@@ -56,5 +64,13 @@ func (s *CacheService) GetWithTTL(ctx context.Context, key string, ttl time.Dura
 		return nil, fmt.Errorf("cache expired")
 	}
 
-	return os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("cache file empty")
+	}
+	return data, nil
 }
