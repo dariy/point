@@ -728,7 +728,9 @@ func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
 		t.Fatalf("GetPostBySlug: %v", err)
 	}
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
 	mediaArr, ok := resp["media"].([]interface{})
 	if !ok || len(mediaArr) == 0 {
 		t.Fatalf("expected non-empty media array, got %v", resp["media"])
@@ -774,7 +776,9 @@ func TestMediaHandler_ListMedia_IncludesMetadata(t *testing.T) {
 		t.Fatalf("ListMedia: %v", err)
 	}
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
 	items := resp["media"].([]interface{})
 	if len(items) == 0 {
 		t.Fatal("expected at least one media item")
@@ -826,7 +830,9 @@ func TestMediaHandler_UpdateMedia_MetadataOnly_PreservesOtherFields(t *testing.T
 		t.Fatalf("UpdateMedia: %v", err)
 	}
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
 
 	if resp["alt_text"] != "my alt" {
 		t.Errorf("alt_text wiped: got %v", resp["alt_text"])
