@@ -113,12 +113,16 @@ export class PublicFooter extends Component {
   _setupExifPill(pill) {
     const { exifMedia = [] } = this.props;
 
-    // Build a flyout element local to this footer instance
+    // Build a flyout element local to this footer instance.
+    // Attach to .site-footer (not #footer-mount) so that the CSS rule
+    // `.ui-hidden .site-footer { transform: translateY(100%) }` carries the
+    // flyout away with the footer automatically — no JS needed.
+    const footerEl = this.$('.site-footer');
+    footerEl.style.position = 'relative';
     const flyout = document.createElement('div');
-    flyout.className = 'post-card-tag-flyout hidden exif-flyout';
-    // Attach to the footer mount so the flyout hides with the footer (UI-hidden mode).
-    this.container.style.position = 'relative';
-    this.container.appendChild(flyout);
+    flyout.className = 'exif-flyout hidden';
+    flyout.style.cssText = 'position:absolute; z-index:500;';
+    footerEl.appendChild(flyout);
     this._exifFlyout = flyout;
 
     // Populate flyout — only the allowed fields, with icons, from the first media item with metadata
@@ -146,12 +150,17 @@ export class PublicFooter extends Component {
       flyout.style.visibility = 'hidden';
       flyout.classList.remove('hidden');
       const fW = flyout.offsetWidth;
-      const containerRect = this.container.getBoundingClientRect();
+      const footerRect = footerEl.getBoundingClientRect();
       const pillRect = pill.getBoundingClientRect();
-      const pillCenter = pillRect.left - containerRect.left + pillRect.width / 2;
-      let left = pillCenter - fW / 2;
-      left = Math.max(8, Math.min(left, this.container.offsetWidth - fW - 8));
+      // horizontal: centre over pill, clamped inside footer
+      const pillCenter = pillRect.left - footerRect.left + pillRect.width / 2;
+      let left = Math.round(pillCenter - fW / 2);
+      left = Math.max(8, Math.min(left, footerEl.offsetWidth - fW - 8));
+      // vertical: above the footer, gap of 8px
+      const bottom = footerEl.offsetHeight + 8;
       flyout.style.left = `${left}px`;
+      flyout.style.bottom = `${bottom}px`;
+      flyout.style.top = '';
       flyout.style.visibility = '';
       pill.classList.add('is-active');
       pill.setAttribute('aria-expanded', 'true');
