@@ -21,7 +21,7 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
-import { RESTORE_SVG, CHEVRON_SVG } from '../../utils/icons.js';
+import { RESTORE_SVG, CHEVRON_SVG, X_SVG, WARNING_SVG } from '../../utils/icons.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 
 export default class SystemPage extends Component {
@@ -225,7 +225,7 @@ export default class SystemPage extends Component {
         </div>
         <div class="backup-actions">
           <button class="btn btn-sm restore-backup-btn" data-file="${escapeHtml(b.filename)}" title="Restore">${RESTORE_SVG}</button>
-          <button class="btn btn-sm btn-danger delete-backup-btn" data-file="${escapeHtml(b.filename)}">✕</button>
+          <button class="btn btn-sm btn-danger delete-backup-btn" data-file="${escapeHtml(b.filename)}">${X_SVG}</button>
         </div>
       </div>
     `).join('');
@@ -274,7 +274,7 @@ export default class SystemPage extends Component {
 
     const errorCard = failedOp ? `
       <div class="sync-error-card" style="margin-top: 1rem;">
-        <strong>⚠ Sync halted</strong>
+        <strong>${WARNING_SVG} Sync halted</strong>
         <p>Failed: <code>${escapeHtml(failedOp.method)} ${escapeHtml(failedOp.url)}</code></p>
         <p class="sync-error-msg">${escapeHtml(failedOp.error || 'Unknown error')}</p>
         <button id="dismiss-retry-btn" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">Dismiss &amp; retry</button>
@@ -562,6 +562,6 @@ export default class SystemPage extends Component {
   async _handleLogout() {
     try { await logout(); } catch { /* ignore */ }
     store.set('user', null);
-    navigate('/light/login', { replace: true });
+    navigate('/', { replace: true });
   }
 }

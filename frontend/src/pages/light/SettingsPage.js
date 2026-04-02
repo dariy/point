@@ -19,7 +19,7 @@ const SETTING_GROUPS = [
   },
   {
     title: 'Display',
-    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'immersive_nav_direction', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt']
+    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'immersive_nav_direction', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt', 'exif_visibility']
   },
   {
     title: 'Storage & System',
@@ -122,6 +122,14 @@ export default class SettingsPage extends Component {
           <select name="${key}" id="${key}" class="form-select">
             <option value="chronological"${!isFeed ? ' selected' : ''}>Chronological (◁ older, ▷ newer)</option>
             <option value="feed"${isFeed ? ' selected' : ''}>Feed order (◁ newer, ▷ older)</option>
+          </select>`;
+      } else if (key === 'exif_visibility') {
+        const v = value || 'hide';
+        input = `
+          <select name="${key}" id="${key}" class="form-select">
+            <option value="hide"${v === 'hide' ? ' selected' : ''}>Hide</option>
+            <option value="admin"${v === 'admin' ? ' selected' : ''}>Admins only</option>
+            <option value="all"${v === 'all' ? ' selected' : ''}>Everyone</option>
           </select>`;
       } else if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
         input = `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
@@ -287,6 +295,6 @@ export default class SettingsPage extends Component {
   async _handleLogout() {
     try { await logout(); } catch { /* ignore */ }
     store.set('user', null);
-    navigate('/light/login', { replace: true });
+    navigate('/', { replace: true });
   }
 }

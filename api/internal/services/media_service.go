@@ -396,10 +396,11 @@ func (s *MediaService) GetMediaFolders(ctx context.Context, fileType string) ([]
 }
 
 type UpdateMediaParams struct {
-	ID      int64
-	AltText string
-	Caption string
-	PostID  *int64
+	ID       int64
+	AltText  string
+	Caption  string
+	PostID   *int64
+	Metadata *map[string]interface{} // nil = keep existing; non-nil (incl. empty map) = replace
 }
 
 func (s *MediaService) UpdateMedia(ctx context.Context, p UpdateMediaParams) (models.Medium, error) {
@@ -407,11 +408,64 @@ func (s *MediaService) UpdateMedia(ctx context.Context, p UpdateMediaParams) (mo
 	if p.PostID != nil {
 		postID = sql.NullInt64{Int64: *p.PostID, Valid: true}
 	}
+
+	var metadataParam sql.NullString
+	if p.Metadata != nil {
+		b, err := json.Marshal(*p.Metadata)
+		if err != nil {
+			return models.Medium{}, fmt.Errorf("marshal metadata: %w", err)
+		}
+		metadataParam = sql.NullString{String: string(b), Valid: true}
+	}
+
 	return s.repo.UpdateMedia(ctx, models.UpdateMediaParams{
-		ID:      p.ID,
-		AltText: sql.NullString{String: p.AltText, Valid: p.AltText != ""},
-		Caption: sql.NullString{String: p.Caption, Valid: p.Caption != ""},
-		PostID:  postID,
+		ID:       p.ID,
+		AltText:  sql.NullString{String: p.AltText, Valid: p.AltText != ""},
+		Caption:  sql.NullString{String: p.Caption, Valid: p.Caption != ""},
+		PostID:   postID,
+		Metadata: metadataParam,
+	})
+}
+
+func (s *MediaService) GetMediaByPostID(ctx context.Context, postID int64) ([]models.Medium, error) {
+	return s.repo.GetMediaByPostID(ctx, sql.NullInt64{Int64: postID, Valid: true})
+}
+
+// GetMediaByContent fetches media records referenced in post content (and
+// optional thumbnailPath) by looking up their original_path in the DB.
+// This works regardless of whether media.post_id has been explicitly set.
+func (s *MediaService) GetMediaByContent(ctx context.Context, content, thumbnailPath string) ([]models.Medium, error) {
+	paths := ExtractMediaPaths(content, thumbnailPath)
+	return s.repo.GetMediaByPaths(ctx, paths)
+}
+
+// ReextractEXIF re-reads the original file from disk, runs extractEXIF, and
+// overwrites media.metadata. Returns the updated media record.
+func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medium, error) {
+	media, err := s.repo.GetMedia(ctx, id)
+	if err != nil {
+		return models.Medium{}, err
+	}
+
+	base := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	full := filepath.Clean(filepath.Join(base, media.OriginalPath))
+	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
+		return models.Medium{}, fmt.Errorf("invalid media path")
+	}
+
+	f, err := os.Open(full)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("open file: %w", err)
+	}
+
+	extracted := s.extractEXIF(f)
+	_ = f.Close()
+	metadata := map[string]interface{}(extracted)
+	return s.UpdateMedia(ctx, UpdateMediaParams{
+		ID:       id,
+		AltText:  media.AltText.String,
+		Caption:  media.Caption.String,
+		Metadata: &metadata,
 	})
 }
 
