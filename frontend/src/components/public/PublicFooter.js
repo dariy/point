@@ -8,7 +8,7 @@
 
 import { Component } from '../Component.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
-import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.js';
+import { renderTagLink, buildTagIndex, setupTagFlyout, createHotZone } from '../../utils/tags.js';
 import {
   CHEVRON_SVG,
   EXIF_SHUTTER_SVG, EXIF_APERTURE_SVG, EXIF_FOCAL_SVG,
@@ -113,16 +113,13 @@ export class PublicFooter extends Component {
   _setupExifPill(pill) {
     const { exifMedia = [] } = this.props;
 
-    // Build a flyout element local to this footer instance.
-    // Attach to .site-footer (not #footer-mount) so that the CSS rule
-    // `.ui-hidden .site-footer { transform: translateY(100%) }` carries the
-    // flyout away with the footer automatically — no JS needed.
-    const footerEl = this.$('.site-footer');
-    footerEl.style.position = 'relative';
+    // Attach flyout to document.body with position:fixed so it floats above
+    // everything. CSS rule `.immersive-layout.ui-hidden .exif-flyout` hides it
+    // when the footer slides away — no JS timer needed.
     const flyout = document.createElement('div');
     flyout.className = 'exif-flyout hidden';
-    flyout.style.cssText = 'position:absolute; z-index:500;';
-    footerEl.appendChild(flyout);
+    flyout.style.cssText = 'position:fixed; z-index:500;';
+    document.body.appendChild(flyout);
     this._exifFlyout = flyout;
 
     // Populate flyout — only the allowed fields, with icons, from the first media item with metadata
@@ -146,33 +143,49 @@ export class PublicFooter extends Component {
     });
     flyout.appendChild(table);
 
+    let _openTimer = null;
     const show = () => {
       flyout.style.visibility = 'hidden';
       flyout.classList.remove('hidden');
       const fW = flyout.offsetWidth;
-      const footerRect = footerEl.getBoundingClientRect();
       const pillRect = pill.getBoundingClientRect();
-      // horizontal: centre over pill, clamped inside footer
-      const pillCenter = pillRect.left - footerRect.left + pillRect.width / 2;
+      // horizontal: centre over pill, clamped to viewport
+      const pillCenter = pillRect.left + pillRect.width / 2;
       let left = Math.round(pillCenter - fW / 2);
-      left = Math.max(8, Math.min(left, footerEl.offsetWidth - fW - 8));
-      // vertical: above the footer, gap of 8px
-      const bottom = footerEl.offsetHeight + 8;
+      left = Math.max(8, Math.min(left, window.innerWidth - fW - 8));
+      // vertical: above the pill, gap of 8px (fixed positioning from top)
+      const top = pillRect.top - flyout.offsetHeight - 8;
       flyout.style.left = `${left}px`;
-      flyout.style.bottom = `${bottom}px`;
-      flyout.style.top = '';
+      flyout.style.top = `${top}px`;
+      flyout.style.bottom = '';
       flyout.style.visibility = '';
       pill.classList.add('is-active');
       pill.setAttribute('aria-expanded', 'true');
+
+      this._exifHotZone?.stop();
+      this._exifHotZone = createHotZone(() => [pill, flyout], hide);
     };
 
     const hide = () => {
+      this._exifHotZone?.stop();
+      this._exifHotZone = null;
       flyout.classList.add('hidden');
       pill.classList.remove('is-active');
       pill.setAttribute('aria-expanded', 'false');
     };
 
+    pill.addEventListener('mouseenter', () => {
+      clearTimeout(_openTimer);
+      _openTimer = setTimeout(() => {
+        _openTimer = null;
+        if (!flyout.classList.contains('hidden')) return;
+        show();
+      }, 300);
+    });
+    pill.addEventListener('mouseleave', () => clearTimeout(_openTimer));
+
     pill.addEventListener('click', (e) => {
+      clearTimeout(_openTimer);
       e.stopPropagation();
       flyout.classList.contains('hidden') ? show() : hide();
     });
@@ -186,6 +199,7 @@ export class PublicFooter extends Component {
 
   beforeUnmount() {
     this._cleanupFlyout?.();
+    this._exifHotZone?.stop();
     this._exifFlyout?.remove();
     this._exifFlyout = null;
     if (this._exifDismiss) {
