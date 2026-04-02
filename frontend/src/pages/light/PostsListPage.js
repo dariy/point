@@ -14,6 +14,7 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
+import { EDIT_SVG, X_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG } from '../../utils/icons.js';
 
 const STATUS_LABELS = {
   published: 'Published',
@@ -61,9 +62,9 @@ export default class PostsListPage extends Component {
               if (isImage && p.media_url) {
                 previewHtml = `<img src="${escapeHtml(p.media_url + '?thumb')}" class="post-preview-img" loading="lazy">`;
               } else if (isVideo) {
-                previewHtml = `<div class="post-preview-placeholder" title="Video">▶</div>`;
+                previewHtml = `<div class="post-preview-placeholder" title="Video">${PLAY_SVG}</div>`;
               } else if (isAudio) {
-                previewHtml = `<div class="post-preview-placeholder" title="Audio">♫</div>`;
+                previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
               } else {
                 previewHtml = `<div class="post-preview-placeholder"></div>`;
               }
@@ -94,13 +95,13 @@ export default class PostsListPage extends Component {
                 <td class="actions-col">
                   <div class="actions">
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
-                       class="btn btn-sm" title="Edit">✎</a>
+                       class="btn btn-sm" title="Edit">${EDIT_SVG}</a>
                     <a href="/post/${escapeHtml(p.slug)}" class="btn btn-sm"
-                       title="View" target="_blank" data-external>↗</a>
+                       title="View" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"
                             data-title="${escapeHtml(p.title)}"
-                            title="Delete">✕</button>
+                            title="Delete">${X_SVG}</button>
                   </div>
                 </td>
               </tr>
@@ -377,6 +378,6 @@ export default class PostsListPage extends Component {
   async _handleLogout() {
     try { await logout(); } catch { /* ignore */ }
     store.set('user', null);
-    navigate('/light/login', { replace: true });
+    navigate('/', { replace: true });
   }
 }

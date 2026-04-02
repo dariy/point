@@ -231,3 +231,89 @@ export const EXIF_MODEL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" f
   <circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.75"/>
   <circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.5"/>
 </svg>`;
+
+/* ── Action / status icons ───────────────────────────────────────────────── */
+
+export const X_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const REFRESH_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polyline points="1,4 1,10 7,10" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="23,20 23,14 17,14" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const WARNING_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const STAR_SVG = `<svg width="16" height="16" viewBox="0 0 24 24"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+    fill="currentColor" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const STAR_OUTLINE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const SPARKLE_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M12 2l2.4 7.6H22l-6.4 4.6 2.4 7.8L12 17.4l-6 4.6 2.4-7.8L2 9.6h7.6z"
+    fill="currentColor"/>
+</svg>`;
+
+export const MUSIC_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/>
+  <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2"/>
+</svg>`;
+
+export const PLAY_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polygon points="5,3 19,12 5,21" fill="currentColor" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const LIST_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <line x1="8" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="8" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="8" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="3" y1="6" x2="3.01" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="3" y1="12" x2="3.01" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="3" y1="18" x2="3.01" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const TREE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="2"/>
+  <circle cx="19" cy="5" r="2" stroke="currentColor" stroke-width="2"/>
+  <circle cx="19" cy="19" r="2" stroke="currentColor" stroke-width="2"/>
+  <path d="M7 12h4a2 2 0 0 0 2-2V7" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M7 12h4a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const CHEVRON_RIGHT_SVG = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" stroke-width="1.5"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
