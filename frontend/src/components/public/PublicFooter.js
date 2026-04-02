@@ -116,7 +116,9 @@ export class PublicFooter extends Component {
     // Build a flyout element local to this footer instance
     const flyout = document.createElement('div');
     flyout.className = 'post-card-tag-flyout hidden exif-flyout';
-    document.body.appendChild(flyout);
+    // Attach to the footer mount so the flyout hides with the footer (UI-hidden mode).
+    this.container.style.position = 'relative';
+    this.container.appendChild(flyout);
     this._exifFlyout = flyout;
 
     // Populate flyout — only the allowed fields, with icons, from the first media item with metadata
@@ -143,15 +145,12 @@ export class PublicFooter extends Component {
     const show = () => {
       flyout.style.visibility = 'hidden';
       flyout.classList.remove('hidden');
-      const fH = flyout.offsetHeight;
       const fW = flyout.offsetWidth;
-      const r = pill.getBoundingClientRect();
-      const gap = 8;
-      let top = r.top - fH - gap;
-      top = Math.max(8, top);
-      let left = r.left + r.width / 2 - fW / 2;
-      left = Math.max(8, Math.min(left, window.innerWidth - fW - 8));
-      flyout.style.top = `${top}px`;
+      const containerRect = this.container.getBoundingClientRect();
+      const pillRect = pill.getBoundingClientRect();
+      const pillCenter = pillRect.left - containerRect.left + pillRect.width / 2;
+      let left = pillCenter - fW / 2;
+      left = Math.max(8, Math.min(left, this.container.offsetWidth - fW - 8));
       flyout.style.left = `${left}px`;
       flyout.style.visibility = '';
       pill.classList.add('is-active');

@@ -109,11 +109,22 @@
 
 /* ── EXIF flyout content (inside .post-card-tag-flyout.exif-flyout) ── */
 .exif-flyout {
+  position: absolute !important;
+  bottom: calc(100% + 8px);
   max-width: min(20rem, calc(100vw - 1rem));
   max-height: 60vh;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+
+/* White chevron on the exif pill — it sits on a dark immersive footer */
+.immersive-tags .exif-pill .flyout-indicator {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.immersive-tags .exif-pill.is-active .flyout-indicator {
+  color: white;
 }
 
 .exif-flyout-table {
