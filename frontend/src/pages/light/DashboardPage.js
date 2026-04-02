@@ -11,6 +11,7 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatFileSize } from '../../utils/formatters.js';
+import { REFRESH_SVG, WARNING_SVG } from '../../utils/icons.js';
 
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {
@@ -30,7 +31,7 @@ export default class DashboardPage extends Component {
     const offline = store.get('offline_status') || {};
     let syncPill = '';
     if (offline.has_ops || offline.syncing) {
-      const text = offline.syncing ? '⟳ Syncing…' : offline.failed ? `⚠ ${offline.failed} failed` : `● ${offline.pending} pending`;
+      const text = offline.syncing ? `${REFRESH_SVG} Syncing…` : offline.failed ? `${WARNING_SVG} ${offline.failed} failed` : `● ${offline.pending} pending`;
       const cls = `sync-pill ${offline.syncing ? 'syncing' : offline.failed ? 'failed' : 'pending'}`;
       syncPill = `<button class="${cls}" id="dashboard-sync-pill">${text}</button>`;
     }
@@ -157,6 +158,6 @@ export default class DashboardPage extends Component {
   async _handleLogout() {
     try { await logout(); } catch { /* ignore */ }
     store.set('user', null);
-    navigate('/light/login', { replace: true });
+    navigate('/', { replace: true });
   }
 }

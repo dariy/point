@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
@@ -143,9 +144,10 @@ func (h *MediaHandler) GetMedia(c echo.Context) error {
 }
 
 type UpdateMediaRequest struct {
-	AltText string `json:"alt_text"`
-	Caption string `json:"caption"`
-	PostID  *int64 `json:"post_id"`
+	AltText  string                  `json:"alt_text"`
+	Caption  string                  `json:"caption"`
+	PostID   *int64                  `json:"post_id"`
+	Metadata *map[string]interface{} `json:"metadata"`
 }
 
 func (h *MediaHandler) UpdateMedia(c echo.Context) error {
@@ -160,15 +162,31 @@ func (h *MediaHandler) UpdateMedia(c echo.Context) error {
 	}
 
 	media, err := h.mediaService.UpdateMedia(c.Request().Context(), services.UpdateMediaParams{
-		ID:      id,
-		AltText: req.AltText,
-		Caption: req.Caption,
-		PostID:  req.PostID,
+		ID:       id,
+		AltText:  req.AltText,
+		Caption:  req.Caption,
+		PostID:   req.PostID,
+		Metadata: req.Metadata,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "media not found")
 	}
 
+	return c.JSON(http.StatusOK, mediaToResponse(media))
+}
+
+func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+	media, err := h.mediaService.ReextractEXIF(c.Request().Context(), id)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
 	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 

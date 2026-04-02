@@ -355,7 +355,10 @@ RETURNING *;
 
 -- name: UpdateMedia :one
 UPDATE media
-SET alt_text = ?, caption = ?, post_id = ?
+SET alt_text = COALESCE(?, alt_text),
+    caption = COALESCE(?, caption),
+    post_id = COALESCE(?, post_id),
+    metadata = COALESCE(?, metadata)
 WHERE id = ?
 RETURNING *;
 
