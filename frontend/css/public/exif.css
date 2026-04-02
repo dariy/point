@@ -107,15 +107,20 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* ── EXIF flyout content (inside .post-card-tag-flyout.exif-flyout) ── */
+/* ── EXIF flyout — positioned via JS relative to .site-footer ── */
 .exif-flyout {
-  position: absolute !important;
-  bottom: calc(100% + 8px);
   max-width: min(20rem, calc(100vw - 1rem));
   max-height: 60vh;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.3) transparent;
+  /* Adopt the same visual style as the tag ancestor flyout */
+  background: var(--bg-card, var(--surface-card));
+  border: 1px solid var(--border-primary);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--text-primary);
 }
 
 /* White chevron on the exif pill — it sits on a dark immersive footer */
