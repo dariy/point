@@ -9,8 +9,52 @@
 import { Component } from '../Component.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.js';
-import { CHEVRON_SVG } from '../../utils/icons.js';
+import {
+  CHEVRON_SVG,
+  EXIF_SHUTTER_SVG, EXIF_APERTURE_SVG, EXIF_FOCAL_SVG,
+  EXIF_ISO_SVG, EXIF_CAMERA_SVG, EXIF_MODEL_SVG,
+} from '../../utils/icons.js';
 import { store } from '../../store.js';
+
+// Fields shown publicly, in display order.
+// icon: SVG string; fmt: optional value formatter.
+const EXIF_FIELDS = [
+  { key: 'ExposureTime',    icon: EXIF_SHUTTER_SVG,  label: 'Shutter',  fmt: _fmtShutter },
+  { key: 'FNumber',         icon: EXIF_APERTURE_SVG, label: 'Aperture', fmt: _fmtFNumber },
+  { key: 'FocalLength',     icon: EXIF_FOCAL_SVG,    label: 'Focal',    fmt: _fmtFocal },
+  { key: 'ISOSpeedRatings', icon: EXIF_ISO_SVG,      label: 'ISO',      fmt: _fmtISO },
+  { key: 'Make',            icon: EXIF_CAMERA_SVG,   label: 'Make',     fmt: null },
+  { key: 'Model',           icon: EXIF_MODEL_SVG,    label: 'Model',    fmt: null },
+];
+
+function _evalFraction(val) {
+  const s = String(val);
+  const m = s.match(/^(-?\d+)\/(\d+)$/);
+  if (m) return parseInt(m[1], 10) / parseInt(m[2], 10);
+  return parseFloat(s);
+}
+
+function _fmtShutter(val) {
+  const s = String(val);
+  // Keep fraction form if denominator > 1 (e.g. "1/200"), add "s"
+  if (/^\d+\/\d+$/.test(s)) return `${s} s`;
+  const n = _evalFraction(s);
+  return n >= 1 ? `${n} s` : `1/${Math.round(1 / n)} s`;
+}
+
+function _fmtFNumber(val) {
+  const n = _evalFraction(val);
+  return `f/${Number(n.toFixed(1))}`;
+}
+
+function _fmtFocal(val) {
+  const n = _evalFraction(val);
+  return `${Math.round(n)} mm`;
+}
+
+function _fmtISO(val) {
+  return `ISO ${val}`;
+}
 
 export class PublicFooter extends Component {
   render() {
@@ -31,8 +75,9 @@ export class PublicFooter extends Component {
         return !entry || entry.isLeaf;
       });
       const tagLinks = visibleTags.map((t) => renderTagLink(t)).join('');
-      // EXIF pill — rendered only when there is metadata on at least one media item
-      const hasExif = exifMedia.some((m) => m.metadata && Object.keys(m.metadata).length > 0);
+      // EXIF pill — rendered only when at least one allowed field is present
+      const hasExif = exifMedia.some((m) =>
+        m.metadata && EXIF_FIELDS.some(({ key }) => key in m.metadata));
       const exifPill = hasExif
         ? `<button class="tag-link exif-pill" type="button" aria-expanded="false" aria-label="Show EXIF data">exif <span class="flyout-indicator" aria-hidden="true">${CHEVRON_SVG}</span></button>`
         : '';
@@ -74,28 +119,26 @@ export class PublicFooter extends Component {
     document.body.appendChild(flyout);
     this._exifFlyout = flyout;
 
-    // Populate flyout with EXIF rows from all media items that have metadata
-    const mediaWithExif = exifMedia.filter((m) => m.metadata && Object.keys(m.metadata).length > 0);
-    mediaWithExif.forEach((m, i) => {
-      if (i > 0) {
-        const sep = document.createElement('hr');
-        sep.className = 'exif-flyout-sep';
-        flyout.appendChild(sep);
-      }
-      const table = document.createElement('table');
-      table.className = 'exif-flyout-table';
-      Object.entries(m.metadata).forEach(([k, v]) => {
-        const tr = document.createElement('tr');
-        const tdK = document.createElement('td');
-        tdK.textContent = k;
-        const tdV = document.createElement('td');
-        tdV.textContent = String(v);
-        tr.appendChild(tdK);
-        tr.appendChild(tdV);
-        table.appendChild(tr);
-      });
-      flyout.appendChild(table);
+    // Populate flyout — only the allowed fields, with icons, from the first media item with metadata
+    const firstMeta = exifMedia.find((m) => m.metadata && Object.keys(m.metadata).length > 0)?.metadata || {};
+    const svgParser = new DOMParser();
+    const table = document.createElement('table');
+    table.className = 'exif-flyout-table';
+    EXIF_FIELDS.forEach(({ key, icon, label, fmt }) => {
+      if (!(key in firstMeta)) return;
+      const tr = document.createElement('tr');
+      const tdK = document.createElement('td');
+      tdK.setAttribute('title', label);
+      // icon is a static SVG string from icons.js — not user data
+      const svgEl = svgParser.parseFromString(icon, 'image/svg+xml').documentElement;
+      tdK.appendChild(svgEl);
+      const tdV = document.createElement('td');
+      tdV.textContent = fmt ? fmt(firstMeta[key]) : String(firstMeta[key]);
+      tr.appendChild(tdK);
+      tr.appendChild(tdV);
+      table.appendChild(tr);
     });
+    flyout.appendChild(table);
 
     const show = () => {
       flyout.style.visibility = 'hidden';

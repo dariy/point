@@ -130,10 +130,10 @@
 
 .exif-flyout-table td:first-child {
   color: var(--text-secondary);
-  padding-right: 10px;
-  white-space: nowrap;
-  width: 40%;
-  font-size: 0.68rem;
+  padding-right: 8px;
+  width: 20px;
+  vertical-align: middle;
+  line-height: 0;
 }
 
 .exif-flyout-sep {
