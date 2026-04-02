@@ -19,6 +19,7 @@ import { getAllShareEntries, clearShareEntries } from '../../utils/idb.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG } from '../../utils/icons.js';
 import { VisualEditor } from '../../components/light/VisualEditor.js';
 
 const AUTOSAVE_MS = 30_000;
@@ -141,7 +142,7 @@ export default class PostEditPage extends Component {
     const aiBtn = (field) =>
       `<button class="field-ai-btn" data-field="${field}" type="button"
                title="Fill with AI" ${aiBtnDisabled ? 'disabled' : ''}
-               aria-label="AI fill ${field}">✦</button>`;
+               aria-label="AI fill ${field}">${SPARKLE_SVG}</button>`;
 
     const modeToggle = `
   <div class="editor-mode-toggle">
@@ -178,7 +179,7 @@ export default class PostEditPage extends Component {
                 <button id="featured-toggle" type="button"
                         class="featured-btn${featured ? ' is-featured' : ''}"
                         title="${featured ? 'Unmark as featured' : 'Mark as featured'}">
-                  ${featured ? '★' : '☆'}
+                  ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
                 </button>
                 <select id="status-select" class="status-select badge-${escapeHtml(status)}">
                   ${statusOpts}
@@ -274,7 +275,9 @@ export default class PostEditPage extends Component {
     featuredToggle?.addEventListener('click', () => {
       const newVal = !featuredCheck.checked;
       featuredCheck.checked = newVal;
-      featuredToggle.textContent = newVal ? '★' : '☆';
+      featuredToggle.replaceChildren(
+        new DOMParser().parseFromString(newVal ? STAR_SVG : STAR_OUTLINE_SVG, 'image/svg+xml').documentElement
+      );
       featuredToggle.classList.toggle('is-featured', newVal);
       featuredToggle.title = newVal ? 'Unmark as featured' : 'Mark as featured';
       this._autoSaveField({ is_featured: newVal });
@@ -374,6 +377,7 @@ export default class PostEditPage extends Component {
     }
     this._visualEditorRef = this.mountChild(VisualEditor, '#visual-editor-mount', {
       nodes: this._nodes,
+      mediaByPath: this._mediaByPath || {},
       onChange: (nodes) => {
         this._nodes = nodes;
         this._visualEditorRef?.setProps({ nodes });
@@ -515,6 +519,16 @@ export default class PostEditPage extends Component {
       this._tags = toTagNames(post.tags);
       const nodes = parseNodes(post.content);
       this._nodes = nodes;
+
+      // Build mediaByPath map for VisualEditor EXIF panels
+      this._mediaByPath = {};
+      try {
+        const result = await listMedia({ post_id: post.id, per_page: 200 });
+        for (const m of (result.media || [])) {
+          if (m.path) this._mediaByPath[m.path] = m;
+        }
+      } catch { /* non-critical */ }
+
       this.setState({ loading: false, post, error: null, editorMode: 'visual' });
     } catch (err) {
       console.error('[PostEditPage] load error:', err);
@@ -761,6 +775,6 @@ export default class PostEditPage extends Component {
   async _handleLogout() {
     try { await logout(); } catch { /* ignore */ }
     store.set('user', null);
-    navigate('/light/login', { replace: true });
+    navigate('/', { replace: true });
   }
 }

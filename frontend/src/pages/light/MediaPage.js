@@ -39,6 +39,6 @@ export default class MediaPage extends Component {
   async _handleLogout() {
     try { await logout(); } catch { /* ignore */ }
     store.set('user', null);
-    navigate('/light/login', { replace: true });
+    navigate('/', { replace: true });
   }
 }

@@ -17,6 +17,7 @@ import { logout } from '../../api/auth.js';
 import { getNavMenu } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { EDIT_SVG, X_SVG, REFRESH_SVG, LOCK_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG } from '../../utils/icons.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -61,14 +62,14 @@ export default class TagsManagerPage extends Component {
             <h1>Tags</h1>
             <div class="header-actions">
               <div class="tm-view-toggle">
-                <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">\u29ad Tree</button>
-                <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">\u2261 List</button>
+                <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${TREE_SVG} Tree</button>
+                <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG} List</button>
               </div>
               ${view === 'tree' ? `
               <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">\u21c5 Expand all</button>
               <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">\u2012 Collapse all</button>` : ''}
               <button id="add-root-tag-btn" class="btn btn-primary">+ New Tag</button>
-              <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">\u27f3</button>
+              <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${REFRESH_SVG}</button>
             </div>
           </header>
           <main class="light-content">
@@ -116,7 +117,7 @@ export default class TagsManagerPage extends Component {
 
       const hasLocation = tag.locations?.length > 0;
       const isSystem = !!tag.is_system;
-      const systemBadge = isSystem ? ' <span class="tm-system-badge" title="System tag">\ud83d\udd12</span>' : '';
+      const systemBadge = isSystem ? ` <span class="tm-system-badge" title="System tag">${LOCK_SVG}</span>` : '';
 
       return `
         <tr class="tm-tag-row" data-name="${escapeHtml(tag.name.toLowerCase())}" data-slug="${escapeHtml(tag.slug.toLowerCase())}" data-parent-ids="${parentIds}" data-parent-names="${escapeHtml(parentNamesLower)}">
@@ -125,18 +126,18 @@ export default class TagsManagerPage extends Component {
           <td class="text-center"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a></td>
           <td class="text-center">
             <span class="tm-flag-static ${hasLocation ? 'active' : ''} tm-flag-location"
-                  title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">\ud83d\udccd</span>
+                  title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">${MAP_SVG}</span>
           </td>
           <td><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">\u2014</span>'}</div></td>
           <td class="tm-actions">
-            <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit"${isSystem ? ' disabled' : ''}>\u270e</button>
-            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete"${isSystem ? ' disabled' : ''}>\u2715</button>
+            <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit"${isSystem ? ' disabled' : ''}>${EDIT_SVG}</button>
+            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete"${isSystem ? ' disabled' : ''}>${X_SVG}</button>
           </td>
         </tr>`;
     }).join('');
 
     const chips = this._listFilterParents.map(p =>
-      `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">\u00d7</span></button>`
+      `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">${X_SVG}</span></button>`
     ).join('');
     const hasFilters = this._listSearch || this._listFilterParents.length > 0;
 
@@ -305,15 +306,15 @@ export default class TagsManagerPage extends Component {
     const hasChildren = node.childrenNodes.length > 0;
 
     const toggle = hasChildren
-      ? `<button class="tm-toggle" data-id="${node.id}">${isExpanded ? '\u25bc' : '\u25b6'}</button>`
+      ? `<button class="tm-toggle" data-id="${node.id}">${isExpanded ? CHEVRON_SVG : CHEVRON_RIGHT_SVG}</button>`
       : `<span class="tm-toggle-spacer"></span>`;
 
     const hasLocation = node.locations?.length > 0;
     const locationFlag = `<button type="button" disabled class="btn btn-sm tm-flag-static ${hasLocation ? 'active' : ''} tm-flag-location"
-                                title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">\ud83d\udccd</button>`;
+                                title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">${MAP_SVG}</button>`;
 
     const isSystem = !!node.is_system;
-    const systemBadge = isSystem ? ' <span class="tm-system-badge" title="System tag">\ud83d\udd12</span>' : '';
+    const systemBadge = isSystem ? ` <span class="tm-system-badge" title="System tag">${LOCK_SVG}</span>` : '';
 
     // Multi-parent indicator: show other parents (not the one rendering this node)
     const otherParents = (node.parents || []).slice(1);
@@ -337,9 +338,9 @@ export default class TagsManagerPage extends Component {
             ${multiParentHint}
           </span>
           <div class="tm-actions">
-            <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit"${isSystem ? ' disabled' : ''}>\u270e</button>
+            <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit"${isSystem ? ' disabled' : ''}>${EDIT_SVG}</button>
             <button class="btn btn-sm add-child-btn"   data-id="${node.id}" title="Add child">+</button>
-            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${node.id}" title="Delete"${isSystem ? ' disabled' : ''}>\u2715</button>
+            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${node.id}" title="Delete"${isSystem ? ' disabled' : ''}>${X_SVG}</button>
           </div>
         </div>
         ${isExpanded && hasChildren ? this._renderTree(node.childrenNodes, level + 1, node.id) : ''}
@@ -1110,6 +1111,6 @@ export default class TagsManagerPage extends Component {
   async _handleLogout() {
     try { await logout(); } catch { /* ignore */ }
     store.set('user', null);
-    navigate('/light/login', { replace: true });
+    navigate('/', { replace: true });
   }
 }

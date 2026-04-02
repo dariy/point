@@ -122,7 +122,7 @@ function _showFlyout(anchorEl, ancestors, excludeEl) {
   // Hot-zone: keep overlay + flyout alive while cursor is over either element.
   _hotZone?.stop();
   const card = _activeCard;
-  _hotZone = createHotZone(() => [card, _flyoutEl], () => _hideFlyout());
+  _hotZone = createHotZone(() => [card, anchorEl, _flyoutEl], () => _hideFlyout());
 
   // Replace the singleton dismiss listener so it uses the correct excludeEl for
   // whichever card/container just opened the flyout.  A per-setupTagFlyout-instance
@@ -177,6 +177,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
   const excludeEl = hostEl || containerEl;
 
   containerEl.querySelectorAll('.tag-link').forEach((link) => {
+    if (!link.getAttribute('href')) return;
     const slug = link.getAttribute('href').replace('/tag/', '');
     const ancestors = getTagAncestors(slug, tagIndex);
     if (ancestors.length && !link.classList.contains('has-flyout')) {

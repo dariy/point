@@ -18,7 +18,7 @@ import { Pagination } from '../shared/Pagination.js';
 import { MediaLightbox } from '../public/MediaLightbox.js';
 import { ConfirmDialog } from '../shared/ConfirmDialog.js';
 import { PromptDialog } from '../shared/PromptDialog.js';
-import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders } from '../../api/media.js';
+import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, updateMedia, reextractMediaEXIF } from '../../api/media.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
@@ -172,6 +172,8 @@ export class MediaBrowser extends Component {
                ${isSelected ? 'checked' : ''} aria-label="Select ${escapeHtml(m.filename)}">
       </label>` : '';
 
+    const exifPanel = pickerMode ? '' : this._renderExifPanel(m);
+
     const actions = pickerMode ? '' : `
       <div class="media-item-actions">
         <a href="${escapeHtml(m.original_path || '')}" class="btn btn-sm" target="_blank"
@@ -182,6 +184,7 @@ export class MediaBrowser extends Component {
         <button class="btn btn-sm btn-danger delete-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
                 data-name="${escapeHtml(m.filename)}" title="Delete">✕</button>
+        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF">ℹ EXIF</button>
       </div>`;
 
     return `
@@ -203,7 +206,171 @@ export class MediaBrowser extends Component {
           </div>
         </div>
         ${actions}
+        ${exifPanel}
       </div>`;
+  }
+
+  _renderExifPanel(m) {
+    const metadata = m.metadata || {};
+    const rows = Object.entries(metadata).map(([k, v]) =>
+      `<tr>
+        <td><input class="exif-key" value="${escapeHtml(String(k))}" placeholder="Field name" aria-label="EXIF field name"></td>
+        <td><input class="exif-val" value="${escapeHtml(String(v))}" placeholder="Value" aria-label="EXIF value"></td>
+        <td><button class="exif-delete-btn" type="button" title="Remove field" aria-label="Remove EXIF field">\u00d7</button></td>
+      </tr>`
+    ).join('');
+
+    return `
+      <div class="exif-panel" id="exif-panel-${escapeHtml(String(m.id))}" hidden>
+        <div class="exif-panel-heading">
+          <span class="exif-panel-title">EXIF / Camera data</span>
+        </div>
+        <table class="exif-table">
+          <thead><tr><th>Field</th><th>Value</th><th></th></tr></thead>
+          <tbody class="exif-rows">${rows}</tbody>
+        </table>
+        <div class="exif-actions">
+          <button class="btn btn-sm exif-add-btn" type="button">+ Add field</button>
+          <button class="btn btn-sm exif-save-btn" type="button" data-id="${escapeHtml(String(m.id))}">Save EXIF</button>
+          <button class="btn btn-sm exif-reextract-btn" type="button" data-id="${escapeHtml(String(m.id))}">Re-extract from file</button>
+        </div>
+      </div>`;
+  }
+
+  _bindExifPanels() {
+    // Toggle visibility
+    this.container.querySelectorAll('.exif-toggle-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const panel = this.container.querySelector(`#exif-panel-${btn.dataset.id}`);
+        if (panel) panel.hidden = !panel.hidden;
+      });
+    });
+
+    // Delete a row
+    const bindDeleteBtns = (scope) => {
+      scope.querySelectorAll('.exif-delete-btn').forEach((btn) => {
+        btn.addEventListener('click', () => btn.closest('tr').remove());
+      });
+    };
+    bindDeleteBtns(this.container);
+
+    // Add a new blank row using DOM API (no innerHTML with user data)
+    this.container.querySelectorAll('.exif-add-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tbody = btn.closest('.exif-panel').querySelector('.exif-rows');
+        const tr = document.createElement('tr');
+
+        const tdKey = document.createElement('td');
+        const inputKey = document.createElement('input');
+        inputKey.className = 'exif-key';
+        inputKey.placeholder = 'Field name';
+        inputKey.setAttribute('aria-label', 'EXIF field name');
+        tdKey.appendChild(inputKey);
+
+        const tdVal = document.createElement('td');
+        const inputVal = document.createElement('input');
+        inputVal.className = 'exif-val';
+        inputVal.placeholder = 'Value';
+        inputVal.setAttribute('aria-label', 'EXIF value');
+        tdVal.appendChild(inputVal);
+
+        const tdDel = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.className = 'exif-delete-btn';
+        delBtn.type = 'button';
+        delBtn.title = 'Remove field';
+        delBtn.setAttribute('aria-label', 'Remove EXIF field');
+        delBtn.textContent = '\u00d7';
+        delBtn.addEventListener('click', () => tr.remove());
+        tdDel.appendChild(delBtn);
+
+        tr.appendChild(tdKey);
+        tr.appendChild(tdVal);
+        tr.appendChild(tdDel);
+        tbody.appendChild(tr);
+      });
+    });
+
+    // Save EXIF — reads from input.value (never innerHTML)
+    this.container.querySelectorAll('.exif-save-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = parseInt(btn.dataset.id, 10);
+        const panel = btn.closest('.exif-panel');
+        const metadata = {};
+        panel.querySelectorAll('.exif-rows tr').forEach((tr) => {
+          const key = tr.querySelector('.exif-key')?.value.trim();
+          const val = tr.querySelector('.exif-val')?.value.trim();
+          if (key) metadata[key] = val;
+        });
+        try {
+          await updateMedia(id, { metadata });
+          store.set('toast', { message: 'EXIF saved.', type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
+        }
+      });
+    });
+
+    // Re-extract — rebuilds rows via DOM API
+    this.container.querySelectorAll('.exif-reextract-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Re-extract will overwrite manual EXIF edits with data from the original file. Continue?')) return;
+        const id = parseInt(btn.dataset.id, 10);
+        try {
+          const updated = await reextractMediaEXIF(id);
+          const metadata = updated.metadata || {};
+          const panel = btn.closest('.exif-panel');
+          const tbody = panel.querySelector('.exif-rows');
+
+          // Clear existing rows
+          while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+          // Rebuild rows via DOM API
+          Object.entries(metadata).forEach(([k, v]) => {
+            const tr = document.createElement('tr');
+
+            const tdKey = document.createElement('td');
+            const inputKey = document.createElement('input');
+            inputKey.className = 'exif-key';
+            inputKey.placeholder = 'Field name';
+            inputKey.setAttribute('aria-label', 'EXIF field name');
+            inputKey.value = String(k); // safe: sets value property, not attribute
+            tdKey.appendChild(inputKey);
+
+            const tdVal = document.createElement('td');
+            const inputVal = document.createElement('input');
+            inputVal.className = 'exif-val';
+            inputVal.placeholder = 'Value';
+            inputVal.setAttribute('aria-label', 'EXIF value');
+            inputVal.value = String(v); // safe: sets value property
+            tdVal.appendChild(inputVal);
+
+            const tdDel = document.createElement('td');
+            const delBtn = document.createElement('button');
+            delBtn.className = 'exif-delete-btn';
+            delBtn.type = 'button';
+            delBtn.title = 'Remove field';
+            delBtn.setAttribute('aria-label', 'Remove EXIF field');
+            delBtn.textContent = '\u00d7';
+            delBtn.addEventListener('click', () => tr.remove());
+            tdDel.appendChild(delBtn);
+
+            tr.appendChild(tdKey);
+            tr.appendChild(tdVal);
+            tr.appendChild(tdDel);
+            tbody.appendChild(tr);
+          });
+
+          const msg = Object.keys(metadata).length
+            ? 'EXIF re-extracted.'
+            : 'No EXIF data found in this file.';
+          store.set('toast', { message: msg, type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Re-extract failed.', type: 'error' });
+        }
+      });
+    });
   }
 
   afterRender() {
@@ -335,6 +502,8 @@ export class MediaBrowser extends Component {
           });
         });
       }
+
+      this._bindExifPanels();
     }
   }
 
