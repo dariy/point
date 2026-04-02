@@ -108,6 +108,10 @@
 }
 
 /* ── EXIF flyout — positioned via JS relative to .site-footer ── */
+.exif-flyout:not(.hidden) {
+  animation: immersiveFadeIn 0.2s ease-out forwards;
+}
+
 .exif-flyout {
   max-width: min(20rem, calc(100vw - 1rem));
   max-height: 60vh;
@@ -121,6 +125,11 @@
   box-shadow: 0 4px 16px rgba(0,0,0,0.18);
   padding: var(--spacing-sm) var(--spacing-md);
   color: var(--text-primary);
+}
+
+/* Hide flyout when immersive footer slides away — no JS needed */
+.immersive-layout.ui-hidden .exif-flyout {
+  display: none !important;
 }
 
 /* White chevron on the exif pill — it sits on a dark immersive footer */
