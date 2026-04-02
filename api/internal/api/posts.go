@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"math"
 	"net/http"
@@ -29,7 +31,7 @@ func NewPostHandler(postService *services.PostService, settingsService *services
 	}
 }
 
-func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, excludeIDs map[int64]bool) map[string]interface{} {
+func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, excludeIDs map[int64]bool, media []models.Medium) map[string]interface{} {
 	tagObjs := make([]map[string]interface{}, 0, len(tags))
 	for _, t := range tags {
 		if excludeIDs != nil && excludeIDs[t.ID] {
@@ -37,6 +39,20 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		}
 		tagObjs = append(tagObjs, map[string]interface{}{"name": t.Name, "slug": t.Slug})
 	}
+
+	mediaObjs := make([]map[string]interface{}, 0, len(media))
+	for _, m := range media {
+		var metadata map[string]interface{}
+		if m.Metadata.Valid && m.Metadata.String != "" {
+			_ = json.Unmarshal([]byte(m.Metadata.String), &metadata)
+		}
+		mediaObjs = append(mediaObjs, map[string]interface{}{
+			"path":     "/" + strings.TrimPrefix(m.OriginalPath, "originals/"),
+			"alt_text": nullString(m.AltText),
+			"metadata": metadata,
+		})
+	}
+
 	return map[string]interface{}{
 		"id":               post.ID,
 		"title":            post.Title,
@@ -54,7 +70,16 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		"meta_description": nullString(post.MetaDescription),
 		"formatter":        post.Formatter,
 		"tags":             tagObjs,
+		"media":            mediaObjs,
 	}
+}
+
+func (h *PostHandler) fetchPostMedia(ctx context.Context, post models.Post) []models.Medium {
+	if h.mediaService == nil {
+		return nil
+	}
+	media, _ := h.mediaService.GetMediaByContent(ctx, post.Content, post.ThumbnailPath.String)
+	return media
 }
 
 // getFullPostResponse fetches a post by ID with author and tags, returns the response map.
@@ -77,7 +102,8 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
-	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
+	postMedia := h.fetchPostMedia(ctx, post)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	return resp, nil
@@ -191,7 +217,8 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
+	postMedia := h.fetchPostMedia(ctx, post)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
@@ -325,7 +352,8 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs)
+	postMedia := h.fetchPostMedia(ctx, post)
+	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	}
@@ -570,7 +598,8 @@ func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
 
 	tags, _ := h.postService.GetTagsForPost(c.Request().Context(), post.ID)
 	htmlContent, _ := h.postService.RenderContent(post.Content)
-	resp := buildPostResponse(post, tags, htmlContent, nil)
+	postMedia := h.fetchPostMedia(c.Request().Context(), post)
+	resp := buildPostResponse(post, tags, htmlContent, nil, postMedia)
 	resp["preview_mode"] = true
 
 	return c.JSON(http.StatusOK, resp)

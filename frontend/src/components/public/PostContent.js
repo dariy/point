@@ -121,9 +121,26 @@ export class PostContent extends Component {
 
   // ── Immersive rendering ───────────────────────────────────────────────────
 
+  _exifVisible() {
+    const settings = store.get('settings') || {};
+    const v = settings.exif_visibility || 'hide';
+    if (v === 'hide') return false;
+    if (v === 'admin' && !store.get('user')) return false;
+    return true;
+  }
+
+  _renderExifTable(metadata) {
+    const entries = Object.entries(metadata || {});
+    if (!entries.length) return '';
+    const rows = entries.map(([k, v]) =>
+      `<tr><td>${escapeHtml(String(k))}</td><td>${escapeHtml(String(v))}</td></tr>`
+    ).join('');
+    return `<table><tbody>${rows}</tbody></table>`;
+  }
+
   _renderImmersive(post, _prevPost, _nextPost) {
-    const media = post.media || [];
-    const items = media.length > 0 ? media : this._mediaFromHtml(post.content_html || '');
+    // Always derive carousel items from HTML — post.media has {path,metadata} shape for EXIF only
+    const items = this._mediaFromHtml(post.content_html || '');
     const startIndex = Math.min(this.props.startIndex || 0, Math.max(0, items.length - 1));
     const visuals = items.length === 1
       ? this._mediaEl(items[0])
@@ -648,6 +665,65 @@ export class PostContent extends Component {
       });
     }
     body.querySelectorAll('audio, video').forEach((el) => el.setAttribute('controls', ''));
+
+    // EXIF overlays — normal mode only, when visibility allows and post has media
+    if (this._exifVisible() && post?.media?.length) {
+      const mediaMap = {};
+      for (const m of post.media) {
+        if (m.path) mediaMap[m.path] = m;
+      }
+
+      body.querySelectorAll('img').forEach((img) => {
+        let src = img.src || '';
+        try { src = new URL(src).pathname; } catch { /* already relative */ }
+        src = src.replace(/\?(?:thumb)$/, '');
+        const media = mediaMap[src];
+        if (!media || !media.metadata || !Object.keys(media.metadata).length) return;
+
+        const figure = document.createElement('figure');
+        figure.className = 'media-exif-wrapper';
+        img.parentNode.insertBefore(figure, img);
+        figure.appendChild(img);
+
+        const btn = document.createElement('button');
+        btn.className = 'exif-info-btn';
+        btn.setAttribute('aria-label', 'Show EXIF data');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.textContent = '\u2139';
+        figure.appendChild(btn);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'exif-overlay';
+        overlay.setAttribute('role', 'complementary');
+        overlay.setAttribute('aria-label', 'EXIF data');
+        const title = document.createElement('div');
+        title.className = 'exif-overlay-title';
+        title.textContent = 'Camera data';
+        overlay.appendChild(title);
+        const table = document.createElement('table');
+        const tbody = document.createElement('tbody');
+        Object.entries(media.metadata).forEach(([k, v]) => {
+          const tr = document.createElement('tr');
+          const tdKey = document.createElement('td');
+          tdKey.textContent = String(k);
+          const tdVal = document.createElement('td');
+          tdVal.textContent = String(v);
+          tr.appendChild(tdKey);
+          tr.appendChild(tdVal);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        overlay.appendChild(table);
+        figure.appendChild(overlay);
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isVisible = overlay.classList.toggle('is-visible');
+          btn.classList.toggle('is-active', isVisible);
+          btn.setAttribute('aria-expanded', String(isVisible));
+        });
+      });
+    }
   }
 
   _renderNav(prev, next) {

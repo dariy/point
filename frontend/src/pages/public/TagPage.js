@@ -133,6 +133,7 @@ export default class TagPage extends Component {
         immersiveTags: immersive ? (post.tags || []) : [],
         immersiveNav: immersive ? { prev: prevPost, next: nextPost } : null,
         tagSlug: immersive ? slug : null,
+        exifMedia: immersive ? (post.media || []) : [],
       });
 
       this.mountChild(PostContent, '#content-mount', {

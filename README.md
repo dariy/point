@@ -167,3 +167,9 @@ Built with:
 - [Vanilla JS](https://developer.mozilla.org/en-US/docs/Web/JavaScript) - Framework-free component system
 - [SQLite](https://sqlite.org/) - Self-contained, serverless database engine
 - [Docker](https://www.docker.com/) / [Podman](https://podman.io/) - Containerization
+
+
+```
+ _| _ ._oo ._  __|_
+(_|(_|| ||o| |}_ | 
+```
