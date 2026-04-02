@@ -686,9 +686,9 @@ func TestMediaHandler_ReextractEXIF(t *testing.T) {
 // GetMediaByPostID-based lookup always returned an empty array.
 func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	t.Cleanup(func() { _ = repo.Close() })
 	tmpDir, _ := os.MkdirTemp("", "post-media-paths-test")
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -746,9 +746,9 @@ func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
 // Before the fix, ListMediaFiltered selected 15 columns and omitted metadata.
 func TestMediaHandler_ListMedia_IncludesMetadata(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	t.Cleanup(func() { _ = repo.Close() })
 	tmpDir, _ := os.MkdirTemp("", "media-list-meta-test")
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -794,9 +794,9 @@ func TestMediaHandler_ListMedia_IncludesMetadata(t *testing.T) {
 // Before the fix, UpdateMedia SQL used unconditional SET (not COALESCE) for those fields.
 func TestMediaHandler_UpdateMedia_MetadataOnly_PreservesOtherFields(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	t.Cleanup(func() { _ = repo.Close() })
 	tmpDir, _ := os.MkdirTemp("", "media-preserve-test")
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
