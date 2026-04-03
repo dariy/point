@@ -73,8 +73,56 @@ maybe_ask() {
 }
 
 # ── Placeholders (filled in subsequent tasks) ──────────────────────────────────
-pick_install_method() { echo "docker"; }
-collect_config()      { :; }
+# ── Install method selection ───────────────────────────────────────────────────
+pick_install_method() {
+  if [ -n "$METHOD_ARG" ]; then echo "$METHOD_ARG"; return; fi
+
+  echo ""
+  echo -e "How would you like to install Point?"
+  echo -e "  ${BOLD}1)${NC} Docker / Podman  ${GREEN}(recommended — easiest, safest)${NC}"
+  echo -e "  ${BOLD}2)${NC} Native Linux binary + systemd service"
+  echo ""
+  local choice
+  choice=$(maybe_ask "Choose [1/2]" "1")
+  case "$choice" in
+    2|native) echo "native" ;;
+    *)        echo "docker" ;;
+  esac
+}
+# ── Config collection ──────────────────────────────────────────────────────────
+# Globals set by collect_config:
+#   PORT           - port Point listens on
+#   DATA_DIR       - absolute path to data directory
+#   GEMINI_KEY     - Gemini API key (optional, may be empty)
+#   PHOTO_LIB_PATH - existing photo library path (optional, may be empty)
+#   INSTALL_DIR    - directory where compose/env files live (docker) or app lives (native)
+
+collect_config() {
+  local method="$1"
+  echo ""
+  say "Configuration  (press Enter to accept defaults)"
+  echo ""
+
+  if [ "$method" = "docker" ]; then
+    INSTALL_DIR=$(maybe_ask "Install directory" "$HOME/point")
+    DATA_DIR=$(maybe_ask "Data directory" "${INSTALL_DIR}/data")
+    PORT=8000   # docker-compose.yml hardcodes PORT=8000 in the environment block;
+                # it cannot be overridden via .env without editing the compose file
+    say "Note: Docker install uses port 8000 (set in docker-compose.yml)"
+  else
+    INSTALL_DIR="/opt/point"
+    DATA_DIR=$(maybe_ask "Data directory" "/var/lib/point")
+    PORT=$(maybe_ask "Port" "8000")
+  fi
+
+  echo ""
+  say "Optional: Gemini API key enables AI photo analysis (leave blank to skip)"
+  GEMINI_KEY=$(maybe_ask "Gemini API key" "")
+
+  echo ""
+  say "Optional: path to an existing photo library to import (leave blank to skip)"
+  PHOTO_LIB_PATH=$(maybe_ask "Photo library path" "")
+}
 install_via_docker()  { die "Not yet implemented"; }
 install_native()      { die "Not yet implemented"; }
 wait_for_health()     { :; }
