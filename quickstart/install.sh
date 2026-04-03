@@ -212,7 +212,112 @@ install_via_docker() {
   (cd "$INSTALL_DIR" && $COMPOSE up -d)
   ok "Container started"
 }
-install_native()      { die "Not yet implemented"; }
+# ── Native install helpers ─────────────────────────────────────────────────────
+
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64)  echo "amd64" ;;
+    aarch64) echo "arm64" ;;
+    armv7l)  echo "arm64" ;;  # best-effort
+    *) die "Unsupported architecture: $(uname -m). Only amd64 and arm64 are supported." ;;
+  esac
+}
+
+fetch_latest_version() {
+  say "Fetching latest release info from GitHub..."
+  local tag
+  tag=$(curl -fsSL "$GITHUB_API" | grep '"tag_name"' | head -1 \
+        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+  if [ -z "$tag" ]; then
+    die "Could not determine latest release. Check your internet connection or visit https://github.com/${REPO}/releases"
+  fi
+  POINT_VERSION="$tag"
+  ok "Latest release: $POINT_VERSION"
+}
+
+download_tarball() {
+  local arch="$1"
+  local version="$2"
+  local tarball="point-linux-${arch}.tar.gz"
+  local url="https://github.com/${REPO}/releases/download/${version}/${tarball}"
+  say "Downloading ${tarball}..."
+  curl -fsSL "$url" -o "/tmp/${tarball}"
+  ok "Downloaded to /tmp/${tarball}"
+  echo "/tmp/${tarball}"
+}
+
+create_point_user() {
+  if ! id -u point >/dev/null 2>&1; then
+    say "Creating system user 'point'..."
+    useradd --system --no-create-home --shell /usr/sbin/nologin point
+    ok "User 'point' created"
+  else
+    ok "User 'point' already exists"
+  fi
+}
+
+install_systemd_service() {
+  local port="$1"
+  say "Installing systemd service..."
+  cat > /etc/systemd/system/point.service <<EOF
+[Unit]
+Description=Point Photo Blog
+After=network.target
+
+[Service]
+Type=simple
+User=point
+Group=point
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment=DATABASE_URL=${DATA_DIR}/point.db
+Environment=STORAGE_PATH=${DATA_DIR}
+Environment=FRONTEND_DIR=${INSTALL_DIR}/frontend
+Environment=PORT=${port}
+Environment=HOST=0.0.0.0
+ExecStart=${INSTALL_DIR}/point
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=${DATA_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now point
+  ok "Service enabled and started"
+}
+
+install_native() {
+  if [ "$(id -u)" -ne 0 ]; then
+    die "Native installation requires root. Re-run with sudo."
+  fi
+
+  local arch; arch=$(detect_arch)
+  fetch_latest_version
+
+  local tarball; tarball=$(download_tarball "$arch" "$POINT_VERSION")
+
+  say "Installing to ${INSTALL_DIR}..."
+  mkdir -p "$INSTALL_DIR" "$DATA_DIR"
+  tar -xzf "$tarball" -C /tmp
+  # tarball extracts to /tmp/point-linux-${arch}/
+  cp -r "/tmp/point-linux-${arch}/." "$INSTALL_DIR/"
+  chmod +x "${INSTALL_DIR}/point"
+  rm -rf "/tmp/point-linux-${arch}" "$tarball"
+  ok "Files installed to ${INSTALL_DIR}"
+
+  create_point_user
+  chown -R point:point "$INSTALL_DIR" "$DATA_DIR"
+
+  write_env_file "${INSTALL_DIR}/.env"
+  chown point:point "${INSTALL_DIR}/.env"
+  chmod 600 "${INSTALL_DIR}/.env"
+
+  install_systemd_service "$PORT"
+}
 wait_for_health()     { :; }
 show_success()        { ok "Done."; }
 
