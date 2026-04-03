@@ -240,9 +240,9 @@ download_tarball() {
   local version="$2"
   local tarball="point-linux-${arch}.tar.gz"
   local url="https://github.com/${REPO}/releases/download/${version}/${tarball}"
-  say "Downloading ${tarball}..."
+  say "Downloading ${tarball}..." >&2
   curl -fsSL "$url" -o "/tmp/${tarball}"
-  ok "Downloaded to /tmp/${tarball}"
+  ok "Downloaded to /tmp/${tarball}" >&2
   echo "/tmp/${tarball}"
 }
 
