@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Point Photo Blog — Interactive Setup Wizard
-# Usage: bash install.sh [--method=docker|native] [--port=8000] [--non-interactive]
+# Usage: bash install.sh [--method=docker|native] [--non-interactive]
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -23,20 +23,16 @@ hr()   { echo -e "${BLUE}──────────────────�
 # ask "Question" "default" → echoes the answer (default if user hits Enter)
 ask() {
   local prompt="$1" default="$2" answer=""
-  if [ -n "$default" ]; then
-    read -rp "$(echo -e "${BOLD}${prompt}${NC} [${default}]: ")" answer || true
-    echo "${answer:-$default}"
-  else
-    read -rp "$(echo -e "${BOLD}${prompt}${NC}: ")" answer || true
-    echo "$answer"
-  fi
+  local display; [ -n "$default" ] && display="${prompt} [${default}]: " || display="${prompt}: "
+  IFS= read -rp "$(echo -e "${BOLD}${display}${NC}")" answer </dev/tty || true
+  echo "${answer:-${default}}"
 }
 
 # ask_yn "Question" "y|n" → echoes "y" or "n"
 ask_yn() {
   local prompt="$1" default="${2:-y}" answer=""
   local hint; [ "$default" = "y" ] && hint="Y/n" || hint="y/N"
-  read -rp "$(echo -e "${BOLD}${prompt}${NC} [${hint}]: ")" answer || true
+  IFS= read -rp "$(echo -e "${BOLD}${prompt}${NC} [${hint}]: ")" answer </dev/tty || true
   answer="${answer:-$default}"
   case "$answer" in [Yy]*) echo "y";; *) echo "n";; esac
 }
@@ -73,7 +69,7 @@ done
 
 # Wrapper: in non-interactive mode, always returns the default
 maybe_ask() {
-  if $NON_INTERACTIVE; then echo "$2"; else ask "$1" "$2"; fi
+  if [ "$NON_INTERACTIVE" = "true" ]; then echo "$2"; else ask "$1" "$2"; fi
 }
 
 # ── Placeholders (filled in subsequent tasks) ──────────────────────────────────
