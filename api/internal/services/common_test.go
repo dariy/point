@@ -14,16 +14,6 @@ func setupTestDB(t *testing.T) *repository.Repository {
 		t.Fatalf("failed to create test repository: %v", err)
 	}
 
-	schema, err := os.ReadFile("../../sql/schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
-	}
-
-	_, err = repo.DB().Exec(string(schema))
-	if err != nil {
-		t.Fatalf("failed to execute schema: %v", err)
-	}
-
 	return repo
 }
 

@@ -3,11 +3,11 @@ package models
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
 	_ "modernc.org/sqlite"
+	pointsql "point-api/sql"
 )
 
 func setupTestDB(t *testing.T) (*Queries, *sql.DB) {
@@ -16,12 +16,7 @@ func setupTestDB(t *testing.T) (*Queries, *sql.DB) {
 		t.Fatal(err)
 	}
 
-	schema, err := os.ReadFile("../../sql/schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = db.Exec(string(schema))
+	_, err = db.Exec(pointsql.SchemaSQL)
 	if err != nil {
 		t.Fatal(err)
 	}
