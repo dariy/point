@@ -26,7 +26,7 @@ hr()   { echo -e "${BLUE}──────────────────�
 
 ask() {
     local prompt="$1" default="$2" answer=""
-    echo -ne "${BOLD}${prompt}${NC} [${default}]: "
+    echo -ne "${BOLD}${prompt}${NC} [${default}]: " >&2
     read -r answer < /dev/tty || answer=""
     echo "${answer:-$default}"
 }
@@ -53,7 +53,7 @@ install_docker() {
     
     local install_dir; install_dir=$(ask "Installation directory" "$DEFAULT_INSTALL_DIR")
     local data_dir; data_dir=$(ask "Data directory" "$DEFAULT_DATA_DIR")
-    local port; port=$(ask "Port" "$DEFAULT_PORT")
+    PORT=$(ask "Port" "$DEFAULT_PORT")
     local gemini_key; gemini_key=$(ask "Gemini API Key (optional)" "")
 
     mkdir -p "$install_dir" "$data_dir"
@@ -61,7 +61,7 @@ install_docker() {
     # Create .env file
     cat > "$install_dir/.env" <<EOF
 NAME=$NAME
-PORT=$port
+PORT=$PORT
 DATA_PATH=$data_dir
 GEMINI_API_KEY=$gemini_key
 EOF
@@ -79,7 +79,7 @@ services:
     container_name: point
     restart: unless-stopped
     ports:
-      - "$port:8000"
+      - "$PORT:8000"
     env_file: .env
     volumes:
       - "$data_dir:/data"
@@ -98,7 +98,7 @@ EOC
 
     say "Starting Point..."
     (cd "$install_dir" && sudo docker-compose up -d)
-    ok "Point is running on http://localhost:$port"
+    ok "Point is running on http://localhost:$PORT"
 }
 
 install_native() {
@@ -110,7 +110,7 @@ install_native() {
 
     local install_dir; install_dir=$(ask "Installation directory" "$DEFAULT_INSTALL_DIR")
     local data_dir; data_dir=$(ask "Data directory" "$DEFAULT_DATA_DIR")
-    local port; port=$(ask "Port" "$DEFAULT_PORT")
+    PORT=$(ask "Port" "$DEFAULT_PORT")
     local gemini_key; gemini_key=$(ask "Gemini API Key (optional)" "")
 
     sudo mkdir -p "$install_dir" "$data_dir"
@@ -140,7 +140,7 @@ install_native() {
 
     # Create .env
     cat > "$install_dir/.env" <<EOF
-PORT=$port
+PORT=$PORT
 DATABASE_URL=$data_dir/point.db
 STORAGE_PATH=$data_dir
 FRONTEND_DIR=$install_dir/frontend
@@ -170,7 +170,7 @@ EOS
     sudo systemctl enable point
     sudo systemctl start point
 
-    ok "Point service started. Running on http://localhost:$port"
+    ok "Point service started. Running on http://localhost:$PORT"
 }
 
 # --- Main ---
@@ -194,7 +194,7 @@ main() {
     echo ""
     hr
     ok "Installation complete!"
-    echo -e "Visit ${BOLD}http://localhost:${port:-8000}${NC} to finish setup."
+    echo -e "Visit ${BOLD}http://localhost:${PORT:-8000}${NC} to finish setup."
     hr
 }
 
