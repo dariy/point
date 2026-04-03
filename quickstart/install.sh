@@ -77,11 +77,11 @@ maybe_ask() {
 pick_install_method() {
   if [ -n "$METHOD_ARG" ]; then echo "$METHOD_ARG"; return; fi
 
-  echo ""
-  echo -e "How would you like to install Point?"
-  echo -e "  ${BOLD}1)${NC} Docker / Podman  ${GREEN}(recommended — easiest, safest)${NC}"
-  echo -e "  ${BOLD}2)${NC} Native Linux binary + systemd service"
-  echo ""
+  echo "" >&2
+  echo -e "How would you like to install Point?" >&2
+  echo -e "  ${BOLD}1)${NC} Docker / Podman  ${GREEN}(recommended — easiest, safest)${NC}" >&2
+  echo -e "  ${BOLD}2)${NC} Native Linux binary + systemd service" >&2
+  echo "" >&2
   local choice
   choice=$(maybe_ask "Choose [1/2]" "1")
   case "$choice" in
