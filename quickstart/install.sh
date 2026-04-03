@@ -127,6 +127,31 @@ collect_config() {
 
 # Sets COMPOSE global to "docker compose" or "podman compose"
 detect_compose_engine() {
+  # 1. Prefer docker if it works without sudo
+  if command -v docker >/dev/null 2>&1 && docker ps >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    COMPOSE="docker compose"
+    return
+  fi
+
+  # 2. Prefer podman if it works without sudo
+  if command -v podman >/dev/null 2>&1 && podman ps >/dev/null 2>&1; then
+    COMPOSE="podman compose"
+    return
+  fi
+
+  # 3. Fallback to docker with sudo
+  if command -v docker >/dev/null 2>&1 && sudo -n docker ps >/dev/null 2>&1 && sudo -n docker compose version >/dev/null 2>&1; then
+    COMPOSE="sudo docker compose"
+    return
+  fi
+
+  # 4. Fallback to podman with sudo
+  if command -v podman >/dev/null 2>&1 && sudo -n podman ps >/dev/null 2>&1; then
+    COMPOSE="sudo podman compose"
+    return
+  fi
+
+  # 5. Last resort (daemon might be asleep, just return the command)
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     COMPOSE="docker compose"
   elif command -v podman >/dev/null 2>&1; then
