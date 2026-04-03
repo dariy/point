@@ -223,11 +223,20 @@ install_via_docker() {
   say "Creating install directory: $INSTALL_DIR"
   mkdir -p "$INSTALL_DIR" "$DATA_DIR"
 
-  say "Downloading docker-compose.yml and update.sh..."
-  curl -fsSL "${RAW_BASE}/quickstart/docker-compose.yml" \
-    -o "${INSTALL_DIR}/docker-compose.yml"
-  curl -fsSL "${RAW_BASE}/quickstart/update.sh" \
-    -o "${INSTALL_DIR}/update.sh"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  if [ -f "${script_dir}/docker-compose.yml" ] && [ -f "${script_dir}/update.sh" ]; then
+    say "Found local docker-compose.yml and update.sh, copying..."
+    cp "${script_dir}/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
+    cp "${script_dir}/update.sh" "${INSTALL_DIR}/update.sh"
+  else
+    say "Downloading docker-compose.yml and update.sh..."
+    curl -fsSL "${RAW_BASE}/quickstart/docker-compose.yml" \
+      -o "${INSTALL_DIR}/docker-compose.yml"
+    curl -fsSL "${RAW_BASE}/quickstart/update.sh" \
+      -o "${INSTALL_DIR}/update.sh"
+  fi
   chmod +x "${INSTALL_DIR}/update.sh"
   ok "Files saved to ${INSTALL_DIR}"
 
