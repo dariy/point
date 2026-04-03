@@ -318,8 +318,51 @@ install_native() {
 
   install_systemd_service "$PORT"
 }
-wait_for_health()     { :; }
-show_success()        { ok "Done."; }
+wait_for_health() {
+  local url="http://localhost:${PORT}/health"
+  local max_attempts=30  # 30 × 2s = 60s timeout
+  local attempt=0
+
+  say "Waiting for Point to be ready at ${url}..."
+  while [ $attempt -lt $max_attempts ]; do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      ok "Point is up!"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    printf "."
+    sleep 2
+  done
+  echo ""
+  warn "Point did not respond within 60 seconds."
+  warn "Check logs with: journalctl -u point -f  (native)  or  docker logs point  (Docker)"
+}
+
+show_success() {
+  local url="http://localhost:${PORT}"
+  echo ""
+  hr
+  echo -e "${GREEN}${BOLD}  Point is running!${NC}"
+  hr
+  echo ""
+  echo -e "  ${BOLD}Open in your browser:${NC}  ${url}"
+  echo ""
+  echo -e "  The setup wizard will appear on first visit."
+  echo -e "  Create your admin account and you're done."
+  echo ""
+  if [ "$INSTALL_METHOD" = "docker" ]; then
+    echo -e "  ${BOLD}Useful commands:${NC}"
+    echo -e "    Update:    cd ${INSTALL_DIR} && bash update.sh"
+    echo -e "    Logs:      cd ${INSTALL_DIR} && docker compose logs -f"
+    echo -e "    Stop:      cd ${INSTALL_DIR} && docker compose down"
+  else
+    echo -e "  ${BOLD}Useful commands:${NC}"
+    echo -e "    Logs:      journalctl -u point -f"
+    echo -e "    Restart:   systemctl restart point"
+    echo -e "    Stop:      systemctl stop point"
+  fi
+  echo ""
+}
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 main() {
