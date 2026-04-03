@@ -15,7 +15,6 @@ services:
       - DATABASE_URL=/data/point.db
       - STORAGE_PATH=/data
       - FRONTEND_DIR=/app/frontend
-      - PORT=8000
       - HOST=0.0.0.0
     volumes:
       - point-data:/data
