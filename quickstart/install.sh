@@ -46,17 +46,25 @@ show_banner() {
   echo ""
 }
 
+check_os() {
+  if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+    warn "This script is optimized for Linux. Continuing anyway..."
+  fi
+}
+
 # ── CLI argument parsing ────────────────────────────────────────────────────────
 METHOD_ARG=""
 NON_INTERACTIVE=false
+AUTO_PORT=""
 
 for arg in "$@"; do
   case "$arg" in
     --method=docker)      METHOD_ARG="docker" ;;
     --method=native)      METHOD_ARG="native" ;;
     --non-interactive)    NON_INTERACTIVE=true ;;
+    --auto)               NON_INTERACTIVE=true; AUTO_PORT="8001" ;;
     --help|-h)
-      echo "Usage: bash install.sh [--method=docker|native] [--non-interactive]"
+      echo "Usage: bash install.sh [--method=docker|native] [--non-interactive] [--auto]"
       echo ""
       echo "  --method=docker     Install using Docker Compose (default)"
       echo "  --method=native     Install as native Linux binary + systemd service"
@@ -106,13 +114,12 @@ collect_config() {
   if [ "$method" = "docker" ]; then
     INSTALL_DIR=$(maybe_ask "Install directory" "$HOME/point")
     DATA_DIR=$(maybe_ask "Data directory" "${INSTALL_DIR}/data")
-    PORT=8000   # docker-compose.yml hardcodes PORT=8000 in the environment block;
-                # it cannot be overridden via .env without editing the compose file
-    say "Note: Docker install uses port 8000 (set in docker-compose.yml)"
+    PORT=${AUTO_PORT:-8000}
+    say "Note: Docker install uses port ${PORT}"
   else
     INSTALL_DIR="/opt/point"
     DATA_DIR=$(maybe_ask "Data directory" "/var/lib/point")
-    PORT=$(maybe_ask "Port" "8000")
+    PORT=$(maybe_ask "Port" "${AUTO_PORT:-8000}")
   fi
 
   echo ""
@@ -329,18 +336,41 @@ install_native() {
     die "Native installation requires root. Re-run with sudo."
   fi
 
-  local arch; arch=$(detect_arch)
-  fetch_latest_version
-
-  local tarball; tarball=$(download_tarball "$arch" "$POINT_VERSION")
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local project_root="$(cd "$script_dir/.." && pwd)"
 
   say "Installing to ${INSTALL_DIR}..."
   mkdir -p "$INSTALL_DIR" "$DATA_DIR"
-  tar -xzf "$tarball" -C /tmp
-  # tarball extracts to /tmp/point-linux-${arch}/
-  cp -r "/tmp/point-linux-${arch}/." "$INSTALL_DIR/"
+
+  if [ -f "${project_root}/api-bin" ]; then
+    say "Found local api-bin, copying..."
+    cp "${project_root}/api-bin" "${INSTALL_DIR}/point"
+    if [ -d "${project_root}/frontend" ]; then
+      cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
+    fi
+  elif [ -f "${project_root}/api/cmd/api/main.go" ]; then
+    say "Found source code, building..."
+    if ! command -v go >/dev/null 2>&1; then
+      die "Go compiler not found. Please install Go or use Docker."
+    fi
+    (cd "${project_root}/api" && go build -o "${INSTALL_DIR}/point" cmd/api/main.go)
+    if [ -d "${project_root}/frontend" ]; then
+      cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
+    fi
+  else
+    local arch; arch=$(detect_arch)
+    fetch_latest_version
+
+    local tarball; tarball=$(download_tarball "$arch" "$POINT_VERSION")
+
+    tar -xzf "$tarball" -C /tmp
+    # tarball extracts to /tmp/point-linux-${arch}/
+    cp -r "/tmp/point-linux-${arch}/." "$INSTALL_DIR/"
+    rm -rf "/tmp/point-linux-${arch}" "$tarball"
+  fi
+
   chmod +x "${INSTALL_DIR}/point"
-  rm -rf "/tmp/point-linux-${arch}" "$tarball"
   ok "Files installed to ${INSTALL_DIR}"
 
   create_point_user
@@ -401,6 +431,7 @@ show_success() {
 # ── Main ───────────────────────────────────────────────────────────────────────
 main() {
   show_banner
+  check_os
 
   INSTALL_METHOD=$(pick_install_method)
   collect_config "$INSTALL_METHOD"
