@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"point-api/internal/models"
@@ -545,10 +544,6 @@ func TestNewRepository_MemorySharedCache(t *testing.T) {
 		return
 	}
 	defer func() { _ = repo.Close() }()
-	schema, _ := os.ReadFile("../../sql/schema.sql")
-	if len(schema) > 0 {
-		_, _ = repo.DB().Exec(string(schema))
-	}
 }
 
 // TestNewRepository_InvalidPath covers the PRAGMA/Ping error paths by using a directory.
