@@ -26,6 +26,10 @@ hr()   { echo -e "${BLUE}──────────────────�
 
 ask() {
     local prompt="$1" default="$2" answer=""
+    if [[ "${AUTO_MODE:-false}" == "true" ]]; then
+        echo "$default"
+        return
+    fi
     echo -ne "${BOLD}${prompt}${NC} [${default}]: " >&2
     read -r answer < /dev/tty || answer=""
     echo "${answer:-$default}"
@@ -176,14 +180,27 @@ EOS
 # --- Main ---
 
 main() {
+    AUTO_MODE=false
+    for arg in "$@"; do
+        case $arg in
+            --auto)
+                AUTO_MODE=true
+                DEFAULT_PORT=8001
+                ;;
+        esac
+    done
+
     show_banner
     check_os
 
-    echo -e "Select installation method:"
-    echo -e "  1) Docker (Recommended)"
-    echo -e "  2) Native (Ubuntu/Systemd)"
-    echo ""
-    local method; method=$(ask "Choice" "1")
+    local method="1"
+    if [[ "${AUTO_MODE}" == "false" ]]; then
+        echo -e "Select installation method:"
+        echo -e "  1) Docker (Recommended)"
+        echo -e "  2) Native (Ubuntu/Systemd)"
+        echo ""
+        method=$(ask "Choice" "1")
+    fi
 
     case "$method" in
         1) install_docker ;;
