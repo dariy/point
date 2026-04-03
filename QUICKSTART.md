@@ -2,16 +2,26 @@
 
 Point is a self-hosted personal photo blog designed for simplicity and privacy. It runs entirely in Docker (or Podman) and uses SQLite for storage, meaning no complex database setup or cloud dependencies are required—your data stays completely on your machine.
 
+## One-Command Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
+```
+
+The wizard will ask a few questions (all with sensible defaults — just hit Enter) and have Point running in minutes. See below for details and manual options.
+
+---
+
 ## Requirements
 - Docker (version 20+) or Podman installed on your server or NAS
 - One port free (default: 8000)
 - (Optional) An existing photo library directory you want to import
 
-## Install in 3 Steps
+## Install in 3 Steps (manual)
+
+If you prefer to run the steps yourself:
 
 ### Step 1: Download the files
-Create a new directory for Point and download the necessary configuration files from GitHub:
-
 ```bash
 mkdir point && cd point
 curl -LO https://raw.githubusercontent.com/dariy/point/main/quickstart/docker-compose.yml
@@ -20,14 +30,12 @@ cp .env.example .env
 ```
 
 ### Step 2: Start Point
-Launch the application using Docker Compose:
-
 ```bash
 docker compose up -d
 ```
 
 ### Step 3: First-run setup
-Open `http://localhost:8000` (or `http://your-server-ip:8000` from another device) in your web browser. The setup wizard will appear—simply enter your desired username, password, and blog name to finish the installation.
+Open `http://localhost:8000` in your browser. The setup wizard will appear — enter your username, password, and blog name to finish.
 
 ## Adding Your Photo Library
 
