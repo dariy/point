@@ -19,7 +19,7 @@ import { api } from './client.js';
  * @param {string} value
  * @returns {Promise<string>} hex digest
  */
-async function sha256(value) {
+export async function sha256(value) {
   if (window.crypto?.subtle && window.TextEncoder) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
