@@ -364,6 +364,12 @@ install_native() {
     if ! command -v go >/dev/null 2>&1; then
       die "Go compiler not found. Please install Go or use Docker."
     fi
+    if command -v npm >/dev/null 2>&1; then
+      say "Building frontend assets..."
+      (cd "${project_root}" && sh scripts/build-js.sh && sh scripts/build-css.sh)
+    else
+      warn "npm not found. Frontend assets will not be updated from source."
+    fi
     (cd "${project_root}/api" && go build -o "${INSTALL_DIR}/point" cmd/api/main.go)
     if [ -d "${project_root}/frontend" ]; then
       cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
