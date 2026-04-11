@@ -56,6 +56,7 @@ check_os() {
 METHOD_ARG=""
 NON_INTERACTIVE=false
 AUTO_PORT=""
+TEST_MODE=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -63,12 +64,14 @@ for arg in "$@"; do
     --method=native)      METHOD_ARG="native" ;;
     --non-interactive)    NON_INTERACTIVE=true ;;
     --auto)               NON_INTERACTIVE=true; AUTO_PORT="8001" ;;
+    --test)               TEST_MODE=true ;;
     --help|-h)
-      echo "Usage: bash install.sh [--method=docker|native] [--non-interactive] [--auto]"
+      echo "Usage: bash install.sh [--method=docker|native] [--non-interactive] [--auto] [--test]"
       echo ""
       echo "  --method=docker     Install using Docker Compose (default)"
       echo "  --method=native     Install as native Linux binary + systemd service"
       echo "  --non-interactive   Accept all defaults without prompting"
+      echo "  --test              Test mode: use localhost/point:dev image in Docker Compose"
       exit 0
       ;;
     *) warn "Unknown argument: $arg" ;;
@@ -259,6 +262,11 @@ install_via_docker() {
   fi
   chmod +x "${INSTALL_DIR}/update.sh"
   ok "Files saved to ${INSTALL_DIR}"
+
+  if [ "$TEST_MODE" = "true" ]; then
+    say "Test mode: configuring docker-compose to use localhost/point:dev"
+    sed -i 's|image: ghcr.io/dariy/point:latest|image: localhost/point:dev|' "${INSTALL_DIR}/docker-compose.yml"
+  fi
 
   write_env_file "${INSTALL_DIR}/.env"
 
