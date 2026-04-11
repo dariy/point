@@ -1,6 +1,7 @@
 import { Component } from '../../components/Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { api } from '../../api/client.js';
+import { sha256 } from '../../api/auth.js';
 import { router } from '../../router.js';
 
 export default class SetupPage extends Component {
@@ -121,7 +122,7 @@ export default class SetupPage extends Component {
           blog_title,
           author_name,
           username,
-          password,
+          password: await sha256(password),
         });
 
         router.navigate('/light');
