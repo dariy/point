@@ -37,7 +37,7 @@ func (h *SetupHandler) SetupStatus(c echo.Context) error {
 func (h *SetupHandler) Setup(c echo.Context) error {
 	var req struct {
 		Username   string `json:"username"`
-		Password   string `json:"password"`
+		Password   string `json:"name"`
 		BlogTitle  string `json:"blog_title"`
 		AuthorName string `json:"author_name"`
 	}
