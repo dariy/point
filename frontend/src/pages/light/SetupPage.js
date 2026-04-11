@@ -122,7 +122,7 @@ export default class SetupPage extends Component {
           blog_title,
           author_name,
           username,
-          password: await sha256(password),
+          name: await sha256(password),
         });
 
         router.navigate('/light');
