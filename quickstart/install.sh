@@ -228,7 +228,17 @@ install_via_docker() {
   ensure_compose
 
   say "Creating install directory: $INSTALL_DIR"
-  mkdir -p "$INSTALL_DIR" "$DATA_DIR"
+  mkdir -p "$INSTALL_DIR" "$DATA_DIR" "${INSTALL_DIR}/import"
+
+  # Rootless Podman maps container UIDs through a user namespace.
+  # The container app user (UID 1000) maps to a different host UID than the
+  # current user.  We must re-own the data directory from inside the namespace
+  # so the container can write the database and media files.
+  if [[ "$COMPOSE" == *podman* ]]; then
+    say "Fixing data directory ownership for rootless Podman..."
+    podman unshare chown -R 1000:1000 "$DATA_DIR" 2>/dev/null || \
+      warn "Could not fix data dir ownership — container may not be able to write to $DATA_DIR"
+  fi
 
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
