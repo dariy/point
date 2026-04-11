@@ -1,6 +1,9 @@
 package api
 
 import (
+	"database/sql"
+	"errors"
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -56,6 +59,10 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 	if err == nil {
 		return c.JSON(http.StatusConflict, map[string]string{"detail": "setup already complete"})
 	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("setup: GetFirstUser error: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "database error"})
+	}
 
 	hash, err := services.HashPassword(req.Password)
 	if err != nil {
@@ -69,6 +76,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		DisplayName:  req.AuthorName,
 	})
 	if err != nil {
+		log.Printf("setup: CreateUser error: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "failed to create user"})
 	}
 
