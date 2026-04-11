@@ -76,6 +76,6 @@ EXPOSE 8000
 
 # Health check using curl (already installed)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 CMD ["./api-bin"]

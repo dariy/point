@@ -1644,7 +1644,13 @@ func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error
 		return nil
 	}
 	if _, err := r.db.ExecContext(ctx, sql); err != nil {
-		return fmt.Errorf("migration %s: %w", name, err)
+		errMsg := err.Error()
+		// Treat "already exists" errors as no-ops: the migration's intent is already
+		// satisfied (e.g. a column added by schema.sql that a migration also adds).
+		// Record it in history so we stop retrying on every startup.
+		if !strings.Contains(errMsg, "already exists") && !strings.Contains(errMsg, "duplicate column") {
+			return fmt.Errorf("migration %s: %w", name, err)
+		}
 	}
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO migration_history (name) VALUES (?)`, name)
