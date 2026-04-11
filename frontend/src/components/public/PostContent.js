@@ -138,13 +138,18 @@ export class PostContent extends Component {
     return `<table><tbody>${rows}</tbody></table>`;
   }
 
-  _renderImmersive(post, _prevPost, _nextPost) {
+  _renderImmersive(post, prevPost, nextPost) {
     // Always derive carousel items from HTML — post.media has {path,metadata} shape for EXIF only
     const items = this._mediaFromHtml(post.content_html || '');
     const startIndex = Math.min(this.props.startIndex || 0, Math.max(0, items.length - 1));
     const visuals = items.length === 1
       ? this._mediaEl(items[0])
       : this._renderCarousel(items, startIndex);
+
+    // Single-image posts have no carousel arrows, so add post-navigation arrows.
+    const postNavArrows = items.length === 1
+      ? this._renderImmersivePostNav(prevPost, nextPost)
+      : '';
 
     const showExcerpt = this.props.showImmersiveExcerpt !== false;
     const excerptHtml = (showExcerpt && post.excerpt)
@@ -154,8 +159,25 @@ export class PostContent extends Component {
     return `
       <div class="immersive-wrapper">
         <div class="immersive-visuals">${visuals}</div>
+        ${postNavArrows}
         ${excerptHtml}
       </div>`;
+  }
+
+  /** Render prev/next post arrow buttons for single-image immersive posts. */
+  _renderImmersivePostNav(prevPost, nextPost) {
+    if (!prevPost && !nextPost) return '';
+    const settings = store.get('settings') || {};
+    const feedMode = settings.immersive_nav_direction === 'feed';
+    const backPost = feedMode ? nextPost : prevPost;
+    const fwdPost  = feedMode ? prevPost : nextPost;
+    const prev = backPost
+      ? `<button class="carousel-prev" aria-label="Previous post">&#10094;</button>`
+      : '';
+    const next = fwdPost
+      ? `<button class="carousel-next" aria-label="Next post">&#10095;</button>`
+      : '';
+    return prev + next;
   }
 
   _renderCarousel(media, startIndex = 0) {
@@ -276,6 +298,12 @@ export class PostContent extends Component {
       if (oldSlide) {
         oldSlide.querySelector('video')?.pause();
         oldSlide.classList.remove('active', 'immersive-fade-in', 'immersive-fade-out');
+        // Clear inline styles set by _updateVisuals during swipe gestures.
+        // Without this, style.transition='none' blocks the CSS fade-out and
+        // style.opacity overrides CSS opacity:0, leaving the old slide visible.
+        oldSlide.style.transform = '';
+        oldSlide.style.opacity = '';
+        oldSlide.style.transition = '';
       }
 
       // Activate and fade in the new slide.
@@ -295,6 +323,15 @@ export class PostContent extends Component {
         (e) => { e.stopPropagation(); goTo(index + 1); });
       dots.forEach((d, i) =>
         this._on(d, 'click', (e) => { e.stopPropagation(); goTo(i); }));
+    } else {
+      // Single-image post — wire up post-navigation arrows rendered by _renderImmersivePostNav.
+      const wrapper = this.$('.immersive-wrapper');
+      if (wrapper) {
+        this._on(wrapper.querySelector('.carousel-prev'), 'click',
+          (e) => { e.stopPropagation(); goToPost(backPost); });
+        this._on(wrapper.querySelector('.carousel-next'), 'click',
+          (e) => { e.stopPropagation(); goToPost(fwdPost); });
+      }
     }
 
     // Fade in on mount
@@ -638,7 +675,20 @@ export class PostContent extends Component {
           : ''}
 
         ${this._renderNav(prevPost, nextPost)}
-      </article>`;
+      </article>
+      ${this._renderNormalPostArrows(prevPost, nextPost)}`;
+  }
+
+  /** Render fixed-position prev/next post arrow buttons for the normal (non-immersive) layout. */
+  _renderNormalPostArrows(prevPost, nextPost) {
+    if (!prevPost && !nextPost) return '';
+    const prev = prevPost
+      ? `<a href="/post/${escapeHtml(prevPost.slug)}" class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>`
+      : '';
+    const next = nextPost
+      ? `<a href="/post/${escapeHtml(nextPost.slug)}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>`
+      : '';
+    return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
   }
 
   _enhanceMedia(body) {
