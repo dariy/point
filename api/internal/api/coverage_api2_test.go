@@ -231,7 +231,7 @@ func TestAuthHandler_ProductionCookie(t *testing.T) {
 	authH := NewAuthHandler(h.authSvc, cfg)
 	e := echo.New()
 
-	body := `{"username":"u","name":"pass1234","remember_me":false}`
+	body := `{"username":"u","password":"pass1234","remember_me":false}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

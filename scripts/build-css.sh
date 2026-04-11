@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Concatenates CSS modules into bundle files
 # This script should be run from the repository root or its directory.
 # But we'll make it robust by finding the repository root.
