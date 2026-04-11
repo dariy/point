@@ -502,7 +502,11 @@ export class PostContent extends Component {
         wrapper.classList.toggle('zoomed', newScale > 1);
         this._updateVisuals();
       },
-      onTap: (_x, _y) => {
+      onTap: (x, y) => {
+        // Don't hide/show the overlay when the tap landed on an interactive element
+        // (nav arrows, info card, etc.) — those elements handle their own action.
+        const tapped = document.elementFromPoint(x, y);
+        if (tapped?.closest('a, button, input, .post-info-card')) return;
         if (document.body.classList.contains('ui-hidden')) {
           showUI();
         } else {
