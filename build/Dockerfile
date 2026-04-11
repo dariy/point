@@ -38,6 +38,10 @@ RUN npx --yes esbuild frontend/src/app.js \
     --bundle --minify --format=esm \
     --outfile=frontend/js/app.js
 
+# Bundle CSS modules into main.css (public) and light.css (admin)
+COPY scripts/build-css.sh ./scripts/
+RUN sh ./scripts/build-css.sh
+
 # Runtime stage
 FROM docker.io/library/alpine:latest
 
