@@ -40,7 +40,7 @@ func TestSetup_HashPasswordError(t *testing.T) {
 	defer h.close()
 	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
 	longPass := strings.Repeat("x", 73)
-	body := `{"username":"u","password":"` + longPass + `","blog_title":"T","author_name":"A"}`
+	body := `{"username":"u","name":"` + longPass + `","blog_title":"T","author_name":"A"}`
 	c, rec := echoCtx(http.MethodPost, "/", body)
 	if err := sh.Setup(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -54,7 +54,7 @@ func TestSetup_SeedSettingsError(t *testing.T) {
 	h := setupHandlers(t)
 	_, _ = h.repo.DB().Exec(`DROP TABLE blog_settings`)
 	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-	body := `{"username":"seeduser","password":"password123","blog_title":"T","author_name":"A"}`
+	body := `{"username":"seeduser","name":"password123","blog_title":"T","author_name":"A"}`
 	c, rec := echoCtx(http.MethodPost, "/", body)
 	if err := sh.Setup(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -499,7 +499,7 @@ func TestSetup_Success(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
 	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-	body := `{"username":"newuser","password":"password123","blog_title":"My Blog","author_name":"Author"}`
+	body := `{"username":"newuser","name":"password123","blog_title":"My Blog","author_name":"Author"}`
 	c, rec := echoCtx(http.MethodPost, "/setup", body)
 	if err := sh.Setup(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
