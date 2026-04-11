@@ -18,9 +18,9 @@ services:
       - HOST=0.0.0.0
     volumes:
       - point-data:/data
-      - ${PHOTO_LIBRARY_PATH:-/data/import}:/photos:ro # set PHOTO_LIBRARY_PATH in .env to mount your library
+      - ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro # set PHOTO_LIBRARY_PATH in .env to mount your library
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:${PORT:-8000}/health"]
       interval: 30s
       timeout: 5s
       retries: 3
