@@ -1832,11 +1832,10 @@ func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
 	return nil
 }
 
-// EnsurePendingSystemTag is an idempotent migration that guarantees the _pending
-// system tag exists with slug="_pending". It handles the case where a regular tag
-// was previously created with name="_pending" but slug="pending" (via Slugify),
-// which caused the system tag INSERT OR IGNORE to silently fail.
-func (r *Repository) EnsurePendingSystemTag(ctx context.Context) error {
+// EnsureSystemTags is an idempotent migration that guarantees all required
+// system tags exist and are linked to _system. It handles the case where a regular tag
+// was previously created with name="_pending" but slug="pending" (via Slugify).
+func (r *Repository) EnsureSystemTags(ctx context.Context) error {
 	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1849,7 +1848,7 @@ func (r *Repository) EnsurePendingSystemTag(ctx context.Context) error {
 
 	var count int64
 	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM migration_history WHERE name = 'ensure_pending_system_tag'`,
+		`SELECT COUNT(*) FROM migration_history WHERE name = 'ensure_system_tags'`,
 	).Scan(&count); err != nil {
 		return fmt.Errorf("check migration_history: %w", err)
 	}
@@ -1865,27 +1864,45 @@ func (r *Repository) EnsurePendingSystemTag(ctx context.Context) error {
 		return fmt.Errorf("rename conflicting _pending tag: %w", err)
 	}
 
-	// Create the _pending system tag if it doesn't exist yet.
-	if _, err := r.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
-		 VALUES ('_pending', '_pending', NULL, 0, CURRENT_TIMESTAMP)`,
-	); err != nil {
-		return fmt.Errorf("create _pending system tag: %w", err)
+	systemTags := []string{
+		"_system",
+		"_root",
+		"_hidden",
+		"_hide_posts",
+		"_is_in_breadcrumbs",
+		"_with_related",
+		"_pending",
+		"_page",
+		"_no_ancestors",
 	}
 
-	// Make _pending a child of _system (no-op if _system doesn't exist or already linked).
-	if _, err := r.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
-		 SELECT s.id, c.id FROM tags s, tags c
-		 WHERE s.slug = '_system' AND c.slug = '_pending'`,
-	); err != nil {
-		return fmt.Errorf("link _pending to _system: %w", err)
+	for _, st := range systemTags {
+		if _, err := r.db.ExecContext(ctx,
+			`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
+			 VALUES (?, ?, NULL, 0, CURRENT_TIMESTAMP)`, st, st,
+		); err != nil {
+			return fmt.Errorf("create %s system tag: %w", st, err)
+		}
+	}
+
+	// Make system tags children of _system (except _system itself)
+	for _, st := range systemTags {
+		if st == "_system" {
+			continue
+		}
+		if _, err := r.db.ExecContext(ctx,
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT s.id, c.id FROM tags s, tags c
+			 WHERE s.slug = '_system' AND c.slug = ?`, st,
+		); err != nil {
+			return fmt.Errorf("link %s to _system: %w", st, err)
+		}
 	}
 
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('ensure_pending_system_tag')`,
+		`INSERT INTO migration_history (name) VALUES ('ensure_system_tags')`,
 	); err != nil {
-		return fmt.Errorf("record ensure_pending_system_tag: %w", err)
+		return fmt.Errorf("record ensure_system_tags: %w", err)
 	}
 	return nil
 }
