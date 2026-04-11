@@ -27,7 +27,7 @@ func NewAuthHandler(authService *services.AuthService, cfg *config.Config) *Auth
 
 type LoginRequest struct {
 	Username   string `json:"username"`
-	Password   string `json:"password"`
+	Password   string `json:"name"`
 	RememberMe bool   `json:"remember_me"`
 }
 

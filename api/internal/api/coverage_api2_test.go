@@ -231,7 +231,7 @@ func TestAuthHandler_ProductionCookie(t *testing.T) {
 	authH := NewAuthHandler(h.authSvc, cfg)
 	e := echo.New()
 
-	body := `{"username":"u","password":"pass1234","remember_me":false}`
+	body := `{"username":"u","name":"pass1234","remember_me":false}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1131,7 +1131,7 @@ func TestAuthHandler_Login_SessionCreateError(t *testing.T) {
 	// Now close DB so session creation fails
 	_ = h.repo.Close()
 	ah := NewAuthHandler(h.authSvc, h.cfg)
-	body := `{"username":"testlogin","password":"password123"}`
+	body := `{"username":"testlogin","name":"password123"}`
 	c, _ := echoCtx(http.MethodPost, "/", body)
 	err := ah.Login(c)
 	// Either error or bad status — we just want to cover the path
