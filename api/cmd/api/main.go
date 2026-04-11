@@ -452,9 +452,9 @@ func main() {
 		log.Printf("warning: system_tags_phase_b: %v", err)
 	}
 
-	// Ensure the _pending system tag exists (handles name-conflict from pre-system-tags era).
-	if err := repo.EnsurePendingSystemTag(ctx); err != nil {
-		log.Printf("warning: ensure_pending_system_tag: %v", err)
+	// Ensure all required system tags exist.
+	if err := repo.EnsureSystemTags(ctx); err != nil {
+		log.Printf("warning: ensure_system_tags: %v", err)
 	}
 
 	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
