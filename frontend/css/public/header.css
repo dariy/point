@@ -211,6 +211,7 @@
     position: relative;
     height: 2.5rem;
     width: 2.5rem; /* Match button width to reserve space */
+    z-index: 105; /* place above tags-filters (which has 100) */
 }
 
 .header-search-form input[type="search"] {
@@ -236,7 +237,9 @@
     width: 18rem;
     opacity: 1;
     padding: 0 2.5rem 0 var(--spacing-md);
-    background: var(--surface-card);
+    background: color-mix(in srgb, var(--surface-card) 95%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-color: var(--border-primary);
 }
 
