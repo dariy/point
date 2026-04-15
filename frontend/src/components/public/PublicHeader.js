@@ -149,6 +149,13 @@ export class PublicHeader extends Component {
         e.preventDefault();
         if (!searchForm.classList.contains('is-active')) {
           searchForm.classList.add('is-active');
+          const tagsBar = document.getElementById('header-tags-mount');
+          if (tagsBar) {
+            const formRect = searchForm.getBoundingClientRect();
+            const tagsRect = tagsBar.getBoundingClientRect();
+            const desiredWidth = formRect.right - tagsRect.left;
+            input.style.setProperty('--search-width', `${desiredWidth}px`);
+          }
           input.tabIndex = 0;
           input.focus();
         } else {
