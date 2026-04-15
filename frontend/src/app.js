@@ -229,6 +229,7 @@ const routes = [
   { path: '/tag/:slug',   load: () => import('./pages/public/TagPage.js'),    public: true },
   { path: '/tags',        load: () => import('./pages/public/TagsPage.js'),   public: true },
   { path: '/map',         load: () => import('./pages/public/MapPage.js'),    public: true },
+  { path: '/search',      load: () => import('./pages/public/SearchPage.js'), public: true },
   { path: '/preview/:token', load: () => import('./pages/public/PreviewPage.js'), public: true },
 
   // Admin (Light) — protected

@@ -12,8 +12,8 @@
 import { Component } from '../Component.js';
 import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
-import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG } from '../../utils/icons.js';
+import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG } from '../../utils/icons.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -88,6 +88,12 @@ export class PublicHeader extends Component {
           ${navTags.length ? '<div class="header-tags-bar" id="header-tags-mount"></div>' : ''}
 
           <nav class="site-nav" aria-label="Main navigation">
+            <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
+              <input type="search" name="q" placeholder="Search..." aria-label="Search posts" required>
+              <button type="submit" aria-label="Submit search" class="header-action-btn">
+                ${SEARCH_SVG}
+              </button>
+            </form>
             ${settings.enable_map !== false ? `
             <a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
                aria-label="Map view">
@@ -116,6 +122,18 @@ export class PublicHeader extends Component {
         const current = store.get('theme') || 'auto';
         const next = current === 'dark' ? 'light' : 'dark';
         store.set('theme', next);
+      });
+    }
+
+    const searchForm = this.$('#header-search');
+    if (searchForm) {
+      searchForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const q = fd.get('q');
+        if (q && q.trim()) {
+          navigate(`/search?q=${encodeURIComponent(q.trim())}`);
+        }
       });
     }
   }
