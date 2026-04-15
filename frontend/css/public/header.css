@@ -205,6 +205,70 @@
     flex-shrink: 0;
 }
 
+.header-search-form {
+    display: flex;
+    align-items: center;
+    position: relative;
+    height: 2.5rem;
+    width: 2.5rem; /* Match button width to reserve space */
+}
+
+.header-search-form input[type="search"] {
+    width: 0;
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+    border: 1px solid transparent;
+    background: transparent;
+    transition: width var(--transition-base) cubic-bezier(0.4, 0, 0.2, 1), opacity var(--transition-fast), padding var(--transition-fast), border-color var(--transition-fast);
+    height: 2.5rem;
+    border-radius: 624.938rem;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+    position: absolute;
+    right: 0;
+    z-index: 10;
+}
+
+.header-search-form.is-active input[type="search"] {
+    width: 18rem;
+    opacity: 1;
+    padding: 0 2.5rem 0 var(--spacing-md);
+    background: var(--surface-card);
+    border-color: var(--border-primary);
+}
+
+.header-search-form.is-active input[type="search"]:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary-alpha, rgba(37, 99, 235, 0.2));
+}
+
+.header-search-form .search-toggle-btn {
+    position: relative;
+    z-index: 11;
+    transition: all var(--transition-fast);
+}
+
+.header-search-form.is-active .search-toggle-btn {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--text-primary); /* Darker icon when active */
+}
+
+/* Provide search icon active state hover */
+.header-search-form.is-active .search-toggle-btn:hover {
+    color: var(--color-primary);
+    transform: scale(1.05); /* Slight pop, keeping it simple instead of big box shadow */
+}
+
+@media (max-width: 600px) {
+    .header-search-form.is-active input[type="search"] {
+        width: 12rem;
+    }
+}
 
 .nav-dropdown {
     position: relative;
