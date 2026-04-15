@@ -20,6 +20,11 @@ export default class PostPage extends Component {
     this.state = { loading: true, post: null, nav: null, error: null, forceImmersive: false, startIndex: 0 };
   }
 
+  beforeUnmount() {
+    super.beforeUnmount();
+    document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
+  }
+
   render() {
     const { loading, error } = this.state;
 
@@ -120,7 +125,38 @@ export default class PostPage extends Component {
 
       document.title = post.title;
       const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) metaDesc.setAttribute('content', post.meta_description || post.excerpt || '');
+      const descText = post.meta_description || post.excerpt || '';
+      if (metaDesc) metaDesc.setAttribute('content', descText);
+
+      const updateMeta = (prop, content) => {
+        if (!content) return;
+        let el = document.querySelector(`meta[property="${prop}"]`);
+        if (!el) {
+          el = document.createElement('meta');
+          el.setAttribute('property', prop);
+          document.head.appendChild(el);
+        }
+        el.setAttribute('content', content);
+      };
+
+      updateMeta('og:type', 'article');
+      updateMeta('og:url', window.location.href);
+      updateMeta('og:title', post.title);
+      updateMeta('og:description', descText);
+
+      let ogImageObj = null;
+      if (post.media && post.media.length > 0 && (post.media[0].path || post.media[0].url)) {
+        ogImageObj = post.media[0].path || post.media[0].url;
+      } else if (post.content_html) {
+        const match = post.content_html.match(/<img[^>]*\ssrc=["']([^"']+)["']/i);
+        if (match && match[1]) ogImageObj = match[1];
+      }
+
+      if (ogImageObj) {
+        try {
+          updateMeta('og:image', new URL(ogImageObj, window.location.origin).href);
+        } catch (e) { /* ignore invalid URL */ }
+      }
 
       let postNav = null;
       try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }
