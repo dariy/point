@@ -234,7 +234,7 @@
 }
 
 .header-search-form.is-active input[type="search"] {
-    width: 18rem;
+    width: var(--search-width, 18rem);
     opacity: 1;
     padding: 0 2.5rem 0 var(--spacing-md);
     background: color-mix(in srgb, var(--surface-card) 95%, transparent);
@@ -269,7 +269,7 @@
 
 @media (max-width: 600px) {
     .header-search-form.is-active input[type="search"] {
-        width: 12rem;
+        width: var(--search-width, 12rem);
     }
 }
 
