@@ -106,7 +106,7 @@ export default class SearchPage extends Component {
     const q = this.props.query?.q || '';
     const page = parseInt(this.props.query?.page || '1', 10);
     
-    document.title = q ? \`Search: \${q} — \${store.get('settings')?.blog_title || 'Blog'}\` : 'Search';
+    document.title = q ? `Search: ${q} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
 
     if (!q.trim()) {
       this.setState({ loading: false, data: { posts: [], total: 0, page: 1, pages: 1 }, error: null });
