@@ -547,7 +547,15 @@ export class PostContent extends Component {
       clearTimeout(this._idleTimer);
       this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
-    const hideUI = () => { hideFlyout(); document.body.classList.add('ui-hidden'); };
+    const hideUI = () => {
+      if (document.querySelector('.header-search-form.is-active, .tag-group.is-open')) {
+        clearTimeout(this._idleTimer);
+        this._idleTimer = setTimeout(hideUI, IDLE_MS);
+        return;
+      }
+      hideFlyout();
+      document.body.classList.add('ui-hidden');
+    };
 
     const resetIdle = (e) => {
       const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
