@@ -89,8 +89,8 @@ export class PublicHeader extends Component {
 
           <nav class="site-nav" aria-label="Main navigation">
             <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
-              <input type="search" name="q" placeholder="Search..." aria-label="Search posts" required>
-              <button type="submit" aria-label="Submit search" class="header-action-btn">
+              <input type="search" name="q" placeholder="Search..." aria-label="Search posts" tabindex="-1">
+              <button type="button" aria-label="Toggle search" class="header-action-btn search-toggle-btn">
                 ${SEARCH_SVG}
               </button>
             </form>
@@ -127,12 +127,49 @@ export class PublicHeader extends Component {
 
     const searchForm = this.$('#header-search');
     if (searchForm) {
+      const input = searchForm.querySelector('input[type="search"]');
+      const toggleBtn = searchForm.querySelector('.search-toggle-btn');
+
+      const closeSearch = () => {
+        searchForm.classList.remove('is-active');
+        input.tabIndex = -1;
+        input.blur();
+      };
+
+      const submitSearch = () => {
+        const q = input.value.trim();
+        if (q) {
+          navigate(`/search?q=${encodeURIComponent(q)}`);
+          input.value = '';
+        }
+        closeSearch();
+      };
+
+      toggleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!searchForm.classList.contains('is-active')) {
+          searchForm.classList.add('is-active');
+          input.tabIndex = 0;
+          input.focus();
+        } else {
+          submitSearch();
+        }
+      });
+
       searchForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const fd = new FormData(e.target);
-        const q = fd.get('q');
-        if (q && q.trim()) {
-          navigate(`/search?q=${encodeURIComponent(q.trim())}`);
+        submitSearch();
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeSearch();
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (searchForm.classList.contains('is-active') && !searchForm.contains(e.target)) {
+          closeSearch();
         }
       });
     }
