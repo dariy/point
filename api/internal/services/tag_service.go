@@ -103,6 +103,9 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 		SortOrder:   sortOrder,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
+			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+		}
 		return models.Tag{}, err
 	}
 
@@ -251,7 +254,7 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		sortOrder = sql.NullInt64{Int64: int64(*p.SortOrder), Valid: true}
 	}
 
-	return s.repo.UpdateTag(ctx, models.UpdateTagParams{
+	tag, err := s.repo.UpdateTag(ctx, models.UpdateTagParams{
 		ID:          p.ID,
 		Name:        p.Name,
 		Slug:        p.Slug,
@@ -259,6 +262,13 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		CustomUrl:   sql.NullString{String: p.CustomURL, Valid: p.CustomURL != ""},
 		SortOrder:   sortOrder,
 	})
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
+			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+		}
+		return models.Tag{}, err
+	}
+	return tag, nil
 }
 
 type TagCloudItem struct {
