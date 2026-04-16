@@ -27,7 +27,7 @@ const SETTING_GROUPS = [
   },
   {
     title: 'Advanced',
-    keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality']
+    keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality', 'GEMINI_API_KEY']
   }
 ];
 
@@ -137,6 +137,10 @@ export default class SettingsPage extends Component {
         const checked = value === 'true' || value === true || value === 1 || value === '1';
         toggles.push({ key, label, checked });
         isToggle = true;
+      } else if (key === 'GEMINI_API_KEY') {
+        const isConfigured = settings['GEMINI_API_KEY_CONFIGURED'] === 'true' || settings['GEMINI_API_KEY_CONFIGURED'] === true;
+        const placeholder = isConfigured ? '******** (Configured)' : 'Enter Gemini API Key';
+        input = `<input type="password" name="${key}" id="${key}" class="form-input" placeholder="${placeholder}" value="">`;
       } else {
         input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
@@ -260,6 +264,10 @@ export default class SettingsPage extends Component {
         const type = this._getSettingType(k);
         if (type === 'boolean') return; // saved on checkbox change
         const val = formData.get(k);
+        if (k === 'GEMINI_API_KEY') {
+          if (val) data[k] = val;
+          return;
+        }
         if (type === 'number') {
           data[k] = String(val ? parseInt(val, 10) : 0);
         } else {
