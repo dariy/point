@@ -660,6 +660,8 @@ export default class PostEditPage extends Component {
         ? await analyzeMedia(item.id)
         : await analyzeMediaByPath(item.path);
 
+      const isEmpty = !result.title && !(result.tags?.length) && !result.excerpt;
+
       if (field === 'title' && result.title) {
         post.title = result.title;
       } else if (field === 'tags' && result.tags?.length) {
@@ -674,7 +676,11 @@ export default class PostEditPage extends Component {
         post.excerpt = result.excerpt;
       }
 
-      store.set('toast', { message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`, type: 'success' });
+      if (isEmpty) {
+        store.set('toast', { message: 'AI disabled or no suggestions.', type: 'info' });
+      } else {
+        store.set('toast', { message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`, type: 'success' });
+      }
     } catch (err) {
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
     }
@@ -702,6 +708,8 @@ export default class PostEditPage extends Component {
         ...(result.tags || []).filter((t) => !snap.tags.includes(t)),
       ];
 
+      const isEmpty = !result.title && !(result.tags?.length) && !result.excerpt;
+
       const post = {
         ...(this.state.post || {}),
         title:            snap.title   || result.title   || '',
@@ -717,7 +725,11 @@ export default class PostEditPage extends Component {
       };
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
 
-      store.set('toast', { message: 'Analysis complete.', type: 'success' });
+      if (isEmpty) {
+        store.set('toast', { message: 'AI disabled or no suggestions.', type: 'info' });
+      } else {
+        store.set('toast', { message: 'Analysis complete.', type: 'success' });
+      }
       this._analyzing = false;
       this.setState({ post });
     } catch (err) {
