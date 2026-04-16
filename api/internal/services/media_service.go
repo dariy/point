@@ -780,26 +780,43 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 		apiKey = s.cfg.GeminiAPIKey
 	}
 
+	var analysis *AnalysisResponse
+	var err error
+
 	if apiKey != "" && len(s.genaiConfig.Models) > 0 {
-		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		client, initErr := genai.NewClient(ctx, &genai.ClientConfig{
 			APIKey:  apiKey,
 			Backend: genai.BackendGeminiAPI,
 		})
-		if err == nil {
-			return s.analyzeImageDirectlyWithClient(ctx, client, content, filename, mimeType)
+		if initErr == nil {
+			analysis, err = s.analyzeImageDirectlyWithClient(ctx, client, content, filename, mimeType)
+		} else {
+			err = initErr
 		}
 	} else if s.genaiClient != nil && len(s.genaiConfig.Models) > 0 {
 		// Fallback to pre-initialized client if any
-		return s.analyzeImageDirectlyWithClient(ctx, s.genaiClient, content, filename, mimeType)
+		analysis, err = s.analyzeImageDirectlyWithClient(ctx, s.genaiClient, content, filename, mimeType)
+	} else {
+		endpoint, epErr := s.settingsService.GetSetting(ctx, "genai_api_endpoint", "")
+		if epErr != nil || endpoint == "" {
+			log.Printf("warning: AI features disabled (GEMINI_API_KEY is absent)")
+			return &AnalysisResponse{Tags: []string{}}, nil
+		}
+		analysis, err = s.analyzeImageViaHTTP(ctx, content, filename, mimeType, endpoint)
 	}
 
-	endpoint, err := s.settingsService.GetSetting(ctx, "genai_api_endpoint", "")
-	if err != nil || endpoint == "" {
-		return nil, fmt.Errorf("GenAI API not configured")
+	if err != nil {
+		// Check if it's an authorization/authentication error
+		var apiErr *googleapi.Error
+		if errors.As(err, &apiErr) && (apiErr.Code == 400 || apiErr.Code == 401 || apiErr.Code == 403) {
+			log.Printf("warning: AI features disabled (GEMINI_API_KEY is wrong or lacks permissions): %v", err)
+		} else {
+			log.Printf("warning: AI features soft-failed: %v", err)
+		}
+		return &AnalysisResponse{Tags: []string{}}, nil
 	}
 
-	// Legacy HTTP endpoint fallback
-	return s.analyzeImageViaHTTP(ctx, content, filename, mimeType, endpoint)
+	return analysis, nil
 }
 
 func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, client *genai.Client, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
@@ -838,7 +855,7 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 	}
 
 	if genErr != nil {
-		return nil, fmt.Errorf("all models failed: last error: %v", genErr)
+		return nil, fmt.Errorf("all models failed: last error: %w", genErr)
 	}
 
 	if len(genResp.Candidates) == 0 || len(genResp.Candidates[0].Content.Parts) == 0 {

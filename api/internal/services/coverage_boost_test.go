@@ -455,12 +455,15 @@ func TestMediaService_AnalyzeMediaByIDSuccess(t *testing.T) {
 		t.Fatalf("UploadFile failed: %v", err)
 	}
 
-	// Call AnalyzeMediaByID on the valid image - will fail at AnalyzeImage
+	// Call AnalyzeMediaByID on the valid image - will return empty response (soft-fail)
 	// (no AI configured), but covers the file read path
-	_, err = svc.AnalyzeMediaByID(ctx, m.ID)
-	// Expected error: "GenAI API not configured"
-	if err == nil {
-		t.Error("expected error from AnalyzeMediaByID (no AI configured)")
+	resp, err := svc.AnalyzeMediaByID(ctx, m.ID)
+	// Expected soft-fail
+	if err != nil {
+		t.Errorf("expected no error from AnalyzeMediaByID (soft-fail), got %v", err)
+	}
+	if resp == nil || len(resp.Tags) != 0 {
+		t.Error("expected empty analysis response")
 	}
 }
 
@@ -915,9 +918,12 @@ func TestMediaService_AnalyzeImageViaHTTPError(t *testing.T) {
 	var buf bytes.Buffer
 	_ = jpeg.Encode(&buf, img, nil)
 
-	_, err := svc.AnalyzeImage(ctx, buf.Bytes(), "test.jpg", "image/jpeg")
-	if err == nil {
-		t.Error("expected error for non-200 response")
+	resp, err := svc.AnalyzeImage(ctx, buf.Bytes(), "test.jpg", "image/jpeg")
+	if err != nil {
+		t.Errorf("expected no error for non-200 response (soft-fail), got %v", err)
+	}
+	if resp == nil || len(resp.Tags) != 0 {
+		t.Error("expected empty analysis response")
 	}
 }
 
