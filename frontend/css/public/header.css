@@ -221,7 +221,7 @@
     margin: 0;
     border: 1px solid transparent;
     background: transparent;
-    transition: width var(--transition-base) cubic-bezier(0.4, 0, 0.2, 1), opacity var(--transition-fast), padding var(--transition-fast), border-color var(--transition-fast);
+    transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity var(--transition-fast), padding var(--transition-fast), border-color var(--transition-fast);
     height: 2.5rem;
     border-radius: 624.938rem;
     font-size: var(--font-size-sm);
