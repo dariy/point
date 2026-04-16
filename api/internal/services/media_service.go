@@ -775,9 +775,22 @@ func (s *MediaService) AnalyzeMediaByPath(ctx context.Context, mediaPath string)
 }
 
 func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
-	// If GenAI client is initialized, use it directly
-	if s.genaiClient != nil && len(s.genaiConfig.Models) > 0 {
-		return s.analyzeImageDirectly(ctx, content, filename, mimeType)
+	apiKey, _ := s.settingsService.GetSetting(ctx, "GEMINI_API_KEY", "")
+	if apiKey == "" && s.cfg != nil {
+		apiKey = s.cfg.GeminiAPIKey
+	}
+
+	if apiKey != "" && len(s.genaiConfig.Models) > 0 {
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		})
+		if err == nil {
+			return s.analyzeImageDirectlyWithClient(ctx, client, content, filename, mimeType)
+		}
+	} else if s.genaiClient != nil && len(s.genaiConfig.Models) > 0 {
+		// Fallback to pre-initialized client if any
+		return s.analyzeImageDirectlyWithClient(ctx, s.genaiClient, content, filename, mimeType)
 	}
 
 	endpoint, err := s.settingsService.GetSetting(ctx, "genai_api_endpoint", "")
@@ -789,7 +802,7 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 	return s.analyzeImageViaHTTP(ctx, content, filename, mimeType, endpoint)
 }
 
-func (s *MediaService) analyzeImageDirectly(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
+func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, client *genai.Client, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
 	parts := []*genai.Part{
 		{Text: s.genaiConfig.Prompt},
 		{InlineData: &genai.Blob{
@@ -803,7 +816,7 @@ func (s *MediaService) analyzeImageDirectly(ctx context.Context, content []byte,
 	var genErr error
 
 	for _, model := range s.genaiConfig.Models {
-		genResp, genErr = s.genaiClient.Models.GenerateContent(ctx,
+		genResp, genErr = client.Models.GenerateContent(ctx,
 			model,
 			contents,
 			&genai.GenerateContentConfig{
