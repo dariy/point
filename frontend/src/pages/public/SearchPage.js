@@ -22,8 +22,7 @@ export default class SearchPage extends Component {
   }
 
   render() {
-    const { loading, error, data } = this.state;
-    const q = this.props.query?.q || '';
+    const { loading, error } = this.state;
 
     if (loading) {
       return `
@@ -52,11 +51,8 @@ export default class SearchPage extends Component {
         <div id="header-mount"></div>
         <main class="site-main">
           <div class="main-container">
-            <header class="page-header">
-              <h1 class="page-title">Search Results for "${escapeHtml(q)}"</h1>
-              <p class="page-subtitle">${data.total} post${data.total !== 1 ? 's' : ''} found</p>
-            </header>
-            <div id="grid-mount" class="grid-expand-mount"></div>
+            <div id="grid-mount" class="grid-expand-mount">
+            </div>
             <div id="pagination-mount"></div>
           </div>
         </main>
@@ -68,11 +64,27 @@ export default class SearchPage extends Component {
     document.body.classList.remove('immersive-layout', 'ui-hidden');
     const settings = store.get('settings') || {};
     const rootMenu = store.get('navTags') || [];
+    const q = this.props.query?.q || '';
+
+    let breadcrumb = [{ name: 'search' }];
+    if (q) {
+      const displayQuery = q.length > 20 ? q.substring(0, 20) + '…' : q;
+      if (this.state.data) {
+        const total = this.state.data.total;
+        breadcrumb.push({
+          name: `${displayQuery} [${total}]`,
+          tooltip: `${total} post${total !== 1 ? 's' : ''} found`
+        });
+      } else {
+        breadcrumb.push({ name: displayQuery });
+      }
+    }
 
     this.mountChild(PublicHeader, '#header-mount', {
       settings,
       navTags: rootMenu,
       currentPath: '/search',
+      breadcrumb,
     });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
