@@ -52,16 +52,33 @@ func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, public)
 }
 
+func maskGeminiAPIKey(settings map[string]string) {
+	if val, ok := settings["GEMINI_API_KEY"]; ok {
+		if val != "" {
+			settings["GEMINI_API_KEY_CONFIGURED"] = "true"
+		} else {
+			settings["GEMINI_API_KEY_CONFIGURED"] = "false"
+		}
+		delete(settings, "GEMINI_API_KEY")
+	} else {
+		settings["GEMINI_API_KEY_CONFIGURED"] = "false"
+	}
+}
+
 func (h *SettingsHandler) GetSettings(c echo.Context) error {
 	all, err := h.settingsService.GetAllSettings(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	maskGeminiAPIKey(all)
 	return c.JSON(http.StatusOK, all)
 }
 
 func (h *SettingsHandler) GetSettingByKey(c echo.Context) error {
 	key := c.Param("key")
+	if key == "GEMINI_API_KEY" {
+		return echo.NewHTTPError(http.StatusForbidden, "access to this setting is restricted")
+	}
 	value, err := h.settingsService.GetSetting(c.Request().Context(), key, "")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "setting not found")
@@ -76,6 +93,9 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 	}
 
 	for key, value := range updates {
+		if key == "GEMINI_API_KEY_CONFIGURED" {
+			continue
+		}
 		if err := h.settingsService.SetSetting(c.Request().Context(), key, value, "string"); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -85,5 +105,6 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	maskGeminiAPIKey(all)
 	return c.JSON(http.StatusOK, all)
 }
