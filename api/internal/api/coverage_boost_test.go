@@ -104,8 +104,11 @@ func TestMediaHandler_AnalyzeImageBoost(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	err := h.AnalyzeImage(c)
-	if err == nil {
-		t.Error("expected error from AnalyzeImage without AI config")
+	if err != nil {
+		t.Errorf("expected no error from AnalyzeImage (soft-fail), got %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
 	}
 }
 
