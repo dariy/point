@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_posts_preview_token ON posts(preview_token);
 -- Tags
 CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
     slug VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     custom_url VARCHAR(200),

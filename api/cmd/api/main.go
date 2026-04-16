@@ -503,9 +503,23 @@ func main() {
 	}
 
 	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
+	// This was the first pass — kept so the migration_history entry is preserved.
 	if err := repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
 		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
 		log.Printf("warning: migration %q: %v", "rename_system_tags_to_slug", err)
+	}
+
+	// Strip the leading '_' from system tag display names so the UI shows
+	// "root", "pending", "hidden", etc. instead of "_root", "_pending".
+	if err := repo.ApplyMigration(ctx, "rename_system_tags_names_no_underscore",
+		`UPDATE tags SET name = LTRIM(slug, '_') WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
+		log.Printf("warning: migration %q: %v", "rename_system_tags_names_no_underscore", err)
+	}
+
+	// Drop the UNIQUE constraint from tags.name so that a user tag (e.g. slug="root")
+	// can share its name with the system tag (slug="_root"). Only slug stays unique.
+	if err := repo.DropTagNameUnique(ctx); err != nil {
+		log.Printf("warning: drop_tags_name_unique: %v", err)
 	}
 
 	// Ensure a secret key is available for session signing.
