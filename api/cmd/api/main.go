@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"os"
@@ -215,7 +216,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth))
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth))
 
-		// ── Tag Routes ─────────────────────────────────────────────────────────────
+	// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")
 	tagsGroup.GET("", tagHandler.ListTags, api.OptionalAuthMiddleware(svcs.Auth))
 	tagsGroup.GET("/cloud", tagHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth))
@@ -329,6 +330,51 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	// ── SPA fallback — must be last ────────────────────────────────────────────
 	e.GET("/*", func(c echo.Context) error {
 		if _, err := os.Stat(indexHTML); err == nil {
+			path := c.Request().URL.Path
+			if strings.HasPrefix(path, "/post/") {
+				slug := strings.TrimPrefix(path, "/post/")
+				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
+				if err == nil && strings.EqualFold(post.Status, "published") {
+					b, err := os.ReadFile(indexHTML)
+					if err == nil {
+						htmlStr := string(b)
+						htmlStr = strings.Replace(htmlStr, "<title>Loading…</title>", "", 1)
+
+						var sb strings.Builder
+						desc := post.MetaDescription.String
+						if !post.MetaDescription.Valid || desc == "" {
+							desc = post.Excerpt.String
+						}
+
+						fmt.Fprintf(&sb, "\n  <title>%s</title>", html.EscapeString(post.Title))
+						if desc != "" {
+							fmt.Fprintf(&sb, "\n  <meta name=\"description\" content=\"%s\">", html.EscapeString(desc))
+							fmt.Fprintf(&sb, "\n  <meta property=\"og:description\" content=\"%s\">", html.EscapeString(desc))
+						}
+
+						sb.WriteString("\n  <meta property=\"og:type\" content=\"article\">")
+						fmt.Fprintf(&sb, "\n  <meta property=\"og:title\" content=\"%s\">", html.EscapeString(post.Title))
+
+						scheme := c.Scheme()
+						if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
+							scheme = fwd
+						}
+						fullURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, c.Request().URL.Path)
+						fmt.Fprintf(&sb, "\n  <meta property=\"og:url\" content=\"%s\">", html.EscapeString(fullURL))
+
+						media, _ := svcs.Media.GetMediaByContent(c.Request().Context(), post.Content, post.ThumbnailPath.String)
+						if len(media) > 0 {
+							mPath := "/" + strings.TrimPrefix(media[0].OriginalPath, "originals/")
+							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, mPath)
+							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
+						}
+
+						sb.WriteString("\n</head>")
+						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
+						return c.HTML(http.StatusOK, htmlStr)
+					}
+				}
+			}
 			return c.File(indexHTML)
 		}
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
@@ -336,7 +382,6 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 		})
 	})
 
-	
 	return e
 }
 
