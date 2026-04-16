@@ -72,7 +72,7 @@ export default class SearchPage extends Component {
       if (this.state.data) {
         const total = this.state.data.total;
         breadcrumb.push({
-          name: `${displayQuery} [${total}]`,
+          name: `${displayQuery}`,
           tooltip: `${total} post${total !== 1 ? 's' : ''} found`
         });
       } else {
