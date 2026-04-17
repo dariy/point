@@ -23,6 +23,7 @@ export default class PostPage extends Component {
   beforeUnmount() {
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
+    document.getElementById('json-ld-blogposting')?.remove();
     removeCanonical();
   }
 
@@ -109,6 +110,39 @@ export default class PostPage extends Component {
     });
   }
 
+  _injectJsonLd(post, descText, ogImageObj) {
+    document.getElementById('json-ld-blogposting')?.remove();
+
+    const settings = store.get('settings') || {};
+    const canonicalUrl = `${window.location.origin}/posts/${post.slug}`;
+    const datePublished = post.published_at || post.created_at;
+
+    const ld = {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      url: canonicalUrl,
+      datePublished,
+    };
+
+    if (post.updated_at && post.updated_at !== datePublished) ld.dateModified = post.updated_at;
+    if (descText) ld.description = descText;
+    if (settings.author_name) ld.author = { '@type': 'Person', name: settings.author_name };
+    if (settings.blog_title) ld.publisher = { '@type': 'Organization', name: settings.blog_title };
+
+    if (ogImageObj) {
+      try {
+        ld.image = new URL(ogImageObj, window.location.origin).href;
+      } catch { /* ignore */ }
+    }
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'json-ld-blogposting';
+    script.textContent = JSON.stringify(ld);
+    document.head.appendChild(script);
+  }
+
   mount() {
     super.mount();
     this._load();
@@ -159,6 +193,8 @@ export default class PostPage extends Component {
           updateMeta('og:image', new URL(ogImageObj, window.location.origin).href);
         } catch (e) { /* ignore invalid URL */ }
       }
+
+      this._injectJsonLd(post, descText, ogImageObj);
 
       let postNav = null;
       try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }
