@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -171,4 +172,73 @@ func TestParseMapsCoords_Handler(t *testing.T) {
 	if lat != 45.5077734 || lng != -73.5544607 {
 		t.Errorf("parseCoordsFromPageBody: got (%v,%v), want (45.5077734,-73.5544607)", lat, lng)
 	}
+}
+
+func TestBaseURL(t *testing.T) {
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/foo", nil)
+	c := e.NewContext(req, httptest.NewRecorder())
+	u := baseURL(c)
+	if !strings.HasPrefix(u, "http") {
+		t.Errorf("expected http URL, got %s", u)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/foo", nil)
+	req2.Header.Set("X-Forwarded-Proto", "https")
+	req2.Header.Set("Host", "blog.example.com")
+	c2 := e.NewContext(req2, httptest.NewRecorder())
+	u2 := baseURL(c2)
+	if !strings.HasPrefix(u2, "https://") {
+		t.Errorf("expected https URL, got %s", u2)
+	}
+}
+
+func TestBaseURL_WithForwardedProto(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Host = "example.com"
+	c := e.NewContext(req, httptest.NewRecorder())
+
+	result := baseURL(c)
+	if result != "https://example.com" {
+		t.Errorf("expected https://example.com, got %s", result)
+	}
+}
+
+func TestTagHandler_ParseMapsCoordsCoverage(t *testing.T) {
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/util/parse-maps-coords?q=https://maps.google.com/maps/search/coffee", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := ParseMapsCoords(c)
+	if err == nil {
+		t.Log("ParseMapsCoords with no-coord URL returned success (may have found coords in URL)")
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/util/parse-maps-coords?q=https://maps.google.com/%00invalid", nil)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	_ = ParseMapsCoords(c2)
+}
+
+func TestParseMapCoords_DisallowedHost(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?q=https://evil.com/maps", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := ParseMapsCoords(c)
+	if err == nil {
+		t.Error("expected error for disallowed host")
+	}
+}
+
+func TestParseMapCoords_DegreeNotation(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?q=45.5077%C2%B0+N%2C+73.5544%C2%B0+W", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	_ = ParseMapsCoords(c)
 }

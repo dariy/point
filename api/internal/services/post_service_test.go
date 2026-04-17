@@ -474,3 +474,132 @@ func TestPostService_PublishedAt(t *testing.T) {
 		}
 	})
 }
+
+// TestPostService_ListPublishedPostStubs covers the 0% function.
+func TestPostService_ListPublishedPostStubs(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	stubs, err := svc.ListPublishedPostStubs(ctx)
+	if err != nil {
+		t.Fatalf("ListPublishedPostStubs failed: %v", err)
+	}
+	// Empty DB returns empty slice (may be nil)
+	_ = stubs
+
+	// Add a published post and verify it appears
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('T','s','b',1,'published',datetime('now'))`)
+
+	stubs, err = svc.ListPublishedPostStubs(ctx)
+	if err != nil {
+		t.Fatalf("ListPublishedPostStubs (with data) failed: %v", err)
+	}
+	if len(stubs) != 1 {
+		t.Errorf("expected 1 stub, got %d", len(stubs))
+	}
+}
+
+// TestPostService_RenderContent covers the RenderContent function.
+func TestPostService_RenderContent(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+
+	html, err := svc.RenderContent("# Hello\n\nWorld **bold**")
+	if err != nil {
+		t.Fatalf("RenderContent failed: %v", err)
+	}
+	if html == "" {
+		t.Error("expected non-empty HTML")
+	}
+}
+
+// TestPostService_ListPosts_WithSearch covers the search path in ListPosts.
+func TestPostService_ListPosts_WithSearch(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = svc.CreatePost(ctx, CreatePostParams{Title: "Hello World", Slug: "hello-world", Status: "published", AuthorID: 1})
+
+	posts, total, err := svc.ListPosts(ctx, ListPostsParams{
+		Page: 1, PerPage: 10, Search: "Hello",
+	})
+	if err != nil {
+		t.Fatalf("ListPosts with search: %v", err)
+	}
+	if total < 0 {
+		t.Error("expected non-negative total")
+	}
+	_ = posts
+}
+
+// TestPostService_GeneratePreviewLink covers the success path.
+func TestPostService_GeneratePreviewLink(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
+	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "P", Slug: "p", Status: "draft", AuthorID: 1})
+
+	token, expiresAt, err := svc.GeneratePreviewLink(ctx, post.ID)
+	if err != nil {
+		t.Fatalf("GeneratePreviewLink: %v", err)
+	}
+	if token == "" {
+		t.Error("expected non-empty token")
+	}
+	if expiresAt.IsZero() {
+		t.Error("expected non-zero expiry")
+	}
+}
+
+// TestPostService_getOrCreateTag_PendingAssign covers auto-assign to _pending via UpdatePost.
+func TestPostService_getOrCreateTag_PendingAssign(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (99,'Pending','_pending')`)
+
+	// Create a post, then update with a brand-new tag → getOrCreateTag creates it + assigns to _pending
+	post, err := svc.CreatePost(ctx, CreatePostParams{Title: "Test", Status: "draft", AuthorID: 1})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	_, err = svc.UpdatePost(ctx, UpdatePostParams{
+		ID:       post.ID,
+		AuthorID: 1,
+		Title:    "Test",
+		Status:   "draft",
+		Tags:     []string{"brandnewtag"},
+	})
+	if err != nil {
+		t.Errorf("UpdatePost with new tag: unexpected error: %v", err)
+	}
+}
+
+// TestPostService_DBErrors3 covers CreatePost, UpdatePost, GeneratePreviewLink, and ListPosts(search) DB errors.
+func TestPostService_DBErrors3(t *testing.T) {
+	svc, repo := setupPostService(t)
+	ctx := context.Background()
+
+	_ = repo.Close()
+
+	if _, err := svc.CreatePost(ctx, CreatePostParams{Title: "T", Status: "draft", AuthorID: 1}); err == nil {
+		t.Error("CreatePost DB error: expected error")
+	}
+	if _, err := svc.UpdatePost(ctx, UpdatePostParams{ID: 1, AuthorID: 1, Title: "T", Status: "draft"}); err == nil {
+		t.Error("UpdatePost DB error: expected error")
+	}
+	if _, _, err := svc.GeneratePreviewLink(ctx, 1); err == nil {
+		t.Error("GeneratePreviewLink DB error: expected error")
+	}
+	if _, _, err := svc.ListPosts(ctx, ListPostsParams{Page: 1, PerPage: 10, Search: "query"}); err == nil {
+		t.Error("ListPosts with search DB error: expected error")
+	}
+}

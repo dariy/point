@@ -261,3 +261,118 @@ func TestTagHandler_GetPostsByTag(t *testing.T) {
 		t.Error("expected error for missing tag slug")
 	}
 }
+
+func TestTagHandler_GetTagByIDBoost(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	h := NewTagHandler(tagSvc, settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("notanumber")
+	if err := h.GetTagByID(c); err == nil {
+		t.Error("expected error for non-numeric ID")
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	c2.SetParamNames("id")
+	c2.SetParamValues("999")
+	if err := h.GetTagByID(c2); err == nil {
+		t.Error("expected error for non-existent tag ID")
+	}
+}
+
+func TestTagHandler_DeleteTagBoost(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	h := NewTagHandler(tagSvc, settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("notanumber")
+	if err := h.DeleteTag(c); err == nil {
+		t.Error("expected error for non-numeric ID")
+	}
+}
+
+func TestTagHandler_RecalculateCounts(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	h := NewTagHandler(tagSvc, settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	if err := h.RecalculateCounts(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("RecalculateCounts failed: %v", err)
+	}
+}
+
+func TestTagHandler_GetTagByIDWithLocation(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	h := NewTagHandler(tagSvc, settingsSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_locations (tag_id, latitude, longitude) VALUES (1,45.5,73.5)`)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+
+	if err := h.GetTagByID(c); err != nil {
+		t.Fatalf("GetTagByID with location failed: %v", err)
+	}
+}
+
+func TestRecalculateCounts_Success(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	h := NewTagHandler(tagSvc, settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	if err := h.RecalculateCounts(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("RecalculateCounts failed: %v", err)
+	}
+}
+
+func TestGetMinTagPostsSetting(t *testing.T) {
+	settings := map[string]string{"min_tag_posts_to_show": "3"}
+	if v := getMinTagPostsSetting(settings); v != 3 {
+		t.Errorf("expected 3, got %d", v)
+	}
+	if v := getMinTagPostsSetting(map[string]string{}); v != 0 {
+		t.Errorf("expected 0, got %d", v)
+	}
+	if v := getMinTagPostsSetting(map[string]string{"min_tag_posts_to_show": "-5"}); v != 0 {
+		t.Errorf("expected 0 for negative, got %d", v)
+	}
+}

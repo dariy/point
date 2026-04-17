@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"os"
 	"testing"
 )
 
@@ -132,5 +133,101 @@ func TestSettingsService_Defaults(t *testing.T) {
 	settings, _ := service.GetAllSettings(ctx)
 	if settings["site_name"] != "My Own Blog" {
 		t.Error("site_name missing from GetAllSettings")
+	}
+}
+
+// TestServiceDBErrors covers DB error paths by closing the DB before operations.
+func TestServiceDBErrors(t *testing.T) {
+	svc, repo := setupTagService(t)
+	ctx := context.Background()
+
+	// Insert minimal data.
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug,post_count) VALUES (1,'T1','t1',1)`)
+
+	// Close the DB — all service calls will fail.
+	_ = repo.Close()
+
+	// Tag service errors.
+	if _, err := svc.ListTags(ctx, false, false); err == nil {
+		t.Error("ListTags: expected error")
+	}
+	if _, err := svc.GetTagByID(ctx, 1); err == nil {
+		t.Error("GetTagByID: expected error")
+	}
+	if _, err := svc.GetTagCloud(ctx, 10, false, 0); err == nil {
+		t.Error("GetTagCloud: expected error")
+	}
+	if _, err := svc.EffectivelyHiddenIDs(ctx); err == nil {
+		t.Error("EffectivelyHiddenIDs: expected error")
+	}
+	if _, err := svc.EffectivelyHiddenPostsTagIDs(ctx); err == nil {
+		t.Error("EffectivelyHiddenPostsTagIDs: expected error")
+	}
+	if _, err := svc.InBreadcrumbsIDs(ctx); err == nil {
+		t.Error("InBreadcrumbsIDs: expected error")
+	}
+	if _, err := svc.WithRelatedIDs(ctx); err == nil {
+		t.Error("WithRelatedIDs: expected error")
+	}
+	if _, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0); err == nil {
+		t.Error("GetHierarchicalNavTags: expected error")
+	}
+}
+
+// TestServiceDBErrors2 covers more DB error paths by closing the DB before service calls.
+func TestServiceDBErrors2(t *testing.T) {
+	mediaSvc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tagSvc := NewTagService(mediaSvc.repo)
+	authSvc := NewAuthService(mediaSvc.repo)
+	settingsSvc := NewSettingsService(mediaSvc.repo)
+	postSvc := NewPostService(mediaSvc.repo)
+	ctx := context.Background()
+
+	// Insert some data before closing.
+	_, _ = mediaSvc.repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
+	_, _ = mediaSvc.repo.DB().Exec(`INSERT INTO tags (id,name,slug,post_count) VALUES (1,'T','t',0)`)
+	hash, _ := HashPassword("pass123")
+	_, _ = mediaSvc.repo.DB().Exec(`UPDATE users SET password_hash=? WHERE id=1`, hash)
+
+	// Close DB — all calls from here return errors.
+	_ = mediaSvc.repo.Close()
+
+	// MediaService errors.
+	if _, err := mediaSvc.GetStorageUsage(ctx); err == nil {
+		t.Error("GetStorageUsage: expected error")
+	}
+	if _, _, err := mediaSvc.ListMedia(ctx, ListMediaParams{Page: 1, PerPage: 10}); err == nil {
+		t.Error("ListMedia: expected error")
+	}
+	if _, _, err := mediaSvc.ListOrphanedMedia(ctx, 1, 10); err == nil {
+		t.Error("ListOrphanedMedia: expected error")
+	}
+	if _, _, err := mediaSvc.CleanupOrphaned(ctx); err == nil {
+		t.Error("CleanupOrphaned: expected error")
+	}
+	if _, err := mediaSvc.BulkDeleteMedia(ctx, []int64{1}); err == nil {
+		t.Error("BulkDeleteMedia: expected error")
+	}
+
+	// TagService errors.
+	if err := tagSvc.SetTagChildren(ctx, 1, []int64{1}); err == nil {
+		t.Error("SetTagChildren: expected error")
+	}
+
+	// AuthService errors.
+	if err := authSvc.ChangePassword(ctx, 1, "pass123", "new"); err == nil {
+		t.Error("ChangePassword (DB closed): expected error")
+	}
+
+	// SettingsService errors.
+	if _, err := settingsSvc.GetAllSettings(ctx); err == nil {
+		t.Error("GetAllSettings: expected error")
+	}
+
+	// PostService errors.
+	if _, _, err := postSvc.ListPosts(ctx, ListPostsParams{Page: 1, PerPage: 10}); err == nil {
+		t.Error("ListPosts: expected error")
 	}
 }
