@@ -324,3 +324,28 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	}
 }
 
+func TestGenerateToken_Success(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	authSvc := services.NewAuthService(repo)
+	h := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720})
+	e := echo.New()
+
+	tok := GenerateToken()
+	if len(tok) == 0 {
+		t.Error("expected non-empty token")
+	}
+
+	hash, _ := services.HashPassword("testpass")
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'admin','a@a.com',?,'Admin')`, hash)
+
+	body, _ := json.Marshal(LoginRequest{Username: "admin", Password: "testpass"})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	if err := h.Login(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("Login failed: %v", err)
+	}
+}
+

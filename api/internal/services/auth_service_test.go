@@ -2,10 +2,12 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/repository"
 )
 
 
@@ -173,5 +175,56 @@ func TestAuthService_ChangePassword(t *testing.T) {
 	err = service.ChangePassword(ctx, user.ID, "wrongpassword", "anotherpassword")
 	if err == nil || err.Error() != "current password incorrect" {
 		t.Errorf("expected current password incorrect error, got %v", err)
+	}
+}
+
+func setupAuthService(t *testing.T) (*AuthService, *repository.Repository) {
+	repo := setupTestDB(t)
+	return NewAuthService(repo), repo
+}
+
+// TestAuthService_ChangePassword_Error covers the ChangePassword error paths.
+func TestAuthService_ChangePassword_Error(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	ctx := context.Background()
+
+	// Insert user with known password.
+	hash, _ := HashPassword("oldpass")
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com',?,'U')`, hash)
+
+	// Wrong old password → should fail verification.
+	err := svc.ChangePassword(ctx, 1, "wrongpass", "newpass")
+	if err == nil {
+		t.Error("ChangePassword with wrong old password: expected error")
+	}
+
+	_ = repo.Close()
+}
+
+// TestAuthService_ValidateSession_DBError covers the ValidateSession DB error path.
+func TestAuthService_ValidateSession_DBError(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	ctx := context.Background()
+
+	_ = repo.Close()
+
+	if _, err := svc.ValidateSession(ctx, "sometoken"); err == nil {
+		t.Error("ValidateSession DB closed: expected error")
+	}
+}
+
+// TestAuthService_ChangePassword_LongPassword covers HashPassword bcrypt error.
+func TestAuthService_ChangePassword_LongPassword(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	hash, _ := HashPassword("correct")
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com',?,'U')`, hash)
+
+	// Password > 72 bytes triggers bcrypt.ErrPasswordTooLong
+	err := svc.ChangePassword(ctx, 1, "correct", strings.Repeat("x", 73))
+	if err == nil {
+		t.Error("ChangePassword long password: expected bcrypt error")
 	}
 }
