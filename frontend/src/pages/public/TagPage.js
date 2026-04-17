@@ -20,7 +20,7 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { getTagPage } from '../../api/pages.js';
 import { getPostBySlug } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 
 export default class TagPage extends Component {
@@ -281,6 +281,7 @@ export default class TagPage extends Component {
   }  beforeUnmount() {
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    removeCanonical();
   }
 
   mount() {
@@ -304,9 +305,15 @@ export default class TagPage extends Component {
       if (postSlug) {
         const post = await getPostBySlug(postSlug);
         document.title = `${post.title} — ${data.tag?.name || slug}`;
+        setCanonical(`${window.location.origin}/posts/${post.slug}`);
         this.setState({ loading: false, data, post, error: null });
       } else {
         document.title = `${data.tag?.name || slug} — Posts`;
+        const pageNum = parseInt(this.props.query?.page || '1', 10);
+        const canonicalUrl = pageNum > 1
+          ? `${window.location.origin}/tag/${slug}?page=${pageNum}`
+          : `${window.location.origin}/tag/${slug}`;
+        setCanonical(canonicalUrl);
         this.setState({ loading: false, data, post: null, error: null });
       }
     } catch (err) {

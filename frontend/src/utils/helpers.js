@@ -110,6 +110,28 @@ export function navigate(path, { replace = false } = {}) {
 }
 
 /**
+ * Set or update the <link rel="canonical"> tag in <head>.
+ *
+ * @param {string} url  Absolute canonical URL
+ */
+export function setCanonical(url) {
+  let el = document.querySelector('link[rel="canonical"]');
+  if (!el) {
+    el = document.createElement('link');
+    el.setAttribute('rel', 'canonical');
+    document.head.appendChild(el);
+  }
+  el.setAttribute('href', url);
+}
+
+/**
+ * Remove the <link rel="canonical"> tag if present.
+ */
+export function removeCanonical() {
+  document.querySelector('link[rel="canonical"]')?.remove();
+}
+
+/**
  * Normalize raw string settings from the backend into proper types.
  *
  * @param {Record<string, string>} raw
