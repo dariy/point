@@ -11,7 +11,7 @@ import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { escapeHtml, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
 
 export default class PostPage extends Component {
@@ -23,6 +23,7 @@ export default class PostPage extends Component {
   beforeUnmount() {
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
+    removeCanonical();
   }
 
   render() {
@@ -124,6 +125,7 @@ export default class PostPage extends Component {
       const post = await getPostBySlug(slug);
 
       document.title = post.title;
+      setCanonical(`${window.location.origin}/posts/${post.slug}`);
       const metaDesc = document.querySelector('meta[name="description"]');
       const descText = post.meta_description || post.excerpt || '';
       if (metaDesc) metaDesc.setAttribute('content', descText);
