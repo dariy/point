@@ -819,13 +819,46 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 	return analysis, nil
 }
 
-const jsonFormatSuffix = `Return a JSON object with exactly these keys: "title" (string), "tags" (array of strings), "excerpt" (string). Return only valid JSON, no markdown or extra text.`
+// sanitizePromptField strips control characters, collapses whitespace, and
+// limits length so users cannot inject extra lines into the assembled prompt.
+func sanitizePromptField(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' {
+			return ' '
+		}
+		return r
+	}, s)
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > 200 {
+		s = s[:200]
+	}
+	return s
+}
 
 func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, client *genai.Client, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
 	prompt := s.genaiConfig.Prompt
 	if s.settingsService != nil {
-		if customPrompt, _ := s.settingsService.GetSetting(ctx, "gemini_prompt", ""); customPrompt != "" {
-			prompt = customPrompt + "\n\n" + jsonFormatSuffix
+		titlePart, _ := s.settingsService.GetSetting(ctx, "gemini_prompt_title", "")
+		tagsPart, _ := s.settingsService.GetSetting(ctx, "gemini_prompt_tags", "")
+		excerptPart, _ := s.settingsService.GetSetting(ctx, "gemini_prompt_excerpt", "")
+		titlePart = sanitizePromptField(titlePart)
+		tagsPart = sanitizePromptField(tagsPart)
+		excerptPart = sanitizePromptField(excerptPart)
+		if titlePart != "" || tagsPart != "" || excerptPart != "" {
+			if titlePart == "" {
+				titlePart = "a concise, descriptive title"
+			}
+			if tagsPart == "" {
+				tagsPart = "relevant keyword tags"
+			}
+			if excerptPart == "" {
+				excerptPart = "a 1-2 sentence description"
+			}
+			prompt = "Analyze this image and return a JSON object.\n" +
+				`"title" (string): ` + titlePart + "\n" +
+				`"tags" (array of strings): ` + tagsPart + "\n" +
+				`"excerpt" (string): ` + excerptPart + "\n" +
+				"Return only valid JSON, no markdown or extra text."
 		}
 	}
 	parts := []*genai.Part{
