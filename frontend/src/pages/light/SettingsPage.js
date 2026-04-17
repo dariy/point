@@ -12,11 +12,6 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
 
-const DEFAULT_GEMINI_PROMPT = `Analyze this image and return a JSON object with exactly these keys:
-"title": a concise, descriptive title for the image (string),
-"tags": an array of relevant keyword tags (array of strings),
-"excerpt": a 1-2 sentence description of the image (string).`;
-
 const SETTING_GROUPS = [
   {
     title: 'General',
@@ -32,7 +27,11 @@ const SETTING_GROUPS = [
   },
   {
     title: 'Advanced',
-    keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality', 'GEMINI_API_KEY', 'gemini_prompt']
+    keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality']
+  },
+  {
+    title: 'AI (Gemini)',
+    keys: ['GEMINI_API_KEY', 'gemini_prompt_title', 'gemini_prompt_tags', 'gemini_prompt_excerpt']
   }
 ];
 
@@ -91,6 +90,7 @@ export default class SettingsPage extends Component {
     const toggles = [];
 
     for (const key of group.keys) {
+      if (key === 'gemini_prompt_tags' || key === 'gemini_prompt_excerpt') continue;
       const value = settings[key] ?? '';
       const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
@@ -146,17 +146,37 @@ export default class SettingsPage extends Component {
         const isConfigured = settings['GEMINI_API_KEY_CONFIGURED'] === 'true' || settings['GEMINI_API_KEY_CONFIGURED'] === true;
         const placeholder = isConfigured ? '******** (Configured)' : 'Enter Gemini API Key';
         input = `<input type="password" name="${key}" id="${key}" class="form-input" placeholder="${placeholder}" value="">`;
-      } else if (key === 'gemini_prompt') {
-        const displayValue = value || DEFAULT_GEMINI_PROMPT;
-        input = `<textarea name="${key}" id="${key}" class="form-input" rows="5">${escapeHtml(displayValue)}</textarea>`;
+      } else if (key === 'gemini_prompt_title') {
+        const tv = escapeHtml(settings['gemini_prompt_title'] ?? '');
+        const kv = escapeHtml(settings['gemini_prompt_tags'] ?? '');
+        const ev = escapeHtml(settings['gemini_prompt_excerpt'] ?? '');
+        input = `<div class="prompt-template">
+          <div class="prompt-line prompt-line-fixed">Analyze this image and return a JSON object.</div>
+          <div class="prompt-line">
+            <span class="prompt-key">"title" <span class="prompt-type">(string)</span>:</span>
+            <input type="text" name="gemini_prompt_title" class="form-input prompt-part" value="${tv}" placeholder="a concise, descriptive title" maxlength="200">
+          </div>
+          <div class="prompt-line">
+            <span class="prompt-key">"tags" <span class="prompt-type">(array of strings)</span>:</span>
+            <input type="text" name="gemini_prompt_tags" class="form-input prompt-part" value="${kv}" placeholder="relevant keyword tags" maxlength="200">
+          </div>
+          <div class="prompt-line">
+            <span class="prompt-key">"excerpt" <span class="prompt-type">(string)</span>:</span>
+            <input type="text" name="gemini_prompt_excerpt" class="form-input prompt-part" value="${ev}" placeholder="a 1-2 sentence description" maxlength="200">
+          </div>
+          <div class="prompt-line prompt-line-fixed">Return only valid JSON, no markdown or extra text.</div>
+        </div>`;
       } else {
         input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
 
       if (!isToggle) {
+        const isPromptComposite = key === 'gemini_prompt_title';
+        const fieldClass = isPromptComposite ? 'settings-field settings-field-top' : 'settings-field';
+        const displayLabel = isPromptComposite ? 'Analysis Prompt' : label;
         inputs.push(`
-          <div class="settings-field">
-            <label class="settings-field-label" for="${key}">${escapeHtml(label)}</label>
+          <div class="${fieldClass}">
+            <label class="settings-field-label"${isPromptComposite ? '' : ` for="${key}"`}>${escapeHtml(displayLabel)}</label>
             ${input}
           </div>`);
       }
@@ -172,8 +192,9 @@ export default class SettingsPage extends Component {
           </label>`).join('')}
       </div>` : '';
 
+    const wideGroup = group.keys.includes('gemini_prompt_title');
     return `
-      <div class="card">
+      <div class="card${wideGroup ? ' card-full-width' : ''}">
         <div class="card-header"><h2>${escapeHtml(group.title)}</h2></div>
         <div class="card-body">
           ${inputsHtml}${togglesHtml}

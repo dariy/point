@@ -176,3 +176,52 @@
     border: 1px solid rgba(59, 130, 246, 0.3);
     color: #3b82f6;
 }
+
+/* Full-width card spanning both grid columns */
+.settings-grid .card-full-width {
+    grid-column: 1 / -1;
+}
+
+/* Gemini prompt template */
+.prompt-template {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+    background: var(--surface-hover, var(--surface-card));
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-md);
+}
+
+.prompt-line {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+.prompt-line-fixed {
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: var(--spacing-xs) 0;
+}
+
+.prompt-key {
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.prompt-type {
+    color: var(--text-tertiary, var(--text-secondary));
+    font-weight: 400;
+}
+
+.prompt-part {
+    flex: 1;
+    min-width: 10rem;
+    font-family: inherit;
+    font-size: inherit;
+}
