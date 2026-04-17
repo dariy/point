@@ -27,7 +27,7 @@ const SETTING_GROUPS = [
   },
   {
     title: 'Advanced',
-    keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality', 'GEMINI_API_KEY']
+    keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality', 'GEMINI_API_KEY', 'gemini_prompt']
   }
 ];
 
@@ -141,6 +141,9 @@ export default class SettingsPage extends Component {
         const isConfigured = settings['GEMINI_API_KEY_CONFIGURED'] === 'true' || settings['GEMINI_API_KEY_CONFIGURED'] === true;
         const placeholder = isConfigured ? '******** (Configured)' : 'Enter Gemini API Key';
         input = `<input type="password" name="${key}" id="${key}" class="form-input" placeholder="${placeholder}" value="">`;
+      } else if (key === 'gemini_prompt') {
+        const placeholder = `Analyze this image and return a JSON object.\n"title": a concise, descriptive title (string),\n"tags": relevant keyword tags (array of strings),\n"excerpt": a 1-2 sentence description (string).\nLeave blank to use built-in prompt.`;
+        input = `<textarea name="${key}" id="${key}" class="form-input" rows="5" placeholder="${escapeHtml(placeholder)}">${escapeHtml(String(value))}</textarea>`;
       } else {
         input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }

@@ -819,9 +819,17 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 	return analysis, nil
 }
 
+const jsonFormatSuffix = `Return a JSON object with exactly these keys: "title" (string), "tags" (array of strings), "excerpt" (string). Return only valid JSON, no markdown or extra text.`
+
 func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, client *genai.Client, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
+	prompt := s.genaiConfig.Prompt
+	if s.settingsService != nil {
+		if customPrompt, _ := s.settingsService.GetSetting(ctx, "gemini_prompt", ""); customPrompt != "" {
+			prompt = customPrompt + "\n\n" + jsonFormatSuffix
+		}
+	}
 	parts := []*genai.Part{
-		{Text: s.genaiConfig.Prompt},
+		{Text: prompt},
 		{InlineData: &genai.Blob{
 			Data:     content,
 			MIMEType: mimeType,
