@@ -204,7 +204,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		}
 	}
 
-	if strings.EqualFold(post.Status, "published") {
+	if !isAdmin && strings.EqualFold(post.Status, "published") {
 		_ = h.postService.IncrementViewCount(ctx, post.ID)
 	}
 
