@@ -12,6 +12,11 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
 
+const DEFAULT_GEMINI_PROMPT = `Analyze this image and return a JSON object with exactly these keys:
+"title": a concise, descriptive title for the image (string),
+"tags": an array of relevant keyword tags (array of strings),
+"excerpt": a 1-2 sentence description of the image (string).`;
+
 const SETTING_GROUPS = [
   {
     title: 'General',
@@ -142,8 +147,8 @@ export default class SettingsPage extends Component {
         const placeholder = isConfigured ? '******** (Configured)' : 'Enter Gemini API Key';
         input = `<input type="password" name="${key}" id="${key}" class="form-input" placeholder="${placeholder}" value="">`;
       } else if (key === 'gemini_prompt') {
-        const placeholder = `Analyze this image and return a JSON object.\n"title": a concise, descriptive title (string),\n"tags": relevant keyword tags (array of strings),\n"excerpt": a 1-2 sentence description (string).\nLeave blank to use built-in prompt.`;
-        input = `<textarea name="${key}" id="${key}" class="form-input" rows="5" placeholder="${escapeHtml(placeholder)}">${escapeHtml(String(value))}</textarea>`;
+        const displayValue = value || DEFAULT_GEMINI_PROMPT;
+        input = `<textarea name="${key}" id="${key}" class="form-input" rows="5">${escapeHtml(displayValue)}</textarea>`;
       } else {
         input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
