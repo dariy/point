@@ -202,3 +202,36 @@ func TestMediaToResponse(t *testing.T) {
 		t.Errorf("expected nil thumbnail_path, got %v", resp["thumbnail_path"])
 	}
 }
+
+func TestTagToPostTagInfo(t *testing.T) {
+	tag := models.Tag{ID: 5, Name: "Nature", Slug: "nature"}
+	info := tagToPostTagInfo(tag)
+	if info.ID != 5 || info.Name != "Nature" || info.Slug != "nature" {
+		t.Errorf("tagToPostTagInfo returned unexpected: %+v", info)
+	}
+}
+
+func TestNullInt64Coverage(t *testing.T) {
+	v := nullInt64(sql.NullInt64{Int64: 42, Valid: true})
+	if v == nil || *v != 42 {
+		t.Errorf("nullInt64(valid 42): unexpected %v", v)
+	}
+	v2 := nullInt64(sql.NullInt64{Valid: false})
+	if v2 != nil {
+		t.Error("nullInt64(invalid) should return nil")
+	}
+}
+
+func TestGetSettingOr(t *testing.T) {
+	settings := map[string]string{"key1": "val1"}
+
+	got := getSettingOr(settings, "key1", "default")
+	if got != "val1" {
+		t.Errorf("expected 'val1', got %s", got)
+	}
+
+	got = getSettingOr(settings, "missing", "fallback")
+	if got != "fallback" {
+		t.Errorf("expected 'fallback', got %s", got)
+	}
+}

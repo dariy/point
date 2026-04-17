@@ -10,6 +10,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
+	"point-api/internal/models"
 	"point-api/internal/services"
 )
 
@@ -207,5 +208,28 @@ func TestSystemHandler_ClearCache(t *testing.T) {
 
 	if _, ok := resp["updated_media"]; !ok {
 		t.Errorf("expected 'updated_media' field in response")
+	}
+}
+
+func TestSystemHandler_GetStats_Success(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	tmpDir := t.TempDir()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: tmpDir}, settingsSvc, tagSvc)
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.2.3")
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	if err := h.GetStats(c); err != nil {
+		t.Fatalf("GetStats failed: %v", err)
 	}
 }
