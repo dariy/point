@@ -483,8 +483,11 @@ func main() {
 		},
 		{
 			"add_scheduled_at_to_posts",
-			`ALTER TABLE posts ADD COLUMN scheduled_at DATETIME;
-CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at);`,
+			`ALTER TABLE posts ADD COLUMN scheduled_at DATETIME`,
+		},
+		{
+			"add_scheduled_at_to_posts_index",
+			`CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at)`,
 		},
 	}
 	for _, m := range migrations {
