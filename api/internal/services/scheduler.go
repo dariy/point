@@ -29,6 +29,9 @@ func (s *SchedulerService) Start(ctx context.Context) {
 	// Periodic task: View count flushing (every 5 minutes)
 	go s.runPeriodic(ctx, "view count flushing", 5*time.Minute, s.postService.FlushViewCounts)
 
+	// Periodic task: Publish scheduled posts (every 1 minute)
+	go s.runPeriodic(ctx, "scheduled post publishing", 1*time.Minute, s.postService.PublishDueScheduledPosts)
+
 	// Daily task: Backups (at 3 AM)
 	go s.runDaily(ctx, "daily backup", 3, func(ctx context.Context) error {
 		_, _, err := s.systemService.CreateBackup(ctx)
