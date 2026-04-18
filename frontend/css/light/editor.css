@@ -160,6 +160,16 @@ body.drag-active::after {
 }
 
 /* Slug row: [/post/] [slug input] */
+.schedule-row {
+    display: flex;
+    align-items: center;
+}
+
+.schedule-at-input {
+    width: auto;
+    flex: 0 0 auto;
+}
+
 .slug-row {
     display: flex;
     align-items: center;
