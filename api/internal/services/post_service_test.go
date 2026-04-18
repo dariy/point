@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"point-api/internal/models"
 )
 
@@ -602,4 +604,74 @@ func TestPostService_DBErrors3(t *testing.T) {
 	if _, _, err := svc.ListPosts(ctx, ListPostsParams{Page: 1, PerPage: 10, Search: "query"}); err == nil {
 		t.Error("ListPosts with search DB error: expected error")
 	}
+}
+
+func TestPublishDueScheduledPosts(t *testing.T) {
+	svc, repo := setupPostService(t)
+
+	ctx := context.Background()
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "scheduser", Email: "sched@test.com", PasswordHash: "h", DisplayName: "Sched",
+	})
+	require.NoError(t, err)
+
+	past := time.Now().Add(-1 * time.Minute)
+	post, err := svc.CreatePost(ctx, CreatePostParams{
+		Title:       "Scheduled Post",
+		Content:     "hello",
+		Formatter:   "markdown",
+		Status:      "scheduled",
+		AuthorID:    user.ID,
+		ScheduledAt: &past,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "scheduled", post.Status)
+
+	err = svc.PublishDueScheduledPosts(ctx)
+	require.NoError(t, err)
+
+	updated, err := repo.GetPost(ctx, post.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "published", updated.Status)
+	assert.False(t, updated.ScheduledAt.Valid, "scheduled_at should be cleared after publishing")
+	assert.True(t, updated.PublishedAt.Valid)
+}
+
+func TestPublishDueScheduledPosts_FutureNotPublished(t *testing.T) {
+	svc, repo := setupPostService(t)
+
+	ctx := context.Background()
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "futureuser", Email: "future@test.com", PasswordHash: "h", DisplayName: "Future",
+	})
+	require.NoError(t, err)
+
+	future := time.Now().Add(10 * time.Minute)
+	post, err := svc.CreatePost(ctx, CreatePostParams{
+		Title:       "Future Post",
+		Content:     "hello",
+		Formatter:   "markdown",
+		Status:      "scheduled",
+		AuthorID:    user.ID,
+		ScheduledAt: &future,
+	})
+	require.NoError(t, err)
+
+	err = svc.PublishDueScheduledPosts(ctx)
+	require.NoError(t, err)
+
+	// Note: cannot call repo.GetPost directly here since only svc is exposed
+	// Verify indirectly via ListPosts
+	posts, _, err := svc.ListPosts(ctx, ListPostsParams{
+		Page: 1, PerPage: 10, IncludeDrafts: true,
+	})
+	require.NoError(t, err)
+	found := false
+	for _, p := range posts {
+		if p.ID == post.ID {
+			found = true
+			assert.Equal(t, "scheduled", p.Status, "future post should remain scheduled")
+		}
+	}
+	assert.True(t, found, "post should still exist")
 }
