@@ -108,6 +108,7 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"is_featured":         p.IsFeatured,
 		"view_count":          p.ViewCount,
 		"published_at":        nullTime(p.PublishedAt),
+		"scheduled_at":        nullTime(p.ScheduledAt),
 		"created_at":          p.CreatedAt,
 		"updated_at":          p.UpdatedAt,
 		"media_url":           extractMediaURL(p.ThumbnailPath, p.Content),
