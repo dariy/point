@@ -627,7 +627,7 @@ func TestPublishDueScheduledPosts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "scheduled", post.Status)
 
-	err = svc.PublishDueScheduledPosts(ctx)
+	_, err = svc.PublishDueScheduledPosts(ctx)
 	require.NoError(t, err)
 
 	updated, err := repo.GetPost(ctx, post.ID)
@@ -635,6 +635,38 @@ func TestPublishDueScheduledPosts(t *testing.T) {
 	assert.Equal(t, "published", updated.Status)
 	assert.False(t, updated.ScheduledAt.Valid, "scheduled_at should be cleared after publishing")
 	assert.True(t, updated.PublishedAt.Valid)
+}
+
+func TestPublishDueScheduledPosts_MakesMediaPublic(t *testing.T) {
+	// This test verifies that after PublishDueScheduledPosts, the
+	// returned posts contain the content needed to update media visibility.
+	// Full media visibility integration is tested via the scheduler.
+	svc, repo := setupPostService(t)
+	ctx := context.Background()
+
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "mediauser", Email: "media@test.com", PasswordHash: "h", DisplayName: "Media",
+	})
+	require.NoError(t, err)
+
+	past := time.Now().UTC().Add(-1 * time.Minute)
+	post, err := svc.CreatePost(ctx, CreatePostParams{
+		Title:       "Media Post",
+		Content:     "![img](/media/test.jpg)",
+		Formatter:   "markdown",
+		Status:      "scheduled",
+		AuthorID:    user.ID,
+		ScheduledAt: &past,
+	})
+	require.NoError(t, err)
+
+	published, err := svc.PublishDueScheduledPosts(ctx)
+	require.NoError(t, err)
+	require.Len(t, published, 1)
+	assert.Equal(t, post.ID, published[0].ID)
+	assert.Equal(t, "published", published[0].Status)
+	assert.Contains(t, published[0].Content, "/media/test.jpg",
+		"returned post must have content so caller can extract media paths")
 }
 
 func TestPublishDueScheduledPosts_FutureNotPublished(t *testing.T) {
@@ -657,7 +689,7 @@ func TestPublishDueScheduledPosts_FutureNotPublished(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = svc.PublishDueScheduledPosts(ctx)
+	_, err = svc.PublishDueScheduledPosts(ctx)
 	require.NoError(t, err)
 
 	updated, err := repo.GetPost(ctx, post.ID)
