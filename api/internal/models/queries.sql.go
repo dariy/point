@@ -1573,7 +1573,11 @@ const updatePost = `-- name: UpdatePost :one
 UPDATE posts
 SET title = ?1, slug = ?2, content = ?3, excerpt = ?4, formatter = ?5, status = ?6, is_featured = ?7, thumbnail_path = ?8, meta_description = ?9,
     scheduled_at = ?10,
-    published_at = (CASE WHEN ?6 = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END),
+    published_at = (CASE
+        WHEN ?6 = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
+        WHEN ?6 = 'scheduled'  THEN NULL
+        ELSE published_at
+    END),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?11 AND author_id = ?12
 RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
