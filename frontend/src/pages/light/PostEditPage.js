@@ -26,6 +26,14 @@ const AUTOSAVE_MS = 30_000;
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
+/** Convert a UTC ISO string to a datetime-local input value (local time). */
+function toDatetimeLocal(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /**
  * Parse content string into an ordered list of image and text nodes.
  * Consecutive non-image lines are grouped into a single text node.
@@ -181,6 +189,14 @@ export default class PostEditPage extends Component {
                         title="${featured ? 'Unmark as featured' : 'Mark as featured'}">
                   ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
                 </button>
+                <div class="schedule-picker-group">
+                  <input type="datetime-local" id="schedule-input"
+                         value="${toDatetimeLocal(p.scheduled_at || '')}">
+                  <button type="button" id="clear-schedule-btn" class="btn btn-sm btn-ghost"
+                          style="display:${p.scheduled_at ? 'inline-flex' : 'none'}">
+                    Clear schedule
+                  </button>
+                </div>
                 <select id="status-select" class="status-select badge-${escapeHtml(status)}">
                   ${statusOpts}
                 </select>
@@ -289,6 +305,25 @@ export default class PostEditPage extends Component {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
       this._autoSaveField({ status: newStatus });
+    });
+
+    // Schedule picker
+    const scheduleInput = this.$('#schedule-input');
+    const clearScheduleBtn = this.$('#clear-schedule-btn');
+
+    scheduleInput?.addEventListener('change', () => {
+      const val = scheduleInput.value; // "YYYY-MM-DDTHH:MM" or ""
+      if (val) {
+        const iso = new Date(val).toISOString();
+        if (clearScheduleBtn) clearScheduleBtn.style.display = 'inline-flex';
+        this._autoSaveField({ scheduled_at: iso });
+      }
+    });
+
+    clearScheduleBtn?.addEventListener('click', () => {
+      if (scheduleInput) scheduleInput.value = '';
+      clearScheduleBtn.style.display = 'none';
+      this._autoSaveField({ scheduled_at: '' });
     });
 
     // Auto-save on content change
@@ -552,6 +587,9 @@ export default class PostEditPage extends Component {
       thumbnail_path:   (this.$('#thumbnail-input')?.value || '').trim() || null,
       meta_description: (this.$('#meta-input')?.value || '').trim() || null,
       tags:             this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
+      scheduled_at:     this.$('#schedule-input')?.value
+        ? new Date(this.$('#schedule-input').value).toISOString()
+        : '',
     };
   }
 

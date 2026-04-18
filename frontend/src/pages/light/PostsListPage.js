@@ -21,6 +21,7 @@ const STATUS_LABELS = {
   draft: 'Draft',
   hidden: 'Hidden',
   page: 'Page',
+  scheduled: 'Scheduled',
 };
 
 export default class PostsListPage extends Component {
@@ -40,7 +41,7 @@ export default class PostsListPage extends Component {
   render() {
     const { loading, posts, error, statusFilter, search } = this.state;
 
-    const statusOptions = ['', 'draft', 'published', 'hidden', 'page'].map((s) => {
+    const statusOptions = ['', 'draft', 'published', 'scheduled', 'hidden', 'page'].map((s) => {
       const label = s ? STATUS_LABELS[s] : 'All statuses';
       const sel = statusFilter === s ? ' selected' : '';
       return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(label)}</option>`;
@@ -77,14 +78,24 @@ export default class PostsListPage extends Component {
                   </a>
                 </td>
                 <td class="status-col">
-                  <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
-                          name="status" data-id="${escapeHtml(String(p.id))}">
-                    ${['draft', 'published', 'hidden', 'page'].map(s => `
-                      <option value="${s}"${p.status === s ? ' selected' : ''}>
-                        ${escapeHtml(STATUS_LABELS[s] || s)}
-                      </option>
-                    `).join('')}
-                  </select>
+                  ${p.status === 'scheduled'
+                    ? `<span class="badge badge-scheduled">
+                         Scheduled&nbsp;&bull;&nbsp;${p.scheduled_at
+                           ? new Date(p.scheduled_at).toLocaleString([], {
+                               month: 'short', day: 'numeric',
+                               hour: '2-digit', minute: '2-digit',
+                             })
+                           : ''}
+                       </span>`
+                    : `<select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
+                               name="status" data-id="${escapeHtml(String(p.id))}">
+                         ${['draft', 'published', 'hidden', 'page'].map(s => `
+                           <option value="${s}"${p.status === s ? ' selected' : ''}>
+                             ${escapeHtml(STATUS_LABELS[s] || s)}
+                           </option>
+                         `).join('')}
+                       </select>`
+                  }
                 </td>
                 <td class="title-col">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
