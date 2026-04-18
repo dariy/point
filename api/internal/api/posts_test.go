@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
@@ -782,4 +783,5 @@ func TestCreatePost_ScheduledInPast_PublishesImmediately(t *testing.T) {
 	if resp["status"] != "published" {
 		t.Errorf("expected status 'published', got %v", resp["status"])
 	}
+	assert.Nil(t, resp["scheduled_at"], "past scheduled_at should not be stored")
 }
