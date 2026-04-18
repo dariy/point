@@ -13,6 +13,7 @@ type Querier interface {
 	AddPostViewCount(ctx context.Context, arg AddPostViewCountParams) error
 	AddTagRelationship(ctx context.Context, arg AddTagRelationshipParams) error
 	AddTagToPost(ctx context.Context, arg AddTagToPostParams) error
+	BulkPublishScheduledPosts(ctx context.Context) ([]Post, error)
 	ClearPostTags(ctx context.Context, postID int64) error
 	ClearTagRelationships(ctx context.Context, arg ClearTagRelationshipsParams) error
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)

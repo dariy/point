@@ -54,6 +54,7 @@ type Post struct {
 	IsFeatured       bool           `json:"is_featured"`
 	ViewCount        int64          `json:"view_count"`
 	PublishedAt      sql.NullTime   `json:"published_at"`
+	ScheduledAt      sql.NullTime   `json:"scheduled_at"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	AuthorID         int64          `json:"author_id"`
