@@ -409,16 +409,16 @@ func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publi
 	return s.repo.GetPostNavigation(ctx, postID, publicOnly)
 }
 
-func (s *PostService) PublishDueScheduledPosts(ctx context.Context) error {
+func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Post, error) {
 	published, err := s.repo.BulkPublishScheduledPosts(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
 		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
 	}
-	return nil
+	return published, nil
 }
 
 func toNullTime(t *time.Time) sql.NullTime {

@@ -10,13 +10,15 @@ type SchedulerService struct {
 	authService   *AuthService
 	postService   *PostService
 	systemService *SystemService
+	mediaService  *MediaService
 }
 
-func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService) *SchedulerService {
+func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService) *SchedulerService {
 	return &SchedulerService{
 		authService:   authService,
 		postService:   postService,
 		systemService: systemService,
+		mediaService:  mediaService,
 	}
 }
 
@@ -30,7 +32,17 @@ func (s *SchedulerService) Start(ctx context.Context) {
 	go s.runPeriodic(ctx, "view count flushing", 5*time.Minute, s.postService.FlushViewCounts)
 
 	// Periodic task: Publish scheduled posts (every 1 minute)
-	go s.runPeriodic(ctx, "scheduled post publishing", 1*time.Minute, s.postService.PublishDueScheduledPosts)
+	go s.runPeriodic(ctx, "scheduled post publishing", 1*time.Minute, func(ctx context.Context) error {
+		published, err := s.postService.PublishDueScheduledPosts(ctx)
+		if err != nil {
+			return err
+		}
+		for _, post := range published {
+			paths := ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
+			_ = s.mediaService.UpdateMediaVisibilityForPaths(ctx, paths)
+		}
+		return nil
+	})
 
 	// Daily task: Backups (at 3 AM)
 	go s.runDaily(ctx, "daily backup", 3, func(ctx context.Context) error {
