@@ -481,6 +481,11 @@ func main() {
 			 SELECT s.id, c.id FROM tags s, tags c
 			 WHERE s.slug = '_system' AND c.slug = '_no_ancestors'`,
 		},
+		{
+			"add_scheduled_at_to_posts",
+			`ALTER TABLE posts ADD COLUMN scheduled_at DATETIME;
+CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at);`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
