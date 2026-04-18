@@ -161,7 +161,11 @@ RETURNING *;
 UPDATE posts
 SET title = sqlc.arg('title'), slug = sqlc.arg('slug'), content = sqlc.arg('content'), excerpt = sqlc.arg('excerpt'), formatter = sqlc.arg('formatter'), status = sqlc.arg('status'), is_featured = sqlc.arg('is_featured'), thumbnail_path = sqlc.arg('thumbnail_path'), meta_description = sqlc.arg('meta_description'),
     scheduled_at = sqlc.arg('scheduled_at'),
-    published_at = (CASE WHEN sqlc.arg('status') = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END),
+    published_at = (CASE
+        WHEN sqlc.arg('status') = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
+        WHEN sqlc.arg('status') = 'scheduled'  THEN NULL
+        ELSE published_at
+    END),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg('id') AND author_id = sqlc.arg('author_id')
 RETURNING *;
