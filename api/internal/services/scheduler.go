@@ -37,9 +37,17 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		if err != nil {
 			return err
 		}
+		if len(published) == 0 {
+			return nil
+		}
+		var allPaths []string
 		for _, post := range published {
-			paths := ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
-			_ = s.mediaService.UpdateMediaVisibilityForPaths(ctx, paths)
+			allPaths = append(allPaths, ExtractMediaPaths(post.Content, post.ThumbnailPath.String)...)
+		}
+		if len(allPaths) > 0 {
+			if err := s.mediaService.UpdateMediaVisibilityForPaths(ctx, allPaths); err != nil {
+				fmt.Printf("Scheduler: failed to update media visibility for %d scheduled post(s): %v\n", len(published), err)
+			}
 		}
 		return nil
 	})
