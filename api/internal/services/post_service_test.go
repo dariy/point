@@ -660,18 +660,7 @@ func TestPublishDueScheduledPosts_FutureNotPublished(t *testing.T) {
 	err = svc.PublishDueScheduledPosts(ctx)
 	require.NoError(t, err)
 
-	// Note: cannot call repo.GetPost directly here since only svc is exposed
-	// Verify indirectly via ListPosts
-	posts, _, err := svc.ListPosts(ctx, ListPostsParams{
-		Page: 1, PerPage: 10, IncludeDrafts: true,
-	})
+	updated, err := repo.GetPost(ctx, post.ID)
 	require.NoError(t, err)
-	found := false
-	for _, p := range posts {
-		if p.ID == post.ID {
-			found = true
-			assert.Equal(t, "scheduled", p.Status, "future post should remain scheduled")
-		}
-	}
-	assert.True(t, found, "post should still exist")
+	assert.Equal(t, "scheduled", updated.Status, "future post should remain scheduled")
 }
