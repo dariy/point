@@ -61,6 +61,11 @@ func (s *SchedulerService) runHourly(ctx context.Context, name string, task func
 }
 
 func (s *SchedulerService) runPeriodic(ctx context.Context, name string, interval time.Duration, task func(context.Context) error) {
+	// Run once at start
+	if err := task(ctx); err != nil {
+		fmt.Printf("Scheduler task %s (initial) failed: %v\n", name, err)
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
