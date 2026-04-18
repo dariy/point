@@ -139,7 +139,7 @@ export default class PostEditPage extends Component {
     const featured = p.is_featured || false;
     const excerpt  = p.excerpt || '';
 
-    const statusOpts = ['draft', 'published', 'hidden', 'page'].map((s) =>
+    const statusOpts = ['draft', 'published', 'scheduled', 'hidden', 'page'].map((s) =>
       `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`
     ).join('');
 
@@ -189,14 +189,6 @@ export default class PostEditPage extends Component {
                         title="${featured ? 'Unmark as featured' : 'Mark as featured'}">
                   ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
                 </button>
-                <div class="schedule-picker-group">
-                  <input type="datetime-local" id="schedule-input"
-                         value="${toDatetimeLocal(p.scheduled_at || '')}">
-                  <button type="button" id="clear-schedule-btn" class="btn btn-sm btn-ghost"
-                          style="display:${p.scheduled_at ? 'inline-flex' : 'none'}">
-                    Clear schedule
-                  </button>
-                </div>
                 <select id="status-select" class="status-select badge-${escapeHtml(status)}">
                   ${statusOpts}
                 </select>
@@ -205,6 +197,13 @@ export default class PostEditPage extends Component {
                          placeholder="Post title" value="${title}" required>
                   ${aiBtn('title')}
                 </div>
+              </div>
+
+              <div class="schedule-row" id="schedule-row"
+                   style="display:${status === 'scheduled' ? 'flex' : 'none'}">
+                <input type="datetime-local" id="schedule-input"
+                       class="form-input schedule-at-input"
+                       value="${toDatetimeLocal(p.scheduled_at || '')}">
               </div>
 
               <div class="slug-row">
@@ -299,31 +298,30 @@ export default class PostEditPage extends Component {
       this._autoSaveField({ is_featured: newVal });
     });
 
-    // Status pill — auto-save on change
+    // Status pill — auto-save on change; show/hide schedule row
     const statusSelect = this.$('#status-select');
+    const scheduleRow  = this.$('#schedule-row');
+    const scheduleInput = this.$('#schedule-input');
+
     statusSelect?.addEventListener('change', () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
-      this._autoSaveField({ status: newStatus });
-    });
-
-    // Schedule picker
-    const scheduleInput = this.$('#schedule-input');
-    const clearScheduleBtn = this.$('#clear-schedule-btn');
-
-    scheduleInput?.addEventListener('change', () => {
-      const val = scheduleInput.value; // "YYYY-MM-DDTHH:MM" or ""
-      if (val) {
-        const iso = new Date(val).toISOString();
-        if (clearScheduleBtn) clearScheduleBtn.style.display = 'inline-flex';
-        this._autoSaveField({ scheduled_at: iso });
+      if (newStatus === 'scheduled') {
+        if (scheduleRow) scheduleRow.style.display = 'flex';
+        this._autoSaveField({ status: newStatus });
+      } else {
+        if (scheduleRow) scheduleRow.style.display = 'none';
+        if (scheduleInput) scheduleInput.value = '';
+        this._autoSaveField({ status: newStatus, scheduled_at: '' });
       }
     });
 
-    clearScheduleBtn?.addEventListener('click', () => {
-      if (scheduleInput) scheduleInput.value = '';
-      clearScheduleBtn.style.display = 'none';
-      this._autoSaveField({ scheduled_at: '' });
+    // Schedule picker — auto-save when date/time is set
+    scheduleInput?.addEventListener('change', () => {
+      const val = scheduleInput.value;
+      if (val) {
+        this._autoSaveField({ scheduled_at: new Date(val).toISOString() });
+      }
     });
 
     // Auto-save on content change
