@@ -118,7 +118,7 @@ body.drag-active::after {
 /* Tags row: [TagsInput flex-1] [AI btn] */
 .tags-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--spacing-xs);
 }
 
@@ -169,6 +169,7 @@ body.drag-active::after {
     position: relative;
     display: block;
     flex: 1;
+    min-width: 0;
 }
 
 .schedule-at-input {
