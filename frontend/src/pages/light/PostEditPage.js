@@ -199,8 +199,8 @@ export default class PostEditPage extends Component {
                 </div>
               </div>
 
-              <div class="form-group schedule-row" id="schedule-row"
-                   style="display:${status === 'scheduled' ? 'block' : 'none'}">
+              <div class="schedule-row" id="schedule-row"
+                   style="display:${status === 'scheduled' ? 'flex' : 'none'}">
                 <div class="schedule-input-wrapper">
                   <input type="datetime-local" id="schedule-input"
                          class="form-input schedule-at-input"
@@ -312,7 +312,7 @@ export default class PostEditPage extends Component {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
       if (newStatus === 'scheduled') {
-        if (scheduleRow) scheduleRow.style.display = 'block';
+        if (scheduleRow) scheduleRow.style.display = 'flex';
         this._autoSaveField({ status: newStatus });
       } else {
         if (scheduleRow) scheduleRow.style.display = 'none';
