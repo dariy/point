@@ -201,6 +201,7 @@ export default class PostEditPage extends Component {
 
               <div class="schedule-row" id="schedule-row"
                    style="display:${status === 'scheduled' ? 'flex' : 'none'}">
+                <span class="slug-prefix">Publish at</span>
                 <input type="datetime-local" id="schedule-input"
                        class="form-input schedule-at-input"
                        value="${toDatetimeLocal(p.scheduled_at || '')}">
