@@ -201,10 +201,14 @@ export default class PostEditPage extends Component {
 
               <div class="form-group schedule-row" id="schedule-row"
                    style="display:${status === 'scheduled' ? 'block' : 'none'}">
-                <input type="datetime-local" id="schedule-input"
-                       class="form-input schedule-at-input"
-                       placeholder="Publish at…"
-                       value="${toDatetimeLocal(p.scheduled_at || '')}">
+                <div class="schedule-input-wrapper">
+                  <input type="datetime-local" id="schedule-input"
+                         class="form-input schedule-at-input"
+                         value="${toDatetimeLocal(p.scheduled_at || '')}">
+                  <span class="schedule-input-hint"
+                        id="schedule-hint"
+                        style="${p.scheduled_at ? 'display:none' : ''}">Publish at…</span>
+                </div>
               </div>
 
               <div class="slug-row">
@@ -318,9 +322,18 @@ export default class PostEditPage extends Component {
     });
 
     // Schedule picker — auto-save when date/time is set
+    const scheduleHint = this.$('#schedule-hint');
+
+    scheduleInput?.addEventListener('focus', () => {
+      if (scheduleHint) scheduleHint.style.display = 'none';
+    });
+    scheduleInput?.addEventListener('blur', () => {
+      if (scheduleHint && !scheduleInput.value) scheduleHint.style.display = '';
+    });
     scheduleInput?.addEventListener('change', () => {
       const val = scheduleInput.value;
       if (val) {
+        if (scheduleHint) scheduleHint.style.display = 'none';
         this._autoSaveField({ scheduled_at: new Date(val).toISOString() });
       }
     });

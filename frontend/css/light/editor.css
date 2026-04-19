@@ -165,9 +165,25 @@ body.drag-active::after {
     align-items: center;
 }
 
+.schedule-input-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
 .schedule-at-input {
     width: auto;
-    flex: 0 0 auto;
+}
+
+.schedule-input-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
+    color: var(--text-muted);
+    pointer-events: none;
+    user-select: none;
 }
 
 .slug-row {
