@@ -150,6 +150,14 @@ th.status-col {
     padding-left: 1.5625rem;
 }
 
+.scheduled-date {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-scheduled);
+    margin-top: 0.1875rem;
+    white-space: nowrap;
+}
+
 .check-col {
     width: 2rem;
     padding-right: 0;

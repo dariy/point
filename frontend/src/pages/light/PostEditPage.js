@@ -321,6 +321,15 @@ export default class PostEditPage extends Component {
       }
     });
 
+    // If navigated from the posts list with ?openSchedule=1, show and focus the date picker
+    if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
+      scheduleRow.style.display = 'flex';
+      statusSelect.value = 'scheduled';
+      statusSelect.className = 'status-select badge-scheduled';
+      this._autoSaveField({ status: 'scheduled' });
+      setTimeout(() => scheduleInput.showPicker?.() || scheduleInput.focus(), 50);
+    }
+
     // Schedule picker — auto-save when date/time is set
     const scheduleHint = this.$('#schedule-hint');
 
