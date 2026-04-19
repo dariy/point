@@ -201,9 +201,9 @@ export default class PostEditPage extends Component {
 
               <div class="form-group schedule-row" id="schedule-row"
                    style="display:${status === 'scheduled' ? 'block' : 'none'}">
-                <label class="form-label" for="schedule-input">Publish at</label>
                 <input type="datetime-local" id="schedule-input"
                        class="form-input schedule-at-input"
+                       placeholder="Publish at…"
                        value="${toDatetimeLocal(p.scheduled_at || '')}">
               </div>
 
