@@ -84,24 +84,20 @@ export default class PostsListPage extends Component {
                   </a>
                 </td>
                 <td class="status-col">
-                  ${p.status === 'scheduled'
-                    ? `<span class="badge badge-scheduled">
-                         Scheduled&nbsp;&bull;&nbsp;${p.scheduled_at
-                           ? new Date(p.scheduled_at).toLocaleString([], {
-                               month: 'short', day: 'numeric',
-                               hour: '2-digit', minute: '2-digit',
-                             })
-                           : ''}
-                       </span>`
-                    : `<select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
-                               name="status" data-id="${escapeHtml(String(p.id))}">
-                         ${['draft', 'published', 'hidden', 'page'].map(s => `
-                           <option value="${s}"${p.status === s ? ' selected' : ''}>
-                             ${escapeHtml(STATUS_LABELS[s] || s)}
-                           </option>
-                         `).join('')}
-                       </select>`
-                  }
+                  <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
+                          name="status" data-id="${escapeHtml(String(p.id))}">
+                    ${['draft', 'published', 'scheduled', 'hidden', 'page'].map(s => `
+                      <option value="${s}"${p.status === s ? ' selected' : ''}>
+                        ${escapeHtml(STATUS_LABELS[s] || s)}
+                      </option>
+                    `).join('')}
+                  </select>
+                  ${p.status === 'scheduled' && p.scheduled_at
+                    ? `<span class="scheduled-date">${escapeHtml(new Date(p.scheduled_at).toLocaleString([], {
+                        month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      }))}</span>`
+                    : ''}
                 </td>
                 <td class="title-col">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
@@ -518,6 +514,10 @@ export default class PostsListPage extends Component {
   }
 
   async _updatePostStatus(id, status, select) {
+    if (status === 'scheduled') {
+      navigate(`/light/posts/${id}/edit?openSchedule=1`);
+      return;
+    }
     const originalStatus = this.state.posts.find(p => p.id === id)?.status || 'draft';
     select.classList.add('badge-loading');
     try {
