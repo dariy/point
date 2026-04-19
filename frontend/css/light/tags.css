@@ -93,7 +93,7 @@
     min-width: 6.25rem;
     border: none;
     outline: none;
-    padding: var(--spacing-xs);
+    padding: var(--spacing-xs) calc(var(--spacing-md) - var(--spacing-xs));
     font-size: var(--font-size-sm);
     background: transparent;
     color: var(--text-primary);

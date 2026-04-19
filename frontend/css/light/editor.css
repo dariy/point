@@ -172,6 +172,7 @@ body.drag-active::after {
 
 .schedule-at-input {
     width: auto;
+    color: var(--text-primary);
 }
 
 .schedule-input-hint {
