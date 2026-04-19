@@ -118,7 +118,7 @@ body.drag-active::after {
 /* Tags row: [TagsInput flex-1] [AI btn] */
 .tags-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--spacing-xs);
 }
 
@@ -167,11 +167,11 @@ body.drag-active::after {
 
 .schedule-input-wrapper {
     position: relative;
-    display: inline-block;
+    display: block;
+    flex: 1;
 }
 
 .schedule-at-input {
-    width: auto;
     color: var(--text-primary);
 }
 
@@ -194,7 +194,7 @@ body.drag-active::after {
 
 .slug-prefix {
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     color: var(--text-muted);
     white-space: nowrap;
     padding: 0 var(--spacing-xs) 0 0.125rem;
@@ -204,7 +204,7 @@ body.drag-active::after {
 .editor-slug {
     flex: 1;
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     min-width: 0;
 }
 

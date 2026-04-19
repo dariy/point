@@ -99,6 +99,10 @@
     color: var(--text-primary);
 }
 
+.tags-input input::placeholder {
+    color: var(--text-muted);
+}
+
 .tags-suggestions {
     position: absolute;
     top: 100%;
