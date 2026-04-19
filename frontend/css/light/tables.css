@@ -149,3 +149,32 @@ td.updated-col {
 th.status-col {
     padding-left: 1.5625rem;
 }
+
+.check-col {
+    width: 2rem;
+    padding-right: 0;
+    border-bottom: none;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.post-row-main td.check-col {
+    border-bottom: none;
+    vertical-align: middle;
+}
+
+.bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--surface-hover);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+}
+
+#bulk-count {
+    color: var(--text-secondary);
+    min-width: 6rem;
+}
