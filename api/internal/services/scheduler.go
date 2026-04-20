@@ -7,18 +7,20 @@ import (
 )
 
 type SchedulerService struct {
-	authService   *AuthService
-	postService   *PostService
-	systemService *SystemService
-	mediaService  *MediaService
+	authService     *AuthService
+	postService     *PostService
+	systemService   *SystemService
+	mediaService    *MediaService
+	settingsService *SettingsService
 }
 
-func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService) *SchedulerService {
+func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService, settingsService *SettingsService) *SchedulerService {
 	return &SchedulerService{
-		authService:   authService,
-		postService:   postService,
-		systemService: systemService,
-		mediaService:  mediaService,
+		authService:     authService,
+		postService:     postService,
+		systemService:   systemService,
+		mediaService:    mediaService,
+		settingsService: settingsService,
 	}
 }
 
@@ -54,6 +56,10 @@ func (s *SchedulerService) Start(ctx context.Context) {
 
 	// Daily task: Backups (at 3 AM)
 	go s.runDaily(ctx, "daily backup", 3, func(ctx context.Context) error {
+		enabled, _ := s.settingsService.GetSetting(ctx, "enable_backup", "true")
+		if enabled != "true" {
+			return nil
+		}
 		_, _, err := s.systemService.CreateBackup(ctx)
 		return err
 	})
