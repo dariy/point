@@ -1,0 +1,17 @@
+[Unit]
+Description=Point Photo Blog — External Backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/point-backup.sh
+StandardOutput=journal
+StandardError=journal
+# Required — set these to match your infrastructure:
+Environment=POINT_HOST=
+Environment=POINT_BACKUP_DIR=
+# Optional overrides:
+# Environment=LOCAL_BACKUP_DIR=/var/backups/point
+# Environment=KEEP_ON_POINT=1
+# Environment=KEEP_LOCAL=30
