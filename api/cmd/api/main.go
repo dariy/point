@@ -97,7 +97,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
 
 	return &AppServices{
 		Settings:  settingsService,
