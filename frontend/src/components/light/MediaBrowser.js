@@ -588,6 +588,12 @@ export class MediaBrowser extends Component {
   }
 
   _wireDragDrop(fileInput, pickerMode) {
+    // Remove any previously registered listeners before re-registering.
+    // afterRender fires on every setState re-render, so without this cleanup
+    // each render accumulates an extra set of document-level drop handlers.
+    for (const [t, ev, fn] of this._dragListeners) t.removeEventListener(ev, fn);
+    this._dragListeners = [];
+
     // In picker mode, scope drag-drop to the component container to avoid
     // conflicting with PostEditPage's document-level drag handler.
     const target = pickerMode ? this.container : document;
