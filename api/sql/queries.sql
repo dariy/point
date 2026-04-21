@@ -361,9 +361,9 @@ WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') 
 
 -- name: CreateMedia :one
 INSERT INTO media (
-    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, uploaded_at
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, original_metadata, uploaded_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -373,6 +373,12 @@ SET alt_text = COALESCE(?, alt_text),
     caption = COALESCE(?, caption),
     post_id = COALESCE(?, post_id),
     metadata = COALESCE(?, metadata)
+WHERE id = ?
+RETURNING *;
+
+-- name: UpdateMediaMetadata :one
+UPDATE media
+SET metadata = ?
 WHERE id = ?
 RETURNING *;
 
