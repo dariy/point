@@ -25,22 +25,23 @@ type MediaVisibilityLog struct {
 }
 
 type Medium struct {
-	ID            int64          `json:"id"`
-	Filename      string         `json:"filename"`
-	OriginalPath  string         `json:"original_path"`
-	ThumbnailPath sql.NullString `json:"thumbnail_path"`
-	FileType      string         `json:"file_type"`
-	MimeType      string         `json:"mime_type"`
-	FileSize      int64          `json:"file_size"`
-	Width         sql.NullInt64  `json:"width"`
-	Height        sql.NullInt64  `json:"height"`
-	PostID        sql.NullInt64  `json:"post_id"`
-	UploadedAt    time.Time      `json:"uploaded_at"`
-	Checksum      string         `json:"checksum"`
-	AltText       sql.NullString `json:"alt_text"`
-	Caption       sql.NullString `json:"caption"`
-	Metadata      sql.NullString `json:"metadata"`
-	IsPublic      int64          `json:"is_public"`
+	ID               int64          `json:"id"`
+	Filename         string         `json:"filename"`
+	OriginalPath     string         `json:"original_path"`
+	ThumbnailPath    sql.NullString `json:"thumbnail_path"`
+	FileType         string         `json:"file_type"`
+	MimeType         string         `json:"mime_type"`
+	FileSize         int64          `json:"file_size"`
+	Width            sql.NullInt64  `json:"width"`
+	Height           sql.NullInt64  `json:"height"`
+	PostID           sql.NullInt64  `json:"post_id"`
+	UploadedAt       time.Time      `json:"uploaded_at"`
+	Checksum         string         `json:"checksum"`
+	AltText          sql.NullString `json:"alt_text"`
+	Caption          sql.NullString `json:"caption"`
+	Metadata         sql.NullString `json:"metadata"`
+	OriginalMetadata sql.NullString `json:"original_metadata"`
+	IsPublic         int64          `json:"is_public"`
 }
 
 type Post struct {
