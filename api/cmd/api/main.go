@@ -249,6 +249,8 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.POST("/:id/reextract", mediaHandler.ReextractEXIF, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.PUT("/:id/exif", mediaHandler.UpdateEXIF, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/:id/revert-exif", mediaHandler.RevertEXIF, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(svcs.Auth))
 
 	// ── Settings Routes ────────────────────────────────────────────────────────
