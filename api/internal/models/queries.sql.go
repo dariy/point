@@ -228,28 +228,29 @@ func (q *Queries) CountPostsByTag(ctx context.Context, arg CountPostsByTagParams
 
 const createMedia = `-- name: CreateMedia :one
 INSERT INTO media (
-    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, uploaded_at
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, original_metadata, uploaded_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
 `
 
 type CreateMediaParams struct {
-	Filename      string         `json:"filename"`
-	OriginalPath  string         `json:"original_path"`
-	ThumbnailPath sql.NullString `json:"thumbnail_path"`
-	FileType      string         `json:"file_type"`
-	MimeType      string         `json:"mime_type"`
-	FileSize      int64          `json:"file_size"`
-	Width         sql.NullInt64  `json:"width"`
-	Height        sql.NullInt64  `json:"height"`
-	PostID        sql.NullInt64  `json:"post_id"`
-	Checksum      string         `json:"checksum"`
-	AltText       sql.NullString `json:"alt_text"`
-	Caption       sql.NullString `json:"caption"`
-	Metadata      sql.NullString `json:"metadata"`
-	UploadedAt    time.Time      `json:"uploaded_at"`
+	Filename         string         `json:"filename"`
+	OriginalPath     string         `json:"original_path"`
+	ThumbnailPath    sql.NullString `json:"thumbnail_path"`
+	FileType         string         `json:"file_type"`
+	MimeType         string         `json:"mime_type"`
+	FileSize         int64          `json:"file_size"`
+	Width            sql.NullInt64  `json:"width"`
+	Height           sql.NullInt64  `json:"height"`
+	PostID           sql.NullInt64  `json:"post_id"`
+	Checksum         string         `json:"checksum"`
+	AltText          sql.NullString `json:"alt_text"`
+	Caption          sql.NullString `json:"caption"`
+	Metadata         sql.NullString `json:"metadata"`
+	OriginalMetadata sql.NullString `json:"original_metadata"`
+	UploadedAt       time.Time      `json:"uploaded_at"`
 }
 
 func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error) {
@@ -267,6 +268,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		arg.AltText,
 		arg.Caption,
 		arg.Metadata,
+		arg.OriginalMetadata,
 		arg.UploadedAt,
 	)
 	var i Medium
@@ -286,6 +288,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
@@ -578,7 +581,7 @@ func (q *Queries) GetFirstUser(ctx context.Context) (User, error) {
 
 const getMedia = `-- name: GetMedia :one
 
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE id = ? LIMIT 1
 `
 
@@ -602,13 +605,14 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
 }
 
 const getMediaByChecksum = `-- name: GetMediaByChecksum :one
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE checksum = ? LIMIT 1
 `
 
@@ -631,13 +635,14 @@ func (q *Queries) GetMediaByChecksum(ctx context.Context, checksum string) (Medi
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
 }
 
 const getMediaByPostID = `-- name: GetMediaByPostID :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE post_id = ?
 ORDER BY uploaded_at ASC
 `
@@ -667,6 +672,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 			&i.AltText,
 			&i.Caption,
 			&i.Metadata,
+			&i.OriginalMetadata,
 			&i.IsPublic,
 		); err != nil {
 			return nil, err
@@ -1170,7 +1176,7 @@ func (q *Queries) IncrementPostViewCount(ctx context.Context, id int64) error {
 }
 
 const listMedia = `-- name: ListMedia :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
 ORDER BY uploaded_at DESC
 LIMIT ?4 OFFSET ?3
@@ -1213,6 +1219,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 			&i.AltText,
 			&i.Caption,
 			&i.Metadata,
+			&i.OriginalMetadata,
 			&i.IsPublic,
 		); err != nil {
 			return nil, err
@@ -1485,7 +1492,7 @@ SET alt_text = COALESCE(?, alt_text),
     post_id = COALESCE(?, post_id),
     metadata = COALESCE(?, metadata)
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
 `
 
 type UpdateMediaParams struct {
@@ -1521,6 +1528,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
@@ -1530,7 +1538,7 @@ const updateMediaFilename = `-- name: UpdateMediaFilename :one
 UPDATE media
 SET filename = ?, original_path = ?, thumbnail_path = ?
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
 `
 
 type UpdateMediaFilenameParams struct {
@@ -1564,6 +1572,44 @@ func (q *Queries) UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilena
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
+		&i.IsPublic,
+	)
+	return i, err
+}
+
+const updateMediaMetadata = `-- name: UpdateMediaMetadata :one
+UPDATE media
+SET metadata = ?
+WHERE id = ?
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
+`
+
+type UpdateMediaMetadataParams struct {
+	Metadata sql.NullString `json:"metadata"`
+	ID       int64          `json:"id"`
+}
+
+func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, updateMediaMetadata, arg.Metadata, arg.ID)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.OriginalPath,
+		&i.ThumbnailPath,
+		&i.FileType,
+		&i.MimeType,
+		&i.FileSize,
+		&i.Width,
+		&i.Height,
+		&i.PostID,
+		&i.UploadedAt,
+		&i.Checksum,
+		&i.AltText,
+		&i.Caption,
+		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err

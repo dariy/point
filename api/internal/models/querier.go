@@ -67,6 +67,7 @@ type Querier interface {
 	UpdateAllTagPostCounts(ctx context.Context) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilenameParams) (Medium, error)
+	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdateSessionActivity(ctx context.Context, id int64) error
 	UpdateSetting(ctx context.Context, arg UpdateSettingParams) (BlogSetting, error)

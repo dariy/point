@@ -432,6 +432,10 @@ func main() {
 			`ALTER TABLE media ADD COLUMN metadata TEXT`,
 		},
 		{
+			"add_media_original_metadata",
+			`ALTER TABLE media ADD COLUMN original_metadata TEXT`,
+		},
+		{
 			"create_media_visibility_log",
 			`CREATE TABLE IF NOT EXISTS media_visibility_log (
 				id         INTEGER PRIMARY KEY AUTOINCREMENT,
