@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS posts (
     is_featured BOOLEAN NOT NULL DEFAULT 0,
     view_count INTEGER NOT NULL DEFAULT 0,
     published_at DATETIME,
+    scheduled_at DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS posts (
 CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
 CREATE INDEX IF NOT EXISTS idx_posts_published_at ON posts(published_at);
+CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_posts_preview_token ON posts(preview_token);
 
 -- Tags
@@ -90,6 +92,7 @@ CREATE TABLE IF NOT EXISTS media (
     alt_text VARCHAR(500),
     caption VARCHAR(1000),
     metadata TEXT,
+    original_metadata TEXT,
     is_public INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_media_post_id ON media(post_id);

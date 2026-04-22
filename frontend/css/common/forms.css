@@ -56,6 +56,11 @@ input[type="password"] {
     border-color: var(--border-secondary);
 }
 
+.form-input::placeholder,
+.form-textarea::placeholder {
+    color: var(--text-muted);
+}
+
 .form-input:focus,
 .form-textarea:focus,
 .form-select:focus {

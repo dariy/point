@@ -190,6 +190,56 @@ func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
 	return c.JSON(http.StatusOK, mediaToResponse(media))
 }
 
+// UpdateEXIFRequest is the body for PUT /api/media/:id/exif.
+// Keys are EXIF field names; values must contain only [a-zA-Z0-9 ].
+type UpdateEXIFRequest map[string]string
+
+func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	var req UpdateEXIFRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	media, err := h.mediaService.UpdateEXIF(c.Request().Context(), services.UpdateEXIFParams{
+		ID:     id,
+		Fields: req,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "disallowed characters") {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		if strings.Contains(err.Error(), "no rows") {
+			return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, mediaToResponse(media))
+}
+
+func (h *MediaHandler) RevertEXIF(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	media, err := h.mediaService.RevertEXIF(c.Request().Context(), id)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		}
+		if strings.Contains(err.Error(), "no original metadata") {
+			return echo.NewHTTPError(http.StatusConflict, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, mediaToResponse(media))
+}
+
 func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	if page < 1 {

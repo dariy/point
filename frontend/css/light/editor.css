@@ -160,6 +160,34 @@ body.drag-active::after {
 }
 
 /* Slug row: [/post/] [slug input] */
+.schedule-row {
+    display: flex;
+    align-items: center;
+}
+
+.schedule-input-wrapper {
+    position: relative;
+    display: block;
+    flex: 1;
+    min-width: 0;
+}
+
+.schedule-at-input {
+    color: var(--text-primary);
+}
+
+.schedule-input-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
+    color: var(--text-muted);
+    pointer-events: none;
+    user-select: none;
+}
+
 .slug-row {
     display: flex;
     align-items: center;
@@ -167,7 +195,7 @@ body.drag-active::after {
 
 .slug-prefix {
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     color: var(--text-muted);
     white-space: nowrap;
     padding: 0 var(--spacing-xs) 0 0.125rem;
@@ -177,7 +205,7 @@ body.drag-active::after {
 .editor-slug {
     flex: 1;
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     min-width: 0;
 }
 

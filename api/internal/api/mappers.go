@@ -108,6 +108,7 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"is_featured":         p.IsFeatured,
 		"view_count":          p.ViewCount,
 		"published_at":        nullTime(p.PublishedAt),
+		"scheduled_at":        nullTime(p.ScheduledAt),
 		"created_at":          p.CreatedAt,
 		"updated_at":          p.UpdatedAt,
 		"media_url":           extractMediaURL(p.ThumbnailPath, p.Content),
@@ -240,6 +241,11 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		_ = json.Unmarshal([]byte(m.Metadata.String), &metadata)
 	}
 
+	var originalMetadata map[string]interface{}
+	if m.OriginalMetadata.Valid && m.OriginalMetadata.String != "" {
+		_ = json.Unmarshal([]byte(m.OriginalMetadata.String), &originalMetadata)
+	}
+
 	return map[string]interface{}{
 		"id":             m.ID,
 		"filename":       m.Filename,
@@ -254,7 +260,8 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		"uploaded_at":    m.UploadedAt,
 		"alt_text":       nullString(m.AltText),
 		"caption":        nullString(m.Caption),
-		"metadata":       metadata,
+		"metadata":          metadata,
+		"original_metadata": originalMetadata,
 		"is_public":      m.IsPublic,
 	}
 }
