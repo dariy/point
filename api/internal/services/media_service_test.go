@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/jpeg"
 	"net/http"
@@ -490,7 +491,7 @@ func TestMediaService_RecalculateAllMediaVisibility(t *testing.T) {
 func TestMediaService_ParseAnalysisResult(t *testing.T) {
 	svc := &MediaService{}
 
-	// Basic result with title, tags, excerpt
+	// Valid result with all three required keys.
 	data := map[string]interface{}{
 		"title":   "Photo",
 		"tags":    []interface{}{"a", "b"},
@@ -507,10 +508,11 @@ func TestMediaService_ParseAnalysisResult(t *testing.T) {
 		t.Errorf("expected 2 tags, got %d", len(result.Tags))
 	}
 
-	// Filename starting with year — year tag is prepended
+	// Year tag prepended when filename starts with year.
 	data2 := map[string]interface{}{
-		"title": "Landscape",
-		"tags":  []interface{}{"nature"},
+		"title":   "Landscape",
+		"tags":    []interface{}{"nature"},
+		"excerpt": "A view",
 	}
 	result2, err := svc.parseAnalysisResult(data2, "2026-summer.jpg")
 	if err != nil {
@@ -520,26 +522,18 @@ func TestMediaService_ParseAnalysisResult(t *testing.T) {
 		t.Errorf("expected year tag '2026' prepended, got %v", result2.Tags)
 	}
 
-	// Alternative key mapping: summary → excerpt
+	// Missing excerpt key → ErrResponseUnusable (strict validation).
 	data3 := map[string]interface{}{
-		"tags":    []interface{}{},
-		"summary": "A summary",
+		"title": "T",
+		"tags":  []interface{}{},
 	}
-	result3, err := svc.parseAnalysisResult(data3, "img.jpg")
-	if err != nil {
-		t.Fatalf("parseAnalysisResult (summary key) failed: %v", err)
-	}
-	if result3.Excerpt == nil || *result3.Excerpt != "A summary" {
-		t.Errorf("expected excerpt from summary key, got %v", result3.Excerpt)
+	if _, err := svc.parseAnalysisResult(data3, "img.jpg"); !errors.Is(err, ErrResponseUnusable) {
+		t.Errorf("expected ErrResponseUnusable for missing excerpt, got %v", err)
 	}
 
-	// Empty map — should return empty AnalysisResponse without error
-	result4, err := svc.parseAnalysisResult(map[string]interface{}{}, "")
-	if err != nil {
-		t.Fatalf("parseAnalysisResult (empty) failed: %v", err)
-	}
-	if result4.Tags == nil {
-		t.Error("expected non-nil Tags slice")
+	// Empty map → ErrResponseUnusable.
+	if _, err := svc.parseAnalysisResult(map[string]interface{}{}, ""); !errors.Is(err, ErrResponseUnusable) {
+		t.Errorf("expected ErrResponseUnusable for empty map, got %v", err)
 	}
 }
 
