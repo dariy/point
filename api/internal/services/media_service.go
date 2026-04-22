@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/disintegration/imaging"
 	"github.com/rwcarlsen/goexif/exif"
@@ -798,8 +799,9 @@ type AnalysisResponse struct {
 }
 
 var (
-	ErrMediaNotFound = errors.New("media not found")
-	ErrNotAnImage    = errors.New("media item is not an image")
+	ErrMediaNotFound    = errors.New("media not found")
+	ErrNotAnImage       = errors.New("media item is not an image")
+	ErrResponseUnusable = errors.New("The response cannot be used.")
 )
 
 const maxAnalyzeBytes = 20 << 20 // 20 MB
@@ -889,6 +891,9 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 	}
 
 	if err != nil {
+		if errors.Is(err, ErrResponseUnusable) {
+			return nil, err
+		}
 		// Check if it's an authorization/authentication error
 		var apiErr *googleapi.Error
 		if errors.As(err, &apiErr) && (apiErr.Code == 400 || apiErr.Code == 401 || apiErr.Code == 403) {
@@ -902,16 +907,34 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 	return analysis, nil
 }
 
-// sanitizePromptField strips control characters, collapses whitespace, and
-// limits length so users cannot inject extra lines into the assembled prompt.
-func sanitizePromptField(s string) string {
-	s = strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' {
-			return ' '
-		}
+// allowedContentRune returns r if it is permitted in AI-related text fields,
+// normalizes whitespace to a plain space, and drops everything else.
+// Allowed: letters, digits, whitespace, and . , - – — ' ? !
+func allowedContentRune(r rune) rune {
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
 		return r
-	}, s)
-	s = strings.Join(strings.Fields(s), " ")
+	}
+	if unicode.IsSpace(r) {
+		return ' '
+	}
+	switch r {
+	case '.', ',', '-', '–', '—', '\'', '?', '!':
+		return r
+	}
+	return -1
+}
+
+// sanitizeContentString applies the allowedContentRune filter and collapses
+// runs of whitespace into single spaces.
+func sanitizeContentString(s string) string {
+	s = strings.Map(allowedContentRune, s)
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// sanitizePromptField sanitizes a user-supplied prompt snippet before it is
+// embedded in the Gemini prompt, and limits its length.
+func sanitizePromptField(s string) string {
+	s = sanitizeContentString(s)
 	if len(s) > 200 {
 		s = s[:200]
 	}
@@ -1048,31 +1071,32 @@ func (s *MediaService) analyzeImageViaHTTP(ctx context.Context, content []byte, 
 }
 
 func (s *MediaService) parseAnalysisResult(result map[string]interface{}, filename string) (*AnalysisResponse, error) {
+	// Require exactly title, tags, excerpt — no extra keys.
+	if len(result) != 3 {
+		return nil, ErrResponseUnusable
+	}
+	titleRaw, hasTitle := result["title"].(string)
+	tagsRaw, hasTags := result["tags"].([]interface{})
+	excerptRaw, hasExcerpt := result["excerpt"].(string)
+	if !hasTitle || !hasTags || !hasExcerpt {
+		return nil, ErrResponseUnusable
+	}
+
 	analysis := &AnalysisResponse{Tags: []string{}}
 
-	if t, ok := result["title"].(string); ok {
-		analysis.Title = &t
-	}
+	t := sanitizeContentString(titleRaw)
+	analysis.Title = &t
 
-	if tags, ok := result["tags"].([]interface{}); ok {
-		for _, t := range tags {
-			if str, ok := t.(string); ok {
-				analysis.Tags = append(analysis.Tags, str)
+	for _, tag := range tagsRaw {
+		if str, ok := tag.(string); ok {
+			if clean := sanitizeContentString(str); clean != "" {
+				analysis.Tags = append(analysis.Tags, clean)
 			}
 		}
 	}
 
-	if e, ok := result["excerpt"].(string); ok {
-		analysis.Excerpt = &e
-	} else {
-		// Map alternative keys to excerpt if missing
-		for _, key := range []string{"summary", "description", "caption", "text", "content"} {
-			if e, ok := result[key].(string); ok {
-				analysis.Excerpt = &e
-				break
-			}
-		}
-	}
+	e := sanitizeContentString(excerptRaw)
+	analysis.Excerpt = &e
 
 	// Detect year tag from filename (starts with 20##)
 	re := regexp.MustCompile(`^(20\d{2})`)

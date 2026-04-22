@@ -3,12 +3,14 @@ package services
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"point-api/internal/config"
@@ -679,6 +681,127 @@ func TestMediaService_parseAnalysisResult_YearTag(t *testing.T) {
 	}
 	if len(analysis.Tags) != 2 {
 		t.Errorf("expected 2 tags, got %d: %v", len(analysis.Tags), analysis.Tags)
+	}
+}
+
+// TestMediaService_parseAnalysisResult_StrictValidation verifies that extra
+// keys or missing required keys return ErrResponseUnusable.
+func TestMediaService_parseAnalysisResult_StrictValidation(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
+	}()
+
+	cases := []struct {
+		name   string
+		result map[string]interface{}
+	}{
+		{
+			name: "extra key",
+			result: map[string]interface{}{
+				"title": "T", "tags": []interface{}{"a"}, "excerpt": "E", "extra": "bad",
+			},
+		},
+		{
+			name: "missing excerpt",
+			result: map[string]interface{}{
+				"title": "T", "tags": []interface{}{"a"},
+			},
+		},
+		{
+			name: "wrong tags type",
+			result: map[string]interface{}{
+				"title": "T", "tags": "not-an-array", "excerpt": "E",
+			},
+		},
+		{
+			name: "empty map",
+			result: map[string]interface{}{},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := svc.parseAnalysisResult(tc.result, "photo.jpg")
+			if !errors.Is(err, ErrResponseUnusable) {
+				t.Errorf("expected ErrResponseUnusable, got %v", err)
+			}
+		})
+	}
+}
+
+// TestMediaService_parseAnalysisResult_Sanitize verifies disallowed characters
+// are stripped from AI-returned string fields.
+func TestMediaService_parseAnalysisResult_Sanitize(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = svc.repo.Close()
+	}()
+
+	result := map[string]interface{}{
+		"title":   "Sunset photo! <b>bold</b>",
+		"tags":    []interface{}{"nature", "beach & sun", "café"},
+		"excerpt": "A beautiful photo. #amazing @user http://evil.com",
+	}
+	analysis, err := svc.parseAnalysisResult(result, "photo.jpg")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// < > / stripped, text joined: "Sunset photo! bbold b"
+	if analysis.Title == nil || strings.ContainsAny(*analysis.Title, "<>/") {
+		t.Errorf("title contains disallowed chars: %v", analysis.Title)
+	}
+	// "beach & sun" → "beach sun" (& removed)
+	for _, tag := range analysis.Tags {
+		if strings.Contains(tag, "&") {
+			t.Errorf("tag not sanitized: %q", tag)
+		}
+	}
+	if analysis.Excerpt == nil || *analysis.Excerpt == "" {
+		t.Error("excerpt should not be empty")
+	}
+	// http:// colon and slashes stripped
+	if strings.Contains(*analysis.Excerpt, "://") {
+		t.Errorf("excerpt contains unsanitized URL: %q", *analysis.Excerpt)
+	}
+}
+
+// TestSanitizeContentString checks the character allowlist directly.
+func TestSanitizeContentString(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"Hello, world!", "Hello, world!"},
+		{"<script>alert(1)</script>", "scriptalert1script"},
+		{"café – a fine day", "café – a fine day"},
+		{"price: $100 & more", "price 100 more"},
+		{"Isn't it great?", "Isn't it great?"},
+		{"em—dash and en–dash", "em—dash and en–dash"},
+		{"  lots   of   spaces  ", "lots of spaces"},
+		{"newline\nand\ttab", "newline and tab"},
+	}
+	for _, tc := range cases {
+		got := sanitizeContentString(tc.input)
+		if got != tc.want {
+			t.Errorf("sanitizeContentString(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+// TestSanitizePromptField verifies length limiting in addition to char filtering.
+func TestSanitizePromptField(t *testing.T) {
+	long := strings.Repeat("a", 250)
+	got := sanitizePromptField(long)
+	if len(got) > 200 {
+		t.Errorf("expected len ≤ 200, got %d", len(got))
+	}
+	dirty := "describe the photo <b>boldly</b> & clearly"
+	got = sanitizePromptField(dirty)
+	if strings.ContainsAny(got, "<>&") {
+		t.Errorf("sanitizePromptField did not remove disallowed chars: %q", got)
 	}
 }
 
