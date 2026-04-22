@@ -777,7 +777,7 @@ func TestSanitizeContentString(t *testing.T) {
 		{"Hello, world!", "Hello, world!"},
 		{"<script>alert(1)</script>", "scriptalert1script"},
 		{"café – a fine day", "café – a fine day"},
-		{"price: $100 & more", "price 100 more"},
+		{"price: $100 & more", "price: 100 more"},
 		{"Isn't it great?", "Isn't it great?"},
 		{"em—dash and en–dash", "em—dash and en–dash"},
 		{"  lots   of   spaces  ", "lots of spaces"},

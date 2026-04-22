@@ -918,7 +918,7 @@ func allowedContentRune(r rune) rune {
 		return ' '
 	}
 	switch r {
-	case '.', ',', '-', '–', '—', '\'', '?', '!':
+	case '.', ',', '-', '–', '—', '\'', '?', '!', ':', ';':
 		return r
 	}
 	return -1
