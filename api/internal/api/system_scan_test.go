@@ -157,20 +157,16 @@ func TestScanMediaImport_NotConfigured(t *testing.T) {
 }
 
 func TestScanMediaImport_PathNotExist(t *testing.T) {
-	_, cleanup := setupSystemHandler(t)
-	defer cleanup()
 	e := echo.New()
 
-	ctx := context.Background()
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 	settingsSvc := services.NewSettingsService(repo)
-	_ = settingsSvc.SetSetting(ctx, "media_import_path", "/nonexistent/does/not/exist", "string")
 
 	tmpDir2 := t.TempDir()
 	systemSvc2 := services.NewSystemService(repo, tmpDir2)
 	cacheSvc2 := services.NewCacheService(tmpDir2)
-	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, systemSvc2, cacheSvc2, tmpDir2, "1.0", "")
+	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, systemSvc2, cacheSvc2, tmpDir2, "1.0", "/nonexistent/does/not/exist")
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	if err := h2.ScanMediaImport(e.NewContext(req, rec)); err != nil {
@@ -182,8 +178,6 @@ func TestScanMediaImport_PathNotExist(t *testing.T) {
 }
 
 func TestScanMediaImport_WithFiles(t *testing.T) {
-	h, cleanup := setupSystemHandler(t)
-	defer cleanup()
 	e := echo.New()
 
 	importDir := t.TempDir()
@@ -195,8 +189,20 @@ func TestScanMediaImport_WithFiles(t *testing.T) {
 	_ = os.WriteFile(imgPath, buf.Bytes(), 0644)
 	_ = os.WriteFile(filepath.Join(importDir, "readme.txt"), []byte("hello"), 0644)
 
-	ctx := context.Background()
-	_ = h.settingsService.SetSetting(ctx, "media_import_path", importDir, "string")
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	tmpDir := t.TempDir()
+	mediaSvc := services.NewMediaService(repo, &config.Config{
+		StoragePath:     tmpDir,
+		ThumbnailWidth:  400,
+		ThumbnailHeight: 300,
+	}, settingsSvc, tagSvc)
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.2.3", importDir)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()

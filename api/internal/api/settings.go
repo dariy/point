@@ -71,12 +71,13 @@ func (h *SettingsHandler) GetSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	maskGeminiAPIKey(all)
+	delete(all, "media_import_path")
 	return c.JSON(http.StatusOK, all)
 }
 
 func (h *SettingsHandler) GetSettingByKey(c echo.Context) error {
 	key := c.Param("key")
-	if key == "GEMINI_API_KEY" {
+	if key == "GEMINI_API_KEY" || key == "media_import_path" {
 		return echo.NewHTTPError(http.StatusForbidden, "access to this setting is restricted")
 	}
 	value, err := h.settingsService.GetSetting(c.Request().Context(), key, "")
