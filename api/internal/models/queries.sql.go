@@ -57,6 +57,58 @@ func (q *Queries) AddTagToPost(ctx context.Context, arg AddTagToPostParams) erro
 	return err
 }
 
+const bulkPublishScheduledPosts = `-- name: BulkPublishScheduledPosts :many
+UPDATE posts
+SET status = 'published',
+    published_at = COALESCE(scheduled_at, CURRENT_TIMESTAMP),
+    scheduled_at = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+`
+
+func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, bulkPublishScheduledPosts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Post
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Content,
+			&i.Excerpt,
+			&i.Formatter,
+			&i.Status,
+			&i.IsFeatured,
+			&i.ViewCount,
+			&i.PublishedAt,
+			&i.ScheduledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorID,
+			&i.ThumbnailPath,
+			&i.MetaDescription,
+			&i.PreviewToken,
+			&i.PreviewExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const clearPostTags = `-- name: ClearPostTags :exec
 DELETE FROM post_tags
 WHERE post_id = ?
@@ -176,28 +228,29 @@ func (q *Queries) CountPostsByTag(ctx context.Context, arg CountPostsByTagParams
 
 const createMedia = `-- name: CreateMedia :one
 INSERT INTO media (
-    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, uploaded_at
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, original_metadata, uploaded_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
 `
 
 type CreateMediaParams struct {
-	Filename      string         `json:"filename"`
-	OriginalPath  string         `json:"original_path"`
-	ThumbnailPath sql.NullString `json:"thumbnail_path"`
-	FileType      string         `json:"file_type"`
-	MimeType      string         `json:"mime_type"`
-	FileSize      int64          `json:"file_size"`
-	Width         sql.NullInt64  `json:"width"`
-	Height        sql.NullInt64  `json:"height"`
-	PostID        sql.NullInt64  `json:"post_id"`
-	Checksum      string         `json:"checksum"`
-	AltText       sql.NullString `json:"alt_text"`
-	Caption       sql.NullString `json:"caption"`
-	Metadata      sql.NullString `json:"metadata"`
-	UploadedAt    time.Time      `json:"uploaded_at"`
+	Filename         string         `json:"filename"`
+	OriginalPath     string         `json:"original_path"`
+	ThumbnailPath    sql.NullString `json:"thumbnail_path"`
+	FileType         string         `json:"file_type"`
+	MimeType         string         `json:"mime_type"`
+	FileSize         int64          `json:"file_size"`
+	Width            sql.NullInt64  `json:"width"`
+	Height           sql.NullInt64  `json:"height"`
+	PostID           sql.NullInt64  `json:"post_id"`
+	Checksum         string         `json:"checksum"`
+	AltText          sql.NullString `json:"alt_text"`
+	Caption          sql.NullString `json:"caption"`
+	Metadata         sql.NullString `json:"metadata"`
+	OriginalMetadata sql.NullString `json:"original_metadata"`
+	UploadedAt       time.Time      `json:"uploaded_at"`
 }
 
 func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error) {
@@ -215,6 +268,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		arg.AltText,
 		arg.Caption,
 		arg.Metadata,
+		arg.OriginalMetadata,
 		arg.UploadedAt,
 	)
 	var i Medium
@@ -234,6 +288,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
@@ -241,11 +296,11 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, created_at, updated_at
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at
 ) VALUES (
-    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), ?11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
 `
 
 type CreatePostParams struct {
@@ -259,6 +314,7 @@ type CreatePostParams struct {
 	AuthorID        int64          `json:"author_id"`
 	ThumbnailPath   sql.NullString `json:"thumbnail_path"`
 	MetaDescription sql.NullString `json:"meta_description"`
+	ScheduledAt     sql.NullTime   `json:"scheduled_at"`
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
@@ -273,6 +329,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		arg.AuthorID,
 		arg.ThumbnailPath,
 		arg.MetaDescription,
+		arg.ScheduledAt,
 	)
 	var i Post
 	err := row.Scan(
@@ -286,6 +343,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.IsFeatured,
 		&i.ViewCount,
 		&i.PublishedAt,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthorID,
@@ -523,7 +581,7 @@ func (q *Queries) GetFirstUser(ctx context.Context) (User, error) {
 
 const getMedia = `-- name: GetMedia :one
 
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE id = ? LIMIT 1
 `
 
@@ -547,13 +605,14 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
 }
 
 const getMediaByChecksum = `-- name: GetMediaByChecksum :one
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE checksum = ? LIMIT 1
 `
 
@@ -576,13 +635,14 @@ func (q *Queries) GetMediaByChecksum(ctx context.Context, checksum string) (Medi
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
 }
 
 const getMediaByPostID = `-- name: GetMediaByPostID :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE post_id = ?
 ORDER BY uploaded_at ASC
 `
@@ -612,6 +672,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 			&i.AltText,
 			&i.Caption,
 			&i.Metadata,
+			&i.OriginalMetadata,
 			&i.IsPublic,
 		); err != nil {
 			return nil, err
@@ -629,7 +690,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 
 const getPost = `-- name: GetPost :one
 
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 WHERE p.id = ? LIMIT 1
 `
@@ -649,6 +710,7 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.IsFeatured,
 		&i.ViewCount,
 		&i.PublishedAt,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthorID,
@@ -661,7 +723,7 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 WHERE p.slug = ? LIMIT 1
 `
@@ -680,6 +742,7 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.IsFeatured,
 		&i.ViewCount,
 		&i.PublishedAt,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthorID,
@@ -692,7 +755,7 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 }
 
 const getPostsByTag = `-- name: GetPostsByTag :many
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
@@ -746,6 +809,7 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 			&i.IsFeatured,
 			&i.ViewCount,
 			&i.PublishedAt,
+			&i.ScheduledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.AuthorID,
@@ -1112,7 +1176,7 @@ func (q *Queries) IncrementPostViewCount(ctx context.Context, id int64) error {
 }
 
 const listMedia = `-- name: ListMedia :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
 ORDER BY uploaded_at DESC
 LIMIT ?4 OFFSET ?3
@@ -1155,6 +1219,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 			&i.AltText,
 			&i.Caption,
 			&i.Metadata,
+			&i.OriginalMetadata,
 			&i.IsPublic,
 		); err != nil {
 			return nil, err
@@ -1171,7 +1236,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 WHERE
     (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
@@ -1234,6 +1299,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 			&i.IsFeatured,
 			&i.ViewCount,
 			&i.PublishedAt,
+			&i.ScheduledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.AuthorID,
@@ -1329,7 +1395,7 @@ const publishPost = `-- name: PublishPost :one
 UPDATE posts
 SET status = 'published', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
 `
 
 func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
@@ -1346,6 +1412,7 @@ func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.IsFeatured,
 		&i.ViewCount,
 		&i.PublishedAt,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthorID,
@@ -1425,7 +1492,7 @@ SET alt_text = COALESCE(?, alt_text),
     post_id = COALESCE(?, post_id),
     metadata = COALESCE(?, metadata)
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
 `
 
 type UpdateMediaParams struct {
@@ -1461,6 +1528,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
@@ -1470,7 +1538,7 @@ const updateMediaFilename = `-- name: UpdateMediaFilename :one
 UPDATE media
 SET filename = ?, original_path = ?, thumbnail_path = ?
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
 `
 
 type UpdateMediaFilenameParams struct {
@@ -1504,6 +1572,44 @@ func (q *Queries) UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilena
 		&i.AltText,
 		&i.Caption,
 		&i.Metadata,
+		&i.OriginalMetadata,
+		&i.IsPublic,
+	)
+	return i, err
+}
+
+const updateMediaMetadata = `-- name: UpdateMediaMetadata :one
+UPDATE media
+SET metadata = ?
+WHERE id = ?
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
+`
+
+type UpdateMediaMetadataParams struct {
+	Metadata sql.NullString `json:"metadata"`
+	ID       int64          `json:"id"`
+}
+
+func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, updateMediaMetadata, arg.Metadata, arg.ID)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.OriginalPath,
+		&i.ThumbnailPath,
+		&i.FileType,
+		&i.MimeType,
+		&i.FileSize,
+		&i.Width,
+		&i.Height,
+		&i.PostID,
+		&i.UploadedAt,
+		&i.Checksum,
+		&i.AltText,
+		&i.Caption,
+		&i.Metadata,
+		&i.OriginalMetadata,
 		&i.IsPublic,
 	)
 	return i, err
@@ -1512,10 +1618,15 @@ func (q *Queries) UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilena
 const updatePost = `-- name: UpdatePost :one
 UPDATE posts
 SET title = ?1, slug = ?2, content = ?3, excerpt = ?4, formatter = ?5, status = ?6, is_featured = ?7, thumbnail_path = ?8, meta_description = ?9,
-    published_at = (CASE WHEN ?6 = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END),
+    scheduled_at = ?10,
+    published_at = (CASE
+        WHEN ?6 = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
+        WHEN ?6 = 'scheduled'  THEN NULL
+        ELSE published_at
+    END),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = ?10 AND author_id = ?11
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+WHERE id = ?11 AND author_id = ?12
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
 `
 
 type UpdatePostParams struct {
@@ -1528,6 +1639,7 @@ type UpdatePostParams struct {
 	IsFeatured      bool           `json:"is_featured"`
 	ThumbnailPath   sql.NullString `json:"thumbnail_path"`
 	MetaDescription sql.NullString `json:"meta_description"`
+	ScheduledAt     sql.NullTime   `json:"scheduled_at"`
 	ID              int64          `json:"id"`
 	AuthorID        int64          `json:"author_id"`
 }
@@ -1543,6 +1655,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		arg.IsFeatured,
 		arg.ThumbnailPath,
 		arg.MetaDescription,
+		arg.ScheduledAt,
 		arg.ID,
 		arg.AuthorID,
 	)
@@ -1558,6 +1671,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.IsFeatured,
 		&i.ViewCount,
 		&i.PublishedAt,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthorID,
@@ -1693,7 +1807,7 @@ const withdrawPost = `-- name: WithdrawPost :one
 UPDATE posts
 SET status = 'draft', updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at
 `
 
 func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
@@ -1710,6 +1824,7 @@ func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
 		&i.IsFeatured,
 		&i.ViewCount,
 		&i.PublishedAt,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthorID,

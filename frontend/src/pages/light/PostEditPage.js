@@ -26,6 +26,14 @@ const AUTOSAVE_MS = 30_000;
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
+/** Convert a UTC ISO string to a datetime-local input value (local time). */
+function toDatetimeLocal(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /**
  * Parse content string into an ordered list of image and text nodes.
  * Consecutive non-image lines are grouped into a single text node.
@@ -131,7 +139,7 @@ export default class PostEditPage extends Component {
     const featured = p.is_featured || false;
     const excerpt  = p.excerpt || '';
 
-    const statusOpts = ['draft', 'published', 'hidden', 'page'].map((s) =>
+    const statusOpts = ['draft', 'published', 'scheduled', 'hidden', 'page'].map((s) =>
       `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`
     ).join('');
 
@@ -188,6 +196,18 @@ export default class PostEditPage extends Component {
                   <input type="text" id="title-input" class="form-input editor-title"
                          placeholder="Post title" value="${title}" required>
                   ${aiBtn('title')}
+                </div>
+              </div>
+
+              <div class="schedule-row" id="schedule-row"
+                   style="display:${status === 'scheduled' ? 'flex' : 'none'}">
+                <div class="schedule-input-wrapper">
+                  <input type="datetime-local" id="schedule-input"
+                         class="form-input schedule-at-input"
+                         value="${toDatetimeLocal(p.scheduled_at || '')}">
+                  <span class="schedule-input-hint"
+                        id="schedule-hint"
+                        style="${p.scheduled_at ? 'display:none' : ''}">Publish at…</span>
                 </div>
               </div>
 
@@ -283,12 +303,48 @@ export default class PostEditPage extends Component {
       this._autoSaveField({ is_featured: newVal });
     });
 
-    // Status pill — auto-save on change
+    // Status pill — auto-save on change; show/hide schedule row
     const statusSelect = this.$('#status-select');
+    const scheduleRow  = this.$('#schedule-row');
+    const scheduleInput = this.$('#schedule-input');
+
     statusSelect?.addEventListener('change', () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
-      this._autoSaveField({ status: newStatus });
+      if (newStatus === 'scheduled') {
+        if (scheduleRow) scheduleRow.style.display = 'flex';
+        this._autoSaveField({ status: newStatus });
+      } else {
+        if (scheduleRow) scheduleRow.style.display = 'none';
+        if (scheduleInput) scheduleInput.value = '';
+        this._autoSaveField({ status: newStatus, scheduled_at: '' });
+      }
+    });
+
+    // If navigated from the posts list with ?openSchedule=1, show and focus the date picker
+    if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
+      scheduleRow.style.display = 'flex';
+      statusSelect.value = 'scheduled';
+      statusSelect.className = 'status-select badge-scheduled';
+      this._autoSaveField({ status: 'scheduled' });
+      setTimeout(() => scheduleInput.showPicker?.() || scheduleInput.focus(), 50);
+    }
+
+    // Schedule picker — auto-save when date/time is set
+    const scheduleHint = this.$('#schedule-hint');
+
+    scheduleInput?.addEventListener('focus', () => {
+      if (scheduleHint) scheduleHint.style.display = 'none';
+    });
+    scheduleInput?.addEventListener('blur', () => {
+      if (scheduleHint && !scheduleInput.value) scheduleHint.style.display = '';
+    });
+    scheduleInput?.addEventListener('change', () => {
+      const val = scheduleInput.value;
+      if (val) {
+        if (scheduleHint) scheduleHint.style.display = 'none';
+        this._autoSaveField({ scheduled_at: new Date(val).toISOString() });
+      }
     });
 
     // Auto-save on content change
@@ -552,6 +608,9 @@ export default class PostEditPage extends Component {
       thumbnail_path:   (this.$('#thumbnail-input')?.value || '').trim() || null,
       meta_description: (this.$('#meta-input')?.value || '').trim() || null,
       tags:             this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
+      scheduled_at:     this.$('#schedule-input')?.value
+        ? new Date(this.$('#schedule-input').value).toISOString()
+        : '',
     };
   }
 

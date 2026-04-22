@@ -18,7 +18,7 @@ import { Pagination } from '../shared/Pagination.js';
 import { MediaLightbox } from '../public/MediaLightbox.js';
 import { ConfirmDialog } from '../shared/ConfirmDialog.js';
 import { PromptDialog } from '../shared/PromptDialog.js';
-import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, updateMedia, reextractMediaEXIF } from '../../api/media.js';
+import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF } from '../../api/media.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
@@ -232,6 +232,7 @@ export class MediaBrowser extends Component {
         <div class="exif-actions">
           <button class="btn btn-sm exif-add-btn" type="button">+ Add field</button>
           <button class="btn btn-sm exif-save-btn" type="button" data-id="${escapeHtml(String(m.id))}">Save EXIF</button>
+          <button class="btn btn-sm exif-revert-btn" type="button" data-id="${escapeHtml(String(m.id))}">Revert to original</button>
           <button class="btn btn-sm exif-reextract-btn" type="button" data-id="${escapeHtml(String(m.id))}">Re-extract from file</button>
         </div>
       </div>`;
@@ -292,22 +293,79 @@ export class MediaBrowser extends Component {
       });
     });
 
-    // Save EXIF — reads from input.value (never innerHTML)
+    // Save EXIF — validates alphanumeric+space, writes to file via PUT /exif
     this.container.querySelectorAll('.exif-save-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const id = parseInt(btn.dataset.id, 10);
         const panel = btn.closest('.exif-panel');
-        const metadata = {};
+        const fields = {};
+        const invalid = [];
         panel.querySelectorAll('.exif-rows tr').forEach((tr) => {
           const key = tr.querySelector('.exif-key')?.value.trim();
           const val = tr.querySelector('.exif-val')?.value.trim();
-          if (key) metadata[key] = val;
+          if (!key) return;
+          if (val && !/^[a-zA-Z0-9 ]*$/.test(val)) {
+            invalid.push(key);
+          } else {
+            fields[key] = val || '';
+          }
         });
+        if (invalid.length > 0) {
+          store.set('toast', { message: `Invalid characters in: ${invalid.join(', ')}. Only letters, numbers and spaces allowed.`, type: 'error' });
+          return;
+        }
         try {
-          await updateMedia(id, { metadata });
+          await updateMediaEXIF(id, fields);
           store.set('toast', { message: 'EXIF saved.', type: 'success' });
         } catch (err) {
           store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
+        }
+      });
+    });
+
+    // Revert EXIF — restores original_metadata captured at upload
+    this.container.querySelectorAll('.exif-revert-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Revert to the original EXIF captured at upload? This will overwrite your edits.')) return;
+        const id = parseInt(btn.dataset.id, 10);
+        try {
+          const updated = await revertMediaEXIF(id);
+          const metadata = updated.metadata || {};
+          const panel = btn.closest('.exif-panel');
+          const tbody = panel.querySelector('.exif-rows');
+          while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+          Object.entries(metadata).forEach(([k, v]) => {
+            const tr = document.createElement('tr');
+            const tdKey = document.createElement('td');
+            const inputKey = document.createElement('input');
+            inputKey.className = 'exif-key';
+            inputKey.placeholder = 'Field name';
+            inputKey.setAttribute('aria-label', 'EXIF field name');
+            inputKey.value = String(k);
+            tdKey.appendChild(inputKey);
+            const tdVal = document.createElement('td');
+            const inputVal = document.createElement('input');
+            inputVal.className = 'exif-val';
+            inputVal.placeholder = 'Value';
+            inputVal.setAttribute('aria-label', 'EXIF value');
+            inputVal.value = String(v);
+            tdVal.appendChild(inputVal);
+            const tdDel = document.createElement('td');
+            const delBtn = document.createElement('button');
+            delBtn.className = 'exif-delete-btn';
+            delBtn.type = 'button';
+            delBtn.title = 'Remove field';
+            delBtn.setAttribute('aria-label', 'Remove EXIF field');
+            delBtn.textContent = '\u00d7';
+            tdDel.appendChild(delBtn);
+            tr.appendChild(tdKey);
+            tr.appendChild(tdVal);
+            tr.appendChild(tdDel);
+            tbody.appendChild(tr);
+          });
+          store.set('toast', { message: 'EXIF reverted to original.', type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Revert failed.', type: 'error' });
         }
       });
     });
@@ -530,6 +588,12 @@ export class MediaBrowser extends Component {
   }
 
   _wireDragDrop(fileInput, pickerMode) {
+    // Remove any previously registered listeners before re-registering.
+    // afterRender fires on every setState re-render, so without this cleanup
+    // each render accumulates an extra set of document-level drop handlers.
+    for (const [t, ev, fn] of this._dragListeners) t.removeEventListener(ev, fn);
+    this._dragListeners = [];
+
     // In picker mode, scope drag-drop to the component container to avoid
     // conflicting with PostEditPage's document-level drag handler.
     const target = pickerMode ? this.container : document;

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
@@ -707,4 +708,80 @@ func TestUpdatePost_BadID(t *testing.T) {
 	if err := h.UpdatePost(c); err == nil {
 		t.Error("expected error for bad ID")
 	}
+}
+
+func TestCreatePost_Scheduled(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+
+	future := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	body := fmt.Sprintf(`{"title":"Scheduled","content":"hello","status":"draft","scheduled_at":%q}`, future)
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	if err := h.CreatePost(c); err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["status"] != "scheduled" {
+		t.Errorf("expected status 'scheduled', got %v", resp["status"])
+	}
+	if resp["scheduled_at"] == nil {
+		t.Error("expected scheduled_at to be non-nil")
+	}
+}
+
+func TestCreatePost_ScheduledInPast_PublishesImmediately(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+
+	past := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)
+	body := fmt.Sprintf(`{"title":"PastScheduled","content":"hello","scheduled_at":%q}`, past)
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	if err := h.CreatePost(c); err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["status"] != "published" {
+		t.Errorf("expected status 'published', got %v", resp["status"])
+	}
+	assert.Nil(t, resp["scheduled_at"], "past scheduled_at should not be stored")
 }
