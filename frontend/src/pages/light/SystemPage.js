@@ -9,9 +9,8 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import {
   clearCache, listBackups,
   createBackup, restoreBackup, deleteBackup, getMigrations,
-  updateMapCoords, scanMediaImport,
+  updateMapCoords, scanMediaImport, getStats,
 } from '../../api/system.js';
-import { getAllSettings } from '../../api/settings.js';
 import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
 import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
 import { preCacheImages } from '../../utils/imageCache.js';
@@ -50,12 +49,12 @@ export default class SystemPage extends Component {
       // Photo library import
       scanningMedia: false,
       scanResult: null,
-      importPath: '',
+      importConfigured: false,
     };
   }
 
   render() {
-    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult, scanningMedia, scanResult, importPath } = this.state;
+    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult, scanningMedia, scanResult, importConfigured } = this.state;
     const settings = store.get('settings') || {};
     const enableBackup = settings.enable_backup !== false;
 
@@ -130,14 +129,14 @@ export default class SystemPage extends Component {
                   <div class="op-item">
                     <div class="op-info">
                       <h4>Scan for New Photos</h4>
-                      ${importPath
-                        ? `<p>Scanning: <code>${escapeHtml(importPath)}</code></p>`
-                        : `<p class="text-muted">Set a <strong>Photo Library path</strong> (<code>media_import_path</code>) in <a href="/light/settings">Settings</a> first.</p>`
+                      ${importConfigured
+                        ? `<p class="text-muted">Photo library import is configured.</p>`
+                        : `<p class="text-muted">No import path configured. Set <code>MEDIA_IMPORT_PATH</code> in the server environment.</p>`
                       }
                       ${scanningMedia ? `<p class="text-muted" style="margin-top:var(--spacing-sm)">Scanning library, please wait&hellip;</p>` : ''}
                       ${scanResult ? this._renderScanResult(scanResult) : ''}
                     </div>
-                    <button id="scan-media-btn" class="btn btn-secondary" ${scanningMedia || !importPath ? 'disabled' : ''}>
+                    <button id="scan-media-btn" class="btn btn-secondary" ${scanningMedia || !importConfigured ? 'disabled' : ''}>
                       ${scanningMedia ? 'Scanning&hellip;' : 'Scan for New Photos'}
                     </button>
                   </div>
@@ -365,16 +364,15 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [backups, migrations, lastSync, queue, allSettings] = await Promise.all([
+      const [backups, migrations, lastSync, queue, stats] = await Promise.all([
         listBackups(),
         getMigrations(),
         getMeta('last_sync'),
         getQueue(),
-        getAllSettings().catch(() => ({})),
+        getStats().catch(() => ({})),
       ]);
       await updateStatus();
-      const importPath = allSettings.media_import_path || '';
-      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue, importPath });
+      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue, importConfigured: !!stats.import_configured });
     } catch (err) {
       console.error('[SystemPage] load error:', err);
       store.set('toast', { message: 'Could not load system data.', type: 'error' });

@@ -129,12 +129,13 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"published_posts": stats.PublishedCount,
-		"total_posts":     stats.PostCount,
-		"total_tags":      stats.TagCount,
-		"total_media":     stats.MediaCount,
-		"storage_used_mb": float64(stats.StorageBytes) / (1024 * 1024),
-		"uptime_seconds":  int64(time.Since(startTime).Seconds()),
+		"published_posts":   stats.PublishedCount,
+		"total_posts":       stats.PostCount,
+		"total_tags":        stats.TagCount,
+		"total_media":       stats.MediaCount,
+		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
+		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
+		"import_configured": h.mediaImportPath != "",
 	})
 }
 
@@ -307,13 +308,10 @@ var importableExtensions = map[string]bool{
 func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	importPath, err := h.settingsService.GetSetting(ctx, "media_import_path", "")
-	if err != nil || importPath == "" {
-		importPath = h.mediaImportPath
-	}
+	importPath := h.mediaImportPath
 	if importPath == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"detail": "media_import_path not configured in settings",
+			"detail": "media_import_path not configured",
 		})
 	}
 
