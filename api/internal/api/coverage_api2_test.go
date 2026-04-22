@@ -757,7 +757,7 @@ func TestSystemHandler_GetStats_DBError(t *testing.T) {
 	tmpDir2 := t.TempDir()
 	systemSvc2 := services.NewSystemService(repo, tmpDir2)
 	cacheSvc2 := services.NewCacheService(tmpDir2)
-	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, cacheSvc2, tmpDir2, "1.0")
+	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, cacheSvc2, tmpDir2, "1.0", "")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -837,7 +837,7 @@ func TestSystemHandler_GetMigrations_OK(t *testing.T) {
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0", "")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -861,7 +861,7 @@ func TestSystemHandler_ClearCache_DBError(t *testing.T) {
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0", "")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -882,7 +882,7 @@ func TestSystemHandler_RecalculateMediaVisibility_DBError(t *testing.T) {
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0", "")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -903,7 +903,7 @@ func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0", "")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -1090,7 +1090,7 @@ func TestOfflineStats_DBError(t *testing.T) {
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(h.repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0", "")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -1106,7 +1106,7 @@ func TestOfflineSnapshot_DBError(t *testing.T) {
 	tmpDir := t.TempDir()
 	systemSvc := services.NewSystemService(h.repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0", "")
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

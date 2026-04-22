@@ -28,6 +28,7 @@ type Config struct {
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
 	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
+	MediaImportPath          string `mapstructure:"MEDIA_IMPORT_PATH"`
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -54,6 +55,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("THUMBNAIL_HEIGHT", 300)
 	viper.SetDefault("JPEG_QUALITY", 85)
 	viper.SetDefault("GEMINI_API_KEY", "")
+	viper.SetDefault("MEDIA_IMPORT_PATH", "")
 
 	err = viper.ReadInConfig()
 	if err != nil {

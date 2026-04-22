@@ -20,21 +20,22 @@ import (
 )
 
 type SystemHandler struct {
-	repo            *repository.Repository
-	mediaService    *services.MediaService
-	postService     *services.PostService
-	settingsService *services.SettingsService
-	tagService      *services.TagService
-	systemService   *services.SystemService
-	cacheService    *services.CacheService
-	dataPath        string
-	logPath         string
-	appVersion      string
+	repo              *repository.Repository
+	mediaService      *services.MediaService
+	postService       *services.PostService
+	settingsService   *services.SettingsService
+	tagService        *services.TagService
+	systemService     *services.SystemService
+	cacheService      *services.CacheService
+	dataPath          string
+	logPath           string
+	appVersion        string
+	mediaImportPath   string
 }
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
+func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string, mediaImportPath string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
@@ -46,6 +47,7 @@ func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaS
 		dataPath:        dataPath,
 		logPath:         filepath.Join(dataPath, "logs", "app.log"),
 		appVersion:      appVersion,
+		mediaImportPath: mediaImportPath,
 	}
 }
 
@@ -307,6 +309,9 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 
 	importPath, err := h.settingsService.GetSetting(ctx, "media_import_path", "")
 	if err != nil || importPath == "" {
+		importPath = h.mediaImportPath
+	}
+	if importPath == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"detail": "media_import_path not configured in settings",
 		})
