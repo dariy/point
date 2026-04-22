@@ -132,7 +132,7 @@ export default class SystemPage extends Component {
                       <h4>Scan for New Photos</h4>
                       ${importPath
                         ? `<p>Scanning: <code>${escapeHtml(importPath)}</code></p>`
-                        : `<p class="text-muted">Set a <strong>Photo Library path</strong> (<code>media_import_path</code>) in Settings first.</p>`
+                        : `<p class="text-muted">Set a <strong>Photo Library path</strong> (<code>media_import_path</code>) in <a href="/light/settings">Settings</a> first.</p>`
                       }
                       ${scanningMedia ? `<p class="text-muted" style="margin-top:var(--spacing-sm)">Scanning library, please wait&hellip;</p>` : ''}
                       ${scanResult ? this._renderScanResult(scanResult) : ''}
