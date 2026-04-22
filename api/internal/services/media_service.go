@@ -113,7 +113,7 @@ func (s *MediaService) extractEXIF(r io.Reader) map[string]interface{} {
 		if err == nil {
 			// val.String() often includes quotes for strings, or is a rational/int.
 			// For a generic metadata map, we just take the string representation.
-			metadata[string(tag)] = strings.Trim(val.String(), "\"")
+			metadata[string(tag)] = sanitizeEXIFValue(strings.Trim(val.String(), "\""))
 		}
 	}
 
@@ -265,7 +265,8 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		AltText:       sql.NullString{String: p.AltText, Valid: p.AltText != ""},
 		Caption:       sql.NullString{String: p.Caption, Valid: p.Caption != ""},
 		Metadata:      metadataJSON,
-		UploadedAt:    now,
+		OriginalMetadata: metadataJSON,
+		UploadedAt:       now,
 	})
 }
 
@@ -361,7 +362,8 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		AltText:       sql.NullString{},
 		Caption:       sql.NullString{},
 		Metadata:      metadataJSON,
-		UploadedAt:    now,
+		OriginalMetadata: metadataJSON,
+		UploadedAt:       now,
 	})
 }
 
@@ -466,6 +468,87 @@ func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medi
 		AltText:  media.AltText.String,
 		Caption:  media.Caption.String,
 		Metadata: &metadata,
+	})
+}
+
+// UpdateEXIFParams holds the fields to write into a media item's EXIF.
+// All string values must contain only alphanumeric characters and spaces.
+type UpdateEXIFParams struct {
+	ID     int64
+	Fields map[string]string
+}
+
+// UpdateEXIF validates field values, writes EXIF back to the JPEG file on
+// disk (no-op for non-JPEG), and replaces media.metadata in the DB.
+// original_metadata is never modified.
+func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (models.Medium, error) {
+	media, err := s.repo.GetMedia(ctx, p.ID)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("get media: %w", err)
+	}
+
+	// Validate: all values must already be clean alphanumeric+space
+	sanitized := make(map[string]interface{}, len(p.Fields))
+	for k, v := range p.Fields {
+		if sanitizeEXIFValue(v) != v {
+			return models.Medium{}, fmt.Errorf("field %q contains disallowed characters: only alphanumeric and space allowed", k)
+		}
+		sanitized[k] = v
+	}
+
+	// Write EXIF to file (JPEG only; non-JPEG is no-op)
+	base := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	full := filepath.Clean(filepath.Join(base, media.OriginalPath))
+	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
+		return models.Medium{}, fmt.Errorf("invalid media path")
+	}
+	if err := writeEXIFToFile(full, media.MimeType, sanitized); err != nil {
+		return models.Medium{}, fmt.Errorf("write exif to file: %w", err)
+	}
+
+	// Update metadata in DB
+	metaJSON, err := json.Marshal(sanitized)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("marshal metadata: %w", err)
+	}
+	return s.repo.UpdateMediaMetadata(ctx, models.UpdateMediaMetadataParams{
+		ID:       p.ID,
+		Metadata: sql.NullString{String: string(metaJSON), Valid: true},
+	})
+}
+
+// RevertEXIF restores media.metadata to the original EXIF captured at upload
+// and writes those values back to the JPEG file on disk. Returns an error if
+// original_metadata is absent (null or empty).
+func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium, error) {
+	media, err := s.repo.GetMedia(ctx, id)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("get media: %w", err)
+	}
+
+	if !media.OriginalMetadata.Valid || media.OriginalMetadata.String == "" {
+		return models.Medium{}, fmt.Errorf("no original metadata to revert to")
+	}
+
+	var origFields map[string]interface{}
+	if err := json.Unmarshal([]byte(media.OriginalMetadata.String), &origFields); err != nil {
+		return models.Medium{}, fmt.Errorf("parse original metadata: %w", err)
+	}
+
+	// Write original EXIF back to file
+	base := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	full := filepath.Clean(filepath.Join(base, media.OriginalPath))
+	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
+		return models.Medium{}, fmt.Errorf("invalid media path")
+	}
+	if err := writeEXIFToFile(full, media.MimeType, origFields); err != nil {
+		return models.Medium{}, fmt.Errorf("write exif to file: %w", err)
+	}
+
+	// Reset metadata = original_metadata in DB
+	return s.repo.UpdateMediaMetadata(ctx, models.UpdateMediaMetadataParams{
+		ID:       id,
+		Metadata: media.OriginalMetadata,
 	})
 }
 

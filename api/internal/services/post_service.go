@@ -172,6 +172,7 @@ type CreatePostParams struct {
 	ThumbnailPath   string
 	MetaDescription string
 	Tags            []string
+	ScheduledAt     *time.Time
 }
 
 func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, error) {
@@ -190,6 +191,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		AuthorID:        p.AuthorID,
 		ThumbnailPath:   sql.NullString{String: p.ThumbnailPath, Valid: p.ThumbnailPath != ""},
 		MetaDescription: sql.NullString{String: p.MetaDescription, Valid: p.MetaDescription != ""},
+		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
 		return models.Post{}, err
@@ -274,6 +276,7 @@ type UpdatePostParams struct {
 	ThumbnailPath   string
 	MetaDescription string
 	Tags            []string
+	ScheduledAt     *time.Time
 }
 
 func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (models.Post, error) {
@@ -293,6 +296,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		MetaDescription: sql.NullString{String: p.MetaDescription, Valid: p.MetaDescription != ""},
 		ID:              p.ID,
 		AuthorID:        p.AuthorID,
+		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
 		return models.Post{}, err
@@ -403,4 +407,23 @@ func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (
 // the given post, ordered by published_at.
 func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error) {
 	return s.repo.GetPostNavigation(ctx, postID, publicOnly)
+}
+
+func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Post, error) {
+	published, err := s.repo.BulkPublishScheduledPosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(published) > 0 {
+		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
+	}
+	return published, nil
+}
+
+func toNullTime(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: t.UTC(), Valid: true}
 }

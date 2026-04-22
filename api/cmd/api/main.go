@@ -97,7 +97,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -249,6 +249,8 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.POST("/:id/reextract", mediaHandler.ReextractEXIF, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.PUT("/:id/exif", mediaHandler.UpdateEXIF, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/:id/revert-exif", mediaHandler.RevertEXIF, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(svcs.Auth))
 
 	// ── Settings Routes ────────────────────────────────────────────────────────
@@ -432,6 +434,10 @@ func main() {
 			`ALTER TABLE media ADD COLUMN metadata TEXT`,
 		},
 		{
+			"add_media_original_metadata",
+			`ALTER TABLE media ADD COLUMN original_metadata TEXT`,
+		},
+		{
 			"create_media_visibility_log",
 			`CREATE TABLE IF NOT EXISTS media_visibility_log (
 				id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -480,6 +486,14 @@ func main() {
 			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
 			 SELECT s.id, c.id FROM tags s, tags c
 			 WHERE s.slug = '_system' AND c.slug = '_no_ancestors'`,
+		},
+		{
+			"add_scheduled_at_to_posts",
+			`ALTER TABLE posts ADD COLUMN scheduled_at DATETIME`,
+		},
+		{
+			"add_scheduled_at_to_posts_index",
+			`CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at)`,
 		},
 	}
 	for _, m := range migrations {

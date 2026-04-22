@@ -14,6 +14,8 @@
     --color-warning-light: #fef3c7;
     --color-danger: #ef4444;
     --color-danger-light: #fee2e2;
+    --color-scheduled: #7c3aed;
+    --color-scheduled-light: #ede9fe;
 
     --bg-overlay: rgba(0, 0, 0, 0.8);
 
