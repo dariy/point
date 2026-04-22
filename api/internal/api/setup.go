@@ -94,7 +94,6 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"show_tag_cloud", "true", "boolean"},
 		{"enable_map", "false", "boolean"},
 		{"enable_backup", "false", "boolean"},
-		{"media_import_path", "", "string"},
 	}
 
 	for _, s := range seedSettings {

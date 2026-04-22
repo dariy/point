@@ -39,27 +39,6 @@ func resolveJSDir(frontendDir string) string {
 	return ""
 }
 
-// syncMediaImportPath seeds the media_import_path DB setting from the
-// MEDIA_IMPORT_PATH env var when the DB value is absent or empty, so the
-// frontend and the scan handler both see the configured path without requiring
-// a manual UI change. A non-empty DB value always wins (user overrides env).
-func syncMediaImportPath(ctx context.Context, cfg *config.Config, repo *repository.Repository) {
-	if cfg.MediaImportPath == "" {
-		return
-	}
-	existing, err := repo.GetSetting(ctx, "media_import_path")
-	if err == nil && existing.Value.Valid && existing.Value.String != "" {
-		return
-	}
-	if _, err := repo.UpdateSetting(ctx, models.UpdateSettingParams{
-		Key:       "media_import_path",
-		Value:     sql.NullString{String: cfg.MediaImportPath, Valid: true},
-		ValueType: "string",
-	}); err != nil {
-		log.Printf("warning: failed to sync MEDIA_IMPORT_PATH to settings: %v", err)
-	}
-}
-
 // ensureSecretKey guarantees cfg.SecretKey is populated before the server
 // starts. If SECRET_KEY is absent from the environment / .env file it checks
 // blog_settings for the key "_secret_key". When no persisted key exists it
@@ -561,9 +540,6 @@ func main() {
 	if err := ensureSecretKey(ctx, &cfg, repo); err != nil {
 		log.Fatalf("failed to ensure secret key: %v", err)
 	}
-
-	// Seed media_import_path from env if the DB setting is empty.
-	syncMediaImportPath(ctx, &cfg, repo)
 
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
