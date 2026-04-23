@@ -27,7 +27,7 @@ func TestSystemHandler_OfflineStats(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/offline/stats", nil)
@@ -70,7 +70,7 @@ func TestSystemHandler_OfflineSnapshot(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/offline/snapshot", nil)
@@ -110,7 +110,7 @@ func TestOfflineStatsWithData(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, thumbnail_path, file_type, mime_type, file_size, checksum, is_public) VALUES ('img.jpg','originals/img.jpg','thumbnails/img.jpg','image','image/jpeg',1024,'c1',1)`)
@@ -134,7 +134,7 @@ func TestOfflineSnapshotWithData(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
