@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+type BlogSecret struct {
+	Key       string         `json:"key"`
+	Value     sql.NullString `json:"value"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
 type BlogSetting struct {
 	Key       string         `json:"key"`
 	Value     sql.NullString `json:"value"`
