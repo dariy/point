@@ -12,7 +12,6 @@ import (
 	"io"
 	"log"
 	"mime"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -860,10 +859,7 @@ func (s *MediaService) AnalyzeMediaByPath(ctx context.Context, mediaPath string)
 }
 
 func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
-	apiKey, _ := s.settingsService.GetSetting(ctx, "GEMINI_API_KEY", "")
-	if apiKey == "" && s.cfg != nil {
-		apiKey = s.cfg.GeminiAPIKey
-	}
+	apiKey, _ := s.settingsService.GetSecret(ctx, "gemini_api_key")
 
 	var analysis *AnalysisResponse
 	var err error
@@ -882,12 +878,8 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 		// Fallback to pre-initialized client if any
 		analysis, err = s.analyzeImageDirectlyWithClient(ctx, s.genaiClient, content, filename, mimeType)
 	} else {
-		endpoint, epErr := s.settingsService.GetSetting(ctx, "genai_api_endpoint", "")
-		if epErr != nil || endpoint == "" {
-			log.Printf("warning: AI features disabled (GEMINI_API_KEY is absent)")
-			return &AnalysisResponse{Tags: []string{}}, nil
-		}
-		analysis, err = s.analyzeImageViaHTTP(ctx, content, filename, mimeType, endpoint)
+		log.Printf("warning: AI features disabled (gemini_api_key is absent)")
+		return &AnalysisResponse{Tags: []string{}}, nil
 	}
 
 	if err != nil {
@@ -1023,52 +1015,6 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 	return s.parseAnalysisResult(result, filename)
 }
 
-func (s *MediaService) analyzeImageViaHTTP(ctx context.Context, content []byte, filename, mimeType, endpoint string) (*AnalysisResponse, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("image", filename)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := io.Copy(part, bytes.NewReader(content)); err != nil {
-		return nil, err
-	}
-	_ = writer.Close()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GenAI service error: status %d", resp.StatusCode)
-	}
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Handle common wrappers
-	for _, wrapper := range []string{"data", "result", "output", "response"} {
-		if inner, ok := result[wrapper].(map[string]interface{}); ok {
-			result = inner
-			break
-		}
-	}
-
-	return s.parseAnalysisResult(result, filename)
-}
 
 func (s *MediaService) parseAnalysisResult(result map[string]interface{}, filename string) (*AnalysisResponse, error) {
 	// Require exactly title, tags, excerpt — no extra keys.
