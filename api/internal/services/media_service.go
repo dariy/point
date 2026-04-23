@@ -800,7 +800,7 @@ type AnalysisResponse struct {
 var (
 	ErrMediaNotFound    = errors.New("media not found")
 	ErrNotAnImage       = errors.New("media item is not an image")
-	ErrResponseUnusable = errors.New("The response cannot be used.")
+	ErrResponseUnusable = errors.New("the response cannot be used")
 )
 
 const maxAnalyzeBytes = 20 << 20 // 20 MB

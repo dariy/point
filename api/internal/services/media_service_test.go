@@ -583,7 +583,7 @@ func TestMediaService_ThumbnailBranches(t *testing.T) {
 
 func TestUploadFile_StoresOriginalMetadata(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	m, err := svc.UploadFile(ctx, UploadFileParams{
@@ -610,7 +610,7 @@ func TestExtractEXIF_Sanitized(t *testing.T) {
 
 func TestUploadFile_OriginalMetadataImmutable(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -642,7 +642,7 @@ func TestUploadFile_OriginalMetadataImmutable(t *testing.T) {
 
 func TestUpdateEXIF_ValidatesInput(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -673,7 +673,7 @@ func TestUpdateEXIF_ValidatesInput(t *testing.T) {
 
 func TestUpdateEXIF_UpdatesDBAndFile(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -706,7 +706,7 @@ func TestUpdateEXIF_UpdatesDBAndFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open file: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() 
 	x, err := goexif.Decode(f)
 	if err != nil {
 		t.Fatalf("goexif decode: %v", err)
@@ -719,7 +719,7 @@ func TestUpdateEXIF_UpdatesDBAndFile(t *testing.T) {
 
 func TestUpdateEXIF_NonJPEGSkipsFileWrite(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	m, _ := svc.UploadFile(ctx, UploadFileParams{
@@ -739,7 +739,7 @@ func TestUpdateEXIF_NonJPEGSkipsFileWrite(t *testing.T) {
 
 func TestUpdateEXIF_NotFound(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	_, err := svc.UpdateEXIF(ctx, UpdateEXIFParams{ID: 9999, Fields: map[string]string{}})
@@ -750,7 +750,7 @@ func TestUpdateEXIF_NotFound(t *testing.T) {
 
 func TestRevertEXIF_RestoresOriginal(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -794,7 +794,7 @@ func TestRevertEXIF_RestoresOriginal(t *testing.T) {
 
 func TestRevertEXIF_NoOriginal(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	_, _ = svc.repo.DB().Exec(
@@ -812,7 +812,7 @@ func TestRevertEXIF_NoOriginal(t *testing.T) {
 
 func TestRevertEXIF_NotFound(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 	ctx := context.Background()
 
 	_, err := svc.RevertEXIF(ctx, 9999)
