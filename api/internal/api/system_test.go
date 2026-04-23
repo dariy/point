@@ -28,7 +28,7 @@ func TestSystemHandler_Stats(t *testing.T) {
 	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
 	systemService := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/stats", nil)
@@ -65,7 +65,7 @@ line3`), 0644)
 	mediaService := services.NewMediaService(repo, &config.Config{}, settingsService, tagService)
 	systemService := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaService, postService, settingsService, tagService, systemService, cacheSvc, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/logs", nil)
@@ -96,7 +96,7 @@ func TestSystemHandler_GetMigrations(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/system/migrations", nil)
@@ -125,7 +125,7 @@ func TestSystemHandler_RecalculateMediaVisibility(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/system/media/recalculate", nil)
@@ -154,7 +154,7 @@ func TestSystemHandler_UpdateMapCoords(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/system/tags/update-coords", nil)
@@ -183,7 +183,7 @@ func TestSystemHandler_ClearCache(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0", "")
+	handler := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/api/system/cache/clear", nil)
@@ -222,7 +222,7 @@ func TestSystemHandler_GetStats_Success(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: tmpDir}, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.2.3", "")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.2.3")
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
