@@ -35,6 +35,7 @@ body {
     padding: var(--spacing-lg) 0;
     display: flex;
     flex-direction: column;
+    touch-action: pan-y; /* Support passive horizontal swipe */
 }
 
 .main-container {

@@ -23,6 +23,21 @@ import { NotificationLogButton } from './components/shared/NotificationLogButton
 import { initNotificationLog } from './utils/notificationLog.js';
 import { syncQueue } from './utils/sync.js';
 
+// ── Theming Foundation ────────────────────────────────────────────────────
+import './utils/PointBus.js';
+import { parseTheme } from './utils/themeParser.js';
+import { PointPostList } from './components/shared/PointPostList.js';
+import { PointLightbox } from './components/shared/PointLightbox.js';
+
+if (typeof customElements !== 'undefined') {
+  customElements.define('point-post-list', PointPostList);
+  customElements.define('point-lightbox', PointLightbox);
+}
+
+// Initialise theme immediately to prevent FOUC
+parseTheme();
+
+
 // ── Login overlay ─────────────────────────────────────────────────────────
 
 const _loginOverlayEl = document.createElement('div');

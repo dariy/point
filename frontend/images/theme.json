@@ -1,0 +1,16 @@
+{
+  "colors": {
+    "bg": "#ffffff",
+    "text": "#000000",
+    "accent": "#007aff",
+    "muted": "#8e8e93"
+  },
+  "spacing": {
+    "base": "16px",
+    "gap": "12px"
+  },
+  "typography": {
+    "font_family": "system-ui, sans-serif",
+    "base_size": "16px"
+  }
+}
