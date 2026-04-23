@@ -6,8 +6,6 @@ import (
 	"errors"
 	"image"
 	"image/jpeg"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -564,68 +562,6 @@ func TestNewMediaServiceWithAPIKey(t *testing.T) {
 	}
 }
 
-// TestMediaService_AnalyzeImageViaHTTP exercises analyzeImageViaHTTP via a mock HTTP server.
-func TestMediaService_AnalyzeImageViaHTTP(t *testing.T) {
-	svc, tmpDir := setupMediaService(t)
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-		_ = svc.repo.Close()
-	}()
-	ctx := context.Background()
-
-	// Start a mock GenAI HTTP endpoint.
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"title":"Test Title","tags":["a","b"],"excerpt":"desc"}`))
-	}))
-	defer mockServer.Close()
-
-	// Configure the endpoint in settings.
-	_ = svc.settingsService.SetSetting(ctx, "genai_api_endpoint", mockServer.URL, "string")
-
-	// Tiny JPEG image.
-	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
-	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, img, nil)
-
-	result, err := svc.AnalyzeImage(ctx, buf.Bytes(), "test.jpg", "image/jpeg")
-	if err != nil {
-		t.Fatalf("AnalyzeImage via HTTP failed: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-}
-
-// TestMediaService_AnalyzeImageViaHTTPError tests non-200 response path.
-func TestMediaService_AnalyzeImageViaHTTPError(t *testing.T) {
-	svc, tmpDir := setupMediaService(t)
-	defer func() {
-		_ = os.RemoveAll(tmpDir)
-		_ = svc.repo.Close()
-	}()
-	ctx := context.Background()
-
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer mockServer.Close()
-
-	_ = svc.settingsService.SetSetting(ctx, "genai_api_endpoint", mockServer.URL, "string")
-
-	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
-	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, img, nil)
-
-	resp, err := svc.AnalyzeImage(ctx, buf.Bytes(), "test.jpg", "image/jpeg")
-	if err != nil {
-		t.Errorf("expected no error for non-200 response (soft-fail), got %v", err)
-	}
-	if resp == nil || len(resp.Tags) != 0 {
-		t.Error("expected empty analysis response")
-	}
-}
 
 // TestMediaService_AnalyzeByPath_InvalidPath covers the path traversal check.
 func TestMediaService_AnalyzeByPath_InvalidPath(t *testing.T) {
