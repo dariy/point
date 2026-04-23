@@ -831,6 +831,19 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 	return items, nil
 }
 
+const getSecret = `-- name: GetSecret :one
+
+SELECT key, value, updated_at FROM blog_secrets WHERE key = ? LIMIT 1
+`
+
+// SECRETS
+func (q *Queries) GetSecret(ctx context.Context, key string) (BlogSecret, error) {
+	row := q.db.QueryRowContext(ctx, getSecret, key)
+	var i BlogSecret
+	err := row.Scan(&i.Key, &i.Value, &i.UpdatedAt)
+	return i, err
+}
+
 const getSessionByToken = `-- name: GetSessionByToken :one
 SELECT s.id, s.user_id, s.token, s.ip_address, s.user_agent, s.location, s.created_at, s.expires_at, s.last_activity, u.username, u.display_name
 FROM sessions s
@@ -1800,6 +1813,22 @@ type UpdateUserPasswordParams struct {
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const upsertSecret = `-- name: UpsertSecret :exec
+INSERT INTO blog_secrets (key, value, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+`
+
+type UpsertSecretParams struct {
+	Key   string         `json:"key"`
+	Value sql.NullString `json:"value"`
+}
+
+func (q *Queries) UpsertSecret(ctx context.Context, arg UpsertSecretParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSecret, arg.Key, arg.Value)
 	return err
 }
 
