@@ -76,7 +76,7 @@ func TestWriteEXIFToFile_JPEG_WritesAndReads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() 
 	x, err := goexif.Decode(f)
 	if err != nil {
 		t.Fatalf("goexif.Decode after write: %v", err)
@@ -133,7 +133,7 @@ func TestWriteEXIFToFile_JPEG_SkipsNumericFields(t *testing.T) {
 	}
 
 	f, _ := os.Open(jpegPath)
-	defer f.Close()
+	defer func() { _ = f.Close() }() 
 	x, err := goexif.Decode(f)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
