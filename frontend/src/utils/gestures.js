@@ -78,7 +78,7 @@ export class GestureController {
     this._onCancel = this._onCancel.bind(this);
 
     element.addEventListener('touchstart',  this._onStart,  { passive: true });
-    element.addEventListener('touchmove',   this._onMove,   { passive: false });
+    element.addEventListener('touchmove',   this._onMove,   { passive: true });
     element.addEventListener('touchend',    this._onEnd,    { passive: true });
     element.addEventListener('touchcancel', this._onCancel, { passive: true });
   }
