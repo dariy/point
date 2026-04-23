@@ -130,3 +130,10 @@ CREATE TABLE IF NOT EXISTS blog_settings (
     value_type VARCHAR(20) NOT NULL DEFAULT 'string',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- BlogSecrets
+CREATE TABLE IF NOT EXISTS blog_secrets (
+    key        VARCHAR(100) PRIMARY KEY,
+    value      TEXT,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

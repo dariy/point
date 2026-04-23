@@ -399,3 +399,13 @@ SELECT SUM(file_size) FROM media;
 SELECT * FROM media
 WHERE post_id = ?
 ORDER BY uploaded_at ASC;
+
+-- SECRETS
+
+-- name: GetSecret :one
+SELECT key, value, updated_at FROM blog_secrets WHERE key = ? LIMIT 1;
+
+-- name: UpsertSecret :exec
+INSERT INTO blog_secrets (key, value, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;
