@@ -31,7 +31,7 @@ const SETTING_GROUPS = [
   },
   {
     title: 'AI (Gemini)',
-    keys: ['GEMINI_API_KEY', 'gemini_prompt_title', 'gemini_prompt_tags', 'gemini_prompt_excerpt']
+    keys: ['gemini_api_key', 'gemini_prompt_title', 'gemini_prompt_tags', 'gemini_prompt_excerpt']
   }
 ];
 
@@ -142,8 +142,8 @@ export default class SettingsPage extends Component {
         const checked = value === 'true' || value === true || value === 1 || value === '1';
         toggles.push({ key, label, checked });
         isToggle = true;
-      } else if (key === 'GEMINI_API_KEY') {
-        const isConfigured = settings['GEMINI_API_KEY_CONFIGURED'] === 'true' || settings['GEMINI_API_KEY_CONFIGURED'] === true;
+      } else if (key === 'gemini_api_key') {
+        const isConfigured = settings['gemini_api_key_is_set'] === 'true' || settings['gemini_api_key_is_set'] === true;
         const placeholder = isConfigured ? '******** (Configured)' : 'Enter Gemini API Key';
         input = `<input type="password" name="${key}" id="${key}" class="form-input" placeholder="${placeholder}" value="">`;
       } else if (key === 'gemini_prompt_title') {
@@ -293,7 +293,7 @@ export default class SettingsPage extends Component {
         const type = this._getSettingType(k);
         if (type === 'boolean') return; // saved on checkbox change
         const val = formData.get(k);
-        if (k === 'GEMINI_API_KEY') {
+        if (k === 'gemini_api_key') {
           if (val) data[k] = val;
           return;
         }
