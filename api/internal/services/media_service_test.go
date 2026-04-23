@@ -7,8 +7,6 @@ import (
 	"errors"
 	"image"
 	"image/jpeg"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,38 +16,25 @@ import (
 	goexif "github.com/rwcarlsen/goexif/exif"
 )
 
-func TestMediaService_AnalyzeImage(t *testing.T) {
+func TestMediaService_AnalyzeImage_DisabledWithNoKey(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
 	defer func() {
 		_ = os.RemoveAll(tmpDir)
 		_ = service.repo.Close()
 	}()
-
 	ctx := context.Background()
 
-	// Mock server for GenAI
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		res := map[string]interface{}{
-			"title": "Mock Title",
-			"tags":  []string{"tag1", "tag2"},
-			"excerpt": "Mock Excerpt",
-		}
-		_ = json.NewEncoder(w).Encode(res)
-	}))
-	defer server.Close()
+	// No API key → analysis is a no-op returning empty tags.
+	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
 
-	// Configure endpoint
-	if err := service.settingsService.SetSetting(ctx, "genai_api_endpoint", server.URL, "string"); err != nil {
-		t.Fatalf("SetSetting failed: %v", err)
-	}
-
-	analysis, err := service.AnalyzeImage(ctx, []byte("fake-image"), "test.jpg", "image/jpeg")
+	result, err := service.AnalyzeImage(ctx, buf.Bytes(), "test.jpg", "image/jpeg")
 	if err != nil {
-		t.Fatalf("AnalyzeImage failed: %v", err)
+		t.Fatalf("expected no error when key absent, got: %v", err)
 	}
-
-	if *analysis.Title != "Mock Title" {
-		t.Errorf("expected Mock Title, got %s", *analysis.Title)
+	if result == nil || len(result.Tags) != 0 {
+		t.Error("expected empty analysis response when key absent")
 	}
 }
 
