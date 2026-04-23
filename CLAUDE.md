@@ -142,16 +142,29 @@ Config is loaded from a `.env` file (in the `api/` working directory) via Viper,
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `PORT` | `8000` | API listen port |
-| `SECRET_KEY` | *(required in prod)* | Session signing key |
+| `SECRET_KEY` | *(auto-generated)* | Session signing key — generated and stored in `blog_secrets` if absent |
 | `DATABASE_URL` | `sqlite:./data/point.db` | SQLite path |
 | `STORAGE_PATH` | `./data` | Media file root |
 | `FRONTEND_DIR` | `../frontend` | Path to SPA static files |
-| `GEMINI_API_KEY` | *(empty)* | Required for AI media analysis |
+| `GEMINI_API_KEY` | *(empty)* | Synced to `blog_secrets` at startup; required for AI media analysis |
+| `MEDIA_IMPORT_PATH` | *(empty)* | Synced to `blog_secrets` at startup; path for bulk media import |
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
 | `THUMBNAIL_WIDTH/HEIGHT` | `400/300` | Thumbnail dimensions |
 
 **In production**, `GEMINI_API_KEY` is injected from the system keyring by `build/rebuild.sh` — it is never stored in the repository.
+
+### Secrets architecture
+
+Sensitive values live in a physically separate `blog_secrets` table and never appear in `blog_settings` or any API response. The `GET /api/settings` endpoint exposes only synthetic `_is_set` boolean properties for secrets with UI relevance:
+
+| Secret key | Env var | API-visible property |
+|---|---|---|
+| `gemini_api_key` | `GEMINI_API_KEY` | `gemini_api_key_is_set` |
+| `media_import_path` | `MEDIA_IMPORT_PATH` | `media_import_path_is_set` |
+| `_secret_key` | `SECRET_KEY` | *(none — fully invisible)* |
+
+`SettingsService` methods: `GetSecret`, `SetSecret`, `SecretIsSet`, `EnsureSecretKey`. Adding a new secret: add a row to `blog_secrets` via `SetSecret`, add a startup migration if migrating from `blog_settings`, add it to `writableSecretKeys` in `settings.go` only if the admin UI needs to write it.
 
 ---
 
@@ -229,7 +242,7 @@ Edit individual files in `css/common/`, `css/light/`, or `css/public/`. Run `scr
 - `api/data.yml` defines the prompt template and model priority list
 - Models: `gemini-2.5-flash` (default), `gemini-2.5-pro`, preview variants
 - Endpoint: `POST /api/media/analyze` — sends image to Gemini, returns `{title, tags, excerpt}`
-- Requires `GEMINI_API_KEY` env var
+- Requires `GEMINI_API_KEY` env var or `gemini_api_key` in `blog_secrets`; set via env var, the admin settings UI, or `settingsService.SetSecret`
 
 ---
 
@@ -262,6 +275,8 @@ Edit individual files in `css/common/`, `css/light/`, or `css/public/`. Run `scr
 - **CSS requires bundling** — editing `.css` files in `css/` requires running `build-css.sh` to take effect.
 - **Python backend is fully removed** — there is no `app/` directory, no `venv`, no `pytest`.
 - **Auth is session-cookie**, not JWT. Sessions are stored in SQLite.
+- **Secrets never appear in `blog_settings`** — `gemini_api_key`, `media_import_path`, and `_secret_key` live in `blog_secrets`. Adding a sensitive setting to `blog_settings` by mistake will expose it in `GET /api/settings`. Use `SetSecret` instead.
+- **`GET /api/settings` has no blocklist** — safety is structural: secrets are in a separate table and never fetched by the settings query.
 
 ## metaswarm
 

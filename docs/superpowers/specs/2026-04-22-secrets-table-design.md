@@ -1,8 +1,8 @@
 # Secrets Table Design
 
 **Date:** 2026-04-22
-**Status:** Approved
-**Branch:** develop
+**Status:** Implemented
+**Branch:** claude/secrets-table-20260422 (merged to develop)
 
 ## Problem
 
@@ -161,15 +161,15 @@ Add a read-only indicator for `media_import_path_is_set` alongside the existing 
 
 ## Definition of Done
 
-- [ ] `blog_secrets` table created via startup migration
-- [ ] Existing sensitive rows migrated out of `blog_settings`
-- [ ] `genai_api_endpoint` row deleted from `blog_settings`
-- [ ] `SettingsService.GetSecret`, `SetSecret`, `SecretIsSet` implemented and tested
-- [ ] `AnalyzeImage` no longer reads `GEMINI_API_KEY` from settings; reads from secrets
-- [ ] `ensureSecretKey` reads/writes `_secret_key` via secrets service
-- [ ] `GetSettings` returns `_is_set` synthetics, no ad-hoc masking code remains
-- [ ] `UpdateSettings` routes `gemini_api_key` writes to secrets table
-- [ ] `analyzeImageViaHTTP` and its tests deleted
-- [ ] Frontend uses `gemini_api_key` / `gemini_api_key_is_set` field names
-- [ ] `media_import_path_is_set` indicator on System page
-- [ ] All existing tests pass; new unit tests for `GetSecret`/`SetSecret`/`SecretIsSet`
+- [x] `blog_secrets` table created via startup migration
+- [x] Existing sensitive rows migrated out of `blog_settings`
+- [x] `genai_api_endpoint` row deleted from `blog_settings`
+- [x] `SettingsService.GetSecret`, `SetSecret`, `SecretIsSet` implemented and tested
+- [x] `AnalyzeImage` no longer reads `GEMINI_API_KEY` from settings; reads from secrets
+- [x] `ensureSecretKey` reads/writes `_secret_key` via secrets service (`EnsureSecretKey` method)
+- [x] `GetSettings` returns `_is_set` synthetics, no ad-hoc masking code remains
+- [x] `UpdateSettings` routes `gemini_api_key` writes to secrets table
+- [x] `analyzeImageViaHTTP` and its tests deleted
+- [x] Frontend uses `gemini_api_key` / `gemini_api_key_is_set` field names
+- [ ] `media_import_path_is_set` indicator on System page *(not implemented — deferred)*
+- [x] All existing tests pass; new unit tests for `GetSecret`/`SetSecret`/`SecretIsSet`
