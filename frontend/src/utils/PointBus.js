@@ -51,10 +51,11 @@ const point = {
 
 if (typeof window !== 'undefined') {
   window.Point = point;
-} else if (typeof global !== 'undefined') {
-  // Support for node-based testing
-  global.window = global.window || {};
-  global.window.Point = point;
+} else {
+  // eslint-disable-next-line no-undef
+  const root = typeof globalThis !== 'undefined' ? globalThis : global;
+  root.window = root.window || {};
+  root.window.Point = point;
 }
 
 export default point;
