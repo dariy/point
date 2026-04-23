@@ -40,6 +40,8 @@ type Querier interface {
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostBySlug(ctx context.Context, slug string) (Post, error)
 	GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]Post, error)
+	// SECRETS
+	GetSecret(ctx context.Context, key string) (BlogSecret, error)
 	GetSessionByToken(ctx context.Context, token string) (GetSessionByTokenRow, error)
 	// SETTINGS
 	GetSetting(ctx context.Context, key string) (BlogSetting, error)
@@ -75,6 +77,7 @@ type Querier interface {
 	UpdateTagPostCount(ctx context.Context, id int64) error
 	UpdateUserLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpsertSecret(ctx context.Context, arg UpsertSecretParams) error
 	WithdrawPost(ctx context.Context, id int64) (Post, error)
 }
 
