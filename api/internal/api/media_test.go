@@ -834,7 +834,7 @@ func TestMediaHandler_UpdateEXIF_ValidInput(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 	tmpDir, _ := os.MkdirTemp("", "exif-handler-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -877,7 +877,7 @@ func TestMediaHandler_UpdateEXIF_InvalidChars(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 	tmpDir, _ := os.MkdirTemp("", "exif-handler-invalid-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)
@@ -926,7 +926,7 @@ func TestMediaHandler_RevertEXIF(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 	tmpDir, _ := os.MkdirTemp("", "exif-revert-test")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
 
 	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
 	settingsSvc := services.NewSettingsService(repo)

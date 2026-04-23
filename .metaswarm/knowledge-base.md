@@ -9,6 +9,14 @@
 - **AI**: Google Gemini (`api/data.yml`) · endpoint `POST /api/media/analyze`
 - **Issue tracking**: beads (`bd`) — do NOT use TodoWrite or markdown task lists
 
+## Secrets Management (ADDED 2026-04-22)
+Introduced `blog_secrets` table for sensitive data like API keys.
+- **Table**: `blog_secrets` (key, value, updated_at)
+- **SettingsHandler**: Writable secrets (defined in `writableSecretKeys`) are routed to `blog_secrets`.
+- **Security**: Secrets are **never** returned in API responses. The API only returns `[key]_is_set` (boolean) to indicate if a secret is configured.
+- **Migration**: `GEMINI_API_KEY` (setting) is now `gemini_api_key` (secret).
+- **App Secret**: `_secret_key` is automatically generated and stored in `blog_secrets` if not provided in config.
+
 ## Architecture Layers
 ```
 Handler (internal/api/)
