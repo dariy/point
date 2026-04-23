@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"html"
 	"log"
@@ -19,7 +16,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"point-api/internal/api"
 	"point-api/internal/config"
-	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
@@ -39,44 +35,6 @@ func resolveJSDir(frontendDir string) string {
 	return ""
 }
 
-// ensureSecretKey guarantees cfg.SecretKey is populated before the server
-// starts. If SECRET_KEY is absent from the environment / .env file it checks
-// blog_settings for the key "_secret_key". When no persisted key exists it
-// generates a cryptographically random 32-byte hex string, stores it in the
-// database, and uses it for this and future runs.
-func ensureSecretKey(ctx context.Context, cfg *config.Config, repo *repository.Repository) error {
-	if cfg.SecretKey != "" {
-		return nil
-	}
-
-	// Try to load a previously generated key from the database.
-	setting, err := repo.GetSetting(ctx, "_secret_key")
-	if err == nil && setting.Value.Valid && setting.Value.String != "" {
-		cfg.SecretKey = setting.Value.String
-		log.Printf("loaded secret key from database settings")
-		return nil
-	}
-
-	// Generate a new 32-byte (64 hex chars) random secret key.
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return fmt.Errorf("generate secret key: %w", err)
-	}
-	key := hex.EncodeToString(raw)
-
-	// Persist it so future restarts reuse the same key.
-	if _, err := repo.UpdateSetting(ctx, models.UpdateSettingParams{
-		Key:       "_secret_key",
-		Value:     sql.NullString{String: key, Valid: true},
-		ValueType: "string",
-	}); err != nil {
-		return fmt.Errorf("store secret key: %w", err)
-	}
-
-	cfg.SecretKey = key
-	log.Printf("generated and stored new secret key in database settings")
-	return nil
-}
 
 type AppServices struct {
 	Settings  *services.SettingsService
@@ -124,7 +82,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings)
-	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion, cfg.MediaImportPath)
+	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
@@ -495,6 +453,33 @@ func main() {
 			"add_scheduled_at_to_posts_index",
 			`CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at)`,
 		},
+		{
+			"create_blog_secrets_table",
+			`CREATE TABLE IF NOT EXISTS blog_secrets (
+				key        VARCHAR(100) PRIMARY KEY,
+				value      TEXT,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+		},
+		{
+			"migrate_gemini_key_to_secrets",
+			`INSERT OR IGNORE INTO blog_secrets (key, value, updated_at)
+			 SELECT 'gemini_api_key', value, updated_at FROM blog_settings WHERE key = 'GEMINI_API_KEY'`,
+		},
+		{
+			"migrate_secret_key_to_secrets",
+			`INSERT OR IGNORE INTO blog_secrets (key, value, updated_at)
+			 SELECT key, value, updated_at FROM blog_settings WHERE key = '_secret_key'`,
+		},
+		{
+			"migrate_media_import_path_to_secrets",
+			`INSERT OR IGNORE INTO blog_secrets (key, value, updated_at)
+			 SELECT key, value, updated_at FROM blog_settings WHERE key = 'media_import_path'`,
+		},
+		{
+			"cleanup_settings_secrets_keys",
+			`DELETE FROM blog_settings WHERE key IN ('GEMINI_API_KEY', '_secret_key', 'media_import_path', 'genai_api_endpoint')`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
@@ -536,12 +521,25 @@ func main() {
 		log.Printf("warning: drop_tags_name_unique: %v", err)
 	}
 
+	svcs := initServices(&cfg, repo)
+
 	// Ensure a secret key is available for session signing.
-	if err := ensureSecretKey(ctx, &cfg, repo); err != nil {
+	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
 		log.Fatalf("failed to ensure secret key: %v", err)
 	}
 
-	svcs := initServices(&cfg, repo)
+	// Sync env-var secrets into blog_secrets so they're available at runtime.
+	if cfg.GeminiAPIKey != "" {
+		if err := svcs.Settings.SetSecret(ctx, "gemini_api_key", cfg.GeminiAPIKey); err != nil {
+			log.Printf("warning: failed to sync gemini_api_key to secrets: %v", err)
+		}
+	}
+	if cfg.MediaImportPath != "" {
+		if err := svcs.Settings.SetSecret(ctx, "media_import_path", cfg.MediaImportPath); err != nil {
+			log.Printf("warning: failed to sync media_import_path to secrets: %v", err)
+		}
+	}
+
 	e := setupEcho(cfg, repo, svcs)
 
 	// Start background scheduler

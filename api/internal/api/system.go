@@ -30,12 +30,11 @@ type SystemHandler struct {
 	dataPath          string
 	logPath           string
 	appVersion        string
-	mediaImportPath   string
 }
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string, mediaImportPath string) *SystemHandler {
+func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
@@ -47,7 +46,6 @@ func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaS
 		dataPath:        dataPath,
 		logPath:         filepath.Join(dataPath, "logs", "app.log"),
 		appVersion:      appVersion,
-		mediaImportPath: mediaImportPath,
 	}
 }
 
@@ -135,7 +133,7 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		"total_media":       stats.MediaCount,
 		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
 		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
-		"import_configured": h.mediaImportPath != "",
+		"import_configured": h.settingsService.SecretIsSet(ctx, "media_import_path"),
 	})
 }
 
@@ -308,7 +306,7 @@ var importableExtensions = map[string]bool{
 func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	importPath := h.mediaImportPath
+	importPath, _ := h.settingsService.GetSecret(ctx, "media_import_path")
 	if importPath == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"detail": "media_import_path not configured",
