@@ -45,6 +45,7 @@ type AppServices struct {
 	System    *services.SystemService
 	Cache     *services.CacheService
 	Scheduler *services.SchedulerService
+	Theme     *services.ThemeService
 }
 
 func initServices(cfg *config.Config, repo *repository.Repository) *AppServices {
@@ -56,6 +57,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
+	themeService := services.NewThemeService(cfg, settingsService)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -66,6 +68,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 		System:    systemService,
 		Cache:     cacheService,
 		Scheduler: schedulerService,
+		Theme:     themeService,
 	}
 }
 
@@ -82,6 +85,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings)
+	themeHandler := api.NewThemeHandler(svcs.Theme)
 	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
@@ -218,6 +222,13 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth))
 	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
 	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
+
+	// ── Themes Routes ──────────────────────────────────────────────────────────
+	themesGroup := e.Group("/api/themes")
+	themesGroup.GET("", themeHandler.ListThemes)
+	themesGroup.GET("/active", themeHandler.GetActiveTheme)
+	themesGroup.PUT("/active", themeHandler.SetActiveTheme, api.AuthMiddleware(svcs.Auth))
+
 
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")

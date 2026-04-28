@@ -24,6 +24,7 @@ var publicSettingKeys = map[string]bool{
 	"posts_per_page":          true,
 	"default_language":        true,
 	"default_theme":           true,
+	"active_css_theme":        true,
 	"show_view_counts":        true,
 	"enable_analytics":        true,
 	"google_analytics_id":     true,

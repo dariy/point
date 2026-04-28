@@ -27,6 +27,7 @@ type Config struct {
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
+	ThemesPath               string `mapstructure:"THEMES_PATH"`
 	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
 	MediaImportPath          string `mapstructure:"MEDIA_IMPORT_PATH"`
 }
@@ -47,6 +48,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
 	viper.SetDefault("STORAGE_PATH", "./data")
 	viper.SetDefault("FRONTEND_DIR", "../frontend")
+	viper.SetDefault("THEMES_PATH", "../frontend/themes")
 	viper.SetDefault("APP_VERSION", "1.0.0")
 	viper.SetDefault("SESSION_EXPIRY_HOURS", 720)
 	viper.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
