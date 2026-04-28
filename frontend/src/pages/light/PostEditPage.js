@@ -84,7 +84,7 @@ export default class PostEditPage extends Component {
       loading: !!id,
       saving: false,
       deleting: false,
-      analyzingField: null,
+      analyzingField: null, // 'title' | 'tags' | 'excerpt' | null
       post: null,
       error: null,
       isNew: !id,
