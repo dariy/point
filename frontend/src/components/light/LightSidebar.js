@@ -13,6 +13,7 @@ import { escapeHtml } from '../../utils/helpers.js';
 import {
   APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
+  THEMES_SVG,
 } from '../../utils/icons.js';
 import { store } from '../../store.js';
 
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/light/posts',    label: 'Posts',     icon: POSTS_SVG     },
   { href: '/light/media',    label: 'Media',     icon: MEDIA_SVG     },
   { href: '/light/tags',     label: 'Tags',      icon: TAGS_SVG      },
+  { href: '/light/themes',   label: 'Themes',    icon: THEMES_SVG    },
   { href: '/light/settings', label: 'Settings',  icon: SETTINGS_SVG  },
   { href: '/light/security', label: 'Security',  icon: SECURITY_SVG  },
   { href: '/light/system',   label: 'System',    icon: SYSTEM_SVG    },

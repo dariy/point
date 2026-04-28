@@ -183,6 +183,12 @@ export default class SettingsPage extends Component {
     }
 
     const inputsHtml = inputs.join('');
+    
+    let groupHeaderExtra = '';
+    if (group.title === 'Display') {
+      groupHeaderExtra = `<a href="/light/themes" class="card-header-link">Manage Themes ↗</a>`;
+    }
+
     const togglesHtml = toggles.length ? `
       <div class="setting-pill-group${inputs.length ? ' setting-pill-group-divided' : ''}">
         ${toggles.map(({ key, label, checked }) => `
@@ -195,7 +201,10 @@ export default class SettingsPage extends Component {
     const wideGroup = group.keys.includes('gemini_prompt_title');
     return `
       <div class="card${wideGroup ? ' card-full-width' : ''}">
-        <div class="card-header"><h2>${escapeHtml(group.title)}</h2></div>
+        <div class="card-header">
+          <h2>${escapeHtml(group.title)}</h2>
+          ${groupHeaderExtra}
+        </div>
         <div class="card-body">
           ${inputsHtml}${togglesHtml}
         </div>
