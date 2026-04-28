@@ -122,11 +122,11 @@
 }
 
 .save-status.success {
-    color: #10b981;
+    color: var(--color-emerald-500);
 }
 
 .save-status.error {
-    color: #ef4444;
+    color: var(--color-danger);
 }
 
 /* Input with Button */
@@ -160,21 +160,21 @@
 }
 
 .connection-test-result.success {
-    background-color: rgba(16, 185, 129, 0.1);
-    border: var(--border-width) solid rgba(16, 185, 129, 0.3);
-    color: #10b981;
+    background-color: var(--color-success-alpha-10);
+    border: var(--border-width) solid var(--color-success-alpha-30);
+    color: var(--color-emerald-500);
 }
 
 .connection-test-result.error {
-    background-color: rgba(239, 68, 68, 0.1);
-    border: var(--border-width) solid rgba(239, 68, 68, 0.3);
-    color: #ef4444;
+    background-color: var(--color-danger-alpha-10);
+    border: var(--border-width) solid var(--color-danger-alpha-30);
+    color: var(--color-danger);
 }
 
 .connection-test-result.info {
-    background-color: rgba(59, 130, 246, 0.1);
-    border: var(--border-width) solid rgba(59, 130, 246, 0.3);
-    color: #3b82f6;
+    background-color: var(--color-primary-light-alpha-10);
+    border: var(--border-width) solid var(--color-primary-light-alpha-30);
+    color: var(--color-primary);
 }
 
 /* Full-width card spanning both grid columns */

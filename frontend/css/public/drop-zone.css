@@ -5,7 +5,7 @@
     position: fixed;
     inset: 0;
     z-index: 9999;
-    background: rgba(37, 99, 235, 0.95);
+    background: var(--color-primary-alpha-95);
     backdrop-filter: blur(0.5rem);
     -webkit-backdrop-filter: blur(0.5rem);
     display: flex;
@@ -24,7 +24,7 @@
 }
 
 .drop-zone-overlay.uploading {
-    background: rgba(37, 99, 235, 0.98);
+    background: var(--color-primary-alpha-98);
 }
 
 .drop-zone-content {
@@ -96,11 +96,11 @@
 
 /* Dark mode adjustments */
 [data-theme="dark"] .drop-zone-overlay {
-    background: rgba(59, 130, 246, 0.95);
+    background: var(--color-primary-light-alpha-95);
 }
 
 [data-theme="dark"] .drop-zone-overlay.uploading {
-    background: rgba(59, 130, 246, 0.98);
+    background: var(--color-primary-light-alpha-98);
 }
 
 /* Drag-over body state indicator */

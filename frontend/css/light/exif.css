@@ -37,7 +37,7 @@
 }
 
 .exif-table td {
-  padding: var(--px-3) var(--spacing-xs);
+  padding: 0.1875rem var(--spacing-xs);
   border-bottom: var(--border-width) solid var(--border-secondary);
   vertical-align: middle;
 }
@@ -50,7 +50,7 @@
   width: 100%;
   border: var(--border-width) solid transparent;
   border-radius: var(--border-radius-sm);
-  padding: var(--px-2) var(--px-4);
+  padding: 0.125rem 0.25rem;
   font-size: var(--font-size-sm);
   background: transparent;
   color: var(--text-primary);
@@ -110,14 +110,14 @@
 .ve-exif-toggle {
   display: inline-flex;
   align-items: center;
-  gap: var(--px-3);
+  gap: 0.1875rem;
   background: none;
   border: var(--border-width) solid var(--border-primary);
   border-radius: var(--border-radius-sm);
   cursor: pointer;
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  padding: var(--px-2) var(--px-6);
+  padding: 0.125rem 0.375rem;
   transition: border-color 0.15s, color 0.15s;
 }
 

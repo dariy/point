@@ -120,7 +120,7 @@
 
 /* Menu-open / first-tap activated state */
 .tag-link.is-active {
-    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    background: var(--color-primary-light);
     border-color: var(--color-primary);
     color: var(--color-primary);
 }

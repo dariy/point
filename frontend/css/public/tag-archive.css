@@ -177,7 +177,7 @@
 }
 
 .tag-important {
-    background-color: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    background-color: var(--color-primary-light);
     color: var(--color-primary);
     border-radius: var(--border-radius-sm);
 }

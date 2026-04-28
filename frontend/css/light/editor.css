@@ -21,7 +21,7 @@ body.drag-active::after {
     content: '';
     position: fixed;
     inset: 0.25rem;
-    background: rgba(37, 99, 235, 0.06);
+    background: var(--color-primary-alpha-06);
     border: 0.125rem dashed var(--color-primary);
     border-radius: var(--border-radius-lg);
     pointer-events: none;
@@ -82,12 +82,12 @@ body.drag-active::after {
 }
 
 .featured-btn:hover {
-    color: #f59e0b;
+    color: var(--color-amber-500);
     transform: scale(1.15);
 }
 
 .featured-btn.is-featured {
-    color: #f59e0b;
+    color: var(--color-amber-500);
 }
 
 /* AI fill button — appears at the end of title/tags/excerpt rows */
@@ -245,7 +245,7 @@ body.drag-active::after {
 
 .editor-mode-toggle button.active {
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-white);
 }
 
 .editor-mode-toggle button:not(.active):hover {
@@ -401,7 +401,7 @@ body.drag-active::after {
 }
 
 .ve-remove:hover {
-    color: var(--color-danger, #ef4444);
+    color: var(--color-danger);
 }
 
 /* Drop indicator line */
@@ -418,7 +418,7 @@ body.drag-active::after {
 .ve-lightbox {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.88);
+    background: var(--color-black-alpha-88);
     display: flex;
     align-items: center;
     justify-content: center;

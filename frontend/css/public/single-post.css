@@ -169,9 +169,9 @@
 }
 
 [data-theme="light"] .post-tags .tag-link {
-    background: rgba(255, 255, 255, 0.85);
+    background: var(--color-white-alpha-85);
     color: var(--text-primary);
-    border: var(--border-width) solid rgba(0, 0, 0, 0.1);
+    border: var(--border-width) solid var(--color-black-alpha-10);
 }
 
 [data-theme="light"] .post-tags .tag-link:hover {
@@ -181,9 +181,9 @@
 }
 
 [data-theme="dark"] .post-tags .tag-link {
-    background: rgba(0, 0, 0, 0.75);
-    color: rgba(255, 255, 255, 0.95);
-    border: var(--border-width) solid rgba(255, 255, 255, 0.2);
+    background: var(--color-black-alpha-75);
+    color: var(--color-white-alpha-95);
+    border: var(--border-width) solid var(--color-white-alpha-20);
 }
 
 [data-theme="dark"] .post-tags .tag-link:hover {
@@ -235,7 +235,7 @@
     position: fixed;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--color-black-alpha-25);
     color: white;
     width: 3.125rem;
     height: 3.125rem;
@@ -253,7 +253,7 @@
 }
 
 .post-side-nav-btn:hover {
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-black-alpha-50);
     transform: translateY(-50%) scale(1.1);
     color: white;
 }
@@ -262,11 +262,11 @@
 .post-side-nav-btn.next { right: 1rem; }
 
 [data-theme="light"] .post-side-nav-btn {
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--color-black-alpha-15);
 }
 
 [data-theme="light"] .post-side-nav-btn:hover {
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--color-black-alpha-35);
 }
 
 /* Hide side arrows on small screens where they'd overlap content */
