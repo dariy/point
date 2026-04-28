@@ -1,0 +1,49 @@
+/* ===========================
+   Runtime Theme Tokens
+   =========================== 
+   These variables are intended to be overridden by theme.json 
+   via the themeParser.js utility. 
+   Defaults here represent the "Default" theme.
+   =========================== */
+
+:root {
+    /* Colors - Backgrounds */
+    --pt-colors-bg-primary: var(--color-white, #ffffff);
+    --pt-colors-bg-secondary: var(--color-gray-50, #f8fafc);
+    --pt-colors-bg-tertiary: var(--color-gray-100, #f1f5f9);
+    --pt-colors-bg-elevated: var(--color-white, #ffffff);
+    
+    /* Colors - Surfaces */
+    --pt-colors-surface-card: var(--color-white, #ffffff);
+    --pt-colors-surface-input: var(--color-white, #ffffff);
+    --pt-colors-surface-hover: var(--color-gray-100, #f1f5f9);
+    
+    /* Colors - Text */
+    --pt-colors-text-primary: var(--color-gray-900, #0f172a);
+    --pt-colors-text-secondary: var(--color-gray-600, #475569);
+    --pt-colors-text-tertiary: var(--color-gray-500, #64748b);
+    --pt-colors-text-muted: var(--color-gray-400, #94a3b8);
+    --pt-colors-text-inverted: var(--color-white, #ffffff);
+    
+    /* Colors - Brand & Accent */
+    --pt-colors-accent: var(--color-primary, #2563eb);
+    --pt-colors-accent-hover: var(--color-primary-hover, #1d4ed8);
+    --pt-colors-accent-alpha-08: rgba(37, 99, 235, 0.08);
+    --pt-colors-accent-alpha-15: rgba(37, 99, 235, 0.15);
+    
+    /* Colors - Borders */
+    --pt-colors-border-primary: var(--color-gray-200, #e2e8f0);
+    --pt-colors-border-secondary: var(--color-gray-300, #cbd5e1);
+    
+    /* Overlays */
+    --pt-colors-bg-overlay: var(--bg-overlay, rgba(0, 0, 0, 0.8));
+    
+    /* Typography */
+    --pt-typography-font-family: var(--font-family);
+    --pt-typography-font-serif: var(--font-serif);
+    --pt-typography-font-mono: var(--font-mono);
+    
+    /* Spacing & Sizes */
+    --pt-spacing-base: 1rem;
+    --pt-border-radius: var(--border-radius, 0.375rem);
+}

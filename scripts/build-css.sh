@@ -12,6 +12,7 @@ echo "Building CSS bundles in $CSS_DIR..."
 
 # Admin bundle
 cat "$CSS_DIR"/common/tokens.css \
+    "$CSS_DIR"/common/theme-tokens.css \
     "$CSS_DIR"/common/reset.css \
     "$CSS_DIR"/light/tokens.css \
     "$CSS_DIR"/common/buttons.css \
@@ -46,6 +47,7 @@ echo "Built light.css ($(wc -c < "$CSS_DIR"/light.css) bytes)"
 
 # Public bundle
 cat "$CSS_DIR"/common/tokens.css \
+    "$CSS_DIR"/common/theme-tokens.css \
     "$CSS_DIR"/common/reset.css \
     "$CSS_DIR"/public/tokens.css \
     "$CSS_DIR"/common/buttons.css \
