@@ -6,8 +6,8 @@
     inset: 0;
     z-index: 9999;
     background: var(--color-primary-alpha-95);
-    backdrop-filter: blur(0.5rem);
-    -webkit-backdrop-filter: blur(0.5rem);
+    backdrop-filter: blur(var(--size-0-5));
+    -webkit-backdrop-filter: blur(var(--size-0-5));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -31,12 +31,12 @@
     text-align: center;
     color: white;
     padding: var(--spacing-2xl);
-    max-width: 25rem;
+    max-width: var(--size-25);
 }
 
 .drop-zone-icon {
-    width: 5rem;
-    height: 5rem;
+    width: var(--size-5);
+    height: var(--size-5);
     margin-bottom: var(--spacing-lg);
     animation: dropZoneBounce 1s ease infinite;
 }
@@ -53,7 +53,7 @@
     }
 
     50% {
-        transform: translateY(-0.625rem);
+        transform: translateY(calc(var(--size-0-625) * -1));
     }
 }
 
@@ -108,7 +108,7 @@ body.drag-over::after {
     content: '';
     position: fixed;
     inset: 0;
-    border: 0.25rem dashed var(--color-primary);
+    border: var(--size-0-25) dashed var(--color-primary);
     pointer-events: none;
     z-index: 9998;
 }

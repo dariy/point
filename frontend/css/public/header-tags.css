@@ -43,8 +43,8 @@
     align-items: center;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: 600rem;
-    height: 2rem;
+    border-radius: var(--size-600);
+    height: var(--size-2);
     padding: 0 var(--spacing-md);
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
@@ -64,8 +64,8 @@
     align-items: center;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: 600rem;
-    height: 2rem;
+    border-radius: var(--size-600);
+    height: var(--size-2);
     transition: all var(--transition-fast);
     box-sizing: border-box;
     /* Prevent Android Chrome from absorbing taps-on-pills as scroll gestures
@@ -89,7 +89,7 @@
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    padding: 0 0.25rem 0 var(--spacing-md);
+    padding: 0 var(--size-0-25) 0 var(--spacing-md);
     height: 100%;
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -110,7 +110,7 @@
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    padding: 0 0.5rem 0 0.25rem;
+    padding: 0 var(--size-0-5) 0 var(--size-0-25);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -165,7 +165,7 @@
     position: absolute;
     inset: 0;
     background: var(--surface-card);
-    backdrop-filter: blur(0.75rem);
+    backdrop-filter: blur(var(--size-0-75));
     border-radius: inherit;
     z-index: -1;
     pointer-events: none;
@@ -174,10 +174,10 @@
 .header-tags-bar .tag-children::before {
     content: "";
     position: absolute;
-    top: -0.5rem;
+    top: calc(var(--size-0-5) * -1);
     left: 0;
     right: 0;
-    height: 0.5rem;
+    height: var(--size-0-5);
     background: transparent;
 }
 
@@ -199,7 +199,7 @@
 @keyframes dropdownFadeIn {
     from {
         opacity: 0;
-        margin-top: -0.625rem;
+        margin-top: calc(var(--size-0-625) * -1);
     }
 
     to {
@@ -211,7 +211,7 @@
 /* Ensure children in dropdowns have consistent sizing - use child combinator for specificity */
 .header-tags-bar .tag-children > .tag-link,
 .header-tags-bar .tag-children > .tag-group .tag-link {
-    height: 2rem;
+    height: var(--size-2);
     font-size: var(--font-size-sm);
 }
 
@@ -220,7 +220,7 @@
 }
 
 .header-tags-bar .tag-children > .tag-group > .tag-group-header {
-    height: 2rem;
+    height: var(--size-2);
     font-size: var(--font-size-sm);
 }
 

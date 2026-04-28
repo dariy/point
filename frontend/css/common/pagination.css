@@ -21,8 +21,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.25rem;
-    height: 2.25rem;
+    min-width: var(--size-2-25);
+    height: var(--size-2-25);
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -66,8 +66,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.25rem;
-    height: 2.25rem;
+    min-width: var(--size-2-25);
+    height: var(--size-2-25);
     color: var(--text-muted);
     user-select: none;
 }

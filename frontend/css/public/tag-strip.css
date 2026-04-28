@@ -21,7 +21,7 @@
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x;
     overscroll-behavior-x: contain;
-    padding-block: 0.1875rem;       /* Room for borders/shadows */
+    padding-block: var(--size-0-1875);       /* Room for borders/shadows */
 }
 
 .tag-strip-scroll::-webkit-scrollbar {
@@ -53,8 +53,8 @@
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 1.5rem;
-    height: 1.5rem;
+    width: var(--size-1-5);
+    height: var(--size-1-5);
     border-radius: 50%;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
@@ -71,8 +71,8 @@
 }
 
 .tags-scroll-btn svg {
-    width: 0.875rem;
-    height: 0.875rem;
+    width: var(--size-0-875);
+    height: var(--size-0-875);
 }
 
 .tags-scroll-btn--left {
@@ -103,8 +103,8 @@
 
 /* Base tag link style within a strip */
 .tag-strip-scroll .tag-link {
-    backdrop-filter: blur(0.5rem);
-    -webkit-backdrop-filter: blur(0.5rem);
+    backdrop-filter: blur(var(--size-0-5));
+    -webkit-backdrop-filter: blur(var(--size-0-5));
     white-space: nowrap;
     /* Prevent Android Chrome from absorbing taps as scroll gestures:
        touch-action: manipulation fires click immediately for any tap. */
