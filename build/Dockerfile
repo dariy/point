@@ -57,12 +57,12 @@ RUN apk add --no-cache \
     && chown -R appuser:appuser /app /data
 
 # Copy the binaries from the builder stage
-COPY --from=builder /app/api-bin .
-COPY --from=builder /app/migrate-paths .
+COPY --chown=appuser:appuser --from=builder /app/api-bin .
+COPY --chown=appuser:appuser --from=builder /app/migrate-paths .
 # Copy data.yml
-COPY --from=builder /app/data.yml .
+COPY --chown=appuser:appuser --from=builder /app/data.yml .
 # Copy frontend assets (includes built js/ bundle from builder stage)
-COPY --from=builder /app/frontend/ /app/frontend/
+COPY --chown=appuser:appuser --from=builder /app/frontend/ /app/frontend/
 
 # Accept build version as argument and stamp it into index.html for cache-busting
 ARG BUILD_VERSION=dev
