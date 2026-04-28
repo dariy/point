@@ -217,7 +217,7 @@
 .immersive-tags .tag-link {
     background: var(--surface-card);
     color: var(--text-secondary);
-    border: 1px solid var(--text-secondary);
+    border: var(--border-width) solid var(--text-secondary);
     backdrop-filter: blur(0.75rem);
     -webkit-backdrop-filter: blur(0.75rem);
     pointer-events: auto;
@@ -231,7 +231,7 @@
 [data-theme="light"].immersive-layout .immersive-tags .tag-link {
     background: rgba(255, 255, 255, 0.85);
     color: var(--text-primary);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: var(--border-width) solid rgba(0, 0, 0, 0.1);
 }
 
 [data-theme="light"].immersive-layout .immersive-tags .tag-link:hover {
@@ -339,13 +339,13 @@ video.immersive-bg-image {
 
 [data-theme="dark"] .post-info-card {
     background: rgba(30, 30, 30, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: var(--border-width) solid rgba(255, 255, 255, 0.1);
 }
 
 .post-header-compact {
     margin-bottom: var(--spacing-lg);
     padding-bottom: var(--spacing-lg);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
     text-align: center;
     flex-shrink: 0;
 }
@@ -364,7 +364,7 @@ video.immersive-bg-image {
 .post-footer-compact {
     margin-top: var(--spacing-lg);
     padding-top: var(--spacing-lg);
-    border-top: 1px solid var(--border-primary);
+    border-top: var(--border-width) solid var(--border-primary);
     flex-shrink: 0;
 }
 

@@ -145,7 +145,7 @@
 .post-footer {
     margin-top: var(--spacing-2xl);
     padding-top: var(--spacing-xl);
-    border-top: 1px solid var(--border-primary);
+    border-top: var(--border-width) solid var(--border-primary);
 }
 
 .post-tags {
@@ -171,7 +171,7 @@
 [data-theme="light"] .post-tags .tag-link {
     background: rgba(255, 255, 255, 0.85);
     color: var(--text-primary);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: var(--border-width) solid rgba(0, 0, 0, 0.1);
 }
 
 [data-theme="light"] .post-tags .tag-link:hover {
@@ -183,7 +183,7 @@
 [data-theme="dark"] .post-tags .tag-link {
     background: rgba(0, 0, 0, 0.75);
     color: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: var(--border-width) solid rgba(255, 255, 255, 0.2);
 }
 
 [data-theme="dark"] .post-tags .tag-link:hover {
@@ -205,7 +205,7 @@
     flex-direction: column;
     padding: var(--spacing-lg);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-lg);
     transition: all var(--transition-fast);
 }

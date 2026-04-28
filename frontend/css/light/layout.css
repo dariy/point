@@ -33,7 +33,7 @@ body {
 
 .sidebar-header {
     padding: 0 var(--spacing-lg);
-    border-bottom: 1px solid var(--sidebar-border);
+    border-bottom: var(--border-width) solid var(--sidebar-border);
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -156,7 +156,7 @@ body {
 
 .sidebar-footer {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--sidebar-border);
+    border-top: var(--border-width) solid var(--sidebar-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -200,7 +200,7 @@ body {
     top: 0;
     height: var(--header-height);
     background-color: var(--header-bg);
-    border-bottom: 1px solid var(--header-border);
+    border-bottom: var(--border-width) solid var(--header-border);
     padding: 0 var(--spacing-xl);
     display: flex;
     align-items: center;
@@ -271,7 +271,7 @@ body {
     height: 2.25rem;
     padding: 0;
     background: transparent;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     color: var(--text-secondary);
     cursor: pointer;
@@ -299,7 +299,7 @@ body {
     height: 2.25rem;
     padding: 0;
     background: transparent;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     color: var(--text-secondary);
     cursor: pointer;

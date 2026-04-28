@@ -12,15 +12,15 @@
 
 .exif-info-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: var(--px-8);
+  right: var(--px-8);
   width: 1.75rem;
   height: 1.75rem;
   background: rgba(0, 0, 0, 0.48);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--px-4));
+  -webkit-backdrop-filter: blur(var(--px-4));
   color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: var(--border-width) solid rgba(255, 255, 255, 0.18);
   border-radius: 50%;
   font-size: 0.8rem;
   font-weight: 600;
@@ -53,16 +53,16 @@
   left: 0;
   right: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.72) 100%);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(var(--px-6));
+  -webkit-backdrop-filter: blur(var(--px-6));
   color: #fff;
-  padding: 10px 14px 12px;
+  padding: var(--px-10) var(--px-14, 0.875rem) var(--px-12);
   font-size: 0.72rem;
   max-height: 55%;
   overflow-y: auto;
   z-index: 3;
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(var(--px-4));
   transition: opacity 0.2s ease, transform 0.2s ease;
   pointer-events: none;
   scrollbar-width: thin;
@@ -81,7 +81,7 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 6px;
+  margin-bottom: var(--px-6);
 }
 
 .exif-overlay table {
@@ -90,7 +90,7 @@
 }
 
 .exif-overlay td {
-  padding: 2px 0;
+  padding: var(--px-2) 0;
   vertical-align: top;
   line-height: 1.45;
 }
@@ -98,7 +98,7 @@
 .exif-overlay td:first-child {
   color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
-  padding-right: 10px;
+  padding-right: var(--px-10);
   min-width: 6rem;
   font-size: 0.68rem;
 }
@@ -120,9 +120,9 @@
   scrollbar-color: rgba(255,255,255,0.3) transparent;
   /* Adopt the same visual style as the tag ancestor flyout */
   background: var(--bg-card, var(--surface-card));
-  border: 1px solid var(--border-primary);
+  border: var(--border-width) solid var(--border-primary);
   border-radius: var(--border-radius);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  box-shadow: 0 var(--px-4) var(--px-16) rgba(0,0,0,0.18);
   padding: var(--spacing-sm) var(--spacing-md);
   color: var(--text-primary);
 }
@@ -148,21 +148,21 @@
 }
 
 .exif-flyout-table td {
-  padding: 2px 0;
+  padding: var(--px-2) 0;
   vertical-align: top;
   line-height: 1.45;
 }
 
 .exif-flyout-table td:first-child {
   color: var(--text-secondary);
-  padding-right: 8px;
-  width: 20px;
+  padding-right: var(--px-8);
+  width: var(--px-20);
   vertical-align: middle;
   line-height: 0;
 }
 
 .exif-flyout-sep {
   border: none;
-  border-top: 1px solid var(--border-primary);
+  border-top: var(--border-width) solid var(--border-primary);
   margin: var(--spacing-xs) 0;
 }
