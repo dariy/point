@@ -31,7 +31,7 @@
     pointer-events: auto;
     animation: toast-in 0.3s ease-out;
     transition: opacity 0.3s ease, transform 0.3s ease;
-    border: var(--border-width) solid rgba(0, 0, 0, 0.1);
+    border: var(--border-width) solid var(--color-black-alpha-10);
     backdrop-filter: blur(0.5rem);
     -webkit-backdrop-filter: blur(0.5rem);
     font-weight: 500;
@@ -40,10 +40,10 @@
 /* Light theme overrides for better contrast with 0.8 opacity */
 :root:not([data-theme="dark"]),
 [data-theme="light"] {
-    --color-success-light: rgba(209, 250, 229, 0.8);
-    --color-danger-light: rgba(254, 226, 226, 0.8);
-    --color-warning-light: rgba(254, 243, 199, 0.8);
-    --color-primary-light: rgba(219, 234, 254, 0.8);
+    --color-success-light: var(--color-rgb-209-250-229-alpha-80);
+    --color-danger-light: var(--color-rgb-254-226-226-alpha-80);
+    --color-warning-light: var(--color-rgb-254-243-199-alpha-80);
+    --color-primary-light: var(--color-rgb-219-234-254-alpha-80);
 }
 
 .flash-error {
@@ -52,8 +52,8 @@
 }
 
 [data-theme="dark"] .flash-message {
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-white);
+    border-color: var(--color-white-alpha-10);
 }
 
 .flash-warning {
@@ -104,7 +104,7 @@
     font-weight: 500;
     box-shadow: var(--shadow-lg);
     pointer-events: auto;
-    border: var(--border-width) solid rgba(0, 0, 0, 0.08);
+    border: var(--border-width) solid var(--color-black-alpha-08);
     backdrop-filter: blur(0.5rem);
     -webkit-backdrop-filter: blur(0.5rem);
     opacity: 0;
@@ -118,23 +118,23 @@
 }
 
 .toast-success {
-    background-color: var(--color-success-light, rgba(209, 250, 229, 0.9));
-    color: var(--color-success, #059669);
+    background-color: var(--color-success-light);
+    color: var(--color-success);
 }
 
 .toast-error {
-    background-color: var(--color-danger-light, rgba(254, 226, 226, 0.9));
-    color: var(--color-danger, #dc2626);
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
 }
 
 .toast-warning {
-    background-color: var(--color-warning-light, rgba(254, 243, 199, 0.9));
-    color: var(--color-warning, #d97706);
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
 }
 
 .toast-info {
-    background-color: var(--color-primary-light, rgba(219, 234, 254, 0.9));
-    color: var(--color-primary, #2563eb);
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
 }
 
 .toast-message {
@@ -182,15 +182,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--color-primary, #2563eb);
-    color: #fff;
+    background-color: var(--color-primary);
+    color: var(--color-white);
     box-shadow: var(--shadow-lg);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .notification-log-btn:hover {
     transform: scale(1.08);
-    box-shadow: 0 0.375rem 1.25rem rgba(0, 0, 0, 0.25);
+    box-shadow: 0 0.375rem 1.25rem var(--color-black-alpha-25);
 }
 
 /* ===========================
@@ -218,23 +218,23 @@
 }
 
 .notification-log-item-success {
-    background-color: var(--color-success-light, rgba(209, 250, 229, 0.6));
-    color: var(--color-success, #059669);
+    background-color: var(--color-success-light);
+    color: var(--color-success);
 }
 
 .notification-log-item-error {
-    background-color: var(--color-danger-light, rgba(254, 226, 226, 0.6));
-    color: var(--color-danger, #dc2626);
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
 }
 
 .notification-log-item-warning {
-    background-color: var(--color-warning-light, rgba(254, 243, 199, 0.6));
-    color: var(--color-warning, #d97706);
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
 }
 
 .notification-log-item-info {
-    background-color: var(--color-primary-light, rgba(219, 234, 254, 0.6));
-    color: var(--color-primary, #2563eb);
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
 }
 
 .notification-log-icon {
@@ -249,7 +249,7 @@
 }
 
 .notification-log-empty {
-    color: var(--color-muted, #6b7280);
+    color: var(--color-muted);
     font-size: var(--font-size-sm);
     text-align: center;
     padding: var(--spacing-lg);

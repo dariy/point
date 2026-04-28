@@ -57,7 +57,7 @@
 }
 
 .tag-cloud-strip .tag-link:hover .count {
-    background: var(--color-primary-light, rgba(37, 99, 235, 0.1));
+    background: var(--color-primary-light);
     color: var(--color-primary);
 }
 

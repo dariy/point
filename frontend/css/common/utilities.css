@@ -168,8 +168,8 @@
     max-width: 37.5rem;
     text-align: center;
     color: var(--color-danger);
-    background-color: rgba(239, 68, 68, 0.08);
-    border: var(--border-width) solid rgba(239, 68, 68, 0.25);
+    background-color: var(--color-danger-alpha-08);
+    border: var(--border-width) solid var(--color-danger-alpha-25);
     border-radius: var(--border-radius);
 }
 

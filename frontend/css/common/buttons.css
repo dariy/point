@@ -57,7 +57,7 @@
 }
 
 .btn-success:hover:not(:disabled) {
-    background-color: #059669;
+    background-color: var(--color-emerald-600);
     color: white;
 }
 
@@ -67,7 +67,7 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-    background-color: #dc2626;
+    background-color: var(--color-rose-600);
     color: white;
 }
 

@@ -43,7 +43,7 @@
     align-items: center;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: 624.938rem;
+    border-radius: 600rem;
     height: 2rem;
     padding: 0 var(--spacing-md);
     color: var(--text-secondary);
@@ -64,7 +64,7 @@
     align-items: center;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: 624.938rem;
+    border-radius: 600rem;
     height: 2rem;
     transition: all var(--transition-fast);
     box-sizing: border-box;
@@ -77,7 +77,7 @@
     border-color: var(--color-primary);
 }
 .header-tags-bar .tag-group.is-open > .tag-group-header {
-    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    background: var(--color-primary-light);
     border-color: var(--color-primary);
 }
 .header-tags-bar .tag-link:active {
@@ -85,7 +85,7 @@
 }
 
 /* Override filter-btn styles when inside tag-group-header - use higher specificity */
-.header-tags-bar .tag-group-header>.tag-link {
+.header-tags-bar .tag-group-header > .tag-link {
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -106,7 +106,6 @@
     -webkit-backdrop-filter: none;
 }
 
-
 .header-tags-bar .tag-group-header .toggle-children {
     background: transparent;
     border: none;
@@ -125,13 +124,13 @@
     transform-origin: center;
 }
 
-.header-tags-bar .tag-group:hover>.tag-group-header .toggle-children,
-.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children {
+.header-tags-bar .tag-group:hover > .tag-group-header .toggle-children,
+.header-tags-bar .tag-group.is-open > .tag-group-header .toggle-children {
     color: var(--color-primary);
 }
 
-.header-tags-bar .tag-group:hover>.tag-group-header .toggle-children svg,
-.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children svg {
+.header-tags-bar .tag-group:hover > .tag-group-header .toggle-children svg,
+.header-tags-bar .tag-group.is-open > .tag-group-header .toggle-children svg {
     transform: rotate(180deg);
 }
 
@@ -162,7 +161,7 @@
 /* Background + blur on ::after so backdrop-filter doesn't make this element
    a containing block for position:fixed descendants (Chrome behaviour). */
 .header-tags-bar .tag-children::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     background: var(--surface-card);
@@ -173,7 +172,7 @@
 }
 
 .header-tags-bar .tag-children::before {
-    content: '';
+    content: "";
     position: absolute;
     top: -0.5rem;
     left: 0;
@@ -183,7 +182,7 @@
 }
 
 /* Show dropdown only when JS has positioned it (position:fixed via inline style) */
-.header-tags-bar .tag-group.is-open>.tag-children {
+.header-tags-bar .tag-group.is-open > .tag-children {
     display: flex;
     visibility: visible;
     opacity: 1;
@@ -210,28 +209,32 @@
 }
 
 /* Ensure children in dropdowns have consistent sizing - use child combinator for specificity */
-.header-tags-bar .tag-children>.tag-link,
-.header-tags-bar .tag-children>.tag-group .tag-link {
+.header-tags-bar .tag-children > .tag-link,
+.header-tags-bar .tag-children > .tag-group .tag-link {
     height: 2rem;
     font-size: var(--font-size-sm);
 }
 
-.header-tags-bar .tag-children>.tag-link {
+.header-tags-bar .tag-children > .tag-link {
     padding: 0 var(--spacing-md);
 }
 
-.header-tags-bar .tag-children>.tag-group>.tag-group-header {
+.header-tags-bar .tag-children > .tag-group > .tag-group-header {
     height: 2rem;
     font-size: var(--font-size-sm);
 }
 
 /* Tag Switcher Logic - keep these with high specificity to prevent display override */
-.header-tags-bar .tag-strip-scroll[data-mode="featured"]>.category-tag,
-.header-tags-bar .tag-strip-scroll[data-mode="featured"]>.tag-group.category-tag {
+.header-tags-bar .tag-strip-scroll[data-mode="featured"] > .category-tag,
+.header-tags-bar
+    .tag-strip-scroll[data-mode="featured"]
+    > .tag-group.category-tag {
     display: none;
 }
 
-.header-tags-bar .tag-strip-scroll[data-mode="categories"]>.featured-tag,
-.header-tags-bar .tag-strip-scroll[data-mode="categories"]>.tag-group.featured-tag {
+.header-tags-bar .tag-strip-scroll[data-mode="categories"] > .featured-tag,
+.header-tags-bar
+    .tag-strip-scroll[data-mode="categories"]
+    > .tag-group.featured-tag {
     display: none;
 }

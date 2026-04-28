@@ -37,7 +37,7 @@
 .page-btn:hover:not(:disabled) {
     border-color: var(--color-primary);
     color: var(--color-primary);
-    background-color: var(--color-primary-light, rgba(37, 99, 235, 0.05));
+    background-color: var(--color-primary-light);
 }
 
 .page-btn:active:not(:disabled) {

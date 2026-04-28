@@ -53,8 +53,8 @@
     --inline-code-text: var(--color-gray-900);
 
     /* Brand */
-    --color-primary: var(--pt-colors-accent, #2563eb);
-    --color-primary-hover: var(--pt-colors-accent-hover, #1d4ed8);
+    --color-primary: var(--pt-colors-accent);
+    --color-primary-hover: var(--pt-colors-accent-hover);
 
     --logo-fill: var(--color-black);
 
@@ -66,38 +66,38 @@
    =========================== */
 [data-theme="dark"] {
     /* Semantic Colors - Background */
-    --bg-primary: var(--pt-colors-bg-primary, #121212);
+    --bg-primary: var(--pt-colors-bg-primary);
     --bg-carouselle: var(--bg-primary);
-    --bg-secondary: var(--pt-colors-bg-secondary, #1e1e1e);
-    --bg-tertiary: var(--pt-colors-bg-tertiary, #2d2d2d);
-    --bg-elevated: var(--pt-colors-bg-elevated, #1e1e1e);
+    --bg-secondary: var(--pt-colors-bg-secondary);
+    --bg-tertiary: var(--pt-colors-bg-tertiary);
+    --bg-elevated: var(--pt-colors-bg-elevated);
     --bg-overlay: rgba(0, 0, 0, 0.7);
 
     /* Semantic Colors - Text */
-    --text-primary: var(--pt-colors-text-primary, #f1f5f9);
+    --text-primary: var(--pt-colors-text-primary);
     --text-primary-hover: var(--color-white);
-    --text-secondary: var(--pt-colors-text-secondary, #cbd5e1);
-    --text-tertiary: var(--pt-colors-text-tertiary, #cbd5e1);
+    --text-secondary: var(--pt-colors-text-secondary);
+    --text-tertiary: var(--pt-colors-text-tertiary);
     --text-immersive: #cbd5e1;
-    --text-muted: var(--pt-colors-text-muted, #64748b);
+    --text-muted: var(--pt-colors-text-muted);
     --text-inverted: #121212;
 
     /* Semantic Colors - Borders */
-    --border-primary: var(--pt-colors-border-primary, #2d2d2d);
-    --border-secondary: var(--pt-colors-border-secondary, #404040);
-    --border-focus: var(--pt-colors-accent, #3b82f6);
+    --border-primary: var(--pt-colors-border-primary);
+    --border-secondary: var(--pt-colors-border-secondary);
+    --border-focus: var(--pt-colors-accent);
 
     /* Semantic Colors - Surfaces */
-    --surface-card: var(--pt-colors-surface-card, #1e1e1e);
-    --surface-input: var(--pt-colors-surface-input, #1e1e1e);
-    --surface-hover: var(--pt-colors-surface-hover, #2d2d2d);
+    --surface-card: var(--pt-colors-surface-card);
+    --surface-input: var(--pt-colors-surface-input);
+    --surface-hover: var(--pt-colors-surface-hover);
     --surface-active: #404040;
 
     /* Shadows (darker for dark theme) */
-    --shadow-sm: 0 var(--px-1) var(--px-2) 0 rgba(0, 0, 0, 0.3);
-    --shadow: 0 var(--px-1) var(--px-3) 0 rgba(0, 0, 0, 0.4), 0 var(--px-1) var(--px-2) -var(--px-1) rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 var(--px-4) var(--px-6) -var(--px-1) rgba(0, 0, 0, 0.4), 0 var(--px-2) var(--px-4) -var(--px-2) rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 var(--px-10) var(--px-15, 0.9375rem) -var(--px-3) rgba(0, 0, 0, 0.4), 0 var(--px-4) var(--px-6) -var(--px-4) rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 0.0625rem 0.125rem 0 rgba(0, 0, 0, 0.3);
+    --shadow: 0 0.0625rem 0.1875rem 0 rgba(0, 0, 0, 0.4), 0 0.0625rem 0.125rem -0.0625rem rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 0.25rem 0.375rem -0.0625rem rgba(0, 0, 0, 0.4), 0 0.125rem 0.25rem -0.125rem rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 0.625rem 0.9375rem -0.1875rem rgba(0, 0, 0, 0.4), 0 0.25rem 0.375rem -0.25rem rgba(0, 0, 0, 0.4);
 
     /* Component-specific */
     --header-bg: rgba(30, 30, 30, 0.8);
@@ -109,8 +109,8 @@
     --inline-code-text: #e2e8f0;
 
     /* Brand adjustments for dark theme */
-    --color-primary: var(--pt-colors-accent, #3b82f6);
-    --color-primary-hover: var(--pt-colors-accent-hover, #60a5fa);
+    --color-primary: var(--pt-colors-accent);
+    --color-primary-hover: var(--pt-colors-accent-hover);
     --color-primary-light: rgba(59, 130, 246, 0.2);
 
     --logo-fill: var(--color-white);
