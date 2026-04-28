@@ -37,8 +37,8 @@
     background: var(--color-black-alpha-30);
     color: white;
     border: none;
-    width: 3.125rem;
-    height: 3.125rem;
+    width: var(--size-3-125);
+    height: var(--size-3-125);
     border-radius: 50%;
     font-size: var(--font-size-2xl);
     cursor: pointer;
@@ -49,7 +49,7 @@
     transition: background-color var(--transition-theme),
         color var(--transition-theme),
         transform 0.2s ease;
-    backdrop-filter: blur(0.25rem);
+    backdrop-filter: blur(var(--size-0-25));
 }
 
 .carousel-prev:hover,
@@ -59,31 +59,31 @@
 }
 
 .carousel-prev {
-    left: 1.25rem;
+    left: var(--size-1-25);
 }
 
 .carousel-next {
-    right: 1.25rem;
+    right: var(--size-1-25);
 }
 
 .carousel-indicators {
     position: absolute;
-    bottom: 1.875rem;
+    bottom: var(--size-1-875);
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 0.625rem;
+    gap: var(--size-0-625);
     z-index: 20;
     background: var(--color-black-alpha-30);
-    padding: var(--spacing-sm) 0.75rem;
-    border-radius: 1.25rem;
-    backdrop-filter: blur(0.25rem);
+    padding: var(--spacing-sm) var(--size-0-75);
+    border-radius: var(--size-1-25);
+    backdrop-filter: blur(var(--size-0-25));
     transition: background-color var(--transition-theme);
 }
 
 .carousel-dot {
-    width: 0.625rem;
-    height: 0.625rem;
+    width: var(--size-0-625);
+    height: var(--size-0-625);
     border-radius: 50%;
     background: var(--color-white-alpha-50);
     border: none;

@@ -2,7 +2,7 @@
 .tree-view {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
+    gap: var(--size-0-125);
 }
 
 .tree-node {
@@ -13,7 +13,7 @@
 .tree-row {
     display: flex;
     align-items: center;
-    padding: var(--spacing-sm) 0.75rem;
+    padding: var(--spacing-sm) var(--size-0-75);
     border-radius: var(--border-radius-sm);
     transition: background-color var(--transition-fast);
     border-bottom: var(--border-width) solid var(--border-primary);
@@ -33,7 +33,7 @@
     align-items: center;
     justify-content: center;
     transition: transform var(--transition-fast);
-    width: 1.5rem;
+    width: var(--size-1-5);
 }
 
 .tree-toggle.expanded {
@@ -41,7 +41,7 @@
 }
 
 .tree-indent {
-    width: 1.5rem;
+    width: var(--size-1-5);
     flex-shrink: 0;
 }
 
@@ -65,7 +65,7 @@
     padding-left: var(--spacing-lg);
     display: none;
     border-left: var(--border-width) dashed var(--border-primary);
-    margin-left: 0.6875rem;
+    margin-left: var(--size-0-6875);
 }
 
 .tree-children.expanded {
@@ -82,7 +82,7 @@
     display: flex;
     gap: var(--spacing-xs);
     border-bottom: var(--border-width) solid var(--border-primary);
-    margin-bottom: 1rem;
+    margin-bottom: var(--size-1);
 }
 
 .tab-link {
@@ -91,7 +91,7 @@
     background: none;
     cursor: pointer;
     color: var(--text-secondary);
-    border-bottom: 0.125rem solid transparent;
+    border-bottom: var(--size-0-125) solid transparent;
     font-weight: 500;
 }
 

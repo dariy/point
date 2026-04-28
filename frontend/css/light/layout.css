@@ -68,7 +68,7 @@ body {
 .sidebar-header .app-logo {
     display: inline-block;
     vertical-align: middle;
-    width: 1rem;
+    width: var(--size-1);
     fill: currentColor;
     flex-shrink: 0;
     transition: fill var(--transition-theme);
@@ -83,8 +83,8 @@ body {
     border: none;
     background: transparent;
     padding: 0;
-    width: 1.25rem;
-    height: 1.25rem;
+    width: var(--size-1-25);
+    height: var(--size-1-25);
 }
 
 .sidebar-header .homepage-link:hover {
@@ -114,7 +114,7 @@ body {
     background: transparent;
     color: var(--sidebar-text);
     padding: 0;
-    font-size: 0.875rem;
+    font-size: var(--size-0-875);
 }
 
 .sidebar-footer .theme-toggle:hover {
@@ -146,8 +146,8 @@ body {
 }
 
 .nav-item.active a {
-    border-left: 0.1875rem solid var(--color-primary);
-    padding-left: calc(var(--spacing-lg) - 0.1875rem);
+    border-left: var(--size-0-1875) solid var(--color-primary);
+    padding-left: calc(var(--spacing-lg) - var(--size-0-1875));
 }
 
 .nav-item svg {
@@ -174,7 +174,7 @@ body {
     cursor: pointer;
     display: flex;
     align-items: center;
-    height: 2.25rem;
+    height: var(--size-2-25);
 }
 
 .logout-btn:hover {
@@ -207,7 +207,7 @@ body {
     justify-content: space-between;
     z-index: 50;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
-    backdrop-filter: blur(0.25rem);
+    backdrop-filter: blur(var(--size-0-25));
 }
 
 .header-title-row {
@@ -267,8 +267,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: var(--size-2-25);
+    height: var(--size-2-25);
     padding: 0;
     background: transparent;
     border: var(--border-width) solid var(--border-primary);
@@ -286,8 +286,8 @@ body {
 }
 
 .homepage-link svg {
-    width: 1.125rem;
-    height: 1.125rem;
+    width: var(--size-1-125);
+    height: var(--size-1-125);
 }
 
 /* Theme Toggle (admin overrides) */
@@ -295,8 +295,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: var(--size-2-25);
+    height: var(--size-2-25);
     padding: 0;
     background: transparent;
     border: var(--border-width) solid var(--border-primary);
@@ -307,8 +307,8 @@ body {
 }
 
 .logo.theme-toggle {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: var(--size-1-5);
+    height: var(--size-1-5);
     border: none;
     align-items: end;
 }
@@ -320,8 +320,8 @@ body {
 }
 
 .theme-toggle svg {
-    width: 1.125rem;
-    height: 1.125rem;
+    width: var(--size-1-125);
+    height: var(--size-1-125);
 }
 
 /* ===========================
@@ -338,7 +338,7 @@ body {
 
 .setup-page-container .card {
     width: 100%;
-    max-width: 30rem;
+    max-width: var(--size-30);
     box-shadow: var(--shadow-lg);
 }
 
@@ -365,6 +365,6 @@ body {
 
 .setup-page-container .setup-submit-btn {
     width: 100%;
-    height: 2.75rem;
+    height: var(--size-2-75);
     font-weight: 600;
 }
