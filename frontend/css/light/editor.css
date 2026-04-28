@@ -29,7 +29,7 @@ body.drag-active::after {
 }
 
 .preview-panel {
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     padding: var(--spacing-md);
     background: var(--surface-card);
@@ -225,7 +225,7 @@ body.drag-active::after {
 .editor-mode-toggle {
     display: flex;
     align-items: center;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     overflow: hidden;
     flex-shrink: 0;
@@ -275,7 +275,7 @@ body.drag-active::after {
     font-size: var(--font-size-sm);
     padding: var(--spacing-md);
     text-align: center;
-    border: 1px dashed var(--border-primary);
+    border: var(--border-width) dashed var(--border-primary);
     border-radius: var(--border-radius);
 }
 
@@ -284,7 +284,7 @@ body.drag-active::after {
     align-items: center;
     gap: var(--spacing-sm);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     padding: 0.375rem 0.625rem 0.375rem 0;
     transition: background var(--transition-fast), opacity var(--transition-fast);
@@ -307,7 +307,7 @@ body.drag-active::after {
     width: 2rem;
     flex-shrink: 0;
     align-self: stretch;
-    border-right: 1px dotted var(--border-primary);
+    border-right: var(--border-width) dotted var(--border-primary);
     cursor: grab;
     color: var(--text-muted);
 }
@@ -451,7 +451,7 @@ body.drag-active::after {
     width: 2rem;
     flex-shrink: 0;
     align-self: stretch;
-    border-right: 1px dotted var(--border-primary);
+    border-right: var(--border-width) dotted var(--border-primary);
     color: var(--text-muted);
     font-size: 0.8125rem;
     user-select: none;
@@ -513,7 +513,7 @@ body.drag-active::after {
 
 .ve-insert-btn {
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl);
     height: 1.5rem;
     font-size: var(--font-size-xs);

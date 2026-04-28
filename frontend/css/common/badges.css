@@ -11,7 +11,7 @@
     font-size: var(--font-size-xs);
     font-weight: 400; /* Use normal weight to match select text rendering */
     border-radius: var(--border-radius-xl);
-    border: 1px solid transparent;
+    border: var(--border-width) solid transparent;
     text-transform: capitalize;
     white-space: nowrap;
     vertical-align: middle;
@@ -72,7 +72,7 @@
     font-size: var(--font-size-xs);
     font-weight: 400; /* Match badge font weight */
     border-radius: var(--border-radius-xl);
-    border: 1px solid transparent;
+    border: var(--border-width) solid transparent;
     cursor: pointer;
     background-image: none;
     appearance: none;

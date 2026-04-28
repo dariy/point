@@ -30,7 +30,7 @@
 /* Modal box */
 .login-modal-box {
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl, var(--border-radius-xl));
     box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.3);
     width: 100%;
@@ -43,7 +43,7 @@
 .login-modal-error {
     margin: 0;
     padding: 0.75rem 1.25rem;
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
     color: var(--color-danger);
     font-size: 0.875rem;
     text-align: center;
@@ -66,7 +66,7 @@
     line-height: 1.5;
     color: var(--text-primary);
     background: var(--bg-input, var(--surface-elevated, var(--bg-primary)));
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius, var(--border-radius));
     outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;

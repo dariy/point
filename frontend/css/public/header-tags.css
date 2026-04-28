@@ -42,7 +42,7 @@
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: 624.938rem;
     height: 2rem;
     padding: 0 var(--spacing-md);
@@ -63,7 +63,7 @@
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: 624.938rem;
     height: 2rem;
     transition: all var(--transition-fast);
@@ -142,7 +142,7 @@
     left: 50%;
     transform: translateX(-50%);
     background: transparent;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl);
     padding: var(--spacing-sm);
     display: none;

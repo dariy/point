@@ -90,7 +90,7 @@
 
 [data-theme="dark"] .marker-label {
     background: var(--bg-secondary, #1e293b);
-    border: 1px solid var(--border-primary, #334155);
+    border: var(--border-width) solid var(--border-primary, #334155);
 }
 
 .custom-marker-wrapper:hover .marker-label {
@@ -132,7 +132,7 @@
     font-weight: 600;
     color: var(--text-primary) !important;
     background: var(--surface-hover);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: 624.938rem;
     text-decoration: none;
     white-space: nowrap;
@@ -172,7 +172,7 @@
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: 624.938rem;
     text-decoration: none;
     white-space: nowrap;
@@ -215,7 +215,7 @@
 [data-theme="dark"] .leaflet-container .leaflet-control-attribution {
     background-color: var(--surface-card);
     color: var(--text-tertiary);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
 }
 
 [data-theme="dark"] .leaflet-container .leaflet-control-attribution a {

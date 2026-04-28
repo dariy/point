@@ -12,7 +12,7 @@
 
 .card-header {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
     background-color: var(--surface-hover);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
     cursor: pointer;
@@ -35,7 +35,7 @@
 
 .card-footer {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--border-primary);
+    border-top: var(--border-width) solid var(--border-primary);
     background-color: var(--surface-hover);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }

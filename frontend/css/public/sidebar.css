@@ -81,7 +81,7 @@
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: 624.938rem;
     text-decoration: none;
     white-space: nowrap;

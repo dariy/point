@@ -33,7 +33,7 @@
     height: 2.25rem;
     padding: 0;
     background: none;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     color: var(--text-primary);
     cursor: pointer;
