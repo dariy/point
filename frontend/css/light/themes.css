@@ -39,6 +39,43 @@
   background-size: cover;
   background-position: center;
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.theme-preview-mock {
+  width: 140px;
+  height: 90px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.mock-header {
+  height: 12px;
+  background: rgba(0, 0, 0, 0.1);
+  margin-bottom: 8px;
+}
+
+.mock-content {
+  padding: 0 8px;
+}
+
+.mock-line {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  margin-bottom: 4px;
+  border-radius: 2px;
+}
+
+.mock-line.short {
+  width: 60%;
 }
 
 .active-badge {

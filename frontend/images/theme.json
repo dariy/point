@@ -1,47 +1,49 @@
 {
+  "description": "Deep blues and vibrant accents for a refreshing look.",
+  "preview_color": "#0891b2",
   "light": {
     "colors": {
-      "bg-primary": "#ffffff",
-      "bg-secondary": "#f8fafc",
-      "bg-tertiary": "#f1f5f9",
+      "bg-primary": "#f0f9ff",
+      "bg-secondary": "#e0f2fe",
+      "bg-tertiary": "#bae6fd",
       "bg-elevated": "#ffffff",
       "surface-card": "#ffffff",
       "surface-input": "#ffffff",
-      "surface-hover": "#f1f5f9",
-      "text-primary": "#0f172a",
-      "text-secondary": "#475569",
-      "text-tertiary": "#64748b",
-      "text-muted": "#94a3b8",
+      "surface-hover": "#f0f9ff",
+      "text-primary": "#0c4a6e",
+      "text-secondary": "#075985",
+      "text-tertiary": "#0369a1",
+      "text-muted": "#38bdf8",
       "text-inverted": "#ffffff",
-      "accent": "#2563eb",
-      "accent-hover": "#1d4ed8",
-      "border-primary": "#e2e8f0",
-      "border-secondary": "#cbd5e1"
+      "accent": "#0891b2",
+      "accent-hover": "#0e7490",
+      "border-primary": "#bae6fd",
+      "border-secondary": "#7dd3fc"
     }
   },
   "dark": {
     "colors": {
-      "bg-primary": "#121212",
-      "bg-secondary": "#1e1e1e",
-      "bg-tertiary": "#2d2d2d",
-      "bg-elevated": "#1e1e1e",
-      "surface-card": "#1e1e1e",
-      "surface-input": "#1e1e1e",
-      "surface-hover": "#2d2d2d",
-      "text-primary": "#f1f5f9",
-      "text-secondary": "#cbd5e1",
-      "text-tertiary": "#94a3b8",
-      "text-muted": "#64748b",
-      "text-inverted": "#121212",
-      "accent": "#3b82f6",
-      "accent-hover": "#60a5fa",
-      "border-primary": "#2d2d2d",
-      "border-secondary": "#404040"
+      "bg-primary": "#082f49",
+      "bg-secondary": "#0c4a6e",
+      "bg-tertiary": "#075985",
+      "bg-elevated": "#0c4a6e",
+      "surface-card": "#0c4a6e",
+      "surface-input": "#0c4a6e",
+      "surface-hover": "#075985",
+      "text-primary": "#e0f2fe",
+      "text-secondary": "#bae6fd",
+      "text-tertiary": "#7dd3fc",
+      "text-muted": "#38bdf8",
+      "text-inverted": "#082f49",
+      "accent": "#22d3ee",
+      "accent-hover": "#67e8f9",
+      "border-primary": "#075985",
+      "border-secondary": "#0369a1"
     }
   },
   "shared": {
     "typography": {
-      "font-family": "Inter, -apple-system, sans-serif"
+      "font-family": "Inter, sans-serif"
     },
     "spacing": {
       "base": "1rem"

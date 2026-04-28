@@ -12,11 +12,13 @@ import (
 )
 
 type Theme struct {
-	Name   string         `json:"name"`
-	Path   string         `json:"-"`
-	Light  map[string]any `json:"light"`
-	Dark   map[string]any `json:"dark"`
-	Shared map[string]any `json:"shared,omitempty"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	PreviewColor string         `json:"preview_color"`
+	Path         string         `json:"-"`
+	Light        map[string]any `json:"light"`
+	Dark         map[string]any `json:"dark"`
+	Shared       map[string]any `json:"shared,omitempty"`
 }
 
 type ThemeService struct {
@@ -109,6 +111,31 @@ func (s *ThemeService) SetActiveTheme(ctx context.Context, name string) error {
 	if _, err := s.ReadAndValidateTheme(themePath, name); err != nil {
 		return fmt.Errorf("invalid theme %q: %w", name, err)
 	}
+
+	// Persist the selection in DB
+	err := s.settingsService.SetSetting(ctx, "active_css_theme", name, "string")
+	if err != nil {
+		return fmt.Errorf("failed to save active theme setting: %w", err)
+	}
+
+	// Synchronize the public-facing theme.json file for the frontend
+	publicThemePath := filepath.Join(s.cfg.FrontendDir, "images", "theme.json")
+
+	// Ensure the target directory exists (useful in some environments/tests)
+	if err := os.MkdirAll(filepath.Dir(publicThemePath), 0755); err != nil {
+		return fmt.Errorf("failed to create public theme directory: %w", err)
+	}
 	
-	return s.settingsService.SetSetting(ctx, "active_css_theme", name, "string")
+	// Read raw content and write to public path (ensures all fields are preserved)
+	data, err := os.ReadFile(themePath)
+	if err != nil {
+		return fmt.Errorf("failed to read source theme file: %w", err)
+	}
+
+	err = os.WriteFile(publicThemePath, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to update public theme.json: %w", err)
+	}
+
+	return nil
 }

@@ -1,4 +1,6 @@
 {
+  "description": "A distraction-free reading experience with classic typography.",
+  "preview_color": "#1a1a1a",
   "light": {
     "colors": {
       "bg-primary": "#fdfdfb",
