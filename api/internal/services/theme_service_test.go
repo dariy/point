@@ -59,12 +59,21 @@ func TestThemeService(t *testing.T) {
 	})
 
 	t.Run("SetActiveTheme success", func(t *testing.T) {
+		frontendDir := t.TempDir()
+		themeService.cfg.FrontendDir = frontendDir
+
 		err := themeService.SetActiveTheme(ctx, "valid")
 		assert.NoError(t, err)
 
 		theme, err := themeService.GetActiveTheme(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, "valid", theme.Name)
+
+		// Verify theme.json sync
+		publicThemePath := filepath.Join(frontendDir, "images", "theme.json")
+		data, err := os.ReadFile(publicThemePath)
+		assert.NoError(t, err)
+		assert.JSONEq(t, string(validTheme), string(data))
 	})
 
 	t.Run("SetActiveTheme invalid", func(t *testing.T) {

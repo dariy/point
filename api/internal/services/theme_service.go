@@ -119,13 +119,23 @@ func (s *ThemeService) SetActiveTheme(ctx context.Context, name string) error {
 	}
 
 	// Synchronize the public-facing theme.json file for the frontend
+	return s.SyncActiveTheme(ctx)
+}
+
+func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
+	activeTheme, err := s.GetActiveTheme(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get active theme: %w", err)
+	}
+
+	themePath := filepath.Join(s.cfg.ThemesPath, activeTheme.Name+".json")
 	publicThemePath := filepath.Join(s.cfg.FrontendDir, "images", "theme.json")
 
 	// Ensure the target directory exists (useful in some environments/tests)
 	if err := os.MkdirAll(filepath.Dir(publicThemePath), 0755); err != nil {
 		return fmt.Errorf("failed to create public theme directory: %w", err)
 	}
-	
+
 	// Read raw content and write to public path (ensures all fields are preserved)
 	data, err := os.ReadFile(themePath)
 	if err != nil {
