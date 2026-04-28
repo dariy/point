@@ -5,19 +5,40 @@
  */
 
 /**
- * Maps a configuration object to CSS variables recursively.
+ * Maps a configuration object to CSS variables.
  * @param {object} obj
- * @param {string} prefix
  * @returns {string}
  */
-function mapToCSS(obj, prefix = '--pt-') {
+function mapToCSS(obj) {
+  // Map theme.json keys to existing blog CSS tokens
+  const tokenMap = {
+    'bg-primary': '--bg-primary',
+    'bg-secondary': '--bg-secondary',
+    'bg-tertiary': '--bg-tertiary',
+    'bg-elevated': '--bg-elevated',
+    'surface-card': '--surface-card',
+    'surface-input': '--surface-input',
+    'surface-hover': '--surface-hover',
+    'text-primary': '--text-primary',
+    'text-secondary': '--text-secondary',
+    'text-tertiary': '--text-tertiary',
+    'text-muted': '--text-muted',
+    'text-inverted': '--text-inverted',
+    'accent': '--color-primary',
+    'accent-hover': '--color-primary-hover',
+    'border-primary': '--border-primary',
+    'border-secondary': '--border-secondary',
+    'font-family': '--font-family',
+    'base': '--spacing-md' // standard mapping for base spacing
+  };
+
   let css = '';
   for (const [key, value] of Object.entries(obj)) {
-    const name = `${prefix}${key.replace(/_/g, '-')}`;
     if (typeof value === 'object' && value !== null) {
-      css += mapToCSS(value, `${name}-`);
+      css += mapToCSS(value);
     } else {
-      css += `  ${name}: ${value};\n`;
+      const varName = tokenMap[key] || `--${key}`;
+      css += `  ${varName}: ${value};\n`;
     }
   }
   return css;
