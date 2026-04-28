@@ -8,6 +8,7 @@ import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { getThemes, getActiveTheme, setActiveTheme } from '../../api/themes.js';
 import { logout } from '../../api/auth.js';
+import { parseTheme } from '../../utils/themeParser.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { STAR_SVG, STAR_OUTLINE_SVG } from '../../utils/icons.js';
@@ -63,6 +64,14 @@ export default class ThemesPage extends Component {
     return `
       <div class="${cardClass}" data-name="${escapeHtml(theme.name)}">
         <div class="theme-card-preview" style="background-color: ${escapeHtml(theme.preview_color || '#eee')}">
+          <div class="theme-preview-mock">
+            <div class="mock-header"></div>
+            <div class="mock-content">
+              <div class="mock-line"></div>
+              <div class="mock-line short"></div>
+              <div class="mock-line"></div>
+            </div>
+          </div>
           ${isActive ? `<span class="active-badge">${STAR_SVG} Active</span>` : ''}
         </div>
         <div class="theme-card-body">
@@ -125,10 +134,11 @@ export default class ThemesPage extends Component {
     try {
       const activeTheme = await setActiveTheme(name);
       store.set('toast', { message: `Theme "${name}" activated.`, type: 'success' });
-      this.setState({ saving: false, activeTheme });
       
-      // Optionally trigger a theme re-parse if needed, 
-      // though typically the active theme for public site is handled by backend.
+      // Re-parse the theme so the admin UI reflects the new theme immediately
+      await parseTheme();
+      
+      this.setState({ saving: false, activeTheme });
     } catch (err) {
       console.error('[ThemesPage] activate error:', err);
       store.set('toast', { message: err.message || 'Failed to activate theme.', type: 'error' });

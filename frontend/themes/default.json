@@ -1,4 +1,6 @@
 {
+  "description": "The standard Point experience. Clean, modern, and reliable.",
+  "preview_color": "#2563eb",
   "light": {
     "colors": {
       "bg-primary": "#ffffff",
