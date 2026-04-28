@@ -18,7 +18,7 @@ func NewThemeHandler(themeService *services.ThemeService) *ThemeHandler {
 func (h *ThemeHandler) ListThemes(c echo.Context) error {
 	themes, err := h.themeService.ListThemes()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 	}
 	return c.JSON(http.StatusOK, themes)
 }
@@ -26,7 +26,7 @@ func (h *ThemeHandler) ListThemes(c echo.Context) error {
 func (h *ThemeHandler) GetActiveTheme(c echo.Context) error {
 	theme, err := h.themeService.GetActiveTheme(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 	}
 	return c.JSON(http.StatusOK, theme)
 }
@@ -38,16 +38,16 @@ type updateActiveThemeRequest struct {
 func (h *ThemeHandler) SetActiveTheme(c echo.Context) error {
 	var req updateActiveThemeRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request format"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request format"})
 	}
 
 	if req.Name == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "theme name is required"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "theme name is required"})
 	}
 
 	err := h.themeService.SetActiveTheme(c.Request().Context(), req.Name)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "success"})
