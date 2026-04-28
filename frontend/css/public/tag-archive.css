@@ -5,7 +5,7 @@
     text-align: center;
     margin-bottom: var(--spacing-2xl);
     padding-bottom: var(--spacing-xl);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
 }
 
 .tag-name {
@@ -61,7 +61,7 @@
     position: relative;
     border-radius: 1rem;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     overflow: visible;
     /* Changed from hidden to support header dropdowns and nested content */
     transition: all var(--transition-fast);
@@ -103,7 +103,7 @@
     align-items: center;
     justify-content: center;
     transition: all var(--transition-fast);
-    border-left: 1px solid var(--border-primary);
+    border-left: var(--border-width) solid var(--border-primary);
 }
 
 .toggle-children:hover {

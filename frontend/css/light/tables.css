@@ -14,7 +14,7 @@
 .table td {
     padding: var(--spacing-sm) var(--spacing-md);
     text-align: left;
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
     vertical-align: middle;
 }
 
@@ -54,7 +54,7 @@
     align-items: center;
     justify-content: center;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     color: var(--text-secondary);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
@@ -95,7 +95,7 @@
     white-space: nowrap;
     vertical-align: top;
     padding-top: var(--spacing-sm);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
 }
 
 /* Group hover effect: highlight both rows when either is hovered */
@@ -118,7 +118,7 @@ td.updated-col {
 .preview-col {
     width: 3rem;
     padding-right: 0 !important;
-    border-bottom: 1px solid var(--border-primary) !important;
+    border-bottom: var(--border-width) solid var(--border-primary) !important;
     vertical-align: middle;
 }
 
@@ -139,7 +139,7 @@ td.updated-col {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px dashed var(--border-primary);
+    border: var(--border-width) dashed var(--border-primary);
     color: var(--text-muted);
     font-size: var(--font-size-base);
 }

@@ -31,7 +31,7 @@
     height: 2rem;
     font-size: var(--font-size-xs);
     font-weight: 500;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: 1rem;
     background: var(--surface-card);
     color: var(--text-primary);
