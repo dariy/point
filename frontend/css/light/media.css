@@ -243,7 +243,7 @@
     left: 50%;
     transform: translate(-50%, -50%);
     color: white;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--color-black-alpha-40);
     border-radius: 50%;
     width: 3.75rem;
     height: 3.75rem;
@@ -255,7 +255,7 @@
 }
 
 .media-video-preview:hover .media-play-overlay {
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--color-black-alpha-60);
     transform: translate(-50%, -50%) scale(1.1);
 }
 
@@ -398,7 +398,7 @@
 .drop-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.12);
+    background: var(--color-primary-light-alpha-12);
     border: 0.1875rem dashed var(--color-primary);
     z-index: 9999;
     display: flex;
@@ -448,7 +448,7 @@
 .media-browser-drop-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.12);
+    background: var(--color-primary-light-alpha-12);
     border: 0.1875rem dashed var(--color-primary);
     border-radius: var(--border-radius);
     z-index: 100;
@@ -516,7 +516,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--color-black-alpha-40);
     color: white;
     border-radius: var(--border-radius-sm);
     backdrop-filter: blur(0.25rem);

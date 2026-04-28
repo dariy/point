@@ -47,7 +47,7 @@
 .lightbox-prev,
 .lightbox-next {
     position: absolute;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-black-alpha-50);
     color: white;
     border: none;
     font-size: 2rem;
@@ -59,7 +59,7 @@
 .lightbox-close:hover,
 .lightbox-prev:hover,
 .lightbox-next:hover {
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--color-black-alpha-70);
 }
 
 .lightbox-close {

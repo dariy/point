@@ -11,7 +11,7 @@
     margin-top: 2rem;
     position: relative;
     z-index: 1;
-    box-shadow: 0 0.25rem 1.25rem rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0.25rem 1.25rem var(--color-black-alpha-10);
 }
 
 .site-main--map .map-container {
@@ -23,13 +23,13 @@
 }
 
 [data-theme="dark"] .map-container {
-    box-shadow: 0 0.25rem 1.25rem rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0.25rem 1.25rem var(--color-black-alpha-40);
 }
 
 #map {
     height: 100%;
     width: 100%;
-    background: var(--bg-secondary, #f8fafc);
+    background: var(--bg-secondary);
 }
 
 .map-header {
@@ -60,11 +60,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--accent-primary, #3b82f6);
+    background: var(--accent-primary);
     color: white;
     border-radius: 50%;
     border: 0.125rem solid white;
-    box-shadow: 0 0.125rem 0.3125rem rgba(0,0,0,0.3);
+    box-shadow: 0 0.125rem 0.3125rem var(--color-black-alpha-30);
     font-weight: bold;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     z-index: 2;
@@ -81,7 +81,7 @@
     border-radius: var(--border-radius-sm);
     font-size: 0.75rem;
     font-weight: 600;
-    box-shadow: 0 0.0625rem 0.1875rem rgba(0,0,0,0.2);
+    box-shadow: 0 0.0625rem 0.1875rem var(--color-black-alpha-20);
     pointer-events: none;
     opacity: 0.8;
     transition: opacity 0.2s ease;
@@ -89,8 +89,8 @@
 }
 
 [data-theme="dark"] .marker-label {
-    background: var(--bg-secondary, #1e293b);
-    border: var(--border-width) solid var(--border-primary, #334155);
+    background: var(--bg-secondary);
+    border: var(--border-width) solid var(--border-primary);
 }
 
 .custom-marker-wrapper:hover .marker-label {
@@ -100,7 +100,7 @@
 
 .custom-marker:hover {
     transform: scale(1.2);
-    box-shadow: 0 0.25rem 0.625rem rgba(0,0,0,0.4);
+    box-shadow: 0 0.25rem 0.625rem var(--color-black-alpha-40);
     z-index: 1000 !important;
 }
 
@@ -108,19 +108,19 @@
  * !important is required because leaflet.css is loaded dynamically and may
  * override these rules depending on load order. */
 .leaflet-popup-content-wrapper {
-    background: var(--surface-card, #fff) !important;
-    color: var(--text-primary, #0f172a) !important;
+    background: var(--surface-card) !important;
+    color: var(--text-primary) !important;
     border-radius: var(--border-radius-lg) !important;
     box-shadow: var(--shadow-md) !important;
     padding: 0.3125rem;
 }
 
 .leaflet-popup-tip {
-    background: var(--surface-card, #fff) !important;
+    background: var(--surface-card) !important;
 }
 
 .leaflet-popup-content a:not(.map-popup-tag) {
-    color: var(--color-primary, #2563eb);
+    color: var(--color-primary);
 }
 
 .map-popup-tag {
@@ -140,8 +140,8 @@
 }
 
 .map-popup-tag:hover {
-    border-color: var(--color-primary, #2563eb);
-    color: var(--color-primary, #2563eb) !important;
+    border-color: var(--color-primary);
+    color: var(--color-primary) !important;
 }
 
 .tag-popup-title {
@@ -180,8 +180,8 @@
 }
 
 .map-year-link:hover {
-    border-color: var(--color-primary, #2563eb);
-    color: var(--color-primary, #2563eb);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
 }
 
 .leaflet-container {

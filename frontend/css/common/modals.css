@@ -6,7 +6,7 @@
     position: fixed;
     inset: 0;
     z-index: 10000;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--color-black-alpha-50);
     justify-content: center;
     align-items: center;
     backdrop-filter: blur(0.125rem);
@@ -28,7 +28,7 @@
 .modal {
     background-color: var(--surface-card);
     border-radius: var(--border-radius-xl);
-    box-shadow: 0 1.25rem 3.75rem rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1.25rem 3.75rem var(--color-black-alpha-30);
     min-width: 25rem;
     max-width: 90%;
     width: 37.5rem;
@@ -51,7 +51,7 @@
 .modal-content {
     background-color: var(--surface-card);
     border-radius: var(--border-radius-xl);
-    box-shadow: 0 1.25rem 3.75rem rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1.25rem 3.75rem var(--color-black-alpha-30);
     min-width: 25rem;
     max-height: 90vh;
     display: flex;
@@ -162,7 +162,7 @@
 .progress-modal {
     background-color: var(--surface-card);
     border-radius: 1rem;
-    box-shadow: 0 1.25rem 3.75rem rgba(0, 0, 0, 0.4);
+    box-shadow: 0 1.25rem 3.75rem var(--color-black-alpha-40);
     padding: var(--spacing-2xl);
     text-align: center;
     min-width: 18.75rem;
