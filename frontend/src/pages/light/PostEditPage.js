@@ -13,8 +13,9 @@ import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
-import { getPost, createPost, updatePost } from '../../api/posts.js';
+import { getPost, createPost, updatePost, deletePost } from '../../api/posts.js';
 import { uploadMedia, analyzeMedia, analyzeMediaByPath, listMedia, renameMedia } from '../../api/media.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { getAllShareEntries, clearShareEntries } from '../../utils/idb.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
@@ -82,7 +83,8 @@ export default class PostEditPage extends Component {
     this.state = {
       loading: !!id,
       saving: false,
-      analyzingField: null,   // 'title' | 'tags' | 'excerpt' | null
+      deleting: false,
+      analyzingField: null,
       post: null,
       error: null,
       isNew: !id,
