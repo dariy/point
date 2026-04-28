@@ -192,10 +192,12 @@ export default class PostEditPage extends Component {
                        ${featured ? 'checked' : ''}>
                 <button id="featured-toggle" type="button"
                         class="featured-btn${featured ? ' is-featured' : ''}"
-                        title="${featured ? 'Unmark as featured' : 'Mark as featured'}">
+                        title="${featured ? 'Unmark as featured' : 'Mark as featured'}"
+                        ${anyActionInProgress ? 'disabled' : ''}>
                   ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
                 </button>
-                <select id="status-select" class="status-select badge-${escapeHtml(status)}">
+                <select id="status-select" class="status-select badge-${escapeHtml(status)}"
+                        ${anyActionInProgress ? 'disabled' : ''}>
                   ${statusOpts}
                 </select>
                 <div class="title-input-wrapper">
@@ -210,7 +212,8 @@ export default class PostEditPage extends Component {
                 <div class="schedule-input-wrapper">
                   <input type="datetime-local" id="schedule-input"
                          class="form-input schedule-at-input"
-                         value="${toDatetimeLocal(p.scheduled_at || '')}">
+                         value="${toDatetimeLocal(p.scheduled_at || '')}"
+                         ${anyActionInProgress ? 'disabled' : ''}>
                   <span class="schedule-input-hint"
                         id="schedule-hint"
                         style="${p.scheduled_at ? 'display:none' : ''}">Publish at…</span>
@@ -858,7 +861,7 @@ export default class PostEditPage extends Component {
   }
 
   async _autoSaveField(patch) {
-    if (this.state.isNew || this.state.saving) return;
+    if (this._unmounted || this.state.isNew || this.state.saving || this.state.deleting) return;
     const formData = this._collectFormData();
     const fullData = { ...formData, ...patch };
     try {
