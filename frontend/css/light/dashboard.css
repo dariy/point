@@ -17,7 +17,7 @@
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--size-12-5), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--stats-grid-grid-template-columns), 1fr));
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-xl);
 }
@@ -64,7 +64,7 @@
 .storage-bar {
     background-color: var(--border-primary);
     border-radius: var(--border-radius);
-    height: var(--size-0-5);
+    height: var(--storage-bar-height);
     margin-top: var(--spacing-sm);
     overflow: hidden;
 }
@@ -103,8 +103,8 @@
 .version-update-banner code {
     font-family: monospace;
     background: var(--color-black-alpha-08);
-    padding: var(--size-0-0625) var(--size-0-3125);
-    border-radius: var(--size-0-1875);
+    padding: var(--code-padding-y) var(--code-padding-x);
+    border-radius: var(--code-border-radius);
 }
 
 .version-update-dismiss {
@@ -112,11 +112,11 @@
     background: none;
     border: none;
     cursor: pointer;
-    font-size: var(--size-1-125);
+    font-size: var(--version-update-dismiss-font-size);
     line-height: 1;
     color: inherit;
     opacity: 0.6;
-    padding: 0 var(--size-0-125);
+    padding: 0 var(--version-update-dismiss-padding);
     flex-shrink: 0;
 }
 

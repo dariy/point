@@ -26,8 +26,8 @@
 }
 
 .post-meta-divider {
-    width: var(--size-0-25);
-    height: var(--size-0-25);
+    width: var(--post-meta-divider-width);
+    height: var(--post-meta-divider-height);
     background-color: var(--border-secondary);
     border-radius: 50%;
 }
@@ -113,7 +113,7 @@
     font-size: 0.9em;
     background-color: var(--inline-code-bg);
     color: var(--inline-code-text);
-    padding: var(--size-0-125) var(--size-0-375);
+    padding: var(--code-padding-y) var(--code-padding-x);
     border-radius: var(--border-radius-sm);
     transition: background-color var(--transition-theme),
         color var(--transition-theme);
@@ -138,7 +138,7 @@
 .post-content a {
     color: var(--color-primary);
     text-decoration: underline;
-    text-underline-offset: var(--size-0-125);
+    text-underline-offset: var(--a-text-underline-offset);
 }
 
 /* Post Footer */
@@ -158,8 +158,8 @@
 
 .post-tags .tag-link {
     background-color: var(--bg-tertiary);
-    backdrop-filter: blur(var(--size-0-5));
-    -webkit-backdrop-filter: blur(var(--size-0-5));
+    backdrop-filter: blur(var(--tag-link-backdrop-filter-alt1));
+    -webkit-backdrop-filter: blur(var(--tag-link--webkit-backdrop-filter-alt1));
 }
 
 .post-tags .tag-link:hover {
@@ -237,8 +237,8 @@
     transform: translateY(-50%);
     background: var(--color-black-alpha-25);
     color: white;
-    width: var(--size-3-125);
-    height: var(--size-3-125);
+    width: var(--post-side-nav-btn-width);
+    height: var(--post-side-nav-btn-height);
     border-radius: 50%;
     font-size: var(--font-size-2xl);
     cursor: pointer;
@@ -248,8 +248,8 @@
     justify-content: center;
     text-decoration: none;
     transition: background-color 0.2s ease, transform 0.2s ease;
-    backdrop-filter: blur(var(--size-0-25));
-    -webkit-backdrop-filter: blur(var(--size-0-25));
+    backdrop-filter: blur(var(--post-side-nav-btn-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-side-nav-btn--webkit-backdrop-filter));
 }
 
 .post-side-nav-btn:hover {
@@ -258,8 +258,8 @@
     color: white;
 }
 
-.post-side-nav-btn.prev { left: var(--size-1); }
-.post-side-nav-btn.next { right: var(--size-1); }
+.post-side-nav-btn.prev { left: var(--post-side-nav-btnprev-left); }
+.post-side-nav-btn.next { right: var(--post-side-nav-btnnext-right); }
 
 [data-theme="light"] .post-side-nav-btn {
     background: var(--color-black-alpha-15);

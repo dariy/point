@@ -43,8 +43,8 @@
     align-items: center;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--size-600);
-    height: var(--size-2);
+    border-radius: var(--tag-link-border-radius);
+    height: var(--tag-link-height);
     padding: 0 var(--spacing-md);
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
@@ -64,8 +64,8 @@
     align-items: center;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--size-600);
-    height: var(--size-2);
+    border-radius: var(--tag-group-header-border-radius);
+    height: var(--tag-group-header-height);
     transition: all var(--transition-fast);
     box-sizing: border-box;
     /* Prevent Android Chrome from absorbing taps-on-pills as scroll gestures
@@ -89,7 +89,7 @@
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    padding: 0 var(--size-0-25) 0 var(--spacing-md);
+    padding: 0 var(--tag-link-padding) 0 var(--spacing-md);
     height: 100%;
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -110,7 +110,7 @@
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    padding: 0 var(--size-0-5) 0 var(--size-0-25);
+    padding: 0 var(--toggle-children-padding-y) 0 var(--toggle-children-padding-x);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -165,7 +165,7 @@
     position: absolute;
     inset: 0;
     background: var(--surface-card);
-    backdrop-filter: blur(var(--size-0-75));
+    backdrop-filter: blur(var(--tag-children--backdrop-filter));
     border-radius: inherit;
     z-index: -1;
     pointer-events: none;
@@ -174,10 +174,10 @@
 .header-tags-bar .tag-children::before {
     content: "";
     position: absolute;
-    top: calc(var(--size-0-5) * -1);
+    top: calc(var(--tag-children--top) * -1);
     left: 0;
     right: 0;
-    height: var(--size-0-5);
+    height: var(--tag-children--height);
     background: transparent;
 }
 
@@ -199,7 +199,7 @@
 @keyframes dropdownFadeIn {
     from {
         opacity: 0;
-        margin-top: calc(var(--size-0-625) * -1);
+        margin-top: calc(var(--from-margin-top) * -1);
     }
 
     to {
@@ -211,7 +211,7 @@
 /* Ensure children in dropdowns have consistent sizing - use child combinator for specificity */
 .header-tags-bar .tag-children > .tag-link,
 .header-tags-bar .tag-children > .tag-group .tag-link {
-    height: var(--size-2);
+    height: var(--tag-link-height);
     font-size: var(--font-size-sm);
 }
 
@@ -220,7 +220,7 @@
 }
 
 .header-tags-bar .tag-children > .tag-group > .tag-group-header {
-    height: var(--size-2);
+    height: var(--tag-group-header-height);
     font-size: var(--font-size-sm);
 }
 

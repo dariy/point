@@ -1,4 +1,4 @@
-import { BaseWebComponent } from './BaseWebComponent.js';
+import { BaseWebComponent } from '../BaseWebComponent.js';
 
 /**
  * Proof-of-Concept component for Post List using Shadow DOM.

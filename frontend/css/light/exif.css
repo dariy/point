@@ -37,20 +37,20 @@
 }
 
 .exif-table td {
-  padding: var(--size-0-1875) var(--spacing-xs);
+  padding: var(--td-padding) var(--spacing-xs);
   border-bottom: var(--border-width) solid var(--border-secondary);
   vertical-align: middle;
 }
 
 .exif-table td:last-child {
-  width: var(--size-1-75);
+  width: var(--td-width);
 }
 
 .exif-table input {
   width: 100%;
   border: var(--border-width) solid transparent;
   border-radius: var(--border-radius-sm);
-  padding: var(--size-0-125) var(--size-0-25);
+  padding: var(--input-padding-y) var(--input-padding-x);
   font-size: var(--font-size-sm);
   background: transparent;
   color: var(--text-primary);
@@ -71,14 +71,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--size-1-5);
-  height: var(--size-1-5);
+  width: var(--exif-delete-btn-width);
+  height: var(--exif-delete-btn-height);
   background: none;
   border: none;
   border-radius: var(--border-radius-sm);
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: var(--size-0-875);
+  font-size: var(--exif-delete-btn-font-size);
   opacity: 0;
   transition: color 0.15s, opacity 0.15s;
 }
@@ -110,14 +110,14 @@
 .ve-exif-toggle {
   display: inline-flex;
   align-items: center;
-  gap: var(--size-0-1875);
+  gap: var(--ve-exif-toggle-gap);
   background: none;
   border: var(--border-width) solid var(--border-primary);
   border-radius: var(--border-radius-sm);
   cursor: pointer;
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  padding: var(--size-0-125) var(--size-0-375);
+  padding: var(--ve-exif-toggle-padding-y) var(--ve-exif-toggle-padding-x);
   transition: border-color 0.15s, color 0.15s;
 }
 

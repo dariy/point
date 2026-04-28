@@ -1,4 +1,4 @@
-import { BaseWebComponent } from './BaseWebComponent.js';
+import { BaseWebComponent } from '../BaseWebComponent.js';
 import { GestureController } from '../../utils/gestures.js';
 
 /**

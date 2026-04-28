@@ -23,10 +23,10 @@
 .category-chip .chip-label {
     display: inline-flex;
     align-items: center;
-    padding: var(--size-0-4) var(--size-0-8);
+    padding: var(--chip-label-padding-y) var(--chip-label-padding-x);
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--size-2);
+    border-radius: var(--chip-label-border-radius);
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
     transition: all var(--transition-fast);
@@ -44,10 +44,10 @@
 }
 
 .category-chip .hidden-checkbox:focus+.chip-label {
-    box-shadow: 0 0 0 var(--size-0-125) var(--color-primary-light);
+    box-shadow: 0 0 0 var(--chip-label-box-shadow) var(--color-primary-light);
 }
 
 .category-chip .chip-label.sub-tag {
-    margin-left: var(--size-1);
+    margin-left: var(--chip-labelsub-tag-margin-left);
     opacity: 0.8;
 }

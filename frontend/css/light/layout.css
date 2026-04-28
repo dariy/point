@@ -68,7 +68,7 @@ body {
 .sidebar-header .app-logo {
     display: inline-block;
     vertical-align: middle;
-    width: var(--size-1);
+    width: var(--app-logo-width);
     fill: currentColor;
     flex-shrink: 0;
     transition: fill var(--transition-theme);
@@ -83,8 +83,8 @@ body {
     border: none;
     background: transparent;
     padding: 0;
-    width: var(--size-1-25);
-    height: var(--size-1-25);
+    width: var(--homepage-link-width);
+    height: var(--homepage-link-height);
 }
 
 .sidebar-header .homepage-link:hover {
@@ -114,7 +114,7 @@ body {
     background: transparent;
     color: var(--sidebar-text);
     padding: 0;
-    font-size: var(--size-0-875);
+    font-size: var(--theme-toggle-font-size);
 }
 
 .sidebar-footer .theme-toggle:hover {
@@ -146,8 +146,8 @@ body {
 }
 
 .nav-item.active a {
-    border-left: var(--size-0-1875) solid var(--color-primary);
-    padding-left: calc(var(--spacing-lg) - var(--size-0-1875));
+    border-left: var(--a-border-left) solid var(--color-primary);
+    padding-left: calc(var(--spacing-lg) - var(--a-padding-left));
 }
 
 .nav-item svg {
@@ -174,7 +174,7 @@ body {
     cursor: pointer;
     display: flex;
     align-items: center;
-    height: var(--size-2-25);
+    height: var(--logout-btn-height);
 }
 
 .logout-btn:hover {
@@ -207,7 +207,7 @@ body {
     justify-content: space-between;
     z-index: 50;
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
-    backdrop-filter: blur(var(--size-0-25));
+    backdrop-filter: blur(var(--light-header-backdrop-filter));
 }
 
 .header-title-row {
@@ -267,8 +267,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--size-2-25);
-    height: var(--size-2-25);
+    width: var(--homepage-link-width-alt1);
+    height: var(--homepage-link-height-alt1);
     padding: 0;
     background: transparent;
     border: var(--border-width) solid var(--border-primary);
@@ -286,8 +286,8 @@ body {
 }
 
 .homepage-link svg {
-    width: var(--size-1-125);
-    height: var(--size-1-125);
+    width: var(--svg-width);
+    height: var(--svg-height);
 }
 
 /* Theme Toggle (admin overrides) */
@@ -295,8 +295,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--size-2-25);
-    height: var(--size-2-25);
+    width: var(--theme-toggle-width);
+    height: var(--theme-toggle-height);
     padding: 0;
     background: transparent;
     border: var(--border-width) solid var(--border-primary);
@@ -307,8 +307,8 @@ body {
 }
 
 .logo.theme-toggle {
-    width: var(--size-1-5);
-    height: var(--size-1-5);
+    width: var(--logotheme-toggle-width);
+    height: var(--logotheme-toggle-height);
     border: none;
     align-items: end;
 }
@@ -320,8 +320,8 @@ body {
 }
 
 .theme-toggle svg {
-    width: var(--size-1-125);
-    height: var(--size-1-125);
+    width: var(--svg-width);
+    height: var(--svg-height);
 }
 
 /* ===========================
@@ -338,7 +338,7 @@ body {
 
 .setup-page-container .card {
     width: 100%;
-    max-width: var(--size-30);
+    max-width: var(--card-max-width);
     box-shadow: var(--shadow-lg);
 }
 
@@ -365,6 +365,6 @@ body {
 
 .setup-page-container .setup-submit-btn {
     width: 100%;
-    height: var(--size-2-75);
+    height: var(--setup-submit-btn-height);
     font-weight: 600;
 }

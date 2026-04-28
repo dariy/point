@@ -4,9 +4,9 @@
 .badge {
     display: inline-flex;
     align-items: center;
-    gap: var(--size-0-25);
+    gap: var(--badge-gap);
     padding: 0 var(--spacing-sm);
-    height: var(--size-1-5);
+    height: var(--badge-height);
     line-height: 1;
     font-size: var(--font-size-xs);
     font-weight: 400; /* Use normal weight to match select text rendering */
@@ -18,7 +18,7 @@
 }
 
 .badge span {
-    transform: translateY(calc(var(--size-0-0625) * -1));
+    transform: translateY(calc(var(--span-transform) * -1));
 }
 
 .badge-draft {
@@ -67,7 +67,7 @@
     display: inline-flex;
     align-items: center;
     padding: 0 var(--spacing-sm);
-    height: var(--size-1-5);
+    height: var(--status-select-height);
     line-height: normal; /* Let browser handle select internal alignment */
     font-size: var(--font-size-xs);
     font-weight: 400; /* Match badge font weight */
@@ -83,7 +83,7 @@
 
 .status-select:focus {
     outline: none;
-    box-shadow: 0 0 0 var(--size-0-125) var(--color-primary-light);
+    box-shadow: 0 0 0 var(--status-select-box-shadow) var(--color-primary-light);
 }
 
 .status-select option {

@@ -2,7 +2,7 @@
    Settings & Security
    =========================== */
 .settings-container {
-    max-width: var(--size-50);
+    max-width: var(--settings-container-max-width);
     margin: 0 auto;
 }
 
@@ -28,8 +28,8 @@
 
 .section-title {
     margin-top: 0;
-    margin-bottom: var(--size-1-25);
-    padding-bottom: var(--size-0-625);
+    margin-bottom: var(--section-title-margin-bottom);
+    padding-bottom: var(--section-title-padding-bottom);
     border-bottom: var(--border-width) solid var(--border-primary);
     color: var(--text-primary);
 }
@@ -37,7 +37,7 @@
 /* Two-column field rows (label | input) */
 .settings-field {
     display: grid;
-    grid-template-columns: var(--size-11-25) 1fr;
+    grid-template-columns: var(--settings-field-grid-template-columns) 1fr;
     align-items: center;
     gap: var(--spacing-lg);
     padding: var(--spacing-sm) 0;
@@ -53,7 +53,7 @@
 }
 
 .settings-field-top .settings-field-label {
-    padding-top: calc(var(--spacing-sm) + var(--size-0-125));
+    padding-top: calc(var(--spacing-sm) + var(--settings-field-label-padding-top));
 }
 
 .settings-field-label {
@@ -91,10 +91,10 @@
 .setting-pill-label {
     display: inline-flex;
     align-items: center;
-    padding: var(--size-0-35) var(--size-0-8);
+    padding: var(--setting-pill-label-padding-y) var(--setting-pill-label-padding-x);
     background: var(--surface-card);
-    border: var(--size-0-09375) solid var(--border-primary);
-    border-radius: var(--size-2);
+    border: var(--setting-pill-label-border) solid var(--border-primary);
+    border-radius: var(--setting-pill-label-border-radius);
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text-secondary);
@@ -114,7 +114,7 @@
 }
 
 .setting-pill-input:focus-visible + .setting-pill-label {
-    box-shadow: 0 0 0 var(--size-0-125) var(--color-primary-light);
+    box-shadow: 0 0 0 var(--setting-pill-label-box-shadow) var(--color-primary-light);
 }
 
 .save-status {
@@ -132,7 +132,7 @@
 /* Input with Button */
 .input-with-button {
     display: flex;
-    gap: var(--size-0-625);
+    gap: var(--input-with-button-gap);
     align-items: center;
 }
 
@@ -148,8 +148,8 @@
 
 /* Connection Test Result */
 .connection-test-result {
-    margin-top: var(--size-0-625);
-    padding: var(--size-0-625);
+    margin-top: var(--connection-test-result-margin-top);
+    padding: var(--connection-test-result-padding);
     border-radius: var(--border-radius-sm);
     font-size: 0.9em;
     display: none;
@@ -221,7 +221,7 @@
 
 .prompt-part {
     flex: 1;
-    min-width: var(--size-10);
+    min-width: var(--prompt-part-min-width);
     font-family: inherit;
     font-size: inherit;
 }
