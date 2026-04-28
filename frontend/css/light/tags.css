@@ -362,12 +362,13 @@
 /* Flag specific colors when active */
 .tm-flag-toggle.active.tm-flag-is-important { color: #f59e0b; border-color: #f59e0b; background: #fffbeb; }
 .tm-flag-toggle.active.tm-flag-is-featured  { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
-.tm-flag-toggle.active.tm-flag-is-hidden    { color: var(--text-muted); border-color: var(--text-muted); }
-.tm-flag-toggle.active.tm-flag-is-hidden-posts { color: var(--color-danger); border-color: var(--color-danger); background: #fef2f2; }
-.tm-flag-toggle.active.tm-flag-include-in-breadcrumbs { color: #8b5cf6; border-color: #8b5cf6; background: #f5f3ff; }
-.tm-flag-toggle.active.tm-flag-show-related-tags-as-children { color: #10b981; border-color: #10b981; background: #ecfdf5; }
+.tm-flag-toggle.active.tm-flag-is-important { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-light); }
+.tm-flag-toggle.active.tm-flag-is-hidden-posts { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-light); }
+.tm-flag-toggle.active.tm-flag-include-in-breadcrumbs { color: var(--color-purple-500); border-color: var(--color-purple-500); background: var(--color-purple-50); }
+.tm-flag-toggle.active.tm-flag-show-related-tags-as-children { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-light); }
 
-.tm-flag-static.active.tm-flag-location { color: #ef4444; border-color: #ef4444; background: #fef2f2; opacity: 1; }
+.tm-flag-static.active.tm-flag-location { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-light); opacity: 1; }
+
 
 .tm-flag {
     font-size: var(--font-size-xs);
