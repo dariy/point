@@ -53,8 +53,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--size-2-5);
-    height: var(--size-2-5);
+    width: var(--footer-action-btn-width);
+    height: var(--footer-action-btn-height);
     padding: 0;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
@@ -74,8 +74,8 @@
 }
 
 .footer-action-btn svg {
-    width: var(--size-1-25);
-    height: var(--size-1-25);
+    width: var(--svg-width);
+    height: var(--svg-height);
 }
 
 .footer-link {

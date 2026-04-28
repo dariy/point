@@ -11,7 +11,7 @@
 .ops-list {
     display: flex;
     flex-direction: column;
-    gap: var(--size-1-25);
+    gap: var(--ops-list-gap);
     padding: var(--spacing-lg);
 }
 
@@ -19,11 +19,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--size-1-25);
+    gap: var(--op-item-gap);
 }
 
 .op-info h4 {
-    margin: 0 0 var(--size-0-3125) 0;
+    margin: 0 0 var(--h4-margin) 0;
 }
 
 .op-info p {
@@ -36,7 +36,7 @@
 .backups-list,
 .migrations-list {
     padding: var(--spacing-md) var(--spacing-lg);
-    max-height: var(--size-25);
+    max-height: var(--backups-list-max-height);
     overflow-y: auto;
 }
 
@@ -47,7 +47,7 @@
     flex-wrap: wrap;
     gap: var(--spacing-md);
     padding: var(--spacing-md);
-    margin-bottom: var(--size-0-75);
+    margin-bottom: var(--backup-item-margin-bottom);
     background: var(--surface-input);
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
@@ -56,7 +56,7 @@
 
 .backup-item:hover {
     border-color: var(--color-primary);
-    box-shadow: 0 var(--size-0-125) var(--size-0-5) var(--color-black-alpha-10);
+    box-shadow: 0 var(--backup-item-box-shadow-1) var(--backup-item-box-shadow-2) var(--color-black-alpha-10);
 }
 
 .backup-item:last-child {
@@ -65,7 +65,7 @@
 
 .backup-info {
     flex: 1;
-    min-width: var(--size-15-625);
+    min-width: var(--backup-info-min-width);
 }
 
 .backup-filename {
@@ -73,7 +73,7 @@
     font-weight: 600;
     font-size: 0.95em;
     color: var(--text-primary);
-    margin-bottom: var(--size-0-375);
+    margin-bottom: var(--backup-filename-margin-bottom);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -102,15 +102,15 @@
 /* Offline & Sync Styles */
 .offline-progress-container {
     width: 100%;
-    margin-top: var(--size-1);
+    margin-top: var(--offline-progress-container-margin-top);
 }
 
 .progress-bar-bg {
-    height: var(--size-0-5);
+    height: var(--progress-bar-bg-height);
     background: var(--surface-input);
     border-radius: var(--border-radius-sm);
     overflow: hidden;
-    margin-bottom: var(--size-0-5);
+    margin-bottom: var(--progress-bar-bg-margin-bottom);
 }
 
 .progress-bar-fill {
@@ -127,14 +127,14 @@
 .sync-pill {
     display: inline-flex;
     align-items: center;
-    padding: var(--size-0-125) var(--size-0-625);
+    padding: var(--sync-pill-padding-y) var(--sync-pill-padding-x);
     border-radius: var(--border-radius-xl);
-    font-size: var(--size-0-75);
+    font-size: var(--sync-pill-font-size);
     font-weight: 600;
     border: none;
     cursor: pointer;
-    margin-left: var(--size-0-75);
-    height: var(--size-1-5);
+    margin-left: var(--sync-pill-margin-left);
+    height: var(--sync-pill-height);
     white-space: nowrap;
 }
 
@@ -176,7 +176,7 @@
     border: var(--border-width) solid var(--color-amber-300);
     border-radius: var(--border-radius-sm);
     padding: var(--spacing-sm) var(--spacing-md);
-    font-size: var(--size-0-875);
+    font-size: var(--sync-error-card-font-size);
 }
 
 .sync-error-card strong {
@@ -184,15 +184,15 @@
 }
 
 .sync-error-card p {
-    margin: var(--size-0-25) 0 0;
+    margin: var(--p-margin) 0 0;
     color: var(--text-secondary);
 }
 
 .sync-error-card code {
-    font-size: var(--size-0-8);
+    font-size: var(--code-font-size);
     background: var(--color-amber-300);
     padding: 0.1em 0.3em;
-    border-radius: var(--size-0-125);
+    border-radius: var(--code-border-radius-alt1);
 }
 
 .sync-error-msg {

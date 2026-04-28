@@ -21,8 +21,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--size-2-25);
-    height: var(--size-2-25);
+    min-width: var(--page-btn-min-width);
+    height: var(--page-btn-height);
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -66,8 +66,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--size-2-25);
-    height: var(--size-2-25);
+    min-width: var(--page-ellipsis-min-width);
+    height: var(--page-ellipsis-height);
     color: var(--text-muted);
     user-select: none;
 }

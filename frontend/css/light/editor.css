@@ -12,7 +12,7 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);
     line-height: 1.6;
-    min-height: var(--size-25);
+    min-height: var(--editor-content-min-height);
     width: 100%;
 }
 
@@ -20,9 +20,9 @@
 body.drag-active::after {
     content: '';
     position: fixed;
-    inset: var(--size-0-25);
+    inset: var(--bodydrag-active--inset);
     background: var(--color-primary-alpha-06);
-    border: var(--size-0-125) dashed var(--color-primary);
+    border: var(--bodydrag-active--border) dashed var(--color-primary);
     border-radius: var(--border-radius-lg);
     pointer-events: none;
     z-index: 9999;
@@ -33,7 +33,7 @@ body.drag-active::after {
     border-radius: var(--border-radius);
     padding: var(--spacing-md);
     background: var(--surface-card);
-    min-height: var(--size-18-75);
+    min-height: var(--preview-panel-min-height);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
@@ -73,9 +73,9 @@ body.drag-active::after {
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: var(--size-1-25);
+    font-size: var(--featured-btn-font-size);
     line-height: 1;
-    padding: var(--size-0-125) var(--spacing-xs);
+    padding: var(--featured-btn-padding) var(--spacing-xs);
     color: var(--text-muted);
     transition: color var(--transition-fast), transform 0.1s ease;
     border-radius: var(--border-radius-sm, var(--border-radius-sm));
@@ -98,7 +98,7 @@ body.drag-active::after {
     cursor: pointer;
     font-size: var(--font-size-base);
     line-height: 1;
-    padding: var(--size-0-125) var(--spacing-xs);
+    padding: var(--field-ai-btn-padding) var(--spacing-xs);
     color: var(--text-muted);
     transition: color var(--transition-fast), transform 0.1s ease;
     border-radius: var(--border-radius-sm, var(--border-radius-sm));
@@ -198,7 +198,7 @@ body.drag-active::after {
     font-size: var(--font-size-base);
     color: var(--text-muted);
     white-space: nowrap;
-    padding: 0 var(--spacing-xs) 0 var(--size-0-125);
+    padding: 0 var(--spacing-xs) 0 var(--slug-prefix-padding);
     user-select: none;
 }
 
@@ -211,7 +211,7 @@ body.drag-active::after {
 
 /* Give the excerpt textarea padding so text doesn't slide under the AI btn */
 .editor-excerpt {
-    padding-right: var(--size-1-75);
+    padding-right: var(--editor-excerpt-padding-right);
 }
 
 /* Full-width editor page — override the global max-width */
@@ -236,7 +236,7 @@ body.drag-active::after {
 .editor-mode-toggle button {
     background: transparent;
     border: none;
-    padding: var(--spacing-xs) var(--size-0-75);
+    padding: var(--spacing-xs) var(--button-padding);
     font-size: var(--font-size-sm);
     cursor: pointer;
     color: var(--text-muted);
@@ -265,8 +265,8 @@ body.drag-active::after {
 .ve-list {
     display: flex;
     flex-direction: column;
-    gap: var(--size-0-125);
-    min-height: var(--size-5);
+    gap: var(--ve-list-gap);
+    min-height: var(--ve-list-min-height);
     position: relative;
 }
 
@@ -286,7 +286,7 @@ body.drag-active::after {
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
-    padding: var(--size-0-375) var(--size-0-625) var(--size-0-375) 0;
+    padding: var(--ve-card-padding-1) var(--ve-card-padding-2) var(--ve-card-padding-3) 0;
     transition: background var(--transition-fast), opacity var(--transition-fast);
     user-select: none;
 }
@@ -304,7 +304,7 @@ body.drag-active::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--size-2);
+    width: var(--ve-handle-width);
     flex-shrink: 0;
     align-self: stretch;
     border-right: var(--border-width) dotted var(--border-primary);
@@ -318,17 +318,17 @@ body.drag-active::after {
 
 .ve-handle-dots {
     display: block;
-    width: var(--size-0-375);
-    height: var(--size-1-25);
-    background-image: radial-gradient(circle, var(--text-muted) var(--size-0-075), transparent var(--size-0-075));
-    background-size: var(--size-0-375) var(--size-0-375);
+    width: var(--ve-handle-dots-width);
+    height: var(--ve-handle-dots-height);
+    background-image: radial-gradient(circle, var(--text-muted) var(--ve-handle-dots-background-image-1), transparent var(--ve-handle-dots-background-image-2));
+    background-size: var(--ve-handle-dots-background-size-1) var(--ve-handle-dots-background-size-2);
 }
 
 .ve-thumb {
-    width: var(--size-5);
-    height: var(--size-3-5);
+    width: var(--ve-thumb-width);
+    height: var(--ve-thumb-height);
     object-fit: cover;
-    border-radius: calc(var(--border-radius) - var(--size-0-125));
+    border-radius: calc(var(--border-radius) - var(--ve-thumb-border-radius));
     flex-shrink: 0;
     cursor: zoom-in;
     background: var(--surface-hover);
@@ -371,14 +371,14 @@ body.drag-active::after {
 
 .ve-rename-input {
     flex: 1;
-    min-width: var(--size-2-5);
+    min-width: var(--ve-rename-input-min-width);
     border: none;
-    border-bottom: var(--size-0-09375) solid var(--color-primary);
+    border-bottom: var(--ve-rename-input-border-bottom) solid var(--color-primary);
     background: transparent;
     font-family: inherit;
     font-size: inherit;
     color: var(--text-primary);
-    padding: 0 var(--size-0-125);
+    padding: 0 var(--ve-rename-input-padding);
     outline: none;
 }
 
@@ -393,9 +393,9 @@ body.drag-active::after {
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: var(--size-1-125);
+    font-size: var(--ve-remove-font-size);
     line-height: 1;
-    padding: var(--size-0-125) var(--spacing-xs);
+    padding: var(--ve-remove-padding) var(--spacing-xs);
     border-radius: var(--border-radius-sm, var(--border-radius-sm));
     transition: color var(--transition-fast);
 }
@@ -406,9 +406,9 @@ body.drag-active::after {
 
 /* Drop indicator line */
 .ve-drop-indicator {
-    height: var(--size-0-125);
+    height: var(--ve-drop-indicator-height);
     background: var(--color-primary);
-    border-radius: var(--size-0-125);
+    border-radius: var(--ve-drop-indicator-border-radius);
     pointer-events: none;
     margin: 0 var(--spacing-xs);
     flex-shrink: 0;
@@ -439,8 +439,8 @@ body.drag-active::after {
    =========================== */
 .ve-card--text {
     align-items: flex-start;
-    padding-top: var(--size-0-375);
-    padding-bottom: var(--size-0-375);
+    padding-top: var(--ve-card--text-padding-top);
+    padding-bottom: var(--ve-card--text-padding-bottom);
 }
 
 /* Paragraph icon — same width as drag handle, dotted right border */
@@ -448,14 +448,14 @@ body.drag-active::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--size-2);
+    width: var(--ve-text-icon-width);
     flex-shrink: 0;
     align-self: stretch;
     border-right: var(--border-width) dotted var(--border-primary);
     color: var(--text-muted);
-    font-size: var(--size-0-8125);
+    font-size: var(--ve-text-icon-font-size);
     user-select: none;
-    padding-right: var(--size-0-125);
+    padding-right: var(--ve-text-icon-padding-right);
 }
 
 /* Auto-resizing textarea inside text card */
@@ -470,8 +470,8 @@ body.drag-active::after {
     color: var(--text-primary);
     resize: none;
     overflow: hidden;
-    min-height: var(--size-1-5);
-    padding: var(--size-0-125) var(--spacing-xs);
+    min-height: var(--ve-text-area-min-height);
+    padding: var(--ve-text-area-padding) var(--spacing-xs);
     outline: none;
     transition: color var(--transition-theme);
 }
@@ -487,7 +487,7 @@ body.drag-active::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: var(--size-1-25);
+    height: var(--ve-insert-zone-height);
     position: relative;
 }
 
@@ -496,7 +496,7 @@ body.drag-active::after {
     position: absolute;
     left: 0;
     right: 0;
-    height: var(--size-0-0625);
+    height: var(--ve-insert-zone--height);
     background: var(--border-primary);
     opacity: 0;
     transition: opacity var(--transition-fast);
@@ -515,14 +515,14 @@ body.drag-active::after {
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl);
-    height: var(--size-1-5);
+    height: var(--ve-insert-btn-height);
     font-size: var(--font-size-xs);
     cursor: pointer;
     color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 var(--size-0-625);
+    padding: 0 var(--ve-insert-btn-padding);
     line-height: 1;
     transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
 }

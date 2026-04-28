@@ -3,15 +3,15 @@
  */
 
 .map-container {
-    height: calc(100vh - var(--size-16-25));
-    min-height: var(--size-31-25);
+    height: calc(100vh - var(--map-container-height));
+    min-height: var(--map-container-min-height);
     width: 100%;
     border-radius: var(--border-radius-xl);
     overflow: hidden;
-    margin-top: var(--size-2);
+    margin-top: var(--map-container-margin-top);
     position: relative;
     z-index: 1;
-    box-shadow: 0 var(--size-0-25) var(--size-1-25) var(--color-black-alpha-10);
+    box-shadow: 0 var(--map-container-box-shadow-1) var(--map-container-box-shadow-2) var(--color-black-alpha-10);
 }
 
 .site-main--map .map-container {
@@ -23,7 +23,7 @@
 }
 
 [data-theme="dark"] .map-container {
-    box-shadow: 0 var(--size-0-25) var(--size-1-25) var(--color-black-alpha-40);
+    box-shadow: 0 var(--map-container-box-shadow-1) var(--map-container-box-shadow-2) var(--color-black-alpha-40);
 }
 
 #map {
@@ -33,19 +33,19 @@
 }
 
 .map-header {
-    margin-bottom: var(--size-1-5);
+    margin-bottom: var(--map-header-margin-bottom);
 }
 
 .map-title {
-    font-size: var(--size-2-5);
+    font-size: var(--map-title-font-size);
     font-weight: 800;
-    margin-bottom: var(--size-0-5);
+    margin-bottom: var(--map-title-margin-bottom);
     color: var(--text-primary);
 }
 
 .map-subtitle {
     color: var(--text-secondary);
-    font-size: var(--size-1-1);
+    font-size: var(--map-subtitle-font-size);
 }
 
 /* Custom Leaflet Marker Styling */
@@ -63,8 +63,8 @@
     background: var(--accent-primary);
     color: white;
     border-radius: 50%;
-    border: var(--size-0-125) solid white;
-    box-shadow: 0 var(--size-0-125) var(--size-0-3125) var(--color-black-alpha-30);
+    border: var(--custom-marker-border) solid white;
+    box-shadow: 0 var(--custom-marker-box-shadow-1) var(--custom-marker-box-shadow-2) var(--color-black-alpha-30);
     font-weight: bold;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     z-index: 2;
@@ -77,11 +77,11 @@
     white-space: nowrap;
     background: var(--bg-primary, white);
     color: var(--text-primary, black);
-    padding: var(--size-0-125) var(--size-0-375);
+    padding: var(--marker-label-padding-y) var(--marker-label-padding-x);
     border-radius: var(--border-radius-sm);
-    font-size: var(--size-0-75);
+    font-size: var(--marker-label-font-size);
     font-weight: 600;
-    box-shadow: 0 var(--size-0-0625) var(--size-0-1875) var(--color-black-alpha-20);
+    box-shadow: 0 var(--marker-label-box-shadow-1) var(--marker-label-box-shadow-2) var(--color-black-alpha-20);
     pointer-events: none;
     opacity: 0.8;
     transition: opacity 0.2s ease;
@@ -100,7 +100,7 @@
 
 .custom-marker:hover {
     transform: scale(1.2);
-    box-shadow: 0 var(--size-0-25) var(--size-0-625) var(--color-black-alpha-40);
+    box-shadow: 0 var(--custom-marker-box-shadow-1-alt1) var(--custom-marker-box-shadow-2-alt1) var(--color-black-alpha-40);
     z-index: 1000 !important;
 }
 
@@ -112,7 +112,7 @@
     color: var(--text-primary) !important;
     border-radius: var(--border-radius-lg) !important;
     box-shadow: var(--shadow-md) !important;
-    padding: var(--size-0-3125);
+    padding: var(--leaflet-popup-content-wrapper-padding);
 }
 
 .leaflet-popup-tip {
@@ -126,14 +126,14 @@
 .map-popup-tag {
     display: inline-flex;
     align-items: center;
-    padding: var(--size-0-25) var(--size-0-625);
-    margin-bottom: var(--size-0-375);
-    font-size: var(--size-0-875);
+    padding: var(--map-popup-tag-padding-y) var(--map-popup-tag-padding-x);
+    margin-bottom: var(--map-popup-tag-margin-bottom);
+    font-size: var(--map-popup-tag-font-size);
     font-weight: 600;
     color: var(--text-primary) !important;
     background: var(--surface-hover);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--size-624-938);
+    border-radius: var(--map-popup-tag-border-radius);
     text-decoration: none;
     white-space: nowrap;
     transition: border-color 0.15s ease, color 0.15s ease;
@@ -146,13 +146,13 @@
 
 .tag-popup-title {
     font-weight: bold;
-    font-size: var(--size-1);
+    font-size: var(--tag-popup-title-font-size);
     margin-bottom: var(--spacing-xs);
     display: block;
 }
 
 .tag-popup-count {
-    font-size: var(--size-0-85);
+    font-size: var(--tag-popup-count-font-size);
     color: var(--text-secondary);
 }
 
@@ -166,14 +166,14 @@
 .map-year-link {
     display: inline-flex;
     align-items: center;
-    height: var(--size-1-625);
-    padding: 0 var(--size-0-5);
-    font-size: var(--size-0-75);
+    height: var(--map-year-link-height);
+    padding: 0 var(--map-year-link-padding);
+    font-size: var(--map-year-link-font-size);
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--size-624-938);
+    border-radius: var(--map-year-link-border-radius);
     text-decoration: none;
     white-space: nowrap;
     transition: border-color 0.15s ease, color 0.15s ease;
@@ -190,7 +190,7 @@
 
 /* Tooltip styling */
 .tag-tooltip {
-    padding: var(--size-0-125) var(--spacing-xs);
+    padding: var(--tag-tooltip-padding) var(--spacing-xs);
 }
 
 /* Leaflet controls dark theme */

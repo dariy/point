@@ -86,7 +86,7 @@ body {
 .breadcrumbs {
     display: flex;
     align-items: center;
-    gap: var(--size-0-5);
+    gap: var(--breadcrumbs-gap);
     flex-wrap: wrap;
 }
 
