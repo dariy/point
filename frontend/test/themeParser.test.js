@@ -66,4 +66,28 @@ describe('themeParser', () => {
     // Restore fetch
     global.fetch = originalFetch;
   });
+
+  test('should handle Sepia theme with shared typography', async () => {
+    const originalFetch = global.fetch;
+    const sepiaTheme = {
+      shared: { typography: { 'font-family': 'Georgia' } },
+      light: { colors: { 'bg-primary': '#f4ecd8' } },
+      dark: { colors: { 'bg-primary': '#2b261d' } }
+    };
+    
+    global.fetch = async () => ({
+      ok: true,
+      json: async () => sepiaTheme
+    });
+
+    const { parseTheme } = await import('../src/utils/themeParser.js');
+    const css = await parseTheme();
+    
+    assert.match(css, /--font-family: Georgia/);
+    assert.match(css, /--bg-primary: #f4ecd8/);
+    assert.match(css, /\[data-theme="dark"\]/);
+    assert.match(css, /--bg-primary: #2b261d/);
+    
+    global.fetch = originalFetch;
+  });
 });
