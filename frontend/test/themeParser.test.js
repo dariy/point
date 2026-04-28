@@ -19,8 +19,8 @@ describe('themeParser', () => {
       ok: true,
       json: async () => ({
         colors: {
-          bg: '#ffffff',
-          accent: '#007aff'
+          "bg-primary": '#ffffff',
+          "accent": '#007aff'
         },
         spacing: {
           base: '1rem'
@@ -33,9 +33,9 @@ describe('themeParser', () => {
     const { parseTheme } = await import('../src/utils/themeParser.js');
     const css = await parseTheme();
     
-    assert.match(css, /--pt-colors-bg: #ffffff/);
-    assert.match(css, /--pt-colors-accent: #007aff/);
-    assert.match(css, /--pt-spacing-base: 1rem/);
+    assert.match(css, /--bg-primary: #ffffff/);
+    assert.match(css, /--color-primary: #007aff/);
+    assert.match(css, /--spacing-md: 1rem/);
   });
 
   test('should handle dual-mode (light/dark/shared) structure', async () => {
@@ -48,10 +48,10 @@ describe('themeParser', () => {
           spacing: { base: '1rem' }
         },
         light: {
-          colors: { bg: '#ffffff' }
+          colors: { "bg-primary": '#ffffff' }
         },
         dark: {
-          colors: { bg: '#121212' }
+          colors: { "bg-primary": '#121212' }
         }
       })
     });
@@ -59,9 +59,9 @@ describe('themeParser', () => {
     const { parseTheme } = await import('../src/utils/themeParser.js');
     const css = await parseTheme();
 
-    assert.match(css, /:root {\n  --pt-spacing-base: 1rem;/);
-    assert.match(css, /:root {\n  --pt-colors-bg: #ffffff;/);
-    assert.match(css, /\[data-theme="dark"\] {\n  --pt-colors-bg: #121212;/);
+    assert.match(css, /:root {\n  --spacing-md: 1rem;/);
+    assert.match(css, /:root {\n  --bg-primary: #ffffff;/);
+    assert.match(css, /\[data-theme="dark"\] {\n  --bg-primary: #121212;/);
 
     // Restore fetch
     global.fetch = originalFetch;
