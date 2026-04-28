@@ -10,7 +10,7 @@
 }
 
 #app.login-blur {
-    filter: blur(var(--size-0-375)) brightness(0.75);
+    filter: blur(var(--applogin-blur-filter)) brightness(0.75);
     pointer-events: none;
     user-select: none;
 }
@@ -32,9 +32,9 @@
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl, var(--border-radius-xl));
-    box-shadow: 0 var(--size-1-5) var(--size-4) var(--color-black-alpha-30);
+    box-shadow: 0 var(--login-modal-box-box-shadow-1) var(--login-modal-box-box-shadow-2) var(--color-black-alpha-30);
     width: 100%;
-    max-width: var(--size-20);
+    max-width: var(--login-modal-box-max-width);
     overflow: hidden;
     animation: loginModalIn 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
@@ -42,10 +42,10 @@
 /* Error */
 .login-modal-error {
     margin: 0;
-    padding: var(--size-0-75) var(--size-1-25);
+    padding: var(--login-modal-error-padding-y) var(--login-modal-error-padding-x);
     border-bottom: var(--border-width) solid var(--border-primary);
     color: var(--color-danger);
-    font-size: var(--size-0-875);
+    font-size: var(--login-modal-error-font-size);
     text-align: center;
     line-height: 1.5;
 }
@@ -54,15 +54,15 @@
 .login-modal-form {
     display: flex;
     flex-direction: column;
-    gap: var(--size-0-75);
-    padding: var(--size-1-5);
+    gap: var(--login-modal-form-gap);
+    padding: var(--login-modal-form-padding);
 }
 
 /* Input */
 .login-input {
     width: 100%;
-    padding: var(--size-0-75) var(--size-1);
-    font-size: var(--size-1);
+    padding: var(--login-input-padding-y) var(--login-input-padding-x);
+    font-size: var(--login-input-font-size);
     line-height: 1.5;
     color: var(--text-primary);
     background: var(--bg-input, var(--surface-elevated, var(--bg-primary)));
@@ -76,7 +76,7 @@
 
 .login-input:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 var(--size-0-1875) var(--color-primary-alpha-15);
+    box-shadow: 0 0 0 var(--login-input-box-shadow) var(--color-primary-alpha-15);
 }
 
 .login-input::placeholder {
@@ -95,6 +95,6 @@
 }
 
 @keyframes loginModalIn {
-    from { opacity: 0; transform: translateY(var(--size-0-875)) scale(0.97); }
+    from { opacity: 0; transform: translateY(var(--from-transform)) scale(0.97); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
 }

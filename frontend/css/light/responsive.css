@@ -29,8 +29,8 @@
     display: none;
     align-items: center;
     justify-content: center;
-    width: var(--size-2-25);
-    height: var(--size-2-25);
+    width: var(--sidebar-toggle-btn-width);
+    height: var(--sidebar-toggle-btn-height);
     padding: 0;
     background: none;
     border: var(--border-width) solid var(--border-primary);
@@ -60,7 +60,7 @@
         bottom: 0;
         z-index: 150;
         transform: translateX(-100%);
-        width: var(--size-15);
+        width: var(--light-sidebar-width);
         transition: transform var(--transition-normal);
     }
 
@@ -104,12 +104,12 @@
     .modal-content {
         min-width: auto;
         max-width: 90%;
-        margin: var(--size-1-25);
+        margin: var(--modal-content-margin);
     }
 
     /* Tag editor modal — clamp to viewport on tablet */
     .tag-editor-modal {
-        width: min(var(--size-43-75), calc(100vw - var(--size-2-5)));
+        width: min(var(--tag-editor-modal-width-1), calc(100vw - var(--tag-editor-modal-width-2)));
     }
 }
 
@@ -124,7 +124,7 @@
         flex-wrap: wrap;
         padding-top: var(--spacing-sm);
         padding-bottom: var(--spacing-sm);
-        row-gap: var(--size-0-375);
+        row-gap: var(--light-header-row-gap);
     }
 
     /* Actions drop to line 2, full width, wrapping allowed */
@@ -159,7 +159,7 @@
         align-items: center;
         gap: var(--spacing-xs) var(--spacing-sm);
         min-height: auto;
-        padding: var(--spacing-sm) var(--size-0-375);
+        padding: var(--spacing-sm) var(--tm-row-padding);
     }
 
     .tm-toggle,
@@ -188,13 +188,13 @@
     .tm-tree.level-1,
     .tm-tree.level-2,
     .tm-tree.level-3 {
-        padding-left: var(--size-0-75);
-        margin-left: var(--size-0-375);
+        padding-left: var(--tm-treelevel-1-padding-left);
+        margin-left: var(--tm-treelevel-1-margin-left);
     }
 
     /* Tag editor modal — full width on small screens */
     .tag-editor-modal {
-        width: calc(100vw - var(--size-2-5));
+        width: calc(100vw - var(--tag-editor-modal-width));
     }
 
     /* Flags grid: single column instead of two */

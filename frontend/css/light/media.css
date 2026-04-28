@@ -14,8 +14,8 @@
    Folder Tree
    =========================== */
 .media-folder-tree {
-    flex: 0 0 var(--size-12-5);
-    min-width: var(--size-11-25);
+    flex: 0 0 var(--media-folder-tree-flex);
+    min-width: var(--media-folder-tree-min-width);
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
@@ -72,8 +72,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--size-1);
-    height: var(--size-1);
+    width: var(--folder-tree-icon-width);
+    height: var(--folder-tree-icon-height);
     opacity: 0.7;
     flex-shrink: 0;
 }
@@ -95,7 +95,7 @@
 }
 
 .folder-year-group {
-    margin-top: var(--size-0-125);
+    margin-top: var(--folder-year-group-margin-top);
 }
 
 .folder-year-row {
@@ -114,8 +114,8 @@
 }
 
 .folder-year-arrow {
-    width: var(--size-1-5);
-    height: var(--size-1-5);
+    width: var(--folder-year-arrow-width);
+    height: var(--folder-year-arrow-height);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -139,13 +139,13 @@
 }
 
 .folder-year-months {
-    margin-left: var(--size-0-75);
+    margin-left: var(--folder-year-months-margin-left);
     border-left: var(--border-width) solid var(--border-primary);
     padding-left: var(--spacing-xs);
-    margin-top: var(--size-0-125);
+    margin-top: var(--folder-year-months-margin-top);
     display: flex;
     flex-direction: column;
-    gap: var(--size-0-0625);
+    gap: var(--folder-year-months-gap);
 }
 
 .folder-year-months.hidden {
@@ -162,7 +162,7 @@
     position: absolute;
     left: 0;
     top: 50%;
-    width: var(--size-0-5);
+    width: var(--folder-month-btn--width);
     border-top: var(--border-width) solid var(--border-primary);
 }
 
@@ -179,7 +179,7 @@
    =========================== */
 .media-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--size-11-25), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--media-grid-grid-template-columns), 1fr));
     gap: var(--spacing-md);
 }
 
@@ -216,7 +216,7 @@
 }
 
 .media-item-preview .file-icon {
-    font-size: var(--size-3);
+    font-size: var(--file-icon-font-size);
     color: var(--text-muted);
 }
 
@@ -245,8 +245,8 @@
     color: white;
     background: var(--color-black-alpha-40);
     border-radius: 50%;
-    width: var(--size-3-75);
-    height: var(--size-3-75);
+    width: var(--media-play-overlay-width);
+    height: var(--media-play-overlay-height);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -275,7 +275,7 @@
 
 .media-audio-preview audio {
     width: 100%;
-    height: var(--size-2);
+    height: var(--audio-height);
 }
 
 .media-item-info {
@@ -287,7 +287,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-xs);
-    margin-bottom: var(--size-0-125);
+    margin-bottom: var(--media-item-name-row-margin-bottom);
 }
 
 .media-item-name {
@@ -309,15 +309,15 @@
 
 .media-item-info .copy-path-btn {
     flex-shrink: 0;
-    width: var(--size-1-5);
-    height: var(--size-1-5);
+    width: var(--copy-path-btn-width);
+    height: var(--copy-path-btn-height);
     padding: 0;
     background: transparent;
     border: none;
     box-shadow: none;
     opacity: 0.5;
     transition: all var(--transition-fast);
-    font-size: var(--size-0-875);
+    font-size: var(--copy-path-btn-font-size);
 }
 
 .media-item-info .copy-path-btn:hover {
@@ -343,8 +343,8 @@
 
 /* Media item action buttons — square and elevated */
 .media-item-actions .btn {
-    width: var(--size-2);
-    height: var(--size-2);
+    width: var(--btn-width);
+    height: var(--btn-height);
     padding: 0;
     display: flex;
     align-items: center;
@@ -354,7 +354,7 @@
     color: var(--text-secondary);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
-    font-size: var(--size-0-875);
+    font-size: var(--btn-font-size);
 }
 
 .media-item-actions .btn:hover {
@@ -371,8 +371,8 @@
 }
 
 .media-item-actions .btn svg {
-    width: var(--size-1-125);
-    height: var(--size-1-125);
+    width: var(--svg-width);
+    height: var(--svg-height);
 }
 
 .media-item:hover .media-item-actions {
@@ -399,7 +399,7 @@
     position: fixed;
     inset: 0;
     background: var(--color-primary-light-alpha-12);
-    border: var(--size-0-1875) dashed var(--color-primary);
+    border: var(--drop-overlay-border) dashed var(--color-primary);
     z-index: 9999;
     display: flex;
     align-items: center;
@@ -426,7 +426,7 @@
 }
 
 .drop-overlay-icon {
-    font-size: var(--size-4);
+    font-size: var(--drop-overlay-icon-font-size);
     margin-bottom: var(--spacing-md);
 }
 
@@ -449,7 +449,7 @@
     position: absolute;
     inset: 0;
     background: var(--color-primary-light-alpha-12);
-    border: var(--size-0-1875) dashed var(--color-primary);
+    border: var(--media-browser-drop-overlay-border) dashed var(--color-primary);
     border-radius: var(--border-radius);
     z-index: 100;
     display: flex;
@@ -475,8 +475,8 @@
     top: var(--spacing-xs);
     left: var(--spacing-xs);
     z-index: 2;
-    width: var(--size-1-5);
-    height: var(--size-1-5);
+    width: var(--media-item-checkbox-width);
+    height: var(--media-item-checkbox-height);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -488,16 +488,16 @@
 }
 
 .media-item-checkbox input[type="checkbox"] {
-    width: var(--size-0-875);
-    height: var(--size-0-875);
+    width: var(--input-type--checkbox---width);
+    height: var(--input-type--checkbox---height);
     cursor: pointer;
     accent-color: var(--color-primary);
 }
 
 /* Selected state: highlight ring */
 .media-item--selected {
-    outline: var(--size-0-125) solid var(--color-primary);
-    outline-offset: calc(var(--size-0-125) * -1);
+    outline: var(--media-item--selected-outline) solid var(--color-primary);
+    outline-offset: calc(var(--media-item--selected-outline-offset) * -1);
 }
 
 .media-item--selected .media-item-checkbox {
@@ -511,20 +511,20 @@
     top: var(--spacing-xs);
     left: var(--spacing-xs);
     z-index: 2;
-    width: var(--size-1-5);
-    height: var(--size-1-5);
+    width: var(--media-item-status-width);
+    height: var(--media-item-status-height);
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--color-black-alpha-40);
     color: white;
     border-radius: var(--border-radius-sm);
-    backdrop-filter: blur(var(--size-0-25));
+    backdrop-filter: blur(var(--media-item-status-backdrop-filter));
 }
 
 .media-item-status svg {
-    width: var(--size-0-875);
-    height: var(--size-0-875);
+    width: var(--svg-width-alt1);
+    height: var(--svg-height-alt1);
 }
 
 /* In picker mode, offset status to avoid overlapping checkbox */
@@ -542,7 +542,7 @@
    =========================== */
 .media-picker-modal {
     width: 90vw;
-    max-width: var(--size-60);
+    max-width: var(--media-picker-modal-max-width);
     max-height: 90vh;
 }
 
@@ -562,7 +562,7 @@
 
 .dropped-media-preview {
     max-width: 100%;
-    max-height: var(--size-18-75);
+    max-height: var(--dropped-media-preview-max-height);
     overflow: hidden;
     border-radius: var(--border-radius);
     background: var(--bg-primary);
@@ -571,7 +571,7 @@
 .dropped-media-preview img {
     width: 100%;
     max-width: 100%;
-    max-height: var(--size-18-75);
+    max-height: var(--img-max-height);
     object-fit: contain;
     display: block;
     margin: 0 auto;

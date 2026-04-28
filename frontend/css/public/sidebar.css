@@ -22,7 +22,7 @@
     color: var(--text-primary);
     margin-bottom: var(--spacing-md);
     padding-bottom: var(--spacing-sm);
-    border-bottom: var(--size-0-125) solid var(--border-primary);
+    border-bottom: var(--widget-title-border-bottom) solid var(--border-primary);
     transition: color var(--transition-theme),
         border-color var(--transition-theme);
 }
@@ -43,16 +43,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--size-1-25);
-    height: var(--size-1-25);
-    padding: 0 var(--size-0-3);
-    font-size: var(--size-0-65);
+    min-width: var(--count-min-width);
+    height: var(--count-height);
+    padding: 0 var(--count-padding);
+    font-size: var(--count-font-size);
     font-weight: 600;
     line-height: 1;
     color: var(--text-tertiary);
     background: var(--bg-tertiary);
-    border-radius: var(--size-624-938);
-    margin-left: var(--size-0-1);
+    border-radius: var(--count-border-radius);
+    margin-left: var(--count-margin-left);
     transition: background var(--transition-fast), color var(--transition-fast);
 }
 
@@ -75,14 +75,14 @@
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
-    height: var(--size-2);
+    height: var(--tag-link-height);
     padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--size-624-938);
+    border-radius: var(--tag-link-border-radius-alt1);
     text-decoration: none;
     white-space: nowrap;
     transition: all var(--transition-fast);
@@ -107,13 +107,13 @@
 .tag-link .flyout-indicator {
     display: inline-flex;
     align-items: center;
-    margin-left: var(--size-0-125);
+    margin-left: var(--flyout-indicator-margin-left);
     color: var(--color-primary);
 }
 
 .tag-link .flyout-indicator svg {
-    width: var(--size-0-75);
-    height: var(--size-0-75);
+    width: var(--svg-width-alt2);
+    height: var(--svg-height-alt2);
     transform: rotate(180deg); /* Default: points up */
     transition: transform var(--transition-fast);
 }

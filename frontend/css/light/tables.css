@@ -47,8 +47,8 @@
 
 /* Table action buttons - square and elevated */
 .table .actions .btn {
-    width: var(--size-2);
-    height: var(--size-2);
+    width: var(--btn-width);
+    height: var(--btn-height);
     padding: 0;
     display: flex;
     align-items: center;
@@ -65,7 +65,7 @@
     color: var(--text-primary);
     border-color: var(--border-secondary);
     box-shadow: var(--shadow);
-    transform: translateY(calc(var(--size-0-0625) * -1));
+    transform: translateY(calc(var(--btn-transform) * -1));
 }
 
 .table .actions .btn-danger:hover {
@@ -75,8 +75,8 @@
 }
 
 .table .actions .btn svg {
-    width: var(--size-1);
-    height: var(--size-1);
+    width: var(--svg-width-alt2);
+    height: var(--svg-height-alt2);
 }
 
 /* Multi-row item grouping (Posts Table) */
@@ -116,15 +116,15 @@ td.updated-col {
 }
 
 .preview-col {
-    width: var(--size-3);
+    width: var(--preview-col-width);
     padding-right: 0 !important;
     border-bottom: var(--border-width) solid var(--border-primary) !important;
     vertical-align: middle;
 }
 
 .post-preview-img {
-    min-width: var(--size-5);
-    min-height: var(--size-5);
+    min-width: var(--post-preview-img-min-width);
+    min-height: var(--post-preview-img-min-height);
     object-fit: cover;
     border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
@@ -132,8 +132,8 @@ td.updated-col {
 }
 
 .post-preview-placeholder {
-    width: var(--size-2-5);
-    height: var(--size-2-5);
+    width: var(--post-preview-placeholder-width);
+    height: var(--post-preview-placeholder-height);
     border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
     display: flex;
@@ -147,19 +147,19 @@ td.updated-col {
 /* No special padding for first header since we added a preview column */
 /* vertically align "Status" with "Published" */
 th.status-col {
-    padding-left: var(--size-1-5625);
+    padding-left: var(--thstatus-col-padding-left);
 }
 
 .scheduled-date {
     display: block;
     font-size: var(--font-size-xs);
     color: var(--color-scheduled);
-    margin-top: var(--size-0-1875);
+    margin-top: var(--scheduled-date-margin-top);
     white-space: nowrap;
 }
 
 .check-col {
-    width: var(--size-2);
+    width: var(--check-col-width);
     padding-right: 0;
     border-bottom: none;
     vertical-align: middle;
@@ -184,5 +184,5 @@ th.status-col {
 
 #bulk-count {
     color: var(--text-secondary);
-    min-width: var(--size-6);
+    min-width: var(--bulk-count-min-width);
 }
