@@ -1,6 +1,7 @@
 /**
  * Theme Parser Utility.
  * Fetches theme.json and injects CSS Custom Properties into the document head.
+ * Supports light/dark/shared structure.
  */
 
 /**
@@ -36,11 +37,30 @@ export async function parseTheme() {
     themeData = await res.json();
   } catch (err) {
     console.warn('[Theme] Failed to load theme.json, using defaults.', err);
-    // Fallback defaults could be defined here
+    return '';
   }
 
-  const variables = mapToCSS(themeData);
-  const css = `:root {\n${variables}}`;
+  let finalCSS = '';
+
+  // 1. Shared variables (global)
+  if (themeData.shared) {
+    finalCSS += `:root {\n${mapToCSS(themeData.shared)}}\n`;
+  }
+
+  // 2. Light mode variables (default)
+  if (themeData.light) {
+    finalCSS += `:root {\n${mapToCSS(themeData.light)}}\n`;
+  }
+
+  // 3. Dark mode variables (scoped)
+  if (themeData.dark) {
+    finalCSS += `[data-theme="dark"] {\n${mapToCSS(themeData.dark)}}\n`;
+  }
+
+  // Fallback for simple flat structures (legacy support)
+  if (!themeData.light && !themeData.dark && !themeData.shared) {
+    finalCSS = `:root {\n${mapToCSS(themeData)}}`;
+  }
 
   if (typeof document !== 'undefined') {
     let styleEl = document.getElementById('point-theme');
@@ -49,8 +69,8 @@ export async function parseTheme() {
       styleEl.id = 'point-theme';
       document.head.appendChild(styleEl);
     }
-    styleEl.textContent = css;
+    styleEl.textContent = finalCSS;
   }
 
-  return css;
+  return finalCSS;
 }

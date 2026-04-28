@@ -139,24 +139,25 @@
 }
 
 .sync-pill.pending {
-    background: #e2e8f0;
-    color: #475569;
+    background: var(--color-gray-200);
+    color: var(--color-gray-600);
 }
 
 .sync-pill.syncing {
-    background: #dbeafe;
-    color: #2563eb;
+    background: var(--color-primary-light);
+    color: var(--color-primary);
 }
 
 .sync-pill.failed {
-    background: #fee2e2;
-    color: #dc2626;
+    background: var(--color-danger-light);
+    color: var(--color-rose-600);
 }
 
 .sync-pill.synced {
-    background: #dcfce7;
-    color: #16a34a;
+    background: var(--color-emerald-50);
+    color: var(--color-emerald-600);
 }
+
 
 .header-title-row {
     display: flex;
@@ -171,15 +172,15 @@
 }
 
 .sync-error-card {
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: var(--radius-sm);
+    background: var(--color-amber-50);
+    border: 1px solid var(--color-amber-300);
+    border-radius: var(--border-radius-sm);
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: 0.875rem;
 }
 
 .sync-error-card strong {
-    color: #c2410c;
+    color: var(--color-amber-700);
 }
 
 .sync-error-card p {
@@ -189,12 +190,12 @@
 
 .sync-error-card code {
     font-size: 0.8rem;
-    background: #fed7aa;
+    background: var(--color-amber-300);
     padding: 0.1em 0.3em;
     border-radius: 0.125rem;
 }
 
 .sync-error-msg {
-    color: #9a3412 !important;
+    color: var(--color-amber-800) !important;
     font-style: italic;
 }
