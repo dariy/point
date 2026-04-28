@@ -104,8 +104,9 @@ export default class PostEditPage extends Component {
   }
 
   render() {
-    const { loading, error, post, isNew, saving } = this.state;
+    const { loading, error, post, isNew, saving, deleting, analyzingField } = this.state;
     const analyzing = this._analyzing;
+    const anyActionInProgress = saving || analyzing || deleting || !!analyzingField;
 
     if (loading) {
       return `
@@ -147,8 +148,7 @@ export default class PostEditPage extends Component {
 
     const saveLabel    = saving    ? 'Saving…'    : 'Save';
     const analyzeLabel = analyzing ? 'Analyzing…' : 'Analyze';
-    const { analyzingField } = this.state;
-    const aiBtnDisabled = analyzing || !!analyzingField;
+    const aiBtnDisabled = anyActionInProgress;
     const aiBtn = (field) =>
       `<button class="field-ai-btn" data-field="${field}" type="button"
                title="Fill with AI" ${aiBtnDisabled ? 'disabled' : ''}
@@ -174,10 +174,14 @@ export default class PostEditPage extends Component {
           <header class="light-header">
             <h1>${isNew ? 'New Post' : 'Edit Post'}</h1>
             <div class="header-actions">
+              ${!isNew ? `
+                <button id="delete-btn" class="btn btn-danger" type="button"
+                        title="Delete post" ${anyActionInProgress ? 'disabled' : ''}>Delete</button>
+              ` : ''}
               <button id="analyze-btn" class="btn btn-secondary" type="button"
-                      ${analyzing ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
+                      ${anyActionInProgress ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
               <button id="save-btn" class="btn btn-primary" type="button"
-                      ${saving ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
+                      ${anyActionInProgress ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
               <a href="/light/posts" class="btn btn-secondary">Cancel</a>
             </div>
           </header>
