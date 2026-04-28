@@ -284,6 +284,15 @@ export default class PostEditPage extends Component {
     const saveBtn = this.$('#save-btn');
     saveBtn?.addEventListener('click', () => this._save());
 
+    // Delete button
+    const deleteBtn = this.$('#delete-btn');
+    deleteBtn?.addEventListener('click', () => {
+      const title = this.$('#title-input')?.value || this.state.post?.title || 'this post';
+      this._showConfirm('Delete post', `Delete post "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
+        this._deletePost(this.state.postId);
+      });
+    });
+
     // Analyze button — uses first image path from content, or opens picker
     const analyzeBtn = this.$('#analyze-btn');
     analyzeBtn?.addEventListener('click', () => {
@@ -663,13 +672,42 @@ export default class PostEditPage extends Component {
   }
 
   async _autosave() {
-    if (this._unmounted || this.state.saving || this.state.isNew) return;
+    if (this._unmounted || this.state.saving || this.state.deleting || this.state.isNew) return;
     const data = this._collectFormData();
     if (!data.title) return;
     try {
       await updatePost(this.state.postId, data);
     } catch {
       // Silent autosave failure.
+    }
+  }
+
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
+  }
+
+  async _deletePost(id) {
+    if (this.state.deleting) return;
+
+    this.setState({ deleting: true });
+    try {
+      await deletePost(id);
+      this._unmounted = true; // Prevent further state updates
+      store.set('toast', { message: 'Post deleted.', type: 'success' });
+      navigate('/light/posts');
+    } catch (err) {
+      this.setState({ deleting: false });
+      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
     }
   }
 
