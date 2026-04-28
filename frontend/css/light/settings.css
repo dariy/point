@@ -2,7 +2,7 @@
    Settings & Security
    =========================== */
 .settings-container {
-    max-width: 50rem;
+    max-width: var(--size-50);
     margin: 0 auto;
 }
 
@@ -28,8 +28,8 @@
 
 .section-title {
     margin-top: 0;
-    margin-bottom: 1.25rem;
-    padding-bottom: 0.625rem;
+    margin-bottom: var(--size-1-25);
+    padding-bottom: var(--size-0-625);
     border-bottom: var(--border-width) solid var(--border-primary);
     color: var(--text-primary);
 }
@@ -37,7 +37,7 @@
 /* Two-column field rows (label | input) */
 .settings-field {
     display: grid;
-    grid-template-columns: 11.25rem 1fr;
+    grid-template-columns: var(--size-11-25) 1fr;
     align-items: center;
     gap: var(--spacing-lg);
     padding: var(--spacing-sm) 0;
@@ -53,7 +53,7 @@
 }
 
 .settings-field-top .settings-field-label {
-    padding-top: calc(var(--spacing-sm) + 0.125rem);
+    padding-top: calc(var(--spacing-sm) + var(--size-0-125));
 }
 
 .settings-field-label {
@@ -91,10 +91,10 @@
 .setting-pill-label {
     display: inline-flex;
     align-items: center;
-    padding: 0.35rem 0.8rem;
+    padding: var(--size-0-35) var(--size-0-8);
     background: var(--surface-card);
-    border: 0.09375rem solid var(--border-primary);
-    border-radius: 2rem;
+    border: var(--size-0-09375) solid var(--border-primary);
+    border-radius: var(--size-2);
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text-secondary);
@@ -114,7 +114,7 @@
 }
 
 .setting-pill-input:focus-visible + .setting-pill-label {
-    box-shadow: 0 0 0 0.125rem var(--color-primary-light);
+    box-shadow: 0 0 0 var(--size-0-125) var(--color-primary-light);
 }
 
 .save-status {
@@ -132,7 +132,7 @@
 /* Input with Button */
 .input-with-button {
     display: flex;
-    gap: 0.625rem;
+    gap: var(--size-0-625);
     align-items: center;
 }
 
@@ -148,8 +148,8 @@
 
 /* Connection Test Result */
 .connection-test-result {
-    margin-top: 0.625rem;
-    padding: 0.625rem;
+    margin-top: var(--size-0-625);
+    padding: var(--size-0-625);
     border-radius: var(--border-radius-sm);
     font-size: 0.9em;
     display: none;
@@ -221,7 +221,7 @@
 
 .prompt-part {
     flex: 1;
-    min-width: 10rem;
+    min-width: var(--size-10);
     font-family: inherit;
     font-size: inherit;
 }

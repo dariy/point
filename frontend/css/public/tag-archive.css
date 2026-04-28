@@ -19,7 +19,7 @@
 .tag-description {
     font-size: var(--font-size-lg);
     color: var(--text-secondary);
-    max-width: 37.5rem;
+    max-width: var(--size-37-5);
     margin: 0 auto;
 }
 
@@ -50,7 +50,7 @@
 }
 
 .tags-page .tags-filters {
-    margin-top: 0.3125rem;
+    margin-top: var(--size-0-3125);
     /*margin-bottom: var(--spacing-md); */
 }
 
@@ -59,7 +59,7 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    border-radius: 1rem;
+    border-radius: var(--size-1);
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
     overflow: visible;
@@ -81,7 +81,7 @@
     background: none;
     border-radius: 0;
     flex: 1;
-    margin-right: -0.0625rem;
+    margin-right: calc(var(--size-0-0625) * -1);
 }
 
 /*.tag-group-header .tag-link.active {
@@ -95,8 +95,8 @@
 .toggle-children {
     background: none;
     border: none;
-    width: 2rem;
-    height: 2rem;
+    width: var(--size-2);
+    height: var(--size-2);
     cursor: pointer;
     color: var(--text-tertiary);
     display: flex;
@@ -158,7 +158,7 @@
 }
 
 .tags-tree-desc {
-    margin: 0.125rem 0 var(--spacing-xs) var(--spacing-md);
+    margin: var(--size-0-125) 0 var(--spacing-xs) var(--spacing-md);
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
 }
@@ -167,7 +167,7 @@
     list-style: none;
     padding-left: var(--spacing-lg);
     margin: var(--spacing-xs) 0 var(--spacing-xs) var(--spacing-sm);
-    border-left: 0.125rem solid var(--border-primary);
+    border-left: var(--size-0-125) solid var(--border-primary);
 }
 
 /* Important tag highlight in public context */

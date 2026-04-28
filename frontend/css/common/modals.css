@@ -9,7 +9,7 @@
     background-color: var(--color-black-alpha-50);
     justify-content: center;
     align-items: center;
-    backdrop-filter: blur(0.125rem);
+    backdrop-filter: blur(var(--size-0-125));
 }
 
 .modal-overlay.active {
@@ -28,10 +28,10 @@
 .modal {
     background-color: var(--surface-card);
     border-radius: var(--border-radius-xl);
-    box-shadow: 0 1.25rem 3.75rem var(--color-black-alpha-30);
-    min-width: 25rem;
+    box-shadow: 0 var(--size-1-25) var(--size-3-75) var(--color-black-alpha-30);
+    min-width: var(--size-25);
     max-width: 90%;
-    width: 37.5rem;
+    width: var(--size-37-5);
     max-height: 90vh;
     display: flex;
     flex-direction: column;
@@ -51,8 +51,8 @@
 .modal-content {
     background-color: var(--surface-card);
     border-radius: var(--border-radius-xl);
-    box-shadow: 0 1.25rem 3.75rem var(--color-black-alpha-30);
-    min-width: 25rem;
+    box-shadow: 0 var(--size-1-25) var(--size-3-75) var(--color-black-alpha-30);
+    min-width: var(--size-25);
     max-height: 90vh;
     display: flex;
     flex-direction: column;
@@ -60,7 +60,7 @@
 }
 
 .modal-header {
-    padding: 1.25rem var(--spacing-lg);
+    padding: var(--size-1-25) var(--spacing-lg);
     border-bottom: var(--border-width) solid var(--border-primary);
     flex-shrink: 0;
 }
@@ -85,7 +85,7 @@
 }
 
 .modal-body .prompt-message {
-    margin-bottom: 1rem;
+    margin-bottom: var(--size-1);
 }
 
 #prompt-input {
@@ -97,7 +97,7 @@
     border-top: var(--border-width) solid var(--border-primary);
     display: flex;
     justify-content: flex-end;
-    gap: 0.75rem;
+    gap: var(--size-0-75);
     flex-shrink: 0;
 }
 
@@ -122,7 +122,7 @@
 
 @keyframes slideUp {
     from {
-        transform: translateY(1.25rem);
+        transform: translateY(var(--size-1-25));
         opacity: 0;
     }
 
@@ -139,7 +139,7 @@
     }
 
     to {
-        transform: translateY(1.25rem);
+        transform: translateY(var(--size-1-25));
         opacity: 0;
     }
 }
@@ -161,19 +161,19 @@
 
 .progress-modal {
     background-color: var(--surface-card);
-    border-radius: 1rem;
-    box-shadow: 0 1.25rem 3.75rem var(--color-black-alpha-40);
+    border-radius: var(--size-1);
+    box-shadow: 0 var(--size-1-25) var(--size-3-75) var(--color-black-alpha-40);
     padding: var(--spacing-2xl);
     text-align: center;
-    min-width: 18.75rem;
+    min-width: var(--size-18-75);
     animation: slideUp 0.3s ease-out;
 }
 
 .progress-spinner {
-    width: 4rem;
-    height: 4rem;
+    width: var(--size-4);
+    height: var(--size-4);
     margin: 0 auto var(--spacing-lg);
-    border: 0.25rem solid var(--border-primary);
+    border: var(--size-0-25) solid var(--border-primary);
     border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;

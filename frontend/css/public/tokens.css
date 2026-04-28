@@ -4,9 +4,9 @@
 :root,
 [data-theme="light"] {
     /* Layout */
-    --content-max-width: 75rem;
-    --content-narrow: 50rem;
-    --header-height: 4.5rem;
+    --content-max-width: var(--size-75);
+    --content-narrow: var(--size-50);
+    --header-height: var(--size-4-5);
 
     /* Semantic Colors - Background */
     --bg-primary: var(--pt-colors-bg-primary, var(--color-white));
@@ -94,10 +94,10 @@
     --surface-active: #404040;
 
     /* Shadows (darker for dark theme) */
-    --shadow-sm: 0 0.0625rem 0.125rem 0 rgba(0, 0, 0, 0.3);
-    --shadow: 0 0.0625rem 0.1875rem 0 rgba(0, 0, 0, 0.4), 0 0.0625rem 0.125rem -0.0625rem rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 0.25rem 0.375rem -0.0625rem rgba(0, 0, 0, 0.4), 0 0.125rem 0.25rem -0.125rem rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 0.625rem 0.9375rem -0.1875rem rgba(0, 0, 0, 0.4), 0 0.25rem 0.375rem -0.25rem rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 var(--size-0-0625) var(--size-0-125) 0 rgba(0, 0, 0, 0.3);
+    --shadow: 0 var(--size-0-0625) var(--size-0-1875) 0 rgba(0, 0, 0, 0.4), 0 var(--size-0-0625) var(--size-0-125) -var(--size-0-0625) rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 var(--size-0-25) var(--size-0-375) -var(--size-0-0625) rgba(0, 0, 0, 0.4), 0 var(--size-0-125) var(--size-0-25) -var(--size-0-125) rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 var(--size-0-625) var(--size-0-9375) -var(--size-0-1875) rgba(0, 0, 0, 0.4), 0 var(--size-0-25) var(--size-0-375) -var(--size-0-25) rgba(0, 0, 0, 0.4);
 
     /* Component-specific */
     --header-bg: rgba(30, 30, 30, 0.8);

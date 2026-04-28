@@ -47,8 +47,8 @@
 
 /* Table action buttons - square and elevated */
 .table .actions .btn {
-    width: 2rem;
-    height: 2rem;
+    width: var(--size-2);
+    height: var(--size-2);
     padding: 0;
     display: flex;
     align-items: center;
@@ -65,7 +65,7 @@
     color: var(--text-primary);
     border-color: var(--border-secondary);
     box-shadow: var(--shadow);
-    transform: translateY(-0.0625rem);
+    transform: translateY(calc(var(--size-0-0625) * -1));
 }
 
 .table .actions .btn-danger:hover {
@@ -75,8 +75,8 @@
 }
 
 .table .actions .btn svg {
-    width: 1rem;
-    height: 1rem;
+    width: var(--size-1);
+    height: var(--size-1);
 }
 
 /* Multi-row item grouping (Posts Table) */
@@ -116,15 +116,15 @@ td.updated-col {
 }
 
 .preview-col {
-    width: 3rem;
+    width: var(--size-3);
     padding-right: 0 !important;
     border-bottom: var(--border-width) solid var(--border-primary) !important;
     vertical-align: middle;
 }
 
 .post-preview-img {
-    min-width: 5rem;
-    min-height: 5rem;
+    min-width: var(--size-5);
+    min-height: var(--size-5);
     object-fit: cover;
     border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
@@ -132,8 +132,8 @@ td.updated-col {
 }
 
 .post-preview-placeholder {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: var(--size-2-5);
+    height: var(--size-2-5);
     border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
     display: flex;
@@ -147,19 +147,19 @@ td.updated-col {
 /* No special padding for first header since we added a preview column */
 /* vertically align "Status" with "Published" */
 th.status-col {
-    padding-left: 1.5625rem;
+    padding-left: var(--size-1-5625);
 }
 
 .scheduled-date {
     display: block;
     font-size: var(--font-size-xs);
     color: var(--color-scheduled);
-    margin-top: 0.1875rem;
+    margin-top: var(--size-0-1875);
     white-space: nowrap;
 }
 
 .check-col {
-    width: 2rem;
+    width: var(--size-2);
     padding-right: 0;
     border-bottom: none;
     vertical-align: middle;
@@ -184,5 +184,5 @@ th.status-col {
 
 #bulk-count {
     color: var(--text-secondary);
-    min-width: 6rem;
+    min-width: var(--size-6);
 }

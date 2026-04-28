@@ -44,6 +44,6 @@
     --pt-typography-font-mono: var(--font-mono);
     
     /* Spacing & Sizes */
-    --pt-spacing-base: 1rem;
+    --pt-spacing-base: var(--size-1);
     --pt-border-radius: var(--border-radius);
 }

@@ -21,8 +21,8 @@
     font-size: var(--font-size-xs);
     color: var(--text-muted);
     background-color: var(--border-primary);
-    padding: 0.125rem 0.375rem;
-    border-radius: 624.938rem;
+    padding: var(--size-0-125) var(--size-0-375);
+    border-radius: var(--size-624-938);
 }
 
 .slug-link {
@@ -62,12 +62,12 @@
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     background: var(--surface-input);
-    min-height: 2.625rem;
+    min-height: var(--size-2-625);
 }
 
 .tags-input:focus-within {
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 0.1875rem var(--color-primary-light);
+    box-shadow: 0 0 0 var(--size-0-1875) var(--color-primary-light);
 }
 
 .tags-input .tag {
@@ -78,7 +78,7 @@
 
 .tags-input .tag-remove {
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: var(--size-0-875);
     line-height: 1;
     opacity: 0.7;
     transition: opacity 0.2s;
@@ -90,7 +90,7 @@
 
 .tags-input input {
     flex: 1;
-    min-width: 6.25rem;
+    min-width: var(--size-6-25);
     border: none;
     outline: none;
     padding: var(--spacing-xs) calc(var(--spacing-md) - var(--spacing-xs));
@@ -114,7 +114,7 @@
     box-shadow: var(--shadow-lg);
     z-index: 100;
     display: none;
-    max-height: 12.5rem;
+    max-height: var(--size-12-5);
     overflow-y: auto;
     margin-top: var(--spacing-xs);
 }
@@ -150,10 +150,10 @@
 /* Drag and Drop Styles */
 .tm-drag-handle {
     flex-shrink: 0;
-    width: 1rem;
+    width: var(--size-1);
     color: var(--text-muted);
-    font-size: 0.625rem;
-    letter-spacing: -0.125rem;
+    font-size: var(--size-0-625);
+    letter-spacing: calc(var(--size-0-125) * -1);
     opacity: 0;
     cursor: grab;
     user-select: none;
@@ -179,40 +179,40 @@
     position: absolute;
     left: 0;
     right: 0;
-    height: 0.125rem;
+    height: var(--size-0-125);
     background-color: var(--color-primary);
-    border-radius: 0.0625rem;
+    border-radius: var(--size-0-0625);
     z-index: 10;
     pointer-events: none;
 }
 
 .tm-row.tm-drop-before::before {
-    top: -0.0625rem;
+    top: calc(var(--size-0-0625) * -1);
 }
 
 .tm-row.tm-drop-after::after {
-    bottom: -0.0625rem;
+    bottom: calc(var(--size-0-0625) * -1);
 }
 
 .tm-row.tm-drop-on {
     background-color: var(--color-primary-alpha-08);
-    outline: 0.125rem solid var(--color-primary);
-    outline-offset: -0.125rem;
-    border-radius: 0.1875rem;
+    outline: var(--size-0-125) solid var(--color-primary);
+    outline-offset: calc(var(--size-0-125) * -1);
+    border-radius: var(--size-0-1875);
 }
 
 /* Tag link pill (posts table) */
 .tag-link {
     display: inline-flex;
     align-items: center;
-    height: 1.5rem;
+    height: var(--size-1-5);
     padding: 0 var(--spacing-sm);
     font-size: var(--font-size-xs);
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
-    border-radius: 624.938rem;
+    border-radius: var(--size-624-938);
     text-decoration: none;
     white-space: nowrap;
     transition: border-color var(--transition-fast), color var(--transition-fast);
@@ -231,12 +231,12 @@
 
 /* Tags column in posts table — always-on inline editor */
 .tags-col {
-    min-width: 12.5rem;
+    min-width: var(--size-12-5);
 }
 
 .tags-col .tags-input {
-    min-height: 2rem;
-    padding: 0.125rem var(--spacing-xs);
+    min-height: var(--size-2);
+    padding: var(--size-0-125) var(--spacing-xs);
     font-size: var(--font-size-sm);
 }
 
@@ -282,9 +282,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 1.375rem;
-    padding: 0.0625rem 0.375rem;
-    border-radius: 624.938rem;
+    min-width: var(--size-1-375);
+    padding: var(--size-0-0625) var(--size-0-375);
+    border-radius: var(--size-624-938);
     font-size: var(--font-size-xs);
     font-weight: 600;
     background: var(--border-primary);
@@ -293,7 +293,7 @@
 
 .tm-parent-badge {
     display: inline-block;
-    padding: 0.125rem 0.4375rem;
+    padding: var(--size-0-125) var(--size-0-4375);
     border-radius: var(--border-radius-sm);
     font-size: var(--font-size-xs);
     background: var(--color-primary-light);
@@ -303,7 +303,7 @@
 }
 
 .tm-flags-inline {
-    margin-left: 0.375rem;
+    margin-left: var(--size-0-375);
 }
 
 .tm-flags-row {
@@ -314,9 +314,9 @@
 
 .tm-flag-toggle, .tm-flag-static {
     padding: 0;
-    width: 1.75rem;
-    height: 1.75rem;
-    font-size: 0.8125rem;
+    width: var(--size-1-75);
+    height: var(--size-1-75);
+    font-size: var(--size-0-8125);
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
     color: var(--text-muted);
@@ -372,7 +372,7 @@
 
 .tm-flag {
     font-size: var(--font-size-xs);
-    margin: 0 0.0625rem;
+    margin: 0 var(--size-0-0625);
     opacity: 0.85;
 }
 
@@ -380,7 +380,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xs);
-    max-width: 12.5rem;
+    max-width: var(--size-12-5);
 }
 
 .tm-tags-table th, .tm-tags-table td {
@@ -409,8 +409,8 @@
 }
 
 .tm-sort-icon {
-    font-size: 0.625rem;
-    width: 0.625rem;
+    font-size: var(--size-0-625);
+    width: var(--size-0-625);
 }
 
 .tm-tags-table .tm-flag-toggle,
@@ -434,11 +434,11 @@
 .tm-tree.level-1,
 .tm-tree.level-2,
 .tm-tree.level-3 {
-    padding-left: 1.25rem;
+    padding-left: var(--size-1-25);
     border-left: var(--border-width) dashed var(--border-primary);
-    margin-left: 0.6875rem;
-    margin-top: 0.125rem;
-    margin-bottom: 0.125rem;
+    margin-left: var(--size-0-6875);
+    margin-top: var(--size-0-125);
+    margin-bottom: var(--size-0-125);
 }
 
 .tm-node {
@@ -450,11 +450,11 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.4375rem 0.625rem;
+    gap: var(--size-0-75);
+    padding: var(--size-0-4375) var(--size-0-625);
     border-radius: var(--border-radius);
     transition: background-color var(--transition-fast);
-    min-height: 2.75rem;
+    min-height: var(--size-2-75);
 }
 
 .tm-row:hover {
@@ -463,8 +463,8 @@
 
 .tm-toggle {
     flex-shrink: 0;
-    width: 1.375rem;
-    height: 1.375rem;
+    width: var(--size-1-375);
+    height: var(--size-1-375);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -472,7 +472,7 @@
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: 0.5625rem;
+    font-size: var(--size-0-5625);
     border-radius: var(--border-radius-sm);
     transition: background-color var(--transition-fast), color var(--transition-fast);
 }
@@ -484,7 +484,7 @@
 
 .tm-toggle-spacer {
     flex-shrink: 0;
-    width: 1.375rem;
+    width: var(--size-1-375);
 }
 
 .tm-row .tm-tag-name {
@@ -505,14 +505,14 @@
 .tm-row-meta {
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--size-0-375);
     flex-shrink: 0;
-    min-width: 3.75rem;
+    min-width: var(--size-3-75);
 }
 
 .tm-actions {
     display: flex;
-    gap: 0.1875rem;
+    gap: var(--size-0-1875);
     opacity: 0.3;
     transition: opacity var(--transition-fast);
     text-wrap-mode: nowrap;
@@ -534,7 +534,7 @@
    Tag editor modal — wider
    =========================== */
 .tag-editor-modal {
-    width: 43.75rem;
+    width: var(--size-43-75);
 }
 
 /* Editor-style field spacing (title-row / slug-row have no intrinsic margin) */
@@ -580,7 +580,7 @@
 .tag-editor-modal .form-group select:focus {
     outline: none;
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 0.1875rem var(--color-primary-light);
+    box-shadow: 0 0 0 var(--size-0-1875) var(--color-primary-light);
 }
 
 /* Remove dropdown arrow from multi-select */
@@ -632,9 +632,9 @@
 .tm-section-toggle {
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--size-0-375);
     width: 100%;
-    padding: 0.625rem 0;
+    padding: var(--size-0-625) 0;
     background: none;
     border: none;
     cursor: pointer;
@@ -652,7 +652,7 @@
 }
 
 .tm-section-arrow {
-    font-size: 0.5rem;
+    font-size: var(--size-0-5);
     flex-shrink: 0;
     transition: transform var(--transition-fast);
 }
@@ -662,7 +662,7 @@
     font-size: var(--font-size-xs);
     font-weight: 700;
     color: var(--color-primary);
-    min-width: 1rem;
+    min-width: var(--size-1);
     text-align: right;
 }
 
@@ -683,8 +683,8 @@
 .flag-item {
     display: flex;
     align-items: flex-start;
-    gap: 0.625rem;
-    padding: 0.625rem 0.75rem;
+    gap: var(--size-0-625);
+    padding: var(--size-0-625) var(--size-0-75);
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     cursor: pointer;
@@ -698,7 +698,7 @@
 }
 
 .flag-item input[type="checkbox"] {
-    margin-top: 0.125rem;
+    margin-top: var(--size-0-125);
     flex-shrink: 0;
     cursor: pointer;
     accent-color: var(--color-primary);
@@ -711,7 +711,7 @@
 }
 
 .flag-item-icon {
-    font-size: 0.9375rem;
+    font-size: var(--size-0-9375);
     line-height: 1.3;
     flex-shrink: 0;
 }
@@ -719,7 +719,7 @@
 .flag-item-text {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
+    gap: var(--size-0-125);
 }
 
 .flag-item-text strong {
@@ -745,7 +745,7 @@
 .tag-toggles-empty {
     font-size: var(--font-size-xs);
     color: var(--text-muted);
-    padding: 0.375rem 0;
+    padding: var(--size-0-375) 0;
 }
 
 .tag-toggle {
@@ -765,12 +765,12 @@
 .tag-toggle span {
     display: inline-flex;
     align-items: center;
-    height: 1.75rem;
+    height: var(--size-1-75);
     padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
     font-weight: 500;
     line-height: 1;
-    border-radius: 624.938rem;
+    border-radius: var(--size-624-938);
     border: var(--border-width) solid var(--border-primary);
     background: var(--surface-card);
     color: var(--text-secondary);
@@ -803,11 +803,11 @@
 .tag-toggle-tree.level-2,
 .tag-toggle-tree.level-3,
 .tag-toggle-tree.level-4 {
-    padding-left: 1.25rem;
+    padding-left: var(--size-1-25);
     border-left: var(--border-width) dashed var(--border-primary);
     margin-left: var(--spacing-sm);
-    margin-top: 0.0625rem;
-    margin-bottom: 0.0625rem;
+    margin-top: var(--size-0-0625);
+    margin-bottom: var(--size-0-0625);
 }
 
 .tag-toggle-node {
@@ -819,7 +819,7 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    padding: 0.1875rem 0.375rem;
+    padding: var(--size-0-1875) var(--size-0-375);
     border-radius: var(--border-radius);
 }
 
@@ -829,8 +829,8 @@
 
 .tag-toggle-btn {
     flex-shrink: 0;
-    width: 1.125rem;
-    height: 1.125rem;
+    width: var(--size-1-125);
+    height: var(--size-1-125);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -838,7 +838,7 @@
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: 0.5rem;
+    font-size: var(--size-0-5);
     border-radius: var(--border-radius-sm);
     padding: 0;
     transition: background-color var(--transition-fast), color var(--transition-fast);
@@ -851,7 +851,7 @@
 
 .tag-toggle-btn-spacer {
     flex-shrink: 0;
-    width: 1.125rem;
+    width: var(--size-1-125);
 }
 
 /* Indeterminate pill: not checked, but a descendant is checked */
@@ -866,7 +866,7 @@
    Multi-parent & relation badges
    =========================== */
 .tm-multi-parent {
-    font-size: 0.6875rem;
+    font-size: var(--size-0-6875);
     color: var(--text-muted);
     opacity: 0.75;
     flex-shrink: 0;
@@ -875,7 +875,7 @@
 
 .tm-rel-badge {
     display: inline-block;
-    padding: 0.125rem 0.4375rem;
+    padding: var(--size-0-125) var(--size-0-4375);
     border-radius: var(--border-radius-sm);
     font-size: var(--font-size-xs);
     background: var(--color-primary-light);
@@ -902,8 +902,8 @@
 
 .tm-system-badge {
     display: inline-block;
-    margin-left: 0.3125rem;
-    font-size: 0.6875rem;
+    margin-left: var(--size-0-3125);
+    font-size: var(--size-0-6875);
     opacity: 0.75;
     vertical-align: middle;
 }
@@ -933,8 +933,8 @@
 
 /* Features section in tag editor modal */
 .tm-features-section {
-    margin-top: 0.5rem;
-    margin-bottom: 0.25rem;
+    margin-top: var(--size-0-5);
+    margin-bottom: var(--size-0-25);
 }
 
 .tm-features-heading {
@@ -943,17 +943,17 @@
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 0.375rem;
+    margin-bottom: var(--size-0-375);
 }
 
 .tm-feature-row {
-    padding: 0.15rem 0;
+    padding: var(--size-0-15) 0;
 }
 
 .tm-checkbox-label {
     display: inline-flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--size-0-375);
     font-size: var(--font-size-sm);
     cursor: pointer;
     user-select: none;
@@ -968,7 +968,7 @@
     border-radius: 50%;
     background: var(--text-muted);
     color: var(--surface);
-    font-size: 0.6rem;
+    font-size: var(--size-0-6);
     font-weight: bold;
     cursor: help;
     flex-shrink: 0;
@@ -980,7 +980,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xs);
-    padding: var(--spacing-xs) 0 0.375rem;
+    padding: var(--spacing-xs) 0 var(--size-0-375);
 }
 
 .tag-toggle-system-item {
@@ -990,7 +990,7 @@
 .tag-toggle-divider {
     border: none;
     border-top: var(--border-width) solid var(--border-primary);
-    margin: 0.375rem 0;
+    margin: var(--size-0-375) 0;
 }
 
 /* ===========================
@@ -998,9 +998,9 @@
    =========================== */
 .tm-toggle-search {
     width: 100%;
-    padding: 0.3125rem 0.625rem;
+    padding: var(--size-0-3125) var(--size-0-625);
     font-size: var(--font-size-sm);
-    margin-bottom: 0.375rem;
+    margin-bottom: var(--size-0-375);
     box-sizing: border-box;
 }
 
@@ -1010,8 +1010,8 @@
 .tm-list-filter-bar {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
-    margin-bottom: 0.75rem;
+    gap: var(--size-0-375);
+    margin-bottom: var(--size-0-75);
 }
 
 .tm-list-search-row {
@@ -1022,23 +1022,23 @@
 
 .tm-list-search {
     flex: 1;
-    padding: 0.375rem 0.75rem;
+    padding: var(--size-0-375) var(--size-0-75);
     font-size: var(--font-size-sm);
 }
 
 .tm-filter-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.375rem;
+    gap: var(--size-0-375);
     min-height: 0;
 }
 
 .tm-filter-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.3125rem;
-    padding: 0.1875rem 0.625rem;
-    border-radius: 624.938rem;
+    gap: var(--size-0-3125);
+    padding: var(--size-0-1875) var(--size-0-625);
+    border-radius: var(--size-624-938);
     font-size: var(--font-size-xs);
     font-weight: 500;
     background: var(--color-primary);
@@ -1053,7 +1053,7 @@
 }
 
 .tm-chip-remove {
-    font-size: 0.8125rem;
+    font-size: var(--size-0-8125);
     line-height: 1;
     opacity: 0.8;
 }

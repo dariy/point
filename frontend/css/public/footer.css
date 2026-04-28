@@ -53,8 +53,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: var(--size-2-5);
+    height: var(--size-2-5);
     padding: 0;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
@@ -74,8 +74,8 @@
 }
 
 .footer-action-btn svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: var(--size-1-25);
+    height: var(--size-1-25);
 }
 
 .footer-link {

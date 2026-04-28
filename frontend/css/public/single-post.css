@@ -26,8 +26,8 @@
 }
 
 .post-meta-divider {
-    width: 0.25rem;
-    height: 0.25rem;
+    width: var(--size-0-25);
+    height: var(--size-0-25);
     background-color: var(--border-secondary);
     border-radius: 50%;
 }
@@ -113,7 +113,7 @@
     font-size: 0.9em;
     background-color: var(--inline-code-bg);
     color: var(--inline-code-text);
-    padding: 0.125rem 0.375rem;
+    padding: var(--size-0-125) var(--size-0-375);
     border-radius: var(--border-radius-sm);
     transition: background-color var(--transition-theme),
         color var(--transition-theme);
@@ -138,7 +138,7 @@
 .post-content a {
     color: var(--color-primary);
     text-decoration: underline;
-    text-underline-offset: 0.125rem;
+    text-underline-offset: var(--size-0-125);
 }
 
 /* Post Footer */
@@ -158,8 +158,8 @@
 
 .post-tags .tag-link {
     background-color: var(--bg-tertiary);
-    backdrop-filter: blur(0.5rem);
-    -webkit-backdrop-filter: blur(0.5rem);
+    backdrop-filter: blur(var(--size-0-5));
+    -webkit-backdrop-filter: blur(var(--size-0-5));
 }
 
 .post-tags .tag-link:hover {
@@ -237,8 +237,8 @@
     transform: translateY(-50%);
     background: var(--color-black-alpha-25);
     color: white;
-    width: 3.125rem;
-    height: 3.125rem;
+    width: var(--size-3-125);
+    height: var(--size-3-125);
     border-radius: 50%;
     font-size: var(--font-size-2xl);
     cursor: pointer;
@@ -248,8 +248,8 @@
     justify-content: center;
     text-decoration: none;
     transition: background-color 0.2s ease, transform 0.2s ease;
-    backdrop-filter: blur(0.25rem);
-    -webkit-backdrop-filter: blur(0.25rem);
+    backdrop-filter: blur(var(--size-0-25));
+    -webkit-backdrop-filter: blur(var(--size-0-25));
 }
 
 .post-side-nav-btn:hover {
@@ -258,8 +258,8 @@
     color: white;
 }
 
-.post-side-nav-btn.prev { left: 1rem; }
-.post-side-nav-btn.next { right: 1rem; }
+.post-side-nav-btn.prev { left: var(--size-1); }
+.post-side-nav-btn.next { right: var(--size-1); }
 
 [data-theme="light"] .post-side-nav-btn {
     background: var(--color-black-alpha-15);
