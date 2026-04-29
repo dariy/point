@@ -46,7 +46,7 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
 	"show_tag_cloud":         true,
-	"enable_map":             true,
+	"show_map":               true,
 }
 
 // GetHomePage returns all data needed to render the public homepage.
@@ -399,9 +399,23 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	mapSettings, _ := h.settingsService.GetAllSettings(ctx)
 
-	if publicOnly && mapSettings["enable_map"] == "false" {
+	showMap := mapSettings["show_map"]
+	// Legacy fallback
+	if showMap == "" {
+		if mapSettings["enable_map"] == "false" {
+			showMap = "off"
+		} else {
+			showMap = "all"
+		}
+	}
+
+	if publicOnly && showMap != "all" {
 		return echo.NewHTTPError(http.StatusNotFound, "map not found")
 	}
+	if !publicOnly && showMap == "off" {
+		return echo.NewHTTPError(http.StatusNotFound, "map not found")
+	}
+
 	var minMapPosts int64
 	if publicOnly {
 		minMapPosts = getMinTagPostsSetting(mapSettings)

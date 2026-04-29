@@ -32,7 +32,7 @@ var publicSettingKeys = map[string]bool{
 	"about_post_id":           true,
 	"multi_user_mode":         true,
 	"show_tag_cloud":          true,
-	"enable_map":              true,
+	"show_map":                true,
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
 	"exif_visibility":         true,
