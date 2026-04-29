@@ -113,6 +113,7 @@ td.title-col {
 td.updated-col {
     white-space: nowrap;
     font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
 }
 
 .preview-col {
@@ -156,6 +157,7 @@ th.status-col {
     color: var(--color-scheduled);
     margin-top: var(--scheduled-date-margin-top);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .check-col {
@@ -185,4 +187,5 @@ th.status-col {
 #bulk-count {
     color: var(--text-secondary);
     min-width: var(--bulk-count-min-width);
+    font-variant-numeric: tabular-nums;
 }

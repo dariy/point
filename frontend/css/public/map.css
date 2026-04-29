@@ -154,6 +154,7 @@
 .tag-popup-count {
     font-size: var(--tag-popup-count-font-size);
     color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
 }
 
 .map-popup-years {

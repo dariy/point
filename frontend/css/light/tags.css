@@ -23,6 +23,7 @@
     background-color: var(--border-primary);
     padding: var(--tag-count-padding-y) var(--tag-count-padding-x);
     border-radius: var(--tag-count-border-radius);
+    font-variant-numeric: tabular-nums;
 }
 
 .slug-link {
@@ -289,6 +290,7 @@
     font-weight: 600;
     background: var(--border-primary);
     color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
 }
 
 .tm-parent-badge {
@@ -664,6 +666,7 @@
     color: var(--color-primary);
     min-width: var(--tm-section-count-min-width);
     text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .tm-section-body {
