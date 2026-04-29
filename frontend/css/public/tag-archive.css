@@ -28,6 +28,7 @@
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
     margin-top: var(--spacing-md);
+    font-variant-numeric: tabular-nums;
 }
 
 /* Tags Filters */

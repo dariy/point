@@ -335,6 +335,7 @@
 .media-item-meta {
     font-size: var(--font-size-xs);
     color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
 }
 
 .media-item-actions {

@@ -76,4 +76,5 @@
     font-size: var(--font-size-sm);
     color: var(--text-muted);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }

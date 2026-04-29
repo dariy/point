@@ -246,6 +246,10 @@
     margin-bottom: var(--spacing-sm);
 }
 
+.view-count {
+    font-variant-numeric: tabular-nums;
+}
+
 .post-card-title {
     font-size: var(--font-size-xl);
     font-weight: 600;
