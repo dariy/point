@@ -24,7 +24,7 @@ body {
     bottom: 0;
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
-    color: white;
+    color: var(--sidebar-text);
     display: flex;
     flex-direction: column;
     z-index: 100;
@@ -52,7 +52,7 @@ body {
 .sidebar-header .site-title-link {
     display: flex;
     align-items: center;
-    color: white;
+    color: var(--sidebar-text-hover);
     text-decoration: none;
 }
 

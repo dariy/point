@@ -21,11 +21,11 @@
     --surface-card: var(--pt-colors-surface-card);
 
     /* Admin-specific */
-    --sidebar-bg: #0f172a;
-    --sidebar-text: #94a3b8;
-    --sidebar-text-hover: #ffffff;
-    --sidebar-active-bg: #1e293b;
-    --sidebar-border: #334155;
+    --sidebar-bg: var(--pt-colors-sidebar-bg, #0f172a);
+    --sidebar-text: var(--pt-colors-sidebar-text, #94a3b8);
+    --sidebar-text-hover: var(--pt-colors-sidebar-text-hover, #ffffff);
+    --sidebar-active-bg: var(--pt-colors-sidebar-active-bg, #1e293b);
+    --sidebar-border: var(--pt-colors-sidebar-border, #334155);
     --header-bg: rgba(var(--color-white-rgb, 255, 255, 255), 0.8);
     --header-border: var(--pt-colors-border-primary);
 
@@ -57,11 +57,11 @@
     --surface-card: var(--pt-colors-surface-card);
 
     /* Admin-specific */
-    --sidebar-bg: #181818;
-    --sidebar-text: #94a3b8;
-    --sidebar-text-hover: #ffffff;
-    --sidebar-active-bg: #2d2d2d;
-    --sidebar-border: #333333;
+    --sidebar-bg: var(--pt-colors-sidebar-bg, #181818);
+    --sidebar-text: var(--pt-colors-sidebar-text, #94a3b8);
+    --sidebar-text-hover: var(--pt-colors-sidebar-text-hover, #ffffff);
+    --sidebar-active-bg: var(--pt-colors-sidebar-active-bg, #2d2d2d);
+    --sidebar-border: var(--pt-colors-sidebar-border, #333333);
     --header-bg: rgba(30, 30, 30, 0.8);
     --header-border: var(--pt-colors-border-primary);
 

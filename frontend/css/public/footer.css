@@ -30,7 +30,7 @@
 }
 
 .footer-copyright a {
-    color: var(--footer-text);
+    color: var(--footer-link, var(--color-primary));
 }
 
 .footer-copyright a:hover {

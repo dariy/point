@@ -37,6 +37,13 @@
     
     /* Overlays */
     --pt-colors-bg-overlay: var(--bg-overlay);
+
+    /* Sidebar - Admin specific */
+    --pt-colors-sidebar-bg: #0f172a;
+    --pt-colors-sidebar-text: #94a3b8;
+    --pt-colors-sidebar-text-hover: #ffffff;
+    --pt-colors-sidebar-active-bg: #1e293b;
+    --pt-colors-sidebar-border: #334155;
     
     /* Typography */
     --pt-typography-font-family: var(--font-family);
