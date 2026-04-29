@@ -28,6 +28,12 @@ function mapToCSS(obj) {
     'accent-hover': '--color-primary-hover',
     'border-primary': '--border-primary',
     'border-secondary': '--border-secondary',
+    'sidebar-bg': '--pt-colors-sidebar-bg',
+    'sidebar-text': '--pt-colors-sidebar-text',
+    'sidebar-text-hover': '--pt-colors-sidebar-text-hover',
+    'sidebar-active-bg': '--pt-colors-sidebar-active-bg',
+    'sidebar-border': '--pt-colors-sidebar-border',
+    'footer-link': '--footer-link',
     'font-family': '--font-family',
     'base': '--spacing-md' // standard mapping for base spacing
   };
