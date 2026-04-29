@@ -122,6 +122,7 @@
 .progress-text {
     font-size: 0.85em;
     color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
 }
 
 .sync-pill {
