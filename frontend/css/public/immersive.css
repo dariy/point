@@ -383,7 +383,7 @@ video.immersive-bg-image {
     border-radius: 50%;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .post-nav-icon:hover {
