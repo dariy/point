@@ -102,6 +102,7 @@ func TestPagesHandler_GetMapPage(t *testing.T) {
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
+	_ = settingsSvc.SetSetting(context.Background(), "show_map", "all", "string")
 
 	// Public map (no user)
 	req := httptest.NewRequest(http.MethodGet, "/map", nil)

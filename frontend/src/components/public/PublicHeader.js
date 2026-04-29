@@ -94,11 +94,17 @@ export class PublicHeader extends Component {
                 ${SEARCH_SVG}
               </button>
             </form>
-            ${settings.enable_map !== false ? `
-            <a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
-               aria-label="Map view">
-              ${MAP_SVG}
-            </a>` : ''}
+            ${(() => {
+              const visibility = settings.show_map || (settings.enable_map === 'false' ? 'off' : 'all');
+              if (visibility === 'all' || (user && visibility === 'hidden')) {
+                return `
+                  <a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
+                     aria-label="Map view">
+                    ${MAP_SVG}
+                  </a>`;
+              }
+              return '';
+            })()}
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
               <span class="icon-sun">${SUN_SVG}</span>
               <span class="icon-moon">${MOON_SVG}</span>
