@@ -102,7 +102,7 @@
     /* Component-specific */
     --header-bg: rgba(30, 30, 30, 0.8);
     --footer-bg: rgba(30, 30, 30, 0.8);
-    --footer-text: #94a3b8;
+    --footer-text: var(--text-tertiary);
     --code-bg: #121212;
     --code-text: #e2e8f0;
     --inline-code-bg: #2d2d2d;
