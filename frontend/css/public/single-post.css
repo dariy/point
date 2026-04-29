@@ -49,6 +49,12 @@
 
 .post-featured-image img {
     width: 100%;
+    outline: 1px solid var(--color-black-alpha-10);
+    outline-offset: -1px;
+}
+
+[data-theme="dark"] .post-featured-image img {
+    outline-color: var(--color-white-alpha-10);
 }
 
 /* Post Content */
@@ -86,6 +92,12 @@
 
 .post-content img {
     border-radius: var(--border-radius-lg);
+    outline: 1px solid var(--color-black-alpha-10);
+    outline-offset: -1px;
+}
+
+[data-theme="dark"] .post-content img {
+    outline-color: var(--color-white-alpha-10);
 }
 
 .post-content blockquote {
