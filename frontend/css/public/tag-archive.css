@@ -64,7 +64,7 @@
     border: var(--border-width) solid var(--border-primary);
     overflow: visible;
     /* Changed from hidden to support header dropdowns and nested content */
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast);
 }
 
 .tag-group:hover {
@@ -102,7 +102,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
     border-left: var(--border-width) solid var(--border-primary);
 }
 

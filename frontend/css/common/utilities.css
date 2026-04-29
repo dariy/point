@@ -117,7 +117,7 @@
 }
 
 .transition-all {
-    transition: all var(--transition-base, 0.3s) ease !important;
+    transition: background-color var(--transition-base, 0.3s) ease, border-color var(--transition-base, 0.3s) ease, color var(--transition-base, 0.3s) ease, opacity var(--transition-base, 0.3s) ease, transform var(--transition-base, 0.3s) ease, box-shadow var(--transition-base, 0.3s) ease !important;
 }
 
 .translate-x-20 {

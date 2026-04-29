@@ -54,7 +54,7 @@
     text-align: left;
     border-radius: var(--border-radius-sm);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .folder-tree-item:hover {
@@ -316,7 +316,7 @@
     border: none;
     box-shadow: none;
     opacity: 0.5;
-    transition: all var(--transition-fast);
+    transition: opacity var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
     font-size: var(--copy-path-btn-font-size);
 }
 
