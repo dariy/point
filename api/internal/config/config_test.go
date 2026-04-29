@@ -87,8 +87,8 @@ func TestThemesPathDerivation(t *testing.T) {
 
 	// Test case 2: FRONTEND_DIR set, THEMES_PATH not set
 	viper.Reset()
-	os.Setenv("FRONTEND_DIR", "/custom/frontend")
-	defer os.Unsetenv("FRONTEND_DIR")
+	_ = os.Setenv("FRONTEND_DIR", "/custom/frontend")
+	defer func() { _ = os.Unsetenv("FRONTEND_DIR") }()
 	config, _ = LoadConfig(tmpDir)
 	expectedThemesPath = "/custom/frontend/themes"
 	if config.ThemesPath != expectedThemesPath {
@@ -97,9 +97,9 @@ func TestThemesPathDerivation(t *testing.T) {
 
 	// Test case 3: Both set
 	viper.Reset()
-	os.Setenv("FRONTEND_DIR", "/custom/frontend")
-	os.Setenv("THEMES_PATH", "/custom/themes")
-	defer os.Unsetenv("THEMES_PATH")
+	_ = os.Setenv("FRONTEND_DIR", "/custom/frontend")
+	_ = os.Setenv("THEMES_PATH", "/custom/themes")
+	defer func() { _ = os.Unsetenv("THEMES_PATH") }()
 	config, _ = LoadConfig(tmpDir)
 	expectedThemesPath = "/custom/themes"
 	if config.ThemesPath != expectedThemesPath {
