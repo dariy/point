@@ -42,5 +42,23 @@ export class PostGrid extends Component {
       }
     });
 
+    const grid = this.container.querySelector('.posts-grid');
+    if (!grid) return;
+
+    this._gridKeyHandler = (e) => {
+      if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
+      const cards = Array.from(grid.querySelectorAll('.post-card[tabindex="0"]'));
+      const idx = cards.indexOf(document.activeElement);
+      if (idx === -1) return;
+      e.preventDefault();
+      const next = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? idx + 1 : idx - 1;
+      cards[Math.max(0, Math.min(next, cards.length - 1))]?.focus();
+    };
+    grid.addEventListener('keydown', this._gridKeyHandler);
+  }
+
+  beforeUnmount() {
+    const grid = this.container?.querySelector('.posts-grid');
+    if (grid && this._gridKeyHandler) grid.removeEventListener('keydown', this._gridKeyHandler);
   }
 }
