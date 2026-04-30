@@ -93,7 +93,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"use_thumbnails", "true", "boolean"},
 		{"show_view_counts", "false", "boolean"},
 		{"show_tag_cloud", "true", "boolean"},
-		{"show_map", "off", "string"},
+		{"map_mode", "off", "string"},
 		{"enable_backup", "false", "boolean"},
 	}
 

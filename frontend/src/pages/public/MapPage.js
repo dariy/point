@@ -137,7 +137,7 @@ export default class MapPage extends Component {
   async _load() {
     const settings = store.get('settings') || {};
     const user = store.get('user');
-    const visibility = settings.show_map || (settings.enable_map === 'false' ? 'off' : 'all');
+    const visibility = settings.map_mode || 'off';
 
     if (visibility === 'off' || (visibility === 'hidden' && !user)) {
       router.notFound();
