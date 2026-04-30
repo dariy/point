@@ -48,7 +48,8 @@
     justify-content: center;
     transition: background-color var(--transition-theme),
         color var(--transition-theme),
-        transform 0.2s ease;
+        transform 0.2s ease,
+        scale 0.2s ease;
     backdrop-filter: blur(var(--carousel-prev-backdrop-filter));
 }
 
@@ -89,7 +90,8 @@
     border: none;
     cursor: pointer;
     transition: background-color var(--transition-theme),
-        transform 0.2s ease;
+        transform 0.2s ease,
+        scale 0.2s ease;
     padding: 0;
 }
 
