@@ -95,7 +95,7 @@ export class PublicHeader extends Component {
               </button>
             </form>
             ${(() => {
-              const visibility = settings.show_map || (settings.enable_map === 'false' ? 'off' : 'all');
+              const visibility = settings.map_mode || 'off';
               if (visibility === 'all' || (user && visibility === 'hidden')) {
                 return `
                   <a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
