@@ -491,6 +491,15 @@ func main() {
 			"cleanup_settings_secrets_keys",
 			`DELETE FROM blog_settings WHERE key IN ('GEMINI_API_KEY', '_secret_key', 'media_import_path', 'genai_api_endpoint')`,
 		},
+		{
+			"rename_show_map_to_map_mode",
+			`INSERT OR IGNORE INTO blog_settings (key, value, type, updated_at)
+			 SELECT 'map_mode', value, type, updated_at FROM blog_settings WHERE key = 'show_map'`,
+		},
+		{
+			"cleanup_show_map_key",
+			`DELETE FROM blog_settings WHERE key = 'show_map'`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {

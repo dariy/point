@@ -102,7 +102,7 @@ func TestPagesHandler_GetMapPage(t *testing.T) {
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
-	_ = settingsSvc.SetSetting(context.Background(), "show_map", "all", "string")
+	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
 
 	// Public map (no user)
 	req := httptest.NewRequest(http.MethodGet, "/map", nil)
@@ -146,6 +146,7 @@ func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 	// Set post_count for city so it appears in ListTags
 	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
 
+	_ = settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
@@ -294,6 +295,7 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
+	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()

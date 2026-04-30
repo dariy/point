@@ -202,6 +202,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
     }
 
     link.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (!ancestors.length) return; // no ancestors — navigate normally
 
       clearTimeout(_openTimer);
