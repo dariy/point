@@ -31,17 +31,13 @@
     border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
 }
 
 .page-btn:hover:not(:disabled) {
     border-color: var(--color-primary);
     color: var(--color-primary);
     background-color: var(--color-primary-light);
-}
-
-.page-btn:active:not(:disabled) {
-    transform: scale(0.97);
 }
 
 .page-btn.active {
