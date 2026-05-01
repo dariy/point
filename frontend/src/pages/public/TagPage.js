@@ -95,7 +95,7 @@ export default class TagPage extends Component {
     const { data, post } = this.state;
 
     const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
-    if (canShowTimeline && !this._isPostView()) {
+    if (canShowTimeline && !this._isPostView() && !this.state.loading && !this.state.error) {
       this.mountChild(Timeline, '#timeline-mount', { mode: 'popover', context: slug });
     }
 
