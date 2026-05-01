@@ -32,6 +32,25 @@
     background: var(--bg-secondary);
 }
 
+.map-title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md) 0 var(--spacing-sm);
+}
+
+.map-title-bar h1 {
+    font-size: var(--map-title-font-size, 1.5rem);
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.map-stats {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
 .map-header {
     margin-bottom: var(--map-header-margin-bottom);
 }
