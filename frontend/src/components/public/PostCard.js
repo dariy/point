@@ -140,6 +140,12 @@ export class PostCard extends Component {
       });
     }
 
+    // Firefox doesn't focus non-interactive elements on click; force it so arrow key
+    // navigation in PostGrid works consistently across browsers.
+    card.addEventListener('mousedown', (e) => {
+      if (!e.target.closest('a')) card.focus({ preventScroll: true });
+    });
+
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
     });

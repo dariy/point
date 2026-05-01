@@ -16,6 +16,7 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
+import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getTagPage } from '../../api/pages.js';
 import { getPostBySlug } from '../../api/posts.js';
@@ -74,6 +75,7 @@ export default class TagPage extends Component {
     return `
       <div class="site-wrapper tags-page">
         <div id="header-mount"></div>
+        <div id="timeline-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
@@ -91,6 +93,11 @@ export default class TagPage extends Component {
     const navTags = navChildren.length ? navChildren : rootMenu;
     const slug     = this.props.params?.slug || '';
     const { data, post } = this.state;
+
+    const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    if (canShowTimeline && !this._isPostView()) {
+      this.mountChild(Timeline, '#timeline-mount', { mode: 'popover', context: slug });
+    }
 
     // Build breadcrumb: ancestors are links, current tag is the non-linked tail.
     const tag = data?.tag;

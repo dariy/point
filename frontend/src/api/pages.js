@@ -39,10 +39,11 @@ export function getTagsPage() {
 /**
  * Map page data: tags with coordinates, categorised as country / city / other.
  *
+ * @param {{ year_from?: number, year_to?: number }} [params]
  * @returns {Promise<{ tags: Array<{name,slug,post_count,lat,lng,type}> }>}
  */
-export function getMapPage() {
-  return api.get('/api/pages/map');
+export function getMapPage(params = {}) {
+  return api.get('/api/pages/map', params);
 }
 
 /**

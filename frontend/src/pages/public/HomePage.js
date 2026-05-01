@@ -12,6 +12,7 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { TagCloud } from '../../components/public/TagCloud.js';
+import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
@@ -53,6 +54,7 @@ export default class HomePage extends Component {
       <div class="site-wrapper">
         <div id="header-mount"></div>
         <div id="tag-cloud-mount"></div>
+        <div id="timeline-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
@@ -79,6 +81,11 @@ export default class HomePage extends Component {
 
     if (!!settings.show_tag_cloud && tagCloud.length) {
       this.mountChild(TagCloud, '#tag-cloud-mount', { tags: tagCloud });
+    }
+
+    const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    if (canShowTimeline) {
+      this.mountChild(Timeline, '#timeline-mount', { mode: 'popover' });
     }
 
     if (pagination.pages > 1) {

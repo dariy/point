@@ -33,6 +33,7 @@ var publicSettingKeys = map[string]bool{
 	"multi_user_mode":         true,
 	"show_tag_cloud":          true,
 	"map_mode":                true,
+	"timeline_mode":           true,
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
 	"exif_visibility":         true,
