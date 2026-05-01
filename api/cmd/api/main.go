@@ -502,8 +502,8 @@ func main() {
 		},
 		{
 			"rename_show_map_to_map_mode",
-			`INSERT OR IGNORE INTO blog_settings (key, value, type, updated_at)
-			 SELECT 'map_mode', value, type, updated_at FROM blog_settings WHERE key = 'show_map'`,
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'map_mode', value, value_type, updated_at FROM blog_settings WHERE key = 'show_map'`,
 		},
 		{
 			"cleanup_show_map_key",
@@ -522,8 +522,15 @@ func main() {
 		},
 		{
 			"add_timeline_mode_setting",
-			`INSERT OR IGNORE INTO blog_settings (key, value, type)
-			 VALUES ('timeline_mode', 'off', 'string')`,
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 VALUES ('timeline_mode', 'off', 'string', CURRENT_TIMESTAMP)`,
+		},
+		{
+			"link_year_tags_to_in_timeline",
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT p.id, t.id FROM tags p, tags t
+			 WHERE p.slug = '_in_timeline'
+			   AND (t.slug GLOB '[0-9][0-9][0-9][0-9]' OR t.slug GLOB '[0-9][0-9][0-9][0-9]s')`,
 		},
 	}
 	for _, m := range migrations {
