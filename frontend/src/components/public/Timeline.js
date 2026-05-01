@@ -114,6 +114,10 @@ export class Timeline extends Component {
     const trackWrapper = this.$('.timeline-track-wrapper');
     if (!trackWrapper) return;
 
+    // Stop touch events from bubbling to parent gesture controllers (page swipe navigation).
+    trackWrapper.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    trackWrapper.addEventListener('touchmove',  (e) => e.stopPropagation(), { passive: true });
+
     this._gestureController = new GestureController(trackWrapper, {
       onPanMove: (dx) => this._onPan(dx),
       onPinchMove: (scale, cx) => this._onZoom(scale, cx),
