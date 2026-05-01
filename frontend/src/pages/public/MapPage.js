@@ -14,7 +14,6 @@ import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { Timeline } from '../../components/public/Timeline.js';
 import { getMapPage } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { router } from '../../router.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 
@@ -110,7 +109,7 @@ export default class MapPage extends Component {
             <h1>Discovery Map</h1>
             <div id="map-stats" class="map-stats"></div>
           </div>
-          <div id="leaflet-map" class="map-canvas"></div>
+          <div class="map-container"><div id="map"></div></div>
         </main>
         <div id="footer-mount"></div>
       </div>`;
@@ -147,10 +146,12 @@ export default class MapPage extends Component {
     }
   }
 
-  async _onTimelineRangeChange({ from, to, source }) {
-    this._currentRange = { from, to };
+  async _onTimelineRangeChange({ from, to }) {
+    const hasRange = from !== undefined && to !== undefined;
+    this._currentRange = hasRange ? { from, to } : null;
+    const params = hasRange ? { year_from: from, year_to: to } : {};
     try {
-      const { tags } = await getMapPage({ year_from: from, year_to: to });
+      const { tags } = await getMapPage(params);
       this.state.tags = tags;
       this._redrawMarkers();
       this._updateStats();
@@ -168,7 +169,7 @@ export default class MapPage extends Component {
   }
 
   async _initMap() {
-    const mapEl = this.$('#leaflet-map');
+    const mapEl = this.$('#map');
     if (!mapEl) return;
 
     let L;
