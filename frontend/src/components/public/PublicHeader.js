@@ -48,7 +48,7 @@ export class PublicHeader extends Component {
             }
             return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
           }
-          const href = crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/';
+          const href = crumb.href || (crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/');
           return `<a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}">${lockIcon}${escapeHtml(crumb.name)}</a>
                   <span class="breadcrumb-separator" aria-hidden="true">/</span>`;
         }),
