@@ -46,19 +46,19 @@ export class PostGrid extends Component {
     if (!grid) return;
 
     this._gridKeyHandler = (e) => {
-      if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
+      if (!e.ctrlKey || !['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
       const cards = Array.from(grid.querySelectorAll('.post-card[tabindex="0"]'));
-      const idx = cards.indexOf(document.activeElement);
-      if (idx === -1) return;
+      if (!cards.length) return;
       e.preventDefault();
-      const next = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? idx + 1 : idx - 1;
-      cards[Math.max(0, Math.min(next, cards.length - 1))]?.focus();
+      const idx = cards.indexOf(document.activeElement);
+      const delta = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
+      const next = idx === -1 ? 0 : Math.max(0, Math.min(idx + delta, cards.length - 1));
+      cards[next].focus();
     };
-    grid.addEventListener('keydown', this._gridKeyHandler);
+    document.addEventListener('keydown', this._gridKeyHandler);
   }
 
   beforeUnmount() {
-    const grid = this.container?.querySelector('.posts-grid');
-    if (grid && this._gridKeyHandler) grid.removeEventListener('keydown', this._gridKeyHandler);
+    if (this._gridKeyHandler) document.removeEventListener('keydown', this._gridKeyHandler);
   }
 }

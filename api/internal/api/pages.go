@@ -47,6 +47,7 @@ var pagePublicSettingKeys = map[string]bool{
 	"min_tag_posts_to_show":  true,
 	"show_tag_cloud":         true,
 	"map_mode":               true,
+	"timeline_mode":          true,
 }
 
 // GetHomePage returns all data needed to render the public homepage.
@@ -411,6 +412,22 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "map not found")
 	}
 
+	// Parse optional year range filter from the timeline component.
+	var yearRangeFilter map[int64]int64 // tagID → scoped post_count; nil = no filter
+	yearFromStr := c.QueryParam("year_from")
+	yearToStr := c.QueryParam("year_to")
+	if yearFromStr != "" && yearToStr != "" {
+		yearFrom, errFrom := strconv.Atoi(yearFromStr)
+		yearTo, errTo := strconv.Atoi(yearToStr)
+		if errFrom == nil && errTo == nil && yearFrom <= yearTo {
+			rangeResults, _ := h.repo.ListMapTagsForYearRange(ctx, yearFrom, yearTo)
+			yearRangeFilter = make(map[int64]int64, len(rangeResults))
+			for _, r := range rangeResults {
+				yearRangeFilter[r.TagID] = r.PostCount
+			}
+		}
+	}
+
 	var minMapPosts int64
 	if publicOnly {
 		minMapPosts = getMinTagPostsSetting(mapSettings)
@@ -464,6 +481,14 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		if !ok {
 			continue
 		}
+
+		// When a year range filter is active, skip tags outside the filtered set.
+		if yearRangeFilter != nil {
+			if _, inRange := yearRangeFilter[t.ID]; !inRange {
+				continue
+			}
+		}
+
 		tagType := "other"
 		if cityDescIDs[t.ID] {
 			tagType = "city"
@@ -476,9 +501,14 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			years = []repository.PostTagInfo{}
 		}
 
-		postCount := hierarchicalCounts[t.ID]
-		if postCount == 0 {
-			postCount = int64(t.PostCount)
+		var postCount int64
+		if yearRangeFilter != nil {
+			postCount = yearRangeFilter[t.ID]
+		} else {
+			postCount = hierarchicalCounts[t.ID]
+			if postCount == 0 {
+				postCount = int64(t.PostCount)
+			}
 		}
 
 		entry := map[string]interface{}{

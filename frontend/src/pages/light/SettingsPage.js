@@ -19,7 +19,7 @@ const SETTING_GROUPS = [
   },
   {
     title: 'Display',
-    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'immersive_nav_direction', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt', 'exif_visibility', 'map_mode']
+    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'immersive_nav_direction', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt', 'exif_visibility', 'map_mode', 'timeline_mode']
   },
   {
     title: 'Storage & System',
@@ -136,7 +136,7 @@ export default class SettingsPage extends Component {
             <option value="admin"${v === 'admin' ? ' selected' : ''}>Admins only</option>
             <option value="all"${v === 'all' ? ' selected' : ''}>Everyone</option>
           </select>`;
-      } else if (key === 'map_mode') {
+      } else if (key === 'map_mode' || key === 'timeline_mode') {
         const v = value || 'off';
         input = `
           <select name="${key}" id="${key}" class="form-select">
@@ -342,7 +342,7 @@ export default class SettingsPage extends Component {
 
   _getSettingType(key) {
     if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) return 'number';
-    if (key === 'map_mode') return 'string';
+    if (key === 'map_mode' || key === 'timeline_mode') return 'string';
     if (key.includes('enable') || key.includes('show') || key.includes('use')) return 'boolean';
     return 'string';
   }
