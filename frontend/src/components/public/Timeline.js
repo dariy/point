@@ -3,6 +3,8 @@ import { getTimeline, getTimelineLocations } from '../../api/timeline.js';
 import { GestureController } from '../../utils/gestures.js';
 import { renderTagLink } from '../../utils/tags.js';
 
+const EDGE_PAD = 48;
+
 /**
  * Timeline component — horizontal date-tag navigation control.
  *
@@ -47,6 +49,12 @@ export class Timeline extends Component {
         extent: payload.extent,
         isLoading: false
       });
+
+      if (this.props.initialYear && !this._unmounted) {
+        const year = parseInt(this.props.initialYear, 10);
+        const pill = payload.pills.find((p) => p.year === year);
+        if (pill) this._pinPill(pill);
+      }
     } catch (err) {
       if (err.status !== 404) {
         console.error('Timeline fetch failed:', err);
@@ -72,8 +80,8 @@ export class Timeline extends Component {
             <g class="timeline-axis-ticks"></g>
             <g class="timeline-pills-mount"></g>
           </svg>
-          <button class="timeline-nav-btn prev" aria-label="Scroll left" hidden>‹</button>
-          <button class="timeline-nav-btn next" aria-label="Scroll right" hidden>›</button>
+          <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
+          <button class="timeline-nav-btn next" aria-label="Scroll right">›</button>
         </div>
         ${mode === 'filter' ? `
           <div class="timeline-filter-controls">
@@ -265,16 +273,17 @@ export class Timeline extends Component {
     if (!track) return;
     const trackWidth = track.clientWidth;
 
+    const usableWidth = trackWidth - 2 * EDGE_PAD;
     const yearSpan = (maxYear - minYear) || 1;
     const extentSpan = (extent.max - extent.min) || 1;
-    const targetZoom = (0.6 * trackWidth) / ((yearSpan / extentSpan) * trackWidth);
-    
+    const targetZoom = (0.6 * extentSpan) / yearSpan;
+
     const midYear = (minYear + maxYear) / 2;
     const progress = (midYear - extent.min) / extentSpan;
-    const targetPanX = (trackWidth / 2) - (progress * trackWidth * targetZoom);
+    const targetPanX = (trackWidth / 2) - EDGE_PAD - (progress * usableWidth * targetZoom);
 
     this.state.zoom = Math.max(1, targetZoom);
-    this.state.panX = Math.min(0, Math.max(trackWidth - (trackWidth * Math.max(1, targetZoom)), targetPanX));
+    this.state.panX = Math.min(0, Math.max(usableWidth * (1 - Math.max(1, targetZoom)), targetPanX));
     this._layout();
 
     this._debounceEmitRange();
@@ -487,11 +496,12 @@ export class Timeline extends Component {
     const newZoom = Math.max(1, zoom * scaleDelta);
     if (newZoom === zoom) return;
 
-    const progressAtAnchor = (anchorX - panX) / (trackWidth * zoom);
-    const newPanX = anchorX - (progressAtAnchor * trackWidth * newZoom);
+    const usableWidth = trackWidth - 2 * EDGE_PAD;
+    const progressAtAnchor = (anchorX - EDGE_PAD - panX) / (usableWidth * zoom);
+    const newPanX = anchorX - EDGE_PAD - (progressAtAnchor * usableWidth * newZoom);
 
     this.state.zoom = newZoom;
-    this.state.panX = Math.min(0, Math.max(trackWidth - (trackWidth * newZoom), newPanX));
+    this.state.panX = Math.min(0, Math.max(usableWidth * (1 - newZoom), newPanX));
     this._layout();
 
     this._gestureController.setZoomed(newZoom > 1);
@@ -504,8 +514,9 @@ export class Timeline extends Component {
     if (!track) return;
     const trackWidth = track.clientWidth;
 
+    const usableWidth = trackWidth - 2 * EDGE_PAD;
     const maxPanX = 0;
-    const minPanX = trackWidth - (trackWidth * zoom);
+    const minPanX = usableWidth * (1 - zoom);
 
     this.state.panX = Math.max(minPanX, Math.min(maxPanX, panX + dx));
     this._layout();
@@ -534,10 +545,11 @@ export class Timeline extends Component {
       }
     }
 
+    const usableWidth = trackWidth - 2 * EDGE_PAD;
     const getX = (year) => {
       if (extent.max === extent.min) return trackWidth / 2;
       const progress = (year - extent.min) / (extent.max - extent.min);
-      return progress * trackWidth * zoom + panX;
+      return EDGE_PAD + progress * usableWidth * zoom + panX;
     };
 
     const { visible, clusters } = this._collide(pills, getX);
@@ -656,8 +668,8 @@ export class Timeline extends Component {
     const minX = getX(extent.min);
     const maxX = getX(extent.max);
 
-    prevBtn.hidden = minX >= -10;
-    nextBtn.hidden = maxX <= trackWidth + 10;
+    prevBtn.classList.toggle('visible', minX < EDGE_PAD - 5);
+    nextBtn.classList.toggle('visible', maxX > trackWidth - EDGE_PAD + 5);
   }
 
   _visibleYearRange() {
@@ -668,8 +680,9 @@ export class Timeline extends Component {
     const trackWidth = track.clientWidth;
     if (trackWidth === 0) return extent;
 
+    const usableWidth = trackWidth - 2 * EDGE_PAD;
     const pxToYear = (px) => {
-      const progress = (px - panX) / (trackWidth * zoom);
+      const progress = (px - EDGE_PAD - panX) / (usableWidth * zoom);
       return extent.min + progress * (extent.max - extent.min);
     };
 

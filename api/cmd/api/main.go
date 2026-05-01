@@ -108,7 +108,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 	// Extra security headers not covered by middleware.Secure
@@ -311,8 +311,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	e.GET("/*", func(c echo.Context) error {
 		if _, err := os.Stat(indexHTML); err == nil {
 			path := c.Request().URL.Path
-			if strings.HasPrefix(path, "/post/") {
-				slug := strings.TrimPrefix(path, "/post/")
+			if slug, ok := strings.CutPrefix(path, "/post/"); ok {
 				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
 				if err == nil && strings.EqualFold(post.Status, "published") {
 					b, err := os.ReadFile(indexHTML)

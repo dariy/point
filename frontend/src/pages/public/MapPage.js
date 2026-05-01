@@ -118,6 +118,13 @@ export default class MapPage extends Component {
 
   afterRender() {
     document.body.classList.remove("immersive-layout", "ui-hidden");
+
+    const yearParam = this.props.params?.year;
+    if (yearParam) {
+      const year = parseInt(yearParam, 10);
+      if (!isNaN(year)) this._currentRange = { from: year, to: year };
+    }
+
     const settings = store.get("settings") || {};
     this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
       settings,
@@ -132,6 +139,7 @@ export default class MapPage extends Component {
     if (canShowTimeline) {
       this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
+        initialYear: yearParam || null,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
       });
     }
@@ -166,10 +174,16 @@ export default class MapPage extends Component {
     return [{ name: 'map', href: '/map' }, { name: label }];
   }
 
-  async _onTimelineRangeChange({ from, to }) {
+  async _onTimelineRangeChange({ from, to, source }) {
     const hasRange = from !== undefined && to !== undefined;
     this._currentRange = hasRange ? { from, to } : null;
     this._headerChild?.setProps({ breadcrumb: this._buildBreadcrumb() });
+
+    if (source === 'pinned' && from === to) {
+      history.replaceState(null, '', `/map/${from}`);
+    } else if (source === 'cleared') {
+      history.replaceState(null, '', '/map');
+    }
     const params = hasRange ? { year_from: from, year_to: to } : {};
     try {
       const { tags } = await getMapPage(params);
