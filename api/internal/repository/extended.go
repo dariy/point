@@ -1857,7 +1857,7 @@ func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error
 		}
 	}
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES (?)`, name)
+		`INSERT INTO migration_history (name, applied_at) VALUES (?, CURRENT_TIMESTAMP)`, name)
 	if err != nil {
 		return fmt.Errorf("failed to record migration %q in history: %w", name, err)
 	}
@@ -1958,7 +1958,7 @@ func (r *Repository) MigrateFlagsToSystemTags(ctx context.Context) error {
 
 	// Record migration.
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('system_tags_phase_a')`,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('system_tags_phase_a', CURRENT_TIMESTAMP)`,
 	); err != nil {
 		return fmt.Errorf("record system_tags_phase_a: %w", err)
 	}
@@ -2029,7 +2029,7 @@ func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
 
 	// Record migration.
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('system_tags_phase_b')`,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('system_tags_phase_b', CURRENT_TIMESTAMP)`,
 	); err != nil {
 		return fmt.Errorf("record system_tags_phase_b: %w", err)
 	}
@@ -2107,7 +2107,7 @@ func (r *Repository) EnsureSystemTags(ctx context.Context) error {
 	}
 
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('ensure_system_tags')`,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('ensure_system_tags', CURRENT_TIMESTAMP)`,
 	); err != nil {
 		return fmt.Errorf("record ensure_system_tags: %w", err)
 	}
@@ -2229,7 +2229,7 @@ func (r *Repository) DropTagNameUnique(ctx context.Context) error {
 	}
 
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('drop_tags_name_unique')`,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('drop_tags_name_unique', CURRENT_TIMESTAMP)`,
 	); err != nil {
 		return fmt.Errorf("record drop_tags_name_unique: %w", err)
 	}
