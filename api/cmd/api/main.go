@@ -46,6 +46,7 @@ type AppServices struct {
 	Cache     *services.CacheService
 	Scheduler *services.SchedulerService
 	Theme     *services.ThemeService
+	Timeline  *services.TimelineService
 }
 
 func initServices(cfg *config.Config, repo *repository.Repository) *AppServices {
@@ -58,6 +59,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
 	themeService := services.NewThemeService(cfg, settingsService)
+	timelineService := services.NewTimelineService(repo)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -69,6 +71,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 		Cache:     cacheService,
 		Scheduler: schedulerService,
 		Theme:     themeService,
+		Timeline:  timelineService,
 	}
 }
 
@@ -89,6 +92,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
+	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 
 	// Global middleware
@@ -258,6 +262,11 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth))
+
+	// ── Timeline Routes ────────────────────────────────────────────────────────
+	timelineGroup := e.Group("/api/timeline")
+	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth))
+	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth))
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
@@ -499,6 +508,22 @@ func main() {
 		{
 			"cleanup_show_map_key",
 			`DELETE FROM blog_settings WHERE key = 'show_map'`,
+		},
+		{
+			"add_in_timeline_system_tag",
+			`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
+			 VALUES ('in_timeline', '_in_timeline', NULL, 0, CURRENT_TIMESTAMP)`,
+		},
+		{
+			"add_in_timeline_to_system",
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT s.id, c.id FROM tags s, tags c
+			 WHERE s.slug = '_system' AND c.slug = '_in_timeline'`,
+		},
+		{
+			"add_timeline_mode_setting",
+			`INSERT OR IGNORE INTO blog_settings (key, value, type)
+			 VALUES ('timeline_mode', 'off', 'string')`,
 		},
 	}
 	for _, m := range migrations {

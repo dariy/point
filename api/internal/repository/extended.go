@@ -669,6 +669,210 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 	return tags, rows.Err()
 }
 
+// MapYearRangeTag pairs a location tag ID with its post count scoped to a year range.
+type MapYearRangeTag struct {
+	TagID     int64 `json:"tag_id"`
+	PostCount int64 `json:"post_count"`
+}
+
+// ListMapTagsForYearRange returns location tags (tags with a row in tag_locations)
+// whose posts intersect with posts tagged by any _in_timeline descendant whose
+// parsed year falls in [fromYear, toYear]. PostCount reflects the scoped count.
+//
+// Year parsing uses CAST(slug AS INTEGER): "2024" → 2024, "2020s" → 2020.
+func (r *Repository) ListMapTagsForYearRange(ctx context.Context, fromYear, toYear int) ([]MapYearRangeTag, error) {
+	const q = `
+WITH RECURSIVE descendants(id, slug) AS (
+    SELECT tr.child_id, c.slug
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug
+    FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id
+    JOIN descendants d ON d.id = tr2.parent_id
+),
+date_tag_ids AS (
+    SELECT DISTINCT id FROM descendants
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+filtered_posts AS (
+    SELECT DISTINCT pt.post_id
+    FROM post_tags pt
+    WHERE pt.tag_id IN (SELECT id FROM date_tag_ids)
+)
+SELECT t.id, COUNT(DISTINCT pt2.post_id) AS scoped_count
+FROM tags t
+JOIN tag_locations tl ON tl.tag_id = t.id
+JOIN post_tags pt2 ON pt2.tag_id = t.id
+WHERE pt2.post_id IN (SELECT post_id FROM filtered_posts)
+GROUP BY t.id
+ORDER BY scoped_count DESC`
+
+	rows, err := r.db.QueryContext(ctx, q, fromYear, toYear)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var results []MapYearRangeTag
+	for rows.Next() {
+		var m MapYearRangeTag
+		if err := rows.Scan(&m.TagID, &m.PostCount); err != nil {
+			return nil, err
+		}
+		results = append(results, m)
+	}
+	return results, rows.Err()
+}
+
+// InTimelineTag is a lightweight descriptor for a tag that is a descendant of _in_timeline.
+type InTimelineTag struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	PostCount int64  `json:"post_count"`
+}
+
+// ListInTimelineDescendants returns all tags whose ancestor chain includes _in_timeline,
+// excluding _in_timeline itself and other system tags, ordered by slug ascending.
+func (r *Repository) ListInTimelineDescendants(ctx context.Context) ([]InTimelineTag, error) {
+	const q = `
+WITH RECURSIVE descendants(id) AS (
+    SELECT tr.child_id
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id
+    FROM tag_relationships tr2
+    JOIN descendants d ON d.id = tr2.parent_id
+)
+SELECT DISTINCT t.id, t.name, t.slug, t.post_count
+FROM tags t
+JOIN descendants d ON d.id = t.id
+WHERE t.slug NOT LIKE '\_%%' ESCAPE '\'
+ORDER BY t.slug ASC`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var tags []InTimelineTag
+	for rows.Next() {
+		var t InTimelineTag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.PostCount); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+// ListInTimelineDescendantsForTag is like ListInTimelineDescendants but restricts
+// results to tags that co-occur with contextTagSlug on at least one shared post.
+func (r *Repository) ListInTimelineDescendantsForTag(ctx context.Context, contextTagSlug string) ([]InTimelineTag, error) {
+	const q = `
+WITH RECURSIVE descendants(id) AS (
+    SELECT tr.child_id
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id
+    FROM tag_relationships tr2
+    JOIN descendants d ON d.id = tr2.parent_id
+)
+SELECT DISTINCT t.id, t.name, t.slug, t.post_count
+FROM tags t
+JOIN descendants d ON d.id = t.id
+WHERE t.slug NOT LIKE '\_%%' ESCAPE '\'
+AND t.id IN (
+    SELECT pt.tag_id FROM post_tags pt
+    WHERE pt.post_id IN (
+        SELECT pt2.post_id FROM post_tags pt2
+        JOIN tags ct ON ct.id = pt2.tag_id
+        WHERE ct.slug = ?
+    )
+)
+ORDER BY t.slug ASC`
+
+	rows, err := r.db.QueryContext(ctx, q, contextTagSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var tags []InTimelineTag
+	for rows.Next() {
+		var t InTimelineTag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.PostCount); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+// LocationTagCoOccurrence is a location tag paired with its co-occurrence count
+// for a specific date tag query.
+type LocationTagCoOccurrence struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	PostCount int    `json:"post_count"`
+}
+
+// GetLocationTagsCoOccurringWith returns location tags (tags with a row in tag_locations)
+// that share at least one post with dateTagSlug. If contextTagSlug is non-empty, only
+// posts also tagged with contextTagSlug are considered. Results are ordered by
+// co-occurrence count desc and capped at limit.
+func (r *Repository) GetLocationTagsCoOccurringWith(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]LocationTagCoOccurrence, error) {
+	contextJoin := ""
+	args := []interface{}{dateTagSlug}
+	if contextTagSlug != "" {
+		contextJoin = `
+		AND pt.post_id IN (
+			SELECT pt_ctx.post_id FROM post_tags pt_ctx
+			JOIN tags t_ctx ON t_ctx.id = pt_ctx.tag_id
+			WHERE t_ctx.slug = ?
+		)`
+		args = append(args, contextTagSlug)
+	}
+	args = append(args, limit)
+
+	q := fmt.Sprintf(`
+SELECT t.id, t.name, t.slug, COUNT(*) AS co_count
+FROM tags t
+JOIN tag_locations tl ON tl.tag_id = t.id
+JOIN post_tags pt ON pt.tag_id = t.id
+WHERE pt.post_id IN (
+    SELECT pt2.post_id FROM post_tags pt2
+    JOIN tags dt ON dt.id = pt2.tag_id
+    WHERE dt.slug = ?
+)%s
+GROUP BY t.id
+ORDER BY co_count DESC
+LIMIT ?`, contextJoin)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var results []LocationTagCoOccurrence
+	for rows.Next() {
+		var lc LocationTagCoOccurrence
+		if err := rows.Scan(&lc.ID, &lc.Name, &lc.Slug, &lc.PostCount); err != nil {
+			return nil, err
+		}
+		results = append(results, lc)
+	}
+	return results, rows.Err()
+}
+
 // TagRelationship represents a parent-child tag relationship pair.
 type TagRelationship struct {
 	ParentID int64 `json:"parent_id"`
@@ -1874,6 +2078,7 @@ func (r *Repository) EnsureSystemTags(ctx context.Context) error {
 		"_pending",
 		"_page",
 		"_no_ancestors",
+		"_in_timeline",
 	}
 
 	for _, st := range systemTags {

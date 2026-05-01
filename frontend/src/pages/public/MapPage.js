@@ -11,6 +11,7 @@
 import { Component } from '../../components/Component.js';
 import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
+import { Timeline } from '../../components/public/Timeline.js';
 import { getMapPage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { router } from '../../router.js';
@@ -70,6 +71,9 @@ export default class MapPage extends Component {
     this._map = null;
     this._tileLayer = null;
     this._themeListener = null;
+    this._markerLayer = null;
+    this._allTagsCount = 0;
+    this._currentRange = null;
   }
 
   render() {
@@ -98,58 +102,69 @@ export default class MapPage extends Component {
     }
 
     return `
-      <div class="site-wrapper site-wrapper--map">
+      <div class="site-wrapper map-page">
         <div id="header-mount"></div>
-        <main class="site-main site-main--map">
-          <div id="leaflet-map" class="map-container" aria-label="Tag locations map"></div>
+        <div id="timeline-mount"></div>
+        <main class="site-main">
+          <div class="map-title-bar">
+            <h1>Discovery Map</h1>
+            <div id="map-stats" class="map-stats"></div>
+          </div>
+          <div id="leaflet-map" class="map-canvas"></div>
         </main>
         <div id="footer-mount"></div>
       </div>`;
   }
 
   afterRender() {
+    document.body.classList.remove('immersive-layout', 'ui-hidden');
     const settings = store.get('settings') || {};
-    const navTags  = store.get('navTags') || [];
-    this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '/map' });
+    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '/map' });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
-    if (!this.state.loading && !this.state.error) {
+    const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    if (canShowTimeline) {
+      this.mountChild(Timeline, '#timeline-mount', {
+        mode: 'filter',
+        onRangeChange: (range) => this._onTimelineRangeChange(range)
+      });
+    }
+
+    if (this.state.loading) {
+      this._loadData();
+    } else {
       this._initMap();
     }
   }
 
-  beforeUnmount() {
-    if (this._map) {
-      this._map.remove();
-      this._map = null;
-    }
-    if (this._themeListener) {
-      document.removeEventListener('themechange', this._themeListener);
-      this._themeListener = null;
-    }
-  }
-
-  mount() {
-    super.mount();
-    this._load();
-  }
-
-  async _load() {
-    const settings = store.get('settings') || {};
-    const user = store.get('user');
-    const visibility = settings.map_mode || 'off';
-
-    if (visibility === 'off' || (visibility === 'hidden' && !user)) {
-      router.notFound();
-      return;
-    }
+  async _loadData() {
     try {
-      const data = await getMapPage();
-      document.title = 'Map';
-      this.setState({ loading: false, tags: data.tags || [], error: null });
+      const { tags } = await getMapPage();
+      this._allTagsCount = tags.length;
+      this.setState({ loading: false, tags });
     } catch (err) {
       this.setState({ loading: false, tags: [], error: err.message || 'Failed to load map data.' });
     }
+  }
+
+  async _onTimelineRangeChange({ from, to, source }) {
+    this._currentRange = { from, to };
+    try {
+      const { tags } = await getMapPage({ year_from: from, year_to: to });
+      this.state.tags = tags;
+      this._redrawMarkers();
+      this._updateStats();
+    } catch (err) {
+      console.error('Failed to filter map:', err);
+    }
+  }
+
+  _updateStats() {
+    const statsEl = this.$('#map-stats');
+    if (!statsEl) return;
+    const count = this.state.tags.length;
+    const total = this._allTagsCount || count;
+    statsEl.textContent = `Showing ${count} of ${total} locations`;
   }
 
   async _initMap() {
@@ -181,6 +196,8 @@ export default class MapPage extends Component {
       bounds: [[-90, -180], [90, 180]]
     }).addTo(this._map);
 
+    this._markerLayer = L.layerGroup().addTo(this._map);
+
     // Listen for theme toggle and swap tile layer
     this._themeListener = () => {
       const dark = document.documentElement.dataset.theme === 'dark' ||
@@ -190,6 +207,15 @@ export default class MapPage extends Component {
       }
     };
     document.addEventListener('themechange', this._themeListener);
+
+    this._redrawMarkers();
+    this._updateStats();
+  }
+
+  async _redrawMarkers() {
+    if (!this._map || !this._markerLayer) return;
+    const L = window.L;
+    this._markerLayer.clearLayers();
 
     const { tags } = this.state;
 
@@ -201,12 +227,18 @@ export default class MapPage extends Component {
       }
     });
 
-    // Load and render country polygons
-    try {
-      const resp = await fetch(COUNTRIES_GEOJSON);
-      const geojson = await resp.json();
+    // Load GeoJSON if not cached
+    if (!this._geojson) {
+      try {
+        const resp = await fetch(COUNTRIES_GEOJSON);
+        this._geojson = await resp.json();
+      } catch {
+        // GeoJSON load failure is non-fatal
+      }
+    }
 
-      L.geoJSON(geojson, {
+    if (this._geojson) {
+      L.geoJSON(this._geojson, {
         style: (feature) => {
           const rawName = feature.properties?.name || '';
           const name = rawName.toLowerCase();
@@ -240,15 +272,13 @@ export default class MapPage extends Component {
           );
           layer.on('click', (e) => layer.openPopup(e.latlng));
         },
-      }).addTo(this._map);
-    } catch {
-      // GeoJSON load failure is non-fatal; fall back to markers only
+      }).addTo(this._markerLayer);
     }
 
-    // Render circle markers for city / other tags (not countries — those are shown as polygons)
+    // Render circle markers for city / other tags (not countries)
     const bounds = [];
     tags.forEach((tag) => {
-      if (tag.type === 'country') return; // polygon already shown
+      if (tag.type === 'country') return;
       const r   = markerRadius(tag.post_count);
       const markerHtml = `<span style="
             display:block;
@@ -265,7 +295,7 @@ export default class MapPage extends Component {
         iconAnchor: [r / 2, r / 2],
       });
 
-      const marker = L.marker([tag.lat, tag.lng], { icon }).addTo(this._map);
+      const marker = L.marker([tag.lat, tag.lng], { icon }).addTo(this._markerLayer);
       
       const yearsHtml = tag.years && tag.years.length > 0
         ? `<div class="map-popup-years">` +
@@ -282,8 +312,15 @@ export default class MapPage extends Component {
       bounds.push([tag.lat, tag.lng]);
     });
 
-    if (bounds.length) {
+    if (bounds.length && !this._currentRange) {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
     }
+  }
+
+  beforeUnmount() {
+    if (this._themeListener) {
+      document.removeEventListener('themechange', this._themeListener);
+    }
+    this._map?.remove();
   }
 }
