@@ -82,6 +82,7 @@ export default class MapPage extends Component {
       return `
         <div class="site-wrapper">
           <div id="header-mount"></div>
+          <div id="timeline-mount"></div>
           <main class="site-main" aria-busy="true">
             <div class="loading-spinner" aria-label="Loading map…"></div>
           </main>
@@ -93,6 +94,7 @@ export default class MapPage extends Component {
       return `
         <div class="site-wrapper">
           <div id="header-mount"></div>
+          <div id="timeline-mount"></div>
           <main class="site-main">
             <p class="error-message" role="alert">${escapeHtml(error)}</p>
           </main>
