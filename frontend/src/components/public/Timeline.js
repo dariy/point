@@ -150,7 +150,7 @@ export class Timeline extends Component {
 
     trackWrapper.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? 1 / 1.1 : 1.1;
+      const delta = e.deltaY > 0 ? 1.1 : 1 / 1.1;
       this._onZoom(delta, e.offsetX);
     }, { passive: false });
 
@@ -511,10 +511,31 @@ export class Timeline extends Component {
 
   _applyVerticalZoom(dy) {
     if (Math.abs(dy) < 0.5) return;
-    const scaleDelta = Math.exp(-dy * 0.015);
+    // down (dy > 0) = zoom in, up (dy < 0) = zoom out
+    const scaleDelta = Math.exp(dy * 0.015);
     const track = this.$('.timeline-track');
     const cx = track ? track.clientWidth / 2 : 0;
     this._onZoom(scaleDelta, cx);
+  }
+
+  _computeMaxZoom() {
+    const { pills, extent } = this.state;
+    const track = this.$('.timeline-track');
+    if (!track || pills.length < 2) return 20;
+
+    const usableWidth = track.clientWidth - 2 * EDGE_PAD;
+    const yearSpan = extent.max - extent.min;
+    if (yearSpan === 0 || usableWidth === 0) return 1;
+
+    const sorted = pills.map((p) => p.year).sort((a, b) => a - b);
+    let minYearGap = Infinity;
+    for (let i = 1; i < sorted.length; i++) {
+      minYearGap = Math.min(minYearGap, sorted[i] - sorted[i - 1]);
+    }
+    if (!isFinite(minYearGap) || minYearGap === 0) return 20;
+
+    const pillWidth = this._measurePillWidth('2024');
+    return (pillWidth + 8) * yearSpan / (usableWidth * minYearGap);
   }
 
   _updateFilterBar() {
@@ -547,7 +568,8 @@ export class Timeline extends Component {
     if (!track) return;
     const trackWidth = track.clientWidth;
 
-    const newZoom = Math.max(1, zoom * scaleDelta);
+    const maxZoom = this._computeMaxZoom();
+    const newZoom = Math.max(1, Math.min(maxZoom, zoom * scaleDelta));
     if (newZoom === zoom) return;
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
@@ -607,7 +629,6 @@ export class Timeline extends Component {
       const x = getX(midYear);
       html += `
         <g class="timeline-cluster" transform="translate(${x}, 0)" data-min="${c.minYear}" data-max="${c.maxYear}">
-          <circle class="timeline-axis-dot cluster" cx="0" cy="40" r="4"></circle>
           <foreignObject x="-20" y="4" width="40" height="32">
             <div class="timeline-cluster-wrapper" xmlns="http://www.w3.org/1999/xhtml">
               <button class="timeline-cluster-btn" aria-label="${c.pills.length} dates cluster. Click to expand.">
@@ -624,7 +645,6 @@ export class Timeline extends Component {
       const activeClass = pinnedRange && pinnedRange.slug === p.slug ? ' active' : '';
       html += `
         <g class="timeline-pill-group${activeClass}" transform="translate(${x}, 0)" data-slug="${p.slug}">
-          <circle class="timeline-axis-dot" cx="0" cy="40" r="3"></circle>
           <foreignObject x="-40" y="0" width="80" height="36">
             <div class="timeline-pill-wrapper" xmlns="http://www.w3.org/1999/xhtml">
               <button class="timeline-pill-btn" aria-label="${p.name}, ${p.post_count} posts.">
