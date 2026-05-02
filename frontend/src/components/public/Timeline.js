@@ -70,8 +70,6 @@ export class Timeline extends Component {
       return '';
     }
 
-    const { mode = 'popover' } = this.props;
-
     return `
       <div class="timeline-container" role="region" aria-label="Date timeline">
         <div class="timeline-track-wrapper">
@@ -83,13 +81,6 @@ export class Timeline extends Component {
           <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
           <button class="timeline-nav-btn next" aria-label="Scroll right">›</button>
         </div>
-        ${mode === 'filter' ? `
-          <div class="timeline-filter-controls">
-            <button class="timeline-clear-btn hidden" aria-label="Clear filter">
-              <span class="icon">×</span> Clear
-            </button>
-          </div>
-        ` : ''}
       </div>
     `;
   }
@@ -104,6 +95,12 @@ export class Timeline extends Component {
 
     this._wireGestures();
 
+    if (this.props.mode === 'filter' && !this._filterBar) {
+      this._filterBar = document.createElement('div');
+      this._filterBar.className = 'timeline-filter-bar';
+      this.container.parentNode.insertBefore(this._filterBar, this.container.nextSibling);
+    }
+
     // Initial layout
     this._layout();
   }
@@ -116,6 +113,8 @@ export class Timeline extends Component {
     clearTimeout(this._emitTimer);
     if (this._onMouseMove) window.removeEventListener('mousemove', this._onMouseMove);
     if (this._onMouseUp) window.removeEventListener('mouseup', this._onMouseUp);
+    this._filterBar?.remove();
+    this._filterBar = null;
   }
 
   // ── Internal Helpers ──────────────────────────────────────────────────────
@@ -129,9 +128,24 @@ export class Timeline extends Component {
     trackWrapper.addEventListener('touchmove',  (e) => e.stopPropagation(), { passive: true });
 
     this._gestureController = new GestureController(trackWrapper, {
-      onPanMove: (dx) => this._onPan(dx),
+      onPanMove: (dx, dy) => {
+        if (Math.abs(dy) > Math.abs(dx)) {
+          this._applyVerticalZoom(dy);
+        } else {
+          this._onPan(dx);
+        }
+      },
       onPinchMove: (scale, cx) => this._onZoom(scale, cx),
       onTap: (x, y) => this._onTap(x, y),
+      onSwipeMove: (dx, dy) => {
+        const dyDelta = dy - (this._swipeDyBase || 0);
+        this._swipeDyBase = dy;
+        if (Math.abs(dy) > Math.abs(dx)) {
+          this._applyVerticalZoom(dyDelta);
+        }
+      },
+      onSwipeCancel: () => { this._swipeDyBase = 0; },
+      onSwipeCommit: () => { this._swipeDyBase = 0; },
     });
 
     trackWrapper.addEventListener('wheel', (e) => {
@@ -144,25 +158,35 @@ export class Timeline extends Component {
     let isDragging = false;
     let hasDragged = false;
     let dragStartX = 0;
+    let dragStartY = 0;
     let lastX = 0;
+    let lastY = 0;
 
     trackWrapper.addEventListener('mousedown', (e) => {
       if (e.target.closest('.timeline-nav-btn')) return;
       isDragging = true;
       hasDragged = false;
       dragStartX = e.clientX;
+      dragStartY = e.clientY;
       lastX = e.clientX;
+      lastY = e.clientY;
       trackWrapper.classList.add('grabbing');
     });
 
     this._onMouseMove = (e) => {
       if (!isDragging) return;
       const dx = e.clientX - lastX;
-      if (Math.abs(e.clientX - dragStartX) > 4) {
+      const dy = e.clientY - lastY;
+      if (Math.abs(e.clientX - dragStartX) > 4 || Math.abs(e.clientY - dragStartY) > 4) {
         hasDragged = true;
       }
       lastX = e.clientX;
-      this._onPan(dx);
+      lastY = e.clientY;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        this._applyVerticalZoom(dy);
+      } else {
+        this._onPan(dx);
+      }
     };
 
     this._onMouseUp = () => {
@@ -204,8 +228,6 @@ export class Timeline extends Component {
       const track = this.$('.timeline-track');
       this._onPan(-track.clientWidth * 0.5);
     });
-
-    this.$('.timeline-clear-btn')?.addEventListener('click', () => this._clearPin());
 
     trackWrapper.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -487,6 +509,38 @@ export class Timeline extends Component {
     }
   }
 
+  _applyVerticalZoom(dy) {
+    if (Math.abs(dy) < 0.5) return;
+    const scaleDelta = Math.exp(-dy * 0.015);
+    const track = this.$('.timeline-track');
+    const cx = track ? track.clientWidth / 2 : 0;
+    this._onZoom(scaleDelta, cx);
+  }
+
+  _updateFilterBar() {
+    if (!this._filterBar) return;
+    const { pinnedRange } = this.state;
+    this._filterBar.replaceChildren();
+    if (!pinnedRange) return;
+
+    const text = pinnedRange.from === pinnedRange.to
+      ? String(pinnedRange.from)
+      : `${pinnedRange.from}–${pinnedRange.to}`;
+
+    const chip = document.createElement('button');
+    chip.className = 'timeline-filter-chip';
+    chip.setAttribute('aria-label', `Clear filter: ${text}`);
+    chip.textContent = text;
+
+    const close = document.createElement('span');
+    close.className = 'timeline-filter-chip-close';
+    close.textContent = '×';
+    chip.appendChild(close);
+
+    chip.addEventListener('click', () => this._clearPin());
+    this._filterBar.appendChild(chip);
+  }
+
   _onZoom(scaleDelta, anchorX) {
     const { zoom, panX } = this.state;
     const track = this.$('.timeline-track');
@@ -535,15 +589,7 @@ export class Timeline extends Component {
     const mount = this.$('.timeline-pills-mount');
     if (!mount) return;
 
-    // Update clear button visibility and filter indication text
-    const clearBtn = this.$('.timeline-clear-btn');
-    if (clearBtn) {
-      clearBtn.classList.toggle('hidden', !pinnedRange);
-      if (pinnedRange) {
-        const text = pinnedRange.from === pinnedRange.to ? pinnedRange.from : `${pinnedRange.from}-${pinnedRange.to}`;
-        clearBtn.innerHTML = `<span class="icon">×</span> ${text}`;
-      }
-    }
+    this._updateFilterBar();
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
     const getX = (year) => {
