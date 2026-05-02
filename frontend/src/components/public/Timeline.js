@@ -87,12 +87,13 @@ export class Timeline extends Component {
     return `
       <div class="timeline-container" role="region" aria-label="Date timeline">
         <div class="timeline-track-wrapper">
-          <svg class="timeline-track" width="100%" height="56">
-            <line class="timeline-axis-line" x1="0" y1="40" x2="100%" y2="40"></line>
-            <line class="timeline-center-indicator" x1="50%" y1="26" x2="50%" y2="52"></line>
-            <g class="timeline-axis-ticks"></g>
-            <g class="timeline-pills-mount"></g>
-          </svg>
+          <div class="timeline-track">
+            <div class="timeline-axis">
+              <div class="timeline-axis-ticks"></div>
+            </div>
+            <div class="timeline-center-indicator"></div>
+            <div class="timeline-pills-mount"></div>
+          </div>
           <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
           <button class="timeline-nav-btn next" aria-label="Scroll right">›</button>
         </div>
@@ -134,8 +135,11 @@ export class Timeline extends Component {
     trackWrapper.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     trackWrapper.addEventListener('touchmove',  (e) => e.stopPropagation(), { passive: true });
 
+    let touchDragged = false;
+
     this._gestureController = new GestureController(trackWrapper, {
       onPanMove: (dx, dy) => {
+        touchDragged = true;
         if (Math.abs(dy) > Math.abs(dx)) {
           this._applyVerticalZoom(dy);
         } else {
@@ -145,6 +149,7 @@ export class Timeline extends Component {
       onPinchMove: (scale, cx) => this._onZoom(scale, cx),
       onTap: (x, y) => this._onTap(x, y),
       onSwipeMove: (dx, dy) => {
+        touchDragged = true;
         const dxDelta = dx - (this._swipeDxBase || 0);
         this._swipeDxBase = dx;
         const dyDelta = dy - (this._swipeDyBase || 0);
@@ -155,14 +160,29 @@ export class Timeline extends Component {
           this._onPan(dxDelta);
         }
       },
-      onSwipeCancel: () => { this._swipeDxBase = 0; this._swipeDyBase = 0; },
-      onSwipeCommit: () => { this._swipeDxBase = 0; this._swipeDyBase = 0; },
+      onSwipeCancel: () => {
+        this._swipeDxBase = 0;
+        this._swipeDyBase = 0;
+        if (touchDragged) {
+          this._ignoreNextClick = true;
+          setTimeout(() => { this._ignoreNextClick = false; }, 500);
+        }
+        touchDragged = false;
+      },
+      onSwipeCommit: () => {
+        this._swipeDxBase = 0;
+        this._swipeDyBase = 0;
+        this._ignoreNextClick = true;
+        setTimeout(() => { this._ignoreNextClick = false; }, 500);
+        touchDragged = false;
+      },
     });
 
     trackWrapper.addEventListener('wheel', (e) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 1.1 : 1 / 1.1;
-      this._onZoom(delta, e.offsetX);
+      const rect = trackWrapper.getBoundingClientRect();
+      this._onZoom(delta, e.clientX - rect.left);
     }, { passive: false });
 
     // Mouse drag support
@@ -677,25 +697,21 @@ export class Timeline extends Component {
       const clusterKey = `cluster-${c.minYear}-${c.maxYear}`;
       const activeClass = centeredKey === clusterKey ? ' active' : '';
       const label = c.minYear === c.maxYear ? String(c.minYear) : `${c.minYear}–${c.maxYear}`;
-      html += [
-        `<g class="timeline-cluster${activeClass}" transform="translate(${x}, 0)" data-min="${c.minYear}" data-max="${c.maxYear}">`,
-        `<foreignObject x="-40" y="10" width="80" height="36">`,
-        `<div class="timeline-cluster-wrapper" xmlns="http://www.w3.org/1999/xhtml">`,
-        `<button class="timeline-cluster-btn" aria-label="${c.minYear} to ${c.maxYear}, ${c.pills.length} dates.">${label}</button>`,
-        `</div></foreignObject></g>`,
-      ].join('');
+      html += `
+        <div class="timeline-cluster${activeClass}" style="left: ${x}px" data-min="${c.minYear}" data-max="${c.maxYear}">
+          <button class="timeline-cluster-btn" aria-label="${c.minYear} to ${c.maxYear}, ${c.pills.length} dates.">${label}</button>
+        </div>
+      `;
     });
 
     visible.forEach((p) => {
       const x = getX(p.year);
       const activeClass = centeredKey === p.slug ? ' active' : '';
-      html += [
-        `<g class="timeline-pill-group${activeClass}" transform="translate(${x}, 0)" data-slug="${p.slug}">`,
-        `<foreignObject x="-40" y="10" width="80" height="36">`,
-        `<div class="timeline-pill-wrapper" xmlns="http://www.w3.org/1999/xhtml">`,
-        `<button class="timeline-pill-btn" aria-label="${p.name}, ${p.post_count} posts.">${p.name}</button>`,
-        `</div></foreignObject></g>`,
-      ].join('');
+      html += `
+        <div class="timeline-pill-group${activeClass}" style="left: ${x}px" data-slug="${p.slug}">
+          <button class="timeline-pill-btn" aria-label="${p.name}, ${p.post_count} posts.">${p.name}</button>
+        </div>
+      `;
     });
 
     mount.innerHTML = html;
@@ -763,8 +779,8 @@ export class Timeline extends Component {
 
     for (let y = startDecade; y <= endDecade; y += 10) {
       const x = getX(y);
-      if (x >= 0 && x <= trackWidth) {
-        ticksHtml += `<line class="timeline-tick" x1="${x}" y1="38" x2="${x}" y2="42"></line>`;
+      if (x >= -50 && x <= trackWidth + 50) {
+        ticksHtml += `<div class="timeline-tick" style="left: ${x}px"></div>`;
       }
     }
     ticksMount.innerHTML = ticksHtml;
