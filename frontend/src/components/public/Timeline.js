@@ -535,7 +535,7 @@ export class Timeline extends Component {
     if (!isFinite(minYearGap) || minYearGap === 0) return 20;
 
     const pillWidth = this._measurePillWidth('2024');
-    return (pillWidth + 8) * yearSpan / (usableWidth * minYearGap);
+    return (pillWidth * 4 / 3) * yearSpan / (usableWidth * minYearGap);
   }
 
   _updateFilterBar() {
@@ -629,7 +629,7 @@ export class Timeline extends Component {
       const x = getX(midYear);
       html += `
         <g class="timeline-cluster" transform="translate(${x}, 0)" data-min="${c.minYear}" data-max="${c.maxYear}">
-          <foreignObject x="-20" y="4" width="40" height="32">
+          <foreignObject x="-20" y="12" width="40" height="32">
             <div class="timeline-cluster-wrapper" xmlns="http://www.w3.org/1999/xhtml">
               <button class="timeline-cluster-btn" aria-label="${c.pills.length} dates cluster. Click to expand.">
                 ${c.pills.length}
@@ -645,7 +645,7 @@ export class Timeline extends Component {
       const activeClass = pinnedRange && pinnedRange.slug === p.slug ? ' active' : '';
       html += `
         <g class="timeline-pill-group${activeClass}" transform="translate(${x}, 0)" data-slug="${p.slug}">
-          <foreignObject x="-40" y="0" width="80" height="36">
+          <foreignObject x="-40" y="10" width="80" height="36">
             <div class="timeline-pill-wrapper" xmlns="http://www.w3.org/1999/xhtml">
               <button class="timeline-pill-btn" aria-label="${p.name}, ${p.post_count} posts.">
                 ${p.name}
