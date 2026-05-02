@@ -182,7 +182,7 @@ export class Timeline extends Component {
       lastX = e.clientX;
       lastY = e.clientY;
       trackWrapper.classList.add('grabbing');
-    });
+    }, true);
 
     this._onMouseMove = (e) => {
       if (!isDragging) return;
