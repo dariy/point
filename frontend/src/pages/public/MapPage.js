@@ -120,9 +120,23 @@ export default class MapPage extends Component {
     document.body.classList.remove("immersive-layout", "ui-hidden");
 
     const yearParam = this.props.params?.year;
+    let initialRange = null;
     if (yearParam) {
-      const year = parseInt(yearParam, 10);
-      if (!isNaN(year)) this._currentRange = { from: year, to: year };
+      const parts = yearParam.split('-');
+      if (parts.length === 2) {
+        const from = parseInt(parts[0], 10);
+        const to = parseInt(parts[1], 10);
+        if (!isNaN(from) && !isNaN(to)) {
+          initialRange = { from, to };
+          this._currentRange = { from, to };
+        }
+      } else {
+        const year = parseInt(yearParam, 10);
+        if (!isNaN(year)) {
+          initialRange = { from: year, to: year };
+          this._currentRange = { from: year, to: year };
+        }
+      }
     }
 
     const settings = store.get("settings") || {};
@@ -139,7 +153,7 @@ export default class MapPage extends Component {
     if (canShowTimeline) {
       this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
-        initialYear: yearParam || null,
+        initialRange,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
       });
     }
@@ -174,15 +188,14 @@ export default class MapPage extends Component {
     return [{ name: 'map', href: '/map' }, { name: label }];
   }
 
-  async _onTimelineRangeChange({ from, to, source }) {
+  async _onTimelineRangeChange({ from, to }) {
     const hasRange = from !== undefined && to !== undefined;
     this._currentRange = hasRange ? { from, to } : null;
     this._headerChild?.setProps({ breadcrumb: this._buildBreadcrumb() });
 
-    if (source === 'pinned' && from === to) {
-      history.replaceState(null, '', `/map/${from}`);
-    } else if (source === 'cleared') {
-      history.replaceState(null, '', '/map');
+    if (hasRange) {
+      const rangeStr = from === to ? String(from) : `${from}-${to}`;
+      history.replaceState(null, '', `/map/${rangeStr}`);
     }
     const params = hasRange ? { year_from: from, year_to: to } : {};
     try {

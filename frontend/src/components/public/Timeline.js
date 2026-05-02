@@ -49,13 +49,25 @@ export class Timeline extends Component {
         isLoading: false
       });
 
-      if (this.props.initialYear && !this._unmounted) {
-        const year = parseInt(this.props.initialYear, 10);
+      if (this._unmounted) return;
+      const { initialRange, initialYear } = this.props;
+      if (initialRange) {
+        const { from, to } = initialRange;
+        if (from === payload.extent.min && to === payload.extent.max) {
+          this._initCollapsed();
+        } else {
+          this._centerOnYear((from + to) / 2);
+          if (this.props.mode === 'filter') this._emitRange();
+        }
+      } else if (initialYear) {
+        const year = parseInt(initialYear, 10);
         const pill = payload.pills.find((p) => p.year === year);
         if (pill) {
           this._centerOnYear(pill.year);
           if (this.props.mode === 'filter') this._emitRange();
         }
+      } else {
+        this._initCollapsed();
       }
     } catch (err) {
       if (err.status !== 404) {
@@ -309,7 +321,7 @@ export class Timeline extends Component {
     const progress = (midYear - extent.min) / extentSpan;
     const targetPanX = (trackWidth / 2) - EDGE_PAD - (progress * usableWidth * targetZoom);
 
-    const clampedZoom = Math.max(1, targetZoom);
+    const clampedZoom = Math.max(0.001, targetZoom);
     const maxPanX = trackWidth / 2 - EDGE_PAD;
     const minPanX = maxPanX - usableWidth * clampedZoom;
     this.state.zoom = clampedZoom;
@@ -474,6 +486,16 @@ export class Timeline extends Component {
     popoverEl.style.left = `${Math.max(8, Math.min(window.innerWidth - popoverRect.width - 8, left))}px`;
   }
 
+  _initCollapsed() {
+    const track = this.$('.timeline-track');
+    if (!track) return;
+    // Zoom so close to 0 that all pills map to the same X and collapse into one cluster.
+    this.state.zoom = 0.0001;
+    this.state.panX = track.clientWidth / 2 - EDGE_PAD;
+    this._layout();
+    if (this.props.mode === 'filter') this._emitRange();
+  }
+
   _centerOnYear(year) {
     const track = this.$('.timeline-track');
     if (!track) return;
@@ -580,7 +602,7 @@ export class Timeline extends Component {
     const trackWidth = track.clientWidth;
 
     const maxZoom = this._computeMaxZoom();
-    const newZoom = Math.max(1, Math.min(maxZoom, zoom * scaleDelta));
+    const newZoom = Math.max(0.001, Math.min(maxZoom, zoom * scaleDelta));
     if (newZoom === zoom) return;
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
