@@ -55,6 +55,13 @@
   stroke-width: 1;
 }
 
+.timeline-center-indicator {
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .timeline-tick {
   stroke: var(--border-subtle);
   stroke-width: 1;
@@ -116,38 +123,41 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 32px;
+  height: 36px;
+  touch-action: none;
 }
 
 .timeline-cluster-btn {
   appearance: none;
-  background: var(--text-muted);
-  border: none;
-  border-radius: 50%;
-  color: var(--surface-card);
-  font-size: 12px;
-  font-weight: 700;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: var(--shadow-sm);
-  transition: scale var(--transition-fast), background var(--transition-fast);
+  background: var(--surface-card);
+  border: var(--border-width) dashed var(--border-primary);
+  border-radius: var(--tag-link-border-radius-alt1);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  height: var(--tag-link-height);
+  padding: 0 var(--spacing-md);
+  white-space: nowrap;
+  touch-action: none;
+  transition: scale var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   cursor: pointer;
 }
 
 .timeline-cluster-btn:hover {
-  scale: 1.1;
-  background: var(--text-primary);
+  border-color: var(--color-primary);
+  border-style: solid;
+  color: var(--color-primary);
 }
 
 .timeline-cluster-btn:active {
   scale: 0.96;
 }
 
-.timeline-axis-dot.cluster {
-  fill: var(--text-muted);
+.timeline-cluster.active .timeline-cluster-btn {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  border-style: solid;
+  color: #fff;
 }
 
 /* ── Navigation & Controls ────────────────────────────────────────────────── */
