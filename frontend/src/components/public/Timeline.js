@@ -95,12 +95,6 @@ export class Timeline extends Component {
 
     this._wireGestures();
 
-    if (this.props.mode === 'filter' && !this._filterBar) {
-      this._filterBar = document.createElement('div');
-      this._filterBar.className = 'timeline-filter-bar';
-      this.container.parentNode.insertBefore(this._filterBar, this.container.nextSibling);
-    }
-
     // Initial layout
     this._layout();
   }
@@ -113,8 +107,6 @@ export class Timeline extends Component {
     clearTimeout(this._emitTimer);
     if (this._onMouseMove) window.removeEventListener('mousemove', this._onMouseMove);
     if (this._onMouseUp) window.removeEventListener('mouseup', this._onMouseUp);
-    this._filterBar?.remove();
-    this._filterBar = null;
   }
 
   // ── Internal Helpers ──────────────────────────────────────────────────────
@@ -138,14 +130,18 @@ export class Timeline extends Component {
       onPinchMove: (scale, cx) => this._onZoom(scale, cx),
       onTap: (x, y) => this._onTap(x, y),
       onSwipeMove: (dx, dy) => {
+        const dxDelta = dx - (this._swipeDxBase || 0);
+        this._swipeDxBase = dx;
         const dyDelta = dy - (this._swipeDyBase || 0);
         this._swipeDyBase = dy;
         if (Math.abs(dy) > Math.abs(dx)) {
           this._applyVerticalZoom(dyDelta);
+        } else {
+          this._onPan(dxDelta);
         }
       },
-      onSwipeCancel: () => { this._swipeDyBase = 0; },
-      onSwipeCommit: () => { this._swipeDyBase = 0; },
+      onSwipeCancel: () => { this._swipeDxBase = 0; this._swipeDyBase = 0; },
+      onSwipeCommit: () => { this._swipeDxBase = 0; this._swipeDyBase = 0; },
     });
 
     trackWrapper.addEventListener('wheel', (e) => {
@@ -538,30 +534,6 @@ export class Timeline extends Component {
     return (pillWidth * 4 / 3) * yearSpan / (usableWidth * minYearGap);
   }
 
-  _updateFilterBar() {
-    if (!this._filterBar) return;
-    const { pinnedRange } = this.state;
-    this._filterBar.replaceChildren();
-    if (!pinnedRange) return;
-
-    const text = pinnedRange.from === pinnedRange.to
-      ? String(pinnedRange.from)
-      : `${pinnedRange.from}–${pinnedRange.to}`;
-
-    const chip = document.createElement('button');
-    chip.className = 'timeline-filter-chip';
-    chip.setAttribute('aria-label', `Clear filter: ${text}`);
-    chip.textContent = text;
-
-    const close = document.createElement('span');
-    close.className = 'timeline-filter-chip-close';
-    close.textContent = '×';
-    chip.appendChild(close);
-
-    chip.addEventListener('click', () => this._clearPin());
-    this._filterBar.appendChild(chip);
-  }
-
   _onZoom(scaleDelta, anchorX) {
     const { zoom, panX } = this.state;
     const track = this.$('.timeline-track');
@@ -610,8 +582,6 @@ export class Timeline extends Component {
 
     const mount = this.$('.timeline-pills-mount');
     if (!mount) return;
-
-    this._updateFilterBar();
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
     const getX = (year) => {
