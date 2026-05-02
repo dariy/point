@@ -22,7 +22,6 @@ export class Timeline extends Component {
       zoom: 1,
       panX: 0,
       popover: null,
-      pinnedRange: null,
       isLoading: true
     };
   }
@@ -53,7 +52,10 @@ export class Timeline extends Component {
       if (this.props.initialYear && !this._unmounted) {
         const year = parseInt(this.props.initialYear, 10);
         const pill = payload.pills.find((p) => p.year === year);
-        if (pill) this._pinPill(pill);
+        if (pill) {
+          this._centerOnYear(pill.year);
+          if (this.props.mode === 'filter') this._emitRange();
+        }
       }
     } catch (err) {
       if (err.status !== 404) {
@@ -75,6 +77,7 @@ export class Timeline extends Component {
         <div class="timeline-track-wrapper">
           <svg class="timeline-track" width="100%" height="56">
             <line class="timeline-axis-line" x1="0" y1="40" x2="100%" y2="40"></line>
+            <line class="timeline-center-indicator" x1="50%" y1="26" x2="50%" y2="52"></line>
             <g class="timeline-axis-ticks"></g>
             <g class="timeline-pills-mount"></g>
           </svg>
@@ -313,7 +316,8 @@ export class Timeline extends Component {
     if (!pill) return;
 
     if (this.props.mode === 'filter') {
-      this._pinPill(pill);
+      this._centerOnYear(pill.year);
+      this._emitRange();
     } else {
       this._openPopover(el, pill);
     }
@@ -406,7 +410,8 @@ export class Timeline extends Component {
         if (!pill) return;
         if (this.props.mode === 'filter') {
           this._closePopover();
-          this._pinPill(pill);
+          this._centerOnYear(pill.year);
+          this._emitRange();
         } else {
           this._openPopover(el, pill);
         }
@@ -460,49 +465,74 @@ export class Timeline extends Component {
     popoverEl.style.left = `${Math.max(8, Math.min(window.innerWidth - popoverRect.width - 8, left))}px`;
   }
 
-  _pinPill(pill) {
-    const isAlreadyPinned = this.state.pinnedRange?.slug === pill.slug;
-    
-    if (isAlreadyPinned) {
-      this._clearPin();
-      return;
-    }
+  _centerOnYear(year) {
+    const track = this.$('.timeline-track');
+    if (!track) return;
+    const trackWidth = track.clientWidth;
+    const { extent, zoom } = this.state;
+    const usableWidth = trackWidth - 2 * EDGE_PAD;
+    if (extent.max === extent.min || usableWidth === 0) return;
 
-    const from = pill.year;
-    const to = pill.is_decade ? from + 9 : from;
-
-    this.state.pinnedRange = { slug: pill.slug, from, to };
+    const progress = (year - extent.min) / (extent.max - extent.min);
+    const currentX = EDGE_PAD + progress * usableWidth * zoom + this.state.panX;
+    const newPanX = this.state.panX + (trackWidth / 2 - currentX);
+    const maxPanX = 0;
+    const minPanX = usableWidth * (1 - zoom);
+    this.state.panX = Math.max(minPanX, Math.min(maxPanX, newPanX));
     this._layout();
-
-    if (this.props.onRangeChange) {
-      this.props.onRangeChange({ from, to, source: 'pinned' });
-    }
   }
 
-  _clearPin() {
-    this.state.pinnedRange = null;
-    this._layout();
+  _snapToCenterPill() {
+    const item = this._findCenteredItem();
+    if (!item) return;
+    const year = item.type === 'cluster' ? (item.minYear + item.maxYear) / 2 : item.year;
+    this._centerOnYear(year);
+  }
 
-    if (this.props.onRangeChange) {
-      this.props.onRangeChange({ source: 'cleared' });
-      const range = this._visibleYearRange();
-      this.props.onRangeChange({ ...range, source: 'visible' });
+  _findCenteredItem() {
+    if (!this._lastCollision || !this._getX) return null;
+    const track = this.$('.timeline-track');
+    if (!track) return null;
+    const centerX = track.clientWidth / 2;
+    const { visible, clusters } = this._lastCollision;
+    const getX = this._getX;
+
+    let nearest = null;
+    let nearestDist = Infinity;
+
+    for (const p of visible) {
+      const dist = Math.abs(getX(p.year) - centerX);
+      if (dist < nearestDist) { nearestDist = dist; nearest = { ...p, type: 'pill' }; }
     }
+    for (const c of clusters) {
+      const dist = Math.abs(getX((c.minYear + c.maxYear) / 2) - centerX);
+      if (dist < nearestDist) { nearestDist = dist; nearest = { ...c, type: 'cluster' }; }
+    }
+    return nearest;
   }
 
   _debounceEmitRange() {
-    if (this.props.mode !== 'filter') return;
     clearTimeout(this._emitTimer);
-    this._emitTimer = setTimeout(() => this._emitRange(), 120);
+    this._emitTimer = setTimeout(() => {
+      this._snapToCenterPill();
+      if (this.props.mode === 'filter') this._emitRange();
+    }, 200);
   }
 
   _emitRange() {
-    if (this.state.pinnedRange) return;
+    if (!this.props.onRangeChange) return;
+    const item = this._findCenteredItem();
+    if (!item) return;
 
-    const range = this._visibleYearRange();
-    if (this.props.onRangeChange) {
-      this.props.onRangeChange({ ...range, source: 'visible' });
+    let from, to;
+    if (item.type === 'cluster') {
+      from = item.minYear;
+      to = item.maxYear;
+    } else {
+      from = item.year;
+      to = item.is_decade ? from + 9 : from;
     }
+    this.props.onRangeChange({ from, to, source: 'center' });
   }
 
   _applyVerticalZoom(dy) {
@@ -573,7 +603,7 @@ export class Timeline extends Component {
 
   _layout() {
     if (this._unmounted) return;
-    const { pills, extent, zoom, panX, pinnedRange } = this.state;
+    const { pills, extent, zoom, panX } = this.state;
     const track = this.$('.timeline-track');
     if (!track) return;
 
@@ -590,40 +620,50 @@ export class Timeline extends Component {
       return EDGE_PAD + progress * usableWidth * zoom + panX;
     };
 
+    this._getX = getX;
     const { visible, clusters } = this._collide(pills, getX);
+    this._lastCollision = { visible, clusters };
+
+    // Find the pill/cluster nearest to the center of the track
+    const centerX = trackWidth / 2;
+    let centeredKey = null;
+    let nearestDist = Infinity;
+    for (const p of visible) {
+      const dist = Math.abs(getX(p.year) - centerX);
+      if (dist < nearestDist) { nearestDist = dist; centeredKey = p.slug; }
+    }
+    for (const c of clusters) {
+      const dist = Math.abs(getX((c.minYear + c.maxYear) / 2) - centerX);
+      if (dist < nearestDist) { nearestDist = dist; centeredKey = `cluster-${c.minYear}-${c.maxYear}`; }
+    }
 
     let html = '';
 
     clusters.forEach((c) => {
       const midYear = (c.minYear + c.maxYear) / 2;
       const x = getX(midYear);
-      html += `
-        <g class="timeline-cluster" transform="translate(${x}, 0)" data-min="${c.minYear}" data-max="${c.maxYear}">
-          <foreignObject x="-20" y="12" width="40" height="32">
-            <div class="timeline-cluster-wrapper" xmlns="http://www.w3.org/1999/xhtml">
-              <button class="timeline-cluster-btn" aria-label="${c.pills.length} dates cluster. Click to expand.">
-                ${c.pills.length}
-              </button>
-            </div>
-          </foreignObject>
-        </g>
-      `;
+      const clusterKey = `cluster-${c.minYear}-${c.maxYear}`;
+      const activeClass = centeredKey === clusterKey ? ' active' : '';
+      const label = c.minYear === c.maxYear ? String(c.minYear) : `${c.minYear}–${c.maxYear}`;
+      html += [
+        `<g class="timeline-cluster${activeClass}" transform="translate(${x}, 0)" data-min="${c.minYear}" data-max="${c.maxYear}">`,
+        `<foreignObject x="-40" y="10" width="80" height="36">`,
+        `<div class="timeline-cluster-wrapper" xmlns="http://www.w3.org/1999/xhtml">`,
+        `<button class="timeline-cluster-btn" aria-label="${c.minYear} to ${c.maxYear}, ${c.pills.length} dates.">${label}</button>`,
+        `</div></foreignObject></g>`,
+      ].join('');
     });
 
     visible.forEach((p) => {
       const x = getX(p.year);
-      const activeClass = pinnedRange && pinnedRange.slug === p.slug ? ' active' : '';
-      html += `
-        <g class="timeline-pill-group${activeClass}" transform="translate(${x}, 0)" data-slug="${p.slug}">
-          <foreignObject x="-40" y="10" width="80" height="36">
-            <div class="timeline-pill-wrapper" xmlns="http://www.w3.org/1999/xhtml">
-              <button class="timeline-pill-btn" aria-label="${p.name}, ${p.post_count} posts.">
-                ${p.name}
-              </button>
-            </div>
-          </foreignObject>
-        </g>
-      `;
+      const activeClass = centeredKey === p.slug ? ' active' : '';
+      html += [
+        `<g class="timeline-pill-group${activeClass}" transform="translate(${x}, 0)" data-slug="${p.slug}">`,
+        `<foreignObject x="-40" y="10" width="80" height="36">`,
+        `<div class="timeline-pill-wrapper" xmlns="http://www.w3.org/1999/xhtml">`,
+        `<button class="timeline-pill-btn" aria-label="${p.name}, ${p.post_count} posts.">${p.name}</button>`,
+        `</div></foreignObject></g>`,
+      ].join('');
     });
 
     mount.innerHTML = html;
@@ -654,7 +694,10 @@ export class Timeline extends Component {
           currentCluster.pills.push(p);
           currentCluster.maxYear = p.year;
         }
-        lastRight = getX((currentCluster.minYear + currentCluster.maxYear) / 2) + 16;
+        const clusterLabel = currentCluster.minYear === currentCluster.maxYear
+          ? String(currentCluster.minYear) : `${currentCluster.minYear}–${currentCluster.maxYear}`;
+        lastRight = getX((currentCluster.minYear + currentCluster.maxYear) / 2) +
+          this._measurePillWidth(clusterLabel) / 2;
       } else {
         if (currentCluster) {
           result.clusters.push(currentCluster);
@@ -708,23 +751,4 @@ export class Timeline extends Component {
     nextBtn.classList.toggle('visible', maxX > trackWidth - EDGE_PAD + 5);
   }
 
-  _visibleYearRange() {
-    const { extent, zoom, panX } = this.state;
-    const track = this.$('.timeline-track');
-    if (!track) return extent;
-
-    const trackWidth = track.clientWidth;
-    if (trackWidth === 0) return extent;
-
-    const usableWidth = trackWidth - 2 * EDGE_PAD;
-    const pxToYear = (px) => {
-      const progress = (px - EDGE_PAD - panX) / (usableWidth * zoom);
-      return extent.min + progress * (extent.max - extent.min);
-    };
-
-    return {
-      from: Math.max(extent.min, Math.floor(pxToYear(0))),
-      to: Math.min(extent.max, Math.ceil(pxToYear(trackWidth)))
-    };
-  }
 }
