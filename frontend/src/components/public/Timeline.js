@@ -279,8 +279,14 @@ export class Timeline extends Component {
   _expandCluster(el) {
     const minYear = parseInt(el.dataset.min, 10);
     const maxYear = parseInt(el.dataset.max, 10);
-    const clusterPills = this.state.pills.filter((p) => p.year >= minYear && p.year <= maxYear);
 
+    if (this.props.mode === 'filter') {
+      this._centerOnYear((minYear + maxYear) / 2);
+      this._emitRange();
+      return;
+    }
+
+    const clusterPills = this.state.pills.filter((p) => p.year >= minYear && p.year <= maxYear);
     if (clusterPills.length <= 4) {
       this._openClusterPopover(el, clusterPills);
     } else {
@@ -303,8 +309,11 @@ export class Timeline extends Component {
     const progress = (midYear - extent.min) / extentSpan;
     const targetPanX = (trackWidth / 2) - EDGE_PAD - (progress * usableWidth * targetZoom);
 
-    this.state.zoom = Math.max(1, targetZoom);
-    this.state.panX = Math.min(0, Math.max(usableWidth * (1 - Math.max(1, targetZoom)), targetPanX));
+    const clampedZoom = Math.max(1, targetZoom);
+    const maxPanX = trackWidth / 2 - EDGE_PAD;
+    const minPanX = maxPanX - usableWidth * clampedZoom;
+    this.state.zoom = clampedZoom;
+    this.state.panX = Math.min(maxPanX, Math.max(minPanX, targetPanX));
     this._layout();
 
     this._debounceEmitRange();
@@ -476,8 +485,8 @@ export class Timeline extends Component {
     const progress = (year - extent.min) / (extent.max - extent.min);
     const currentX = EDGE_PAD + progress * usableWidth * zoom + this.state.panX;
     const newPanX = this.state.panX + (trackWidth / 2 - currentX);
-    const maxPanX = 0;
-    const minPanX = usableWidth * (1 - zoom);
+    const maxPanX = trackWidth / 2 - EDGE_PAD;
+    const minPanX = maxPanX - usableWidth * zoom;
     this.state.panX = Math.max(minPanX, Math.min(maxPanX, newPanX));
     this._layout();
   }
@@ -579,7 +588,8 @@ export class Timeline extends Component {
     const newPanX = anchorX - EDGE_PAD - (progressAtAnchor * usableWidth * newZoom);
 
     this.state.zoom = newZoom;
-    this.state.panX = Math.min(0, Math.max(usableWidth * (1 - newZoom), newPanX));
+    const maxPanXz = trackWidth / 2 - EDGE_PAD;
+    this.state.panX = Math.min(maxPanXz, Math.max(maxPanXz - usableWidth * newZoom, newPanX));
     this._layout();
 
     this._gestureController.setZoomed(newZoom > 1);
@@ -593,8 +603,8 @@ export class Timeline extends Component {
     const trackWidth = track.clientWidth;
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
-    const maxPanX = 0;
-    const minPanX = usableWidth * (1 - zoom);
+    const maxPanX = trackWidth / 2 - EDGE_PAD;
+    const minPanX = maxPanX - usableWidth * zoom;
 
     this.state.panX = Math.max(minPanX, Math.min(maxPanX, panX + dx));
     this._layout();
