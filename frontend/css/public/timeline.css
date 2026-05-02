@@ -67,6 +67,7 @@
   justify-content: center;
   align-items: center;
   height: 36px;
+  touch-action: none;
 }
 
 .timeline-pill-btn {
@@ -80,6 +81,7 @@
   height: var(--tag-link-height);
   padding: 0 var(--spacing-md);
   white-space: nowrap;
+  touch-action: none;
   transition: scale var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   cursor: pointer;
 }
@@ -186,50 +188,6 @@
 
 .timeline-nav-btn.prev { left: 8px; }
 .timeline-nav-btn.next { right: 8px; }
-
-.timeline-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-card);
-  min-height: 0;
-}
-
-.timeline-filter-bar:empty {
-  display: none;
-}
-
-.timeline-filter-chip {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--color-primary);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 4px 10px 4px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: scale var(--transition-fast), opacity var(--transition-fast);
-}
-
-.timeline-filter-chip:hover {
-  opacity: 0.88;
-}
-
-.timeline-filter-chip:active {
-  scale: 0.97;
-}
-
-.timeline-filter-chip-close {
-  font-size: 15px;
-  line-height: 1;
-  opacity: 0.75;
-}
 
 /* ── Popover ──────────────────────────────────────────────────────────────── */
 
