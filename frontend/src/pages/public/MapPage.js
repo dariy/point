@@ -83,10 +83,10 @@ export default class MapPage extends Component {
 
     if (loading) {
       return `
-        <div class="site-wrapper">
+        <div class="site-wrapper site-wrapper--map">
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
-          <main class="site-main" aria-busy="true">
+          <main class="site-main site-main--map" aria-busy="true">
             <div class="loading-spinner" aria-label="Loading map…"></div>
           </main>
           <div id="footer-mount"></div>
@@ -95,10 +95,10 @@ export default class MapPage extends Component {
 
     if (error) {
       return `
-        <div class="site-wrapper">
+        <div class="site-wrapper site-wrapper--map">
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
-          <main class="site-main">
+          <main class="site-main site-main--map">
             <p class="error-message" role="alert">${escapeHtml(error)}</p>
           </main>
           <div id="footer-mount"></div>
@@ -106,10 +106,10 @@ export default class MapPage extends Component {
     }
 
     return `
-      <div class="site-wrapper map-page">
+      <div class="site-wrapper site-wrapper--map">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>
-        <main class="site-main">
+        <main class="site-main site-main--map">
           <div class="map-container"><div id="map"></div></div>
         </main>
         <div id="footer-mount"></div>
