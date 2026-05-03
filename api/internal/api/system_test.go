@@ -233,3 +233,38 @@ func TestSystemHandler_GetStats_Success(t *testing.T) {
 		t.Fatalf("GetStats failed: %v", err)
 	}
 }
+
+func TestSystemHandler_GetDiskInfo(t *testing.T) {
+	repo := setupTestDB(t)
+	tmpDir := t.TempDir()
+	defer func() { _ = repo.Close() }()
+
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/system/disk", nil)
+	rec := httptest.NewRecorder()
+	if err := h.GetDiskInfo(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetDiskInfo failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	for _, key := range []string{"total", "free", "used"} {
+		if _, ok := resp[key]; !ok {
+			t.Errorf("response missing field %q", key)
+		}
+	}
+}

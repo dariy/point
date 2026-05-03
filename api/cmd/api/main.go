@@ -237,6 +237,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")
 	systemGroup.GET("/stats", systemHandler.GetStats, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/disk", systemHandler.GetDiskInfo, api.AuthMiddleware(svcs.Auth))
 	systemGroup.GET("/logs", systemHandler.GetLogs, api.AuthMiddleware(svcs.Auth))
 	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(svcs.Auth))
 	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(svcs.Auth))

@@ -368,3 +368,11 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	})
 }
 
+func (h *SystemHandler) GetDiskInfo(c echo.Context) error {
+	info, err := h.systemService.GetDiskInfo()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, info)
+}
+
