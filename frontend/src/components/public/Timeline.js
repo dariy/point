@@ -611,7 +611,6 @@ export class Timeline extends Component {
     this.state.zoom = 0.0001;
     this.state.panX = track.clientWidth / 2 - EDGE_PAD;
     this._layout();
-    if (this.props.mode === "filter") this._emitRange();
   }
 
   _centerOnYear(year, animate = false) {

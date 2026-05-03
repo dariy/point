@@ -85,8 +85,10 @@ export default class HomePage extends Component {
 
     const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
     if (canShowTimeline) {
+      const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
       this.mountChild(Timeline, '#timeline-mount', {
         mode: 'filter',
+        initialRange: timelineRange || undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
       });
     }
@@ -96,7 +98,12 @@ export default class HomePage extends Component {
         page: pagination.page,
         pages: pagination.pages,
         total: pagination.total,
-        onPage: (p) => navigate(`/?page=${p}`),
+        onPage: (p) => {
+          const params = new URLSearchParams({ page: p });
+          const t = new URLSearchParams(location.search).get('timeline');
+          if (t) params.set('timeline', t);
+          navigate(`/?${params.toString()}`);
+        },
       });
     }
 
@@ -169,10 +176,16 @@ export default class HomePage extends Component {
           }
         },
         onSwipeCommit: (dir) => {
+          const t = new URLSearchParams(location.search).get('timeline');
+          const buildUrl = (p) => {
+            const params = new URLSearchParams({ page: p });
+            if (t) params.set('timeline', t);
+            return `/?${params.toString()}`;
+          };
           if (dir === 'left' && pagination.page < pagination.pages) {
-            navigate(`/?page=${pagination.page + 1}`);
+            navigate(buildUrl(pagination.page + 1));
           } else if (dir === 'right' && pagination.page > 1) {
-            navigate(`/?page=${pagination.page - 1}`);
+            navigate(buildUrl(pagination.page - 1));
           } else {
             // Reset visuals if not committed
             if (gridMount) {
@@ -193,10 +206,16 @@ export default class HomePage extends Component {
       });
       this._trackpad = new TrackpadDetector(this.$('.site-main'), {
         onHorizontal: (dir) => {
+          const t = new URLSearchParams(location.search).get('timeline');
+          const buildUrl = (p) => {
+            const params = new URLSearchParams({ page: p });
+            if (t) params.set('timeline', t);
+            return `/?${params.toString()}`;
+          };
           if (dir === 'left' && pagination.page < pagination.pages) {
-            navigate(`/?page=${pagination.page + 1}`);
+            navigate(buildUrl(pagination.page + 1));
           } else if (dir === 'right' && pagination.page > 1) {
-            navigate(`/?page=${pagination.page - 1}`);
+            navigate(buildUrl(pagination.page - 1));
           }
         }
       });
@@ -206,14 +225,38 @@ export default class HomePage extends Component {
     const settings = store.get('settings') || {};
     const showViewCount = !!settings.show_view_counts;
     const useThumbnails = settings.use_thumbnails !== false;
+
+    const timelineParam = from === to ? `${from}` : `${from}-${to}`;
+    const url = new URL(location.href);
+    url.searchParams.set('timeline', timelineParam);
+    url.searchParams.delete('page');
+    history.replaceState(null, '', url.pathname + url.search);
+
     try {
       const data = await getHomePage({ page: 1, year_from: from, year_to: to });
       this.state.data = data;
-      const { posts = [] } = data;
+      const { posts = [], pagination = {} } = data;
       this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
+      this.mountChild(Pagination, '#pagination-mount', {
+        page: 1,
+        pages: pagination.pages || 1,
+        total: pagination.total || 0,
+        onPage: (p) => {
+          const params = new URLSearchParams({ page: p, timeline: timelineParam });
+          navigate(`/?${params.toString()}`);
+        },
+      });
     } catch (err) {
       console.error('Failed to filter posts by year:', err);
     }
+  }
+
+  _parseTimelineParam(param) {
+    if (!param) return null;
+    const parts = param.split('-').map(Number);
+    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return { from: parts[0], to: parts[1] };
+    if (parts.length === 1 && parts[0] > 0) return { from: parts[0], to: parts[0] };
+    return null;
   }
 
   beforeUnmount() {
@@ -228,8 +271,14 @@ export default class HomePage extends Component {
 
   async _load() {
     const page = parseInt(this.props.query?.page || '1', 10);
+    const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
+    const params = { page };
+    if (timelineRange) {
+      params.year_from = timelineRange.from;
+      params.year_to = timelineRange.to;
+    }
     try {
-      const data = await getHomePage({ page });
+      const data = await getHomePage(params);
       // Merge settings from page response into store.
       if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
       this.setState({ loading: false, data, error: null });
