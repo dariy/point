@@ -6,11 +6,18 @@
   <meta name="description" content="" />
   <title>Loading…</title>
 
-  <!-- CSS — public and admin bundles both preloaded; the active one is set via
-       media="all" and the inactive one via media="not all". The section is
-       switched synchronously by app.js before any page component mounts. -->
+  <!-- CSS — public and admin bundles both preloaded. The correct bundle is made
+       render-blocking by the inline script below; the inactive one uses
+       media="not all" so it is downloaded eagerly but not applied.
+       app.js re-applies _applySection() on every SPA route change. -->
   <link id="css-public" rel="stylesheet" href="/assets/css/main.css?v=__BUILD_VERSION__" />
   <link id="css-light"  rel="stylesheet" href="/assets/css/light.css?v=__BUILD_VERSION__" media="not all" />
+  <!-- Switch CSS media before stylesheets are parsed so the browser never
+       has to re-apply a stylesheet mid-load (which triggers Firefox's
+       "Layout was forced before the page was fully loaded" warning). -->
+  <script>
+    (function(){var p=location.pathname,l=p.startsWith('/light')||p==='/setup';document.documentElement.dataset.section=l?'light':'public';if(l){var a=document.getElementById('css-public'),b=document.getElementById('css-light');if(a)a.media='not all';if(b)b.media='all';}})();
+  </script>
 
   <!-- PWA -->
   <link rel="manifest" href="/manifest.webmanifest" />
