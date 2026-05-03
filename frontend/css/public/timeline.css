@@ -3,323 +3,347 @@
  */
 
 .timeline-container {
-  position: relative;
-  margin: 1rem 0;
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-subtle);
-  user-select: none;
-  overflow: hidden;
-  touch-action: none;
+    position: relative;
+    margin: 0;
+    background: var(--surface-card);
+    border-bottom: 1px solid var(--border-subtle);
+    user-select: none;
+    overflow: hidden;
+    touch-action: none;
 }
 
 .timeline-track-wrapper {
-  position: relative;
-  height: 56px;
-  cursor: grab;
+    position: relative;
+    height: 56px;
+    cursor: grab;
 }
 
 .timeline-track-wrapper::before,
 .timeline-track-wrapper::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 50px;
-  pointer-events: none;
-  z-index: 5;
+    content: "";
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 50px;
+    pointer-events: none;
+    z-index: 5;
 }
 
 .timeline-track-wrapper::before {
-  left: 0;
-  background: linear-gradient(to right, var(--surface-card), transparent);
+    left: 0;
+    background: linear-gradient(to right, var(--surface-card), transparent);
 }
 
 .timeline-track-wrapper::after {
-  right: 0;
-  background: linear-gradient(to left, var(--surface-card), transparent);
+    right: 0;
+    background: linear-gradient(to left, var(--surface-card), transparent);
 }
 
 .timeline-track-wrapper.grabbing {
-  cursor: grabbing;
+    cursor: grabbing;
 }
 
 .timeline-track {
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: all;
-  position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: all;
+    position: relative;
 }
 
 .timeline-axis {
-  position: absolute;
-  top: 40px;
-  left: 0;
-  width: 100%;
-  height: 1px;
-  background: var(--border-subtle);
-  pointer-events: none;
+    position: absolute;
+    top: 40px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: var(--border-subtle);
+    pointer-events: none;
 }
 
 .timeline-axis-ticks {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
 }
 
 .timeline-tick {
-  position: absolute;
-  top: -2px;
-  width: 1px;
-  height: 5px;
-  background: var(--border-subtle);
+    position: absolute;
+    top: -2px;
+    width: 1px;
+    height: 5px;
+    background: var(--border-subtle);
 }
 
 .timeline-center-indicator {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 2px;
-  height: 100%;
-  background: var(--color-primary);
-  opacity: 0.2;
-  pointer-events: none;
-  z-index: 2;
-  transform: translateX(-50%);
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 100%;
+    background: var(--color-primary);
+    opacity: 0.2;
+    pointer-events: none;
+    z-index: 2;
+    transform: translateX(-50%);
 }
 
 /* ── Pills ────────────────────────────────────────────────────────────────── */
 
 .timeline-pills-mount {
-  position: relative;
-  width: 100%;
-  height: 100%;
+    position: relative;
+    width: 100%;
+    height: 100%;
 }
 
 .timeline-pill-group,
 .timeline-cluster {
-  position: absolute;
-  top: 10px;
-  transform: translateX(-50%);
-  z-index: 3;
+    position: absolute;
+    top: 10px;
+    transform: translateX(-50%);
+    z-index: 3;
 }
 
 .timeline-pill-btn {
-  appearance: none;
-  background: var(--surface-card);
-  border: var(--border-width) solid var(--border-primary);
-  border-radius: var(--tag-link-border-radius-alt1);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  height: var(--tag-link-height);
-  padding: 0 var(--spacing-md);
-  white-space: nowrap;
-  touch-action: none;
-  transition: scale var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+    appearance: none;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--tag-link-border-radius-alt1);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    height: var(--tag-link-height);
+    padding: 0 var(--spacing-md);
+    white-space: nowrap;
+    touch-action: none;
+    transition:
+        scale var(--transition-fast),
+        background var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .timeline-pill-btn:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
 }
 
 .timeline-pill-btn:active {
-  scale: 0.96;
+    scale: 0.96;
 }
 
 .timeline-pill-group.active .timeline-pill-btn {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #fff;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
 }
 
 /* ── Clusters ─────────────────────────────────────────────────────────────── */
 
 .timeline-cluster-btn {
-  appearance: none;
-  background: var(--surface-card);
-  border: var(--border-width) dashed var(--border-primary);
-  border-radius: var(--tag-link-border-radius-alt1);
-  color: var(--text-muted);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  height: var(--tag-link-height);
-  padding: 0 var(--spacing-md);
-  white-space: nowrap;
-  touch-action: none;
-  transition: scale var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+    appearance: none;
+    background: var(--surface-card);
+    border: var(--border-width) dashed var(--border-primary);
+    border-radius: var(--tag-link-border-radius-alt1);
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    height: var(--tag-link-height);
+    padding: 0 var(--spacing-md);
+    white-space: nowrap;
+    touch-action: none;
+    transition:
+        scale var(--transition-fast),
+        background var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .timeline-cluster-btn:hover {
-  border-color: var(--color-primary);
-  border-style: solid;
-  color: var(--color-primary);
+    border-color: var(--color-primary);
+    border-style: solid;
+    color: var(--color-primary);
 }
 
 .timeline-cluster-btn:active {
-  scale: 0.96;
+    scale: 0.96;
 }
 
 .timeline-cluster.active .timeline-cluster-btn {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  border-style: solid;
-  color: #fff;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    border-style: solid;
+    color: #fff;
 }
 
 /* ── Navigation & Controls ────────────────────────────────────────────────── */
 
 .timeline-nav-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  z-index: 10;
-  opacity: 0;
-  pointer-events: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), scale var(--transition-fast), opacity var(--transition-fast);
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        scale var(--transition-fast),
+        opacity var(--transition-fast);
 }
 
 .timeline-nav-btn.visible {
-  opacity: 1;
-  pointer-events: auto;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .timeline-nav-btn:hover {
-  border-color: var(--text-muted);
-  box-shadow: var(--shadow-md);
+    border-color: var(--text-muted);
+    box-shadow: var(--shadow-md);
 }
 
 .timeline-nav-btn:active {
-  scale: 0.96;
+    scale: 0.96;
 }
 
-.timeline-nav-btn.prev { left: 8px; }
-.timeline-nav-btn.next { right: 8px; }
+.timeline-nav-btn.prev {
+    left: 8px;
+}
+.timeline-nav-btn.next {
+    right: 8px;
+}
 
 /* ── Popover ──────────────────────────────────────────────────────────────── */
 
 .timeline-popover {
-  position: absolute;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  box-shadow: var(--shadow-lg);
-  padding: 12px;
-  min-width: 200px;
-  max-width: 280px;
-  z-index: 2000;
-  animation: timeline-popover-in var(--transition-normal) ease-out;
+    position: absolute;
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    padding: 12px;
+    min-width: 200px;
+    max-width: 280px;
+    z-index: 2000;
+    animation: timeline-popover-in var(--transition-normal) ease-out;
 }
 
 @keyframes timeline-popover-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .timeline-popover::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  left: 50%;
-  margin-left: -6px;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 6px solid var(--surface-card);
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    margin-left: -6px;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid var(--surface-card);
 }
 
 .timeline-popover.flipped::after {
-  bottom: auto;
-  top: -6px;
-  border-top: none;
-  border-bottom: 6px solid var(--surface-card);
+    bottom: auto;
+    top: -6px;
+    border-top: none;
+    border-bottom: 6px solid var(--surface-card);
 }
 
 .timeline-popover-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
 
 .timeline-popover-year {
-  font-weight: 600;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--border-subtle);
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border-subtle);
 }
 
 .timeline-popover-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
 }
 
 .timeline-popover-list li:not(:last-child):not(.timeline-popover-year) {
-  border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .timeline-popover-list .count {
-  font-size: 11px;
-  color: var(--text-muted);
-  background: var(--border-subtle);
-  padding: 1px 6px;
-  border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--border-subtle);
+    padding: 1px 6px;
+    border-radius: 10px;
 }
 
 .timeline-popover-empty {
-  font-size: 13px;
-  color: var(--text-muted);
-  text-align: center;
-  margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    margin: 0;
 }
 
 .timeline-popover.loading {
-  display: flex;
-  justify-content: center;
-  padding: 24px;
+    display: flex;
+    justify-content: center;
+    padding: 24px;
 }
 
 .timeline-popover-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border-subtle);
-  border-top-color: var(--text-muted);
-  border-radius: 50%;
-  animation: timeline-spin 0.6s linear infinite;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-subtle);
+    border-top-color: var(--text-muted);
+    border-radius: 50%;
+    animation: timeline-spin 0.6s linear infinite;
 }
 
 @keyframes timeline-spin {
-  to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .timeline-popover {
-    animation: none;
-  }
-  .timeline-pill-btn,
-  .timeline-cluster-btn,
-  .timeline-nav-btn {
-    transition: none !important;
-  }
+    .timeline-popover {
+        animation: none;
+    }
+    .timeline-pill-btn,
+    .timeline-cluster-btn,
+    .timeline-nav-btn {
+        transition: none !important;
+    }
 }
