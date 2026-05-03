@@ -67,6 +67,11 @@
     font-size: var(--map-subtitle-font-size);
 }
 
+/* Flush timeline against header and map — no gaps on the map page */
+.site-wrapper--map .timeline-container {
+    margin: 0;
+}
+
 /* Custom Leaflet Marker Styling */
 .custom-marker-wrapper {
     position: relative;
