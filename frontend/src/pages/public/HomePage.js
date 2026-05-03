@@ -222,11 +222,17 @@ export default class HomePage extends Component {
     }
   }  async _onTimelineRangeChange({ from, to }) {
     if (!this.state.data) return;
+
+    // If the incoming range matches what's already in the URL, this is the
+    // Timeline re-confirming its initial state on mount — not a user action.
+    // The data was already fetched with the correct params by _load(), so skip.
+    const timelineParam = from === to ? `${from}` : `${from}-${to}`;
+    const currentTimeline = new URLSearchParams(location.search).get('timeline');
+    if (currentTimeline === timelineParam) return;
+
     const settings = store.get('settings') || {};
     const showViewCount = !!settings.show_view_counts;
     const useThumbnails = settings.use_thumbnails !== false;
-
-    const timelineParam = from === to ? `${from}` : `${from}-${to}`;
     const url = new URL(location.href);
     url.searchParams.set('timeline', timelineParam);
     url.searchParams.delete('page');
