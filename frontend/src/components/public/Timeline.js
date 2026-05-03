@@ -141,6 +141,7 @@ export class Timeline extends Component {
     this._gestureController = new GestureController(trackWrapper, {
       onPanMove: (dx, dy) => {
         touchDragged = true;
+        this._isDragging = true;
         if (Math.abs(dy) > Math.abs(dx)) {
           this._applyVerticalZoom(dy);
         } else {
@@ -151,6 +152,7 @@ export class Timeline extends Component {
       onTap: (x, y) => this._onTap(x, y),
       onSwipeMove: (dx, dy) => {
         touchDragged = true;
+        this._isDragging = true;
         const dxDelta = dx - (this._swipeDxBase || 0);
         this._swipeDxBase = dx;
         const dyDelta = dy - (this._swipeDyBase || 0);
@@ -168,7 +170,14 @@ export class Timeline extends Component {
           this._ignoreNextClick = true;
           setTimeout(() => { this._ignoreNextClick = false; }, 500);
         }
+        const wasDragging = touchDragged;
         touchDragged = false;
+        this._isDragging = false;
+        if (wasDragging) {
+          clearTimeout(this._emitTimer);
+          this._snapToCenterPill();
+          if (this.props.mode === 'filter') this._emitRange();
+        }
       },
       onSwipeCommit: () => {
         this._swipeDxBase = 0;
@@ -176,6 +185,10 @@ export class Timeline extends Component {
         this._ignoreNextClick = true;
         setTimeout(() => { this._ignoreNextClick = false; }, 500);
         touchDragged = false;
+        this._isDragging = false;
+        clearTimeout(this._emitTimer);
+        this._snapToCenterPill();
+        if (this.props.mode === 'filter') this._emitRange();
       },
     });
 
@@ -197,6 +210,7 @@ export class Timeline extends Component {
     trackWrapper.addEventListener('mousedown', (e) => {
       if (e.target.closest('.timeline-nav-btn')) return;
       isDragging = true;
+      this._isDragging = true;
       hasDragged = false;
       dragStartX = e.clientX;
       dragStartY = e.clientY;
@@ -224,7 +238,13 @@ export class Timeline extends Component {
     this._onMouseUp = () => {
       if (!isDragging) return;
       isDragging = false;
+      this._isDragging = false;
       trackWrapper.classList.remove('grabbing');
+      if (hasDragged) {
+        clearTimeout(this._emitTimer);
+        this._snapToCenterPill();
+        if (this.props.mode === 'filter') this._emitRange();
+      }
     };
 
     window.addEventListener('mousemove', this._onMouseMove);
@@ -610,7 +630,7 @@ export class Timeline extends Component {
   _debounceEmitRange() {
     clearTimeout(this._emitTimer);
     this._emitTimer = setTimeout(() => {
-      this._snapToCenterPill();
+      if (!this._isDragging) this._snapToCenterPill();
       if (this.props.mode === 'filter') this._emitRange();
     }, 200);
   }
