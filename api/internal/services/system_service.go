@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"point-api/internal/repository"
@@ -24,6 +25,26 @@ func NewSystemService(repo *repository.Repository, dataPath string) *SystemServi
 		repo:     repo,
 		dataPath: dataPath,
 	}
+}
+
+type DiskInfo struct {
+	Total int64 `json:"total"`
+	Free  int64 `json:"free"`
+	Used  int64 `json:"used"`
+}
+
+func (s *SystemService) GetDiskInfo() (DiskInfo, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(s.dataPath, &stat); err != nil {
+		return DiskInfo{}, fmt.Errorf("statfs: %w", err)
+	}
+	total := int64(stat.Blocks) * stat.Bsize
+	free := int64(stat.Bavail) * stat.Bsize
+	return DiskInfo{
+		Total: total,
+		Free:  free,
+		Used:  total - free,
+	}, nil
 }
 
 func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error) {
