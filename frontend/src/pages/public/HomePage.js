@@ -85,7 +85,10 @@ export default class HomePage extends Component {
 
     const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
     if (canShowTimeline) {
-      this.mountChild(Timeline, '#timeline-mount', { mode: 'popover' });
+      this.mountChild(Timeline, '#timeline-mount', {
+        mode: 'filter',
+        onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
     }
 
     if (pagination.pages > 1) {
@@ -198,7 +201,22 @@ export default class HomePage extends Component {
         }
       });
     }
-  }  beforeUnmount() {
+  }  async _onTimelineRangeChange({ from, to }) {
+    if (!this.state.data) return;
+    const settings = store.get('settings') || {};
+    const showViewCount = !!settings.show_view_counts;
+    const useThumbnails = settings.use_thumbnails !== false;
+    try {
+      const data = await getHomePage({ page: 1, year_from: from, year_to: to });
+      this.state.data = data;
+      const { posts = [] } = data;
+      this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
+    } catch (err) {
+      console.error('Failed to filter posts by year:', err);
+    }
+  }
+
+  beforeUnmount() {
     this._gesture?.destroy();
     this._trackpad?.destroy();
   }
