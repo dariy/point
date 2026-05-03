@@ -101,6 +101,8 @@ type ListPostsParams struct {
 	IncludeDrafts bool
 	IncludeHidden bool
 	Search        string
+	YearFrom      int
+	YearTo        int
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
@@ -110,32 +112,41 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	var total int64
 	var err error
 
-	if p.Search != "" {
+	repoParams := models.ListPostsParams{
+		StatusFilter:   p.Status != "",
+		Status:         p.Status,
+		FeaturedFilter: p.FeaturedOnly,
+		IncludeDrafts:  p.IncludeDrafts,
+		Limit:          int64(p.PerPage),
+		Offset:         int64(offset),
+		IncludeHidden:  p.IncludeHidden,
+	}
+	countParams := models.CountPostsParams{
+		StatusFilter:   p.Status != "",
+		Status:         p.Status,
+		FeaturedFilter: p.FeaturedOnly,
+		IncludeDrafts:  p.IncludeDrafts,
+		IncludeHidden:  p.IncludeHidden,
+	}
+
+	if p.YearFrom > 0 && p.YearTo > 0 {
+		posts, err = s.repo.ListPostsInYearRange(ctx, p.YearFrom, p.YearTo, repoParams)
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
+	} else if p.Search != "" {
 		posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, int64(p.PerPage), int64(offset))
 		if err != nil {
 			return nil, 0, err
 		}
 		total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search)
 	} else {
-		posts, err = s.repo.ListPosts(ctx, models.ListPostsParams{
-			StatusFilter:   p.Status != "",
-			Status:         p.Status,
-			FeaturedFilter: p.FeaturedOnly,
-			IncludeDrafts:  p.IncludeDrafts,
-			Limit:          int64(p.PerPage),
-			Offset:         int64(offset),
-			IncludeHidden:  p.IncludeHidden,
-		})
+		posts, err = s.repo.ListPosts(ctx, repoParams)
 		if err != nil {
 			return nil, 0, err
 		}
-		total, err = s.repo.CountPosts(ctx, models.CountPostsParams{
-			StatusFilter:   p.Status != "",
-			Status:         p.Status,
-			FeaturedFilter: p.FeaturedOnly,
-			IncludeDrafts:  p.IncludeDrafts,
-			IncludeHidden:  p.IncludeHidden,
-		})
+		total, err = s.repo.CountPosts(ctx, countParams)
 	}
 	if err != nil {
 		return nil, 0, err
