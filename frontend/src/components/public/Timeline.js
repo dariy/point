@@ -121,6 +121,7 @@ export class Timeline extends Component {
     this._gestureController?.destroy?.();
     this._closePopover();
     clearTimeout(this._emitTimer);
+    this._cancelAnimation();
     if (this._onMouseMove) window.removeEventListener('mousemove', this._onMouseMove);
     if (this._onMouseUp) window.removeEventListener('mouseup', this._onMouseUp);
   }
@@ -313,7 +314,7 @@ export class Timeline extends Component {
     const maxYear = parseInt(el.dataset.max, 10);
 
     if (this.props.mode === 'filter') {
-      this._centerOnYear((minYear + maxYear) / 2);
+      this._centerOnYear((minYear + maxYear) / 2, true);
       this._emitRange();
       return;
     }
@@ -322,11 +323,11 @@ export class Timeline extends Component {
     if (clusterPills.length <= 4) {
       this._openClusterPopover(el, clusterPills);
     } else {
-      this._zoomToFit(minYear, maxYear);
+      this._zoomToFit(minYear, maxYear, true);
     }
   }
 
-  _zoomToFit(minYear, maxYear) {
+  _zoomToFit(minYear, maxYear, animate = false) {
     const { extent } = this.state;
     const track = this.$('.timeline-track');
     if (!track) return;
@@ -344,9 +345,15 @@ export class Timeline extends Component {
     const clampedZoom = Math.max(0.001, targetZoom);
     const maxPanX = trackWidth / 2 - EDGE_PAD;
     const minPanX = maxPanX - usableWidth * clampedZoom;
-    this.state.zoom = clampedZoom;
-    this.state.panX = Math.min(maxPanX, Math.max(minPanX, targetPanX));
-    this._layout();
+    const clampedPanX = Math.min(maxPanX, Math.max(minPanX, targetPanX));
+
+    if (animate) {
+      this._animateTo(clampedPanX, clampedZoom, 320);
+    } else {
+      this.state.zoom = clampedZoom;
+      this.state.panX = clampedPanX;
+      this._layout();
+    }
 
     this._debounceEmitRange();
   }
@@ -357,7 +364,7 @@ export class Timeline extends Component {
     if (!pill) return;
 
     if (this.props.mode === 'filter') {
-      this._centerOnYear(pill.year);
+      this._centerOnYear(pill.year, true);
       this._emitRange();
     } else {
       this._openPopover(el, pill);
@@ -451,7 +458,7 @@ export class Timeline extends Component {
         if (!pill) return;
         if (this.props.mode === 'filter') {
           this._closePopover();
-          this._centerOnYear(pill.year);
+          this._centerOnYear(pill.year, true);
           this._emitRange();
         } else {
           this._openPopover(el, pill);
@@ -506,6 +513,38 @@ export class Timeline extends Component {
     popoverEl.style.left = `${Math.max(8, Math.min(window.innerWidth - popoverRect.width - 8, left))}px`;
   }
 
+  _animateTo(targetPanX, targetZoom, duration) {
+    this._cancelAnimation();
+    const startPanX = this.state.panX;
+    const startZoom = this.state.zoom;
+    const startTime = performance.now();
+
+    const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+    const step = (now) => {
+      if (this._unmounted) return;
+      const t = Math.min(1, (now - startTime) / duration);
+      const e = easeOut(t);
+      this.state.panX = startPanX + (targetPanX - startPanX) * e;
+      this.state.zoom = startZoom + (targetZoom - startZoom) * e;
+      this._layout();
+      if (t < 1) {
+        this._animRaf = requestAnimationFrame(step);
+      } else {
+        this._animRaf = null;
+      }
+    };
+
+    this._animRaf = requestAnimationFrame(step);
+  }
+
+  _cancelAnimation() {
+    if (this._animRaf) {
+      cancelAnimationFrame(this._animRaf);
+      this._animRaf = null;
+    }
+  }
+
   _initCollapsed() {
     const track = this.$('.timeline-track');
     if (!track) return;
@@ -516,7 +555,7 @@ export class Timeline extends Component {
     if (this.props.mode === 'filter') this._emitRange();
   }
 
-  _centerOnYear(year) {
+  _centerOnYear(year, animate = false) {
     const track = this.$('.timeline-track');
     if (!track) return;
     const trackWidth = track.clientWidth;
@@ -529,8 +568,14 @@ export class Timeline extends Component {
     const newPanX = this.state.panX + (trackWidth / 2 - currentX);
     const maxPanX = trackWidth / 2 - EDGE_PAD;
     const minPanX = maxPanX - usableWidth * zoom;
-    this.state.panX = Math.max(minPanX, Math.min(maxPanX, newPanX));
-    this._layout();
+    const clampedPanX = Math.max(minPanX, Math.min(maxPanX, newPanX));
+
+    if (animate) {
+      this._animateTo(clampedPanX, zoom, 320);
+    } else {
+      this.state.panX = clampedPanX;
+      this._layout();
+    }
   }
 
   _snapToCenterPill() {
@@ -616,6 +661,7 @@ export class Timeline extends Component {
   }
 
   _onZoom(scaleDelta, anchorX) {
+    this._cancelAnimation();
     const { zoom, panX } = this.state;
     const track = this.$('.timeline-track');
     if (!track) return;
@@ -658,6 +704,7 @@ export class Timeline extends Component {
   }
 
   _onPan(dx) {
+    this._cancelAnimation();
     const { panX, zoom } = this.state;
     const track = this.$('.timeline-track');
     if (!track) return;
