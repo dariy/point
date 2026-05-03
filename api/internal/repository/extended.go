@@ -101,6 +101,133 @@ WHERE
 	return count, err
 }
 
+// ListPostsInYearRange returns posts that carry an _in_timeline year tag whose
+// parsed year (CAST(slug AS INTEGER)) falls in [fromYear, toYear].
+func (r *Repository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
+	const q = `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug
+    FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id
+    JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+_hide(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
+)
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+       p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _hide)
+    ) END)
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q,
+		fromYear, toYear,
+		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
+		arg.IncludeDrafts, arg.IncludeHidden,
+		arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Post
+	for rows.Next() {
+		var i models.Post
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
+			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// CountPostsInYearRange counts posts matching the year range and standard filters.
+func (r *Repository) CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error) {
+	const q = `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug
+    FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id
+    JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+_hide(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
+)
+SELECT COUNT(*) FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _hide)
+    ) END)`
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q,
+		fromYear, toYear,
+		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
+		arg.IncludeDrafts, arg.IncludeHidden,
+	).Scan(&count)
+	return count, err
+}
+
 func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (

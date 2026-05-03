@@ -61,9 +61,13 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		page = 1
 	}
 
-	// Try cache for public requests (TTL 15 minutes)
+	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
+	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
+	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
+
+	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	cacheKey := fmt.Sprintf("homepage_p%d.json", page)
-	if publicOnly {
+	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
 		}
@@ -80,12 +84,17 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	// Published posts
-	posts, total, err := h.postService.ListPosts(ctx, services.ListPostsParams{
+	listParams := services.ListPostsParams{
 		Page:          int32(page),
 		PerPage:       int32(perPage),
-		IncludeDrafts: false, // Never show drafts in public part
+		IncludeDrafts: false,
 		IncludeHidden: !publicOnly,
-	})
+	}
+	if hasYearFilter {
+		listParams.YearFrom = yearFrom
+		listParams.YearTo = yearTo
+	}
+	posts, total, err := h.postService.ListPosts(ctx, listParams)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -147,7 +156,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		"settings":  publicSettings,
 	}
 
-	if publicOnly {
+	if publicOnly && !hasYearFilter {
 		if data, err := json.Marshal(resp); err == nil {
 			_ = h.cacheService.Set(ctx, cacheKey, data)
 		}
