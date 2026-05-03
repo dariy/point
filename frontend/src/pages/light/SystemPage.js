@@ -9,7 +9,7 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import {
   clearCache, listBackups,
   createBackup, restoreBackup, deleteBackup, getMigrations,
-  updateMapCoords, scanMediaImport, getStats,
+  updateMapCoords, scanMediaImport, getStats, getDiskInfo,
 } from '../../api/system.js';
 import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
 import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
@@ -50,11 +50,12 @@ export default class SystemPage extends Component {
       scanningMedia: false,
       scanResult: null,
       importConfigured: false,
+      diskInfo: null,
     };
   }
 
   render() {
-    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult, scanningMedia, scanResult, importConfigured } = this.state;
+    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult, scanningMedia, scanResult, importConfigured, diskInfo } = this.state;
     const settings = store.get('settings') || {};
     const enableBackup = settings.enable_backup !== false;
 
@@ -364,15 +365,16 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [backups, migrations, lastSync, queue, stats] = await Promise.all([
+      const [backups, migrations, lastSync, queue, stats, diskInfo] = await Promise.all([
         listBackups(),
         getMigrations(),
         getMeta('last_sync'),
         getQueue(),
         getStats().catch(() => ({})),
+        getDiskInfo().catch(() => null),
       ]);
       await updateStatus();
-      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue, importConfigured: !!stats.import_configured });
+      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue, importConfigured: !!stats.import_configured, diskInfo });
     } catch (err) {
       console.error('[SystemPage] load error:', err);
       store.set('toast', { message: 'Could not load system data.', type: 'error' });
