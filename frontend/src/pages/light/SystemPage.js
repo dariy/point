@@ -181,6 +181,7 @@ export default class SystemPage extends Component {
                 </div>
               </div>
               <div class="card-body">
+                ${this._renderDiskInfo(diskInfo, backups)}
                 ${this._renderBackups(backups)}
               </div>
             </div>` : ''}
@@ -210,6 +211,28 @@ export default class SystemPage extends Component {
           </main>
         </div>
       </div>`;
+  }
+
+  _renderDiskInfo(diskInfo, backups) {
+    if (!diskInfo) return '';
+    const free = diskInfo.free;
+    const total = diskInfo.total;
+    const usedPct = total > 0 ? Math.round((diskInfo.used / total) * 100) : 0;
+    const lastBackupSize = backups.length > 0
+      ? Math.max(...backups.map(b => b.size || 0))
+      : 0;
+    const isLow = lastBackupSize > 0 && free < lastBackupSize * 1.5;
+
+    return `
+      <div class="disk-info">
+        <span class="disk-free">Free: <strong>${formatFileSize(free)}</strong> of ${formatFileSize(total)} (${usedPct}% used)</span>
+      </div>
+      ${isLow ? `
+        <div class="backup-warning" role="alert">
+          <strong>Low disk space.</strong> Free space (${formatFileSize(free)}) may be insufficient for a new backup (estimated ${formatFileSize(Math.round(lastBackupSize * 1.5))} needed).
+        </div>
+      ` : ''}
+    `;
   }
 
   _renderBackups(backups) {
