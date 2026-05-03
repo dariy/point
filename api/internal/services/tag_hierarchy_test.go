@@ -169,7 +169,7 @@ func TestTagService_PostsByTagIDsExtended(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, ?)`, child.ID)
 
 	// Parent should show child's posts
-	posts, total, err := service.GetPostsByTag(ctx, parent.ID, 1, 10, true, false)
+	posts, total, err := service.GetPostsByTag(ctx, parent.ID, 1, 10, true, false, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

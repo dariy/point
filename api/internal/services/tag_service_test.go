@@ -93,7 +93,7 @@ func TestTagService_CRUD(t *testing.T) {
 	}
 
 	// Test GetPostsByTag (empty result)
-	posts, total, err := service.GetPostsByTag(ctx, 999, 1, 10, true, false)
+	posts, total, err := service.GetPostsByTag(ctx, 999, 1, 10, true, false, 0, 0)
 	if err != nil {
 		t.Errorf("GetPostsByTag failed: %v", err)
 	}

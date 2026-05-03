@@ -1753,6 +1753,190 @@ AND (? OR NOT EXISTS (
 	return count, err
 }
 
+// GetPostsByTagIDsInYearRange returns paginated posts that have at least one tag from the
+// given set AND fall within [fromYear, toYear] via _in_timeline year tags.
+func (r *Repository) GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
+	if len(tagIDs) == 0 {
+		return []models.Post{}, nil
+	}
+
+	placeholders := ""
+	args := make([]interface{}, 0, 2+len(tagIDs)+3)
+	args = append(args, fromYear, toYear)
+	for i, id := range tagIDs {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+
+	var statusClause string
+	if includeDrafts {
+		statusClause = "1=1"
+	} else if includeHidden {
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+	} else {
+		if publishedOnly {
+			statusClause = "LOWER(p.status) = 'published'"
+		} else {
+			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		}
+		statusClause += ` AND p.id NOT IN (
+			SELECT pt.post_id FROM post_tags pt
+			WHERE pt.tag_id IN (
+				WITH RECURSIVE h(id) AS (
+					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					UNION
+					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+				)
+				SELECT id FROM h
+			)
+		)`
+	}
+
+	bypassEHP := includeDrafts || includeHidden
+	q := `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+ehp(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
+)
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
+       p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
+       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+AND p.id IN (
+    SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
+)
+AND (` + statusClause + `)
+AND (? OR NOT EXISTS (
+    SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
+))
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?`
+	args = append(args, bypassEHP, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Post
+	for rows.Next() {
+		var i models.Post
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter, &i.Status,
+			&i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.CreatedAt, &i.UpdatedAt,
+			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// CountPostsByTagIDsInYearRange counts posts in the tag set that fall within the year range.
+func (r *Repository) CountPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error) {
+	if len(tagIDs) == 0 {
+		return 0, nil
+	}
+
+	placeholders := ""
+	args := make([]interface{}, 0, 2+len(tagIDs)+1)
+	args = append(args, fromYear, toYear)
+	for i, id := range tagIDs {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+
+	var statusClause string
+	if includeDrafts {
+		statusClause = "1=1"
+	} else if includeHidden {
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+	} else {
+		if publishedOnly {
+			statusClause = "LOWER(p.status) = 'published'"
+		} else {
+			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		}
+		statusClause += ` AND p.id NOT IN (
+			SELECT pt.post_id FROM post_tags pt
+			WHERE pt.tag_id IN (
+				WITH RECURSIVE h(id) AS (
+					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					UNION
+					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+				)
+				SELECT id FROM h
+			)
+		)`
+	}
+
+	bypassEHP := includeDrafts || includeHidden
+	q := `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+ehp(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
+)
+SELECT COUNT(*) FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+AND p.id IN (
+    SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
+)
+AND (` + statusClause + `)
+AND (? OR NOT EXISTS (
+    SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
+))`
+	args = append(args, bypassEHP)
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
+	return count, err
+}
+
 // GetMediaByPath returns the media record whose original_path matches exactly.
 // The path should be in the stored format, e.g. "originals/2026/03/ts_file.jpg".
 func (r *Repository) GetMediaByPath(ctx context.Context, originalPath string) (models.Medium, error) {
