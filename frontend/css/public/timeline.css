@@ -48,33 +48,62 @@
   width: 100%;
   height: 100%;
   pointer-events: all;
+  position: relative;
 }
 
-.timeline-axis-line {
-  stroke: var(--border-subtle);
-  stroke-width: 1;
-}
-
-.timeline-center-indicator {
-  stroke: var(--color-primary);
-  stroke-width: 2;
-  opacity: 0.35;
+.timeline-axis {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--border-subtle);
   pointer-events: none;
 }
 
+.timeline-axis-ticks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .timeline-tick {
-  stroke: var(--border-subtle);
-  stroke-width: 1;
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 5px;
+  background: var(--border-subtle);
+}
+
+.timeline-center-indicator {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 100%;
+  background: var(--color-primary);
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: 2;
+  transform: translateX(-50%);
 }
 
 /* ── Pills ────────────────────────────────────────────────────────────────── */
 
-.timeline-pill-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 36px;
-  touch-action: none;
+.timeline-pills-mount {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.timeline-pill-group,
+.timeline-cluster {
+  position: absolute;
+  top: 10px;
+  transform: translateX(-50%);
+  z-index: 3;
 }
 
 .timeline-pill-btn {
@@ -91,6 +120,9 @@
   touch-action: none;
   transition: scale var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .timeline-pill-btn:hover {
@@ -108,24 +140,7 @@
   color: #fff;
 }
 
-.timeline-axis-dot {
-  fill: var(--border-subtle);
-  transition: fill var(--transition-fast);
-}
-
-.timeline-pill-group.active .timeline-axis-dot {
-  fill: var(--pt-colors-primary, #e05c00);
-}
-
 /* ── Clusters ─────────────────────────────────────────────────────────────── */
-
-.timeline-cluster-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 36px;
-  touch-action: none;
-}
 
 .timeline-cluster-btn {
   appearance: none;
@@ -141,6 +156,9 @@
   touch-action: none;
   transition: scale var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .timeline-cluster-btn:hover {

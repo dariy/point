@@ -582,7 +582,7 @@ export class Timeline extends Component {
     const item = this._findCenteredItem();
     if (!item) return;
     const year = item.type === 'cluster' ? (item.minYear + item.maxYear) / 2 : item.year;
-    this._centerOnYear(year);
+    this._centerOnYear(year, true);
   }
 
   _findCenteredItem() {

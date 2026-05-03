@@ -114,8 +114,10 @@ const _cssLight  = document.getElementById('css-light');
 
 function _applySection(pathname) {
   const isLight = pathname.startsWith('/light') || pathname === '/setup';
-  if (_cssPublic) _cssPublic.media = isLight ? 'not all' : 'all';
-  if (_cssLight)  _cssLight.media  = isLight ? 'all' : 'not all';
+  const pubMedia = isLight ? 'not all' : 'all';
+  const lgtMedia = isLight ? 'all' : 'not all';
+  if (_cssPublic && _cssPublic.media !== pubMedia) _cssPublic.media = pubMedia;
+  if (_cssLight  && _cssLight.media  !== lgtMedia) _cssLight.media  = lgtMedia;
   document.documentElement.dataset.section = isLight ? 'light' : 'public';
 }
 
