@@ -467,7 +467,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 		}
 	}
 
-	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, int32(page), int32(perPage), publicOnly, false)
+	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, int32(page), int32(perPage), publicOnly, false, 0, 0)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
