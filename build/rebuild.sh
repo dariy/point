@@ -77,3 +77,5 @@ podman run -d \
 echo "Cleaning up dangling images..."
 podman image prune -f
 rm ../frontend/css/*.css # clear css artifacts for development builds
+
+notify "Rebuild is done."
