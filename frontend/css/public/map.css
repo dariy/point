@@ -11,7 +11,8 @@
     margin-top: var(--map-container-margin-top);
     position: relative;
     z-index: 1;
-    box-shadow: 0 var(--map-container-box-shadow-1) var(--map-container-box-shadow-2) var(--color-black-alpha-10);
+    box-shadow: 0 var(--map-container-box-shadow-1)
+        var(--map-container-box-shadow-2) var(--color-black-alpha-10);
 }
 
 .site-main--map .map-container {
@@ -23,7 +24,8 @@
 }
 
 [data-theme="dark"] .map-container {
-    box-shadow: 0 var(--map-container-box-shadow-1) var(--map-container-box-shadow-2) var(--color-black-alpha-40);
+    box-shadow: 0 var(--map-container-box-shadow-1)
+        var(--map-container-box-shadow-2) var(--color-black-alpha-40);
 }
 
 #map {
@@ -67,11 +69,6 @@
     font-size: var(--map-subtitle-font-size);
 }
 
-/* Flush timeline against header and map — no gaps on the map page */
-.site-wrapper--map .timeline-container {
-    margin: 0;
-}
-
 /* Custom Leaflet Marker Styling */
 .custom-marker-wrapper {
     position: relative;
@@ -88,9 +85,12 @@
     color: white;
     border-radius: 50%;
     border: var(--custom-marker-border) solid white;
-    box-shadow: 0 var(--custom-marker-box-shadow-1) var(--custom-marker-box-shadow-2) var(--color-black-alpha-30);
+    box-shadow: 0 var(--custom-marker-box-shadow-1)
+        var(--custom-marker-box-shadow-2) var(--color-black-alpha-30);
     font-weight: bold;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
     z-index: 2;
 }
 
@@ -105,7 +105,8 @@
     border-radius: var(--border-radius-sm);
     font-size: var(--marker-label-font-size);
     font-weight: 600;
-    box-shadow: 0 var(--marker-label-box-shadow-1) var(--marker-label-box-shadow-2) var(--color-black-alpha-20);
+    box-shadow: 0 var(--marker-label-box-shadow-1)
+        var(--marker-label-box-shadow-2) var(--color-black-alpha-20);
     pointer-events: none;
     opacity: 0.8;
     transition: opacity 0.2s ease;
@@ -124,7 +125,8 @@
 
 .custom-marker:hover {
     transform: scale(1.2);
-    box-shadow: 0 var(--custom-marker-box-shadow-1-alt1) var(--custom-marker-box-shadow-2-alt1) var(--color-black-alpha-40);
+    box-shadow: 0 var(--custom-marker-box-shadow-1-alt1)
+        var(--custom-marker-box-shadow-2-alt1) var(--color-black-alpha-40);
     z-index: 1000 !important;
 }
 
@@ -160,7 +162,9 @@
     border-radius: var(--map-popup-tag-border-radius);
     text-decoration: none;
     white-space: nowrap;
-    transition: border-color 0.15s ease, color 0.15s ease;
+    transition:
+        border-color 0.15s ease,
+        color 0.15s ease;
 }
 
 .map-popup-tag:hover {
@@ -201,7 +205,9 @@
     border-radius: var(--map-year-link-border-radius);
     text-decoration: none;
     white-space: nowrap;
-    transition: border-color 0.15s ease, color 0.15s ease;
+    transition:
+        border-color 0.15s ease,
+        color 0.15s ease;
 }
 
 .map-year-link:hover {
