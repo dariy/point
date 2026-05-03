@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -13,6 +15,37 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 )
+
+func TestSystemService_CreateBackup_InsufficientDisk(t *testing.T) {
+	repo := setupTestDB(t)
+	tmpDir := t.TempDir()
+	defer func() { _ = repo.Close() }()
+
+	svc := services.NewSystemService(repo, tmpDir)
+
+	// Get actual free space
+	info, err := svc.GetDiskInfo()
+	if err != nil {
+		t.Fatalf("GetDiskInfo: %v", err)
+	}
+
+	// Create a fake "previous backup" whose size > free/1.5 (1.5x would exceed free)
+	backupDir := filepath.Join(tmpDir, "backups")
+	_ = os.MkdirAll(backupDir, 0755)
+	fakeSize := info.Free + 1 // larger than free space itself
+	fakeFile := filepath.Join(backupDir, "backup_20200101_000000.tar.gz")
+	f, _ := os.Create(fakeFile)
+	_ = f.Truncate(fakeSize)
+	_ = f.Close()
+
+	_, _, err = svc.CreateBackup(context.Background())
+	if err == nil {
+		t.Fatal("expected error for insufficient disk space, got nil")
+	}
+	if !strings.Contains(err.Error(), "insufficient disk space") {
+		t.Errorf("expected 'insufficient disk space' in error, got: %v", err)
+	}
+}
 
 func TestSystemHandler_Stats(t *testing.T) {
 	repo := setupTestDB(t)

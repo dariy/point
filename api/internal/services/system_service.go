@@ -53,6 +53,14 @@ func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error)
 		return "", 0, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
+	// Pre-flight: check disk space against the largest existing backup.
+	if prevSize := s.largestBackupSize(backupDir); prevSize > 0 {
+		disk, err := s.GetDiskInfo()
+		if err == nil && disk.Free < int64(float64(prevSize)*1.5) {
+			return "", 0, fmt.Errorf("insufficient disk space: need %d bytes (1.5× last backup), have %d free", int64(float64(prevSize)*1.5), disk.Free)
+		}
+	}
+
 	timestamp := time.Now().Format("20060102_150405")
 	backupName := fmt.Sprintf("backup_%s.tar.gz", timestamp)
 	backupPath := filepath.Join(backupDir, backupName)
@@ -67,6 +75,28 @@ func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error)
 	}
 
 	return backupName, info.Size(), nil
+}
+
+// largestBackupSize returns the size in bytes of the largest .tar.gz in backupDir, or 0 if there are none.
+func (s *SystemService) largestBackupSize(backupDir string) int64 {
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return 0
+	}
+	var largest int64
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.Size() > largest {
+			largest = info.Size()
+		}
+	}
+	return largest
 }
 
 func (s *SystemService) createTarGz(destPath string) error {
