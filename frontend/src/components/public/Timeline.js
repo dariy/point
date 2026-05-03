@@ -621,8 +621,27 @@ export class Timeline extends Component {
     if (!track) return;
     const trackWidth = track.clientWidth;
 
+    const MIN_ZOOM = 0.001;
+
+    // In collapsed state, first zoom-in jumps to fit-all; zoom-out is a no-op.
+    if (zoom < MIN_ZOOM) {
+      if (scaleDelta <= 1) return;
+      this._zoomToFit(this.state.extent.min, this.state.extent.max);
+      this._gestureController.setZoomed(this.state.zoom > 1);
+      return;
+    }
+
     const maxZoom = this._computeMaxZoom();
-    const newZoom = Math.max(0.001, Math.min(maxZoom, zoom * scaleDelta));
+    const rawZoom = zoom * scaleDelta;
+
+    // Zooming out past the minimum snaps back to the collapsed state.
+    if (rawZoom < MIN_ZOOM) {
+      this._initCollapsed();
+      this._gestureController.setZoomed(false);
+      return;
+    }
+
+    const newZoom = Math.max(MIN_ZOOM, Math.min(maxZoom, rawZoom));
     if (newZoom === zoom) return;
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
@@ -643,6 +662,15 @@ export class Timeline extends Component {
     const track = this.$('.timeline-track');
     if (!track) return;
     const trackWidth = track.clientWidth;
+
+    // In collapsed state the pan range is ~0px; any real drag expands to fit-all instead.
+    if (zoom < 0.001) {
+      if (Math.abs(dx) > 1) {
+        this._zoomToFit(this.state.extent.min, this.state.extent.max);
+        this._gestureController.setZoomed(this.state.zoom > 1);
+      }
+      return;
+    }
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
     const maxPanX = trackWidth / 2 - EDGE_PAD;
