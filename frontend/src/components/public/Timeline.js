@@ -689,35 +689,73 @@ export class Timeline extends Component {
       if (dist < nearestDist) { nearestDist = dist; centeredKey = `cluster-${c.minYear}-${c.maxYear}`; }
     }
 
-    let html = '';
-
-    clusters.forEach((c) => {
-      const midYear = (c.minYear + c.maxYear) / 2;
-      const x = getX(midYear);
-      const clusterKey = `cluster-${c.minYear}-${c.maxYear}`;
-      const activeClass = centeredKey === clusterKey ? ' active' : '';
-      const label = c.minYear === c.maxYear ? String(c.minYear) : `${c.minYear}–${c.maxYear}`;
-      html += `
-        <div class="timeline-cluster${activeClass}" style="left: ${x}px" data-min="${c.minYear}" data-max="${c.maxYear}">
-          <button class="timeline-cluster-btn" aria-label="${c.minYear} to ${c.maxYear}, ${c.pills.length} dates.">${label}</button>
-        </div>
-      `;
-    });
-
-    visible.forEach((p) => {
-      const x = getX(p.year);
-      const activeClass = centeredKey === p.slug ? ' active' : '';
-      html += `
-        <div class="timeline-pill-group${activeClass}" style="left: ${x}px" data-slug="${p.slug}">
-          <button class="timeline-pill-btn" aria-label="${p.name}, ${p.post_count} posts.">${p.name}</button>
-        </div>
-      `;
-    });
-
-    mount.innerHTML = html;
+    this._patchPillsMount(mount, visible, clusters, getX, centeredKey);
 
     this._updateTicks(trackWidth, getX);
     this._updateNavButtons(trackWidth, getX);
+  }
+
+  _patchPillsMount(mount, visible, clusters, getX, centeredKey) {
+    const elKey = (el) => el.dataset.slug
+      ? `p:${el.dataset.slug}`
+      : `c:${el.dataset.min}-${el.dataset.max}`;
+
+    const existing = new Map();
+    for (const el of [...mount.children]) existing.set(elKey(el), el);
+
+    const desired = new Map();
+    for (const c of clusters) {
+      desired.set(`c:${c.minYear}-${c.maxYear}`, {
+        x: getX((c.minYear + c.maxYear) / 2),
+        active: centeredKey === `cluster-${c.minYear}-${c.maxYear}`,
+        type: 'cluster', data: c,
+      });
+    }
+    for (const p of visible) {
+      desired.set(`p:${p.slug}`, {
+        x: getX(p.year),
+        active: centeredKey === p.slug,
+        type: 'pill', data: p,
+      });
+    }
+
+    for (const [k, el] of existing) {
+      if (!desired.has(k)) el.remove();
+    }
+    for (const [k, info] of desired) {
+      if (existing.has(k)) {
+        const el = existing.get(k);
+        el.style.left = `${info.x}px`;
+        el.classList.toggle('active', info.active);
+      } else {
+        const el = this._makePillEl(info);
+        mount.appendChild(el);
+      }
+    }
+  }
+
+  _makePillEl(info) {
+    const wrap = document.createElement('div');
+    const btn = document.createElement('button');
+    if (info.type === 'cluster') {
+      const c = info.data;
+      const label = c.minYear === c.maxYear ? String(c.minYear) : `${c.minYear}–${c.maxYear}`;
+      wrap.className = 'timeline-cluster';
+      wrap.dataset.min = c.minYear;
+      wrap.dataset.max = c.maxYear;
+      btn.className = 'timeline-cluster-btn';
+      btn.setAttribute('aria-label', `${c.minYear} to ${c.maxYear}, ${c.pills.length} dates.`);
+      btn.textContent = label;
+    } else {
+      const p = info.data;
+      wrap.className = 'timeline-pill-group';
+      wrap.dataset.slug = p.slug;
+      btn.className = 'timeline-pill-btn';
+      btn.setAttribute('aria-label', `${p.name}, ${p.post_count} posts.`);
+      btn.textContent = p.name;
+    }
+    wrap.appendChild(btn);
+    return wrap;
   }
 
   _collide(pills, getX) {
