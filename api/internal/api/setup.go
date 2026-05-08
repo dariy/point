@@ -50,8 +50,9 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "all fields are required"})
 	}
 
-	if len(req.Password) < 8 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "password must be at least 8 characters"})
+	// req.Password is a SHA-256 hex string sent by the frontend (always 64 chars)
+	if len(req.Password) != 64 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid password format"})
 	}
 
 	ctx := c.Request().Context()
