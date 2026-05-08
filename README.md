@@ -1,173 +1,107 @@
 # Point
 
-A modern, high-performance personal photo blog engine built with Go and Vanilla JS. Designed for photographers and visual storytellers who want a fast, self-hosted, and beautiful way to share their work.
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Tests](https://github.com/dariy/point/actions/workflows/test.yml/badge.svg)](https://github.com/dariy/point/actions/workflows/test.yml)
+[![GHCR](https://ghcr-badge.egpl.dev/dariy/point/latest_tag?trim=major&label=ghcr.io%2Fdariy%2Fpoint)](https://github.com/dariy/point/pkgs/container/point)
 
-## ✨ Key Features
+A self-hosted personal photo blog engine. Single container, SQLite storage, no external services required.
 
-- **🚀 High Performance**: Native Go backend (using Echo framework) and a lightweight Vanilla JS Single-Page Application (SPA).
-- **🖼️ Media-Centric**: Automatic thumbnail generation, image resizing, and video support.
-- **📱 Modern UX**:
-    - **Immersive Mode**: Full-screen, distraction-free viewing for photo-heavy posts.
-    - **SPA Navigation**: Instant page transitions via client-side routing.
-    - **Gesture Support**: Swipe navigation for touch devices and carousels.
-- **🌓 Dual Themes**: Beautiful dark and light modes with system preference detection.
-- **🛠️ Professional Tools**:
-    - Full post management with Markdown support.
-    - **Quick Post Creation**: Drag-and-drop images into the editor or onto the page.
-    - **Meta-tagging**: Hierarchical tag system with recursive post retrieval and counts.
-    - Integrated backup/restore system.
-    - System health and log monitoring.
-- **🔒 Secure & Private**: Self-hosted, single-user authentication, and security-hardened headers.
-- **📦 Single Container**: Easy deployment with Docker and SQLite.
+Built with Go + Echo v4 backend and a Vanilla JS SPA frontend.
 
-## 🚀 Quick Start
+## Quick start with the prebuilt image
 
-### Prerequisites
+```bash
+docker run -d --name point \
+  -p 8000:8000 \
+  -v point-data:/data \
+  ghcr.io/dariy/point:latest
+```
 
-- Docker and Docker Compose. Podman and Podman Compose as an alternative.
-- (Optional) Go 1.25+ for local backend development.
+On first boot, visit `http://localhost:8000` to complete the setup wizard.
 
-### Installation
+For a full production setup with a compose file, persistent volumes, and optional photo library import, see [QUICKSTART.md](QUICKSTART.md).
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/dariy/point.git
-   cd point
-   ```
+## Key features
 
-2. **Configure environment**:
-   ```bash
-   cp build/.env build/.env.local
-   # Edit build/.env with your desired settings (SECRET_KEY is required in production)
-   ```
+- **Media-centric**: automatic thumbnail generation, image resizing, video support, EXIF extraction
+- **AI analysis**: Google Gemini integration for automatic title, tags, and excerpt suggestions
+- **Timeline navigation**: interactive SVG timeline with tag-based filtering and year/location drill-down
+- **Post scheduling**: publish posts at a future date/time
+- **Drag-and-drop creation**: drop an image on any page to instantly create a post
+- **Immersive mode**: full-screen, distraction-free viewing
+- **Themes**: built-in dark/light/auto themes with CSS custom property overrides
+- **Single container**: multi-stage Dockerfile, runs as non-root, multi-arch (amd64 + arm64) GHCR images
+- **Self-hosted**: no external databases, no cloud services required
 
-3. **Build and start**:
-   ```bash
-   # Development (Podman)
-   cd build && ./rebuild.sh
+## Configuration
 
-   # Production (Docker)
-   cd build && docker compose up -d
-   ```
+The app is configured via environment variables (or a `.env` file in the working directory).
 
-The blog will be available at `http://localhost:8000`. The admin interface ("light") is at `http://localhost:8000/light/login`.
+| Variable | Default | Description |
+|---|---|---|
+| `SECRET_KEY` | *(auto-generated)* | Session signing key — generated and persisted automatically |
+| `PORT` | `8000` | API listen port |
+| `DATABASE_URL` | `sqlite:./data/point.db` | SQLite path |
+| `STORAGE_PATH` | `./data` | Media file root |
+| `GEMINI_API_KEY` | *(empty)* | Google Gemini key for AI media analysis |
+| `MEDIA_IMPORT_PATH` | *(empty)* | Path to a read-only photo library to import from |
+| `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
+| `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
+| `THUMBNAIL_WIDTH/HEIGHT` | `400/300` | Thumbnail dimensions |
 
-## ⚙️ Configuration
+## Development
 
-The application is configured via environment variables in the `.env` file. Key settings include:
+### Run locally
 
-- `APP_NAME`: Title of your blog.
-- `SECRET_KEY`: Random string for session security.
-- `STORAGE_PATH`: Directory for database and media storage (default: `/data`).
-- `MAX_IMAGE_WIDTH`: Maximum width for uploaded images (auto-resized).
-- `JPEG_QUALITY`: Quality setting for generated images (1-100).
-
-## 📖 Usage Guide
-
-### Quick Post Creation (Drag-and-Drop)
-
-One of the standout features is the ability to create posts instantly by dragging images onto the page:
-
-1. **Log in** to your blog at `/light/login`
-2. **Browse** to any public page (homepage, single post, gallery, tags, etc.)
-3. **Drag an image file** from your desktop onto the page
-   - A full-screen drop zone overlay will appear
-4. **Drop the image** to upload it
-   - The image is automatically uploaded
-   - You'll see an "Uploading..." indicator with the filename
-5. **Automatic redirect** to the post editor
-   - The image is pre-populated in the post content as a markdown reference
-   - A preview of the uploaded image is displayed
-   - You can immediately add a title, tags, and publish
-
-**Supported formats**: JPG, PNG, GIF, WebP, SVG
-
-**Benefits**:
-- Skip the traditional "New Post → Upload Media → Insert" workflow
-- Perfect for quick photo sharing while browsing your blog
-- Seamlessly integrates content creation into your browsing experience
-
-### Traditional Workflow
-
-For a more traditional approach:
-
-1. Go to `/light/posts/new`
-2. Fill in post title and content
-3. Upload media via the media library or drag-and-drop in the editor
-4. Add tags
-5. Save as draft or publish immediately
-
-## 🛠️ Development
-
-### Local Setup (Backend)
-
-1. Navigate to the API directory:
-   ```bash
-   cd api
-   ```
-
-2. Install dependencies:
-   ```bash
-   go mod download
-   ```
-
-3. Run the development server:
-   ```bash
-   go run cmd/api/main.go
-   ```
-
-   The API will start on port 8000.
-
-### Local Setup (Frontend)
-
-The frontend is a static SPA served by the Go backend. During development, you can edit files in `frontend/` and refresh the browser.
+```bash
+cd api
+go run ./cmd/api
+# API starts at http://localhost:8000 (reads .env if present)
+```
 
 ### Tests & CSS
 
 ```bash
-# Run all Go tests with coverage (from project root)
-./scripts/run-tests.sh
-
-# Rebuild CSS bundles after editing frontend/css/
-./scripts/build-css.sh
+./scripts/run-tests.sh          # Go tests with coverage
+./scripts/run-tests.sh --race   # with race detector
+./scripts/build-css.sh          # rebuild CSS bundles after editing frontend/css/
 ```
 
-## 📂 Project Structure
+### Build + deploy (Podman)
 
-- `api/`: Go backend (Echo v4, sqlc, SQLite).
-- `frontend/`: Vanilla JS SPA (no build step required).
-- `build/`: Dockerfile, docker-compose, rebuild script.
-- `data/`: Persistent storage (DB + media, mounted as volume).
-- `docs/`: Architecture and feature documentation.
-- `scripts/`: Test runner, CSS builder, backup utilities.
+```bash
+cd build && ./rebuild.sh        # build + restart container
+```
 
-## 🚀 Production Deployment
+### Prerequisites
 
-1. **Clone** the repository on your server.
-2. **Configure** `build/.env` — set `SECRET_KEY`, `APP_NAME`, `STORAGE_PATH`.
-3. **Deploy**:
-   ```bash
-   cd build
-   docker compose up -d
-   ```
+- Go 1.25+ for local backend development
+- Docker or Podman for container builds
 
-Your blog will be available at `http://your-server:8000`. Put it behind a reverse proxy (nginx/Caddy) for HTTPS.
+## Project structure
 
-See [`scripts/SETUP-PRODUCTION.md`](scripts/SETUP-PRODUCTION.md) for backup/restore setup.
+```
+api/          Go backend (Echo v4, sqlc, SQLite)
+frontend/     Vanilla JS SPA (no build step for development)
+build/        Dockerfile, compose file, rebuild script
+scripts/      Test runner, CSS bundler, deploy, backup, lint, setup utilities
+quickstart/   Quickstart docker-compose and install script
+data/         Runtime data (DB + media) — gitignored
+```
 
-## 📄 License
+## Production deployment
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+See [`scripts/SETUP-PRODUCTION.md`](scripts/SETUP-PRODUCTION.md) for systemd + nginx + backup setup.
 
-## 🙏 Acknowledgments
+For Docker-only, [QUICKSTART.md](QUICKSTART.md) covers the full install in a few commands.
 
-Built with:
-- [Go](https://golang.org/) - Efficient and reliable backend language
-- [Echo](https://echo.labstack.com/) - High performance, extensible Go web framework
-- [Vanilla JS](https://developer.mozilla.org/en-US/docs/Web/JavaScript) - Framework-free component system
-- [SQLite](https://sqlite.org/) - Self-contained, serverless database engine
-- [Docker](https://www.docker.com/) / [Podman](https://podman.io/) - Containerization
+## License
 
+MIT — see [LICENSE](LICENSE).
+
+## Built with
+
+[Go](https://golang.org/) · [Echo](https://echo.labstack.com/) · [SQLite](https://sqlite.org/) · [Docker](https://www.docker.com/) / [Podman](https://podman.io/)
 
 ```
  _| _ ._oo ._  __|_
