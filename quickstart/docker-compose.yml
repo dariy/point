@@ -16,6 +16,7 @@ services:
       - STORAGE_PATH=/data
       - FRONTEND_DIR=/app/frontend
       - HOST=0.0.0.0
+      - MEDIA_IMPORT_PATH=/photos
     volumes:
       - point-data:/data
       - ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro # set PHOTO_LIBRARY_PATH in .env to mount your library
