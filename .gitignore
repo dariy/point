@@ -160,3 +160,6 @@ build/gemini*
 .beads-credential-key
 .sqlhistory
 test-connection.sh
+
+# bv (beads viewer) local config and caches
+.bv/
