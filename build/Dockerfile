@@ -2,6 +2,7 @@
 FROM --platform=$BUILDPLATFORM docker.io/library/golang:alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG BUILD_VERSION=dev
 
 # Install build dependencies
 RUN apk add --no-cache git nodejs npm
@@ -22,7 +23,7 @@ COPY api/ ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
-    -ldflags="-s -w" \
+    -ldflags="-s -w -X main.Version=${BUILD_VERSION}" \
     -o api-bin cmd/api/main.go
 
 # Build the path migration utility
