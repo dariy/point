@@ -51,7 +51,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("STORAGE_PATH", "./data")
 	v.SetDefault("FRONTEND_DIR", "../frontend")
 	v.SetDefault("THEMES_PATH", "")
-	v.SetDefault("APP_VERSION", "1.0.0")
+	v.SetDefault("APP_VERSION", "")
 	v.SetDefault("SESSION_EXPIRY_HOURS", 720)
 	v.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
 	v.SetDefault("MAX_UPLOAD_SIZE_MB", 50)

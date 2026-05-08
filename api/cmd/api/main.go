@@ -7,10 +7,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -19,6 +22,9 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
+
+// Version is set at build time via -ldflags="-X main.Version=..."
+var Version = "dev"
 
 // resolveJSDir returns the directory to serve under /assets/js.
 // It prefers the pre-built bundle directory (frontend/js/) over the raw
@@ -372,6 +378,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+	if cfg.AppVersion == "" {
+		cfg.AppVersion = Version
+	}
 
 	// Initialize repository
 	repo, err := repository.NewRepository(cfg.DatabaseURL)
@@ -393,7 +402,8 @@ func main() {
 	}
 
 	// Apply pending DB migrations.
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	migrations := []struct{ name, sql string }{
 		{
 			"add_tags_include_in_breadcrumbs",
@@ -599,15 +609,29 @@ func main() {
 
 	e := setupEcho(cfg, repo, svcs)
 
-	// Start background scheduler
+	// Start background scheduler (goroutines honor ctx cancellation)
 	svcs.Scheduler.Start(ctx)
 
 	// Start server
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	log.Printf("Point API starting on %s", address)
-	if err := e.Start(address); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("failed to start server: %v", err)
+	go func() {
+		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("failed to start server: %v", err)
+		}
+	}()
+
+	// Wait for interrupt or SIGTERM
+	<-ctx.Done()
+	stop()
+
+	log.Println("shutting down...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown error: %v", err)
 	}
+	log.Println("graceful shutdown complete")
 }
 
 // checksumRe matches the 8-char hex checksum embedded in a media filename,
