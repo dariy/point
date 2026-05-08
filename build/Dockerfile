@@ -1,5 +1,5 @@
 # Build stage
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:alpine AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.25-alpine3.21 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # Bundle and minify frontend JS
 COPY frontend/ ./frontend/
-RUN npx --yes esbuild frontend/src/app.js \
+RUN npx --yes esbuild@0.28.0 frontend/src/app.js \
     --bundle --minify --format=esm \
     --outfile=frontend/js/app.js
 
@@ -44,7 +44,7 @@ COPY scripts/build-css.sh ./scripts/
 RUN sh ./scripts/build-css.sh
 
 # Runtime stage
-FROM docker.io/library/alpine:latest
+FROM docker.io/library/alpine:3.21
 
 WORKDIR /app
 
