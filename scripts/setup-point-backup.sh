@@ -1,6 +1,6 @@
 #!/bin/bash
-# Install the Point external backup service on Lab.
-# Run as root (or with sudo) on the Lab machine.
+# Install the Point external backup service on a local machine.
+# Run as root on the a local machine.
 
 set -euo pipefail
 

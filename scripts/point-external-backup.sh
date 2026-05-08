@@ -1,6 +1,6 @@
 #!/bin/bash
 # External backup script for Point photo blog.
-# Runs on Lab — SSHes to the Point server, downloads the latest backup that
+# Runs on a local machine — SSHes to the Point server, downloads the latest backup that
 # was created by Point's built-in scheduler, then removes old backups from
 # Point to avoid disk overfill.
 #
@@ -15,7 +15,7 @@ POINT_HOST="${POINT_HOST:?Set POINT_HOST (SSH host of the Point server)}"
 POINT_BACKUP_DIR="${POINT_BACKUP_DIR:?Set POINT_BACKUP_DIR (path to backups on Point host)}"
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/point}"
 KEEP_ON_POINT="${KEEP_ON_POINT:-1}"   # backups to leave on Point after download
-KEEP_LOCAL="${KEEP_LOCAL:-30}"        # local backups to retain on Lab
+KEEP_LOCAL="${KEEP_LOCAL:-30}"        # local backups to retain on a local machine
 LOG_TAG="point-backup"
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -79,7 +79,7 @@ DELETED_ON_POINT=$(ssh "$POINT_HOST" "
 
 log "Removed $DELETED_ON_POINT old backup(s) from Point"
 
-# 4. Prune old local backups on Lab.
+# 4. Prune old local backups on a local machine.
 EXCESS=$(find "$LOCAL_BACKUP_DIR" -maxdepth 1 -name "backup_*.tar.gz" \
          | sort | head -n "-$KEEP_LOCAL" 2>/dev/null | wc -l)
 if [ "$EXCESS" -gt 0 ]; then
