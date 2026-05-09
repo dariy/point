@@ -53,7 +53,11 @@ podman build $PULL_FLAG \
     --cache-from point-builder \
     --build-arg "BUILD_VERSION=$DEV_BUILD_VERSION" \
     .. && \
-podman rm -f point 2>/dev/null || true && \
+podman rm -f point 2>/dev/null || true
+
+# Pre-create data dirs as host user so --userns=keep-id containers can write
+mkdir -p ../data/media/originals ../data/media/thumbnails ../data/logs ../data/backups
+
 podman run -d \
     --name point \
     --restart unless-stopped \

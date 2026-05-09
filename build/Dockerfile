@@ -53,6 +53,7 @@ RUN apk add --no-cache \
     ca-certificates \
     tzdata \
     curl \
+    su-exec \
     && adduser -D -u 1000 appuser \
     && mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups \
     && chown -R appuser:appuser /app /data
@@ -75,7 +76,8 @@ ENV FRONTEND_DIR=/app/frontend
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
-USER appuser
+COPY build/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
 
@@ -83,4 +85,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
+# Start as root so the entrypoint can create /data subdirs on volume mounts,
+# then drop to appuser via su-exec before exec'ing the binary.
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["./api-bin"]
