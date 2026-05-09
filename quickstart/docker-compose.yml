@@ -1,8 +1,25 @@
 services:
+  # One-shot init: creates the data directory tree and sets ownership so
+  # the app container (UID 1000) can write on a fresh host.
+  init:
+    image: alpine:3.21
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups
+        chown -R 1000:1000 /data
+    volumes:
+      - ${DATA_PATH:-./data}:/data
+
   point:
-    image: ghcr.io/dariy/point:latest
+    image: ${IMAGE:-ghcr.io/dariy/point:latest}
     container_name: ${NAME:-point}
     restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
     # host networking avoids Netavark (required for rootless Podman on WSL2 / cgroups v1).
     # With host mode the app is accessible directly on PORT (default 8000).
     # Docker users who want port remapping: remove network_mode and uncomment ports below.
@@ -10,7 +27,8 @@ services:
     ports:
       - "${APP_PORT:-8000}:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - DATABASE_URL=/data/point.db
       - STORAGE_PATH=/data
@@ -18,7 +36,7 @@ services:
       - HOST=0.0.0.0
       - MEDIA_IMPORT_PATH=/photos
     volumes:
-      - point-data:/data
+      - ${DATA_PATH:-./data}:/data
       - ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro # set PHOTO_LIBRARY_PATH in .env to mount your library
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${PORT:-8000}/health"]
@@ -31,10 +49,3 @@ services:
         limits:
           cpus: '1'
           memory: 1G
-volumes:
-  point-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${DATA_PATH:-./data}
