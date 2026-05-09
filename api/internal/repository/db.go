@@ -45,16 +45,18 @@ func NewRepository(dbURL string) (*Repository, error) {
 	}
 
 	// Check if the database needs initialization
-	var tableName string
-	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='blog_settings';").Scan(&tableName)
-	if err == sql.ErrNoRows {
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='blog_settings';").Scan(&count)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check database schema: %w", err)
+	}
+
+	if count == 0 {
 		log.Println("Initializing new database with schema...")
 		if _, err := db.Exec(pointsql.SchemaSQL); err != nil {
 			return nil, fmt.Errorf("failed to initialize database schema: %w", err)
 		}
 		log.Println("Database schema initialized successfully.")
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to check database schema: %w", err)
 	}
 
 	queries := models.New(db)

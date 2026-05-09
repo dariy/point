@@ -53,7 +53,7 @@ services:
 
     volumes:
       # Use named volume for data persistence
-      - point-data:/data
+      - point-data:/data:z,U
 
     networks:
       - point-network
