@@ -4,50 +4,37 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/jpeg"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"point-api/internal/config"
+	goexif "github.com/rwcarlsen/goexif/exif"
 )
 
-func TestMediaService_AnalyzeImage(t *testing.T) {
+func TestMediaService_AnalyzeImage_DisabledWithNoKey(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
 	defer func() {
 		_ = os.RemoveAll(tmpDir)
 		_ = service.repo.Close()
 	}()
-
 	ctx := context.Background()
 
-	// Mock server for GenAI
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		res := map[string]interface{}{
-			"title": "Mock Title",
-			"tags":  []string{"tag1", "tag2"},
-			"excerpt": "Mock Excerpt",
-		}
-		_ = json.NewEncoder(w).Encode(res)
-	}))
-	defer server.Close()
+	// No API key → analysis is a no-op returning empty tags.
+	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
 
-	// Configure endpoint
-	if err := service.settingsService.SetSetting(ctx, "genai_api_endpoint", server.URL, "string"); err != nil {
-		t.Fatalf("SetSetting failed: %v", err)
-	}
-
-	analysis, err := service.AnalyzeImage(ctx, []byte("fake-image"), "test.jpg", "image/jpeg")
+	result, err := service.AnalyzeImage(ctx, buf.Bytes(), "test.jpg", "image/jpeg")
 	if err != nil {
-		t.Fatalf("AnalyzeImage failed: %v", err)
+		t.Fatalf("expected no error when key absent, got: %v", err)
 	}
-
-	if *analysis.Title != "Mock Title" {
-		t.Errorf("expected Mock Title, got %s", *analysis.Title)
+	if result == nil || len(result.Tags) != 0 {
+		t.Error("expected empty analysis response when key absent")
 	}
 }
 
@@ -489,7 +476,7 @@ func TestMediaService_RecalculateAllMediaVisibility(t *testing.T) {
 func TestMediaService_ParseAnalysisResult(t *testing.T) {
 	svc := &MediaService{}
 
-	// Basic result with title, tags, excerpt
+	// Valid result with all three required keys.
 	data := map[string]interface{}{
 		"title":   "Photo",
 		"tags":    []interface{}{"a", "b"},
@@ -506,10 +493,11 @@ func TestMediaService_ParseAnalysisResult(t *testing.T) {
 		t.Errorf("expected 2 tags, got %d", len(result.Tags))
 	}
 
-	// Filename starting with year — year tag is prepended
+	// Year tag prepended when filename starts with year.
 	data2 := map[string]interface{}{
-		"title": "Landscape",
-		"tags":  []interface{}{"nature"},
+		"title":   "Landscape",
+		"tags":    []interface{}{"nature"},
+		"excerpt": "A view",
 	}
 	result2, err := svc.parseAnalysisResult(data2, "2026-summer.jpg")
 	if err != nil {
@@ -519,26 +507,18 @@ func TestMediaService_ParseAnalysisResult(t *testing.T) {
 		t.Errorf("expected year tag '2026' prepended, got %v", result2.Tags)
 	}
 
-	// Alternative key mapping: summary → excerpt
+	// Missing excerpt key → ErrResponseUnusable (strict validation).
 	data3 := map[string]interface{}{
-		"tags":    []interface{}{},
-		"summary": "A summary",
+		"title": "T",
+		"tags":  []interface{}{},
 	}
-	result3, err := svc.parseAnalysisResult(data3, "img.jpg")
-	if err != nil {
-		t.Fatalf("parseAnalysisResult (summary key) failed: %v", err)
-	}
-	if result3.Excerpt == nil || *result3.Excerpt != "A summary" {
-		t.Errorf("expected excerpt from summary key, got %v", result3.Excerpt)
+	if _, err := svc.parseAnalysisResult(data3, "img.jpg"); !errors.Is(err, ErrResponseUnusable) {
+		t.Errorf("expected ErrResponseUnusable for missing excerpt, got %v", err)
 	}
 
-	// Empty map — should return empty AnalysisResponse without error
-	result4, err := svc.parseAnalysisResult(map[string]interface{}{}, "")
-	if err != nil {
-		t.Fatalf("parseAnalysisResult (empty) failed: %v", err)
-	}
-	if result4.Tags == nil {
-		t.Error("expected non-nil Tags slice")
+	// Empty map → ErrResponseUnusable.
+	if _, err := svc.parseAnalysisResult(map[string]interface{}{}, ""); !errors.Is(err, ErrResponseUnusable) {
+		t.Errorf("expected ErrResponseUnusable for empty map, got %v", err)
 	}
 }
 
@@ -600,6 +580,246 @@ func TestMediaService_ThumbnailBranches(t *testing.T) {
 	}
 }
 
+
+func TestUploadFile_StoresOriginalMetadata(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("data"),
+		Filename: "doc.txt",
+		MimeType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	if m.OriginalMetadata.Valid != m.Metadata.Valid {
+		t.Errorf("original_metadata valid=%v != metadata valid=%v", m.OriginalMetadata.Valid, m.Metadata.Valid)
+	}
+}
+
+func TestExtractEXIF_Sanitized(t *testing.T) {
+	dirty := "Canon <script>alert(1)</script>"
+	got := sanitizeEXIFValue(dirty)
+	want := "Canon scriptalert1script"
+	if got != want {
+		t.Errorf("sanitizeEXIFValue(%q) = %q; want %q", dirty, got, want)
+	}
+}
+
+func TestUploadFile_OriginalMetadataImmutable(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "photo.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	originalMeta := m.OriginalMetadata.String
+
+	_, err = svc.UpdateEXIF(ctx, UpdateEXIFParams{ID: m.ID, Fields: map[string]string{"Make": "Edited"}})
+	if err != nil {
+		t.Fatalf("UpdateEXIF: %v", err)
+	}
+	got, _ := svc.GetMediaByID(ctx, m.ID)
+	if got.OriginalMetadata.String != originalMeta {
+		t.Errorf("original_metadata changed after UpdateEXIF: got %q; want %q",
+			got.OriginalMetadata.String, originalMeta)
+	}
+	if !strings.Contains(got.Metadata.String, "Edited") {
+		t.Errorf("metadata should contain edited value, got %q", got.Metadata.String)
+	}
+}
+
+func TestUpdateEXIF_ValidatesInput(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
+	m, _ := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "photo.jpg",
+		MimeType: "image/jpeg",
+	})
+
+	_, err := svc.UpdateEXIF(ctx, UpdateEXIFParams{
+		ID:     m.ID,
+		Fields: map[string]string{"Make": "Canon EOS"},
+	})
+	if err != nil {
+		t.Errorf("valid value rejected: %v", err)
+	}
+
+	_, err = svc.UpdateEXIF(ctx, UpdateEXIFParams{
+		ID:     m.ID,
+		Fields: map[string]string{"Make": "Canon/EOS"},
+	})
+	if err == nil {
+		t.Error("expected error for value with '/'")
+	}
+}
+
+func TestUpdateEXIF_UpdatesDBAndFile(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
+	m, _ := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "photo.jpg",
+		MimeType: "image/jpeg",
+	})
+
+	updated, err := svc.UpdateEXIF(ctx, UpdateEXIFParams{
+		ID:     m.ID,
+		Fields: map[string]string{"Make": "Sony", "Model": "A7 IV"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateEXIF: %v", err)
+	}
+
+	var meta map[string]interface{}
+	if err := json.Unmarshal([]byte(updated.Metadata.String), &meta); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if meta["Make"] != "Sony" || meta["Model"] != "A7 IV" {
+		t.Errorf("DB metadata = %v; want Make=Sony Model=A7 IV", meta)
+	}
+
+	fullPath := filepath.Join(tmpDir, "media", m.OriginalPath)
+	f, err := os.Open(fullPath)
+	if err != nil {
+		t.Fatalf("open file: %v", err)
+	}
+	defer func() { _ = f.Close() }() 
+	x, err := goexif.Decode(f)
+	if err != nil {
+		t.Fatalf("goexif decode: %v", err)
+	}
+	makeVal, _ := x.Get(goexif.Make)
+	if got := strings.Trim(makeVal.String(), "\""); got != "Sony" {
+		t.Errorf("file Make = %q; want Sony", got)
+	}
+}
+
+func TestUpdateEXIF_NonJPEGSkipsFileWrite(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	m, _ := svc.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("plain text"),
+		Filename: "doc.txt",
+		MimeType: "text/plain",
+	})
+
+	_, err := svc.UpdateEXIF(ctx, UpdateEXIFParams{
+		ID:     m.ID,
+		Fields: map[string]string{"Make": "Test"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateEXIF on non-JPEG: %v", err)
+	}
+}
+
+func TestUpdateEXIF_NotFound(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	_, err := svc.UpdateEXIF(ctx, UpdateEXIFParams{ID: 9999, Fields: map[string]string{}})
+	if err == nil {
+		t.Error("expected error for non-existent media ID")
+	}
+}
+
+func TestRevertEXIF_RestoresOriginal(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
+	// Write EXIF into the JPEG so extractEXIF finds tags and original_metadata gets populated.
+	tmpJpeg := filepath.Join(t.TempDir(), "source.jpg")
+	_ = os.WriteFile(tmpJpeg, buf.Bytes(), 0644)
+	_ = writeEXIFToFile(tmpJpeg, "image/jpeg", map[string]interface{}{"Make": "TestCam", "Model": "M1"})
+	jpegWithExif, _ := os.ReadFile(tmpJpeg)
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegWithExif,
+		Filename: "photo.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if !m.OriginalMetadata.Valid {
+		t.Fatal("expected original_metadata to be populated after upload with EXIF-bearing JPEG")
+	}
+	originalMeta := m.OriginalMetadata.String
+
+	_, _ = svc.UpdateEXIF(ctx, UpdateEXIFParams{
+		ID:     m.ID,
+		Fields: map[string]string{"Make": "Edited"},
+	})
+
+	reverted, err := svc.RevertEXIF(ctx, m.ID)
+	if err != nil {
+		t.Fatalf("RevertEXIF: %v", err)
+	}
+
+	if reverted.Metadata.String != originalMeta {
+		t.Errorf("metadata after revert = %q; want %q", reverted.Metadata.String, originalMeta)
+	}
+	if reverted.OriginalMetadata.String != originalMeta {
+		t.Errorf("original_metadata changed: got %q; want %q", reverted.OriginalMetadata.String, originalMeta)
+	}
+}
+
+func TestRevertEXIF_NoOriginal(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	_, _ = svc.repo.DB().Exec(
+		`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum, is_public)
+         VALUES ('ghost.jpg', 'originals/ghost.jpg', 'image', 'image/jpeg', 100, 'abc999', 0)`)
+
+	var id int64
+	_ = svc.repo.DB().QueryRow(`SELECT id FROM media WHERE checksum = 'abc999'`).Scan(&id)
+
+	_, err := svc.RevertEXIF(ctx, id)
+	if err == nil {
+		t.Error("expected error when original_metadata is null")
+	}
+}
+
+func TestRevertEXIF_NotFound(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+	ctx := context.Background()
+
+	_, err := svc.RevertEXIF(ctx, 9999)
+	if err == nil {
+		t.Error("expected error for non-existent ID")
+	}
+}
 
 func TestMediaService_UpdateMedia_Metadata(t *testing.T) {
 	repo := setupTestDB(t)

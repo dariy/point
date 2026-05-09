@@ -5,7 +5,7 @@
     text-align: center;
     margin-bottom: var(--spacing-2xl);
     padding-bottom: var(--spacing-xl);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
 }
 
 .tag-name {
@@ -19,7 +19,7 @@
 .tag-description {
     font-size: var(--font-size-lg);
     color: var(--text-secondary);
-    max-width: 37.5rem;
+    max-width: var(--tag-description-max-width);
     margin: 0 auto;
 }
 
@@ -28,6 +28,7 @@
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
     margin-top: var(--spacing-md);
+    font-variant-numeric: tabular-nums;
 }
 
 /* Tags Filters */
@@ -50,7 +51,7 @@
 }
 
 .tags-page .tags-filters {
-    margin-top: 0.3125rem;
+    margin-top: var(--tags-filters-margin-top);
     /*margin-bottom: var(--spacing-md); */
 }
 
@@ -59,12 +60,12 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    border-radius: 1rem;
+    border-radius: var(--tag-group-border-radius);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     overflow: visible;
     /* Changed from hidden to support header dropdowns and nested content */
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast);
 }
 
 .tag-group:hover {
@@ -81,7 +82,7 @@
     background: none;
     border-radius: 0;
     flex: 1;
-    margin-right: -0.0625rem;
+    margin-right: calc(var(--tag-link-margin-right) * -1);
 }
 
 /*.tag-group-header .tag-link.active {
@@ -95,15 +96,15 @@
 .toggle-children {
     background: none;
     border: none;
-    width: 2rem;
-    height: 2rem;
+    width: var(--toggle-children-width);
+    height: var(--toggle-children-height);
     cursor: pointer;
     color: var(--text-tertiary);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--transition-fast);
-    border-left: 1px solid var(--border-primary);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+    border-left: var(--border-width) solid var(--border-primary);
 }
 
 .toggle-children:hover {
@@ -158,7 +159,7 @@
 }
 
 .tags-tree-desc {
-    margin: 0.125rem 0 var(--spacing-xs) var(--spacing-md);
+    margin: var(--tags-tree-desc-margin) 0 var(--spacing-xs) var(--spacing-md);
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
 }
@@ -167,7 +168,7 @@
     list-style: none;
     padding-left: var(--spacing-lg);
     margin: var(--spacing-xs) 0 var(--spacing-xs) var(--spacing-sm);
-    border-left: 0.125rem solid var(--border-primary);
+    border-left: var(--tags-tree-children-border-left) solid var(--border-primary);
 }
 
 /* Important tag highlight in public context */
@@ -177,7 +178,7 @@
 }
 
 .tag-important {
-    background-color: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    background-color: var(--color-primary-light);
     color: var(--color-primary);
     border-radius: var(--border-radius-sm);
 }

@@ -12,6 +12,7 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { TagCloud } from '../../components/public/TagCloud.js';
+import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
@@ -53,6 +54,7 @@ export default class HomePage extends Component {
       <div class="site-wrapper">
         <div id="header-mount"></div>
         <div id="tag-cloud-mount"></div>
+        <div id="timeline-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
@@ -81,12 +83,27 @@ export default class HomePage extends Component {
       this.mountChild(TagCloud, '#tag-cloud-mount', { tags: tagCloud });
     }
 
+    const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    if (canShowTimeline) {
+      const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
+      this.mountChild(Timeline, '#timeline-mount', {
+        mode: 'filter',
+        initialRange: timelineRange || undefined,
+        onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
+    }
+
     if (pagination.pages > 1) {
       this.mountChild(Pagination, '#pagination-mount', {
         page: pagination.page,
         pages: pagination.pages,
         total: pagination.total,
-        onPage: (p) => navigate(`/?page=${p}`),
+        onPage: (p) => {
+          const params = new URLSearchParams({ page: p });
+          const t = new URLSearchParams(location.search).get('timeline');
+          if (t) params.set('timeline', t);
+          navigate(`/?${params.toString()}`);
+        },
       });
     }
 
@@ -159,10 +176,16 @@ export default class HomePage extends Component {
           }
         },
         onSwipeCommit: (dir) => {
+          const t = new URLSearchParams(location.search).get('timeline');
+          const buildUrl = (p) => {
+            const params = new URLSearchParams({ page: p });
+            if (t) params.set('timeline', t);
+            return `/?${params.toString()}`;
+          };
           if (dir === 'left' && pagination.page < pagination.pages) {
-            navigate(`/?page=${pagination.page + 1}`);
+            navigate(buildUrl(pagination.page + 1));
           } else if (dir === 'right' && pagination.page > 1) {
-            navigate(`/?page=${pagination.page - 1}`);
+            navigate(buildUrl(pagination.page - 1));
           } else {
             // Reset visuals if not committed
             if (gridMount) {
@@ -183,15 +206,66 @@ export default class HomePage extends Component {
       });
       this._trackpad = new TrackpadDetector(this.$('.site-main'), {
         onHorizontal: (dir) => {
+          const t = new URLSearchParams(location.search).get('timeline');
+          const buildUrl = (p) => {
+            const params = new URLSearchParams({ page: p });
+            if (t) params.set('timeline', t);
+            return `/?${params.toString()}`;
+          };
           if (dir === 'left' && pagination.page < pagination.pages) {
-            navigate(`/?page=${pagination.page + 1}`);
+            navigate(buildUrl(pagination.page + 1));
           } else if (dir === 'right' && pagination.page > 1) {
-            navigate(`/?page=${pagination.page - 1}`);
+            navigate(buildUrl(pagination.page - 1));
           }
         }
       });
     }
-  }  beforeUnmount() {
+  }  async _onTimelineRangeChange({ from, to }) {
+    if (!this.state.data) return;
+
+    // If the incoming range matches what's already in the URL, this is the
+    // Timeline re-confirming its initial state on mount — not a user action.
+    // The data was already fetched with the correct params by _load(), so skip.
+    const timelineParam = from === to ? `${from}` : `${from}-${to}`;
+    const currentTimeline = new URLSearchParams(location.search).get('timeline');
+    if (currentTimeline === timelineParam) return;
+
+    const settings = store.get('settings') || {};
+    const showViewCount = !!settings.show_view_counts;
+    const useThumbnails = settings.use_thumbnails !== false;
+    const url = new URL(location.href);
+    url.searchParams.set('timeline', timelineParam);
+    url.searchParams.delete('page');
+    history.replaceState(null, '', url.pathname + url.search);
+
+    try {
+      const data = await getHomePage({ page: 1, year_from: from, year_to: to });
+      this.state.data = data;
+      const { posts = [], pagination = {} } = data;
+      this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
+      this.mountChild(Pagination, '#pagination-mount', {
+        page: 1,
+        pages: pagination.pages || 1,
+        total: pagination.total || 0,
+        onPage: (p) => {
+          const params = new URLSearchParams({ page: p, timeline: timelineParam });
+          navigate(`/?${params.toString()}`);
+        },
+      });
+    } catch (err) {
+      console.error('Failed to filter posts by year:', err);
+    }
+  }
+
+  _parseTimelineParam(param) {
+    if (!param) return null;
+    const parts = param.split('-').map(Number);
+    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return { from: parts[0], to: parts[1] };
+    if (parts.length === 1 && parts[0] > 0) return { from: parts[0], to: parts[0] };
+    return null;
+  }
+
+  beforeUnmount() {
     this._gesture?.destroy();
     this._trackpad?.destroy();
   }
@@ -203,8 +277,14 @@ export default class HomePage extends Component {
 
   async _load() {
     const page = parseInt(this.props.query?.page || '1', 10);
+    const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
+    const params = { page };
+    if (timelineRange) {
+      params.year_from = timelineRange.from;
+      params.year_to = timelineRange.to;
+    }
     try {
-      const data = await getHomePage({ page });
+      const data = await getHomePage(params);
       // Merge settings from page response into store.
       if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
       this.setState({ loading: false, data, error: null });

@@ -9,7 +9,7 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listPosts, deletePost, updatePostTags, updatePost } from '../../api/posts.js';
+import { listPosts, deletePost, updatePostTags, updatePost, setPostStatus } from '../../api/posts.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
@@ -21,6 +21,7 @@ const STATUS_LABELS = {
   draft: 'Draft',
   hidden: 'Hidden',
   page: 'Page',
+  scheduled: 'Scheduled',
 };
 
 export default class PostsListPage extends Component {
@@ -34,24 +35,28 @@ export default class PostsListPage extends Component {
       statusFilter: props.query?.status || '',
       search: props.query?.search || '',
       page: parseInt(props.query?.page || '1', 10),
+      selectMode: false,
+      selectedIds: new Set(),
     };
   }
 
   render() {
-    const { loading, posts, error, statusFilter, search } = this.state;
+    const { loading, posts, error, statusFilter, search, selectMode, selectedIds } = this.state;
 
-    const statusOptions = ['', 'draft', 'published', 'hidden', 'page'].map((s) => {
+    const statusOptions = ['', 'draft', 'published', 'scheduled', 'hidden', 'page'].map((s) => {
       const label = s ? STATUS_LABELS[s] : 'All statuses';
       const sel = statusFilter === s ? ' selected' : '';
       return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(label)}</option>`;
     }).join('');
 
+    const colspan = selectMode ? 6 : 5;
+
     const rows = loading
-      ? `<tr><td colspan="5" class="loading">Loading…</td></tr>`
+      ? `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`
       : error
-        ? `<tr><td colspan="5" class="error-state">${escapeHtml(error)}</td></tr>`
+        ? `<tr><td colspan="${colspan}" class="error-state">${escapeHtml(error)}</td></tr>`
         : !posts.length
-          ? `<tr><td colspan="5" class="empty-state">No posts found.</td></tr>`
+          ? `<tr><td colspan="${colspan}" class="empty-state">No posts found.</td></tr>`
           : posts.map((p) => {
               const mediaUrl = p.media_url || '';
               const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
@@ -68,9 +73,11 @@ export default class PostsListPage extends Component {
               } else {
                 previewHtml = `<div class="post-preview-placeholder"></div>`;
               }
+              const isChecked = selectedIds.has(p.id);
 
               return `
               <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
+                ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-id="${p.id}" ${isChecked ? 'checked' : ''}></td>` : ''}
                 <td class="preview-col" rowspan="2">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" title="Edit post">
                     ${previewHtml}
@@ -79,12 +86,18 @@ export default class PostsListPage extends Component {
                 <td class="status-col">
                   <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
                           name="status" data-id="${escapeHtml(String(p.id))}">
-                    ${['draft', 'published', 'hidden', 'page'].map(s => `
+                    ${['draft', 'published', 'scheduled', 'hidden', 'page'].map(s => `
                       <option value="${s}"${p.status === s ? ' selected' : ''}>
                         ${escapeHtml(STATUS_LABELS[s] || s)}
                       </option>
                     `).join('')}
                   </select>
+                  ${p.status === 'scheduled' && p.scheduled_at
+                    ? `<span class="scheduled-date">${escapeHtml(new Date(p.scheduled_at).toLocaleString([], {
+                        month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      }))}</span>`
+                    : ''}
                 </td>
                 <td class="title-col">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
@@ -119,6 +132,7 @@ export default class PostsListPage extends Component {
           <header class="light-header">
             <h1>Posts</h1>
             <div class="header-actions">
+              <button id="select-mode-btn" class="btn">${selectMode ? 'Cancel' : 'Select'}</button>
               <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
             </div>
           </header>
@@ -130,8 +144,29 @@ export default class PostsListPage extends Component {
               <input type="search" id="search-input" class="form-input filter-search"
                      placeholder="Search posts…" value="${escapeHtml(search)}">
             </div>
+            ${selectMode ? `
+            <div class="bulk-toolbar" id="bulk-toolbar">
+              <span id="bulk-count">0 selected</span>
+              <select id="bulk-status-select">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="hidden">Hidden</option>
+              </select>
+              <button id="bulk-apply-btn" class="btn btn-sm" disabled>Apply</button>
+              <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled>Delete selected</button>
+            </div>
+            ` : ''}
             <div class="table-container">
               <table class="table">
+                <thead>
+                  <tr>
+                    ${selectMode ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ''}
+                    <th class="preview-col" colspan="2">Post</th>
+                    <th class="title-col"></th>
+                    <th class="updated-col">Last updated</th>
+                    <th class="actions-col"></th>
+                  </tr>
+                </thead>
                 <tbody id="posts-tbody">${rows}</tbody>
               </table>
             </div>
@@ -212,6 +247,129 @@ export default class PostsListPage extends Component {
         });
       });
     });
+
+    // Select mode
+    this.$('#select-mode-btn').addEventListener('click', () => {
+      this.setState({ selectMode: !this.state.selectMode, selectedIds: new Set() });
+    });
+
+    if (this.state.selectMode) {
+      this.$('#select-all-cb').addEventListener('change', this._handleSelectAll.bind(this));
+      this.$$('.select-row-cb').forEach(cb => {
+        cb.addEventListener('change', this._handleSelectRow.bind(this));
+      });
+      this.$('#bulk-apply-btn').addEventListener('click', this._handleBulkApply.bind(this));
+      this.$('#bulk-delete-btn').addEventListener('click', this._handleBulkDelete.bind(this));
+      this._updateBulkToolbar();
+    }
+  }
+
+  _handleSelectAll(e) {
+    const isChecked = e.target.checked;
+    const { posts, selectedIds } = this.state;
+    this.$$('.select-row-cb').forEach(cb => {
+      cb.checked = isChecked;
+    });
+    if (isChecked) {
+      posts.forEach(p => selectedIds.add(p.id));
+    } else {
+      selectedIds.clear();
+    }
+    this._updateBulkToolbar();
+  }
+
+  _handleSelectRow(e) {
+    const id = parseInt(e.target.dataset.id, 10);
+    if (e.target.checked) {
+      this.state.selectedIds.add(id);
+    } else {
+      this.state.selectedIds.delete(id);
+    }
+    this._updateBulkToolbar();
+  }
+
+  _updateBulkToolbar() {
+    const n = this.state.selectedIds.size;
+    const bulkCount = this.$('#bulk-count');
+    const applyBtn = this.$('#bulk-apply-btn');
+    const deleteBtn = this.$('#bulk-delete-btn');
+    const selectAllCb = this.$('#select-all-cb');
+
+    if (bulkCount) bulkCount.textContent = `${n} selected`;
+    if (applyBtn) applyBtn.disabled = n === 0;
+    if (deleteBtn) deleteBtn.disabled = n === 0;
+
+    if (selectAllCb) {
+      const totalVisible = this.state.posts.length;
+      if (n === 0) {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = false;
+      } else if (n === totalVisible) {
+        selectAllCb.checked = true;
+        selectAllCb.indeterminate = false;
+      } else {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = true;
+      }
+    }
+  }
+
+  async _handleBulkApply() {
+    const status = this.$('#bulk-status-select').value;
+    const ids = Array.from(this.state.selectedIds);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const id of ids) {
+      try {
+        await setPostStatus(id, status);
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to update post ${id}:`, err);
+        failCount++;
+      }
+    }
+
+    let message = '';
+    if (failCount === 0) {
+      message = `All ${successCount} posts updated.`;
+    } else {
+      message = `${successCount} of ${ids.length} posts updated. ${failCount} failed.`;
+    }
+    store.set('toast', { message, type: failCount > 0 ? 'error' : 'success' });
+
+    this.setState({ selectMode: false, selectedIds: new Set() });
+    this._load();
+  }
+
+  _handleBulkDelete() {
+    const n = this.state.selectedIds.size;
+    this._showConfirm('Delete posts', `Delete ${n} posts? This cannot be undone.`, 'Delete', 'danger', async () => {
+      const ids = Array.from(this.state.selectedIds);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const id of ids) {
+        try {
+          await deletePost(id);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to delete post ${id}:`, err);
+          failCount++;
+        }
+      }
+
+      let message = '';
+      if (failCount === 0) {
+        message = `All ${successCount} posts deleted.`;
+      } else {
+        message = `${successCount} of ${ids.length} posts deleted. ${failCount} failed.`;
+      }
+      store.set('toast', { message, type: failCount > 0 ? 'error' : 'success' });
+
+      this.setState({ selectMode: false, selectedIds: new Set() });
+      this._load();
+    });
   }
 
   mount() {
@@ -269,8 +427,9 @@ export default class PostsListPage extends Component {
     // Show loading indicator in-place — no full re-render, no focus loss.
     // The string is fully static (no user data), so innerHTML is safe here.
     const tbody = this.$('#posts-tbody');
+    const colspan = this.state.selectMode ? 6 : 5;
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="5" class="loading">Loading…</td></tr>`; // static, safe
+      tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
     }
     this.state.loading = true;
     this.state.error = null;
@@ -355,6 +514,10 @@ export default class PostsListPage extends Component {
   }
 
   async _updatePostStatus(id, status, select) {
+    if (status === 'scheduled') {
+      navigate(`/light/posts/${id}/edit?openSchedule=1`);
+      return;
+    }
     const originalStatus = this.state.posts.find(p => p.id === id)?.status || 'draft';
     select.classList.add('badge-loading');
     try {

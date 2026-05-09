@@ -67,3 +67,42 @@ func TestLoadConfigDefaults(t *testing.T) {
 		t.Errorf("expected default Port 8000, got %d", config.Port)
 	}
 }
+
+func TestThemesPathDerivation(t *testing.T) {
+	viper.Reset()
+	tmpDir, err := os.MkdirTemp("", "config-test-themes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	// Test case 1: Neither FRONTEND_DIR nor THEMES_PATH set
+	config, _ := LoadConfig(tmpDir)
+	expectedThemesPath := filepath.Join("../frontend", "themes")
+	if config.ThemesPath != expectedThemesPath {
+		t.Errorf("expected ThemesPath %s, got %s", expectedThemesPath, config.ThemesPath)
+	}
+
+	// Test case 2: FRONTEND_DIR set, THEMES_PATH not set
+	viper.Reset()
+	_ = os.Setenv("FRONTEND_DIR", "/custom/frontend")
+	defer func() { _ = os.Unsetenv("FRONTEND_DIR") }()
+	config, _ = LoadConfig(tmpDir)
+	expectedThemesPath = "/custom/frontend/themes"
+	if config.ThemesPath != expectedThemesPath {
+		t.Errorf("expected ThemesPath %s, got %s", expectedThemesPath, config.ThemesPath)
+	}
+
+	// Test case 3: Both set
+	viper.Reset()
+	_ = os.Setenv("FRONTEND_DIR", "/custom/frontend")
+	_ = os.Setenv("THEMES_PATH", "/custom/themes")
+	defer func() { _ = os.Unsetenv("THEMES_PATH") }()
+	config, _ = LoadConfig(tmpDir)
+	expectedThemesPath = "/custom/themes"
+	if config.ThemesPath != expectedThemesPath {
+		t.Errorf("expected ThemesPath %s, got %s", expectedThemesPath, config.ThemesPath)
+	}
+}

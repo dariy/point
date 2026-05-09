@@ -101,6 +101,8 @@ type ListPostsParams struct {
 	IncludeDrafts bool
 	IncludeHidden bool
 	Search        string
+	YearFrom      int
+	YearTo        int
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
@@ -110,32 +112,41 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	var total int64
 	var err error
 
-	if p.Search != "" {
+	repoParams := models.ListPostsParams{
+		StatusFilter:   p.Status != "",
+		Status:         p.Status,
+		FeaturedFilter: p.FeaturedOnly,
+		IncludeDrafts:  p.IncludeDrafts,
+		Limit:          int64(p.PerPage),
+		Offset:         int64(offset),
+		IncludeHidden:  p.IncludeHidden,
+	}
+	countParams := models.CountPostsParams{
+		StatusFilter:   p.Status != "",
+		Status:         p.Status,
+		FeaturedFilter: p.FeaturedOnly,
+		IncludeDrafts:  p.IncludeDrafts,
+		IncludeHidden:  p.IncludeHidden,
+	}
+
+	if p.YearFrom > 0 && p.YearTo > 0 {
+		posts, err = s.repo.ListPostsInYearRange(ctx, p.YearFrom, p.YearTo, repoParams)
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
+	} else if p.Search != "" {
 		posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, int64(p.PerPage), int64(offset))
 		if err != nil {
 			return nil, 0, err
 		}
 		total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search)
 	} else {
-		posts, err = s.repo.ListPosts(ctx, models.ListPostsParams{
-			StatusFilter:   p.Status != "",
-			Status:         p.Status,
-			FeaturedFilter: p.FeaturedOnly,
-			IncludeDrafts:  p.IncludeDrafts,
-			Limit:          int64(p.PerPage),
-			Offset:         int64(offset),
-			IncludeHidden:  p.IncludeHidden,
-		})
+		posts, err = s.repo.ListPosts(ctx, repoParams)
 		if err != nil {
 			return nil, 0, err
 		}
-		total, err = s.repo.CountPosts(ctx, models.CountPostsParams{
-			StatusFilter:   p.Status != "",
-			Status:         p.Status,
-			FeaturedFilter: p.FeaturedOnly,
-			IncludeDrafts:  p.IncludeDrafts,
-			IncludeHidden:  p.IncludeHidden,
-		})
+		total, err = s.repo.CountPosts(ctx, countParams)
 	}
 	if err != nil {
 		return nil, 0, err
@@ -172,6 +183,7 @@ type CreatePostParams struct {
 	ThumbnailPath   string
 	MetaDescription string
 	Tags            []string
+	ScheduledAt     *time.Time
 }
 
 func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, error) {
@@ -190,6 +202,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		AuthorID:        p.AuthorID,
 		ThumbnailPath:   sql.NullString{String: p.ThumbnailPath, Valid: p.ThumbnailPath != ""},
 		MetaDescription: sql.NullString{String: p.MetaDescription, Valid: p.MetaDescription != ""},
+		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
 		return models.Post{}, err
@@ -274,6 +287,7 @@ type UpdatePostParams struct {
 	ThumbnailPath   string
 	MetaDescription string
 	Tags            []string
+	ScheduledAt     *time.Time
 }
 
 func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (models.Post, error) {
@@ -293,6 +307,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		MetaDescription: sql.NullString{String: p.MetaDescription, Valid: p.MetaDescription != ""},
 		ID:              p.ID,
 		AuthorID:        p.AuthorID,
+		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
 		return models.Post{}, err
@@ -403,4 +418,23 @@ func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (
 // the given post, ordered by published_at.
 func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error) {
 	return s.repo.GetPostNavigation(ctx, postID, publicOnly)
+}
+
+func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Post, error) {
+	published, err := s.repo.BulkPublishScheduledPosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(published) > 0 {
+		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
+	}
+	return published, nil
+}
+
+func toNullTime(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: t.UTC(), Valid: true}
 }

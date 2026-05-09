@@ -2,7 +2,7 @@
    Settings & Security
    =========================== */
 .settings-container {
-    max-width: 50rem;
+    max-width: var(--settings-container-max-width);
     margin: 0 auto;
 }
 
@@ -20,7 +20,7 @@
 
 .form-section {
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
@@ -28,20 +28,20 @@
 
 .section-title {
     margin-top: 0;
-    margin-bottom: 1.25rem;
-    padding-bottom: 0.625rem;
-    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: var(--section-title-margin-bottom);
+    padding-bottom: var(--section-title-padding-bottom);
+    border-bottom: var(--border-width) solid var(--border-primary);
     color: var(--text-primary);
 }
 
 /* Two-column field rows (label | input) */
 .settings-field {
     display: grid;
-    grid-template-columns: 11.25rem 1fr;
+    grid-template-columns: var(--settings-field-grid-template-columns) 1fr;
     align-items: center;
     gap: var(--spacing-lg);
     padding: var(--spacing-sm) 0;
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
 }
 
 .settings-field:last-child {
@@ -53,7 +53,7 @@
 }
 
 .settings-field-top .settings-field-label {
-    padding-top: calc(var(--spacing-sm) + 0.125rem);
+    padding-top: calc(var(--spacing-sm) + var(--settings-field-label-padding-top));
 }
 
 .settings-field-label {
@@ -70,7 +70,7 @@
 }
 
 .setting-pill-group-divided {
-    border-top: 1px solid var(--border-primary);
+    border-top: var(--border-width) solid var(--border-primary);
     margin-top: var(--spacing-sm);
     padding-top: var(--spacing-md);
 }
@@ -91,14 +91,14 @@
 .setting-pill-label {
     display: inline-flex;
     align-items: center;
-    padding: 0.35rem 0.8rem;
+    padding: var(--setting-pill-label-padding-y) var(--setting-pill-label-padding-x);
     background: var(--surface-card);
-    border: 0.09375rem solid var(--border-primary);
-    border-radius: 2rem;
+    border: var(--setting-pill-label-border) solid var(--border-primary);
+    border-radius: var(--setting-pill-label-border-radius);
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text-secondary);
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .setting-pill:hover .setting-pill-label {
@@ -114,7 +114,7 @@
 }
 
 .setting-pill-input:focus-visible + .setting-pill-label {
-    box-shadow: 0 0 0 0.125rem var(--color-primary-light);
+    box-shadow: 0 0 0 var(--setting-pill-label-box-shadow) var(--color-primary-light);
 }
 
 .save-status {
@@ -122,17 +122,17 @@
 }
 
 .save-status.success {
-    color: #10b981;
+    color: var(--color-emerald-500);
 }
 
 .save-status.error {
-    color: #ef4444;
+    color: var(--color-danger);
 }
 
 /* Input with Button */
 .input-with-button {
     display: flex;
-    gap: 0.625rem;
+    gap: var(--input-with-button-gap);
     align-items: center;
 }
 
@@ -148,8 +148,8 @@
 
 /* Connection Test Result */
 .connection-test-result {
-    margin-top: 0.625rem;
-    padding: 0.625rem;
+    margin-top: var(--connection-test-result-margin-top);
+    padding: var(--connection-test-result-padding);
     border-radius: var(--border-radius-sm);
     font-size: 0.9em;
     display: none;
@@ -160,19 +160,68 @@
 }
 
 .connection-test-result.success {
-    background-color: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: #10b981;
+    background-color: var(--color-success-alpha-10);
+    border: var(--border-width) solid var(--color-success-alpha-30);
+    color: var(--color-emerald-500);
 }
 
 .connection-test-result.error {
-    background-color: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #ef4444;
+    background-color: var(--color-danger-alpha-10);
+    border: var(--border-width) solid var(--color-danger-alpha-30);
+    color: var(--color-danger);
 }
 
 .connection-test-result.info {
-    background-color: rgba(59, 130, 246, 0.1);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    color: #3b82f6;
+    background-color: var(--color-primary-light-alpha-10);
+    border: var(--border-width) solid var(--color-primary-light-alpha-30);
+    color: var(--color-primary);
+}
+
+/* Full-width card spanning both grid columns */
+.settings-grid .card-full-width {
+    grid-column: 1 / -1;
+}
+
+/* Gemini prompt template */
+.prompt-template {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+    background: var(--surface-hover, var(--surface-card));
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-md);
+}
+
+.prompt-line {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+.prompt-line-fixed {
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: var(--spacing-xs) 0;
+}
+
+.prompt-key {
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.prompt-type {
+    color: var(--text-tertiary, var(--text-secondary));
+    font-weight: 400;
+}
+
+.prompt-part {
+    flex: 1;
+    min-width: var(--prompt-part-min-width);
+    font-family: inherit;
+    font-size: inherit;
 }

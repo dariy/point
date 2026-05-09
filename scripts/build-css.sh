@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/sh
+set -e
 # Concatenates CSS modules into bundle files
 # This script should be run from the repository root or its directory.
 # But we'll make it robust by finding the repository root.
@@ -11,6 +12,7 @@ echo "Building CSS bundles in $CSS_DIR..."
 
 # Admin bundle
 cat "$CSS_DIR"/common/tokens.css \
+    "$CSS_DIR"/common/theme-tokens.css \
     "$CSS_DIR"/common/reset.css \
     "$CSS_DIR"/light/tokens.css \
     "$CSS_DIR"/common/buttons.css \
@@ -36,6 +38,8 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/light/filters.css \
     "$CSS_DIR"/light/system.css \
     "$CSS_DIR"/light/settings.css \
+    "$CSS_DIR"/light/themes.css \
+    "$CSS_DIR"/light/exif.css \
     "$CSS_DIR"/light/responsive.css \
     "$CSS_DIR"/common/lightbox.css \
     > "$CSS_DIR"/light.css
@@ -44,6 +48,7 @@ echo "Built light.css ($(wc -c < "$CSS_DIR"/light.css) bytes)"
 
 # Public bundle
 cat "$CSS_DIR"/common/tokens.css \
+    "$CSS_DIR"/common/theme-tokens.css \
     "$CSS_DIR"/common/reset.css \
     "$CSS_DIR"/public/tokens.css \
     "$CSS_DIR"/common/buttons.css \
@@ -67,6 +72,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/public/carousel.css \
     "$CSS_DIR"/common/lightbox.css \
     "$CSS_DIR"/public/map.css \
+    "$CSS_DIR"/public/timeline.css \
     "$CSS_DIR"/public/drop-zone.css \
     "$CSS_DIR"/public/responsive.css \
     "$CSS_DIR"/public/exif.css \

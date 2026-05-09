@@ -103,6 +103,7 @@ export class PostCard extends Component {
 
     if (hasOverlay) {
       card.addEventListener('click', (e) => {
+        if (e.target.closest('a')) return;
         if (!card.classList.contains('is-touched')) {
           // Tag links with ancestor flyouts manage their own first-click behavior.
           // Don't intercept — let setupTagFlyout handle it cleanly.
@@ -128,15 +129,22 @@ export class PostCard extends Component {
           };
           document.addEventListener('click', dismiss, true);
         } else {
-          // Second click — behave normally (tag links fire themselves; card click navigates).
-          if (!e.target.closest('a')) go();
+          // Second click — behave normally.
+          go();
         }
       });
     } else {
       card.addEventListener('click', (e) => {
-        if (!e.target.closest('a')) go();
+        if (e.target.closest('a')) return;
+        go();
       });
     }
+
+    // Firefox doesn't focus non-interactive elements on click; force it so arrow key
+    // navigation in PostGrid works consistently across browsers.
+    card.addEventListener('mousedown', (e) => {
+      if (!e.target.closest('a')) card.focus({ preventScroll: true });
+    });
 
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }

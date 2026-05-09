@@ -23,13 +23,13 @@
 .category-chip .chip-label {
     display: inline-flex;
     align-items: center;
-    padding: 0.4rem 0.8rem;
+    padding: var(--chip-label-padding-y) var(--chip-label-padding-x);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
-    border-radius: 2rem;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--chip-label-border-radius);
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .category-chip:hover .chip-label {
@@ -44,10 +44,10 @@
 }
 
 .category-chip .hidden-checkbox:focus+.chip-label {
-    box-shadow: 0 0 0 0.125rem var(--color-primary-light);
+    box-shadow: 0 0 0 var(--chip-label-box-shadow) var(--color-primary-light);
 }
 
 .category-chip .chip-label.sub-tag {
-    margin-left: 1rem;
+    margin-left: var(--chip-labelsub-tag-margin-left);
     opacity: 0.8;
 }

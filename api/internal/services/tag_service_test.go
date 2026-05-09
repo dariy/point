@@ -93,7 +93,7 @@ func TestTagService_CRUD(t *testing.T) {
 	}
 
 	// Test GetPostsByTag (empty result)
-	posts, total, err := service.GetPostsByTag(ctx, 999, 1, 10, true, false)
+	posts, total, err := service.GetPostsByTag(ctx, 999, 1, 10, true, false, 0, 0)
 	if err != nil {
 		t.Errorf("GetPostsByTag failed: %v", err)
 	}
@@ -714,5 +714,173 @@ func TestTagService_UpdateMissingCoordsNoBaseTags(t *testing.T) {
 	}
 	if result["updated_count"] != 0 {
 		t.Errorf("expected 0 updated, got %v", result["updated_count"])
+	}
+}
+
+func TestTagService_GetTagDescendants(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'P','parent'),(2,'C','child')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`)
+
+	desc, err := svc.GetTagDescendants(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetTagDescendants failed: %v", err)
+	}
+	if len(desc) != 1 {
+		t.Errorf("expected 1 descendant, got %d", len(desc))
+	}
+}
+
+func TestTagService_GetTagByID(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
+
+	tag, err := svc.GetTagByID(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetTagByID failed: %v", err)
+	}
+	if tag.Slug != "t" {
+		t.Errorf("expected slug 't', got %s", tag.Slug)
+	}
+
+	_, err = svc.GetTagByID(ctx, 999)
+	if err == nil {
+		t.Error("expected error for non-existent tag ID")
+	}
+}
+
+func TestTagService_WithRelatedIDs(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	ids, err := svc.WithRelatedIDs(ctx)
+	if err != nil {
+		t.Fatalf("WithRelatedIDs failed: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(ids))
+	}
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10,'_with_related','_with_related'),(20,'User','user')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10,20)`)
+
+	ids, err = svc.WithRelatedIDs(ctx)
+	if err != nil {
+		t.Fatalf("WithRelatedIDs (with data) failed: %v", err)
+	}
+	if !ids[20] {
+		t.Error("expected tag 20 in WithRelatedIDs result")
+	}
+}
+
+func TestTagService_InBreadcrumbsIDs(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	ids, err := svc.InBreadcrumbsIDs(ctx)
+	if err != nil {
+		t.Fatalf("InBreadcrumbsIDs failed: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(ids))
+	}
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10,'_is_in_breadcrumbs','_is_in_breadcrumbs'),(30,'User','user2')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10,30)`)
+
+	ids, err = svc.InBreadcrumbsIDs(ctx)
+	if err != nil {
+		t.Fatalf("InBreadcrumbsIDs (with data) failed: %v", err)
+	}
+	if !ids[30] {
+		t.Error("expected tag 30 in InBreadcrumbsIDs result")
+	}
+}
+
+func TestTagService_SetTagParentsAndChildren(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'P','parent'),(2,'C','child')`)
+
+	if err := svc.SetTagParents(ctx, 2, []int64{1}); err != nil {
+		t.Fatalf("SetTagParents failed: %v", err)
+	}
+	if err := svc.SetTagChildren(ctx, 1, []int64{2}); err != nil {
+		t.Fatalf("SetTagChildren failed: %v", err)
+	}
+	if err := svc.SetTagParents(ctx, 2, []int64{}); err != nil {
+		t.Fatalf("SetTagParents (clear) failed: %v", err)
+	}
+	if err := svc.SetTagChildren(ctx, 1, []int64{}); err != nil {
+		t.Fatalf("SetTagChildren (clear) failed: %v", err)
+	}
+}
+
+func TestTagService_UpdateTag(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'Original','orig')`)
+
+	updated, err := svc.UpdateTag(ctx, UpdateTagParams{
+		ID: 1, Name: "Updated", Slug: "updated", Description: "desc",
+	})
+	if err != nil {
+		t.Fatalf("UpdateTag failed: %v", err)
+	}
+	if updated.Name != "Updated" {
+		t.Errorf("expected name 'Updated', got %s", updated.Name)
+	}
+
+	_, err = svc.UpdateTag(ctx, UpdateTagParams{ID: 999, Name: "X", Slug: "x"})
+	if err == nil {
+		t.Error("expected error for non-existent tag")
+	}
+}
+
+func TestTagService_DeleteTag(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
+
+	if err := svc.DeleteTag(ctx, 1); err != nil {
+		t.Fatalf("DeleteTag failed: %v", err)
+	}
+	if err := svc.DeleteTag(ctx, 999); err == nil {
+		t.Error("expected error for non-existent tag")
+	}
+}
+
+func TestTagService_GetTagBySlug(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','myslug')`)
+
+	tag, err := svc.GetTagBySlug(ctx, "myslug")
+	if err != nil {
+		t.Fatalf("GetTagBySlug failed: %v", err)
+	}
+	if tag.Slug != "myslug" {
+		t.Errorf("expected slug 'myslug', got %s", tag.Slug)
+	}
+
+	_, err = svc.GetTagBySlug(ctx, "nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent slug")
 	}
 }

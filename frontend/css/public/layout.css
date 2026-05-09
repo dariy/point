@@ -35,6 +35,7 @@ body {
     padding: var(--spacing-lg) 0;
     display: flex;
     flex-direction: column;
+    touch-action: pan-y; /* Support passive horizontal swipe */
 }
 
 .main-container {
@@ -85,7 +86,7 @@ body {
 .breadcrumbs {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--breadcrumbs-gap);
     flex-wrap: wrap;
 }
 

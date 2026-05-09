@@ -12,7 +12,7 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);
     line-height: 1.6;
-    min-height: 25rem;
+    min-height: var(--editor-content-min-height);
     width: 100%;
 }
 
@@ -20,20 +20,20 @@
 body.drag-active::after {
     content: '';
     position: fixed;
-    inset: 0.25rem;
-    background: rgba(37, 99, 235, 0.06);
-    border: 0.125rem dashed var(--color-primary);
+    inset: var(--bodydrag-active--inset);
+    background: var(--color-primary-alpha-06);
+    border: var(--bodydrag-active--border) dashed var(--color-primary);
     border-radius: var(--border-radius-lg);
     pointer-events: none;
     z-index: 9999;
 }
 
 .preview-panel {
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     padding: var(--spacing-md);
     background: var(--surface-card);
-    min-height: 18.75rem;
+    min-height: var(--preview-panel-min-height);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
 
@@ -73,21 +73,21 @@ body.drag-active::after {
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 1.25rem;
+    font-size: var(--featured-btn-font-size);
     line-height: 1;
-    padding: 0.125rem var(--spacing-xs);
+    padding: var(--featured-btn-padding) var(--spacing-xs);
     color: var(--text-muted);
     transition: color var(--transition-fast), transform 0.1s ease;
     border-radius: var(--border-radius-sm, var(--border-radius-sm));
 }
 
 .featured-btn:hover {
-    color: #f59e0b;
+    color: var(--color-amber-500);
     transform: scale(1.15);
 }
 
 .featured-btn.is-featured {
-    color: #f59e0b;
+    color: var(--color-amber-500);
 }
 
 /* AI fill button — appears at the end of title/tags/excerpt rows */
@@ -98,7 +98,7 @@ body.drag-active::after {
     cursor: pointer;
     font-size: var(--font-size-base);
     line-height: 1;
-    padding: 0.125rem var(--spacing-xs);
+    padding: var(--field-ai-btn-padding) var(--spacing-xs);
     color: var(--text-muted);
     transition: color var(--transition-fast), transform 0.1s ease;
     border-radius: var(--border-radius-sm, var(--border-radius-sm));
@@ -160,6 +160,34 @@ body.drag-active::after {
 }
 
 /* Slug row: [/post/] [slug input] */
+.schedule-row {
+    display: flex;
+    align-items: center;
+}
+
+.schedule-input-wrapper {
+    position: relative;
+    display: block;
+    flex: 1;
+    min-width: 0;
+}
+
+.schedule-at-input {
+    color: var(--text-primary);
+}
+
+.schedule-input-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
+    color: var(--text-muted);
+    pointer-events: none;
+    user-select: none;
+}
+
 .slug-row {
     display: flex;
     align-items: center;
@@ -167,23 +195,23 @@ body.drag-active::after {
 
 .slug-prefix {
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     color: var(--text-muted);
     white-space: nowrap;
-    padding: 0 var(--spacing-xs) 0 0.125rem;
+    padding: 0 var(--spacing-xs) 0 var(--slug-prefix-padding);
     user-select: none;
 }
 
 .editor-slug {
     flex: 1;
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     min-width: 0;
 }
 
 /* Give the excerpt textarea padding so text doesn't slide under the AI btn */
 .editor-excerpt {
-    padding-right: 1.75rem;
+    padding-right: var(--editor-excerpt-padding-right);
 }
 
 /* Full-width editor page — override the global max-width */
@@ -197,7 +225,7 @@ body.drag-active::after {
 .editor-mode-toggle {
     display: flex;
     align-items: center;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     overflow: hidden;
     flex-shrink: 0;
@@ -208,7 +236,7 @@ body.drag-active::after {
 .editor-mode-toggle button {
     background: transparent;
     border: none;
-    padding: var(--spacing-xs) 0.75rem;
+    padding: var(--spacing-xs) var(--button-padding);
     font-size: var(--font-size-sm);
     cursor: pointer;
     color: var(--text-muted);
@@ -217,7 +245,7 @@ body.drag-active::after {
 
 .editor-mode-toggle button.active {
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-white);
 }
 
 .editor-mode-toggle button:not(.active):hover {
@@ -237,8 +265,8 @@ body.drag-active::after {
 .ve-list {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
-    min-height: 5rem;
+    gap: var(--ve-list-gap);
+    min-height: var(--ve-list-min-height);
     position: relative;
 }
 
@@ -247,7 +275,7 @@ body.drag-active::after {
     font-size: var(--font-size-sm);
     padding: var(--spacing-md);
     text-align: center;
-    border: 1px dashed var(--border-primary);
+    border: var(--border-width) dashed var(--border-primary);
     border-radius: var(--border-radius);
 }
 
@@ -256,9 +284,9 @@ body.drag-active::after {
     align-items: center;
     gap: var(--spacing-sm);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
-    padding: 0.375rem 0.625rem 0.375rem 0;
+    padding: var(--ve-card-padding-1) var(--ve-card-padding-2) var(--ve-card-padding-3) 0;
     transition: background var(--transition-fast), opacity var(--transition-fast);
     user-select: none;
 }
@@ -276,10 +304,10 @@ body.drag-active::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
+    width: var(--ve-handle-width);
     flex-shrink: 0;
     align-self: stretch;
-    border-right: 1px dotted var(--border-primary);
+    border-right: var(--border-width) dotted var(--border-primary);
     cursor: grab;
     color: var(--text-muted);
 }
@@ -290,17 +318,17 @@ body.drag-active::after {
 
 .ve-handle-dots {
     display: block;
-    width: 0.375rem;
-    height: 1.25rem;
-    background-image: radial-gradient(circle, var(--text-muted) 0.075rem, transparent 0.075rem);
-    background-size: 0.375rem 0.375rem;
+    width: var(--ve-handle-dots-width);
+    height: var(--ve-handle-dots-height);
+    background-image: radial-gradient(circle, var(--text-muted) var(--ve-handle-dots-background-image-1), transparent var(--ve-handle-dots-background-image-2));
+    background-size: var(--ve-handle-dots-background-size-1) var(--ve-handle-dots-background-size-2);
 }
 
 .ve-thumb {
-    width: 5rem;
-    height: 3.5rem;
+    width: var(--ve-thumb-width);
+    height: var(--ve-thumb-height);
     object-fit: cover;
-    border-radius: calc(var(--border-radius) - 0.125rem);
+    border-radius: calc(var(--border-radius) - var(--ve-thumb-border-radius));
     flex-shrink: 0;
     cursor: zoom-in;
     background: var(--surface-hover);
@@ -343,14 +371,14 @@ body.drag-active::after {
 
 .ve-rename-input {
     flex: 1;
-    min-width: 2.5rem;
+    min-width: var(--ve-rename-input-min-width);
     border: none;
-    border-bottom: 0.09375rem solid var(--color-primary);
+    border-bottom: var(--ve-rename-input-border-bottom) solid var(--color-primary);
     background: transparent;
     font-family: inherit;
     font-size: inherit;
     color: var(--text-primary);
-    padding: 0 0.125rem;
+    padding: 0 var(--ve-rename-input-padding);
     outline: none;
 }
 
@@ -365,22 +393,22 @@ body.drag-active::after {
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    font-size: 1.125rem;
+    font-size: var(--ve-remove-font-size);
     line-height: 1;
-    padding: 0.125rem var(--spacing-xs);
+    padding: var(--ve-remove-padding) var(--spacing-xs);
     border-radius: var(--border-radius-sm, var(--border-radius-sm));
     transition: color var(--transition-fast);
 }
 
 .ve-remove:hover {
-    color: var(--color-danger, #ef4444);
+    color: var(--color-danger);
 }
 
 /* Drop indicator line */
 .ve-drop-indicator {
-    height: 0.125rem;
+    height: var(--ve-drop-indicator-height);
     background: var(--color-primary);
-    border-radius: 0.125rem;
+    border-radius: var(--ve-drop-indicator-border-radius);
     pointer-events: none;
     margin: 0 var(--spacing-xs);
     flex-shrink: 0;
@@ -390,7 +418,7 @@ body.drag-active::after {
 .ve-lightbox {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.88);
+    background: var(--color-black-alpha-88);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -411,8 +439,8 @@ body.drag-active::after {
    =========================== */
 .ve-card--text {
     align-items: flex-start;
-    padding-top: 0.375rem;
-    padding-bottom: 0.375rem;
+    padding-top: var(--ve-card--text-padding-top);
+    padding-bottom: var(--ve-card--text-padding-bottom);
 }
 
 /* Paragraph icon — same width as drag handle, dotted right border */
@@ -420,14 +448,14 @@ body.drag-active::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
+    width: var(--ve-text-icon-width);
     flex-shrink: 0;
     align-self: stretch;
-    border-right: 1px dotted var(--border-primary);
+    border-right: var(--border-width) dotted var(--border-primary);
     color: var(--text-muted);
-    font-size: 0.8125rem;
+    font-size: var(--ve-text-icon-font-size);
     user-select: none;
-    padding-right: 0.125rem;
+    padding-right: var(--ve-text-icon-padding-right);
 }
 
 /* Auto-resizing textarea inside text card */
@@ -442,8 +470,8 @@ body.drag-active::after {
     color: var(--text-primary);
     resize: none;
     overflow: hidden;
-    min-height: 1.5rem;
-    padding: 0.125rem var(--spacing-xs);
+    min-height: var(--ve-text-area-min-height);
+    padding: var(--ve-text-area-padding) var(--spacing-xs);
     outline: none;
     transition: color var(--transition-theme);
 }
@@ -459,7 +487,7 @@ body.drag-active::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 1.25rem;
+    height: var(--ve-insert-zone-height);
     position: relative;
 }
 
@@ -468,7 +496,7 @@ body.drag-active::after {
     position: absolute;
     left: 0;
     right: 0;
-    height: 0.0625rem;
+    height: var(--ve-insert-zone--height);
     background: var(--border-primary);
     opacity: 0;
     transition: opacity var(--transition-fast);
@@ -485,16 +513,16 @@ body.drag-active::after {
 
 .ve-insert-btn {
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl);
-    height: 1.5rem;
+    height: var(--ve-insert-btn-height);
     font-size: var(--font-size-xs);
     cursor: pointer;
     color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 0.625rem;
+    padding: 0 var(--ve-insert-btn-padding);
     line-height: 1;
     transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
 }

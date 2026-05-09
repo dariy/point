@@ -35,18 +35,17 @@ func TestSetup_BindError(t *testing.T) {
 	}
 }
 
-func TestSetup_HashPasswordError(t *testing.T) {
+func TestSetup_InvalidPasswordFormat(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
 	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-	longPass := strings.Repeat("x", 73)
-	body := `{"username":"u","password":"` + longPass + `","blog_title":"T","author_name":"A"}`
+	body := `{"username":"u","name":"tooshort","blog_title":"T","author_name":"A"}`
 	c, rec := echoCtx(http.MethodPost, "/", body)
 	if err := sh.Setup(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 for bcrypt error, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid password format, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -54,7 +53,7 @@ func TestSetup_SeedSettingsError(t *testing.T) {
 	h := setupHandlers(t)
 	_, _ = h.repo.DB().Exec(`DROP TABLE blog_settings`)
 	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-	body := `{"username":"seeduser","password":"password123","blog_title":"T","author_name":"A"}`
+	body := `{"username":"seeduser","name":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","blog_title":"T","author_name":"A"}`
 	c, rec := echoCtx(http.MethodPost, "/", body)
 	if err := sh.Setup(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -499,7 +498,7 @@ func TestSetup_Success(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
 	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-	body := `{"username":"newuser","password":"password123","blog_title":"My Blog","author_name":"Author"}`
+	body := `{"username":"newuser","name":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","blog_title":"My Blog","author_name":"Author"}`
 	c, rec := echoCtx(http.MethodPost, "/setup", body)
 	if err := sh.Setup(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)

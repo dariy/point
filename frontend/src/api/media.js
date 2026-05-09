@@ -141,3 +141,23 @@ export function analyzeMediaByPath(path) {
 export function reextractMediaEXIF(id) {
   return api.post(`/api/media/${id}/reextract`, {});
 }
+
+/**
+ * Write EXIF fields back to the media file and update the DB.
+ * Only alphanumeric and space characters are accepted.
+ * @param {number} id
+ * @param {Record<string, string>} fields  e.g. { Make: "Canon", Model: "EOS R5" }
+ * @returns {Promise<object>} Updated media object
+ */
+export function updateMediaEXIF(id, fields) {
+  return api.put(`/api/media/${id}/exif`, fields);
+}
+
+/**
+ * Revert media EXIF metadata to the original values captured at upload.
+ * @param {number} id
+ * @returns {Promise<object>} Updated media object
+ */
+export function revertMediaEXIF(id) {
+  return api.post(`/api/media/${id}/revert-exif`, {});
+}

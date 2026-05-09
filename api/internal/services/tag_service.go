@@ -103,6 +103,9 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 		SortOrder:   sortOrder,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
+			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+		}
 		return models.Tag{}, err
 	}
 
@@ -251,7 +254,7 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		sortOrder = sql.NullInt64{Int64: int64(*p.SortOrder), Valid: true}
 	}
 
-	return s.repo.UpdateTag(ctx, models.UpdateTagParams{
+	tag, err := s.repo.UpdateTag(ctx, models.UpdateTagParams{
 		ID:          p.ID,
 		Name:        p.Name,
 		Slug:        p.Slug,
@@ -259,6 +262,13 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		CustomUrl:   sql.NullString{String: p.CustomURL, Valid: p.CustomURL != ""},
 		SortOrder:   sortOrder,
 	})
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: tags.slug") {
+			return models.Tag{}, echo.NewHTTPError(http.StatusConflict, "a tag with that slug already exists")
+		}
+		return models.Tag{}, err
+	}
+	return tag, nil
 }
 
 type TagCloudItem struct {
@@ -1101,7 +1111,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	return result, nil
 }
 
-func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool) ([]models.Post, int64, error) {
+func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool, yearFrom, yearTo int) ([]models.Post, int64, error) {
 	// Collect the tag itself plus all descendants so that a parent tag page
 	// (e.g. /tag/countries) shows posts from all nested sub-tags.
 	descendants, _ := s.repo.GetTagDescendants(ctx, tagID)
@@ -1113,12 +1123,24 @@ func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPa
 
 	includeHidden := !publicOnly
 	offset := (page - 1) * perPage
-	posts, err := s.repo.GetPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, includeHidden, int64(perPage), int64(offset))
-	if err != nil {
-		return nil, 0, err
-	}
+	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
 
-	total, err := s.repo.CountPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, includeHidden)
+	var posts []models.Post
+	var total int64
+	var err error
+	if hasYearFilter {
+		posts, err = s.repo.GetPostsByTagIDsInYearRange(ctx, tagIDs, yearFrom, yearTo, publicOnly, includeDrafts, includeHidden, int64(perPage), int64(offset))
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = s.repo.CountPostsByTagIDsInYearRange(ctx, tagIDs, yearFrom, yearTo, publicOnly, includeDrafts, includeHidden)
+	} else {
+		posts, err = s.repo.GetPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, includeHidden, int64(perPage), int64(offset))
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = s.repo.CountPostsByTagIDs(ctx, tagIDs, publicOnly, includeDrafts, includeHidden)
+	}
 	if err != nil {
 		return nil, 0, err
 	}

@@ -5,16 +5,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"point-api/internal/config"
 	"point-api/internal/models"
+	"point-api/internal/repository"
 	"point-api/internal/services"
 )
 
@@ -453,4 +457,331 @@ func TestPostHandler_UpdateSettings(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
+}
+
+func TestFetchAncestorsMapDirect(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'A','a'),(2,'B','b')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`)
+
+	postTagsMap := map[int64][]repository.PostTagInfo{
+		1: {{ID: 2, Name: "B", Slug: "b"}},
+	}
+	result := fetchAncestorsMap(ctx, repo, postTagsMap)
+	if len(result) == 0 {
+		t.Error("expected non-empty ancestors map")
+	}
+}
+
+func TestExpandPostTagsWithAncestors(t *testing.T) {
+	postTagsMap := map[int64][]repository.PostTagInfo{
+		1: {
+			{ID: 2, Name: "Child", Slug: "child"},
+			{ID: 2, Name: "Child", Slug: "child"},
+		},
+		2: {
+			{ID: 10, Name: "_system", Slug: "_system"},
+		},
+	}
+	ancestorsMap := map[int64][]repository.PostTagInfo{
+		2: {{ID: 3, Name: "Parent", Slug: "parent"}},
+	}
+
+	result := expandPostTagsWithAncestors(postTagsMap, ancestorsMap, false)
+	if len(result[1]) == 0 {
+		t.Error("expected tags for post 1")
+	}
+
+	result2 := expandPostTagsWithAncestors(postTagsMap, ancestorsMap, true)
+	for _, tag := range result2[2] {
+		if strings.HasPrefix(tag.Slug, "_") {
+			t.Errorf("system tag %s should not appear with publicOnly=true", tag.Slug)
+		}
+	}
+}
+
+func TestUpdatePost_Success(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	post, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Original", Slug: "original", Content: "hello", Status: "draft", AuthorID: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+
+	body, _ := json.Marshal(UpdatePostRequest{Title: "Updated Title", Content: "new content", Status: "published", Slug: "updated-slug"})
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	if err := h.UpdatePost(c); err != nil {
+		t.Fatalf("UpdatePost success failed: %v", err)
+	}
+}
+
+func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	post, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "My Post", Slug: "my-post", Content: "hello", Status: "draft", AuthorID: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	idStr := strconv.FormatInt(post.ID, 10)
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(idStr)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	if err := h.PublishPost(c); err != nil {
+		t.Fatalf("PublishPost failed: %v", err)
+	}
+
+	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	c2.SetParamNames("id")
+	c2.SetParamValues(idStr)
+	c2.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	if err := h.WithdrawPost(c2); err != nil {
+		t.Fatalf("WithdrawPost failed: %v", err)
+	}
+}
+
+func TestPostHandler_GeneratePreviewLink_Success(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	post, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Preview", Slug: "preview-post", Status: "draft", AuthorID: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	if err := h.GeneratePreviewLink(c); err != nil {
+		t.Fatalf("GeneratePreviewLink failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateAudioPost_NoTitleWithTags(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{
+		StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300,
+	}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	p, _ := writer.CreateFormFile("file", "my-audio.mp3")
+	_, _ = p.Write([]byte("fake mp3 data"))
+	_ = writer.WriteField("tags", "nature, landscape, , ")
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	if err := h.CreateAudioPost(c); err != nil {
+		t.Fatalf("CreateAudioPost (no title) failed: %v", err)
+	}
+}
+
+func TestUpdatePost_SlugConflict(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+
+	_, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Post A", Slug: "post-a", Status: "draft", AuthorID: 1})
+	if err != nil {
+		t.Fatalf("CreatePost A: %v", err)
+	}
+	postB, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Post B", Slug: "post-b", Status: "draft", AuthorID: 1})
+	if err != nil {
+		t.Fatalf("CreatePost B: %v", err)
+	}
+
+	body, _ := json.Marshal(UpdatePostRequest{Title: "Post B", Slug: "post-a", Status: "draft"})
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(postB.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	err = h.UpdatePost(c)
+	if err != nil {
+		t.Logf("UpdatePost conflict returned error (may be echo HTTPError): %v", err)
+	}
+	if rec.Code != http.StatusConflict && err == nil {
+		t.Errorf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdatePost_BadID(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodPut, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("notanint")
+
+	if err := h.UpdatePost(c); err == nil {
+		t.Error("expected error for bad ID")
+	}
+}
+
+func TestCreatePost_Scheduled(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+
+	future := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	body := fmt.Sprintf(`{"title":"Scheduled","content":"hello","status":"draft","scheduled_at":%q}`, future)
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	if err := h.CreatePost(c); err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["status"] != "scheduled" {
+		t.Errorf("expected status 'scheduled', got %v", resp["status"])
+	}
+	if resp["scheduled_at"] == nil {
+		t.Error("expected scheduled_at to be non-nil")
+	}
+}
+
+func TestCreatePost_ScheduledInPast_PublishesImmediately(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+
+	past := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)
+	body := fmt.Sprintf(`{"title":"PastScheduled","content":"hello","scheduled_at":%q}`, past)
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+
+	if err := h.CreatePost(c); err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["status"] != "published" {
+		t.Errorf("expected status 'published', got %v", resp["status"])
+	}
+	assert.Nil(t, resp["scheduled_at"], "past scheduled_at should not be stored")
 }

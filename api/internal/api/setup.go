@@ -1,6 +1,9 @@
 package api
 
 import (
+	"database/sql"
+	"errors"
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -34,7 +37,7 @@ func (h *SetupHandler) SetupStatus(c echo.Context) error {
 func (h *SetupHandler) Setup(c echo.Context) error {
 	var req struct {
 		Username   string `json:"username"`
-		Password   string `json:"password"`
+		Password   string `json:"name"`
 		BlogTitle  string `json:"blog_title"`
 		AuthorName string `json:"author_name"`
 	}
@@ -47,14 +50,19 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "all fields are required"})
 	}
 
-	if len(req.Password) < 8 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "password must be at least 8 characters"})
+	// req.Password is a SHA-256 hex string sent by the frontend (always 64 chars)
+	if len(req.Password) != 64 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid password format"})
 	}
 
 	ctx := c.Request().Context()
 	_, err := h.repo.GetFirstUser(ctx)
 	if err == nil {
 		return c.JSON(http.StatusConflict, map[string]string{"detail": "setup already complete"})
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("setup: GetFirstUser error: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "database error"})
 	}
 
 	hash, err := services.HashPassword(req.Password)
@@ -69,6 +77,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		DisplayName:  req.AuthorName,
 	})
 	if err != nil {
+		log.Printf("setup: CreateUser error: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "failed to create user"})
 	}
 
@@ -81,12 +90,12 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"author_name", req.AuthorName, "string"},
 		{"posts_per_page", "10", "integer"},
 		{"default_theme", "dark", "string"},
+		{"active_css_theme", "default", "string"},
 		{"use_thumbnails", "true", "boolean"},
 		{"show_view_counts", "false", "boolean"},
 		{"show_tag_cloud", "true", "boolean"},
-		{"enable_map", "false", "boolean"},
+		{"map_mode", "off", "string"},
 		{"enable_backup", "false", "boolean"},
-		{"media_import_path", "", "string"},
 	}
 
 	for _, s := range seedSettings {
