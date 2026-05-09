@@ -149,7 +149,7 @@ jobs:
           strip_components: 0
 
       - name: Deploy to Production
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         env:
           BUILD_VERSION: ${{ needs.build.outputs.version }}
           IMAGE_TAG: ${{ github.sha }}
