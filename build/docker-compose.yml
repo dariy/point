@@ -10,7 +10,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ../data:/data:z
+      - ../data:/data:z,U
     env_file:
       - .env
     environment:

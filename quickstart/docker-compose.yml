@@ -19,7 +19,7 @@ services:
       - HOST=0.0.0.0
       - MEDIA_IMPORT_PATH=/photos
     volumes:
-      - ${DATA_PATH:-./data}:/data:z
+      - ${DATA_PATH:-./data}:/data:z,U
       - ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro,z # set PHOTO_LIBRARY_PATH in .env to mount your library
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${PORT:-8000}/health"]
