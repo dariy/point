@@ -151,16 +151,21 @@ WHERE
 
 -- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, created_at, updated_at
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at
 ) VALUES (
-    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), sqlc.arg('scheduled_at'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 RETURNING *;
 
 -- name: UpdatePost :one
 UPDATE posts
 SET title = sqlc.arg('title'), slug = sqlc.arg('slug'), content = sqlc.arg('content'), excerpt = sqlc.arg('excerpt'), formatter = sqlc.arg('formatter'), status = sqlc.arg('status'), is_featured = sqlc.arg('is_featured'), thumbnail_path = sqlc.arg('thumbnail_path'), meta_description = sqlc.arg('meta_description'),
-    published_at = (CASE WHEN sqlc.arg('status') = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END),
+    scheduled_at = sqlc.arg('scheduled_at'),
+    published_at = (CASE
+        WHEN sqlc.arg('status') = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
+        WHEN sqlc.arg('status') = 'scheduled'  THEN NULL
+        ELSE published_at
+    END),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg('id') AND author_id = sqlc.arg('author_id')
 RETURNING *;
@@ -189,6 +194,15 @@ RETURNING *;
 UPDATE posts
 SET status = 'draft', updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
+RETURNING *;
+
+-- name: BulkPublishScheduledPosts :many
+UPDATE posts
+SET status = 'published',
+    published_at = COALESCE(scheduled_at, CURRENT_TIMESTAMP),
+    scheduled_at = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
 RETURNING *;
 
 -- name: SetPostPreviewToken :exec
@@ -347,9 +361,9 @@ WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') 
 
 -- name: CreateMedia :one
 INSERT INTO media (
-    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, uploaded_at
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, original_metadata, uploaded_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -359,6 +373,12 @@ SET alt_text = COALESCE(?, alt_text),
     caption = COALESCE(?, caption),
     post_id = COALESCE(?, post_id),
     metadata = COALESCE(?, metadata)
+WHERE id = ?
+RETURNING *;
+
+-- name: UpdateMediaMetadata :one
+UPDATE media
+SET metadata = ?
 WHERE id = ?
 RETURNING *;
 
@@ -379,3 +399,13 @@ SELECT SUM(file_size) FROM media;
 SELECT * FROM media
 WHERE post_id = ?
 ORDER BY uploaded_at ASC;
+
+-- SECRETS
+
+-- name: GetSecret :one
+SELECT key, value, updated_at FROM blog_secrets WHERE key = ? LIMIT 1;
+
+-- name: UpsertSecret :exec
+INSERT INTO blog_secrets (key, value, updated_at)
+VALUES (?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;

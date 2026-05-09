@@ -46,7 +46,8 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
 	"show_tag_cloud":         true,
-	"enable_map":             true,
+	"map_mode":               true,
+	"timeline_mode":          true,
 }
 
 // GetHomePage returns all data needed to render the public homepage.
@@ -60,9 +61,13 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		page = 1
 	}
 
-	// Try cache for public requests (TTL 15 minutes)
+	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
+	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
+	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
+
+	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	cacheKey := fmt.Sprintf("homepage_p%d.json", page)
-	if publicOnly {
+	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
 		}
@@ -79,12 +84,17 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	// Published posts
-	posts, total, err := h.postService.ListPosts(ctx, services.ListPostsParams{
+	listParams := services.ListPostsParams{
 		Page:          int32(page),
 		PerPage:       int32(perPage),
-		IncludeDrafts: false, // Never show drafts in public part
+		IncludeDrafts: false,
 		IncludeHidden: !publicOnly,
-	})
+	}
+	if hasYearFilter {
+		listParams.YearFrom = yearFrom
+		listParams.YearTo = yearTo
+	}
+	posts, total, err := h.postService.ListPosts(ctx, listParams)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -146,7 +156,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		"settings":  publicSettings,
 	}
 
-	if publicOnly {
+	if publicOnly && !hasYearFilter {
 		if data, err := json.Marshal(resp); err == nil {
 			_ = h.cacheService.Set(ctx, cacheKey, data)
 		}
@@ -167,9 +177,13 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		page = 1
 	}
 
-	// Try cache for public requests (TTL 15 minutes)
+	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
+	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
+	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
+
+	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
 	cacheKey := fmt.Sprintf("tagpage_%s_p%d.json", slug, page)
-	if publicOnly {
+	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
 		}
@@ -247,7 +261,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
 
 	// Posts for this tag (published only)
-	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false)
+	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false, yearFrom, yearTo)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -320,7 +334,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		},
 	}
 
-	if publicOnly {
+	if publicOnly && !hasYearFilter {
 		if data, err := json.Marshal(resp); err == nil {
 			_ = h.cacheService.Set(ctx, cacheKey, data)
 		}
@@ -399,9 +413,34 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	mapSettings, _ := h.settingsService.GetAllSettings(ctx)
 
-	if publicOnly && mapSettings["enable_map"] == "false" {
+	mapMode := mapSettings["map_mode"]
+	if mapMode == "" {
+		mapMode = "off"
+	}
+
+	if publicOnly && mapMode != "all" {
 		return echo.NewHTTPError(http.StatusNotFound, "map not found")
 	}
+	if !publicOnly && mapMode == "off" {
+		return echo.NewHTTPError(http.StatusNotFound, "map not found")
+	}
+
+	// Parse optional year range filter from the timeline component.
+	var yearRangeFilter map[int64]int64 // tagID → scoped post_count; nil = no filter
+	yearFromStr := c.QueryParam("year_from")
+	yearToStr := c.QueryParam("year_to")
+	if yearFromStr != "" && yearToStr != "" {
+		yearFrom, errFrom := strconv.Atoi(yearFromStr)
+		yearTo, errTo := strconv.Atoi(yearToStr)
+		if errFrom == nil && errTo == nil && yearFrom <= yearTo {
+			rangeResults, _ := h.repo.ListMapTagsForYearRange(ctx, yearFrom, yearTo)
+			yearRangeFilter = make(map[int64]int64, len(rangeResults))
+			for _, r := range rangeResults {
+				yearRangeFilter[r.TagID] = r.PostCount
+			}
+		}
+	}
+
 	var minMapPosts int64
 	if publicOnly {
 		minMapPosts = getMinTagPostsSetting(mapSettings)
@@ -455,6 +494,14 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 		if !ok {
 			continue
 		}
+
+		// When a year range filter is active, skip tags outside the filtered set.
+		if yearRangeFilter != nil {
+			if _, inRange := yearRangeFilter[t.ID]; !inRange {
+				continue
+			}
+		}
+
 		tagType := "other"
 		if cityDescIDs[t.ID] {
 			tagType = "city"
@@ -467,9 +514,14 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			years = []repository.PostTagInfo{}
 		}
 
-		postCount := hierarchicalCounts[t.ID]
-		if postCount == 0 {
-			postCount = int64(t.PostCount)
+		var postCount int64
+		if yearRangeFilter != nil {
+			postCount = yearRangeFilter[t.ID]
+		} else {
+			postCount = hierarchicalCounts[t.ID]
+			if postCount == 0 {
+				postCount = int64(t.PostCount)
+			}
 		}
 
 		entry := map[string]interface{}{

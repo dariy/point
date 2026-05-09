@@ -20,16 +20,16 @@ import (
 )
 
 type SystemHandler struct {
-	repo            *repository.Repository
-	mediaService    *services.MediaService
-	postService     *services.PostService
-	settingsService *services.SettingsService
-	tagService      *services.TagService
-	systemService   *services.SystemService
-	cacheService    *services.CacheService
-	dataPath        string
-	logPath         string
-	appVersion      string
+	repo              *repository.Repository
+	mediaService      *services.MediaService
+	postService       *services.PostService
+	settingsService   *services.SettingsService
+	tagService        *services.TagService
+	systemService     *services.SystemService
+	cacheService      *services.CacheService
+	dataPath          string
+	logPath           string
+	appVersion        string
 }
 
 var startTime = time.Now()
@@ -127,12 +127,13 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"published_posts": stats.PublishedCount,
-		"total_posts":     stats.PostCount,
-		"total_tags":      stats.TagCount,
-		"total_media":     stats.MediaCount,
-		"storage_used_mb": float64(stats.StorageBytes) / (1024 * 1024),
-		"uptime_seconds":  int64(time.Since(startTime).Seconds()),
+		"published_posts":   stats.PublishedCount,
+		"total_posts":       stats.PostCount,
+		"total_tags":        stats.TagCount,
+		"total_media":       stats.MediaCount,
+		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
+		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
+		"import_configured": h.settingsService.SecretIsSet(ctx, "media_import_path"),
 	})
 }
 
@@ -305,10 +306,10 @@ var importableExtensions = map[string]bool{
 func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	importPath, err := h.settingsService.GetSetting(ctx, "media_import_path", "")
-	if err != nil || importPath == "" {
+	importPath, _ := h.settingsService.GetSecret(ctx, "media_import_path")
+	if importPath == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"detail": "media_import_path not configured in settings",
+			"detail": "media_import_path not configured",
 		})
 	}
 
@@ -365,5 +366,13 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 		"skipped":  skipped,
 		"errors":   errors,
 	})
+}
+
+func (h *SystemHandler) GetDiskInfo(c echo.Context) error {
+	info, err := h.systemService.GetDiskInfo()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, info)
 }
 

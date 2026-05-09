@@ -7,7 +7,7 @@
 }
 
 .error-code {
-    font-size: 7.5rem;
+    font-size: var(--error-code-font-size);
     font-weight: 700;
     color: var(--border-primary);
     line-height: 1;

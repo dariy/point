@@ -7,7 +7,7 @@
 
 .posts-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--posts-grid-grid-template-columns), 1fr));
     gap: var(--spacing-xl);
 }
 
@@ -19,8 +19,8 @@
     border-radius: var(--border-radius-xl);
     overflow: hidden;
     box-shadow: var(--shadow);
-    transition: all var(--transition-normal),
-        background-color var(--transition-theme);
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal),
+        background-color var(--transition-theme), scale var(--transition-normal);
     text-decoration: none;
     /* Make sure links inside look clean */
     display: block;
@@ -35,13 +35,13 @@
 
 .post-card:hover {
     box-shadow: var(--shadow-lg);
-    transform: translateY(-0.125rem);
+    transform: translateY(calc(var(--post-card-transform) * -1));
 }
 
 /* --- HAS IMAGE/VISUAL STYLE --- */
 .post-card.has-image,
 .post-card.has-visual {
-    min-height: 13.75rem;
+    min-height: var(--post-cardhas-image-min-height);
     /* Minimum height for image cards */
     color: var(--text-inverted);
     /* Default text color on image */
@@ -65,14 +65,14 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform var(--transition-slow);
+    transition: transform var(--transition-slow), scale var(--transition-slow);
 }
 
 .post-card-background video {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform var(--transition-slow);
+    transition: transform var(--transition-slow), scale var(--transition-slow);
 }
 
 .audio-placeholder {
@@ -98,7 +98,7 @@
     transform: translate(-50%, -50%);
     z-index: 2;
     pointer-events: none;
-    filter: drop-shadow(0 0 0.625rem rgba(0, 0, 0, 0.5));
+    filter: drop-shadow(0 0 var(--video-play-indicator-filter) var(--color-black-alpha-50));
     transition: opacity var(--transition-normal);
 }
 
@@ -117,11 +117,11 @@
     inset: 0;
     z-index: 10;
     background: linear-gradient(to top,
-            rgba(0, 0, 0, 0.9) 0%,
-            rgba(0, 0, 0, 0.4) 10%,
-            rgba(0, 0, 0, 0) 40%,
-            rgba(0, 0, 0, 0.6) 70%,
-            rgba(0, 0, 0, 0.9) 100%);
+            var(--color-black-alpha-90) 0%,
+            var(--color-black-alpha-40) 10%,
+            var(--color-black-alpha-0) 40%,
+            var(--color-black-alpha-60) 70%,
+            var(--color-black-alpha-90) 100%);
     padding: var(--spacing-lg);
     display: flex;
     flex-direction: column;
@@ -143,19 +143,19 @@
     top: var(--spacing-sm);
     right: var(--spacing-sm);
     z-index: 20;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: var(--post-card-edit-btn-width);
+    height: var(--post-card-edit-btn-height);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
     box-shadow: var(--shadow-sm);
-    transition: all var(--transition-fast);
-    backdrop-filter: blur(0.5rem);
-    -webkit-backdrop-filter: blur(0.5rem);
+    transition: opacity var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), scale var(--transition-fast);
+    backdrop-filter: blur(var(--post-card-edit-btn-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-card-edit-btn--webkit-backdrop-filter));
     opacity: 0;
     /* Hidden by default, shown on hover */
     text-decoration: none;
@@ -174,8 +174,8 @@
 }
 
 .post-card-edit-btn svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: var(--svg-width);
+    height: var(--svg-height);
 }
 
 /* Hidden post indicator */
@@ -184,22 +184,22 @@
     top: var(--spacing-sm);
     left: var(--spacing-sm);
     z-index: 20;
-    width: 2rem;
-    height: 2rem;
-    background: rgba(0, 0, 0, 0.6);
+    width: var(--post-hidden-indicator-width);
+    height: var(--post-hidden-indicator-height);
+    background: var(--color-black-alpha-60);
     border-radius: var(--border-radius);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--color-white-alpha-90);
     box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(0.25rem);
-    -webkit-backdrop-filter: blur(0.25rem);
+    backdrop-filter: blur(var(--post-hidden-indicator-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-hidden-indicator--webkit-backdrop-filter));
 }
 
 .post-hidden-indicator svg {
-    width: 1rem;
-    height: 1rem;
+    width: var(--svg-width-alt1);
+    height: var(--svg-height-alt1);
 }
 
 /* Override text colors for overlay */
@@ -209,11 +209,11 @@
 }
 
 .post-card-content.overlay .post-card-meta {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--color-white-alpha-80);
 }
 
 .post-card-content.overlay .post-card-excerpt {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--color-white-alpha-90);
     font-size: var(--font-size-sm);
     margin-bottom: var(--spacing-md);
 }
@@ -244,6 +244,10 @@
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
     margin-bottom: var(--spacing-sm);
+}
+
+.view-count {
+    font-variant-numeric: tabular-nums;
 }
 
 .post-card-title {
@@ -312,16 +316,16 @@
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl);
     box-shadow: var(--shadow-md);
-    backdrop-filter: blur(0.5rem);
-    -webkit-backdrop-filter: blur(0.5rem);
+    backdrop-filter: blur(var(--post-card-tag-flyout-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-card-tag-flyout--webkit-backdrop-filter));
     animation: flyout-up 150ms ease;
 }
 
 @keyframes flyout-up {
-    from { opacity: 0; transform: translateY(0.25rem); }
+    from { opacity: 0; transform: translateY(var(--from-transform)); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -334,9 +338,9 @@
 
 /* Orphan expansion: last card fills remaining columns in an incomplete row.
    Featured post spans a full row, shifting the orphan parity by 1.
-   Grid is 2-col below 66rem viewport, 3-col at 66rem+ (max-width: 75rem). */
+   Grid is 2-col below var(--size-66) viewport, 3-col at var(--size-66)+ (max-width: var(--size-75)). */
 
-@media (max-width: 65.9375rem) {
+@media (max-width: var(--media-query-1-alt1)) {
     /* 2-col: orphan lands on an odd position (even with a featured-post offset) */
     .posts-grid:not(:has(.featured-post)) .post-card-slot:last-child:nth-child(odd),
     .posts-grid:has(.featured-post) .post-card-slot:last-child:nth-child(even) {
@@ -344,7 +348,7 @@
     }
 }
 
-@media (min-width: 66rem) {
+@media (min-width: var(--media-query-1-alt2)) {
     /* 3-col: orphan lands on 3n+1 (or 3n+2 with featured-post offset) */
     .posts-grid:not(:has(.featured-post)) .post-card-slot:last-child:nth-child(3n+1),
     .posts-grid:has(.featured-post) .post-card-slot:last-child:nth-child(3n+2) {
@@ -355,7 +359,7 @@
 /* Reset grid for featured post if using new card style */
 /* If featured post has image, it behaves like a big card now */
 .featured-post .post-card.has-image {
-    min-height: 31.25rem;
+    min-height: var(--post-cardhas-image-min-height-alt1);
 }
 
 .featured-post .post-card-content.overlay .post-card-title {
@@ -404,7 +408,7 @@
 .placeholder-grid .post-card-slot {
     background: var(--surface-card);
     border-radius: var(--border-radius-xl);
-    min-height: 20rem;
+    min-height: var(--post-card-slot-min-height);
     box-shadow: var(--shadow);
     opacity: 0.5;
     animation: pulse 1.5s infinite alternate;

@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
@@ -64,6 +66,7 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		"is_featured":      post.IsFeatured,
 		"view_count":       post.ViewCount,
 		"published_at":     nullTime(post.PublishedAt),
+		"scheduled_at":     nullTime(post.ScheduledAt),
 		"created_at":       post.CreatedAt,
 		"updated_at":       post.UpdatedAt,
 		"thumbnail_path":   nullString(post.ThumbnailPath),
@@ -204,7 +207,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		}
 	}
 
-	if strings.EqualFold(post.Status, "published") {
+	if !isAdmin && strings.EqualFold(post.Status, "published") {
 		_ = h.postService.IncrementViewCount(ctx, post.ID)
 	}
 
@@ -372,6 +375,18 @@ type CreatePostRequest struct {
 	ThumbnailPath   string   `json:"thumbnail_path"`
 	MetaDescription string   `json:"meta_description"`
 	Tags            []string `json:"tags"`
+	ScheduledAt     *string  `json:"scheduled_at"`
+}
+
+func parseScheduledAt(s *string) (*time.Time, error) {
+	if s == nil || *s == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, *s)
+	if err != nil {
+		return nil, fmt.Errorf("invalid scheduled_at: must be RFC3339 (e.g. 2026-04-17T15:04:05Z)")
+	}
+	return &t, nil
 }
 
 func (h *PostHandler) CreatePost(c echo.Context) error {
@@ -389,6 +404,18 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		req.Formatter = "markdown"
 	}
 
+	scheduledAt, err := parseScheduledAt(req.ScheduledAt)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": err.Error()})
+	}
+	if scheduledAt != nil && time.Now().Before(*scheduledAt) {
+		req.Status = "scheduled"
+	} else if scheduledAt != nil {
+		// past scheduled_at: publish immediately, don't store the schedule time
+		req.Status = "published"
+		scheduledAt = nil
+	}
+
 	post, err := h.postService.CreatePost(c.Request().Context(), services.CreatePostParams{
 		Title:           req.Title,
 		Content:         req.Content,
@@ -401,6 +428,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		ThumbnailPath:   req.ThumbnailPath,
 		MetaDescription: req.MetaDescription,
 		Tags:            req.Tags,
+		ScheduledAt:     scheduledAt,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {
@@ -433,6 +461,7 @@ type UpdatePostRequest struct {
 	ThumbnailPath   string   `json:"thumbnail_path"`
 	MetaDescription string   `json:"meta_description"`
 	Tags            []string `json:"tags"`
+	ScheduledAt     *string  `json:"scheduled_at"`
 }
 
 func (h *PostHandler) UpdatePost(c echo.Context) error {
@@ -446,6 +475,17 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	var req UpdatePostRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	scheduledAt, err := parseScheduledAt(req.ScheduledAt)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": err.Error()})
+	}
+	if scheduledAt != nil && time.Now().Before(*scheduledAt) {
+		req.Status = "scheduled"
+	} else if scheduledAt != nil {
+		req.Status = "published"
+		scheduledAt = nil
 	}
 
 	// Capture pre-update paths so that images removed from the post are also re-evaluated.
@@ -467,6 +507,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		ThumbnailPath:   req.ThumbnailPath,
 		MetaDescription: req.MetaDescription,
 		Tags:            req.Tags,
+		ScheduledAt:     scheduledAt,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: posts.slug") {

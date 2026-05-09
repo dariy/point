@@ -14,7 +14,7 @@
 .table td {
     padding: var(--spacing-sm) var(--spacing-md);
     text-align: left;
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
     vertical-align: middle;
 }
 
@@ -47,14 +47,14 @@
 
 /* Table action buttons - square and elevated */
 .table .actions .btn {
-    width: 2rem;
-    height: 2rem;
+    width: var(--btn-width);
+    height: var(--btn-height);
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     color: var(--text-secondary);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
@@ -65,7 +65,7 @@
     color: var(--text-primary);
     border-color: var(--border-secondary);
     box-shadow: var(--shadow);
-    transform: translateY(-0.0625rem);
+    transform: translateY(calc(var(--btn-transform) * -1));
 }
 
 .table .actions .btn-danger:hover {
@@ -75,8 +75,8 @@
 }
 
 .table .actions .btn svg {
-    width: 1rem;
-    height: 1rem;
+    width: var(--svg-width-alt2);
+    height: var(--svg-height-alt2);
 }
 
 /* Multi-row item grouping (Posts Table) */
@@ -95,7 +95,7 @@
     white-space: nowrap;
     vertical-align: top;
     padding-top: var(--spacing-sm);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
 }
 
 /* Group hover effect: highlight both rows when either is hovered */
@@ -113,18 +113,19 @@ td.title-col {
 td.updated-col {
     white-space: nowrap;
     font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
 }
 
 .preview-col {
-    width: 3rem;
+    width: var(--preview-col-width);
     padding-right: 0 !important;
-    border-bottom: 1px solid var(--border-primary) !important;
+    border-bottom: var(--border-width) solid var(--border-primary) !important;
     vertical-align: middle;
 }
 
 .post-preview-img {
-    min-width: 5rem;
-    min-height: 5rem;
+    min-width: var(--post-preview-img-min-width);
+    min-height: var(--post-preview-img-min-height);
     object-fit: cover;
     border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
@@ -132,14 +133,14 @@ td.updated-col {
 }
 
 .post-preview-placeholder {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: var(--post-preview-placeholder-width);
+    height: var(--post-preview-placeholder-height);
     border-radius: var(--border-radius-sm);
     background-color: var(--surface-hover);
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px dashed var(--border-primary);
+    border: var(--border-width) dashed var(--border-primary);
     color: var(--text-muted);
     font-size: var(--font-size-base);
 }
@@ -147,5 +148,44 @@ td.updated-col {
 /* No special padding for first header since we added a preview column */
 /* vertically align "Status" with "Published" */
 th.status-col {
-    padding-left: 1.5625rem;
+    padding-left: var(--thstatus-col-padding-left);
+}
+
+.scheduled-date {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-scheduled);
+    margin-top: var(--scheduled-date-margin-top);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.check-col {
+    width: var(--check-col-width);
+    padding-right: 0;
+    border-bottom: none;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.post-row-main td.check-col {
+    border-bottom: none;
+    vertical-align: middle;
+}
+
+.bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--surface-hover);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+}
+
+#bulk-count {
+    color: var(--text-secondary);
+    min-width: var(--bulk-count-min-width);
+    font-variant-numeric: tabular-nums;
 }

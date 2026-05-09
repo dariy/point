@@ -47,15 +47,3 @@ go run cmd/api/main.go
 # Or directly from api/:
 go test ./...
 ```
-
-## Implementation Status
-
-- [x] Foundation (Config, DB, startup migrations)
-- [x] Authentication & User Management (session-cookie, bcrypt)
-- [x] Posts & Tags (CRUD, slug, pagination, filtering, hierarchy)
-- [x] Media & File Handling (upload, thumbnails, visibility, AI analysis)
-- [x] System & Settings (stats, logs, backup, settings)
-- [x] Feeds (RSS, sitemap, robots.txt)
-- [x] Compound page endpoints (home, tag, tags index)
-
-See [`MIGRATION_PROGRESS.md`](../MIGRATION_PROGRESS.md) for remaining tasks before production switch.

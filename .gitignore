@@ -53,6 +53,7 @@ coverage.xml
 .env
 .env.local
 .env.*.local
+!build/.env
 .venv
 env/
 venv/
@@ -159,3 +160,15 @@ build/gemini*
 .beads-credential-key
 .sqlhistory
 test-connection.sh
+
+# bv (beads viewer) local config and caches
+.bv/
+.zed/
+.metaswarm/
+.gemini/
+.claude/
+.agents/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+skills-lock.json

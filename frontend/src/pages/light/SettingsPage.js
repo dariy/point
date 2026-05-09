@@ -19,15 +19,19 @@ const SETTING_GROUPS = [
   },
   {
     title: 'Display',
-    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'immersive_nav_direction', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt', 'exif_visibility']
+    keys: ['posts_per_page', 'min_tag_posts_to_show', 'default_theme', 'immersive_nav_direction', 'show_view_counts', 'use_thumbnails', 'show_tag_cloud', 'show_immersive_excerpt', 'exif_visibility', 'map_mode', 'timeline_mode']
   },
   {
     title: 'Storage & System',
-    keys: ['storage_quota_mb', 'enable_map', 'enable_back`up', 'backup_interval_hours']
+    keys: ['storage_quota_mb', 'enable_backup', 'backup_interval_hours']
   },
   {
     title: 'Advanced',
     keys: ['max_upload_size_mb', 'thumbnail_width', 'thumbnail_height', 'jpeg_quality']
+  },
+  {
+    title: 'AI (Gemini)',
+    keys: ['gemini_api_key', 'gemini_prompt_title', 'gemini_prompt_tags', 'gemini_prompt_excerpt']
   }
 ];
 
@@ -86,6 +90,7 @@ export default class SettingsPage extends Component {
     const toggles = [];
 
     for (const key of group.keys) {
+      if (key === 'gemini_prompt_tags' || key === 'gemini_prompt_excerpt') continue;
       const value = settings[key] ?? '';
       const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
@@ -131,26 +136,67 @@ export default class SettingsPage extends Component {
             <option value="admin"${v === 'admin' ? ' selected' : ''}>Admins only</option>
             <option value="all"${v === 'all' ? ' selected' : ''}>Everyone</option>
           </select>`;
+      } else if (key === 'map_mode' || key === 'timeline_mode') {
+        const v = value || 'off';
+        input = `
+          <select name="${key}" id="${key}" class="form-select">
+            <option value="off"${v === 'off' ? ' selected' : ''}>Off</option>
+            <option value="hidden"${v === 'hidden' ? ' selected' : ''}>Hidden (Admins only)</option>
+            <option value="all"${v === 'all' ? ' selected' : ''}>All (Everyone)</option>
+          </select>`;
       } else if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) {
         input = `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" min="0">`;
       } else if (key.includes('enable') || key.includes('show') || key.includes('use')) {
         const checked = value === 'true' || value === true || value === 1 || value === '1';
         toggles.push({ key, label, checked });
         isToggle = true;
+      } else if (key === 'gemini_api_key') {
+        const isConfigured = settings['gemini_api_key_is_set'] === 'true' || settings['gemini_api_key_is_set'] === true;
+        const placeholder = isConfigured ? '******** (Configured)' : 'Enter Gemini API Key';
+        input = `<input type="password" name="${key}" id="${key}" class="form-input" placeholder="${placeholder}" value="">`;
+      } else if (key === 'gemini_prompt_title') {
+        const tv = escapeHtml(settings['gemini_prompt_title'] ?? '');
+        const kv = escapeHtml(settings['gemini_prompt_tags'] ?? '');
+        const ev = escapeHtml(settings['gemini_prompt_excerpt'] ?? '');
+        input = `<div class="prompt-template">
+          <div class="prompt-line prompt-line-fixed">Analyze this image and return a JSON object.</div>
+          <div class="prompt-line">
+            <span class="prompt-key">"title" <span class="prompt-type">(string)</span>:</span>
+            <input type="text" name="gemini_prompt_title" class="form-input prompt-part" value="${tv}" placeholder="a concise, descriptive title" maxlength="200">
+          </div>
+          <div class="prompt-line">
+            <span class="prompt-key">"tags" <span class="prompt-type">(array of strings)</span>:</span>
+            <input type="text" name="gemini_prompt_tags" class="form-input prompt-part" value="${kv}" placeholder="relevant keyword tags" maxlength="200">
+          </div>
+          <div class="prompt-line">
+            <span class="prompt-key">"excerpt" <span class="prompt-type">(string)</span>:</span>
+            <input type="text" name="gemini_prompt_excerpt" class="form-input prompt-part" value="${ev}" placeholder="a 1-2 sentence description" maxlength="200">
+          </div>
+          <div class="prompt-line prompt-line-fixed">Return only valid JSON, no markdown or extra text.</div>
+        </div>`;
       } else {
         input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
       }
 
       if (!isToggle) {
+        const isPromptComposite = key === 'gemini_prompt_title';
+        const fieldClass = isPromptComposite ? 'settings-field settings-field-top' : 'settings-field';
+        const displayLabel = isPromptComposite ? 'Analysis Prompt' : label;
         inputs.push(`
-          <div class="settings-field">
-            <label class="settings-field-label" for="${key}">${escapeHtml(label)}</label>
+          <div class="${fieldClass}">
+            <label class="settings-field-label"${isPromptComposite ? '' : ` for="${key}"`}>${escapeHtml(displayLabel)}</label>
             ${input}
           </div>`);
       }
     }
 
     const inputsHtml = inputs.join('');
+    
+    let groupHeaderExtra = '';
+    if (group.title === 'Display') {
+      groupHeaderExtra = `<a href="/light/themes" class="card-header-link">Manage Themes ↗</a>`;
+    }
+
     const togglesHtml = toggles.length ? `
       <div class="setting-pill-group${inputs.length ? ' setting-pill-group-divided' : ''}">
         ${toggles.map(({ key, label, checked }) => `
@@ -160,9 +206,13 @@ export default class SettingsPage extends Component {
           </label>`).join('')}
       </div>` : '';
 
+    const wideGroup = group.keys.includes('gemini_prompt_title');
     return `
-      <div class="card">
-        <div class="card-header"><h2>${escapeHtml(group.title)}</h2></div>
+      <div class="card${wideGroup ? ' card-full-width' : ''}">
+        <div class="card-header">
+          <h2>${escapeHtml(group.title)}</h2>
+          ${groupHeaderExtra}
+        </div>
         <div class="card-body">
           ${inputsHtml}${togglesHtml}
         </div>
@@ -260,6 +310,10 @@ export default class SettingsPage extends Component {
         const type = this._getSettingType(k);
         if (type === 'boolean') return; // saved on checkbox change
         const val = formData.get(k);
+        if (k === 'gemini_api_key') {
+          if (val) data[k] = val;
+          return;
+        }
         if (type === 'number') {
           data[k] = String(val ? parseInt(val, 10) : 0);
         } else {
@@ -288,6 +342,7 @@ export default class SettingsPage extends Component {
 
   _getSettingType(key) {
     if (NUMERIC_KEYS.has(key) || key.includes('per_page') || key.includes('quota') || key.includes('interval') || key.includes('posts_to_show')) return 'number';
+    if (key === 'map_mode' || key === 'timeline_mode') return 'string';
     if (key.includes('enable') || key.includes('show') || key.includes('use')) return 'boolean';
     return 'string';
   }

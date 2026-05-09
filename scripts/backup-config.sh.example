@@ -26,7 +26,7 @@ export PROD_SUDO=""
 # Local Container Configuration
 # ==================================================
 
-# Local container name on lab machine (as shown in 'docker ps')
+# Local container name on a local machine machine (as shown in 'docker ps')
 export LOCAL_CONTAINER="point"
 
 # Docker command prefix on local machine
@@ -39,5 +39,5 @@ export LOCAL_SUDO=""
 # Backup Storage
 # ==================================================
 
-# Local backup directory on lab machine
+# Local backup directory on a local machine machine
 export LOCAL_BACKUP_DIR="./backups"

@@ -130,7 +130,7 @@ func TestSetupHandler_SetupValidation(t *testing.T) {
 		h := setupHandlers(t)
 		defer h.close()
 		setupH := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-		body := `{"username":"u","password":"abc","blog_title":"T","author_name":"A"}`
+		body := `{"username":"u","name":"abc","blog_title":"T","author_name":"A"}`
 		c, rec := echoCtx(http.MethodPost, "/", body)
 		if err := setupH.Setup(c); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -145,7 +145,7 @@ func TestSetupHandler_SetupValidation(t *testing.T) {
 		defer h.close()
 		insertUser(h.repo)
 		setupH := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
-		body := `{"username":"u","password":"password123","blog_title":"T","author_name":"A"}`
+		body := `{"username":"u","name":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","blog_title":"T","author_name":"A"}`
 		c, rec := echoCtx(http.MethodPost, "/", body)
 		if err := setupH.Setup(c); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -159,7 +159,7 @@ func TestSetupHandler_SetupValidation(t *testing.T) {
 		h := setupHandlers(t)
 		setupH := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo)
 		_ = h.repo.Close() // close DB so CreateUser fails
-		body := `{"username":"u","password":"password123","blog_title":"T","author_name":"A"}`
+		body := `{"username":"u","name":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","blog_title":"T","author_name":"A"}`
 		c, rec := echoCtx(http.MethodPost, "/", body)
 		if err := setupH.Setup(c); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -1131,7 +1131,7 @@ func TestAuthHandler_Login_SessionCreateError(t *testing.T) {
 	// Now close DB so session creation fails
 	_ = h.repo.Close()
 	ah := NewAuthHandler(h.authSvc, h.cfg)
-	body := `{"username":"testlogin","password":"password123"}`
+	body := `{"username":"testlogin","name":"password123"}`
 	c, _ := echoCtx(http.MethodPost, "/", body)
 	err := ah.Login(c)
 	// Either error or bad status — we just want to cover the path

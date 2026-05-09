@@ -23,6 +23,21 @@ import { NotificationLogButton } from './components/shared/NotificationLogButton
 import { initNotificationLog } from './utils/notificationLog.js';
 import { syncQueue } from './utils/sync.js';
 
+// ── Theming Foundation ────────────────────────────────────────────────────
+import './utils/PointBus.js';
+import { parseTheme } from './utils/themeParser.js';
+import { PointPostList } from './components/shared/PointPostList.js';
+import { PointLightbox } from './components/shared/PointLightbox.js';
+
+if (typeof customElements !== 'undefined') {
+  customElements.define('point-post-list', PointPostList);
+  customElements.define('point-lightbox', PointLightbox);
+}
+
+// Initialise theme immediately to prevent FOUC
+parseTheme();
+
+
 // ── Login overlay ─────────────────────────────────────────────────────────
 
 const _loginOverlayEl = document.createElement('div');
@@ -99,8 +114,10 @@ const _cssLight  = document.getElementById('css-light');
 
 function _applySection(pathname) {
   const isLight = pathname.startsWith('/light') || pathname === '/setup';
-  if (_cssPublic) _cssPublic.media = isLight ? 'not all' : 'all';
-  if (_cssLight)  _cssLight.media  = isLight ? 'all' : 'not all';
+  const pubMedia = isLight ? 'not all' : 'all';
+  const lgtMedia = isLight ? 'all' : 'not all';
+  if (_cssPublic && _cssPublic.media !== pubMedia) _cssPublic.media = pubMedia;
+  if (_cssLight  && _cssLight.media  !== lgtMedia) _cssLight.media  = lgtMedia;
   document.documentElement.dataset.section = isLight ? 'light' : 'public';
 }
 
@@ -228,7 +245,9 @@ const routes = [
   { path: '/post/:slug',  load: () => import('./pages/public/PostPage.js'),   public: true },
   { path: '/tag/:slug',   load: () => import('./pages/public/TagPage.js'),    public: true },
   { path: '/tags',        load: () => import('./pages/public/TagsPage.js'),   public: true },
+  { path: '/map/:year',   load: () => import('./pages/public/MapPage.js'),    public: true },
   { path: '/map',         load: () => import('./pages/public/MapPage.js'),    public: true },
+  { path: '/search',      load: () => import('./pages/public/SearchPage.js'), public: true },
   { path: '/preview/:token', load: () => import('./pages/public/PreviewPage.js'), public: true },
 
   // Admin (Light) — protected
@@ -239,6 +258,7 @@ const routes = [
   { path: '/light/media',          load: () => import('./pages/light/MediaPage.js') },
   { path: '/light/tags',           load: () => import('./pages/light/TagsManagerPage.js') },
   { path: '/light/tags/:slug',     load: () => import('./pages/light/TagsManagerPage.js') },
+  { path: '/light/themes',         load: () => import('./pages/light/ThemesPage.js') },
   { path: '/light/settings',       load: () => import('./pages/light/SettingsPage.js') },
   { path: '/light/security',       load: () => import('./pages/light/SecurityPage.js') },
   { path: '/light/system',         load: () => import('./pages/light/SystemPage.js') },

@@ -1,13 +1,12 @@
 #!/bin/bash
+set -euo pipefail
+
 # Move to the build directory where this script is located
 cd "$(dirname "$0")"
 
-# Find repository root
-ROOT_DIR="$(cd .. && pwd)"
-
 # Check for --clean parameter
-PULL_FLAG="--pull=never"
-if [ "$1" == "--clean" ]; then
+PULL_FLAG="--pull=missing"
+if [ "${1:-}" == "--clean" ]; then
     PULL_FLAG=""
     echo "Clean build: pulling latest images"
 fi
@@ -16,9 +15,6 @@ fi
 export DEV_BUILD_VERSION="dev-$(date +%Y%m%d-%H%M%S)"
 
 echo "Building with version: $DEV_BUILD_VERSION"
-
-# Build CSS bundles
-../scripts/build-css.sh
 
 # Ensure .env exists
 if [ ! -f .env ] && [ -f .env.example ]; then
@@ -55,7 +51,7 @@ podman build $PULL_FLAG \
     -t point:dev \
     -f Dockerfile \
     --cache-from point-builder \
-    --build-arg BUILD_VERSION=$DEV_BUILD_VERSION \
+    --build-arg "BUILD_VERSION=$DEV_BUILD_VERSION" \
     .. && \
 podman rm -f point 2>/dev/null || true && \
 podman run -d \
@@ -73,7 +69,8 @@ podman run -d \
     -e HOST=0.0.0.0 \
     point:dev
 
-# Clean up dangling images to save space (optional, but addresses user's concern)
+# Clean up dangling images to save space
 echo "Cleaning up dangling images..."
 podman image prune -f
-rm ../frontend/css/*.css # clear css artifacts for development builds
+
+echo "Rebuild is done."

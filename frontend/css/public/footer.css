@@ -30,7 +30,7 @@
 }
 
 .footer-copyright a {
-    color: var(--footer-text);
+    color: var(--footer-link, var(--color-primary));
 }
 
 .footer-copyright a:hover {
@@ -53,15 +53,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: var(--footer-action-btn-width);
+    height: var(--footer-action-btn-height);
     padding: 0;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
     text-decoration: none;
     box-shadow: var(--shadow-sm);
 }
@@ -74,8 +74,8 @@
 }
 
 .footer-action-btn svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: var(--svg-width);
+    height: var(--svg-height);
 }
 
 .footer-link {

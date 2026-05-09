@@ -11,13 +11,20 @@ import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
+import { escapeHtml, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
 
 export default class PostPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, post: null, nav: null, error: null, forceImmersive: false, startIndex: 0 };
+  }
+
+  beforeUnmount() {
+    super.beforeUnmount();
+    document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
+    document.getElementById('json-ld-blogposting')?.remove();
+    removeCanonical();
   }
 
   render() {
@@ -103,6 +110,39 @@ export default class PostPage extends Component {
     });
   }
 
+  _injectJsonLd(post, descText, ogImageObj) {
+    document.getElementById('json-ld-blogposting')?.remove();
+
+    const settings = store.get('settings') || {};
+    const canonicalUrl = `${window.location.origin}/posts/${post.slug}`;
+    const datePublished = post.published_at || post.created_at;
+
+    const ld = {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      url: canonicalUrl,
+      datePublished,
+    };
+
+    if (post.updated_at && post.updated_at !== datePublished) ld.dateModified = post.updated_at;
+    if (descText) ld.description = descText;
+    if (settings.author_name) ld.author = { '@type': 'Person', name: settings.author_name };
+    if (settings.blog_title) ld.publisher = { '@type': 'Organization', name: settings.blog_title };
+
+    if (ogImageObj) {
+      try {
+        ld.image = new URL(ogImageObj, window.location.origin).href;
+      } catch { /* ignore */ }
+    }
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'json-ld-blogposting';
+    script.textContent = JSON.stringify(ld);
+    document.head.appendChild(script);
+  }
+
   mount() {
     super.mount();
     this._load();
@@ -119,8 +159,42 @@ export default class PostPage extends Component {
       const post = await getPostBySlug(slug);
 
       document.title = post.title;
+      setCanonical(`${window.location.origin}/posts/${post.slug}`);
       const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) metaDesc.setAttribute('content', post.meta_description || post.excerpt || '');
+      const descText = post.meta_description || post.excerpt || '';
+      if (metaDesc) metaDesc.setAttribute('content', descText);
+
+      const updateMeta = (prop, content) => {
+        if (!content) return;
+        let el = document.querySelector(`meta[property="${prop}"]`);
+        if (!el) {
+          el = document.createElement('meta');
+          el.setAttribute('property', prop);
+          document.head.appendChild(el);
+        }
+        el.setAttribute('content', content);
+      };
+
+      updateMeta('og:type', 'article');
+      updateMeta('og:url', window.location.href);
+      updateMeta('og:title', post.title);
+      updateMeta('og:description', descText);
+
+      let ogImageObj = null;
+      if (post.media && post.media.length > 0 && (post.media[0].path || post.media[0].url)) {
+        ogImageObj = post.media[0].path || post.media[0].url;
+      } else if (post.content_html) {
+        const match = post.content_html.match(/<img[^>]*\ssrc=["']([^"']+)["']/i);
+        if (match && match[1]) ogImageObj = match[1];
+      }
+
+      if (ogImageObj) {
+        try {
+          updateMeta('og:image', new URL(ogImageObj, window.location.origin).href);
+        } catch (e) { /* ignore invalid URL */ }
+      }
+
+      this._injectJsonLd(post, descText, ogImageObj);
 
       let postNav = null;
       try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }

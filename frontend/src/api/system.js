@@ -86,3 +86,11 @@ export function scanMediaImport() {
 export function getVersion() {
   return api.get('/api/system/version');
 }
+
+/**
+ * Get disk usage for the data directory.
+ * @returns {Promise<{total: number, free: number, used: number}>}
+ */
+export function getDiskInfo() {
+  return api.get('/api/system/disk');
+}

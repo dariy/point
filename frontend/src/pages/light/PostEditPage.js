@@ -13,8 +13,9 @@ import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
-import { getPost, createPost, updatePost } from '../../api/posts.js';
+import { getPost, createPost, updatePost, deletePost } from '../../api/posts.js';
 import { uploadMedia, analyzeMedia, analyzeMediaByPath, listMedia, renameMedia } from '../../api/media.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { getAllShareEntries, clearShareEntries } from '../../utils/idb.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
@@ -25,6 +26,14 @@ import { VisualEditor } from '../../components/light/VisualEditor.js';
 const AUTOSAVE_MS = 30_000;
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
+
+/** Convert a UTC ISO string to a datetime-local input value (local time). */
+function toDatetimeLocal(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 /**
  * Parse content string into an ordered list of image and text nodes.
@@ -74,7 +83,8 @@ export default class PostEditPage extends Component {
     this.state = {
       loading: !!id,
       saving: false,
-      analyzingField: null,   // 'title' | 'tags' | 'excerpt' | null
+      deleting: false,
+      analyzingField: null, // 'title' | 'tags' | 'excerpt' | null
       post: null,
       error: null,
       isNew: !id,
@@ -94,8 +104,9 @@ export default class PostEditPage extends Component {
   }
 
   render() {
-    const { loading, error, post, isNew, saving } = this.state;
+    const { loading, error, post, isNew, saving, deleting, analyzingField } = this.state;
     const analyzing = this._analyzing;
+    const anyActionInProgress = saving || analyzing || deleting || !!analyzingField;
 
     if (loading) {
       return `
@@ -131,14 +142,13 @@ export default class PostEditPage extends Component {
     const featured = p.is_featured || false;
     const excerpt  = p.excerpt || '';
 
-    const statusOpts = ['draft', 'published', 'hidden', 'page'].map((s) =>
+    const statusOpts = ['draft', 'published', 'scheduled', 'hidden', 'page'].map((s) =>
       `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`
     ).join('');
 
     const saveLabel    = saving    ? 'Saving…'    : 'Save';
     const analyzeLabel = analyzing ? 'Analyzing…' : 'Analyze';
-    const { analyzingField } = this.state;
-    const aiBtnDisabled = analyzing || !!analyzingField;
+    const aiBtnDisabled = anyActionInProgress;
     const aiBtn = (field) =>
       `<button class="field-ai-btn" data-field="${field}" type="button"
                title="Fill with AI" ${aiBtnDisabled ? 'disabled' : ''}
@@ -164,10 +174,14 @@ export default class PostEditPage extends Component {
           <header class="light-header">
             <h1>${isNew ? 'New Post' : 'Edit Post'}</h1>
             <div class="header-actions">
+              ${!isNew ? `
+                <button id="delete-btn" class="btn btn-danger" type="button"
+                        title="Delete post" ${anyActionInProgress ? 'disabled' : ''}>Delete</button>
+              ` : ''}
               <button id="analyze-btn" class="btn btn-secondary" type="button"
-                      ${analyzing ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
+                      ${anyActionInProgress ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
               <button id="save-btn" class="btn btn-primary" type="button"
-                      ${saving ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
+                      ${anyActionInProgress ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
               <a href="/light/posts" class="btn btn-secondary">Cancel</a>
             </div>
           </header>
@@ -178,16 +192,31 @@ export default class PostEditPage extends Component {
                        ${featured ? 'checked' : ''}>
                 <button id="featured-toggle" type="button"
                         class="featured-btn${featured ? ' is-featured' : ''}"
-                        title="${featured ? 'Unmark as featured' : 'Mark as featured'}">
+                        title="${featured ? 'Unmark as featured' : 'Mark as featured'}"
+                        ${anyActionInProgress ? 'disabled' : ''}>
                   ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
                 </button>
-                <select id="status-select" class="status-select badge-${escapeHtml(status)}">
+                <select id="status-select" class="status-select badge-${escapeHtml(status)}"
+                        ${anyActionInProgress ? 'disabled' : ''}>
                   ${statusOpts}
                 </select>
                 <div class="title-input-wrapper">
                   <input type="text" id="title-input" class="form-input editor-title"
                          placeholder="Post title" value="${title}" required>
                   ${aiBtn('title')}
+                </div>
+              </div>
+
+              <div class="schedule-row" id="schedule-row"
+                   style="display:${status === 'scheduled' ? 'flex' : 'none'}">
+                <div class="schedule-input-wrapper">
+                  <input type="datetime-local" id="schedule-input"
+                         class="form-input schedule-at-input"
+                         value="${toDatetimeLocal(p.scheduled_at || '')}"
+                         ${anyActionInProgress ? 'disabled' : ''}>
+                  <span class="schedule-input-hint"
+                        id="schedule-hint"
+                        style="${p.scheduled_at ? 'display:none' : ''}">Publish at…</span>
                 </div>
               </div>
 
@@ -258,6 +287,15 @@ export default class PostEditPage extends Component {
     const saveBtn = this.$('#save-btn');
     saveBtn?.addEventListener('click', () => this._save());
 
+    // Delete button
+    const deleteBtn = this.$('#delete-btn');
+    deleteBtn?.addEventListener('click', () => {
+      const title = this.$('#title-input')?.value || this.state.post?.title || 'this post';
+      this._showConfirm('Delete post', `Delete post "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
+        this._deletePost(this.state.postId);
+      });
+    });
+
     // Analyze button — uses first image path from content, or opens picker
     const analyzeBtn = this.$('#analyze-btn');
     analyzeBtn?.addEventListener('click', () => {
@@ -283,12 +321,48 @@ export default class PostEditPage extends Component {
       this._autoSaveField({ is_featured: newVal });
     });
 
-    // Status pill — auto-save on change
+    // Status pill — auto-save on change; show/hide schedule row
     const statusSelect = this.$('#status-select');
+    const scheduleRow  = this.$('#schedule-row');
+    const scheduleInput = this.$('#schedule-input');
+
     statusSelect?.addEventListener('change', () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
-      this._autoSaveField({ status: newStatus });
+      if (newStatus === 'scheduled') {
+        if (scheduleRow) scheduleRow.style.display = 'flex';
+        this._autoSaveField({ status: newStatus });
+      } else {
+        if (scheduleRow) scheduleRow.style.display = 'none';
+        if (scheduleInput) scheduleInput.value = '';
+        this._autoSaveField({ status: newStatus, scheduled_at: '' });
+      }
+    });
+
+    // If navigated from the posts list with ?openSchedule=1, show and focus the date picker
+    if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
+      scheduleRow.style.display = 'flex';
+      statusSelect.value = 'scheduled';
+      statusSelect.className = 'status-select badge-scheduled';
+      this._autoSaveField({ status: 'scheduled' });
+      setTimeout(() => scheduleInput.showPicker?.() || scheduleInput.focus(), 50);
+    }
+
+    // Schedule picker — auto-save when date/time is set
+    const scheduleHint = this.$('#schedule-hint');
+
+    scheduleInput?.addEventListener('focus', () => {
+      if (scheduleHint) scheduleHint.style.display = 'none';
+    });
+    scheduleInput?.addEventListener('blur', () => {
+      if (scheduleHint && !scheduleInput.value) scheduleHint.style.display = '';
+    });
+    scheduleInput?.addEventListener('change', () => {
+      const val = scheduleInput.value;
+      if (val) {
+        if (scheduleHint) scheduleHint.style.display = 'none';
+        this._autoSaveField({ scheduled_at: new Date(val).toISOString() });
+      }
     });
 
     // Auto-save on content change
@@ -552,6 +626,9 @@ export default class PostEditPage extends Component {
       thumbnail_path:   (this.$('#thumbnail-input')?.value || '').trim() || null,
       meta_description: (this.$('#meta-input')?.value || '').trim() || null,
       tags:             this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
+      scheduled_at:     this.$('#schedule-input')?.value
+        ? new Date(this.$('#schedule-input').value).toISOString()
+        : '',
     };
   }
 
@@ -598,13 +675,42 @@ export default class PostEditPage extends Component {
   }
 
   async _autosave() {
-    if (this._unmounted || this.state.saving || this.state.isNew) return;
+    if (this._unmounted || this.state.saving || this.state.deleting || this.state.isNew) return;
     const data = this._collectFormData();
     if (!data.title) return;
     try {
       await updatePost(this.state.postId, data);
     } catch {
       // Silent autosave failure.
+    }
+  }
+
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
+  }
+
+  async _deletePost(id) {
+    if (this.state.deleting) return;
+
+    this.setState({ deleting: true });
+    try {
+      await deletePost(id);
+      this._unmounted = true; // Prevent further state updates
+      store.set('toast', { message: 'Post deleted.', type: 'success' });
+      navigate('/light/posts');
+    } catch (err) {
+      this.setState({ deleting: false });
+      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
     }
   }
 
@@ -660,6 +766,8 @@ export default class PostEditPage extends Component {
         ? await analyzeMedia(item.id)
         : await analyzeMediaByPath(item.path);
 
+      const isEmpty = !result.title && !(result.tags?.length) && !result.excerpt;
+
       if (field === 'title' && result.title) {
         post.title = result.title;
       } else if (field === 'tags' && result.tags?.length) {
@@ -674,7 +782,11 @@ export default class PostEditPage extends Component {
         post.excerpt = result.excerpt;
       }
 
-      store.set('toast', { message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`, type: 'success' });
+      if (isEmpty) {
+        store.set('toast', { message: 'AI disabled or no suggestions.', type: 'info' });
+      } else {
+        store.set('toast', { message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`, type: 'success' });
+      }
     } catch (err) {
       store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
     }
@@ -702,6 +814,8 @@ export default class PostEditPage extends Component {
         ...(result.tags || []).filter((t) => !snap.tags.includes(t)),
       ];
 
+      const isEmpty = !result.title && !(result.tags?.length) && !result.excerpt;
+
       const post = {
         ...(this.state.post || {}),
         title:            snap.title   || result.title   || '',
@@ -717,7 +831,11 @@ export default class PostEditPage extends Component {
       };
       if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
 
-      store.set('toast', { message: 'Analysis complete.', type: 'success' });
+      if (isEmpty) {
+        store.set('toast', { message: 'AI disabled or no suggestions.', type: 'info' });
+      } else {
+        store.set('toast', { message: 'Analysis complete.', type: 'success' });
+      }
       this._analyzing = false;
       this.setState({ post });
     } catch (err) {
@@ -743,7 +861,7 @@ export default class PostEditPage extends Component {
   }
 
   async _autoSaveField(patch) {
-    if (this.state.isNew || this.state.saving) return;
+    if (this._unmounted || this.state.isNew || this.state.saving || this.state.deleting) return;
     const formData = this._collectFormData();
     const fullData = { ...formData, ...patch };
     try {

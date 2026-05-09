@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"point-api/internal/models"
 	"point-api/internal/services"
 )
 
@@ -102,6 +104,7 @@ func TestPagesHandler_GetMapPage(t *testing.T) {
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
+	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
 
 	// Public map (no user)
 	req := httptest.NewRequest(http.MethodGet, "/map", nil)
@@ -145,6 +148,7 @@ func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 	// Set post_count for city so it appears in ListTags
 	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
 
+	_ = settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
 	e := echo.New()
@@ -284,3 +288,157 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	}
 }
 
+func TestPagesHandler_GetTagPage(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1, 'News', 'news')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('P','p','b',1,'published',datetime('now'))`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, 1)`)
+
+	// 1. Existing tag
+	req := httptest.NewRequest(http.MethodGet, "/tag/news", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("news")
+
+	if err := handler.GetTagPage(c); err != nil {
+		t.Fatalf("GetTagPage failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	// 2. Non-existent tag
+	req = httptest.NewRequest(http.MethodGet, "/tag/missing", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("missing")
+
+	err := handler.GetTagPage(c)
+	if err == nil {
+		t.Error("expected error for non-existent tag")
+	}
+
+	// 3. GetMapPage
+	req = httptest.NewRequest(http.MethodGet, "/map", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	if err := handler.GetMapPage(c); err != nil {
+		t.Fatalf("GetMapPage failed: %v", err)
+	}
+}
+
+func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	cacheSvc := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheSvc)
+
+	ctx := context.Background()
+	_ = repo.EnsureSystemTags(ctx)
+	_ = settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
+
+	// Create user
+	res, _ := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('test', 'test@test.com', 'hash', 'Test User')`)
+	userID, _ := res.LastInsertId()
+
+	// 2024 tag in timeline
+	y2024, err := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2024"})
+	if err != nil {
+		t.Fatalf("y2024 creation failed: %v", err)
+	}
+	inTimeline, _ := repo.GetTagBySlug(ctx, "_in_timeline")
+	err = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: inTimeline.ID, ChildID: y2024.ID})
+	if err != nil {
+		t.Fatalf("y2024 rel failed: %v", err)
+	}
+
+	// Berlin location
+	berlin, err := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Berlin"})
+	if err != nil {
+		t.Fatalf("Berlin creation failed: %v", err)
+	}
+	_ = repo.UpsertTagLocation(ctx, berlin.ID, 52.5, 13.4)
+
+	// Post in 2024 at Berlin
+	p1, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P1", Status: "published", AuthorID: userID})
+	if err != nil {
+		t.Fatalf("p1 creation failed: %v", err)
+	}
+	err = postSvc.UpdatePostTags(ctx, p1.ID, []string{"2024", "berlin"})
+	if err != nil {
+		t.Fatalf("p1 tags update failed: %v", err)
+	}
+
+	// Post NOT in 2024 (e.g. 2023) at Paris
+	y2023, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2023"})
+	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: inTimeline.ID, ChildID: y2023.ID})
+	paris, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Paris"})
+	_ = repo.UpsertTagLocation(ctx, paris.ID, 48.8, 2.3)
+	p2, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P2", Status: "published", AuthorID: userID})
+	_ = postSvc.UpdatePostTags(ctx, p2.ID, []string{"2023", "paris"})
+
+	// Verify repo has the link
+	var ptCount int64
+	_ = repo.DB().QueryRow(`SELECT COUNT(*) FROM post_tags`).Scan(&ptCount)
+	t.Logf("PostTags count: %d", ptCount)
+
+	var inTimelineID int64
+	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug = '_in_timeline'`).Scan(&inTimelineID)
+	t.Logf("_in_timeline ID: %d", inTimelineID)
+
+	var y2024ID int64
+	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug = '2024'`).Scan(&y2024ID)
+	t.Logf("2024 ID: %d", y2024ID)
+
+	var relCount int64
+	_ = repo.DB().QueryRow(`SELECT COUNT(*) FROM tag_relationships WHERE parent_id = ? AND child_id = ?`, inTimelineID, y2024ID).Scan(&relCount)
+	t.Logf("Relationship count (_in_timeline -> 2024): %d", relCount)
+
+	rangeResults, err := repo.ListMapTagsForYearRange(ctx, 2024, 2024)
+	t.Logf("Repo rangeResults (2024): %+v, error: %v", rangeResults, err)
+
+	e := echo.New()
+
+	// Test with year_from=2024&year_to=2024
+	req := httptest.NewRequest(http.MethodGet, "/api/pages/map?year_from=2024&year_to=2024", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := handler.GetMapPage(c); err != nil {
+		t.Fatalf("GetMapPage failed: %v", err)
+	}
+	t.Logf("Response body: %s", rec.Body.String())
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	tags := resp["tags"].([]interface{})
+
+	// Should only have Berlin
+	if len(tags) != 1 {
+		t.Errorf("expected 1 tag, got %d: %v", len(tags), tags)
+	} else {
+		tag := tags[0].(map[string]interface{})
+		if tag["slug"] != "berlin" {
+			t.Errorf("expected berlin, got %v", tag["slug"])
+		}
+	}
+}

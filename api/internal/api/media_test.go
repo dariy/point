@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/jpeg"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -12,11 +14,47 @@ import (
 	"strings"
 	"testing"
 
+	exif "github.com/dsoprea/go-exif/v3"
+	jpegstructure "github.com/dsoprea/go-jpeg-image-structure/v2"
 	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/services"
 )
+
+// makeJPEGWithEXIF creates a minimal JPEG with Make embedded so that
+// UploadFile will extract EXIF and populate original_metadata.
+func makeJPEGWithEXIF(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatalf("jpeg.Encode: %v", err)
+	}
+	jmp := jpegstructure.NewJpegMediaParser()
+	intfc, err := jmp.ParseBytes(buf.Bytes())
+	if err != nil {
+		t.Fatalf("parse jpeg: %v", err)
+	}
+	sl := intfc.(*jpegstructure.SegmentList)
+	rootIb, err := sl.ConstructExifBuilder()
+	if err != nil {
+		t.Fatalf("construct exif builder: %v", err)
+	}
+	ifd0Ib, err := exif.GetOrCreateIbFromRootIb(rootIb, "IFD0")
+	if err != nil {
+		t.Fatalf("get IFD0: %v", err)
+	}
+	_ = ifd0Ib.SetStandardWithName("Make", "TestCam")
+	if err := sl.SetExif(rootIb); err != nil {
+		t.Fatalf("set exif: %v", err)
+	}
+	var out bytes.Buffer
+	if err := sl.Write(&out); err != nil {
+		t.Fatalf("write jpeg: %v", err)
+	}
+	return out.Bytes()
+}
 
 func TestMediaHandler_Upload(t *testing.T) {
 	repo := setupTestDB(t)
@@ -792,6 +830,154 @@ func TestMediaHandler_ListMedia_IncludesMetadata(t *testing.T) {
 
 // Regression: PATCH /api/media/:id with only metadata must not wipe alt_text/caption/post_id.
 // Before the fix, UpdateMedia SQL used unconditional SET (not COALESCE) for those fields.
+func TestMediaHandler_UpdateEXIF_ValidInput(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	tmpDir, _ := os.MkdirTemp("", "exif-handler-test")
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
+	m, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: buf.Bytes(), Filename: "photo.jpg", MimeType: "image/jpeg",
+	})
+
+	body, _ := json.Marshal(map[string]string{"Make": "Sony", "Model": "A7 IV"})
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(m.ID, 10))
+
+	if err := handler.UpdateEXIF(c); err != nil {
+		t.Fatalf("UpdateEXIF handler: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	meta, _ := resp["metadata"].(map[string]interface{})
+	if meta["Make"] != "Sony" {
+		t.Errorf("metadata Make = %v; want Sony", meta["Make"])
+	}
+}
+
+func TestMediaHandler_UpdateEXIF_InvalidChars(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	tmpDir, _ := os.MkdirTemp("", "exif-handler-invalid-test")
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	m, _ := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("data"), Filename: "doc.txt", MimeType: "text/plain",
+	})
+
+	body, _ := json.Marshal(map[string]string{"Make": "Canon/EOS"})
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(m.ID, 10))
+
+	err := handler.UpdateEXIF(c)
+	if err == nil && rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid chars, got %d", rec.Code)
+	}
+}
+
+func TestMediaHandler_UpdateEXIF_InvalidID(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewMediaHandler(nil, settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader("{}"))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("notanumber")
+	if err := handler.UpdateEXIF(c); err == nil {
+		t.Error("expected error for invalid id")
+	}
+}
+
+func TestMediaHandler_RevertEXIF(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	tmpDir, _ := os.MkdirTemp("", "exif-revert-test")
+	defer func() { _ = os.RemoveAll(tmpDir) }() 
+
+	cfg := &config.Config{StoragePath: tmpDir, ThumbnailWidth: 100, ThumbnailHeight: 100}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	handler := NewMediaHandler(mediaSvc, settingsSvc)
+	e := echo.New()
+	ctx := context.Background()
+
+	jpegData := makeJPEGWithEXIF(t)
+	m, err2 := mediaSvc.UploadFile(ctx, services.UploadFileParams{
+		Content: jpegData, Filename: "photo.jpg", MimeType: "image/jpeg",
+	})
+	if err2 != nil {
+		t.Fatalf("UploadFile: %v", err2)
+	}
+
+	_, _ = mediaSvc.UpdateEXIF(ctx, services.UpdateEXIFParams{
+		ID: m.ID, Fields: map[string]string{"Make": "Temp"},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(m.ID, 10))
+
+	if err := handler.RevertEXIF(c); err != nil {
+		t.Fatalf("RevertEXIF handler: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestMediaHandler_RevertEXIF_InvalidID(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	settingsSvc := services.NewSettingsService(repo)
+	handler := NewMediaHandler(nil, settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("bad")
+	if err := handler.RevertEXIF(c); err == nil {
+		t.Error("expected error for invalid id")
+	}
+}
+
 func TestMediaHandler_UpdateMedia_MetadataOnly_PreservesOtherFields(t *testing.T) {
 	repo := setupTestDB(t)
 	t.Cleanup(func() { _ = repo.Close() })

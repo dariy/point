@@ -2,10 +2,12 @@
   "name": "point",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "lint": "./scripts/lint.sh",
     "build": "./build/rebuild.sh",
-    "test": "./scripts/run-tests.sh"
+    "test": "./scripts/run-tests.sh",
+    "test:frontend": "node --test frontend/test/*.test.js"
   }
 }

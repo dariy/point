@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"point-api/internal/repository"
@@ -26,10 +27,38 @@ func NewSystemService(repo *repository.Repository, dataPath string) *SystemServi
 	}
 }
 
+type DiskInfo struct {
+	Total int64 `json:"total"`
+	Free  int64 `json:"free"`
+	Used  int64 `json:"used"`
+}
+
+func (s *SystemService) GetDiskInfo() (DiskInfo, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(s.dataPath, &stat); err != nil {
+		return DiskInfo{}, fmt.Errorf("statfs: %w", err)
+	}
+	total := int64(stat.Blocks) * stat.Bsize
+	free := int64(stat.Bavail) * stat.Bsize
+	return DiskInfo{
+		Total: total,
+		Free:  free,
+		Used:  total - free,
+	}, nil
+}
+
 func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error) {
 	backupDir := filepath.Join(s.dataPath, "backups")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return "", 0, fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	// Pre-flight: check disk space against the largest existing backup.
+	if prevSize := s.largestBackupSize(backupDir); prevSize > 0 {
+		disk, err := s.GetDiskInfo()
+		if err == nil && disk.Free < int64(float64(prevSize)*1.5) {
+			return "", 0, fmt.Errorf("insufficient disk space: need %d bytes (1.5× last backup), have %d free", int64(float64(prevSize)*1.5), disk.Free)
+		}
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -46,6 +75,28 @@ func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error)
 	}
 
 	return backupName, info.Size(), nil
+}
+
+// largestBackupSize returns the size in bytes of the largest .tar.gz in backupDir, or 0 if there are none.
+func (s *SystemService) largestBackupSize(backupDir string) int64 {
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return 0
+	}
+	var largest int64
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.Size() > largest {
+			largest = info.Size()
+		}
+	}
+	return largest
 }
 
 func (s *SystemService) createTarGz(destPath string) error {

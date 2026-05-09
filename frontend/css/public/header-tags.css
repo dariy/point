@@ -42,15 +42,15 @@
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
-    border-radius: 624.938rem;
-    height: 2rem;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--tag-link-border-radius);
+    height: var(--tag-link-height);
     padding: 0 var(--spacing-md);
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
     font-weight: 500;
     line-height: normal;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
     box-sizing: border-box;
     text-rendering: optimizeLegibility;
 }
@@ -63,10 +63,10 @@
     display: inline-flex;
     align-items: center;
     background: var(--surface-card);
-    border: 1px solid var(--border-primary);
-    border-radius: 624.938rem;
-    height: 2rem;
-    transition: all var(--transition-fast);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--tag-group-header-border-radius);
+    height: var(--tag-group-header-height);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), scale var(--transition-fast);
     box-sizing: border-box;
     /* Prevent Android Chrome from absorbing taps-on-pills as scroll gestures
        when the header strip has touch-action: pan-x on its scroll container. */
@@ -77,19 +77,16 @@
     border-color: var(--color-primary);
 }
 .header-tags-bar .tag-group.is-open > .tag-group-header {
-    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    background: var(--color-primary-light);
     border-color: var(--color-primary);
-}
-.header-tags-bar .tag-link:active {
-    transform: scale(0.97);
 }
 
 /* Override filter-btn styles when inside tag-group-header - use higher specificity */
-.header-tags-bar .tag-group-header>.tag-link {
+.header-tags-bar .tag-group-header > .tag-link {
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    padding: 0 0.25rem 0 var(--spacing-md);
+    padding: 0 var(--tag-link-padding) 0 var(--spacing-md);
     height: 100%;
     font-size: var(--font-size-sm);
     font-weight: 500;
@@ -97,7 +94,7 @@
     text-rendering: optimizeLegibility;
     border-radius: 0;
     box-shadow: none;
-    /* Prevent transition: all (from base .tag-link) from animating background/border-radius
+    /* Prevent transition properties (from base .tag-link) from animating background/border-radius
        when hover state changes — that would flash a surface-card rectangle on hover. */
     transition: color var(--transition-fast);
     /* tag-strip.css applies backdrop-filter: blur to .tag-strip-scroll .tag-link (descendant selector),
@@ -106,12 +103,11 @@
     -webkit-backdrop-filter: none;
 }
 
-
 .header-tags-bar .tag-group-header .toggle-children {
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    padding: 0 0.5rem 0 0.25rem;
+    padding: 0 var(--toggle-children-padding-y) 0 var(--toggle-children-padding-x);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -121,17 +117,17 @@
 }
 
 .header-tags-bar .tag-group-header .toggle-children svg {
-    transition: transform var(--transition-fast);
+    transition: transform var(--transition-fast), scale var(--transition-fast);
     transform-origin: center;
 }
 
-.header-tags-bar .tag-group:hover>.tag-group-header .toggle-children,
-.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children {
+.header-tags-bar .tag-group:hover > .tag-group-header .toggle-children,
+.header-tags-bar .tag-group.is-open > .tag-group-header .toggle-children {
     color: var(--color-primary);
 }
 
-.header-tags-bar .tag-group:hover>.tag-group-header .toggle-children svg,
-.header-tags-bar .tag-group.is-open>.tag-group-header .toggle-children svg {
+.header-tags-bar .tag-group:hover > .tag-group-header .toggle-children svg,
+.header-tags-bar .tag-group.is-open > .tag-group-header .toggle-children svg {
     transform: rotate(180deg);
 }
 
@@ -142,7 +138,7 @@
     left: 50%;
     transform: translateX(-50%);
     background: transparent;
-    border: 1px solid var(--border-primary);
+    border: var(--border-width) solid var(--border-primary);
     border-radius: var(--border-radius-xl);
     padding: var(--spacing-sm);
     display: none;
@@ -162,28 +158,28 @@
 /* Background + blur on ::after so backdrop-filter doesn't make this element
    a containing block for position:fixed descendants (Chrome behaviour). */
 .header-tags-bar .tag-children::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     background: var(--surface-card);
-    backdrop-filter: blur(0.75rem);
+    backdrop-filter: blur(var(--tag-children--backdrop-filter));
     border-radius: inherit;
     z-index: -1;
     pointer-events: none;
 }
 
 .header-tags-bar .tag-children::before {
-    content: '';
+    content: "";
     position: absolute;
-    top: -0.5rem;
+    top: calc(var(--tag-children--top) * -1);
     left: 0;
     right: 0;
-    height: 0.5rem;
+    height: var(--tag-children--height);
     background: transparent;
 }
 
 /* Show dropdown only when JS has positioned it (position:fixed via inline style) */
-.header-tags-bar .tag-group.is-open>.tag-children {
+.header-tags-bar .tag-group.is-open > .tag-children {
     display: flex;
     visibility: visible;
     opacity: 1;
@@ -200,7 +196,7 @@
 @keyframes dropdownFadeIn {
     from {
         opacity: 0;
-        margin-top: -0.625rem;
+        margin-top: calc(var(--from-margin-top) * -1);
     }
 
     to {
@@ -210,28 +206,32 @@
 }
 
 /* Ensure children in dropdowns have consistent sizing - use child combinator for specificity */
-.header-tags-bar .tag-children>.tag-link,
-.header-tags-bar .tag-children>.tag-group .tag-link {
-    height: 2rem;
+.header-tags-bar .tag-children > .tag-link,
+.header-tags-bar .tag-children > .tag-group .tag-link {
+    height: var(--tag-link-height);
     font-size: var(--font-size-sm);
 }
 
-.header-tags-bar .tag-children>.tag-link {
+.header-tags-bar .tag-children > .tag-link {
     padding: 0 var(--spacing-md);
 }
 
-.header-tags-bar .tag-children>.tag-group>.tag-group-header {
-    height: 2rem;
+.header-tags-bar .tag-children > .tag-group > .tag-group-header {
+    height: var(--tag-group-header-height);
     font-size: var(--font-size-sm);
 }
 
 /* Tag Switcher Logic - keep these with high specificity to prevent display override */
-.header-tags-bar .tag-strip-scroll[data-mode="featured"]>.category-tag,
-.header-tags-bar .tag-strip-scroll[data-mode="featured"]>.tag-group.category-tag {
+.header-tags-bar .tag-strip-scroll[data-mode="featured"] > .category-tag,
+.header-tags-bar
+    .tag-strip-scroll[data-mode="featured"]
+    > .tag-group.category-tag {
     display: none;
 }
 
-.header-tags-bar .tag-strip-scroll[data-mode="categories"]>.featured-tag,
-.header-tags-bar .tag-strip-scroll[data-mode="categories"]>.tag-group.featured-tag {
+.header-tags-bar .tag-strip-scroll[data-mode="categories"] > .featured-tag,
+.header-tags-bar
+    .tag-strip-scroll[data-mode="categories"]
+    > .tag-group.featured-tag {
     display: none;
 }

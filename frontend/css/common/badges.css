@@ -4,21 +4,21 @@
 .badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--badge-gap);
     padding: 0 var(--spacing-sm);
-    height: 1.5rem;
+    height: var(--badge-height);
     line-height: 1;
     font-size: var(--font-size-xs);
     font-weight: 400; /* Use normal weight to match select text rendering */
     border-radius: var(--border-radius-xl);
-    border: 1px solid transparent;
+    border: var(--border-width) solid transparent;
     text-transform: capitalize;
     white-space: nowrap;
     vertical-align: middle;
 }
 
 .badge span {
-    transform: translateY(-0.0625rem);
+    transform: translateY(calc(var(--span-transform) * -1));
 }
 
 .badge-draft {
@@ -39,10 +39,16 @@
     border-color: var(--color-warning-light);
 }
 
+.badge-scheduled {
+    background-color: var(--color-scheduled-light);
+    color: var(--color-scheduled);
+    border-color: var(--color-scheduled-light);
+}
+
 .badge-warning {
     background-color: var(--color-warning-light);
     color: var(--color-warning);
-    border-color: rgba(245, 158, 11, 0.3);
+    border-color: var(--color-warning-alpha-30);
 }
 
 .badge-success {
@@ -61,23 +67,23 @@
     display: inline-flex;
     align-items: center;
     padding: 0 var(--spacing-sm);
-    height: 1.5rem;
+    height: var(--status-select-height);
     line-height: normal; /* Let browser handle select internal alignment */
     font-size: var(--font-size-xs);
     font-weight: 400; /* Match badge font weight */
     border-radius: var(--border-radius-xl);
-    border: 1px solid transparent;
+    border: var(--border-width) solid transparent;
     cursor: pointer;
     background-image: none;
     appearance: none;
     -webkit-appearance: none;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
     vertical-align: middle;
 }
 
 .status-select:focus {
     outline: none;
-    box-shadow: 0 0 0 0.125rem var(--color-primary-light);
+    box-shadow: 0 0 0 var(--status-select-box-shadow) var(--color-primary-light);
 }
 
 .status-select option {
@@ -108,6 +114,12 @@
     color: var(--color-primary);
     border-color: var(--color-primary-light);
     text-align: center;
+}
+
+.status-select.badge-scheduled {
+    background-color: var(--color-scheduled-light);
+    color: var(--color-scheduled);
+    border-color: var(--color-scheduled-light);
 }
 
 .status-select.badge-loading {

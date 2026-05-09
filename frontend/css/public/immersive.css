@@ -16,8 +16,8 @@
     z-index: 50;
     padding-top: env(safe-area-inset-top, 0);
     background: var(--header-bg);
-    backdrop-filter: blur(0.5rem);
-    -webkit-backdrop-filter: blur(0.5rem);
+    backdrop-filter: blur(var(--site-header-group-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter));
     border-bottom: none;
     color: var(--text-primary);
     transition: opacity 0.4s ease,
@@ -32,7 +32,7 @@
 .immersive-layout .site-header .light-link,
 .immersive-layout .site-header .breadcrumb-link,
 .immersive-layout .site-header .breadcrumb-current {
-    border-color: rgba(255, 255, 255, 0.3);
+    border-color: var(--color-white-alpha-30);
     transition: color var(--transition-theme),
         border-color var(--transition-theme),
         background-color var(--transition-theme);
@@ -52,9 +52,9 @@
 }
 
 [data-theme="light"].immersive-layout .site-header-group {
-    background: rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(0.75rem);
-    -webkit-backdrop-filter: blur(0.75rem);
+    background: var(--color-white-alpha-75);
+    backdrop-filter: blur(var(--site-header-group-backdrop-filter-alt1));
+    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter-alt1));
 }
 
 [data-theme="light"].immersive-layout .site-header svg {
@@ -78,7 +78,7 @@
 }
 
 .immersive-layout .site-header .header-action-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-white-alpha-10);
 }
 
 [data-theme="light"].immersive-layout .site-header .header-action-btn:hover {
@@ -114,9 +114,9 @@
     right: 0;
     z-index: 50;
     background: var(--footer-bg);
-    /*background: rgba(0,0,0,0.6);*/
-    /*linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 40%, rgba(0, 0, 0, 0.4) 80%, transparent 100%);*/
-    color: rgba(255, 255, 255, 0.95);
+    /*background: var(--color-black-alpha-60);*/
+    /*linear-gradient(to top, var(--color-black-alpha-95) 0%, var(--color-black-alpha-85) 40%, var(--color-black-alpha-40) 80%, transparent 100%);*/
+    color: var(--color-white-alpha-95);
     border-top: none;
     padding-top: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
     padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
@@ -133,7 +133,7 @@
 }
 
 [data-theme="light"].immersive-layout .site-footer {
-    background: linear-gradient(to top, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 40%, rgba(255, 255, 255, 0.4) 80%, transparent 100%);
+    background: linear-gradient(to top, var(--color-white-alpha-95) 0%, var(--color-white-alpha-85) 40%, var(--color-white-alpha-40) 80%, transparent 100%);
     color: var(--text-primary);
 }
 
@@ -217,9 +217,9 @@
 .immersive-tags .tag-link {
     background: var(--surface-card);
     color: var(--text-secondary);
-    border: 1px solid var(--text-secondary);
-    backdrop-filter: blur(0.75rem);
-    -webkit-backdrop-filter: blur(0.75rem);
+    border: var(--border-width) solid var(--text-secondary);
+    backdrop-filter: blur(var(--tag-link-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--tag-link--webkit-backdrop-filter));
     pointer-events: auto;
 }
 
@@ -229,9 +229,9 @@
 }
 
 [data-theme="light"].immersive-layout .immersive-tags .tag-link {
-    background: rgba(255, 255, 255, 0.85);
+    background: var(--color-white-alpha-85);
     color: var(--text-primary);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: var(--border-width) solid var(--color-black-alpha-10);
 }
 
 [data-theme="light"].immersive-layout .immersive-tags .tag-link:hover {
@@ -247,7 +247,7 @@
 }
 
 .immersive-tags .tag-link.is-flyout-open {
-    background: var(--color-primary-light, rgba(37, 99, 235, 0.08));
+    background: var(--color-primary-light);
     border-color: var(--color-primary);
     color: white;
 }
@@ -272,12 +272,12 @@ video.immersive-bg-image {
 
 .immersive-audio-container {
     width: 100%;
-    max-width: 37.5rem;
+    max-width: var(--immersive-audio-container-max-width);
     padding: var(--spacing-xl);
     background: var(--bg-overlay);
     border-radius: var(--border-radius-lg);
-    backdrop-filter: blur(0.75rem);
-    -webkit-backdrop-filter: blur(0.75rem);
+    backdrop-filter: blur(var(--immersive-audio-container-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--immersive-audio-container--webkit-backdrop-filter));
     margin-bottom: 6em;
 }
 
@@ -306,28 +306,28 @@ video.immersive-bg-image {
     justify-content: center;
     /* Center the info card */
     align-items: center;
-    padding: 5rem 2.5rem;
+    padding: var(--immersive-overlay-container-padding-y) var(--immersive-overlay-container-padding-x);
     /* Clear header/footer areas */
     transition: opacity 0.4s ease,
         transform 0.4s ease;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--color-black-alpha-30);
     /* Slight dim to make text readable */
 }
 
 .post-info-card {
     pointer-events: auto;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(1rem);
-    -webkit-backdrop-filter: blur(1rem);
+    background: var(--color-white-alpha-95);
+    backdrop-filter: blur(var(--post-info-card-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-info-card--webkit-backdrop-filter));
     padding: var(--spacing-xl);
     border-radius: var(--border-radius-xl);
     width: 100%;
-    max-width: 43.75rem;
+    max-width: var(--post-info-card-max-width);
     max-height: 80vh;
     /* Leave some space */
     display: flex;
     flex-direction: column;
-    box-shadow: 0 1.25rem 3.125rem rgba(0, 0, 0, 0.3);
+    box-shadow: 0 var(--post-info-card-box-shadow-1) var(--post-info-card-box-shadow-2) var(--color-black-alpha-30);
     transition: opacity 0.3s ease,
         background-color var(--transition-theme),
         color var(--transition-theme),
@@ -338,14 +338,14 @@ video.immersive-bg-image {
 }
 
 [data-theme="dark"] .post-info-card {
-    background: rgba(30, 30, 30, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--color-rgb-30-30-30-alpha-85);
+    border: var(--border-width) solid var(--color-white-alpha-10);
 }
 
 .post-header-compact {
     margin-bottom: var(--spacing-lg);
     padding-bottom: var(--spacing-lg);
-    border-bottom: 1px solid var(--border-primary);
+    border-bottom: var(--border-width) solid var(--border-primary);
     text-align: center;
     flex-shrink: 0;
 }
@@ -364,7 +364,7 @@ video.immersive-bg-image {
 .post-footer-compact {
     margin-top: var(--spacing-lg);
     padding-top: var(--spacing-lg);
-    border-top: 1px solid var(--border-primary);
+    border-top: var(--border-width) solid var(--border-primary);
     flex-shrink: 0;
 }
 
@@ -378,12 +378,12 @@ video.immersive-bg-image {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 3rem;
-    height: 3rem;
+    width: var(--post-nav-icon-width);
+    height: var(--post-nav-icon-height);
     border-radius: 50%;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .post-nav-icon:hover {
@@ -424,16 +424,16 @@ video.immersive-bg-image {
 /* Excerpt card — top-left overlay below the header */
 .post-excerpt-card {
     position: absolute;
-    top: 4.375rem; /* below fixed header */
+    top: var(--post-excerpt-card-top); /* below fixed header */
     left: var(--spacing-lg);
     z-index: 25;
-    max-width: min(23.75rem, calc(100vw - var(--spacing-xl) * 2));
+    max-width: min(var(--post-excerpt-card-max-width), calc(100vw - var(--spacing-xl) * 2));
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--bg-overlay);
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--color-white-alpha-90);
     border-radius: var(--border-radius);
-    backdrop-filter: blur(0.625rem);
-    -webkit-backdrop-filter: blur(0.625rem);
+    backdrop-filter: blur(var(--post-excerpt-card-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-excerpt-card--webkit-backdrop-filter));
     font-size: var(--font-size-sm);
     line-height: 1.5;
     pointer-events: none;
@@ -442,12 +442,12 @@ video.immersive-bg-image {
 }
 
 [data-theme="light"] .post-excerpt-card {
-    background: rgba(255, 255, 255, 0.85);
+    background: var(--color-white-alpha-85);
     color: var(--text-primary);
 }
 
 .immersive-layout.ui-hidden .post-excerpt-card {
     opacity: 0;
-    transform: translateY(-0.5rem);
+    transform: translateY(calc(var(--post-excerpt-card-transform) * -1));
     pointer-events: none;
 }

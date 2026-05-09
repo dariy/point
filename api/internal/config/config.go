@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -27,35 +28,40 @@ type Config struct {
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
+	ThemesPath               string `mapstructure:"THEMES_PATH"`
 	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
+	MediaImportPath          string `mapstructure:"MEDIA_IMPORT_PATH"`
 }
 
 func LoadConfig(path string) (config Config, err error) {
-	viper.AddConfigPath(path)
-	viper.SetConfigName(".env")
-	viper.SetConfigType("env")
+	v := viper.New()
+	v.AddConfigPath(path)
+	v.SetConfigName(".env")
+	v.SetConfigType("env")
 
-	viper.AutomaticEnv()
+	v.AutomaticEnv()
 
 	// Defaults
-	viper.SetDefault("APP_NAME", "Point")
-	viper.SetDefault("APP_ENV", "development")
-	viper.SetDefault("DEBUG", true)
-	viper.SetDefault("HOST", "0.0.0.0")
-	viper.SetDefault("PORT", 8000)
-	viper.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
-	viper.SetDefault("STORAGE_PATH", "./data")
-	viper.SetDefault("FRONTEND_DIR", "../frontend")
-	viper.SetDefault("APP_VERSION", "1.0.0")
-	viper.SetDefault("SESSION_EXPIRY_HOURS", 720)
-	viper.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
-	viper.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
-	viper.SetDefault("THUMBNAIL_WIDTH", 400)
-	viper.SetDefault("THUMBNAIL_HEIGHT", 300)
-	viper.SetDefault("JPEG_QUALITY", 85)
-	viper.SetDefault("GEMINI_API_KEY", "")
+	v.SetDefault("APP_NAME", "Point")
+	v.SetDefault("APP_ENV", "development")
+	v.SetDefault("DEBUG", true)
+	v.SetDefault("HOST", "0.0.0.0")
+	v.SetDefault("PORT", 8000)
+	v.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
+	v.SetDefault("STORAGE_PATH", "./data")
+	v.SetDefault("FRONTEND_DIR", "../frontend")
+	v.SetDefault("THEMES_PATH", "")
+	v.SetDefault("APP_VERSION", "")
+	v.SetDefault("SESSION_EXPIRY_HOURS", 720)
+	v.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
+	v.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
+	v.SetDefault("THUMBNAIL_WIDTH", 400)
+	v.SetDefault("THUMBNAIL_HEIGHT", 300)
+	v.SetDefault("JPEG_QUALITY", 85)
+	v.SetDefault("GEMINI_API_KEY", "")
+	v.SetDefault("MEDIA_IMPORT_PATH", "")
 
-	err = viper.ReadInConfig()
+	err = v.ReadInConfig()
 	if err != nil {
 		// It's okay if .env is missing, we use defaults and ENV vars
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -63,7 +69,12 @@ func LoadConfig(path string) (config Config, err error) {
 		}
 	}
 
-	err = viper.Unmarshal(&config)
+	err = v.Unmarshal(&config)
+
+	// If THEMES_PATH was not set (or set to empty), derive it from FRONTEND_DIR
+	if config.ThemesPath == "" {
+		config.ThemesPath = filepath.Join(config.FrontendDir, "themes")
+	}
 	
 	// Clean database URL (remove python-specific aiosqlite prefix if present)
 	if strings.Contains(config.DatabaseURL, "sqlite+aiosqlite:///") {

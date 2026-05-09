@@ -101,6 +101,133 @@ WHERE
 	return count, err
 }
 
+// ListPostsInYearRange returns posts that carry an _in_timeline year tag whose
+// parsed year (CAST(slug AS INTEGER)) falls in [fromYear, toYear].
+func (r *Repository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
+	const q = `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug
+    FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id
+    JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+_hide(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
+)
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+       p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _hide)
+    ) END)
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, q,
+		fromYear, toYear,
+		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
+		arg.IncludeDrafts, arg.IncludeHidden,
+		arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Post
+	for rows.Next() {
+		var i models.Post
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
+			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// CountPostsInYearRange counts posts matching the year range and standard filters.
+func (r *Repository) CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error) {
+	const q = `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug
+    FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id
+    JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+_hide(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
+)
+SELECT COUNT(*) FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ? THEN 1=1
+        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
+        ELSE LOWER(p.status) = 'published'
+    END)
+    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+        SELECT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _hide)
+    ) END)`
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q,
+		fromYear, toYear,
+		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
+		arg.IncludeDrafts, arg.IncludeHidden,
+	).Scan(&count)
+	return count, err
+}
+
 func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
@@ -667,6 +794,210 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 		tags = append(tags, t)
 	}
 	return tags, rows.Err()
+}
+
+// MapYearRangeTag pairs a location tag ID with its post count scoped to a year range.
+type MapYearRangeTag struct {
+	TagID     int64 `json:"tag_id"`
+	PostCount int64 `json:"post_count"`
+}
+
+// ListMapTagsForYearRange returns location tags (tags with a row in tag_locations)
+// whose posts intersect with posts tagged by any _in_timeline descendant whose
+// parsed year falls in [fromYear, toYear]. PostCount reflects the scoped count.
+//
+// Year parsing uses CAST(slug AS INTEGER): "2024" → 2024, "2020s" → 2020.
+func (r *Repository) ListMapTagsForYearRange(ctx context.Context, fromYear, toYear int) ([]MapYearRangeTag, error) {
+	const q = `
+WITH RECURSIVE descendants(id, slug) AS (
+    SELECT tr.child_id, c.slug
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug
+    FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id
+    JOIN descendants d ON d.id = tr2.parent_id
+),
+date_tag_ids AS (
+    SELECT DISTINCT id FROM descendants
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+filtered_posts AS (
+    SELECT DISTINCT pt.post_id
+    FROM post_tags pt
+    WHERE pt.tag_id IN (SELECT id FROM date_tag_ids)
+)
+SELECT t.id, COUNT(DISTINCT pt2.post_id) AS scoped_count
+FROM tags t
+JOIN tag_locations tl ON tl.tag_id = t.id
+JOIN post_tags pt2 ON pt2.tag_id = t.id
+WHERE pt2.post_id IN (SELECT post_id FROM filtered_posts)
+GROUP BY t.id
+ORDER BY scoped_count DESC`
+
+	rows, err := r.db.QueryContext(ctx, q, fromYear, toYear)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var results []MapYearRangeTag
+	for rows.Next() {
+		var m MapYearRangeTag
+		if err := rows.Scan(&m.TagID, &m.PostCount); err != nil {
+			return nil, err
+		}
+		results = append(results, m)
+	}
+	return results, rows.Err()
+}
+
+// InTimelineTag is a lightweight descriptor for a tag that is a descendant of _in_timeline.
+type InTimelineTag struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	PostCount int64  `json:"post_count"`
+}
+
+// ListInTimelineDescendants returns all tags whose ancestor chain includes _in_timeline,
+// excluding _in_timeline itself and other system tags, ordered by slug ascending.
+func (r *Repository) ListInTimelineDescendants(ctx context.Context) ([]InTimelineTag, error) {
+	const q = `
+WITH RECURSIVE descendants(id) AS (
+    SELECT tr.child_id
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id
+    FROM tag_relationships tr2
+    JOIN descendants d ON d.id = tr2.parent_id
+)
+SELECT DISTINCT t.id, t.name, t.slug, t.post_count
+FROM tags t
+JOIN descendants d ON d.id = t.id
+WHERE t.slug NOT LIKE '\_%%' ESCAPE '\'
+ORDER BY t.slug ASC`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var tags []InTimelineTag
+	for rows.Next() {
+		var t InTimelineTag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.PostCount); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+// ListInTimelineDescendantsForTag is like ListInTimelineDescendants but restricts
+// results to tags that co-occur with contextTagSlug on at least one shared post.
+func (r *Repository) ListInTimelineDescendantsForTag(ctx context.Context, contextTagSlug string) ([]InTimelineTag, error) {
+	const q = `
+WITH RECURSIVE descendants(id) AS (
+    SELECT tr.child_id
+    FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id
+    FROM tag_relationships tr2
+    JOIN descendants d ON d.id = tr2.parent_id
+)
+SELECT DISTINCT t.id, t.name, t.slug, t.post_count
+FROM tags t
+JOIN descendants d ON d.id = t.id
+WHERE t.slug NOT LIKE '\_%%' ESCAPE '\'
+AND t.id IN (
+    SELECT pt.tag_id FROM post_tags pt
+    WHERE pt.post_id IN (
+        SELECT pt2.post_id FROM post_tags pt2
+        JOIN tags ct ON ct.id = pt2.tag_id
+        WHERE ct.slug = ?
+    )
+)
+ORDER BY t.slug ASC`
+
+	rows, err := r.db.QueryContext(ctx, q, contextTagSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var tags []InTimelineTag
+	for rows.Next() {
+		var t InTimelineTag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.PostCount); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+// LocationTagCoOccurrence is a location tag paired with its co-occurrence count
+// for a specific date tag query.
+type LocationTagCoOccurrence struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	PostCount int    `json:"post_count"`
+}
+
+// GetLocationTagsCoOccurringWith returns location tags (tags with a row in tag_locations)
+// that share at least one post with dateTagSlug. If contextTagSlug is non-empty, only
+// posts also tagged with contextTagSlug are considered. Results are ordered by
+// co-occurrence count desc and capped at limit.
+func (r *Repository) GetLocationTagsCoOccurringWith(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]LocationTagCoOccurrence, error) {
+	contextJoin := ""
+	args := []interface{}{dateTagSlug}
+	if contextTagSlug != "" {
+		contextJoin = `
+		AND pt.post_id IN (
+			SELECT pt_ctx.post_id FROM post_tags pt_ctx
+			JOIN tags t_ctx ON t_ctx.id = pt_ctx.tag_id
+			WHERE t_ctx.slug = ?
+		)`
+		args = append(args, contextTagSlug)
+	}
+	args = append(args, limit)
+
+	q := fmt.Sprintf(`
+SELECT t.id, t.name, t.slug, COUNT(*) AS co_count
+FROM tags t
+JOIN tag_locations tl ON tl.tag_id = t.id
+JOIN post_tags pt ON pt.tag_id = t.id
+WHERE pt.post_id IN (
+    SELECT pt2.post_id FROM post_tags pt2
+    JOIN tags dt ON dt.id = pt2.tag_id
+    WHERE dt.slug = ?
+)%s
+GROUP BY t.id
+ORDER BY co_count DESC
+LIMIT ?`, contextJoin)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var results []LocationTagCoOccurrence
+	for rows.Next() {
+		var lc LocationTagCoOccurrence
+		if err := rows.Scan(&lc.ID, &lc.Name, &lc.Slug, &lc.PostCount); err != nil {
+			return nil, err
+		}
+		results = append(results, lc)
+	}
+	return results, rows.Err()
 }
 
 // TagRelationship represents a parent-child tag relationship pair.
@@ -1422,6 +1753,190 @@ AND (? OR NOT EXISTS (
 	return count, err
 }
 
+// GetPostsByTagIDsInYearRange returns paginated posts that have at least one tag from the
+// given set AND fall within [fromYear, toYear] via _in_timeline year tags.
+func (r *Repository) GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
+	if len(tagIDs) == 0 {
+		return []models.Post{}, nil
+	}
+
+	placeholders := ""
+	args := make([]interface{}, 0, 2+len(tagIDs)+3)
+	args = append(args, fromYear, toYear)
+	for i, id := range tagIDs {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+
+	var statusClause string
+	if includeDrafts {
+		statusClause = "1=1"
+	} else if includeHidden {
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+	} else {
+		if publishedOnly {
+			statusClause = "LOWER(p.status) = 'published'"
+		} else {
+			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		}
+		statusClause += ` AND p.id NOT IN (
+			SELECT pt.post_id FROM post_tags pt
+			WHERE pt.tag_id IN (
+				WITH RECURSIVE h(id) AS (
+					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					UNION
+					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+				)
+				SELECT id FROM h
+			)
+		)`
+	}
+
+	bypassEHP := includeDrafts || includeHidden
+	q := `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+ehp(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
+)
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
+       p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
+       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+AND p.id IN (
+    SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
+)
+AND (` + statusClause + `)
+AND (? OR NOT EXISTS (
+    SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
+))
+ORDER BY p.published_at DESC, p.created_at DESC
+LIMIT ? OFFSET ?`
+	args = append(args, bypassEHP, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Post
+	for rows.Next() {
+		var i models.Post
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter, &i.Status,
+			&i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.CreatedAt, &i.UpdatedAt,
+			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+// CountPostsByTagIDsInYearRange counts posts in the tag set that fall within the year range.
+func (r *Repository) CountPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error) {
+	if len(tagIDs) == 0 {
+		return 0, nil
+	}
+
+	placeholders := ""
+	args := make([]interface{}, 0, 2+len(tagIDs)+1)
+	args = append(args, fromYear, toYear)
+	for i, id := range tagIDs {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+
+	var statusClause string
+	if includeDrafts {
+		statusClause = "1=1"
+	} else if includeHidden {
+		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+	} else {
+		if publishedOnly {
+			statusClause = "LOWER(p.status) = 'published'"
+		} else {
+			statusClause = "LOWER(p.status) IN ('published', 'hidden')"
+		}
+		statusClause += ` AND p.id NOT IN (
+			SELECT pt.post_id FROM post_tags pt
+			WHERE pt.tag_id IN (
+				WITH RECURSIVE h(id) AS (
+					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					UNION
+					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+				)
+				SELECT id FROM h
+			)
+		)`
+	}
+
+	bypassEHP := includeDrafts || includeHidden
+	q := `
+WITH RECURSIVE
+_it(id, slug) AS (
+    SELECT tr.child_id, c.slug FROM tag_relationships tr
+    JOIN tags p ON p.id = tr.parent_id JOIN tags c ON c.id = tr.child_id
+    WHERE p.slug = '_in_timeline'
+    UNION ALL
+    SELECT tr2.child_id, c2.slug FROM tag_relationships tr2
+    JOIN tags c2 ON c2.id = tr2.child_id JOIN _it d ON d.id = tr2.parent_id
+),
+_ytags AS (
+    SELECT DISTINCT id FROM _it
+    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
+    AND slug NOT LIKE '\_%%' ESCAPE '\'
+),
+_yposts AS (
+    SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
+),
+ehp(id) AS (
+    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
+)
+SELECT COUNT(*) FROM posts p
+WHERE p.id IN (SELECT post_id FROM _yposts)
+AND p.id IN (
+    SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
+)
+AND (` + statusClause + `)
+AND (? OR NOT EXISTS (
+    SELECT 1 FROM post_tags pt2 WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM ehp)
+))`
+	args = append(args, bypassEHP)
+
+	var count int64
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
+	return count, err
+}
+
 // GetMediaByPath returns the media record whose original_path matches exactly.
 // The path should be in the stored format, e.g. "originals/2026/03/ts_file.jpg".
 func (r *Repository) GetMediaByPath(ctx context.Context, originalPath string) (models.Medium, error) {
@@ -1644,10 +2159,16 @@ func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error
 		return nil
 	}
 	if _, err := r.db.ExecContext(ctx, sql); err != nil {
-		return fmt.Errorf("migration %s: %w", name, err)
+		errMsg := err.Error()
+		// Treat "already exists" errors as no-ops: the migration's intent is already
+		// satisfied (e.g. a column added by schema.sql that a migration also adds).
+		// Record it in history so we stop retrying on every startup.
+		if !strings.Contains(errMsg, "already exists") && !strings.Contains(errMsg, "duplicate column") {
+			return fmt.Errorf("migration %s: %w", name, err)
+		}
 	}
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES (?)`, name)
+		`INSERT INTO migration_history (name, applied_at) VALUES (?, CURRENT_TIMESTAMP)`, name)
 	if err != nil {
 		return fmt.Errorf("failed to record migration %q in history: %w", name, err)
 	}
@@ -1748,7 +2269,7 @@ func (r *Repository) MigrateFlagsToSystemTags(ctx context.Context) error {
 
 	// Record migration.
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('system_tags_phase_a')`,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('system_tags_phase_a', CURRENT_TIMESTAMP)`,
 	); err != nil {
 		return fmt.Errorf("record system_tags_phase_a: %w", err)
 	}
@@ -1794,7 +2315,7 @@ func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
 			"PRAGMA foreign_keys = OFF",
 			`CREATE TABLE IF NOT EXISTS tags_new (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				name VARCHAR(100) NOT NULL UNIQUE,
+				name VARCHAR(100) NOT NULL,
 				slug VARCHAR(100) NOT NULL UNIQUE,
 				description TEXT,
 				custom_url VARCHAR(200),
@@ -1819,18 +2340,17 @@ func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
 
 	// Record migration.
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('system_tags_phase_b')`,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('system_tags_phase_b', CURRENT_TIMESTAMP)`,
 	); err != nil {
 		return fmt.Errorf("record system_tags_phase_b: %w", err)
 	}
 	return nil
 }
 
-// EnsurePendingSystemTag is an idempotent migration that guarantees the _pending
-// system tag exists with slug="_pending". It handles the case where a regular tag
-// was previously created with name="_pending" but slug="pending" (via Slugify),
-// which caused the system tag INSERT OR IGNORE to silently fail.
-func (r *Repository) EnsurePendingSystemTag(ctx context.Context) error {
+// EnsureSystemTags is an idempotent migration that guarantees all required
+// system tags exist and are linked to _system. It handles the case where a regular tag
+// was previously created with name="_pending" but slug="pending" (via Slugify).
+func (r *Repository) EnsureSystemTags(ctx context.Context) error {
 	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1843,7 +2363,7 @@ func (r *Repository) EnsurePendingSystemTag(ctx context.Context) error {
 
 	var count int64
 	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM migration_history WHERE name = 'ensure_pending_system_tag'`,
+		`SELECT COUNT(*) FROM migration_history WHERE name = 'ensure_system_tags'`,
 	).Scan(&count); err != nil {
 		return fmt.Errorf("check migration_history: %w", err)
 	}
@@ -1859,27 +2379,48 @@ func (r *Repository) EnsurePendingSystemTag(ctx context.Context) error {
 		return fmt.Errorf("rename conflicting _pending tag: %w", err)
 	}
 
-	// Create the _pending system tag if it doesn't exist yet.
-	if _, err := r.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
-		 VALUES ('_pending', '_pending', NULL, 0, CURRENT_TIMESTAMP)`,
-	); err != nil {
-		return fmt.Errorf("create _pending system tag: %w", err)
+	systemTags := []string{
+		"_system",
+		"_root",
+		"_hidden",
+		"_hide_posts",
+		"_is_in_breadcrumbs",
+		"_with_related",
+		"_pending",
+		"_page",
+		"_no_ancestors",
+		"_in_timeline",
 	}
 
-	// Make _pending a child of _system (no-op if _system doesn't exist or already linked).
-	if _, err := r.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
-		 SELECT s.id, c.id FROM tags s, tags c
-		 WHERE s.slug = '_system' AND c.slug = '_pending'`,
-	); err != nil {
-		return fmt.Errorf("link _pending to _system: %w", err)
+	for _, st := range systemTags {
+		// Display name strips the leading '_' (e.g. "_root" → "root").
+		displayName := strings.TrimLeft(st, "_")
+		if _, err := r.db.ExecContext(ctx,
+			`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
+			 VALUES (?, ?, NULL, 0, CURRENT_TIMESTAMP)`, displayName, st,
+		); err != nil {
+			return fmt.Errorf("create %s system tag: %w", st, err)
+		}
+	}
+
+	// Make system tags children of _system (except _system itself)
+	for _, st := range systemTags {
+		if st == "_system" {
+			continue
+		}
+		if _, err := r.db.ExecContext(ctx,
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT s.id, c.id FROM tags s, tags c
+			 WHERE s.slug = '_system' AND c.slug = ?`, st,
+		); err != nil {
+			return fmt.Errorf("link %s to _system: %w", st, err)
+		}
 	}
 
 	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name) VALUES ('ensure_pending_system_tag')`,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('ensure_system_tags', CURRENT_TIMESTAMP)`,
 	); err != nil {
-		return fmt.Errorf("record ensure_pending_system_tag: %w", err)
+		return fmt.Errorf("record ensure_system_tags: %w", err)
 	}
 	return nil
 }
@@ -1936,4 +2477,72 @@ func (r *Repository) GetMediaByPaths(ctx context.Context, paths []string) ([]mod
 	}
 	return items, rows.Err()
 }
+// DropTagNameUnique rebuilds the tags table to remove the UNIQUE constraint
+// from the name column, keeping only slug as unique.
+// This allows a user tag (e.g. slug="root") to share a display name with a
+// system tag (e.g. slug="_root", name="root").
+// It is idempotent: recorded as "drop_tags_name_unique" in migration_history.
+func (r *Repository) DropTagNameUnique(ctx context.Context) error {
+	if _, err := r.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS migration_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name VARCHAR(255) NOT NULL UNIQUE,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("create migration_history: %w", err)
+	}
 
+	var count int64
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_history WHERE name = 'drop_tags_name_unique'`,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("check migration_history: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	// Confirm the UNIQUE constraint still exists before rebuilding.
+	// SQLite encodes constraint info in the CREATE TABLE statement stored in sqlite_master.
+	var ddl string
+	_ = r.db.QueryRowContext(ctx,
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='tags'`,
+	).Scan(&ddl)
+
+	if strings.Contains(ddl, "name VARCHAR(100) NOT NULL UNIQUE") ||
+		strings.Contains(ddl, "name VARCHAR(100)  NOT NULL UNIQUE") {
+		stmts := []string{
+			"PRAGMA foreign_keys = OFF",
+			`CREATE TABLE IF NOT EXISTS tags_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name VARCHAR(100) NOT NULL,
+				slug VARCHAR(100) NOT NULL UNIQUE,
+				description TEXT,
+				custom_url VARCHAR(200),
+				sort_order INTEGER,
+				post_count INTEGER NOT NULL DEFAULT 0,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`INSERT INTO tags_new (id, name, slug, description, custom_url, sort_order, post_count, created_at)
+			SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags`,
+			`DROP TABLE tags`,
+			`ALTER TABLE tags_new RENAME TO tags`,
+			`CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)`,
+			`CREATE INDEX IF NOT EXISTS idx_tags_slug ON tags(slug)`,
+			"PRAGMA foreign_keys = ON",
+		}
+		for _, stmt := range stmts {
+			if _, err := r.db.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("drop_tags_name_unique rebuild: %w", err)
+			}
+		}
+	}
+
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO migration_history (name, applied_at) VALUES ('drop_tags_name_unique', CURRENT_TIMESTAMP)`,
+	); err != nil {
+		return fmt.Errorf("record drop_tags_name_unique: %w", err)
+	}
+	return nil
+}

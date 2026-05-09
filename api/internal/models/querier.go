@@ -13,6 +13,7 @@ type Querier interface {
 	AddPostViewCount(ctx context.Context, arg AddPostViewCountParams) error
 	AddTagRelationship(ctx context.Context, arg AddTagRelationshipParams) error
 	AddTagToPost(ctx context.Context, arg AddTagToPostParams) error
+	BulkPublishScheduledPosts(ctx context.Context) ([]Post, error)
 	ClearPostTags(ctx context.Context, postID int64) error
 	ClearTagRelationships(ctx context.Context, arg ClearTagRelationshipsParams) error
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
@@ -39,6 +40,8 @@ type Querier interface {
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostBySlug(ctx context.Context, slug string) (Post, error)
 	GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]Post, error)
+	// SECRETS
+	GetSecret(ctx context.Context, key string) (BlogSecret, error)
 	GetSessionByToken(ctx context.Context, token string) (GetSessionByTokenRow, error)
 	// SETTINGS
 	GetSetting(ctx context.Context, key string) (BlogSetting, error)
@@ -66,6 +69,7 @@ type Querier interface {
 	UpdateAllTagPostCounts(ctx context.Context) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilenameParams) (Medium, error)
+	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdateSessionActivity(ctx context.Context, id int64) error
 	UpdateSetting(ctx context.Context, arg UpdateSettingParams) (BlogSetting, error)
@@ -73,6 +77,7 @@ type Querier interface {
 	UpdateTagPostCount(ctx context.Context, id int64) error
 	UpdateUserLogin(ctx context.Context, id int64) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpsertSecret(ctx context.Context, arg UpsertSecretParams) error
 	WithdrawPost(ctx context.Context, id int64) (Post, error)
 }
 

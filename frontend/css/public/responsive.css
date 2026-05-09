@@ -17,7 +17,7 @@
 
 @media (max-width: 48em) {
     :root {
-        --header-height: 4rem;
+        --header-height: var(--base---header-height);
     }
 
     /*.site-nav {
@@ -52,7 +52,7 @@
     }
 }
 
-@media (max-width: 31.1875em) {
+@media (max-width: 32em) {
     .posts-grid {
         grid-template-columns: 1fr;
     }

@@ -12,13 +12,13 @@ import (
 	"io"
 	"log"
 	"mime"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/disintegration/imaging"
 	"github.com/rwcarlsen/goexif/exif"
@@ -113,7 +113,7 @@ func (s *MediaService) extractEXIF(r io.Reader) map[string]interface{} {
 		if err == nil {
 			// val.String() often includes quotes for strings, or is a rational/int.
 			// For a generic metadata map, we just take the string representation.
-			metadata[string(tag)] = strings.Trim(val.String(), "\"")
+			metadata[string(tag)] = sanitizeEXIFValue(strings.Trim(val.String(), "\""))
 		}
 	}
 
@@ -265,7 +265,8 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		AltText:       sql.NullString{String: p.AltText, Valid: p.AltText != ""},
 		Caption:       sql.NullString{String: p.Caption, Valid: p.Caption != ""},
 		Metadata:      metadataJSON,
-		UploadedAt:    now,
+		OriginalMetadata: metadataJSON,
+		UploadedAt:       now,
 	})
 }
 
@@ -361,7 +362,8 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		AltText:       sql.NullString{},
 		Caption:       sql.NullString{},
 		Metadata:      metadataJSON,
-		UploadedAt:    now,
+		OriginalMetadata: metadataJSON,
+		UploadedAt:       now,
 	})
 }
 
@@ -466,6 +468,87 @@ func (s *MediaService) ReextractEXIF(ctx context.Context, id int64) (models.Medi
 		AltText:  media.AltText.String,
 		Caption:  media.Caption.String,
 		Metadata: &metadata,
+	})
+}
+
+// UpdateEXIFParams holds the fields to write into a media item's EXIF.
+// All string values must contain only alphanumeric characters and spaces.
+type UpdateEXIFParams struct {
+	ID     int64
+	Fields map[string]string
+}
+
+// UpdateEXIF validates field values, writes EXIF back to the JPEG file on
+// disk (no-op for non-JPEG), and replaces media.metadata in the DB.
+// original_metadata is never modified.
+func (s *MediaService) UpdateEXIF(ctx context.Context, p UpdateEXIFParams) (models.Medium, error) {
+	media, err := s.repo.GetMedia(ctx, p.ID)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("get media: %w", err)
+	}
+
+	// Validate: all values must already be clean alphanumeric+space
+	sanitized := make(map[string]interface{}, len(p.Fields))
+	for k, v := range p.Fields {
+		if sanitizeEXIFValue(v) != v {
+			return models.Medium{}, fmt.Errorf("field %q contains disallowed characters: only alphanumeric and space allowed", k)
+		}
+		sanitized[k] = v
+	}
+
+	// Write EXIF to file (JPEG only; non-JPEG is no-op)
+	base := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	full := filepath.Clean(filepath.Join(base, media.OriginalPath))
+	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
+		return models.Medium{}, fmt.Errorf("invalid media path")
+	}
+	if err := writeEXIFToFile(full, media.MimeType, sanitized); err != nil {
+		return models.Medium{}, fmt.Errorf("write exif to file: %w", err)
+	}
+
+	// Update metadata in DB
+	metaJSON, err := json.Marshal(sanitized)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("marshal metadata: %w", err)
+	}
+	return s.repo.UpdateMediaMetadata(ctx, models.UpdateMediaMetadataParams{
+		ID:       p.ID,
+		Metadata: sql.NullString{String: string(metaJSON), Valid: true},
+	})
+}
+
+// RevertEXIF restores media.metadata to the original EXIF captured at upload
+// and writes those values back to the JPEG file on disk. Returns an error if
+// original_metadata is absent (null or empty).
+func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium, error) {
+	media, err := s.repo.GetMedia(ctx, id)
+	if err != nil {
+		return models.Medium{}, fmt.Errorf("get media: %w", err)
+	}
+
+	if !media.OriginalMetadata.Valid || media.OriginalMetadata.String == "" {
+		return models.Medium{}, fmt.Errorf("no original metadata to revert to")
+	}
+
+	var origFields map[string]interface{}
+	if err := json.Unmarshal([]byte(media.OriginalMetadata.String), &origFields); err != nil {
+		return models.Medium{}, fmt.Errorf("parse original metadata: %w", err)
+	}
+
+	// Write original EXIF back to file
+	base := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	full := filepath.Clean(filepath.Join(base, media.OriginalPath))
+	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
+		return models.Medium{}, fmt.Errorf("invalid media path")
+	}
+	if err := writeEXIFToFile(full, media.MimeType, origFields); err != nil {
+		return models.Medium{}, fmt.Errorf("write exif to file: %w", err)
+	}
+
+	// Reset metadata = original_metadata in DB
+	return s.repo.UpdateMediaMetadata(ctx, models.UpdateMediaMetadataParams{
+		ID:       id,
+		Metadata: media.OriginalMetadata,
 	})
 }
 
@@ -715,8 +798,9 @@ type AnalysisResponse struct {
 }
 
 var (
-	ErrMediaNotFound = errors.New("media not found")
-	ErrNotAnImage    = errors.New("media item is not an image")
+	ErrMediaNotFound    = errors.New("media not found")
+	ErrNotAnImage       = errors.New("media item is not an image")
+	ErrResponseUnusable = errors.New("the response cannot be used")
 )
 
 const maxAnalyzeBytes = 20 << 20 // 20 MB
@@ -775,23 +859,108 @@ func (s *MediaService) AnalyzeMediaByPath(ctx context.Context, mediaPath string)
 }
 
 func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
-	// If GenAI client is initialized, use it directly
-	if s.genaiClient != nil && len(s.genaiConfig.Models) > 0 {
-		return s.analyzeImageDirectly(ctx, content, filename, mimeType)
+	apiKey, _ := s.settingsService.GetSecret(ctx, "gemini_api_key")
+
+	var analysis *AnalysisResponse
+	var err error
+
+	if apiKey != "" && len(s.genaiConfig.Models) > 0 {
+		client, initErr := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		})
+		if initErr == nil {
+			analysis, err = s.analyzeImageDirectlyWithClient(ctx, client, content, filename, mimeType)
+		} else {
+			err = initErr
+		}
+	} else if s.genaiClient != nil && len(s.genaiConfig.Models) > 0 {
+		// Fallback to pre-initialized client if any
+		analysis, err = s.analyzeImageDirectlyWithClient(ctx, s.genaiClient, content, filename, mimeType)
+	} else {
+		log.Printf("warning: AI features disabled (gemini_api_key is absent)")
+		return &AnalysisResponse{Tags: []string{}}, nil
 	}
 
-	endpoint, err := s.settingsService.GetSetting(ctx, "genai_api_endpoint", "")
-	if err != nil || endpoint == "" {
-		return nil, fmt.Errorf("GenAI API not configured")
+	if err != nil {
+		if errors.Is(err, ErrResponseUnusable) {
+			return nil, err
+		}
+		// Check if it's an authorization/authentication error
+		var apiErr *googleapi.Error
+		if errors.As(err, &apiErr) && (apiErr.Code == 400 || apiErr.Code == 401 || apiErr.Code == 403) {
+			log.Printf("warning: AI features disabled (GEMINI_API_KEY is wrong or lacks permissions): %v", err)
+		} else {
+			log.Printf("warning: AI features soft-failed: %v", err)
+		}
+		return &AnalysisResponse{Tags: []string{}}, nil
 	}
 
-	// Legacy HTTP endpoint fallback
-	return s.analyzeImageViaHTTP(ctx, content, filename, mimeType, endpoint)
+	return analysis, nil
 }
 
-func (s *MediaService) analyzeImageDirectly(ctx context.Context, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
+// allowedContentRune returns r if it is permitted in AI-related text fields,
+// normalizes whitespace to a plain space, and drops everything else.
+// Allowed: letters, digits, whitespace, and . , - – — ' ? !
+func allowedContentRune(r rune) rune {
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		return r
+	}
+	if unicode.IsSpace(r) {
+		return ' '
+	}
+	switch r {
+	case '.', ',', '-', '–', '—', '\'', '?', '!', ':', ';':
+		return r
+	}
+	return -1
+}
+
+// sanitizeContentString applies the allowedContentRune filter and collapses
+// runs of whitespace into single spaces.
+func sanitizeContentString(s string) string {
+	s = strings.Map(allowedContentRune, s)
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// sanitizePromptField sanitizes a user-supplied prompt snippet before it is
+// embedded in the Gemini prompt, and limits its length.
+func sanitizePromptField(s string) string {
+	s = sanitizeContentString(s)
+	if len(s) > 200 {
+		s = s[:200]
+	}
+	return s
+}
+
+func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, client *genai.Client, content []byte, filename, mimeType string) (*AnalysisResponse, error) {
+	prompt := s.genaiConfig.Prompt
+	if s.settingsService != nil {
+		titlePart, _ := s.settingsService.GetSetting(ctx, "gemini_prompt_title", "")
+		tagsPart, _ := s.settingsService.GetSetting(ctx, "gemini_prompt_tags", "")
+		excerptPart, _ := s.settingsService.GetSetting(ctx, "gemini_prompt_excerpt", "")
+		titlePart = sanitizePromptField(titlePart)
+		tagsPart = sanitizePromptField(tagsPart)
+		excerptPart = sanitizePromptField(excerptPart)
+		if titlePart != "" || tagsPart != "" || excerptPart != "" {
+			if titlePart == "" {
+				titlePart = "a concise, descriptive title"
+			}
+			if tagsPart == "" {
+				tagsPart = "relevant keyword tags"
+			}
+			if excerptPart == "" {
+				excerptPart = "a 1-2 sentence description"
+			}
+			prompt = "Analyze this image and return a JSON object.\n" +
+				`"title" (string): ` + titlePart + "\n" +
+				`"tags" (array of strings): ` + tagsPart + "\n" +
+				`"excerpt" (string): ` + excerptPart + "\n" +
+				"Return only valid JSON, no markdown or extra text."
+		}
+	}
 	parts := []*genai.Part{
-		{Text: s.genaiConfig.Prompt},
+		{Text: prompt},
 		{InlineData: &genai.Blob{
 			Data:     content,
 			MIMEType: mimeType,
@@ -803,7 +972,7 @@ func (s *MediaService) analyzeImageDirectly(ctx context.Context, content []byte,
 	var genErr error
 
 	for _, model := range s.genaiConfig.Models {
-		genResp, genErr = s.genaiClient.Models.GenerateContent(ctx,
+		genResp, genErr = client.Models.GenerateContent(ctx,
 			model,
 			contents,
 			&genai.GenerateContentConfig{
@@ -825,7 +994,7 @@ func (s *MediaService) analyzeImageDirectly(ctx context.Context, content []byte,
 	}
 
 	if genErr != nil {
-		return nil, fmt.Errorf("all models failed: last error: %v", genErr)
+		return nil, fmt.Errorf("all models failed: last error: %w", genErr)
 	}
 
 	if len(genResp.Candidates) == 0 || len(genResp.Candidates[0].Content.Parts) == 0 {
@@ -846,79 +1015,34 @@ func (s *MediaService) analyzeImageDirectly(ctx context.Context, content []byte,
 	return s.parseAnalysisResult(result, filename)
 }
 
-func (s *MediaService) analyzeImageViaHTTP(ctx context.Context, content []byte, filename, mimeType, endpoint string) (*AnalysisResponse, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("image", filename)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := io.Copy(part, bytes.NewReader(content)); err != nil {
-		return nil, err
-	}
-	_ = writer.Close()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GenAI service error: status %d", resp.StatusCode)
-	}
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Handle common wrappers
-	for _, wrapper := range []string{"data", "result", "output", "response"} {
-		if inner, ok := result[wrapper].(map[string]interface{}); ok {
-			result = inner
-			break
-		}
-	}
-
-	return s.parseAnalysisResult(result, filename)
-}
 
 func (s *MediaService) parseAnalysisResult(result map[string]interface{}, filename string) (*AnalysisResponse, error) {
+	// Require exactly title, tags, excerpt — no extra keys.
+	if len(result) != 3 {
+		return nil, ErrResponseUnusable
+	}
+	titleRaw, hasTitle := result["title"].(string)
+	tagsRaw, hasTags := result["tags"].([]interface{})
+	excerptRaw, hasExcerpt := result["excerpt"].(string)
+	if !hasTitle || !hasTags || !hasExcerpt {
+		return nil, ErrResponseUnusable
+	}
+
 	analysis := &AnalysisResponse{Tags: []string{}}
 
-	if t, ok := result["title"].(string); ok {
-		analysis.Title = &t
-	}
+	t := sanitizeContentString(titleRaw)
+	analysis.Title = &t
 
-	if tags, ok := result["tags"].([]interface{}); ok {
-		for _, t := range tags {
-			if str, ok := t.(string); ok {
-				analysis.Tags = append(analysis.Tags, str)
+	for _, tag := range tagsRaw {
+		if str, ok := tag.(string); ok {
+			if clean := sanitizeContentString(str); clean != "" {
+				analysis.Tags = append(analysis.Tags, clean)
 			}
 		}
 	}
 
-	if e, ok := result["excerpt"].(string); ok {
-		analysis.Excerpt = &e
-	} else {
-		// Map alternative keys to excerpt if missing
-		for _, key := range []string{"summary", "description", "caption", "text", "content"} {
-			if e, ok := result[key].(string); ok {
-				analysis.Excerpt = &e
-				break
-			}
-		}
-	}
+	e := sanitizeContentString(excerptRaw)
+	analysis.Excerpt = &e
 
 	// Detect year tag from filename (starts with 20##)
 	re := regexp.MustCompile(`^(20\d{2})`)

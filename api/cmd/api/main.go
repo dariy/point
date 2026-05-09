@@ -2,26 +2,29 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"database/sql"
-	"encoding/hex"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"point-api/internal/api"
 	"point-api/internal/config"
-	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
+
+// Version is set at build time via -ldflags="-X main.Version=..."
+var Version = "dev"
 
 // resolveJSDir returns the directory to serve under /assets/js.
 // It prefers the pre-built bundle directory (frontend/js/) over the raw
@@ -38,44 +41,6 @@ func resolveJSDir(frontendDir string) string {
 	return ""
 }
 
-// ensureSecretKey guarantees cfg.SecretKey is populated before the server
-// starts. If SECRET_KEY is absent from the environment / .env file it checks
-// blog_settings for the key "_secret_key". When no persisted key exists it
-// generates a cryptographically random 32-byte hex string, stores it in the
-// database, and uses it for this and future runs.
-func ensureSecretKey(ctx context.Context, cfg *config.Config, repo *repository.Repository) error {
-	if cfg.SecretKey != "" {
-		return nil
-	}
-
-	// Try to load a previously generated key from the database.
-	setting, err := repo.GetSetting(ctx, "_secret_key")
-	if err == nil && setting.Value.Valid && setting.Value.String != "" {
-		cfg.SecretKey = setting.Value.String
-		log.Printf("loaded secret key from database settings")
-		return nil
-	}
-
-	// Generate a new 32-byte (64 hex chars) random secret key.
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return fmt.Errorf("generate secret key: %w", err)
-	}
-	key := hex.EncodeToString(raw)
-
-	// Persist it so future restarts reuse the same key.
-	if _, err := repo.UpdateSetting(ctx, models.UpdateSettingParams{
-		Key:       "_secret_key",
-		Value:     sql.NullString{String: key, Valid: true},
-		ValueType: "string",
-	}); err != nil {
-		return fmt.Errorf("store secret key: %w", err)
-	}
-
-	cfg.SecretKey = key
-	log.Printf("generated and stored new secret key in database settings")
-	return nil
-}
 
 type AppServices struct {
 	Settings  *services.SettingsService
@@ -86,6 +51,8 @@ type AppServices struct {
 	System    *services.SystemService
 	Cache     *services.CacheService
 	Scheduler *services.SchedulerService
+	Theme     *services.ThemeService
+	Timeline  *services.TimelineService
 }
 
 func initServices(cfg *config.Config, repo *repository.Repository) *AppServices {
@@ -96,7 +63,9 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
+	themeService := services.NewThemeService(cfg, settingsService)
+	timelineService := services.NewTimelineService(repo)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -107,6 +76,8 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 		System:    systemService,
 		Cache:     cacheService,
 		Scheduler: schedulerService,
+		Theme:     themeService,
+		Timeline:  timelineService,
 	}
 }
 
@@ -123,9 +94,11 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings)
+	themeHandler := api.NewThemeHandler(svcs.Theme)
 	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
+	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 
 	// Global middleware
@@ -141,7 +114,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 	// Extra security headers not covered by middleware.Secure
@@ -215,7 +188,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth))
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth))
 
-		// ── Tag Routes ─────────────────────────────────────────────────────────────
+	// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")
 	tagsGroup.GET("", tagHandler.ListTags, api.OptionalAuthMiddleware(svcs.Auth))
 	tagsGroup.GET("/cloud", tagHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth))
@@ -248,6 +221,8 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.POST("/:id/reextract", mediaHandler.ReextractEXIF, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.PUT("/:id/exif", mediaHandler.UpdateEXIF, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.POST("/:id/revert-exif", mediaHandler.RevertEXIF, api.AuthMiddleware(svcs.Auth))
 	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(svcs.Auth))
 
 	// ── Settings Routes ────────────────────────────────────────────────────────
@@ -258,9 +233,17 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
 	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
 
+	// ── Themes Routes ──────────────────────────────────────────────────────────
+	themesGroup := e.Group("/api/themes")
+	themesGroup.GET("", themeHandler.ListThemes)
+	themesGroup.GET("/active", themeHandler.GetActiveTheme)
+	themesGroup.PUT("/active", themeHandler.SetActiveTheme, api.AuthMiddleware(svcs.Auth))
+
+
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")
 	systemGroup.GET("/stats", systemHandler.GetStats, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/disk", systemHandler.GetDiskInfo, api.AuthMiddleware(svcs.Auth))
 	systemGroup.GET("/logs", systemHandler.GetLogs, api.AuthMiddleware(svcs.Auth))
 	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(svcs.Auth))
 	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(svcs.Auth))
@@ -286,6 +269,11 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth))
+
+	// ── Timeline Routes ────────────────────────────────────────────────────────
+	timelineGroup := e.Group("/api/timeline")
+	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth))
+	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth))
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
@@ -329,6 +317,50 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	// ── SPA fallback — must be last ────────────────────────────────────────────
 	e.GET("/*", func(c echo.Context) error {
 		if _, err := os.Stat(indexHTML); err == nil {
+			path := c.Request().URL.Path
+			if slug, ok := strings.CutPrefix(path, "/post/"); ok {
+				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
+				if err == nil && strings.EqualFold(post.Status, "published") {
+					b, err := os.ReadFile(indexHTML)
+					if err == nil {
+						htmlStr := string(b)
+						htmlStr = strings.Replace(htmlStr, "<title>Loading…</title>", "", 1)
+
+						var sb strings.Builder
+						desc := post.MetaDescription.String
+						if !post.MetaDescription.Valid || desc == "" {
+							desc = post.Excerpt.String
+						}
+
+						fmt.Fprintf(&sb, "\n  <title>%s</title>", html.EscapeString(post.Title))
+						if desc != "" {
+							fmt.Fprintf(&sb, "\n  <meta name=\"description\" content=\"%s\">", html.EscapeString(desc))
+							fmt.Fprintf(&sb, "\n  <meta property=\"og:description\" content=\"%s\">", html.EscapeString(desc))
+						}
+
+						sb.WriteString("\n  <meta property=\"og:type\" content=\"article\">")
+						fmt.Fprintf(&sb, "\n  <meta property=\"og:title\" content=\"%s\">", html.EscapeString(post.Title))
+
+						scheme := c.Scheme()
+						if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
+							scheme = fwd
+						}
+						fullURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, c.Request().URL.Path)
+						fmt.Fprintf(&sb, "\n  <meta property=\"og:url\" content=\"%s\">", html.EscapeString(fullURL))
+
+						media, _ := svcs.Media.GetMediaByContent(c.Request().Context(), post.Content, post.ThumbnailPath.String)
+						if len(media) > 0 {
+							mPath := "/" + strings.TrimPrefix(media[0].OriginalPath, "originals/")
+							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, mPath)
+							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
+						}
+
+						sb.WriteString("\n</head>")
+						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
+						return c.HTML(http.StatusOK, htmlStr)
+					}
+				}
+			}
 			return c.File(indexHTML)
 		}
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
@@ -336,7 +368,6 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 		})
 	})
 
-	
 	return e
 }
 
@@ -346,6 +377,9 @@ func main() {
 	cfg, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
+	}
+	if cfg.AppVersion == "" {
+		cfg.AppVersion = Version
 	}
 
 	// Initialize repository
@@ -368,7 +402,8 @@ func main() {
 	}
 
 	// Apply pending DB migrations.
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	migrations := []struct{ name, sql string }{
 		{
 			"add_tags_include_in_breadcrumbs",
@@ -385,6 +420,10 @@ func main() {
 		{
 			"add_media_metadata",
 			`ALTER TABLE media ADD COLUMN metadata TEXT`,
+		},
+		{
+			"add_media_original_metadata",
+			`ALTER TABLE media ADD COLUMN original_metadata TEXT`,
 		},
 		{
 			"create_media_visibility_log",
@@ -436,6 +475,73 @@ func main() {
 			 SELECT s.id, c.id FROM tags s, tags c
 			 WHERE s.slug = '_system' AND c.slug = '_no_ancestors'`,
 		},
+		{
+			"add_scheduled_at_to_posts",
+			`ALTER TABLE posts ADD COLUMN scheduled_at DATETIME`,
+		},
+		{
+			"add_scheduled_at_to_posts_index",
+			`CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at)`,
+		},
+		{
+			"create_blog_secrets_table",
+			`CREATE TABLE IF NOT EXISTS blog_secrets (
+				key        VARCHAR(100) PRIMARY KEY,
+				value      TEXT,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+		},
+		{
+			"migrate_gemini_key_to_secrets",
+			`INSERT OR IGNORE INTO blog_secrets (key, value, updated_at)
+			 SELECT 'gemini_api_key', value, updated_at FROM blog_settings WHERE key = 'GEMINI_API_KEY'`,
+		},
+		{
+			"migrate_secret_key_to_secrets",
+			`INSERT OR IGNORE INTO blog_secrets (key, value, updated_at)
+			 SELECT key, value, updated_at FROM blog_settings WHERE key = '_secret_key'`,
+		},
+		{
+			"migrate_media_import_path_to_secrets",
+			`INSERT OR IGNORE INTO blog_secrets (key, value, updated_at)
+			 SELECT key, value, updated_at FROM blog_settings WHERE key = 'media_import_path'`,
+		},
+		{
+			"cleanup_settings_secrets_keys",
+			`DELETE FROM blog_settings WHERE key IN ('GEMINI_API_KEY', '_secret_key', 'media_import_path', 'genai_api_endpoint')`,
+		},
+		{
+			"rename_show_map_to_map_mode",
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'map_mode', value, value_type, updated_at FROM blog_settings WHERE key = 'show_map'`,
+		},
+		{
+			"cleanup_show_map_key",
+			`DELETE FROM blog_settings WHERE key = 'show_map'`,
+		},
+		{
+			"add_in_timeline_system_tag",
+			`INSERT OR IGNORE INTO tags (name, slug, sort_order, post_count, created_at)
+			 VALUES ('in_timeline', '_in_timeline', NULL, 0, CURRENT_TIMESTAMP)`,
+		},
+		{
+			"add_in_timeline_to_system",
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT s.id, c.id FROM tags s, tags c
+			 WHERE s.slug = '_system' AND c.slug = '_in_timeline'`,
+		},
+		{
+			"add_timeline_mode_setting",
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 VALUES ('timeline_mode', 'off', 'string', CURRENT_TIMESTAMP)`,
+		},
+		{
+			"link_year_tags_to_in_timeline",
+			`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
+			 SELECT p.id, t.id FROM tags p, tags t
+			 WHERE p.slug = '_in_timeline'
+			   AND (t.slug GLOB '[0-9][0-9][0-9][0-9]' OR t.slug GLOB '[0-9][0-9][0-9][0-9]s')`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
@@ -452,34 +558,80 @@ func main() {
 		log.Printf("warning: system_tags_phase_b: %v", err)
 	}
 
-	// Ensure the _pending system tag exists (handles name-conflict from pre-system-tags era).
-	if err := repo.EnsurePendingSystemTag(ctx); err != nil {
-		log.Printf("warning: ensure_pending_system_tag: %v", err)
+	// Ensure all required system tags exist.
+	if err := repo.EnsureSystemTags(ctx); err != nil {
+		log.Printf("warning: ensure_system_tags: %v", err)
 	}
 
 	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
+	// This was the first pass — kept so the migration_history entry is preserved.
 	if err := repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
 		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
 		log.Printf("warning: migration %q: %v", "rename_system_tags_to_slug", err)
 	}
 
-	// Ensure a secret key is available for session signing.
-	if err := ensureSecretKey(ctx, &cfg, repo); err != nil {
-		log.Fatalf("failed to ensure secret key: %v", err)
+	// Strip the leading '_' from system tag display names so the UI shows
+	// "root", "pending", "hidden", etc. instead of "_root", "_pending".
+	if err := repo.ApplyMigration(ctx, "rename_system_tags_names_no_underscore",
+		`UPDATE tags SET name = LTRIM(slug, '_') WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
+		log.Printf("warning: migration %q: %v", "rename_system_tags_names_no_underscore", err)
+	}
+
+	// Drop the UNIQUE constraint from tags.name so that a user tag (e.g. slug="root")
+	// can share its name with the system tag (slug="_root"). Only slug stays unique.
+	if err := repo.DropTagNameUnique(ctx); err != nil {
+		log.Printf("warning: drop_tags_name_unique: %v", err)
 	}
 
 	svcs := initServices(&cfg, repo)
+
+	// Ensure a secret key is available for session signing.
+	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
+		log.Fatalf("failed to ensure secret key: %v", err)
+	}
+
+	// Sync env-var secrets into blog_secrets so they're available at runtime.
+	if cfg.GeminiAPIKey != "" {
+		if err := svcs.Settings.SetSecret(ctx, "gemini_api_key", cfg.GeminiAPIKey); err != nil {
+			log.Printf("warning: failed to sync gemini_api_key to secrets: %v", err)
+		}
+	}
+	if cfg.MediaImportPath != "" {
+		if err := svcs.Settings.SetSecret(ctx, "media_import_path", cfg.MediaImportPath); err != nil {
+			log.Printf("warning: failed to sync media_import_path to secrets: %v", err)
+		}
+	}
+
+	// Synchronize active theme with public theme.json for the frontend
+	if err := svcs.Theme.SyncActiveTheme(ctx); err != nil {
+		log.Printf("warning: failed to sync active theme: %v", err)
+	}
+
 	e := setupEcho(cfg, repo, svcs)
 
-	// Start background scheduler
+	// Start background scheduler (goroutines honor ctx cancellation)
 	svcs.Scheduler.Start(ctx)
 
 	// Start server
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	log.Printf("Point API starting on %s", address)
-	if err := e.Start(address); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("failed to start server: %v", err)
+	go func() {
+		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("failed to start server: %v", err)
+		}
+	}()
+
+	// Wait for interrupt or SIGTERM
+	<-ctx.Done()
+	stop()
+
+	log.Println("shutting down...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown error: %v", err)
 	}
+	log.Println("graceful shutdown complete")
 }
 
 // checksumRe matches the 8-char hex checksum embedded in a media filename,

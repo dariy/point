@@ -10,7 +10,7 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { getTagsPage } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { buildTagIndex, renderTagLink, setupTagFlyout } from '../../utils/tags.js';
 import { LOCK_SVG } from '../../utils/icons.js';
 
@@ -83,6 +83,7 @@ export default class TagsPage extends Component {
 
   beforeUnmount() {
     this._cleanupFlyout?.();
+    removeCanonical();
   }
 
   mount() {
@@ -119,6 +120,7 @@ export default class TagsPage extends Component {
     try {
       const { tags, total } = await getTagsPage();
       document.title = 'Tags';
+      setCanonical(`${window.location.origin}/tags`);
       this.setState({ loading: false, tags, total, error: null });
     } catch (err) {
       this.setState({ loading: false, tags: [], total: 0, error: err.message || 'Failed to load tags.' });
