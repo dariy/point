@@ -58,6 +58,14 @@ podman rm -f point 2>/dev/null || true
 # Pre-create data dirs as host user so --userns=keep-id containers can write
 mkdir -p ../data/media/originals ../data/media/thumbnails ../data/logs ../data/backups
 
+# Optionally mount MEDIA_IMPORT_PATH as a read-only volume when set in .env
+_MEDIA_PATH=$(grep -E '^MEDIA_IMPORT_PATH=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')
+MEDIA_IMPORT_ARGS=()
+if [ -n "$_MEDIA_PATH" ]; then
+    MEDIA_IMPORT_ARGS=(-v "${_MEDIA_PATH}:/import:ro,z" -e MEDIA_IMPORT_PATH=/import)
+fi
+unset _MEDIA_PATH
+
 podman run -d \
     --name point \
     --restart unless-stopped \
@@ -71,6 +79,7 @@ podman run -d \
     -e FRONTEND_DIR=/app/frontend \
     -e PORT=8000 \
     -e HOST=0.0.0.0 \
+    "${MEDIA_IMPORT_ARGS[@]}" \
     point:dev
 
 # Clean up dangling images to save space
