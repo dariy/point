@@ -3,25 +3,31 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
+	"point-api/internal/repository"
 	"point-api/internal/services"
 )
 
 type AuthHandler struct {
 	authService *services.AuthService
 	cfg         *config.Config
+	repo        *repository.Repository
 }
 
-func NewAuthHandler(authService *services.AuthService, cfg *config.Config) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, cfg *config.Config, repo *repository.Repository) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		cfg:         cfg,
+		repo:        repo,
 	}
 }
 
@@ -215,4 +221,103 @@ func (h *AuthHandler) DeleteOtherSessions(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Other sessions terminated"})
+}
+
+func (h *AuthHandler) ForgotPassword(c echo.Context) error {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request"})
+	}
+
+	// Always return the same message to prevent email enumeration.
+	const okMsg = "If an account with that email exists, you will receive a password reset link shortly."
+
+	if strings.TrimSpace(req.Email) == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "email is required"})
+	}
+
+	if h.cfg.SMTPHost == "" {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{
+			"detail": "Password reset is not configured. Set SMTP_HOST in your .env file.",
+		})
+	}
+
+	ctx := c.Request().Context()
+	user, err := h.repo.GetUserByEmail(ctx, strings.TrimSpace(req.Email))
+	if err != nil {
+		// No account — return the same OK message to prevent enumeration.
+		return c.JSON(http.StatusOK, map[string]string{"detail": okMsg})
+	}
+
+	token, err := h.authService.CreatePasswordResetToken(ctx, user.ID)
+	if err != nil {
+		log.Printf("forgot-password: create token: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "could not generate reset token"})
+	}
+
+	appURL := h.cfg.AppURL
+	if appURL == "" {
+		scheme := c.Scheme()
+		if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
+			scheme = fwd
+		}
+		appURL = fmt.Sprintf("%s://%s", scheme, c.Request().Host)
+	}
+	appURL = strings.TrimRight(appURL, "/")
+
+	resetLink := fmt.Sprintf("%s/light/pss/%s", appURL, token)
+	body := fmt.Sprintf(
+		"You requested a password reset for your blog.\n\n"+
+			"Click the link below to set a new password (valid for 1 hour):\n\n"+
+			"%s\n\n"+
+			"If you did not request this, ignore this email — your password has not changed.\n",
+		resetLink,
+	)
+
+	from := h.cfg.SMTPFrom
+	if from == "" {
+		from = h.cfg.SMTPUsername
+	}
+	smtpCfg := services.SMTPConfig{
+		Host:     h.cfg.SMTPHost,
+		Port:     h.cfg.SMTPPort,
+		Username: h.cfg.SMTPUsername,
+		Password: h.cfg.SMTPPassword,
+		From:     from,
+	}
+
+	if err := services.SendEmail(smtpCfg, user.Email, "Password Reset Request", body); err != nil {
+		log.Printf("forgot-password: send email: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "failed to send reset email"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"detail": okMsg})
+}
+
+func (h *AuthHandler) ResetPassword(c echo.Context) error {
+	var req struct {
+		Token    string `json:"token"`
+		Password string `json:"name"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request"})
+	}
+
+	if req.Token == "" || req.Password == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "token and password are required"})
+	}
+
+	// Password arrives pre-hashed (SHA-256 hex, 64 chars) just like login/change-password.
+	if len(req.Password) != 64 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid password format"})
+	}
+
+	ctx := c.Request().Context()
+	if err := h.authService.ResetPassword(ctx, req.Token, req.Password); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"detail": "Password reset successfully. You can now log in."})
 }

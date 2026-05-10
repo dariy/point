@@ -12,12 +12,12 @@ export default class SetupPage extends Component {
       error: null,
       blog_title: '',
       author_name: '',
-      username: '',
+      email: '',
     };
   }
 
   render() {
-    const { loading, error, blog_title, author_name, username } = this.state;
+    const { loading, error, blog_title, author_name, email } = this.state;
 
     return `
       <div class="setup-page-container">
@@ -31,29 +31,34 @@ export default class SetupPage extends Component {
 
             <form id="setup-form" novalidate>
               <div class="form-group">
-                <label for="blog_title">Blog Title</label>
-                <input type="text" id="blog_title" name="blog_title"
-                       value="${escapeHtml(blog_title)}" required placeholder="e.g. My Photo Blog"
+                <label class="form-label" for="blog_title">Blog Title</label>
+                <input type="text" id="blog_title" name="blog_title" class="form-input"
+                       value="${escapeHtml(blog_title)}" required placeholder="My Photo Blog"
+                       autocomplete="off"
                        ${loading ? 'disabled' : ''}>
               </div>
 
               <div class="form-group">
-                <label for="author_name">Your Name</label>
-                <input type="text" id="author_name" name="author_name"
-                       value="${escapeHtml(author_name)}" required placeholder="e.g. Jane Doe"
+                <label class="form-label" for="author_name">Your Name</label>
+                <input type="text" id="author_name" name="author_name" class="form-input"
+                       value="${escapeHtml(author_name)}" required placeholder="Jane Doe"
+                       autocomplete="name"
                        ${loading ? 'disabled' : ''}>
               </div>
 
               <div class="form-group">
-                <label for="username">Admin Username</label>
-                <input type="text" id="username" name="username"
-                       value="${escapeHtml(username)}" required placeholder="e.g. admin"
-                       autocomplete="username"
+                <label class="form-label" for="email">
+                  Email Address
+                  <span class="form-help" style="display:inline; margin-top:0; margin-left:var(--spacing-xs);">(used for password reset)</span>
+                </label>
+                <input type="email" id="email" name="email" class="form-input"
+                       value="${escapeHtml(email)}" placeholder="you@example.com"
+                       autocomplete="email"
                        ${loading ? 'disabled' : ''}>
               </div>
 
               <div class="form-group">
-                <label for="password">Password</label>
+                <label class="form-label" for="password">Password</label>
                 <input type="password" id="password" name="password"
                        required placeholder="Minimum 8 characters"
                        autocomplete="new-password"
@@ -61,7 +66,7 @@ export default class SetupPage extends Component {
               </div>
 
               <div class="form-group">
-                <label for="confirm_password">Confirm Password</label>
+                <label class="form-label" for="confirm_password">Confirm Password</label>
                 <input type="password" id="confirm_password" name="confirm_password"
                        required placeholder="Repeat your password"
                        autocomplete="new-password"
@@ -70,7 +75,7 @@ export default class SetupPage extends Component {
 
               <div class="setup-submit-wrapper">
                 <button type="submit" class="btn btn-primary setup-submit-btn" ${loading ? 'disabled' : ''}>
-                  ${loading ? 'Setting up...' : 'Finish Setup'}
+                  ${loading ? 'Setting up…' : 'Finish Setup'}
                 </button>
               </div>
             </form>
@@ -90,12 +95,12 @@ export default class SetupPage extends Component {
 
       const blog_title = this.$('#blog_title').value.trim();
       const author_name = this.$('#author_name').value.trim();
-      const username = this.$('#username').value.trim();
+      const email = this.$('#email').value.trim();
       const password = this.$('#password').value;
       const confirm_password = this.$('#confirm_password').value;
 
-      if (!blog_title || !author_name || !username || !password) {
-        this.setState({ error: 'All fields are required.' });
+      if (!blog_title || !author_name || !password) {
+        this.setState({ error: 'Blog title, your name, and password are required.' });
         return;
       }
 
@@ -109,19 +114,13 @@ export default class SetupPage extends Component {
         return;
       }
 
-      this.setState({
-        loading: true,
-        error: null,
-        blog_title,
-        author_name,
-        username,
-      });
+      this.setState({ loading: true, error: null, blog_title, author_name, email });
 
       try {
         await api.post('/api/setup', {
           blog_title,
           author_name,
-          username,
+          email,
           name: await sha256(password),
         });
 

@@ -240,6 +240,10 @@ const routes = [
   // First-run setup wizard (public — no auth required)
   { path: '/setup',       load: () => import('./pages/light/SetupPage.js'),   public: true },
 
+  // Password reset (public — no auth required)
+  { path: '/light/pss',        load: () => import('./pages/light/PasswordResetPage.js'), public: true },
+  { path: '/light/pss/:token', load: () => import('./pages/light/PasswordResetPage.js'), public: true },
+
   // Public blog
   { path: '/',            load: () => import('./pages/public/HomePage.js'),   public: true },
   { path: '/post/:slug',  load: () => import('./pages/public/PostPage.js'),   public: true },

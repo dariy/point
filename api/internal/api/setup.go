@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
@@ -36,17 +37,19 @@ func (h *SetupHandler) SetupStatus(c echo.Context) error {
 
 func (h *SetupHandler) Setup(c echo.Context) error {
 	var req struct {
-		Username   string `json:"username"`
 		Password   string `json:"name"`
 		BlogTitle  string `json:"blog_title"`
 		AuthorName string `json:"author_name"`
+		Email      string `json:"email"`
 	}
 
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request body"})
 	}
 
-	if req.Username == "" || req.Password == "" || req.BlogTitle == "" || req.AuthorName == "" {
+	req.Email = strings.TrimSpace(req.Email)
+
+	if req.Password == "" || req.BlogTitle == "" || req.AuthorName == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "all fields are required"})
 	}
 
@@ -71,8 +74,8 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 	}
 
 	_, err = h.repo.CreateUser(ctx, models.CreateUserParams{
-		Username:     req.Username,
-		Email:        "",
+		Username:     "the_owner",
+		Email:        req.Email,
 		PasswordHash: hash,
 		DisplayName:  req.AuthorName,
 	})

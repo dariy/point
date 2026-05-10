@@ -25,5 +25,6 @@ build/*
 !build/api-bin
 !build/go.Dockerfile
 !build/docker-compose.dev.yml
+!build/entrypoint.sh
 
 # We want to keep app/static/css/light.css and app/static/css/main.css

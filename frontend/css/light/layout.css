@@ -345,6 +345,7 @@ body {
 .setup-page-container .card-header {
     text-align: center;
     padding: var(--spacing-xl) var(--spacing-lg);
+    cursor: default;
 }
 
 .setup-page-container .card-header h2 {
@@ -367,4 +368,19 @@ body {
     width: 100%;
     height: var(--setup-submit-btn-height);
     font-weight: 600;
+}
+
+.setup-page-container .pss-success {
+    padding: var(--spacing-md) var(--spacing-lg);
+    color: var(--color-success);
+    background-color: var(--color-success-light);
+    border: var(--border-width) solid var(--color-success-light);
+    border-radius: var(--border-radius);
+    text-align: center;
+    line-height: 1.6;
+}
+
+.setup-page-container .pss-back {
+    margin-top: var(--spacing-lg);
+    text-align: center;
 }
