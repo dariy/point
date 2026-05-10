@@ -49,7 +49,7 @@ func TestFullWorkflow(t *testing.T) {
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 
 	// Handlers
-	authH := NewAuthHandler(authSvc, cfg)
+	authH := NewAuthHandler(authSvc, cfg, repo)
 	mediaH := NewMediaHandler(mediaSvc, settingsSvc)
 	postH := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	tagH := NewTagHandler(tagSvc, settingsSvc)
