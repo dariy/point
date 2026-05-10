@@ -31,6 +31,14 @@ type Config struct {
 	ThemesPath               string `mapstructure:"THEMES_PATH"`
 	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
 	MediaImportPath          string `mapstructure:"MEDIA_IMPORT_PATH"`
+
+	// SMTP for password reset emails
+	SMTPHost     string `mapstructure:"SMTP_HOST"`
+	SMTPPort     int    `mapstructure:"SMTP_PORT"`
+	SMTPUsername string `mapstructure:"SMTP_USERNAME"`
+	SMTPPassword string `mapstructure:"SMTP_PASSWORD"`
+	SMTPFrom     string `mapstructure:"SMTP_FROM"`
+	AppURL       string `mapstructure:"APP_URL"`
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -60,6 +68,12 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("JPEG_QUALITY", 85)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("MEDIA_IMPORT_PATH", "")
+	v.SetDefault("SMTP_HOST", "")
+	v.SetDefault("SMTP_PORT", 587)
+	v.SetDefault("SMTP_USERNAME", "")
+	v.SetDefault("SMTP_PASSWORD", "")
+	v.SetDefault("SMTP_FROM", "")
+	v.SetDefault("APP_URL", "")
 
 	err = v.ReadInConfig()
 	if err != nil {

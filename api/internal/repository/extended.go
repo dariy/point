@@ -2548,3 +2548,9 @@ func (r *Repository) DropTagNameUnique(ctx context.Context) error {
 	}
 	return nil
 }
+
+// DeleteSecret removes a secret by key (used to invalidate one-time tokens).
+func (r *Repository) DeleteSecret(ctx context.Context, key string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM blog_secrets WHERE key = ?`, key)
+	return err
+}

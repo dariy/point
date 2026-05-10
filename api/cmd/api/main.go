@@ -89,7 +89,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	e.HTTPErrorHandler = api.CustomHTTPErrorHandler
 
 	// Handlers
-	authHandler := api.NewAuthHandler(svcs.Auth, &cfg)
+	authHandler := api.NewAuthHandler(svcs.Auth, &cfg, repo)
 	tagHandler := api.NewTagHandler(svcs.Tag, svcs.Settings)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
@@ -171,6 +171,8 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(svcs.Auth))
 	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(svcs.Auth))
 	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth))
+	authGroup.POST("/forgot-password", authHandler.ForgotPassword)
+	authGroup.POST("/reset-password", authHandler.ResetPassword)
 
 	// ── Post Routes ────────────────────────────────────────────────────────────
 	postsGroup := e.Group("/api/posts")
