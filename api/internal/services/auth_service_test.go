@@ -228,3 +228,109 @@ func TestAuthService_ChangePassword_LongPassword(t *testing.T) {
 		t.Error("ChangePassword long password: expected bcrypt error")
 	}
 }
+
+func TestAuthService_CleanupExpiredSessions(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Should not error on empty DB
+	if err := svc.CleanupExpiredSessions(ctx); err != nil {
+		t.Fatalf("CleanupExpiredSessions failed: %v", err)
+	}
+
+	// Insert a user and an expired session, then verify cleanup
+	hash, _ := HashPassword("pw")
+	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com',?,'U')`, hash)
+	_, _ = repo.DB().Exec(
+		`INSERT INTO sessions (user_id,token,expires_at,ip_address,user_agent) VALUES (1,'hashed',datetime('now','-1 hour'),'127.0.0.1','agent')`,
+	)
+
+	if err := svc.CleanupExpiredSessions(ctx); err != nil {
+		t.Fatalf("CleanupExpiredSessions with expired session failed: %v", err)
+	}
+
+	var count int
+	_ = repo.DB().QueryRow(`SELECT COUNT(*) FROM sessions WHERE token = 'hashed'`).Scan(&count)
+	if count != 0 {
+		t.Errorf("expected expired session to be deleted, got count=%d", count)
+	}
+}
+
+func TestAuthService_PasswordReset(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	hash, _ := HashPassword("oldpass")
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "reset-user",
+		Email:        "reset@test.com",
+		PasswordHash: hash,
+		DisplayName:  "Reset User",
+	})
+
+	// CreatePasswordResetToken
+	token, err := svc.CreatePasswordResetToken(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("CreatePasswordResetToken failed: %v", err)
+	}
+	if token == "" {
+		t.Error("expected non-empty reset token")
+	}
+
+	// ValidatePasswordResetToken — valid
+	userID, err := svc.ValidatePasswordResetToken(ctx, token)
+	if err != nil {
+		t.Fatalf("ValidatePasswordResetToken failed: %v", err)
+	}
+	if userID != user.ID {
+		t.Errorf("expected user ID %d, got %d", user.ID, userID)
+	}
+
+	// Token should still be valid after validation (not consumed yet)
+	_, err = svc.ValidatePasswordResetToken(ctx, token)
+	if err != nil {
+		t.Fatalf("ValidatePasswordResetToken second call failed: %v", err)
+	}
+
+	// ResetPassword
+	if err := svc.ResetPassword(ctx, token, "newpassword"); err != nil {
+		t.Fatalf("ResetPassword failed: %v", err)
+	}
+
+	// Token should be invalidated after use
+	_, err = svc.ValidatePasswordResetToken(ctx, token)
+	if err == nil {
+		t.Error("expected error on used reset token")
+	}
+
+	// New password works
+	if _, err := svc.Authenticate(ctx, "reset-user", "newpassword"); err != nil {
+		t.Fatalf("Authenticate with new password failed: %v", err)
+	}
+}
+
+func TestAuthService_ValidatePasswordResetToken_Invalid(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Non-existent token
+	_, err := svc.ValidatePasswordResetToken(ctx, "badtoken")
+	if err == nil {
+		t.Error("expected error for non-existent token")
+	}
+}
+
+func TestAuthService_ResetPassword_BadToken(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	err := svc.ResetPassword(ctx, "invalid-token", "newpass")
+	if err == nil {
+		t.Error("expected error for invalid reset token")
+	}
+}
+
