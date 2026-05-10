@@ -37,7 +37,7 @@ func TestAuthHandler_Login(t *testing.T) {
 		SessionExpiryPublicHours: 24,
 		SessionExpiryHours:       720,
 	}
-	handler := NewAuthHandler(authService, cfg)
+	handler := NewAuthHandler(authService, cfg, repo)
 
 	e := echo.New()
 	reqBody, _ := json.Marshal(LoginRequest{
@@ -79,7 +79,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 	}()
 
 	authService := services.NewAuthService(repo)
-	handler := NewAuthHandler(authService, &config.Config{})
+	handler := NewAuthHandler(authService, &config.Config{}, repo)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
@@ -101,7 +101,7 @@ func TestAuthHandler_Me(t *testing.T) {
 		_ = repo.Close()
 	}()
 	authService := services.NewAuthService(repo)
-	handler := NewAuthHandler(authService, nil)
+	handler := NewAuthHandler(authService, nil, repo)
 	e := echo.New()
 
 	// Test authenticated
@@ -181,7 +181,7 @@ func TestAuthHandler_ChangePassword(t *testing.T) {
 	})
 
 	authSvc := services.NewAuthService(repo)
-	handler := NewAuthHandler(authSvc, &config.Config{})
+	handler := NewAuthHandler(authSvc, &config.Config{}, repo)
 	e := echo.New()
 	session := models.GetSessionByTokenRow{UserID: user.ID}
 
@@ -246,7 +246,7 @@ func TestAuthHandler_LogoutWithSession(t *testing.T) {
 
 	authSvc := services.NewAuthService(repo)
 	cfg := &config.Config{SessionExpiryHours: 720}
-	handler := NewAuthHandler(authSvc, cfg)
+	handler := NewAuthHandler(authSvc, cfg, repo)
 	e := echo.New()
 
 	// Create a real session
@@ -273,7 +273,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	}()
 
 	authSvc := services.NewAuthService(repo)
-	handler := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720, SessionExpiryPublicHours: 24})
+	handler := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720, SessionExpiryPublicHours: 24}, repo)
 	e := echo.New()
 
 	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
@@ -329,7 +329,7 @@ func TestGenerateToken_Success(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 
 	authSvc := services.NewAuthService(repo)
-	h := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720})
+	h := NewAuthHandler(authSvc, &config.Config{SessionExpiryHours: 720}, repo)
 	e := echo.New()
 
 	tok := GenerateToken()

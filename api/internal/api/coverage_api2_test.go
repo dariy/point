@@ -228,7 +228,7 @@ func TestAuthHandler_ProductionCookie(t *testing.T) {
 	_, _ = h.repo.DB().Exec(`UPDATE users SET password_hash=? WHERE id=1`, hash)
 
 	cfg := &config.Config{AppEnv: "production"}
-	authH := NewAuthHandler(h.authSvc, cfg)
+	authH := NewAuthHandler(h.authSvc, cfg, h.repo)
 	e := echo.New()
 
 	body := `{"username":"u","name":"pass1234","remember_me":false}`
@@ -261,7 +261,7 @@ func TestAuthHandler_ListSessions_WithData(t *testing.T) {
 	// Insert a session directly
 	_, _ = h.repo.DB().Exec(`INSERT INTO sessions (user_id,token,ip_address,user_agent,expires_at) VALUES (1,'tok','127.0.0.1','ua',datetime('now','+1 hour'))`)
 
-	authH := NewAuthHandler(h.authSvc, h.cfg)
+	authH := NewAuthHandler(h.authSvc, h.cfg, h.repo)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -275,7 +275,7 @@ func TestAuthHandler_ListSessions_WithData(t *testing.T) {
 func TestAuthHandler_DBErrors(t *testing.T) {
 	h := setupHandlers(t)
 	_ = h.repo.Close()
-	authH := NewAuthHandler(h.authSvc, h.cfg)
+	authH := NewAuthHandler(h.authSvc, h.cfg, h.repo)
 	e := echo.New()
 
 	t.Run("ListSessions_Error", func(t *testing.T) {
@@ -1130,7 +1130,7 @@ func TestAuthHandler_Login_SessionCreateError(t *testing.T) {
 	})
 	// Now close DB so session creation fails
 	_ = h.repo.Close()
-	ah := NewAuthHandler(h.authSvc, h.cfg)
+	ah := NewAuthHandler(h.authSvc, h.cfg, h.repo)
 	body := `{"username":"testlogin","name":"password123"}`
 	c, _ := echoCtx(http.MethodPost, "/", body)
 	err := ah.Login(c)
@@ -1188,7 +1188,7 @@ func TestAuthHandler_Logout_WithValidSession(t *testing.T) {
 	expiry := time.Now().Add(24 * time.Hour).UTC()
 	_, _ = h.authSvc.CreateSession(nil_ctx(), user.ID, "127.0.0.1", "test", expiry, token)
 
-	ah := NewAuthHandler(h.authSvc, h.cfg)
+	ah := NewAuthHandler(h.authSvc, h.cfg, h.repo)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.AddCookie(&http.Cookie{Name: "session", Value: token})
