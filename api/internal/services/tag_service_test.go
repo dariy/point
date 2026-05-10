@@ -884,3 +884,31 @@ func TestTagService_GetTagBySlug(t *testing.T) {
 		t.Error("expected error for non-existent slug")
 	}
 }
+
+func TestTagService_PageTagIDs(t *testing.T) {
+	svc, repo := setupTagService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// No _page tag — should return empty map, not error
+	ids, err := svc.PageTagIDs(ctx)
+	if err != nil {
+		t.Fatalf("PageTagIDs (no _page) failed: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(ids))
+	}
+
+	// Create _page tag and a child tag
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (200,'page','_page')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (201,'About','about')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id,child_id) VALUES (200,201)`)
+
+	ids2, err := svc.PageTagIDs(ctx)
+	if err != nil {
+		t.Fatalf("PageTagIDs failed: %v", err)
+	}
+	if !ids2[201] {
+		t.Errorf("expected tag 201 to be a page tag ID")
+	}
+}
