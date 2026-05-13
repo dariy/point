@@ -110,7 +110,7 @@ restore_local_backup() {
     log "Restoring $backup_name to $LOCAL_CONTAINER..."
     
     $DOCKER_LOCAL cp "$backup_file" "$LOCAL_CONTAINER:/tmp/$backup_name"
-    $DOCKER_LOCAL exec "$LOCAL_CONTAINER" pkill -f api-bin || true
+    $DOCKER_LOCAL exec "$LOCAL_CONTAINER" pkill -f point || true
     
     $DOCKER_LOCAL exec "$LOCAL_CONTAINER" sh -c "
         set -e
@@ -163,7 +163,7 @@ push_prod_backup() {
     
     scp "$backup_file" "$PROD_HOST:/tmp/$backup_name"
     ssh "$PROD_HOST" "$DOCKER_PROD cp /tmp/$backup_name $PROD_CONTAINER:/tmp/$backup_name"
-    ssh "$PROD_HOST" "$DOCKER_PROD exec $PROD_CONTAINER pkill -f api-bin || true"
+    ssh "$PROD_HOST" "$DOCKER_PROD exec $PROD_CONTAINER pkill -f point || true"
     
     ssh "$PROD_HOST" "$DOCKER_PROD exec $PROD_CONTAINER sh -c \"
         set -e
