@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Move to the build directory where this script is located
 cd "$(dirname "$0")"
+cd "../build"
 
 # Check for --clean parameter
 PULL_FLAG="--pull=missing"
@@ -12,7 +13,8 @@ if [ "${1:-}" == "--clean" ]; then
 fi
 
 # Generate timestamp-based version for development builds
-export DEV_BUILD_VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+PACKAGE_VERSION=$(grep '"version":' ../package.json | head -n 1 | cut -d'"' -f4)
+export DEV_BUILD_VERSION="${PACKAGE_VERSION}-dev-$(date +%Y%m%d-%H%M%S)"
 
 echo "Building with version: $DEV_BUILD_VERSION"
 
@@ -58,12 +60,25 @@ podman rm -f point 2>/dev/null || true
 # Pre-create data dirs as host user so --userns=keep-id containers can write
 mkdir -p ../data/media/originals ../data/media/thumbnails ../data/logs ../data/backups
 
+# Optionally mount MEDIA_IMPORT_PATH as a read-only volume when set in .env
+_MEDIA_PATH=$(grep -E '^MEDIA_IMPORT_PATH=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')
+MEDIA_IMPORT_ARGS=()
+if [ -n "$_MEDIA_PATH" ]; then
+    MEDIA_IMPORT_ARGS=(-v "${_MEDIA_PATH}:/import:ro,z" -e MEDIA_IMPORT_PATH=/import)
+fi
+unset _MEDIA_PATH
+
+# Optionally set host port mapping via DEPLOY_PORT in .env
+_HOST_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+HOST_PORT=${_HOST_PORT:-8000}
+unset _HOST_PORT
+
 podman run -d \
     --name point \
     --restart unless-stopped \
     --userns=keep-id \
-    -p 8000:8000 \
-    -v ../data:/data:z \
+    -p "${HOST_PORT}:8000" \
+    -v ../data:/data:z,U \
     --env-file .env \
     -e TZ=UTC \
     -e DATABASE_URL=/data/point.db \
@@ -71,6 +86,7 @@ podman run -d \
     -e FRONTEND_DIR=/app/frontend \
     -e PORT=8000 \
     -e HOST=0.0.0.0 \
+    "${MEDIA_IMPORT_ARGS[@]}" \
     point:dev
 
 # Clean up dangling images to save space

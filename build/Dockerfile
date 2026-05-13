@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-s -w -X main.Version=${BUILD_VERSION}" \
-    -o api-bin cmd/api/main.go
+    -o point cmd/api/main.go
 
 # Build the path migration utility
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -59,7 +59,7 @@ RUN apk add --no-cache \
     && chown -R appuser:appuser /app /data
 
 # Copy the binaries from the builder stage
-COPY --chown=appuser:appuser --from=builder /app/api-bin .
+COPY --chown=appuser:appuser --from=builder /app/point .
 COPY --chown=appuser:appuser --from=builder /app/migrate-paths .
 # Copy data.yml
 COPY --chown=appuser:appuser --from=builder /app/data.yml .
@@ -76,7 +76,7 @@ ENV FRONTEND_DIR=/app/frontend
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
-COPY build/entrypoint.sh /entrypoint.sh
+COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
@@ -88,4 +88,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Start as root so the entrypoint can create /data subdirs on volume mounts,
 # then drop to appuser via su-exec before exec'ing the binary.
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["./api-bin"]
+CMD ["./point"]

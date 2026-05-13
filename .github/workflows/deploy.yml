@@ -100,12 +100,14 @@ jobs:
       - name: Generate build version
         id: version
         run: |
-          # Use git tag if available, otherwise use short SHA with timestamp
+          # Use git tag if available, otherwise use version from package.json + short SHA + timestamp
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VERSION="${{ github.ref_name }}"
           else
-            VERSION="${{ github.sha }}"
-            VERSION="${VERSION:0:7}-$(date +%Y%m%d-%H%M%S)"
+            BASE_VERSION=$(grep '"version":' package.json | head -n 1 | cut -d'"' -f4)
+            SHA_SHORT="${GITHUB_SHA:0:7}"
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            VERSION="${BASE_VERSION}-${SHA_SHORT}-${TIMESTAMP}"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Build version: ${VERSION}"
@@ -136,6 +138,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
       - name: Copy docker-compose files to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -156,12 +163,13 @@ jobs:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET,GEMINI_API_KEY
+          envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET,GEMINI_API_KEY,DEPLOY_PORT
           script: |
             cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
 
@@ -172,11 +180,14 @@ jobs:
             if [ -f build/.env ]; then
               sed -i '/^APP_VERSION=/d' build/.env
               sed -i '/^IMAGE_TAG=/d' build/.env
+              sed -i '/^DEPLOY_PORT=/d' build/.env
               echo "APP_VERSION=${BUILD_VERSION}" >> build/.env
               echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> build/.env
+              [ -n "${DEPLOY_PORT}" ] && echo "DEPLOY_PORT=${DEPLOY_PORT}" >> build/.env
             else
               echo "APP_VERSION=${BUILD_VERSION}" > build/.env
               echo "IMAGE_TAG=${IMAGE_TAG:0:7}" >> build/.env
+              [ -n "${DEPLOY_PORT}" ] && echo "DEPLOY_PORT=${DEPLOY_PORT}" >> build/.env
             fi
 
             # Add / update sensitive secrets in build/.env (do NOT print them)
@@ -256,14 +267,21 @@ jobs:
 
       - name: External Health Check
         continue-on-error: true
+        env:
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
           echo "Verifying external access..."
-          if curl -f -s -m 10 https://${{ secrets.DEPLOY_HOST }}/health > /dev/null 2>&1; then
+          PORT_SUFFIX=""
+          if [ -n "$DEPLOY_PORT" ] && [ "$DEPLOY_PORT" != "80" ] && [ "$DEPLOY_PORT" != "443" ]; then
+            PORT_SUFFIX=":$DEPLOY_PORT"
+          fi
+
+          if curl -f -s -m 10 "https://${{ secrets.DEPLOY_HOST }}$PORT_SUFFIX/health" > /dev/null 2>&1; then
             echo "HTTPS health check passed!"
-          elif curl -f -s -m 10 http://${{ secrets.DEPLOY_HOST }}/health > /dev/null 2>&1; then
+          elif curl -f -s -m 10 "http://${{ secrets.DEPLOY_HOST }}$PORT_SUFFIX/health" > /dev/null 2>&1; then
             echo "HTTP health check passed!"
           else
-            echo "Warning: External health check failed (server may not have public access configured)"
+            echo "Warning: External health check failed (server may not have public access configured on port ${DEPLOY_PORT:-80/443})"
           fi
 
       - name: Notify Success

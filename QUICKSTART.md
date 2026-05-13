@@ -71,7 +71,7 @@ You can customize Point by editing the `.env` file.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `APP_PORT` | `8000` | The host port Point listens on |
+| `DEPLOY_PORT` | `8000` | The host port Point listens on |
 | `DATA_PATH` | `./data` | Directory where the database, photos, and backups are stored |
 | `PHOTO_LIBRARY_PATH` | (None) | Path to your existing photo library (mounted read-only) |
 | `SECRET_KEY` | (Auto) | Secret key for signing sessions (generated automatically if blank) |
@@ -100,8 +100,8 @@ Log in using the username and password you created during the first-run setup.
 
 ## Troubleshooting
 
-1. **Port already in use:** Change `APP_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
-2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `APP_PORT`.
+1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
+2. **Cannot reach Point from another machine:** Ensure your server's firewall allows traffic on the configured `DEPLOY_PORT`.
 3. **Forgot your password:** There is currently no self-service reset. To reset manually, run `docker exec -it point /bin/sh` and use the internal CLI tool, or check [GitHub Issues](https://github.com/dariy/point/issues) for guidance.
 4. **Container will not start:** Check the application logs for errors by running `docker logs point`.
 

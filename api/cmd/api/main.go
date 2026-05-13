@@ -26,6 +26,12 @@ import (
 // Version is set at build time via -ldflags="-X main.Version=..."
 var Version = "dev"
 
+func init() {
+	if Version == "dev" {
+		Version = "dev-" + time.Now().Format("20060102-150405")
+	}
+}
+
 // resolveJSDir returns the directory to serve under /assets/js.
 // It prefers the pre-built bundle directory (frontend/js/) over the raw
 // source directory (frontend/src/), enabling zero-config dev/prod switching.
@@ -114,7 +120,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'sha256-+20twPiohHfGLZsSvahDBaYeh7l+te5yNz5UDCAfqsA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 	// Extra security headers not covered by middleware.Secure
@@ -380,7 +386,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
-	if cfg.AppVersion == "" {
+	if cfg.AppVersion == "" || cfg.AppVersion == "dev" {
 		cfg.AppVersion = Version
 	}
 

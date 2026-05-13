@@ -158,8 +158,22 @@ body {
     padding: var(--spacing-md) var(--spacing-lg);
     border-top: var(--border-width) solid var(--sidebar-border);
     display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.sidebar-version {
+    font-size: var(--font-size-xs);
+    color: var(--sidebar-text);
+    opacity: 0.5;
+    font-family: var(--font-mono);
+}
+
+.sidebar-footer-actions {
+    display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--spacing-md);
 }
 
 .user-info {

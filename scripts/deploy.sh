@@ -99,7 +99,7 @@ run_migrations() {
     log_info "Running database migrations..."
 
     # Database initialization is handled by the application or requires manual step
-    # docker compose -f "$COMPOSE_FILE" exec -T point ./api-bin -migrate || true
+    # docker compose -f "$COMPOSE_FILE" exec -T point ./point -migrate || true
 
     log_success "Database migrations skipped (handled by app)"
 }
