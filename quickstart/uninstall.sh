@@ -107,7 +107,7 @@ NATIVE_DATA_DIR="${DATA_DIR_ARG:-/var/lib/point}"
 if systemctl list-unit-files 2>/dev/null | grep -q "^point.service" || \
    [ -d "$NATIVE_INSTALL_DIR" ] || \
    [ -f "/etc/systemd/system/point.service" ] || \
-   pgrep -f api-bin >/dev/null 2>&1 || \
+   pgrep -f "[ /]point$" >/dev/null 2>&1 || \
    (command -v lsof >/dev/null 2>&1 && lsof -i :8000 >/dev/null 2>&1); then
     HAS_NATIVE=true
     say "Found Native installation"
@@ -187,15 +187,15 @@ uninstall_native() {
     local dir="${INSTALL_DIR_ARG:-/opt/point}"
     local datadir="${DATA_DIR_ARG:-/var/lib/point}"
 
-    # Stop any running Point / api-bin processes
-    if pgrep -f api-bin >/dev/null 2>&1; then
-        say "Stopping running api-bin process..."
-        pkill -f api-bin || true
+    # Stop any running Point processes
+    if pgrep -f "[ /]point$" >/dev/null 2>&1; then
+        say "Stopping running point process..."
+        pkill -f "[ /]point$" || true
         sleep 1
     fi
     if command -v lsof >/dev/null 2>&1; then
         for pid in $(lsof -t -i :8000 2>/dev/null || true); do
-            if ps -p "$pid" -o comm= 2>/dev/null | grep -qE "api-bin|point"; then
+            if ps -p "$pid" -o comm= 2>/dev/null | grep -qE "point"; then
                 say "Stopping Point process on port 8000 (PID $pid)..."
                 kill "$pid" 2>/dev/null || true
             fi

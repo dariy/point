@@ -368,9 +368,9 @@ install_native() {
   say "Installing to ${INSTALL_DIR}..."
   mkdir -p "$INSTALL_DIR" "$DATA_DIR"
 
-  if [ -f "${project_root}/api-bin" ]; then
-    say "Found local api-bin, copying..."
-    cp "${project_root}/api-bin" "${INSTALL_DIR}/point"
+  if [ -f "${project_root}/point" ]; then
+    say "Found local point binary, copying..."
+    cp "${project_root}/point" "${INSTALL_DIR}/point"
     if [ -d "${project_root}/frontend" ]; then
       cp -r "${project_root}/frontend" "${INSTALL_DIR}/"
     fi
