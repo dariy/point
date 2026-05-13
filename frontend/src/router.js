@@ -204,6 +204,7 @@ class Router {
     if (pathname.startsWith('/light') || pathname === this._setupPath) {
       try {
         const res = await fetch('/api/setup/status', { credentials: 'include' });
+        if (!res.ok) throw new Error('unavailable');
         const data = await res.json();
         if (!data.setup_complete && pathname !== this._setupPath) {
           this.navigate(this._setupPath, { replace: true });
