@@ -17,6 +17,7 @@ import { router } from './router.js';
 import { getMe } from './api/auth.js';
 import { getPublicSettings } from './api/settings.js';
 import { getNavMenu } from './api/pages.js';
+import { getVersion } from './api/system.js';
 import { normalizeSettings } from './utils/helpers.js';
 import { ToastContainer } from './components/shared/Toast.js';
 import { NotificationLogButton } from './components/shared/NotificationLogButton.js';
@@ -186,6 +187,14 @@ async function bootstrap() {
     // Offline or server unreachable — proceed as unauthenticated.
   }
   store.set('user', user);
+
+  // 3.1 Fetch version info (non-blocking)
+  getVersion().then(ver => {
+    store.set('version', ver.current);
+  }).catch(() => {
+    // If it fails, we can try to fall back to the stamped version in index.html if we want,
+    // but the API is more reliable for the actual running binary.
+  });
 
   // 3.5 Load auth-scoped nav tag hierarchy so all pages have it from first render.
   try {
