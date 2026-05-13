@@ -270,6 +270,13 @@ async function serveFromOfflineStore(request) {
 
     // 1. /api/pages/home
     if (path === '/api/pages/home') {
+      const lastSync = await idbGet('meta', 'last_sync');
+      if (!lastSync) {
+        return new Response(
+          JSON.stringify({ message: 'The site is temporarily unavailable. Please try again later.' }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
       const posts = await idbGet('posts');
       
       const tag_cloud = allTags
