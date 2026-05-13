@@ -15,7 +15,7 @@ require (
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	golang.org/x/crypto v0.50.0
 	google.golang.org/api v0.278.0
-	google.golang.org/genai v1.46.0
+	google.golang.org/genai v1.56.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.46.1
 )
