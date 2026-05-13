@@ -139,24 +139,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Connect to Tailscale
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Prepare remote directories
+        run: |
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "mkdir -p ${{ secrets.DEPLOY_PATH || '/opt/point' }}/build ${{ secrets.DEPLOY_PATH || '/opt/point' }}/data"
+
       - name: Copy docker-compose files to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          source: "build/docker-compose.prod.yml"
-          target: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
-          overwrite: true
-          strip_components: 0
+        run: |
+          scp -o StrictHostKeyChecking=no -P ${{ secrets.DEPLOY_SSH_PORT || 22 }} build/docker-compose.prod.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH || '/opt/point' }}/build/
 
       - name: Deploy to Production
-        uses: appleboy/ssh-action@v1.0.3
         env:
           BUILD_VERSION: ${{ needs.build.outputs.version }}
           IMAGE_TAG: ${{ github.sha }}
@@ -164,17 +165,18 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: BUILD_VERSION,IMAGE_TAG,SECRET_KEY,SESSION_SECRET,GEMINI_API_KEY,DEPLOY_PORT
-          script: |
-            cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash -s" << 'EOF'
+            export BUILD_VERSION="${{ env.BUILD_VERSION }}"
+            export IMAGE_TAG="${{ env.IMAGE_TAG }}"
+            export SECRET_KEY="${{ env.SECRET_KEY }}"
+            export SESSION_SECRET="${{ env.SESSION_SECRET }}"
+            export GEMINI_API_KEY="${{ env.GEMINI_API_KEY }}"
+            export DEPLOY_PORT="${{ env.DEPLOY_PORT }}"
+            export GHCR_TOKEN="${{ env.GHCR_TOKEN }}"
 
-            # Create build and data directories if they don't exist (since strip_components: 0 is used)
-            mkdir -p build data
+            cd ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/point' }}
 
             # Set version and image tag in .env file (now in build/ directory)
             if [ -f build/.env ]; then
@@ -201,7 +203,7 @@ jobs:
             chmod 600 build/.env
 
             # Login to GitHub Container Registry
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u ${{ secrets.GHCR_USER != '' && secrets.GHCR_USER || github.repository_owner }} --password-stdin
 
             # Clean up Docker resources to free disk space
             echo "Cleaning up Docker resources..."
@@ -215,8 +217,8 @@ jobs:
 
             # Pull specific Docker image by SHA tag (first 7 chars of commit SHA)
             echo "Pulling image with tag: ${IMAGE_TAG:0:7}"
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7}
-            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            docker pull ghcr.io/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7}
+            docker tag ghcr.io/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7} ghcr.io/${{ env.IMAGE_NAME }}:latest
 
             # Export truncated IMAGE_TAG to environment
             export IMAGE_TAG=${IMAGE_TAG:0:7}
@@ -235,7 +237,7 @@ jobs:
 
             if [[ ! "${DEPLOYED_IMAGE}" =~ ${IMAGE_TAG:0:7} ]]; then
               echo "ERROR: Deployed image tag does not match expected tag!"
-              echo "Expected: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7}"
+              echo "Expected: ghcr.io/${{ env.IMAGE_NAME }}:${IMAGE_TAG:0:7}"
               echo "Got: ${DEPLOYED_IMAGE}"
               exit 1
             fi
@@ -264,6 +266,7 @@ jobs:
             echo "Container status:"
             docker inspect point-prod --format='{{.State.Status}} (ExitCode: {{.State.ExitCode}})'
             exit 1
+          EOF
 
       - name: External Health Check
         continue-on-error: true
