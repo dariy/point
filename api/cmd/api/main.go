@@ -160,10 +160,6 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	// ── Preview route (public, but token-gated) ────────────────────────────────
 	e.GET("/preview/:token", postHandler.GetPostByPreviewToken)
 
-	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
-	// Auth-gated: unauthenticated clients see 404 for non-public media.
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(svcs.Auth))
-
 	// ── Setup Routes (unauthenticated — first-run wizard) ──────────────────────
 	e.GET("/api/setup/status", setupHandler.SetupStatus)
 	e.POST("/api/setup", setupHandler.Setup)
@@ -282,6 +278,11 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	timelineGroup := e.Group("/api/timeline")
 	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth))
 	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth))
+
+	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
+	// Auth-gated: unauthenticated clients see 404 for non-public media.
+	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(svcs.Auth))
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir

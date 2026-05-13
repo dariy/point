@@ -8,8 +8,8 @@ set -u  # Exit on undefined variable
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
-ENV_FILE="${PROJECT_DIR}/.env"
+COMPOSE_FILE="${PROJECT_DIR}/build/docker-compose.prod.yml"
+ENV_FILE="${PROJECT_DIR}/build/.env"
 
 # Colors for output
 RED='\033[0;31m'
