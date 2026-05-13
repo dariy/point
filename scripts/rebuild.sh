@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Move to the build directory where this script is located
 cd "$(dirname "$0")"
+cd "../build"
 
 # Check for --clean parameter
 PULL_FLAG="--pull=missing"

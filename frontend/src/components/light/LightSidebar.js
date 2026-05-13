@@ -33,6 +33,7 @@ const NAV_ITEMS = [
 export class LightSidebar extends Component {
   render() {
     const { currentPath = '', publicUrl = '/' } = this.props;
+    const version = store.get('version') || '';
 
     const navItems = NAV_ITEMS.map(({ href, label, icon }) => {
       const isActive = href === '/light'
@@ -66,18 +67,29 @@ export class LightSidebar extends Component {
           <ul>${navItems}</ul>
         </nav>
         <div class="sidebar-footer">
-          <div class="user-info">
-            <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
+          <div class="sidebar-version">${escapeHtml(version)}</div>
+          <div class="sidebar-footer-actions">
+            <div class="user-info">
+              <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
+            </div>
+            <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button">
+              <span class="icon-sun">${SUN_SVG}</span>
+              <span class="icon-moon">${MOON_SVG}</span>
+            </button>
           </div>
-          <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button">
-            <span class="icon-sun">${SUN_SVG}</span>
-            <span class="icon-moon">${MOON_SVG}</span>
-          </button>
         </div>
       </aside>`;
   }
 
   afterRender() {
+    if (!this._subscribedVersion) {
+      this.subscribeStore(store, 'version', (v) => {
+        const el = this.$('.sidebar-version');
+        if (el) el.textContent = v;
+      });
+      this._subscribedVersion = true;
+    }
+
     const btn = this.$('#logout-btn');
     if (btn && this.props.onLogout) {
       btn.addEventListener('click', this.props.onLogout);

@@ -76,7 +76,7 @@ ENV FRONTEND_DIR=/app/frontend
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
-COPY build/entrypoint.sh /entrypoint.sh
+COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
