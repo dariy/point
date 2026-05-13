@@ -13,7 +13,8 @@ if [ "${1:-}" == "--clean" ]; then
 fi
 
 # Generate timestamp-based version for development builds
-export DEV_BUILD_VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+PACKAGE_VERSION=$(grep '"version":' ../package.json | head -n 1 | cut -d'"' -f4)
+export DEV_BUILD_VERSION="${PACKAGE_VERSION}-dev-$(date +%Y%m%d-%H%M%S)"
 
 echo "Building with version: $DEV_BUILD_VERSION"
 
@@ -67,12 +68,17 @@ if [ -n "$_MEDIA_PATH" ]; then
 fi
 unset _MEDIA_PATH
 
+# Optionally set host port mapping via DEPLOY_PORT in .env
+_HOST_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+HOST_PORT=${_HOST_PORT:-8000}
+unset _HOST_PORT
+
 podman run -d \
     --name point \
     --restart unless-stopped \
     --userns=keep-id \
-    -p 8000:8000 \
-    -v ../data:/data:z \
+    -p "${HOST_PORT}:8000" \
+    -v ../data:/data:z,U \
     --env-file .env \
     -e TZ=UTC \
     -e DATABASE_URL=/data/point.db \
