@@ -42,24 +42,22 @@ export default class SetupPage extends Component {
                 <label class="form-label" for="author_name">Your Name</label>
                 <input type="text" id="author_name" name="author_name" class="form-input"
                        value="${escapeHtml(author_name)}" required placeholder="Jane Doe"
-                       autocomplete="name"
+                       autocomplete="off"
                        ${loading ? 'disabled' : ''}>
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="email">
-                  Email Address
-                  <span class="form-help" style="display:inline; margin-top:0; margin-left:var(--spacing-xs);">(used for password reset)</span>
-                </label>
-                <input type="email" id="email" name="email" class="form-input"
+                <label class="form-label" for="email">Email Address</label>
+                <input type="text" id="email" name="email" class="form-input"
                        value="${escapeHtml(email)}" placeholder="you@example.com"
-                       autocomplete="email"
+                       autocomplete="off"
                        ${loading ? 'disabled' : ''}>
+                <span class="form-help">(used for password reset)</span>
               </div>
 
               <div class="form-group">
                 <label class="form-label" for="password">Password</label>
-                <input type="password" id="password" name="password"
+                <input type="password" id="password" name="password" class="form-input"
                        required placeholder="Minimum 8 characters"
                        autocomplete="new-password"
                        ${loading ? 'disabled' : ''}>
@@ -67,7 +65,7 @@ export default class SetupPage extends Component {
 
               <div class="form-group">
                 <label class="form-label" for="confirm_password">Confirm Password</label>
-                <input type="password" id="confirm_password" name="confirm_password"
+                <input type="password" id="confirm_password" name="confirm_password" class="form-input"
                        required placeholder="Repeat your password"
                        autocomplete="new-password"
                        ${loading ? 'disabled' : ''}>
