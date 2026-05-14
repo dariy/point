@@ -45,13 +45,13 @@ jobs:
       - name: Build CSS bundles
         run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
 
-      - name: Run tests
+      - name: Run Go tests
         run: |
           cd api
           go test ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: github.event_name == 'push'
         with:
           file: api/coverage.txt
@@ -113,7 +113,7 @@ jobs:
           echo "Build version: ${VERSION}"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: build/Dockerfile
