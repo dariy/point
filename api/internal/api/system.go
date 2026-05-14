@@ -133,7 +133,7 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		"total_media":       stats.MediaCount,
 		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
 		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
-		"import_configured": h.settingsService.SecretIsSet(ctx, "media_import_path"),
+		"import_configured": h.settingsService.SecretIsSet(ctx, "photo_library_path"),
 	})
 }
 
@@ -306,10 +306,10 @@ var importableExtensions = map[string]bool{
 func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	importPath, _ := h.settingsService.GetSecret(ctx, "media_import_path")
+	importPath, _ := h.settingsService.GetSecret(ctx, "photo_library_path")
 	if importPath == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"detail": "media_import_path not configured",
+			"detail": "photo_library_path not configured",
 		})
 	}
 

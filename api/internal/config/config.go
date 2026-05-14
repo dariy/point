@@ -30,7 +30,7 @@ type Config struct {
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
 	ThemesPath               string `mapstructure:"THEMES_PATH"`
 	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
-	MediaImportPath          string `mapstructure:"MEDIA_IMPORT_PATH"`
+	PhotoLibraryPath         string `mapstructure:"PHOTO_LIBRARY_PATH"`
 
 	// SMTP for password reset emails
 	SMTPHost     string `mapstructure:"SMTP_HOST"`
@@ -67,7 +67,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("THUMBNAIL_HEIGHT", 300)
 	v.SetDefault("JPEG_QUALITY", 85)
 	v.SetDefault("GEMINI_API_KEY", "")
-	v.SetDefault("MEDIA_IMPORT_PATH", "")
+	v.SetDefault("PHOTO_LIBRARY_PATH", "")
 	v.SetDefault("SMTP_HOST", "")
 	v.SetDefault("SMTP_PORT", 587)
 	v.SetDefault("SMTP_USERNAME", "")

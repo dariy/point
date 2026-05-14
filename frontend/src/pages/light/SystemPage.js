@@ -132,7 +132,7 @@ export default class SystemPage extends Component {
                       <h4>Scan for New Photos</h4>
                       ${importConfigured
                         ? `<p class="text-muted">Photo library import is configured.</p>`
-                        : `<p class="text-muted">No import path configured. Set <code>MEDIA_IMPORT_PATH</code> in the server environment.</p>`
+                        : `<p class="text-muted">No import path configured. Set <code>PHOTO_LIBRARY_PATH</code> in the server environment.</p>`
                       }
                       ${scanningMedia ? `<p class="text-muted" style="margin-top:var(--spacing-sm)">Scanning library, please wait&hellip;</p>` : ''}
                       ${scanResult ? this._renderScanResult(scanResult) : ''}

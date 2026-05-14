@@ -65,7 +65,7 @@ func (h *SettingsHandler) GetSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	all["gemini_api_key_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "gemini_api_key"))
-	all["media_import_path_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "media_import_path"))
+	all["photo_library_path_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "photo_library_path"))
 	return c.JSON(http.StatusOK, all)
 }
 
@@ -103,6 +103,6 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	all["gemini_api_key_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "gemini_api_key"))
-	all["media_import_path_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "media_import_path"))
+	all["photo_library_path_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "photo_library_path"))
 	return c.JSON(http.StatusOK, all)
 }

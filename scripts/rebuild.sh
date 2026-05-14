@@ -60,13 +60,13 @@ podman rm -f point 2>/dev/null || true
 # Pre-create data dirs as host user so --userns=keep-id containers can write
 mkdir -p ../data/media/originals ../data/media/thumbnails ../data/logs ../data/backups
 
-# Optionally mount MEDIA_IMPORT_PATH as a read-only volume when set in .env
-_MEDIA_PATH=$(grep -E '^MEDIA_IMPORT_PATH=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')
-MEDIA_IMPORT_ARGS=()
-if [ -n "$_MEDIA_PATH" ]; then
-    MEDIA_IMPORT_ARGS=(-v "${_MEDIA_PATH}:/import:ro,z" -e MEDIA_IMPORT_PATH=/import)
+# Optionally mount PHOTO_LIBRARY_PATH as a read-only volume when set in .env
+_PHOTO_PATH=$(grep -E '^PHOTO_LIBRARY_PATH=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')
+PHOTO_IMPORT_ARGS=()
+if [ -n "$_PHOTO_PATH" ]; then
+    PHOTO_IMPORT_ARGS=(-v "${_PHOTO_PATH}:/import:ro,z" -e PHOTO_LIBRARY_PATH=/import)
 fi
-unset _MEDIA_PATH
+unset _PHOTO_PATH
 
 # Optionally set host port mapping via DEPLOY_PORT in .env
 _HOST_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
@@ -86,7 +86,7 @@ podman run -d \
     -e FRONTEND_DIR=/app/frontend \
     -e PORT=8000 \
     -e HOST=0.0.0.0 \
-    "${MEDIA_IMPORT_ARGS[@]}" \
+    "${PHOTO_IMPORT_ARGS[@]}" \
     point:dev
 
 # Clean up dangling images to save space
