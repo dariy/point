@@ -511,9 +511,9 @@ func main() {
 			 SELECT key, value, updated_at FROM blog_settings WHERE key = '_secret_key'`,
 		},
 		{
-			"migrate_media_import_path_to_secrets",
+			"migrate_photo_library_path_to_secrets",
 			`INSERT OR IGNORE INTO blog_secrets (key, value, updated_at)
-			 SELECT key, value, updated_at FROM blog_settings WHERE key = 'media_import_path'`,
+			 SELECT 'photo_library_path', value, updated_at FROM blog_settings WHERE key = 'media_import_path'`,
 		},
 		{
 			"cleanup_settings_secrets_keys",
@@ -605,9 +605,9 @@ func main() {
 			log.Printf("warning: failed to sync gemini_api_key to secrets: %v", err)
 		}
 	}
-	if cfg.MediaImportPath != "" {
-		if err := svcs.Settings.SetSecret(ctx, "media_import_path", cfg.MediaImportPath); err != nil {
-			log.Printf("warning: failed to sync media_import_path to secrets: %v", err)
+	if cfg.PhotoLibraryPath != "" {
+		if err := svcs.Settings.SetSecret(ctx, "photo_library_path", cfg.PhotoLibraryPath); err != nil {
+			log.Printf("warning: failed to sync photo_library_path to secrets: %v", err)
 		}
 	}
 
