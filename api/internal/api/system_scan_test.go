@@ -167,7 +167,7 @@ func TestScanMediaImport_PathNotExist(t *testing.T) {
 	tmpDir2 := t.TempDir()
 	systemSvc2 := services.NewSystemService(repo, tmpDir2)
 	cacheSvc2 := services.NewCacheService(tmpDir2)
-	_ = settingsSvc.SetSecret(ctx, "media_import_path", "/nonexistent/does/not/exist")
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", "/nonexistent/does/not/exist")
 	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, systemSvc2, cacheSvc2, tmpDir2, "1.0")
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -205,7 +205,7 @@ func TestScanMediaImport_WithFiles(t *testing.T) {
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
 	ctx := context.Background()
-	_ = settingsSvc.SetSecret(ctx, "media_import_path", importDir)
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", importDir)
 	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.2.3")
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)

@@ -44,7 +44,7 @@ The app is configured via environment variables (or a `.env` file in the working
 | `DATABASE_URL` | `sqlite:./data/point.db` | SQLite path |
 | `STORAGE_PATH` | `./data` | Media file root |
 | `GEMINI_API_KEY` | *(empty)* | Google Gemini key for AI media analysis |
-| `MEDIA_IMPORT_PATH` | *(empty)* | Path to a read-only photo library to import from |
+| `PHOTO_LIBRARY_PATH` | *(empty)* | Path to a read-only photo library to import from |
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
 | `THUMBNAIL_WIDTH/HEIGHT` | `400/300` | Thumbnail dimensions |
@@ -84,7 +84,7 @@ cd build && ./rebuild.sh        # build + restart container
 api/          Go backend (Echo v4, sqlc, SQLite)
 frontend/     Vanilla JS SPA (no build step for development)
 build/        Dockerfile, compose file, rebuild script
-scripts/      Test runner, CSS bundler, deploy, backup, lint, setup utilities
+scripts/      Operational scripts (deploy, backup, setup, lint, tests, CSS bundling)
 quickstart/   Quickstart docker-compose and install script
 data/         Runtime data (DB + media) — gitignored
 ```
