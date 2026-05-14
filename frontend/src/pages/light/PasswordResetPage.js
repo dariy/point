@@ -39,9 +39,9 @@ export default class PasswordResetPage extends Component {
             <form id="pss-request-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="pss-email">Email Address</label>
-                <input type="email" id="pss-email" name="email" class="form-input"
+                <input type="text" id="pss-email" name="email" class="form-input"
                        required placeholder="you@example.com"
-                       autocomplete="email"
+                       autocomplete="off"
                        ${loading ? 'disabled' : ''}>
               </div>
               <div class="setup-submit-wrapper">
@@ -79,16 +79,16 @@ export default class PasswordResetPage extends Component {
             <form id="pss-reset-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="pss-password">New Password</label>
-                <input type="password" id="pss-password" name="password"
+                <input type="password" id="pss-password" name="password" class="form-input"
                        required placeholder="Minimum 8 characters"
-                       autocomplete="new-password"
+                       autocomplete="off"
                        ${loading ? 'disabled' : ''}>
               </div>
               <div class="form-group">
                 <label class="form-label" for="pss-confirm">Confirm Password</label>
-                <input type="password" id="pss-confirm" name="confirm"
+                <input type="password" id="pss-confirm" name="confirm" class="form-input"
                        required placeholder="Repeat your password"
-                       autocomplete="new-password"
+                       autocomplete="off"
                        ${loading ? 'disabled' : ''}>
               </div>
               <div class="setup-submit-wrapper">
