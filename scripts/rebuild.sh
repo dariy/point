@@ -1,9 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# Move to the build directory where this script is located
-cd "$(dirname "$0")"
-cd "../build"
+# Get the absolute path to the project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Move to the build directory
+cd "$PROJECT_ROOT/build"
 
 # Check for --clean parameter
 PULL_FLAG="--pull=missing"
@@ -73,9 +76,11 @@ _HOST_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -
 HOST_PORT=${_HOST_PORT:-8000}
 unset _HOST_PORT
 
+echo "Starting container..."
 podman run -d \
     --name point \
     --restart unless-stopped \
+    --user "$(id -u):$(id -g)" \
     --userns=keep-id \
     -p "${HOST_PORT}:8000" \
     -v ../data:/data:z,U \

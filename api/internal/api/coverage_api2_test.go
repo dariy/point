@@ -920,7 +920,7 @@ func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
 
 func setupPagesHandler(t *testing.T) (*PagesHandler, *testHandlers) {
 	h := setupHandlers(t)
-	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.settingsSvc, h.cacheSvc)
+	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.mediaSvc, h.settingsSvc, h.cacheSvc)
 	return ph, h
 }
 

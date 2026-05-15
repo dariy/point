@@ -15,7 +15,7 @@ import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js'
 const SETTING_GROUPS = [
   {
     title: 'General',
-    keys: ['blog_title', 'blog_subtitle', 'author_name', 'about_post_id']
+    keys: ['blog_title', 'blog_subtitle', 'author_name', 'about_post_id', 'home_page_post_id']
   },
   {
     title: 'Display',
@@ -97,13 +97,15 @@ export default class SettingsPage extends Component {
       let input = '';
       let isToggle = false;
 
-      if (key === 'about_post_id') {
-        const options = posts.map(p => {
-          const slug = escapeHtml(p.slug);
-          const title = escapeHtml(p.title || p.slug);
-          const selected = p.slug === value ? ' selected' : '';
-          return `<option value="${slug}"${selected}>${title}</option>`;
-        }).join('');
+      if (key === 'about_post_id' || key === 'home_page_post_id') {
+        const options = posts
+          .filter(p => p.type === 'page')
+          .map(p => {
+            const slug = escapeHtml(p.slug);
+            const title = escapeHtml(p.title || p.slug);
+            const selected = p.slug === value ? ' selected' : '';
+            return `<option value="${slug}"${selected}>${title}</option>`;
+          }).join('');
         const previewLink = value
           ? `<a href="/post/${escapeHtml(String(value))}" target="_blank" class="settings-preview-link">Preview ↗</a>`
           : '';
@@ -233,11 +235,16 @@ export default class SettingsPage extends Component {
       this._handleSave();
     });
 
-    const aboutSelect = this.$('select[name="about_post_id"]');
-    if (aboutSelect) {
-      aboutSelect.addEventListener('change', () => {
-        const slug = aboutSelect.value;
-        const wrapper = aboutSelect.closest('.settings-input-with-preview');
+    this._wirePostSelectPreview('about_post_id');
+    this._wirePostSelectPreview('home_page_post_id');
+  }
+
+  _wirePostSelectPreview(name) {
+    const select = this.$(`select[name="${name}"]`);
+    if (select) {
+      select.addEventListener('change', () => {
+        const slug = select.value;
+        const wrapper = select.closest('.settings-input-with-preview');
         let link = wrapper?.querySelector('.settings-preview-link');
         if (slug) {
           if (link) {
@@ -273,7 +280,7 @@ export default class SettingsPage extends Component {
     try {
       const [settings, postsResult] = await Promise.all([
         getAllSettings(),
-        listPosts({ status: 'page', per_page: 200 }),
+        listPosts({ per_page: 500 }),
       ]);
       this.setState({
         loading: false,

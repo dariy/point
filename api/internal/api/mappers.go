@@ -101,6 +101,7 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"id":                  p.ID,
 		"title":               p.Title,
 		"slug":                p.Slug,
+		"type":                getPostType(p.Status, tags),
 		"content":             p.Content,
 		"excerpt":             nullString(p.Excerpt),
 		"formatter":           p.Formatter,
@@ -115,6 +116,36 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"meta_description":    nullString(p.MetaDescription),
 		"tags":                tagObjs,
 	}
+}
+
+func getPostType(status string, tags []repository.PostTagInfo) string {
+	if strings.EqualFold(status, "page") {
+		return "page"
+	}
+	for _, t := range tags {
+		if t.Slug == "_type_page" {
+			return "page"
+		}
+		if t.Slug == "_type_audio" {
+			return "audio"
+		}
+	}
+	return "post"
+}
+
+func getPostTypeFromModels(status string, tags []models.Tag) string {
+	if strings.EqualFold(status, "page") {
+		return "page"
+	}
+	for _, t := range tags {
+		if t.Slug == "_type_page" {
+			return "page"
+		}
+		if t.Slug == "_type_audio" {
+			return "audio"
+		}
+	}
+	return "post"
 }
 
 func tagToListItem(t models.Tag) map[string]interface{} {

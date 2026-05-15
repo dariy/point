@@ -21,8 +21,9 @@ func TestPagesHandler_GetHomePage(t *testing.T) {
 	postService := services.NewPostService(repo)
 	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
+	mediaService := services.NewMediaService(repo, nil, settingsService, tagService)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postService, tagService, settingsService, cacheService)
+	handler := NewPagesHandler(repo, postService, tagService, mediaService, settingsService, cacheService)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -49,8 +50,9 @@ func TestPagesHandler_TagPage(t *testing.T) {
 
 	postService := services.NewPostService(repo)
 	settingsService := services.NewSettingsService(repo)
+	mediaService := services.NewMediaService(repo, nil, settingsService, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postService, tagSvc, settingsService, cacheService)
+	handler := NewPagesHandler(repo, postService, tagSvc, mediaService, settingsService, cacheService)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/tag/news", nil)
@@ -76,8 +78,9 @@ func TestPagesHandler_TagsPage(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	postService := services.NewPostService(repo)
 	settingsService := services.NewSettingsService(repo)
+	mediaService := services.NewMediaService(repo, nil, settingsService, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postService, tagSvc, settingsService, cacheService)
+	handler := NewPagesHandler(repo, postService, tagSvc, mediaService, settingsService, cacheService)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/tags", nil)
@@ -101,8 +104,9 @@ func TestPagesHandler_GetMapPage(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
 
@@ -149,8 +153,9 @@ func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
 
 	_ = settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/map", nil)
@@ -183,8 +188,9 @@ func TestPagesHandler_TagsPageAdmin(t *testing.T) {
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	// Admin mode
@@ -210,8 +216,9 @@ func TestPagesHandler_TagPageNotFound(t *testing.T) {
 	postSvc := services.NewPostService(repo)
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/tag/nonexistent", nil)
@@ -242,8 +249,9 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	// Public user requesting hidden tag should get 404
@@ -269,8 +277,9 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 
 	postSvc := services.NewPostService(repo)
 	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/tag/auth-tag", nil)
@@ -298,8 +307,9 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
@@ -349,8 +359,9 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheSvc := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheSvc)
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)
 
 	ctx := context.Background()
 	_ = repo.EnsureSystemTags(ctx)
