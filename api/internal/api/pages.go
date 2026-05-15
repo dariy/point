@@ -20,15 +20,17 @@ type PagesHandler struct {
 	repo            *repository.Repository
 	postService     *services.PostService
 	tagService      *services.TagService
+	mediaService    *services.MediaService
 	settingsService *services.SettingsService
 	cacheService    *services.CacheService
 }
 
-func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
+func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, mediaService *services.MediaService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
 	return &PagesHandler{
 		repo:            repo,
 		postService:     postService,
 		tagService:      tagService,
+		mediaService:    mediaService,
 		settingsService: settingsService,
 		cacheService:    cacheService,
 	}
@@ -43,6 +45,7 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_view_counts":       true,
 	"use_thumbnails":         true,
 	"about_post_id":          true,
+	"home_page_post_id":       true,
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
 	"show_tag_cloud":         true,
@@ -74,6 +77,69 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+
+	// Custom Home Page logic: if home_page_post_id is set, return that specific post.
+	// We only apply this on the first page of the index if no other filters are active.
+	if page == 1 && !hasYearFilter {
+		if hpIDStr, ok := allSettings["home_page_post_id"]; ok && hpIDStr != "" {
+			hpPost, err := h.postService.GetPostBySlug(ctx, hpIDStr)
+			if err == nil && (hpPost.Status == "published" || !publicOnly) {
+				postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, []int64{hpPost.ID})
+				hpPostType := getPostType(hpPost.Status, postTagsMap[hpPost.ID])
+				if hpPostType == "page" {
+					ancestorsMap := fetchAncestorsMap(ctx, h.repo, postTagsMap)
+					postTagsMap = expandPostTagsWithAncestors(postTagsMap, ancestorsMap, publicOnly)
+
+					minPosts := getMinTagPostsSetting(allSettings)
+					var excludeTagIDs map[int64]bool
+					if publicOnly {
+						excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+					}
+					effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+
+					resp := postToResponse(hpPost, postTagsMap[hpPost.ID], excludeTagIDs)
+					resp["type"] = "page" // Force type to page as we verified it above
+
+					htmlContent, _ := h.postService.RenderContent(hpPost.Content)
+					resp["content_html"] = htmlContent
+
+					media, _ := h.mediaService.GetMediaByContent(ctx, hpPost.Content, hpPost.ThumbnailPath.String)
+					mediaObjs := make([]map[string]interface{}, 0, len(media))
+					for _, m := range media {
+						mediaObjs = append(mediaObjs, map[string]interface{}{
+							"path":     "/" + strings.TrimPrefix(m.OriginalPath, "originals/"),
+							"alt_text": nullString(m.AltText),
+						})
+					}
+					resp["media"] = mediaObjs
+
+					if !publicOnly {
+						injectPostHiddenFieldsFromInfo(resp, hpPost.Status, postTagsMap[hpPost.ID], effectiveHiddenPosts)
+					}
+
+					// Public settings subset
+					publicSettings := make(map[string]string)
+					for k, v := range allSettings {
+						if pagePublicSettingKeys[k] {
+							publicSettings[k] = v
+						}
+					}
+
+					return c.JSON(http.StatusOK, map[string]interface{}{
+						"posts": []map[string]interface{}{resp},
+						"pagination": map[string]interface{}{
+							"page":     1,
+							"per_page": 1,
+							"total":    1,
+							"pages":    1,
+						},
+						"settings": publicSettings,
+					})
+				}
+			}
+		}
+	}
+
 	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
 	perPage, _ := strconv.Atoi(perPageStr)
 	if perPage < 1 {

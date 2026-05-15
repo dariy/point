@@ -56,7 +56,7 @@ func TestFullWorkflow(t *testing.T) {
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
 	systemH := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
-	pagesH := NewPagesHandler(repo, postSvc, tagSvc, settingsSvc, cacheSvc)
+	pagesH := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)
 
 	e := echo.New()
 	ctx := context.Background()

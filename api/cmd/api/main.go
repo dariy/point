@@ -103,7 +103,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	themeHandler := api.NewThemeHandler(svcs.Theme)
 	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
-	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
+	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 
@@ -157,9 +157,6 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	e.GET("/sitemap.xml", feedsHandler.Sitemap)
 	e.GET("/robots.txt", feedsHandler.RobotsTxt)
 
-	// ── Preview route (public, but token-gated) ────────────────────────────────
-	e.GET("/preview/:token", postHandler.GetPostByPreviewToken)
-
 	// ── Setup Routes (unauthenticated — first-run wizard) ──────────────────────
 	e.GET("/api/setup/status", setupHandler.SetupStatus)
 	e.POST("/api/setup", setupHandler.Setup)
@@ -190,6 +187,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth))
 	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(svcs.Auth))
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.GET("/preview/:token", postHandler.GetPostByPreviewToken)
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth))
 
 	// ── Tag Routes ─────────────────────────────────────────────────────────────

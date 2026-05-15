@@ -89,7 +89,7 @@ export default class PreviewPage extends Component {
       return;
     }
     try {
-      const post = await api.get(`/preview/${encodeURIComponent(token)}`);
+      const post = await api.get(`/posts/preview/${encodeURIComponent(token)}`);
       document.title = `Preview: ${post.title}`;
       this.setState({ loading: false, post, error: null });
     } catch (err) {

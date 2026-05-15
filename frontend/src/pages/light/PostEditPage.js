@@ -13,7 +13,7 @@ import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
-import { getPost, createPost, updatePost, deletePost } from '../../api/posts.js';
+import { getPost, createPost, updatePost, deletePost, generatePreviewLink } from '../../api/posts.js';
 import { uploadMedia, analyzeMedia, analyzeMediaByPath, listMedia, renameMedia } from '../../api/media.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { getAllShareEntries, clearShareEntries } from '../../utils/idb.js';
@@ -84,6 +84,7 @@ export default class PostEditPage extends Component {
       loading: !!id,
       saving: false,
       deleting: false,
+      generatingPreview: false,
       analyzingField: null, // 'title' | 'tags' | 'excerpt' | null
       post: null,
       error: null,
@@ -104,9 +105,9 @@ export default class PostEditPage extends Component {
   }
 
   render() {
-    const { loading, error, post, isNew, saving, deleting, analyzingField } = this.state;
+    const { loading, error, post, isNew, saving, deleting, generatingPreview, analyzingField } = this.state;
     const analyzing = this._analyzing;
-    const anyActionInProgress = saving || analyzing || deleting || !!analyzingField;
+    const anyActionInProgress = saving || analyzing || deleting || generatingPreview || !!analyzingField;
 
     if (loading) {
       return `
@@ -177,6 +178,9 @@ export default class PostEditPage extends Component {
               ${!isNew ? `
                 <button id="delete-btn" class="btn btn-danger" type="button"
                         title="Delete post" ${anyActionInProgress ? 'disabled' : ''}>Delete</button>
+                <button id="preview-link-btn" class="btn btn-secondary" type="button"
+                        title="Generate a shareable preview link (7 days)"
+                        ${anyActionInProgress ? 'disabled' : ''}>${generatingPreview ? 'Copying…' : 'Preview link'}</button>
               ` : ''}
               <button id="analyze-btn" class="btn btn-secondary" type="button"
                       ${anyActionInProgress ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
@@ -295,6 +299,10 @@ export default class PostEditPage extends Component {
         this._deletePost(this.state.postId);
       });
     });
+
+    // Preview link button — generates a 7-day shareable URL and copies it to the clipboard
+    const previewLinkBtn = this.$('#preview-link-btn');
+    previewLinkBtn?.addEventListener('click', () => this._generatePreviewLink());
 
     // Analyze button — uses first image path from content, or opens picker
     const analyzeBtn = this.$('#analyze-btn');
@@ -887,6 +895,49 @@ export default class PostEditPage extends Component {
       }
     } catch (err) {
       store.set('toast', { message: `Upload failed: ${err.message || file.name}`, type: 'error' });
+    }
+  }
+
+  async _generatePreviewLink() {
+    if (this.state.generatingPreview || this.state.isNew) return;
+    this.setState({ generatingPreview: true });
+    try {
+      const { preview_url } = await generatePreviewLink(this.state.postId);
+      try {
+        await navigator.clipboard.writeText(preview_url);
+        store.set('toast', { message: 'Preview link copied to clipboard.', type: 'success' });
+      } catch {
+        // Clipboard not available — show the link in a dialog so the user can copy it manually
+        this._showPreviewLinkDialog(preview_url);
+      }
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Could not generate preview link.', type: 'error' });
+    } finally {
+      this.setState({ generatingPreview: false });
+    }
+  }
+
+  _showPreviewLinkDialog(url) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const close = () => { dialog.unmount(); mount.remove(); };
+    const dialog = new ConfirmDialog(mount, {
+      title: 'Preview link',
+      message: url,
+      confirmText: 'Close',
+      variant: 'primary',
+      onConfirm: close,
+      onCancel: close,
+    });
+    dialog.mount();
+    // Select the URL text in the message element so it's easy to copy
+    const msgEl = mount.querySelector('.confirm-dialog__message, p');
+    if (msgEl) {
+      const range = document.createRange();
+      range.selectNodeContents(msgEl);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
   }
 

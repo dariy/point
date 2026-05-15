@@ -53,7 +53,6 @@ coverage.xml
 .env
 .env.local
 .env.*.local
-!build/.env
 .venv
 env/
 venv/
@@ -84,8 +83,8 @@ dmypy.json
 # Data directory (local development)
 data/
 *.db
-*.sqlite
-*.sqlite3
+
+
 
 # Logs
 *.log

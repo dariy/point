@@ -11,6 +11,7 @@ import { Component } from '../../components/Component.js';
 import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
+import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { TagCloud } from '../../components/public/TagCloud.js';
 import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
@@ -22,7 +23,7 @@ import { GestureController, TrackpadDetector, rubberBand } from '../../utils/ges
 export default class HomePage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, data: null, error: null };
+    this.state = { loading: true, data: null, error: null, forceImmersive: false, startIndex: 0 };
   }
 
   render() {
@@ -50,26 +51,51 @@ export default class HomePage extends Component {
         </div>`;
     }
 
+    const settings = store.get('settings') || {};
+    const { data } = this.state;
+    const isStaticHomePage = data && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
+
     return `
       <div class="site-wrapper">
         <div id="header-mount"></div>
-        <div id="tag-cloud-mount"></div>
-        <div id="timeline-mount"></div>
+        ${isStaticHomePage ? '' : '<div id="tag-cloud-mount"></div>'}
+        ${isStaticHomePage ? '' : '<div id="timeline-mount"></div>'}
         <main class="site-main">
           <div class="main-container">
-            <div id="grid-mount" class="grid-expand-mount"></div>
+            <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
       </div>`;
-  }  afterRender() {
-    document.body.classList.remove('immersive-layout', 'ui-hidden');
+  }
+
+  afterRender() {
+    const settings = store.get('settings') || {};
+    const { data, forceImmersive, startIndex } = this.state;
+    const isStaticHomePage = data && !!settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1;
+    const post = isStaticHomePage ? data.posts[0] : null;
+    const immersive = forceImmersive || (isStaticHomePage && shouldUseImmersive(post));
+
+    if (immersive) {
+      document.body.classList.add('immersive-layout');
+    } else {
+      document.body.classList.remove('immersive-layout', 'ui-hidden');
+    }
+
     this._gesture?.destroy();
     this._trackpad?.destroy();
-    const settings = store.get('settings') || {};
     const navTags = store.get('navTags') || [];
-    this.mountChild(PublicHeader, '#header-mount', { settings, currentPath: '/', navTags });
-    this.mountChild(PublicFooter, '#footer-mount', { settings });
+
+    // In immersive mode suppress the tag filter bar; tags go in the footer instead
+    this.mountChild(PublicHeader, '#header-mount', {
+      settings,
+      currentPath: '/',
+      navTags: immersive ? [] : navTags,
+      editUrl: (isStaticHomePage && post) ? `/light/posts/${post.id}/edit` : null,
+    });
+
+    const immersiveTags = (isStaticHomePage && immersive) ? (post.tags || []) : [];
+    this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags });
 
     if (this.state.loading || !this.state.data) return;
 
@@ -77,13 +103,24 @@ export default class HomePage extends Component {
     const showViewCount = !!settings.show_view_counts;
     const useThumbnails = settings.use_thumbnails !== false;
 
-    this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
+    if (isStaticHomePage) {
+      this.mountChild(PostContent, '#grid-mount', {
+        post: posts[0],
+        showViewCount,
+        showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
+        forceImmersive: immersive,
+        startIndex: startIndex,
+        onEnterImmersive: (idx = 0) => this.setState({ forceImmersive: true, startIndex: idx }),
+      });
+    } else {
+      this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
+    }
 
-    if (!!settings.show_tag_cloud && tagCloud.length) {
+    if (!isStaticHomePage && !!settings.show_tag_cloud && tagCloud.length) {
       this.mountChild(TagCloud, '#tag-cloud-mount', { tags: tagCloud });
     }
 
-    const canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    const canShowTimeline = !isStaticHomePage && (settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden'));
     if (canShowTimeline) {
       const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
       this.mountChild(Timeline, '#timeline-mount', {

@@ -68,7 +68,16 @@ export function deletePost(id) {
  * @returns {Promise<object>}
  */
 export function previewPost(token) {
-  return api.get(`/api/posts/preview/${token}`);
+  return api.get(`/posts/preview/${token}`);
+}
+
+/**
+ * Generate a shareable preview link for a post (valid 7 days).
+ * @param {number} id
+ * @returns {Promise<{ preview_url: string, token: string, expires_at: string }>}
+ */
+export function generatePreviewLink(id) {
+  return api.post(`/api/posts/${id}/preview`);
 }
 
 /**
