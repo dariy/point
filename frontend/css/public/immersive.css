@@ -17,10 +17,13 @@
     padding-top: env(safe-area-inset-top, 0);
     background: var(--header-bg);
     backdrop-filter: blur(var(--site-header-group-backdrop-filter));
-    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--site-header-group--webkit-backdrop-filter)
+    );
     border-bottom: none;
     color: var(--text-primary);
-    transition: opacity 0.4s ease,
+    transition:
+        opacity 0.4s ease,
         transform 0.4s ease,
         background-color var(--transition-theme),
         color var(--transition-theme),
@@ -33,7 +36,8 @@
 .immersive-layout .site-header .breadcrumb-link,
 .immersive-layout .site-header .breadcrumb-current {
     border-color: var(--color-white-alpha-30);
-    transition: color var(--transition-theme),
+    transition:
+        color var(--transition-theme),
         border-color var(--transition-theme),
         background-color var(--transition-theme);
 }
@@ -44,7 +48,8 @@
 .immersive-layout .site-header .header-action-btn {
     color: var(--text-primary);
     border-color: var(--border-primary);
-    transition: color var(--transition-theme),
+    transition:
+        color var(--transition-theme),
         border-color var(--transition-theme),
         background-color var(--transition-theme),
         stroke var(--transition-theme),
@@ -54,7 +59,9 @@
 [data-theme="light"].immersive-layout .site-header-group {
     background: var(--color-white-alpha-75);
     backdrop-filter: blur(var(--site-header-group-backdrop-filter-alt1));
-    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter-alt1));
+    -webkit-backdrop-filter: blur(
+        var(--site-header-group--webkit-backdrop-filter-alt1)
+    );
 }
 
 [data-theme="light"].immersive-layout .site-header svg {
@@ -69,7 +76,9 @@
 [data-theme="light"].immersive-layout .site-header .breadcrumb-current {
     color: var(--text-primary);
     border-color: var(--border-primary);
-    transition: color var(--transition-theme), border-color var(--transition-theme);
+    transition:
+        color var(--transition-theme),
+        border-color var(--transition-theme);
 }
 
 [data-theme="light"].immersive-layout .site-header .breadcrumb-separator {
@@ -120,7 +129,8 @@
     border-top: none;
     padding-top: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
     padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
-    transition: opacity 0.4s ease,
+    transition:
+        opacity 0.4s ease,
         transform 0.4s ease,
         background-color var(--transition-theme),
         background var(--transition-theme),
@@ -133,7 +143,13 @@
 }
 
 [data-theme="light"].immersive-layout .site-footer {
-    background: linear-gradient(to top, var(--color-white-alpha-95) 0%, var(--color-white-alpha-85) 40%, var(--color-white-alpha-40) 80%, transparent 100%);
+    background: linear-gradient(
+        to top,
+        var(--color-white-alpha-95) 0%,
+        var(--color-white-alpha-85) 40%,
+        var(--color-white-alpha-40) 80%,
+        transparent 100%
+    );
     color: var(--text-primary);
 }
 
@@ -277,7 +293,9 @@ video.immersive-bg-image {
     background: var(--bg-overlay);
     border-radius: var(--border-radius-lg);
     backdrop-filter: blur(var(--immersive-audio-container-backdrop-filter));
-    -webkit-backdrop-filter: blur(var(--immersive-audio-container--webkit-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--immersive-audio-container--webkit-backdrop-filter)
+    );
     margin-bottom: 6em;
 }
 
@@ -306,9 +324,11 @@ video.immersive-bg-image {
     justify-content: center;
     /* Center the info card */
     align-items: center;
-    padding: var(--immersive-overlay-container-padding-y) var(--immersive-overlay-container-padding-x);
+    padding: var(--immersive-overlay-container-padding-y)
+        var(--immersive-overlay-container-padding-x);
     /* Clear header/footer areas */
-    transition: opacity 0.4s ease,
+    transition:
+        opacity 0.4s ease,
         transform 0.4s ease;
     background: var(--color-black-alpha-30);
     /* Slight dim to make text readable */
@@ -318,7 +338,9 @@ video.immersive-bg-image {
     pointer-events: auto;
     background: var(--color-white-alpha-95);
     backdrop-filter: blur(var(--post-info-card-backdrop-filter));
-    -webkit-backdrop-filter: blur(var(--post-info-card--webkit-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--post-info-card--webkit-backdrop-filter)
+    );
     padding: var(--spacing-xl);
     border-radius: var(--border-radius-xl);
     width: 100%;
@@ -327,8 +349,10 @@ video.immersive-bg-image {
     /* Leave some space */
     display: flex;
     flex-direction: column;
-    box-shadow: 0 var(--post-info-card-box-shadow-1) var(--post-info-card-box-shadow-2) var(--color-black-alpha-30);
-    transition: opacity 0.3s ease,
+    box-shadow: 0 var(--post-info-card-box-shadow-1)
+        var(--post-info-card-box-shadow-2) var(--color-black-alpha-30);
+    transition:
+        opacity 0.3s ease,
         background-color var(--transition-theme),
         color var(--transition-theme),
         border-color var(--transition-theme),
@@ -383,7 +407,10 @@ video.immersive-bg-image {
     border-radius: 50%;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
-    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease,
+        transform 0.2s ease;
 }
 
 .post-nav-icon:hover {
@@ -427,17 +454,23 @@ video.immersive-bg-image {
     top: var(--post-excerpt-card-top); /* below fixed header */
     left: var(--spacing-lg);
     z-index: 25;
-    max-width: min(var(--post-excerpt-card-max-width), calc(100vw - var(--spacing-xl) * 2));
+    max-width: min(
+        var(--post-excerpt-card-max-width),
+        calc(100vw - var(--spacing-xl) * 2)
+    );
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--bg-overlay);
     color: var(--color-white-alpha-90);
     border-radius: var(--border-radius);
     backdrop-filter: blur(var(--post-excerpt-card-backdrop-filter));
-    -webkit-backdrop-filter: blur(var(--post-excerpt-card--webkit-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--post-excerpt-card--webkit-backdrop-filter)
+    );
     font-size: var(--font-size-sm);
     line-height: 1.5;
     pointer-events: none;
-    transition: opacity 0.4s ease,
+    transition:
+        opacity 0.4s ease,
         transform 0.4s ease;
 }
 
@@ -473,14 +506,14 @@ video.immersive-bg-image {
     font-size: var(--font-size-lg);
     line-height: 1.6;
     padding-right: var(--spacing-md);
-    
+
     /* Custom scrollbar */
     scrollbar-width: thin;
     scrollbar-color: var(--color-primary) transparent;
 }
 
-.immersive-text-content h1, 
-.immersive-text-content h2, 
+.immersive-text-content h1,
+.immersive-text-content h2,
 .immersive-text-content h3 {
     margin-top: var(--spacing-lg);
     margin-bottom: var(--spacing-md);
