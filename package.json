@@ -11,6 +11,6 @@
     "test:frontend": "node --test frontend/test/*.test.js"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.28.0"
   }
 }
