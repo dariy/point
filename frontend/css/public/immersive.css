@@ -451,3 +451,48 @@ video.immersive-bg-image {
     transform: translateY(calc(var(--post-excerpt-card-transform) * -1));
     pointer-events: none;
 }
+
+/* Text slides in immersive mode */
+.immersive-text-slide {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden; /* Parent slide shouldn't scroll */
+}
+
+.immersive-text-content {
+    width: 100%;
+    max-width: var(--post-info-card-max-width);
+    max-height: calc(100% - 12rem); /* Leave space for header/footer */
+    overflow-y: auto;
+    font-size: var(--font-size-lg);
+    line-height: 1.6;
+    padding-right: var(--spacing-md);
+    
+    /* Custom scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+
+.immersive-text-content h1, 
+.immersive-text-content h2, 
+.immersive-text-content h3 {
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-text-content p {
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-text-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius);
+    margin: var(--spacing-md) 0;
+}

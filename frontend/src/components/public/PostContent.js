@@ -25,12 +25,14 @@ let _overlayHidden = false; // persists across post navigations
 
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'm4v', 'avi', 'mkv']);
 const AUDIO_EXTS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'opus']);
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'heic', 'heif', 'bmp']);
 
-/** Return 'video', 'audio', or null based on file extension. */
+/** Return 'video', 'audio', 'image', or null based on file extension. */
 function mediaTypeFromPath(path) {
   const ext = (path.split('.').pop() || '').toLowerCase();
   if (VIDEO_EXTS.has(ext)) return 'video';
   if (AUDIO_EXTS.has(ext)) return 'audio';
+  if (IMAGE_EXTS.has(ext)) return 'image';
   return null;
 }
 
@@ -41,12 +43,15 @@ function mediaTypeFromPath(path) {
 export function shouldUseImmersive(post) {
   if (!post) return false;
 
+  const html = post.content_html || '';
+  if (html.includes('<hr>') || html.includes('<hr/>') || html.includes('<hr />')) return true;
+
   const media = post.media || [];
   // Audio-only attachment posts stay in normal layout
   if (media.length && media.every((m) => m.type === 'audio')) return false;
 
   // Strip all HTML tags; what remains is the visible text.
-  const text = (post.content_html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+  const text = html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
 
   // If there is text, check whether every non-empty line is a bare media path.
   // If so it counts as media, not prose.
@@ -57,7 +62,7 @@ export function shouldUseImmersive(post) {
   }
 
   const hasVisualMedia = media.some((m) => m.type !== 'audio');
-  const hasContentMedia = (post.content_html || '').trim().length > 0;
+  const hasContentMedia = html.trim().length > 0;
   return hasVisualMedia || hasContentMedia;
 }
 
@@ -201,6 +206,11 @@ export class PostContent extends Component {
   }
 
   _mediaEl(item) {
+    if (item.type === 'html') {
+      return `<div class="immersive-text-slide">
+                <div class="immersive-text-content">${item.html}</div>
+              </div>`;
+    }
     const url = safeUrl(item.url);
     if (item.type === 'video') {
       return `<video src="${url}" class="immersive-bg-image" autoplay muted loop playsinline></video>`;
@@ -215,6 +225,35 @@ export class PostContent extends Component {
 
   /** Extract image/video/audio items from HTML, including bare media paths in text. */
   _mediaFromHtml(html) {
+    const items = [];
+
+    // If there are page breaks, split by <hr> and treat each segment as a slide.
+    if (html.includes('<hr>') || html.includes('<hr/>') || html.includes('<hr />')) {
+      const segments = html.split(/<hr\s*\/?>/i);
+      for (const segment of segments) {
+        const trimmed = segment.trim();
+        if (!trimmed) continue;
+
+        // Extract media from this segment to see if it's a bare media slide.
+        const segmentMedia = this._extractMedia(trimmed);
+        const text = trimmed.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+
+        if (segmentMedia.length === 1 && (text.length === 0 || text === segmentMedia[0].url)) {
+          // Exactly one media element and no other prose: treat as a visual slide.
+          items.push(segmentMedia[0]);
+        } else {
+          // Mixed content or pure text: treat as an HTML slide.
+          items.push({ type: 'html', html: trimmed });
+        }
+      }
+      if (items.length > 0) return items;
+    }
+
+    return this._extractMedia(html);
+  }
+
+  /** Internal helper to extract all media items from a block of HTML. */
+  _extractMedia(html) {
     const items = [];
     for (const m of html.matchAll(/<img[^>]+>/gi)) {
       const src = (m[0].match(/\ssrc="([^"]*)"/i) || [])[1] || '';
@@ -713,16 +752,27 @@ export class PostContent extends Component {
     });
 
     if (onEnterImmersive) {
+      const items = this._mediaFromHtml(post.content_html || '');
       const images = Array.from(body.querySelectorAll('img')).filter(
         (img) => !img.closest('a[href]')
       );
-      images.forEach((img, i) => {
+      images.forEach((img) => {
         img.classList.add('zoomable');
         img.setAttribute('tabindex', '0');
-        const enter = () => onEnterImmersive(i);
+        const enter = () => {
+          const src = img.getAttribute('src');
+          // Find which slide index this image belongs to.
+          const idx = items.findIndex((item) =>
+            item.url === src || (item.type === 'html' && item.html.includes(src))
+          );
+          onEnterImmersive(idx >= 0 ? idx : 0);
+        };
         img.addEventListener('click', enter);
         img.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); }
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            enter();
+          }
         });
       });
     }
