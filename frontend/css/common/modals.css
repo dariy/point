@@ -1,0 +1,192 @@
+/* ===========================
+   Modal Dialogs
+   =========================== */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background-color: var(--color-black-alpha-50);
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(var(--modal-overlay-backdrop-filter));
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-overlay.closing {
+    animation: fadeOut 0.3s ease-in forwards;
+}
+
+.modal-overlay.closing .modal,
+.modal-overlay.closing .modal-content {
+    animation: slideDown 0.3s ease-in forwards;
+}
+
+.modal {
+    background-color: var(--surface-card);
+    border-radius: var(--border-radius-xl);
+    box-shadow: 0 var(--modal-box-shadow-1) var(--modal-box-shadow-2) var(--color-black-alpha-30);
+    min-width: var(--modal-min-width);
+    max-width: 90%;
+    width: var(--modal-width);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+    position: relative;
+    z-index: 10001;
+    overflow: hidden;
+}
+
+.modal form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.modal-content {
+    background-color: var(--surface-card);
+    border-radius: var(--border-radius-xl);
+    box-shadow: 0 var(--modal-content-box-shadow-1) var(--modal-content-box-shadow-2) var(--color-black-alpha-30);
+    min-width: var(--modal-content-min-width);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+}
+
+.modal-header {
+    padding: var(--modal-header-padding) var(--spacing-lg);
+    border-bottom: var(--border-width) solid var(--border-primary);
+    flex-shrink: 0;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.25em;
+}
+
+.modal-body {
+    padding: var(--spacing-lg);
+    color: var(--text-primary);
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-body p {
+    margin: 0;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.modal-body .prompt-message {
+    margin-bottom: var(--prompt-message-margin-bottom);
+}
+
+#prompt-input {
+    width: 100%;
+}
+
+.modal-footer {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-top: var(--border-width) solid var(--border-primary);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--modal-footer-gap);
+    flex-shrink: 0;
+}
+
+.modal-close {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    background: transparent;
+    border: none;
+    font-size: var(--font-size-2xl);
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+    padding: var(--spacing-xs);
+    z-index: 10;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(var(--from-transform-alt1));
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateY(var(--to-transform));
+        opacity: 0;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+/* Progress Overlay */
+.progress-overlay {
+    cursor: wait;
+}
+
+.progress-modal {
+    background-color: var(--surface-card);
+    border-radius: var(--progress-modal-border-radius);
+    box-shadow: 0 var(--progress-modal-box-shadow-1) var(--progress-modal-box-shadow-2) var(--color-black-alpha-40);
+    padding: var(--spacing-2xl);
+    text-align: center;
+    min-width: var(--progress-modal-min-width);
+    animation: slideUp 0.3s ease-out;
+}
+
+.progress-spinner {
+    width: var(--progress-spinner-width);
+    height: var(--progress-spinner-height);
+    margin: 0 auto var(--spacing-lg);
+    border: var(--progress-spinner-border) solid var(--border-primary);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.progress-message {
+    color: var(--text-primary);
+    font-size: 1.1em;
+    font-weight: 500;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

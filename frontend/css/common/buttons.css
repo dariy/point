@@ -1,0 +1,188 @@
+/* ===========================
+   Buttons
+   =========================== */
+
+/* 
+ * Truly Comprehensive Tactile Feedback 
+ * Covers all identified interactive elements across Admin and Public UIs.
+ * Uses the independent 'scale' property to preserve positioning transforms.
+ */
+:is(
+    button, 
+    a, 
+    .btn, 
+    .page-btn, 
+    .header-action-btn, 
+    .theme-toggle, 
+    .create-post, 
+    .light-link, 
+    .search-toggle-btn, 
+    .footer-action-btn, 
+    .modal-close, 
+    .tag-link, 
+    .chip-label, 
+    .tm-toggle, 
+    .tm-flag-toggle, 
+    .tm-sortable-header, 
+    .tm-view-toggle .btn, 
+    .folder-tree-item, 
+    .carousel-prev, 
+    .carousel-next, 
+    .carousel-dot, 
+    .post-nav-icon, 
+    .tags-scroll-btn, 
+    .featured-btn, 
+    .field-ai-btn, 
+    .ve-remove, 
+    .ve-insert-btn, 
+    .editor-mode-toggle button, 
+    .form-select, 
+    .filter-select, 
+    .status-select, 
+    .breadcrumb-link, 
+    .site-title-link, 
+    .dropdown-item, 
+    .tab-link, 
+    .toast-close, 
+    .notification-log-btn, 
+    .exif-info-btn, 
+    .exif-delete-btn, 
+    .ve-exif-toggle, 
+    .custom-marker, 
+    .map-popup-tag, 
+    .map-year-link, 
+    .post-card-edit-btn, 
+    .post-side-nav-btn, 
+    .nav-item a, 
+    .sidebar-header .public-home-link, 
+    .folder-year-arrow, 
+    .copy-path-btn, 
+    .media-item-actions .btn, 
+    .media-item-checkbox, 
+    .media-item-name, 
+    .media-item-preview--clickable, 
+    .card-header, 
+    .post-card, 
+    .checkbox-label, 
+    .tm-checkbox-label, 
+    .sort-link, 
+    .slug-link, 
+    .tag-count-link, 
+    .flag-item, 
+    .suggestion-item, 
+    .tag-toggle-btn, 
+    .tm-section-toggle, 
+    .tree-toggle, 
+    .folder-month-btn, 
+    .media-video-preview video, 
+    .leaflet-bar a, 
+    .leaflet-control-zoom a, 
+    .toggle-children, 
+    .version-update-dismiss,
+    .tag-toggle span
+):active:not(:disabled) {
+    scale: 0.96;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
+    text-decoration: none;
+}
+
+.btn:hover:not(:disabled) {
+    box-shadow: var(--shadow);
+    transform: translateY(calc(var(--btn-transform) * -1));
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: var(--text-inverted);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-hover);
+    color: var(--text-inverted);
+}
+
+.btn-secondary {
+    background-color: var(--surface-hover);
+    color: var(--text-secondary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.btn-success {
+    background-color: var(--color-success);
+    color: var(--text-inverted);
+}
+
+.btn-success:hover:not(:disabled) {
+    background-color: var(--color-emerald-600);
+    color: white;
+}
+
+.btn-danger {
+    background-color: var(--color-danger);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: var(--color-rose-600);
+    color: white;
+}
+
+.btn-outline {
+    background-color: transparent;
+    border: var(--border-width) solid var(--border-primary);
+    color: var(--text-secondary);
+}
+
+.btn-outline:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    border-color: var(--border-primary);
+}
+
+.btn-ghost {
+    background-color: transparent;
+    color: var(--text-secondary);
+    padding: var(--spacing-xs);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.btn-sm {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-xs);
+}
+
+.btn-lg {
+    padding: var(--spacing-md) var(--spacing-lg);
+    font-size: var(--font-size-base);
+}
+
+.btn-block {
+    display: flex;
+    width: 100%;
+}

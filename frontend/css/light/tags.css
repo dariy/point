@@ -1,0 +1,1074 @@
+/* ===========================
+   Tags (Admin)
+   =========================== */
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    background-color: var(--surface-hover);
+    color: var(--text-secondary);
+    border-radius: var(--border-radius-sm);
+}
+
+.tag-important {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.tag-count {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    background-color: var(--border-primary);
+    padding: var(--tag-count-padding-y) var(--tag-count-padding-x);
+    border-radius: var(--tag-count-border-radius);
+    font-variant-numeric: tabular-nums;
+}
+
+.slug-link {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    transition: color var(--transition-fast);
+}
+
+.slug-link:hover {
+    color: var(--color-primary);
+}
+
+.sort-link {
+    color: inherit;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.sort-link:hover {
+    color: var(--color-primary);
+}
+
+.sort-link.active {
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.tags-input {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-input);
+    min-height: var(--tags-input-min-height);
+}
+
+.tags-input:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 var(--tags-input-box-shadow) var(--color-primary-light);
+}
+
+.tags-input .tag {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    font-weight: 500;
+}
+
+.tags-input .tag-remove {
+    cursor: pointer;
+    font-size: var(--tag-remove-font-size);
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.tags-input .tag-remove:hover {
+    opacity: 1;
+}
+
+.tags-input input {
+    flex: 1;
+    min-width: var(--input-min-width);
+    border: none;
+    outline: none;
+    padding: var(--spacing-xs) calc(var(--spacing-md) - var(--spacing-xs));
+    font-size: var(--font-size-sm);
+    background: transparent;
+    color: var(--text-primary);
+}
+
+.tags-input input::placeholder {
+    color: var(--text-muted);
+}
+
+.tags-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    display: none;
+    max-height: var(--tags-suggestions-max-height);
+    overflow-y: auto;
+    margin-top: var(--spacing-xs);
+}
+
+.tags-suggestions.show {
+    display: block;
+}
+
+.suggestion-item {
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    transition: background-color var(--transition-fast);
+}
+
+.suggestion-item:hover {
+    background-color: var(--surface-hover);
+    color: var(--color-primary);
+}
+
+.tag-count-link {
+    text-decoration: none;
+    color: inherit;
+    display: inline-block;
+}
+
+.tag-count-link:hover .tag-count {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+/* Drag and Drop Styles */
+.tm-drag-handle {
+    flex-shrink: 0;
+    width: var(--tm-drag-handle-width);
+    color: var(--text-muted);
+    font-size: var(--tm-drag-handle-font-size);
+    letter-spacing: calc(var(--tm-drag-handle-letter-spacing) * -1);
+    opacity: 0;
+    cursor: grab;
+    user-select: none;
+    transition: opacity var(--transition-fast);
+}
+
+.tm-row:hover .tm-drag-handle {
+    opacity: 0.5;
+}
+
+.tm-row[draggable="true"] {
+    cursor: default;
+}
+
+.tm-row.tm-dragging {
+    opacity: 0.4;
+}
+
+/* Drop indicators */
+.tm-row.tm-drop-before::before,
+.tm-row.tm-drop-after::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--tm-rowtm-drop-before--height);
+    background-color: var(--color-primary);
+    border-radius: var(--tm-rowtm-drop-before--border-radius);
+    z-index: 10;
+    pointer-events: none;
+}
+
+.tm-row.tm-drop-before::before {
+    top: calc(var(--tm-rowtm-drop-before--top) * -1);
+}
+
+.tm-row.tm-drop-after::after {
+    bottom: calc(var(--tm-rowtm-drop-after--bottom) * -1);
+}
+
+.tm-row.tm-drop-on {
+    background-color: var(--color-primary-alpha-08);
+    outline: var(--tm-rowtm-drop-on-outline) solid var(--color-primary);
+    outline-offset: calc(var(--tm-rowtm-drop-on-outline-offset) * -1);
+    border-radius: var(--tm-rowtm-drop-on-border-radius);
+}
+
+/* Tag link pill (posts table) */
+.tag-link {
+    display: inline-flex;
+    align-items: center;
+    height: var(--tag-link-height);
+    padding: 0 var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--tag-link-border-radius);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tag-link:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.post-tags-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+/* Tags column in posts table — always-on inline editor */
+.tags-col {
+    min-width: var(--tags-col-min-width);
+}
+
+.tags-col .tags-input {
+    min-height: var(--tags-input-min-height-alt1);
+    padding: var(--tags-input-padding) var(--spacing-xs);
+    font-size: var(--font-size-sm);
+}
+
+/* ===========================
+   Tags Manager — view toggle
+   =========================== */
+.tm-view-toggle {
+    display: flex;
+    gap: 0;
+}
+
+.tm-view-toggle .btn {
+    border-radius: 0;
+}
+
+.tm-view-toggle .btn:first-child {
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.tm-view-toggle .btn:last-child {
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    border-left: none;
+}
+
+/* ===========================
+   Tags Manager — list view extras
+   =========================== */
+.tm-tag-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.tm-slug {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
+    border: none;
+}
+
+.tm-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tm-count-badge-min-width);
+    padding: var(--tm-count-badge-padding-y) var(--tm-count-badge-padding-x);
+    border-radius: var(--tm-count-badge-border-radius);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    background: var(--border-primary);
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-parent-badge {
+    display: inline-block;
+    padding: var(--tm-parent-badge-padding-y) var(--tm-parent-badge-padding-x);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    margin-right: var(--spacing-xs);
+    white-space: nowrap;
+}
+
+.tm-flags-inline {
+    margin-left: var(--tm-flags-inline-margin-left);
+}
+
+.tm-flags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.tm-flag-toggle, .tm-flag-static {
+    padding: 0;
+    width: var(--tm-flag-toggle-width);
+    height: var(--tm-flag-toggle-height);
+    font-size: var(--tm-flag-toggle-font-size);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0.6;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tm-flag-toggle:hover {
+    border-color: var(--color-primary);
+    background-color: var(--surface-hover);
+    opacity: 1;
+}
+
+.tm-flag-toggle.active, .tm-flag-static.active {
+    opacity: 1;
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-sm);
+}
+
+.tm-flag-static {
+    cursor: default;
+}
+
+.tm-flag-static:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+.tm-flag-static.active:disabled {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Flag specific colors when active */
+.tm-flag-toggle.active.tm-flag-is-important { color: var(--color-amber-500); border-color: var(--color-amber-500); background: var(--color-amber-50); }
+.tm-flag-toggle.active.tm-flag-is-featured  { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
+.tm-flag-toggle.active.tm-flag-is-important { color: var(--color-warning); border-color: var(--color-warning); background: var(--color-warning-light); }
+.tm-flag-toggle.active.tm-flag-is-hidden-posts { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-light); }
+.tm-flag-toggle.active.tm-flag-include-in-breadcrumbs { color: var(--color-purple-500); border-color: var(--color-purple-500); background: var(--color-purple-50); }
+.tm-flag-toggle.active.tm-flag-show-related-tags-as-children { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-light); }
+
+.tm-flag-static.active.tm-flag-location { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-light); opacity: 1; }
+
+
+.tm-flag {
+    font-size: var(--font-size-xs);
+    margin: 0 var(--tm-flag-margin);
+    opacity: 0.85;
+}
+
+.tm-parents-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    max-width: var(--tm-parents-cell-max-width);
+}
+
+.tm-tags-table th, .tm-tags-table td {
+    padding: var(--spacing-sm);
+    vertical-align: middle;
+}
+
+.tm-sortable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--transition-fast);
+}
+
+.tm-sortable-header:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-sortable-header.active {
+    color: var(--color-primary);
+}
+
+.tm-header-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.tm-sort-icon {
+    font-size: var(--tm-sort-icon-font-size);
+    width: var(--tm-sort-icon-width);
+}
+
+.tm-tags-table .tm-flag-toggle,
+.tm-tags-table .tm-flag-static {
+    margin: 0 auto;
+}
+
+/* ===========================
+   Tags Manager — tree view
+   =========================== */
+.tags-tree-container {
+    padding: var(--spacing-xs) 0;
+}
+
+.tm-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tm-tree.level-1,
+.tm-tree.level-2,
+.tm-tree.level-3 {
+    padding-left: var(--tm-treelevel-1-padding-left-alt1);
+    border-left: var(--border-width) dashed var(--border-primary);
+    margin-left: var(--tm-treelevel-1-margin-left-alt1);
+    margin-top: var(--tm-treelevel-1-margin-top);
+    margin-bottom: var(--tm-treelevel-1-margin-bottom);
+}
+
+.tm-node {
+    display: flex;
+    flex-direction: column;
+}
+
+.tm-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--tm-row-gap);
+    padding: var(--tm-row-padding-y) var(--tm-row-padding-x);
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-fast);
+    min-height: var(--tm-row-min-height);
+}
+
+.tm-row:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-toggle {
+    flex-shrink: 0;
+    width: var(--tm-toggle-width);
+    height: var(--tm-toggle-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--tm-toggle-font-size);
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-toggle:hover {
+    background: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.tm-toggle-spacer {
+    flex-shrink: 0;
+    width: var(--tm-toggle-spacer-width);
+}
+
+.tm-row .tm-tag-name {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.tm-node-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.tm-row .tm-flags-row {
+    margin: 0;
+}
+
+.tm-row-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--tm-row-meta-gap);
+    flex-shrink: 0;
+    min-width: var(--tm-row-meta-min-width);
+}
+
+.tm-actions {
+    display: flex;
+    gap: var(--tm-actions-gap);
+    opacity: 0.3;
+    transition: opacity var(--transition-fast);
+    text-wrap-mode: nowrap;
+}
+
+.tm-row:hover .tm-actions,
+.tm-row:focus-within .tm-actions {
+    opacity: 1;
+}
+
+/* Always show on touch devices where hover is unavailable */
+@media (hover: none) {
+    .tm-actions {
+        opacity: 1;
+    }
+}
+
+/* ===========================
+   Tag editor modal — wider
+   =========================== */
+.tag-editor-modal {
+    width: var(--tag-editor-modal-width-alt1);
+}
+
+/* Editor-style field spacing (title-row / slug-row have no intrinsic margin) */
+.tag-editor-modal .title-row {
+    margin-bottom: var(--spacing-xs);
+}
+
+.tag-editor-modal .slug-row {
+    margin-bottom: var(--spacing-md);
+}
+
+/* Coordinates section: tighter spacing between lat and lng rows */
+.tag-editor-modal .tm-section-body .input-with-btn {
+    margin-bottom: var(--spacing-sm);
+}
+
+.tag-editor-modal .tm-section-body .slug-row {
+    margin-bottom: var(--spacing-xs);
+}
+
+/* Hint text (e.g. below coordinate fields) */
+.form-hint {
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+/* Form input styles for modal (textarea & select[multiple] not in settings.css) */
+.tag-editor-modal .form-group textarea,
+.tag-editor-modal .form-group select {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-input);
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.tag-editor-modal .form-group textarea:focus,
+.tag-editor-modal .form-group select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 var(--textarea-box-shadow) var(--color-primary-light);
+}
+
+/* Remove dropdown arrow from multi-select */
+.tag-parents-select {
+    appearance: auto;
+    -webkit-appearance: auto;
+    background-image: none !important;
+    padding-right: var(--spacing-md) !important;
+}
+
+.input-with-btn {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.input-with-btn input {
+    flex: 1;
+    min-width: 0;
+}
+
+.input-with-btn .btn {
+    flex-shrink: 0;
+}
+
+.required-mark {
+    color: var(--color-danger);
+}
+
+.font-mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+}
+
+.form-help {
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+/* ===========================
+   Tag editor — collapsible sections
+   (Parents / Children)
+   =========================== */
+.tm-collapsible-section {
+    border-top: var(--border-width) solid var(--border-primary);
+    margin-top: var(--spacing-sm);
+}
+
+.tm-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--tm-section-toggle-gap);
+    width: 100%;
+    padding: var(--tm-section-toggle-padding) 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left;
+    transition: color var(--transition-fast);
+}
+
+.tm-section-toggle:hover {
+    color: var(--text-primary);
+}
+
+.tm-section-arrow {
+    font-size: var(--tm-section-arrow-font-size);
+    flex-shrink: 0;
+    transition: transform var(--transition-fast);
+}
+
+.tm-section-count {
+    margin-left: auto;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--color-primary);
+    min-width: var(--tm-section-count-min-width);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-section-body {
+    padding-bottom: var(--spacing-sm);
+}
+
+/* ===========================
+   Tag editor modal — flags grid
+   =========================== */
+.tag-flags-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-xs);
+}
+
+.flag-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--flag-item-gap);
+    padding: var(--flag-item-padding-y) var(--flag-item-padding-x);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    user-select: none;
+}
+
+.flag-item:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--color-primary);
+}
+
+.flag-item input[type="checkbox"] {
+    margin-top: var(--input-type--checkbox---margin-top);
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+.flag-item-body {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+}
+
+.flag-item-icon {
+    font-size: var(--flag-item-icon-font-size);
+    line-height: 1.3;
+    flex-shrink: 0;
+}
+
+.flag-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--flag-item-text-gap);
+}
+
+.flag-item-text strong {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.flag-item-text small {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
+/* ===========================
+   Tag-badge toggle checkboxes
+   (parent / child selectors)
+   =========================== */
+.tag-toggles-container {
+    padding: var(--spacing-sm) 0 var(--spacing-xs);
+}
+
+.tag-toggles-empty {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    padding: var(--tag-toggles-empty-padding) 0;
+}
+
+.tag-toggle {
+    display: inline-flex;
+    cursor: pointer;
+    user-select: none;
+}
+
+.tag-toggle input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.tag-toggle span {
+    display: inline-flex;
+    align-items: center;
+    height: var(--span-height);
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1;
+    border-radius: var(--span-border-radius);
+    border: var(--border-width) solid var(--border-primary);
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.tag-toggle:hover span {
+    border-color: var(--color-primary);
+    color: var(--text-primary);
+}
+
+.tag-toggle input[type="checkbox"]:checked + span {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-white);
+}
+
+/* ===========================
+   Tag-toggle tree picker
+   (collapsible tree inside parent/child sections of tag editor modal)
+   =========================== */
+.tag-toggle-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tag-toggle-tree.level-1,
+.tag-toggle-tree.level-2,
+.tag-toggle-tree.level-3,
+.tag-toggle-tree.level-4 {
+    padding-left: var(--tag-toggle-treelevel-1-padding-left);
+    border-left: var(--border-width) dashed var(--border-primary);
+    margin-left: var(--spacing-sm);
+    margin-top: var(--tag-toggle-treelevel-1-margin-top);
+    margin-bottom: var(--tag-toggle-treelevel-1-margin-bottom);
+}
+
+.tag-toggle-node {
+    display: flex;
+    flex-direction: column;
+}
+
+.tag-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--tag-toggle-row-padding-y) var(--tag-toggle-row-padding-x);
+    border-radius: var(--border-radius);
+}
+
+.tag-toggle-row:hover {
+    background-color: var(--surface-hover);
+}
+
+.tag-toggle-btn {
+    flex-shrink: 0;
+    width: var(--tag-toggle-btn-width);
+    height: var(--tag-toggle-btn-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--tag-toggle-btn-font-size);
+    border-radius: var(--border-radius-sm);
+    padding: 0;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tag-toggle-btn:hover {
+    background: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.tag-toggle-btn-spacer {
+    flex-shrink: 0;
+    width: var(--tag-toggle-btn-spacer-width);
+}
+
+/* Indeterminate pill: not checked, but a descendant is checked */
+.tag-toggle input[type="checkbox"]:indeterminate + span {
+    border-color: var(--color-primary);
+    border-style: dashed;
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+/* ===========================
+   Multi-parent & relation badges
+   =========================== */
+.tm-multi-parent {
+    font-size: var(--tm-multi-parent-font-size);
+    color: var(--text-muted);
+    opacity: 0.75;
+    flex-shrink: 0;
+    cursor: default;
+}
+
+.tm-rel-badge {
+    display: inline-block;
+    padding: var(--tm-rel-badge-padding-y) var(--tm-rel-badge-padding-x);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    margin-right: var(--spacing-xs);
+    white-space: nowrap;
+}
+
+/* ===========================
+   System tag highlighting
+   (tree view rows + toggle-picker nodes)
+   =========================== */
+.tm-node.tm-system-node > .tm-row {
+    background: var(--color-warning-alpha-07);
+}
+
+.tm-node.tm-system-node > .tm-row:hover {
+    background: var(--color-warning-alpha-14);
+}
+
+.tm-node.tm-system-node > .tm-row .tm-tag-name {
+    color: var(--color-amber-800);
+}
+
+.tm-system-badge {
+    display: inline-block;
+    margin-left: var(--tm-system-badge-margin-left);
+    font-size: var(--tm-system-badge-font-size);
+    opacity: 0.75;
+    vertical-align: middle;
+}
+
+/* System tags in the parent/child toggle picker */
+.tag-toggle-node.tm-system-node > .tag-toggle-row {
+    background: var(--color-warning-alpha-07);
+    border-radius: var(--border-radius);
+}
+
+.tag-toggle-node.tm-system-node > .tag-toggle-row:hover {
+    background: var(--color-warning-alpha-14);
+}
+
+.tag-toggle-node.tm-system-node > .tag-toggle-row .tag-toggle span {
+    border-color: var(--color-warning-dark-alpha-35);
+    color: var(--color-amber-800);
+}
+
+/* Readonly name/slug fields in system tag editor */
+.tag-editor-modal .editor-title[readonly],
+.tag-editor-modal .editor-slug[readonly] {
+    opacity: 0.6;
+    cursor: default;
+    background: var(--surface-hover);
+}
+
+/* Features section in tag editor modal */
+.tm-features-section {
+    margin-top: var(--tm-features-section-margin-top);
+    margin-bottom: var(--tm-features-section-margin-bottom);
+}
+
+.tm-features-heading {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--tm-features-heading-margin-bottom);
+}
+
+.tm-feature-row {
+    padding: var(--tm-feature-row-padding) 0;
+}
+
+.tm-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tm-checkbox-label-gap);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    user-select: none;
+}
+
+.tm-help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    border-radius: 50%;
+    background: var(--text-muted);
+    color: var(--surface);
+    font-size: var(--tm-help-icon-font-size);
+    font-weight: bold;
+    cursor: help;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+/* System tag pill strip inside parent/child selector */
+.tag-toggle-system-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) 0 var(--tag-toggle-system-strip-padding);
+}
+
+.tag-toggle-system-item {
+    display: inline-flex;
+}
+
+.tag-toggle-divider {
+    border: none;
+    border-top: var(--border-width) solid var(--border-primary);
+    margin: var(--tag-toggle-divider-margin) 0;
+}
+
+/* ===========================
+   Tag selector search input
+   =========================== */
+.tm-toggle-search {
+    width: 100%;
+    padding: var(--tm-toggle-search-padding-y) var(--tm-toggle-search-padding-x);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--tm-toggle-search-margin-bottom);
+    box-sizing: border-box;
+}
+
+/* ===========================
+   List-view filter bar
+   =========================== */
+.tm-list-filter-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tm-list-filter-bar-gap);
+    margin-bottom: var(--tm-list-filter-bar-margin-bottom);
+}
+
+.tm-list-search-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.tm-list-search {
+    flex: 1;
+    padding: var(--tm-list-search-padding-y) var(--tm-list-search-padding-x);
+    font-size: var(--font-size-sm);
+}
+
+.tm-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tm-filter-chips-gap);
+    min-height: 0;
+}
+
+.tm-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tm-filter-chip-gap);
+    padding: var(--tm-filter-chip-padding-y) var(--tm-filter-chip-padding-x);
+    border-radius: var(--tm-filter-chip-border-radius);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    background: var(--color-primary);
+    color: var(--color-white);
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.tm-filter-chip:hover {
+    background: var(--color-primary-dark);
+}
+
+.tm-chip-remove {
+    font-size: var(--tm-chip-remove-font-size);
+    line-height: 1;
+    opacity: 0.8;
+}
+
+/* Parent filter buttons inside table cells */
+.tm-parent-filter-btn.tm-rel-badge {
+    cursor: pointer;
+    border: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tm-parent-filter-btn.tm-rel-badge:hover {
+    background: var(--color-primary);
+    color: var(--color-white);
+}

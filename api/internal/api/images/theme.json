@@ -1,0 +1,4 @@
+{
+		"light": {"colors": {"bg-primary": "#fff"}},
+		"dark": {"colors": {"bg-primary": "#000"}}
+	}

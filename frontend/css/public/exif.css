@@ -1,0 +1,168 @@
+/* ── Public EXIF overlay — normal mode ─────────────────── */
+.media-exif-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.media-exif-wrapper img {
+  display: block;
+  max-width: 100%;
+}
+
+.exif-info-btn {
+  position: absolute;
+  top: var(--exif-info-btn-top);
+  right: var(--exif-info-btn-right);
+  width: var(--exif-info-btn-width);
+  height: var(--exif-info-btn-height);
+  background: var(--color-black-alpha-48);
+  backdrop-filter: blur(var(--exif-info-btn-backdrop-filter));
+  -webkit-backdrop-filter: blur(var(--exif-info-btn--webkit-backdrop-filter));
+  color: var(--color-white-alpha-90);
+  border: var(--border-width) solid var(--color-white-alpha-18);
+  border-radius: 50%;
+  font-size: var(--exif-info-btn-font-size);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 2;
+  line-height: 1;
+}
+
+.media-exif-wrapper:hover .exif-info-btn,
+.media-exif-wrapper:focus-within .exif-info-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.exif-info-btn.is-active {
+  opacity: 1;
+  transform: scale(1);
+  background: var(--color-white-alpha-18);
+}
+
+.exif-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, var(--color-black-alpha-82) 0%, var(--color-black-alpha-72) 100%);
+  backdrop-filter: blur(var(--exif-overlay-backdrop-filter));
+  -webkit-backdrop-filter: blur(var(--exif-overlay--webkit-backdrop-filter));
+  color: var(--color-white);
+  padding: var(--exif-overlay-padding-1) var(--exif-overlay-padding-2) var(--exif-overlay-padding-3);
+  font-size: var(--exif-overlay-font-size);
+  max-height: 55%;
+  overflow-y: auto;
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(var(--exif-overlay-transform));
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-white-alpha-30) transparent;
+}
+
+.exif-overlay.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.exif-overlay-title {
+  font-size: var(--exif-overlay-title-font-size);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-white-alpha-50);
+  margin-bottom: var(--exif-overlay-title-margin-bottom);
+}
+
+.exif-overlay table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.exif-overlay td {
+  padding: var(--td-padding) 0;
+  vertical-align: top;
+  line-height: 1.45;
+}
+
+.exif-overlay td:first-child {
+  color: var(--color-white-alpha-55);
+  white-space: nowrap;
+  padding-right: var(--td-padding-right);
+  min-width: var(--td-min-width);
+  font-size: var(--td-font-size);
+}
+
+.exif-overlay td:last-child {
+  color: var(--color-white-alpha-90);
+}
+
+/* ── EXIF flyout — positioned via JS relative to .site-footer ── */
+.exif-flyout:not(.hidden) {
+  animation: immersiveFadeIn 0.2s ease-out forwards;
+}
+
+.exif-flyout {
+  max-width: min(var(--exif-flyout-max-width-1), calc(100vw - var(--exif-flyout-max-width-2)));
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-white-alpha-30) transparent;
+  /* Adopt the same visual style as the tag ancestor flyout */
+  background: var(--bg-card, var(--surface-card));
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--border-radius);
+  box-shadow: 0 var(--exif-flyout-box-shadow-1) var(--exif-flyout-box-shadow-2) var(--color-black-alpha-18);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--text-primary);
+}
+
+/* Hide flyout when immersive footer slides away — no JS needed */
+.immersive-layout.ui-hidden .exif-flyout {
+  display: none !important;
+}
+
+/* White chevron on the exif pill — it sits on a dark immersive footer */
+.immersive-tags .exif-pill .flyout-indicator {
+  color: var(--color-white-alpha-60);
+}
+
+.immersive-tags .exif-pill.is-active .flyout-indicator {
+  color: white;
+}
+
+.exif-flyout-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--exif-flyout-table-font-size);
+}
+
+.exif-flyout-table td {
+  padding: var(--td-padding) 0;
+  vertical-align: top;
+  line-height: 1.45;
+}
+
+.exif-flyout-table td:first-child {
+  color: var(--text-secondary);
+  padding-right: var(--td-padding-right-alt1);
+  width: var(--td-width);
+  vertical-align: middle;
+  line-height: 0;
+}
+
+.exif-flyout-sep {
+  border: none;
+  border-top: var(--border-width) solid var(--border-primary);
+  margin: var(--spacing-xs) 0;
+}

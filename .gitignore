@@ -1,0 +1,27 @@
+# Environments
+.env
+.env.*
+
+# IDE
+*~
+
+# Docker
+docker-compose.override.yml
+
+# Secrets (never commit these!)
+*.pem
+*.key
+*.crt
+secrets/
+credentials.json
+
+# Deployment artifacts
+deployment-*.log
+app/static/css/light.css
+app/static/css/main.css
+api/coverage.out
+api/coverage.html
+frontend/js/
+light.css
+main.css
+api/api*

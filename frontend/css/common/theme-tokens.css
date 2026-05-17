@@ -1,0 +1,56 @@
+/* ===========================
+   Runtime Theme Tokens
+   =========================== 
+   These variables are intended to be overridden by theme.json 
+   via the themeParser.js utility. 
+   Defaults here represent the "Default" theme.
+   =========================== */
+
+:root {
+    /* Colors - Backgrounds */
+    --pt-colors-bg-primary: var(--color-white);
+    --pt-colors-bg-secondary: var(--color-gray-50);
+    --pt-colors-bg-tertiary: var(--color-gray-100);
+    --pt-colors-bg-elevated: var(--color-white);
+    
+    /* Colors - Surfaces */
+    --pt-colors-surface-card: var(--color-white);
+    --pt-colors-surface-input: var(--color-white);
+    --pt-colors-surface-hover: var(--color-gray-100);
+    
+    /* Colors - Text */
+    --pt-colors-text-primary: var(--color-gray-900);
+    --pt-colors-text-secondary: var(--color-gray-600);
+    --pt-colors-text-tertiary: var(--color-gray-500);
+    --pt-colors-text-muted: var(--color-gray-400);
+    --pt-colors-text-inverted: var(--color-white);
+    
+    /* Colors - Brand & Accent */
+    --pt-colors-accent: var(--color-primary);
+    --pt-colors-accent-hover: var(--color-primary-hover);
+    --pt-colors-accent-alpha-08: rgba(37, 99, 235, 0.08);
+    --pt-colors-accent-alpha-15: rgba(37, 99, 235, 0.15);
+    
+    /* Colors - Borders */
+    --pt-colors-border-primary: var(--color-gray-200);
+    --pt-colors-border-secondary: var(--color-gray-300);
+    
+    /* Overlays */
+    --pt-colors-bg-overlay: var(--bg-overlay);
+
+    /* Sidebar - Admin specific */
+    --pt-colors-sidebar-bg: #0f172a;
+    --pt-colors-sidebar-text: #94a3b8;
+    --pt-colors-sidebar-text-hover: #ffffff;
+    --pt-colors-sidebar-active-bg: #1e293b;
+    --pt-colors-sidebar-border: #334155;
+    
+    /* Typography */
+    --pt-typography-font-family: var(--font-family);
+    --pt-typography-font-serif: var(--font-serif);
+    --pt-typography-font-mono: var(--font-mono);
+    
+    /* Spacing & Sizes */
+    --pt-spacing-base: var(--size-1);
+    --pt-border-radius: var(--border-radius);
+}

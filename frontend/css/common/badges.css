@@ -1,0 +1,135 @@
+/* ===========================
+   Status Badges
+   =========================== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--badge-gap);
+    padding: 0 var(--spacing-sm);
+    height: var(--badge-height);
+    line-height: 1;
+    font-size: var(--font-size-xs);
+    font-weight: 400; /* Use normal weight to match select text rendering */
+    border-radius: var(--border-radius-xl);
+    border: var(--border-width) solid transparent;
+    text-transform: capitalize;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.badge span {
+    transform: translateY(calc(var(--span-transform) * -1));
+}
+
+.badge-draft {
+    background-color: var(--surface-hover);
+    color: var(--text-secondary);
+    border-color: var(--border-primary);
+}
+
+.badge-published {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border-color: var(--color-success-light);
+}
+
+.badge-hidden {
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
+    border-color: var(--color-warning-light);
+}
+
+.badge-scheduled {
+    background-color: var(--color-scheduled-light);
+    color: var(--color-scheduled);
+    border-color: var(--color-scheduled-light);
+}
+
+.badge-warning {
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
+    border-color: var(--color-warning-alpha-30);
+}
+
+.badge-success {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border-color: var(--color-success-light);
+}
+
+/* Status Selector in tables */
+.status-change-wrapper {
+    display: inline-flex;
+    vertical-align: middle;
+}
+
+.status-select {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--spacing-sm);
+    height: var(--status-select-height);
+    line-height: normal; /* Let browser handle select internal alignment */
+    font-size: var(--font-size-xs);
+    font-weight: 400; /* Match badge font weight */
+    border-radius: var(--border-radius-xl);
+    border: var(--border-width) solid transparent;
+    cursor: pointer;
+    background-image: none;
+    appearance: none;
+    -webkit-appearance: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+    vertical-align: middle;
+}
+
+.status-select:focus {
+    outline: none;
+    box-shadow: 0 0 0 var(--status-select-box-shadow) var(--color-primary-light);
+}
+
+.status-select option {
+    background-color: var(--surface-card);
+    color: var(--text-primary);
+}
+
+.status-select.badge-draft {
+    background-color: var(--surface-hover);
+    color: var(--text-secondary);
+    border-color: var(--border-primary);
+}
+
+.status-select.badge-published {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+    border-color: var(--color-success-light);
+}
+
+.status-select.badge-hidden {
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
+    border-color: var(--color-warning-light);
+}
+
+.status-select.badge-page {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border-color: var(--color-primary-light);
+    text-align: center;
+}
+
+.status-select.badge-scheduled {
+    background-color: var(--color-scheduled-light);
+    color: var(--color-scheduled);
+    border-color: var(--color-scheduled-light);
+}
+
+.status-select.badge-loading {
+    opacity: 0.6;
+    cursor: wait;
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 0.3; }
+    100% { opacity: 0.6; }
+}

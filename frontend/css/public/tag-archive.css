@@ -1,0 +1,184 @@
+/* ===========================
+   Tag Archive
+   =========================== */
+.tag-header {
+    text-align: center;
+    margin-bottom: var(--spacing-2xl);
+    padding-bottom: var(--spacing-xl);
+    border-bottom: var(--border-width) solid var(--border-primary);
+}
+
+.tag-name {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+    transition: color var(--transition-theme);
+}
+
+.tag-description {
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+    max-width: var(--tag-description-max-width);
+    margin: 0 auto;
+}
+
+.tag-count {
+    display: inline-block;
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-top: var(--spacing-md);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Tags Filters */
+.tags-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: var(--spacing-sm);
+    justify-content: safe center;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.tags-filters::-webkit-scrollbar {
+    display: none;
+}
+
+.tags-page .tags-filters {
+    margin-top: var(--tags-filters-margin-top);
+    /*margin-bottom: var(--spacing-md); */
+}
+
+/* Hierarchical Tags */
+.tag-group {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    border-radius: var(--tag-group-border-radius);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    overflow: visible;
+    /* Changed from hidden to support header dropdowns and nested content */
+    transition: border-color var(--transition-fast);
+}
+
+.tag-group:hover {
+    border-color: var(--border-secondary);
+}
+
+.tag-group-header {
+    display: flex;
+    align-items: center;
+}
+
+.tag-group-header .tag-link {
+    border: none;
+    background: none;
+    border-radius: 0;
+    flex: 1;
+    margin-right: calc(var(--tag-link-margin-right) * -1);
+}
+
+/*.tag-group-header .tag-link.active {
+    color: var(--text-inverted);
+    }*/
+
+.tag-group-header .tag-link:hover:not(.active) {
+    color: var(--text-primary);
+}
+
+.toggle-children {
+    background: none;
+    border: none;
+    width: var(--toggle-children-width);
+    height: var(--toggle-children-height);
+    cursor: pointer;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+    border-left: var(--border-width) solid var(--border-primary);
+}
+
+.toggle-children:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.toggle-children svg {
+    transition: transform var(--transition-fast);
+    transform-origin: center;
+}
+
+.toggle-children.active svg {
+    transform: rotate(180deg);
+}
+
+/* ===========================
+   Tags Tree (TagsPage hierarchy)
+   =========================== */
+.tags-tree {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tags-tree-item {
+    margin-bottom: var(--spacing-xs);
+}
+
+.tag-link.tags-tree-link {
+    height: auto;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: none;
+    border-radius: var(--border-radius-sm);
+    background: transparent;
+    font-size: var(--font-size-base);
+    font-weight: normal;
+    white-space: normal;
+    color: var(--text-primary);
+}
+
+.tag-link.tags-tree-link:hover {
+    color: var(--color-primary);
+    background-color: var(--surface-hover);
+    border-color: transparent;
+    transform: none;
+}
+
+.tag-link.tags-tree-link .tag-count {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.tags-tree-desc {
+    margin: var(--tags-tree-desc-margin) 0 var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.tags-tree-children {
+    list-style: none;
+    padding-left: var(--spacing-lg);
+    margin: var(--spacing-xs) 0 var(--spacing-xs) var(--spacing-sm);
+    border-left: var(--tags-tree-children-border-left) solid var(--border-primary);
+}
+
+/* Important tag highlight in public context */
+.tags-tree-item.tag-important > .tag-link {
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+.tag-important {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border-radius: var(--border-radius-sm);
+}
