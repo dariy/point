@@ -57,14 +57,17 @@ podman build $PULL_FLAG \
     -f Dockerfile \
     --cache-from point-builder \
     --build-arg "BUILD_VERSION=$DEV_BUILD_VERSION" \
-    .. && \
-podman rm -f point 2>/dev/null || true
+    ..
+
+# Stop and remove existing container to ensure a clean start
+echo "Stopping and removing existing container..."
+podman rm -f point-test 2>/dev/null || true
 
 # Pre-create data dirs as host user so --userns=keep-id containers can write
 mkdir -p ../data/media/originals ../data/media/thumbnails ../data/logs ../data/backups
 
 # Optionally mount PHOTO_LIBRARY_PATH as a read-only volume when set in .env
-_PHOTO_PATH=$(grep -E '^PHOTO_LIBRARY_PATH=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')
+_PHOTO_PATH=$(grep -E '^PHOTO_LIBRARY_PATH=.+' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]' || true)
 PHOTO_IMPORT_ARGS=()
 if [ -n "$_PHOTO_PATH" ]; then
     PHOTO_IMPORT_ARGS=(-v "${_PHOTO_PATH}:/import:ro,z" -e PHOTO_LIBRARY_PATH=/import)
@@ -72,13 +75,13 @@ fi
 unset _PHOTO_PATH
 
 # Optionally set host port mapping via DEPLOY_PORT in .env
-_HOST_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+_HOST_PORT=$(grep -E '^DEPLOY_PORT=[0-9]+' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || true)
 HOST_PORT=${_HOST_PORT:-8000}
 unset _HOST_PORT
 
 echo "Starting container..."
 podman run -d \
-    --name point \
+    --name point-test \
     --restart unless-stopped \
     --user "$(id -u):$(id -g)" \
     --userns=keep-id \
@@ -99,3 +102,4 @@ echo "Cleaning up dangling images..."
 podman image prune -f
 
 echo "Rebuild is done."
+podman ps -f name=point-test
