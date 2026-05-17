@@ -1,0 +1,591 @@
+/* ===========================
+   Media Page Layout
+   =========================== */
+
+/* Two-column layout: folder tree | media content */
+.media-layout {
+    display: flex;
+    gap: var(--spacing-lg);
+    align-items: flex-start;
+    width: 100%;
+}
+
+/* ===========================
+   Folder Tree
+   =========================== */
+.media-folder-tree {
+    flex: 0 0 var(--media-folder-tree-flex);
+    min-width: var(--media-folder-tree-min-width);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-sm);
+    position: sticky;
+    top: calc(var(--header-height) + var(--spacing-md));
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
+    display: flex;
+    flex-direction: column;
+}
+
+#mb-upload-btn {
+    margin-bottom: var(--spacing-md);
+}
+
+#mb-type-filter {
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    border-radius: var(--border-radius-sm);
+    border: var(--border-width) solid var(--border-primary);
+    background-color: var(--surface-input);
+    color: var(--text-primary);
+}
+
+.folder-tree-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    text-align: left;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.folder-tree-item:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.folder-tree-item.active {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.folder-tree-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--folder-tree-icon-width);
+    height: var(--folder-tree-icon-height);
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.folder-tree-icon svg {
+    display: block;
+}
+
+.folder-tree-all .folder-tree-icon {
+    cursor: pointer;
+}
+
+.folder-tree-all .folder-tree-icon:hover {
+    opacity: 1;
+}
+
+.folder-tree-item.active .folder-tree-icon {
+    opacity: 1;
+}
+
+.folder-year-group {
+    margin-top: var(--folder-year-group-margin-top);
+}
+
+.folder-year-row {
+    display: flex;
+    align-items: center;
+    border-radius: var(--border-radius-sm);
+}
+
+/* Row active state (when either year is selected or a child is active) */
+.folder-year-row.active {
+    background-color: var(--color-primary-light);
+}
+
+.folder-year-row.has-active-child:not(.active) {
+    background-color: var(--surface-hover);
+}
+
+.folder-year-arrow {
+    width: var(--folder-year-arrow-width);
+    height: var(--folder-year-arrow-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--border-radius-sm);
+    flex-shrink: 0;
+    transition: transform var(--transition-fast);
+    transform: rotate(-90deg);
+}
+
+.folder-year-arrow.rotated {
+    transform: rotate(0deg);
+}
+
+.folder-year-arrow:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.folder-year-months {
+    margin-left: var(--folder-year-months-margin-left);
+    border-left: var(--border-width) solid var(--border-primary);
+    padding-left: var(--spacing-xs);
+    margin-top: var(--folder-year-months-margin-top);
+    display: flex;
+    flex-direction: column;
+    gap: var(--folder-year-months-gap);
+}
+
+.folder-year-months.hidden {
+    display: none;
+}
+
+.folder-month-btn {
+    padding-left: var(--spacing-md);
+    position: relative;
+}
+
+.folder-month-btn::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: var(--folder-month-btn--width);
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+/* ===========================
+   Media Content Area
+   =========================== */
+.media-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ===========================
+   Media Grid
+   =========================== */
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--media-grid-grid-template-columns), 1fr));
+    gap: var(--spacing-md);
+}
+
+.media-item {
+    position: relative;
+    background: var(--surface-card);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition-fast), background-color var(--transition-theme);
+}
+
+.media-item:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.media-item-preview {
+    aspect-ratio: 4/3;
+    background-color: var(--surface-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.media-item-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    outline: 1px solid var(--color-black-alpha-10);
+    outline-offset: -1px;
+}
+
+[data-theme="dark"] .media-item-preview img {
+    outline-color: var(--color-white-alpha-10);
+}
+
+.media-item-preview--clickable {
+    cursor: zoom-in;
+}
+
+.media-item-preview .file-icon {
+    font-size: var(--file-icon-font-size);
+    color: var(--text-muted);
+}
+
+.media-video-preview,
+.media-audio-preview {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.media-video-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: pointer;
+}
+
+.media-play-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    background: var(--color-black-alpha-40);
+    border-radius: 50%;
+    width: var(--media-play-overlay-width);
+    height: var(--media-play-overlay-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.media-video-preview:hover .media-play-overlay {
+    background: var(--color-black-alpha-60);
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.media-video-preview.is-playing .media-play-overlay {
+    opacity: 0;
+}
+
+.media-audio-preview {
+    flex-direction: column;
+    padding: var(--spacing-sm);
+}
+
+.media-audio-preview svg {
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-muted);
+}
+
+.media-audio-preview audio {
+    width: 100%;
+    height: var(--audio-height);
+}
+
+.media-item-info {
+    padding: var(--spacing-sm);
+}
+
+.media-item-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--media-item-name-row-margin-bottom);
+}
+
+.media-item-name {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-mono, monospace);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.media-item-name:hover {
+    color: var(--color-primary);
+}
+
+.media-item-info .copy-path-btn {
+    flex-shrink: 0;
+    width: var(--copy-path-btn-width);
+    height: var(--copy-path-btn-height);
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
+    font-size: var(--copy-path-btn-font-size);
+}
+
+.media-item-info .copy-path-btn:hover {
+    opacity: 1;
+    background: var(--surface-hover);
+    color: var(--color-primary);
+}
+
+.media-item-meta {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.media-item-actions {
+    position: absolute;
+    top: var(--spacing-xs);
+    right: var(--spacing-xs);
+    display: flex;
+    gap: var(--spacing-xs);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+/* Media item action buttons — square and elevated */
+.media-item-actions .btn {
+    width: var(--btn-width);
+    height: var(--btn-height);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    color: var(--text-secondary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    font-size: var(--btn-font-size);
+}
+
+.media-item-actions .btn:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow);
+}
+
+.media-item-actions .btn-danger:hover {
+    background-color: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger);
+}
+
+.media-item-actions .btn svg {
+    width: var(--svg-width);
+    height: var(--svg-height);
+}
+
+.media-item:hover .media-item-actions {
+    opacity: 1;
+}
+
+/* ===========================
+   Upload Progress
+   =========================== */
+.upload-progress-banner {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    border: var(--border-width) solid var(--color-primary);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-sm) var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+}
+
+/* ===========================
+   Window-wide Drop Overlay
+   =========================== */
+.drop-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--color-primary-light-alpha-12);
+    border: var(--drop-overlay-border) dashed var(--color-primary);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.drop-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.drop-overlay-inner {
+    text-align: center;
+    color: var(--color-primary);
+    font-weight: 600;
+    font-size: var(--font-size-lg);
+    background: var(--surface-card);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl) var(--spacing-2xl, var(--spacing-2xl));
+    box-shadow: var(--shadow-lg);
+}
+
+.drop-overlay-icon {
+    font-size: var(--drop-overlay-icon-font-size);
+    margin-bottom: var(--spacing-md);
+}
+
+/* ===========================
+   MediaBrowser Component
+   =========================== */
+.media-browser {
+    position: relative;
+}
+
+.media-browser-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+/* Scoped drop overlay for picker mode (replaces full-screen overlay) */
+.media-browser-drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--color-primary-light-alpha-12);
+    border: var(--media-browser-drop-overlay-border) dashed var(--color-primary);
+    border-radius: var(--border-radius);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.media-browser-drop-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ===========================
+   Picker Mode
+   =========================== */
+
+/* Checkbox overlay on each media item */
+.media-item-checkbox {
+    position: absolute;
+    top: var(--spacing-xs);
+    left: var(--spacing-xs);
+    z-index: 2;
+    width: var(--media-item-checkbox-width);
+    height: var(--media-item-checkbox-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-sm);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+}
+
+.media-item-checkbox input[type="checkbox"] {
+    width: var(--input-type--checkbox---width);
+    height: var(--input-type--checkbox---height);
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+/* Selected state: highlight ring */
+.media-item--selected {
+    outline: var(--media-item--selected-outline) solid var(--color-primary);
+    outline-offset: calc(var(--media-item--selected-outline-offset) * -1);
+}
+
+.media-item--selected .media-item-checkbox {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+/* Status indicator (e.g. lock for private) */
+.media-item-status {
+    position: absolute;
+    top: var(--spacing-xs);
+    left: var(--spacing-xs);
+    z-index: 2;
+    width: var(--media-item-status-width);
+    height: var(--media-item-status-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-black-alpha-40);
+    color: white;
+    border-radius: var(--border-radius-sm);
+    backdrop-filter: blur(var(--media-item-status-backdrop-filter));
+}
+
+.media-item-status svg {
+    width: var(--svg-width-alt1);
+    height: var(--svg-height-alt1);
+}
+
+/* In picker mode, offset status to avoid overlapping checkbox */
+.media-browser--picker .media-item-status {
+    left: calc(var(--spacing-xs) + var(--spacing-lg) + var(--spacing-xs));
+}
+
+/* Picker mode: entire item is clickable */
+.media-browser--picker .media-item {
+    cursor: pointer;
+}
+
+/* ===========================
+   MediaPickerDialog
+   =========================== */
+.media-picker-modal {
+    width: 90vw;
+    max-width: var(--media-picker-modal-max-width);
+    max-height: 90vh;
+}
+
+.media-picker-body {
+    overflow-y: auto;
+    flex: 1;
+    padding: var(--spacing-md);
+}
+
+/* ===========================
+   Dropped Media Preview (from drag-drop in editor)
+   =========================== */
+.dropped-media-card {
+    border-color: var(--color-success);
+    background: linear-gradient(135deg, var(--color-success-light) 0%, var(--bg-primary) 100%);
+}
+
+.dropped-media-preview {
+    max-width: 100%;
+    max-height: var(--dropped-media-preview-max-height);
+    overflow: hidden;
+    border-radius: var(--border-radius);
+    background: var(--bg-primary);
+}
+
+.dropped-media-preview img {
+    width: 100%;
+    max-width: 100%;
+    max-height: var(--img-max-height);
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+    outline: 1px solid var(--color-black-alpha-10);
+    outline-offset: -1px;
+}
+
+[data-theme="dark"] .dropped-media-preview img {
+    outline-color: var(--color-white-alpha-10);
+}

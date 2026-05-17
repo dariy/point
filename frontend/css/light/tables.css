@@ -1,0 +1,191 @@
+/* ===========================
+   Tables
+   =========================== */
+.table-container {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: left;
+    border-bottom: var(--border-width) solid var(--border-primary);
+    vertical-align: middle;
+}
+
+.table th {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+    background-color: var(--surface-hover);
+}
+
+.table tbody tr:hover {
+    background-color: var(--surface-hover);
+}
+
+/* Keep the actions column narrow; stack buttons vertically when rows are tall */
+.table td.actions {
+    width: 1%;
+    white-space: nowrap;
+    vertical-align: top;
+    padding-top: var(--spacing-sm);
+    border-bottom: none;
+}
+
+.table .actions {
+    display: flex;
+    flex-direction: row;
+    gap: var(--spacing-xs);
+    align-items: center;
+}
+
+/* Table action buttons - square and elevated */
+.table .actions .btn {
+    width: var(--btn-width);
+    height: var(--btn-height);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    color: var(--text-secondary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.table .actions .btn:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow);
+    transform: translateY(calc(var(--btn-transform) * -1));
+}
+
+.table .actions .btn-danger:hover {
+    background-color: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger);
+}
+
+.table .actions .btn svg {
+    width: var(--svg-width-alt2);
+    height: var(--svg-height-alt2);
+}
+
+/* Multi-row item grouping (Posts Table) */
+.post-row-main td {
+    border-bottom: none;
+    padding-bottom: var(--spacing-xs);
+}
+
+.post-row-tags td {
+    padding-top: 0;
+    padding-bottom: var(--spacing-md);
+}
+
+.actions-col {
+    width: 1%;
+    white-space: nowrap;
+    vertical-align: top;
+    padding-top: var(--spacing-sm);
+    border-bottom: var(--border-width) solid var(--border-primary);
+}
+
+/* Group hover effect: highlight both rows when either is hovered */
+.table tbody tr.post-row-main:hover,
+.table tbody tr.post-row-main:has(+ tr.post-row-tags:hover),
+.table tbody tr.post-row-tags:hover,
+.table tbody tr.post-row-main:hover + tr.post-row-tags {
+    background-color: var(--surface-hover);
+}
+
+td.title-col {
+    width: 100%;
+}
+
+td.updated-col {
+    white-space: nowrap;
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.preview-col {
+    width: var(--preview-col-width);
+    padding-right: 0 !important;
+    border-bottom: var(--border-width) solid var(--border-primary) !important;
+    vertical-align: middle;
+}
+
+.post-preview-img {
+    min-width: var(--post-preview-img-min-width);
+    min-height: var(--post-preview-img-min-height);
+    object-fit: cover;
+    border-radius: var(--border-radius-sm);
+    background-color: var(--surface-hover);
+    display: block;
+}
+
+.post-preview-placeholder {
+    width: var(--post-preview-placeholder-width);
+    height: var(--post-preview-placeholder-height);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--surface-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--border-width) dashed var(--border-primary);
+    color: var(--text-muted);
+    font-size: var(--font-size-base);
+}
+
+/* No special padding for first header since we added a preview column */
+/* vertically align "Status" with "Published" */
+th.status-col {
+    padding-left: var(--thstatus-col-padding-left);
+}
+
+.scheduled-date {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-scheduled);
+    margin-top: var(--scheduled-date-margin-top);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.check-col {
+    width: var(--check-col-width);
+    padding-right: 0;
+    border-bottom: none;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.post-row-main td.check-col {
+    border-bottom: none;
+    vertical-align: middle;
+}
+
+.bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--surface-hover);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+}
+
+#bulk-count {
+    color: var(--text-secondary);
+    min-width: var(--bulk-count-min-width);
+    font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,125 @@
+/* ===========================
+   Dashboard
+   =========================== */
+
+/* Generic two-column grid used in system/dashboard pages */
+.grid-2-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+}
+
+@media (max-width: 48em) {
+    .grid-2-col {
+        grid-template-columns: 1fr;
+    }
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(var(--stats-grid-grid-template-columns), 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.stat-card {
+    background: var(--surface-card);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow);
+    transition: background-color var(--transition-theme);
+}
+
+.stat-card .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-xs);
+}
+
+.stat-card .stat-value {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stat-card .stat-suffix {
+    font-size: var(--font-size-lg);
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+.stat-card.stat-primary .stat-value {
+    color: var(--color-primary);
+}
+
+.stat-card.stat-success .stat-value {
+    color: var(--color-success);
+}
+
+.stat-card.stat-warning .stat-value {
+    color: var(--color-warning);
+}
+
+/* Storage bar */
+.storage-bar {
+    background-color: var(--border-primary);
+    border-radius: var(--border-radius);
+    height: var(--storage-bar-height);
+    margin-top: var(--spacing-sm);
+    overflow: hidden;
+}
+
+.storage-bar-fill {
+    background-color: var(--color-primary);
+    height: 100%;
+    border-radius: var(--border-radius);
+    transition: width var(--transition-normal);
+}
+
+.storage-bar-fill.warning {
+    background-color: var(--color-warning);
+}
+
+.storage-bar-fill.danger {
+    background-color: var(--color-danger);
+}
+
+/* ===========================
+   Version Update Banner
+   =========================== */
+.version-update-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border-bottom: var(--border-width) solid var(--color-primary-alpha-15);
+    font-size: var(--font-size-sm);
+
+    font-weight: 500;
+}
+
+.version-update-banner code {
+    font-family: monospace;
+    background: var(--color-black-alpha-08);
+    padding: var(--code-padding-y) var(--code-padding-x);
+    border-radius: var(--code-border-radius);
+}
+
+.version-update-dismiss {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--version-update-dismiss-font-size);
+    line-height: 1;
+    color: inherit;
+    opacity: 0.6;
+    padding: 0 var(--version-update-dismiss-padding);
+    flex-shrink: 0;
+}
+
+.version-update-dismiss:hover {
+    opacity: 1;
+}

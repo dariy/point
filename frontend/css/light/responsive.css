@@ -1,0 +1,214 @@
+/* ===========================
+   Admin Responsive
+   =========================== */
+@media (max-width: 64em) {
+    .editor-container {
+        grid-template-columns: 1fr;
+    }
+
+    .editor-sidebar {
+        order: -1;
+    }
+}
+
+/* Sidebar overlay (hidden by default; shown on mobile when sidebar is open) */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 149; /* below sidebar (150) */
+    background: var(--color-black-alpha-40);
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* Hamburger button — hidden on desktop, visible on mobile */
+.sidebar-toggle-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--sidebar-toggle-btn-width);
+    height: var(--sidebar-toggle-btn-height);
+    padding: 0;
+    background: none;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    color: var(--text-primary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+    background: var(--surface-hover);
+}
+
+@media (max-width: 48em) {
+    :root {
+        --sidebar-width: 0;
+    }
+
+    .sidebar-toggle-btn {
+        display: flex;
+    }
+
+    .light-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 150;
+        transform: translateX(-100%);
+        width: var(--light-sidebar-width);
+        transition: transform var(--transition-normal);
+    }
+
+    .light-sidebar.open {
+        transform: translateX(0);
+    }
+
+    .light-main {
+        margin-left: 0;
+    }
+
+    .light-content {
+        padding: var(--spacing-md);
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .system-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .backup-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .backup-info {
+        min-width: 0;
+    }
+
+    .backup-actions {
+        justify-content: flex-end;
+    }
+
+    .modal-content {
+        min-width: auto;
+        max-width: 90%;
+        margin: var(--modal-content-margin);
+    }
+
+    /* Tag editor modal — clamp to viewport on tablet */
+    .tag-editor-modal {
+        width: min(var(--tag-editor-modal-width-1), calc(100vw - var(--tag-editor-modal-width-2)));
+    }
+}
+
+/* ===========================
+   Tags Manager — portrait phones
+   =========================== */
+@media (max-width: 40em) {
+    /* Header: two rows — [hamburger + title] then [actions] */
+    .light-header {
+        height: auto;
+        min-height: var(--header-height);
+        flex-wrap: wrap;
+        padding-top: var(--spacing-sm);
+        padding-bottom: var(--spacing-sm);
+        row-gap: var(--light-header-row-gap);
+    }
+
+    /* Actions drop to line 2, full width, wrapping allowed */
+    .header-actions {
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        text-wrap-mode: wrap;
+    }
+
+    /* Hide drag handles — touch drag is unavailable */
+    .tm-drag-handle {
+        display: none;
+    }
+
+    .card {
+        background: none;
+    }
+
+    .card-body {
+        padding: 0;
+    }
+
+    .tm-row .tm-actions {
+        order: 5;
+    }
+
+    /* Two-line tree rows:
+       Line 1 – expand toggle + tag name + count badge
+       Line 2 – flag buttons + action buttons              */
+    .tm-row {
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--spacing-xs) var(--spacing-sm);
+        min-height: auto;
+        padding: var(--spacing-sm) var(--tm-row-padding);
+    }
+
+    .tm-toggle,
+    .tm-toggle-spacer {
+        order: 1;
+    }
+
+    .tm-node-body {
+        order: 2;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .tm-row-meta {
+        order: 3;
+        min-width: auto;
+        flex-shrink: 1;
+    }
+
+    /* Hide flag buttons on portrait — keep only edit/add/delete actions */
+    .tm-flags-row {
+        display: none;
+    }
+
+    /* Reduce per-level indentation so deeply nested tags stay readable */
+    .tm-tree.level-1,
+    .tm-tree.level-2,
+    .tm-tree.level-3 {
+        padding-left: var(--tm-treelevel-1-padding-left);
+        margin-left: var(--tm-treelevel-1-margin-left);
+    }
+
+    /* Tag editor modal — full width on small screens */
+    .tag-editor-modal {
+        width: calc(100vw - var(--tag-editor-modal-width));
+    }
+
+    /* Flags grid: single column instead of two */
+    .tag-flags-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 30em) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .filters {
+        flex-direction: column;
+    }
+}

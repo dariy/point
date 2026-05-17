@@ -1,0 +1,114 @@
+/* ===========================
+   Drop Zone Overlay (Quick Post Creation)
+   =========================== */
+.drop-zone-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--color-primary-alpha-95);
+    backdrop-filter: blur(var(--drop-zone-overlay-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--drop-zone-overlay--webkit-backdrop-filter));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.drop-zone-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.drop-zone-overlay.uploading {
+    background: var(--color-primary-alpha-98);
+}
+
+.drop-zone-content {
+    text-align: center;
+    color: white;
+    padding: var(--spacing-2xl);
+    max-width: var(--drop-zone-content-max-width);
+}
+
+.drop-zone-icon {
+    width: var(--drop-zone-icon-width);
+    height: var(--drop-zone-icon-height);
+    margin-bottom: var(--spacing-lg);
+    animation: dropZoneBounce 1s ease infinite;
+}
+
+.drop-zone-overlay.uploading .drop-zone-icon {
+    animation: dropZoneSpin 1s linear infinite;
+}
+
+@keyframes dropZoneBounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(calc(var(--50--transform) * -1));
+    }
+}
+
+@keyframes dropZoneSpin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.drop-zone-title {
+    font-size: var(--font-size-2xl);
+    font-weight: 600;
+    margin-bottom: var(--spacing-sm);
+}
+
+.drop-zone-hint {
+    font-size: var(--font-size-base);
+    opacity: 0.9;
+}
+
+.drop-zone-overlay.uploading .drop-zone-title {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .drop-zone-overlay {
+    background: var(--color-primary-light-alpha-95);
+}
+
+[data-theme="dark"] .drop-zone-overlay.uploading {
+    background: var(--color-primary-light-alpha-98);
+}
+
+/* Drag-over body state indicator */
+body.drag-over::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    border: var(--bodydrag-over--border) dashed var(--color-primary);
+    pointer-events: none;
+    z-index: 9998;
+}

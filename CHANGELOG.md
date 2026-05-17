@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - TBD
+
+### Added
+- **Core blog engine**: self-hosted personal photo blog with Go + Echo v4 backend and Vanilla JS SPA frontend
+- **SQLite storage** via sqlc — no external database required
+- **Single-container deployment**: multi-stage Dockerfile, runs as non-root, multi-arch (amd64 + arm64) images on GHCR
+- **Media management**: upload, thumbnail generation, EXIF extraction, bulk import
+- **AI media analysis**: Google Gemini integration for automatic title, tags, and excerpt suggestions
+- **Timeline navigation**: interactive SVG timeline with tag-based filtering and year/location drill-down
+- **Post scheduling**: publish posts at a future date/time; background scheduler publishes on time
+- **Themes**: built-in light/dark themes plus CSS custom property overrides
+- **Lightbox**: keyboard-accessible full-screen media viewer
+- **Setup wizard**: one-time configuration flow on first boot
+- **Session-cookie auth**: bcrypt passwords, configurable session TTL
+- **Secrets architecture**: sensitive values stored in a separate `blog_secrets` table, never exposed via API
+- **Graceful shutdown**: SIGTERM/SIGINT triggers clean shutdown with 30-second drain window
+- **Health endpoint**: `GET /health` for container health checks and orchestration
+- **Version endpoint**: `GET /api/system/version` reports the running release tag
+- **GHCR release pipeline**: GitHub Actions publishes `ghcr.io/dariy/point:{tag,latest}` on version tags
+
+[Unreleased]: https://github.com/dariy/point/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dariy/point/releases/tag/v0.1.0

@@ -1,0 +1,546 @@
+/**
+ * PostsListPage — paginated, filterable list of all posts.
+ *
+ * Fetches: GET /api/posts
+ */
+
+import { Component } from '../../components/Component.js';
+import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { TagsInput } from '../../components/light/TagsInput.js';
+import { Pagination } from '../../components/shared/Pagination.js';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
+import { listPosts, deletePost, updatePostTags, updatePost, setPostStatus } from '../../api/posts.js';
+import { logout } from '../../api/auth.js';
+import { store } from '../../store.js';
+import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
+import { formatDateShort } from '../../utils/formatters.js';
+import { EDIT_SVG, X_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG } from '../../utils/icons.js';
+
+const STATUS_LABELS = {
+  published: 'Published',
+  draft: 'Draft',
+  hidden: 'Hidden',
+  page: 'Page',
+  scheduled: 'Scheduled',
+};
+
+export default class PostsListPage extends Component {
+  constructor(container, props = {}) {
+    super(container, props);
+    this.state = {
+      loading: true,
+      posts: [],
+      pagination: {},
+      error: null,
+      statusFilter: props.query?.status || '',
+      search: props.query?.search || '',
+      page: parseInt(props.query?.page || '1', 10),
+      selectMode: false,
+      selectedIds: new Set(),
+    };
+  }
+
+  render() {
+    const { loading, posts, error, statusFilter, search, selectMode, selectedIds } = this.state;
+
+    const statusOptions = ['', 'draft', 'published', 'scheduled', 'hidden', 'page'].map((s) => {
+      const label = s ? STATUS_LABELS[s] : 'All statuses';
+      const sel = statusFilter === s ? ' selected' : '';
+      return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(label)}</option>`;
+    }).join('');
+
+    const colspan = selectMode ? 6 : 5;
+
+    const rows = loading
+      ? `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`
+      : error
+        ? `<tr><td colspan="${colspan}" class="error-state">${escapeHtml(error)}</td></tr>`
+        : !posts.length
+          ? `<tr><td colspan="${colspan}" class="empty-state">No posts found.</td></tr>`
+          : posts.map((p) => {
+              const mediaUrl = p.media_url || '';
+              const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
+              const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
+              const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
+
+              let previewHtml = '';
+              if (isImage && p.media_url) {
+                previewHtml = `<img src="${escapeHtml(p.media_url + '?thumb')}" class="post-preview-img" loading="lazy">`;
+              } else if (isVideo) {
+                previewHtml = `<div class="post-preview-placeholder" title="Video">${PLAY_SVG}</div>`;
+              } else if (isAudio) {
+                previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
+              } else {
+                previewHtml = `<div class="post-preview-placeholder"></div>`;
+              }
+              const isChecked = selectedIds.has(p.id);
+
+              return `
+              <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
+                ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-id="${p.id}" ${isChecked ? 'checked' : ''}></td>` : ''}
+                <td class="preview-col" rowspan="2">
+                  <a href="/light/posts/${escapeHtml(String(p.id))}/edit" title="Edit post">
+                    ${previewHtml}
+                  </a>
+                </td>
+                <td class="status-col">
+                  <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
+                          name="status" data-id="${escapeHtml(String(p.id))}">
+                    ${['draft', 'published', 'scheduled', 'hidden', 'page'].map(s => `
+                      <option value="${s}"${p.status === s ? ' selected' : ''}>
+                        ${escapeHtml(STATUS_LABELS[s] || s)}
+                      </option>
+                    `).join('')}
+                  </select>
+                  ${p.status === 'scheduled' && p.scheduled_at
+                    ? `<span class="scheduled-date">${escapeHtml(new Date(p.scheduled_at).toLocaleString([], {
+                        month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      }))}</span>`
+                    : ''}
+                </td>
+                <td class="title-col">
+                  <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
+                    ${escapeHtml(p.title)}
+                  </a>
+                </td>
+                <td class="updated-col">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
+                <td class="actions-col">
+                  <div class="actions">
+                    <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
+                       class="btn btn-sm" title="Edit">${EDIT_SVG}</a>
+                    <a href="/post/${escapeHtml(p.slug)}" class="btn btn-sm"
+                       title="View" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
+                    <button class="btn btn-sm btn-danger delete-btn"
+                            data-id="${escapeHtml(String(p.id))}"
+                            data-title="${escapeHtml(p.title)}"
+                            title="Delete">${X_SVG}</button>
+                  </div>
+                </td>
+              </tr>
+              <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-tags">
+                <td colspan="4" class="tags-col">
+                  <div id="tags-cell-${escapeHtml(String(p.id))}"></div>
+                </td>
+              </tr>`;
+            }).join('');
+
+    return `
+      <div class="light-layout">
+        <div id="sidebar-mount"></div>
+        <div class="light-main posts-list-main">
+          <header class="light-header">
+            <h1>Posts</h1>
+            <div class="header-actions">
+              <button id="select-mode-btn" class="btn">${selectMode ? 'Cancel' : 'Select'}</button>
+              <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
+            </div>
+          </header>
+          <main class="light-content">
+            <div class="filters">
+              <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || 'draft')} filter-select">
+                ${statusOptions}
+              </select>
+              <input type="search" id="search-input" class="form-input filter-search"
+                     placeholder="Search posts…" value="${escapeHtml(search)}">
+            </div>
+            ${selectMode ? `
+            <div class="bulk-toolbar" id="bulk-toolbar">
+              <span id="bulk-count">0 selected</span>
+              <select id="bulk-status-select">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="hidden">Hidden</option>
+              </select>
+              <button id="bulk-apply-btn" class="btn btn-sm" disabled>Apply</button>
+              <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled>Delete selected</button>
+            </div>
+            ` : ''}
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    ${selectMode ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ''}
+                    <th class="preview-col" colspan="2">Post</th>
+                    <th class="title-col"></th>
+                    <th class="updated-col">Last updated</th>
+                    <th class="actions-col"></th>
+                  </tr>
+                </thead>
+                <tbody id="posts-tbody">${rows}</tbody>
+              </table>
+            </div>
+            <div id="pagination-mount"></div>
+          </main>
+        </div>
+      </div>`;
+  }
+
+  afterRender() {
+    this.mountChild(LightSidebar, '#sidebar-mount', {
+      currentPath: '/light/posts',
+      user: store.get('user') || {},
+      onLogout: this._handleLogout.bind(this),
+    });
+
+    if (!this.state.loading && this.state.pagination.pages > 1) {
+      this.mountChild(Pagination, '#pagination-mount', {
+        page: this.state.pagination.page,
+        pages: this.state.pagination.pages,
+        total: this.state.pagination.total,
+        onPage: (p) => this._load({ page: p }),
+      });
+    }
+
+    // Restore focus to search input after a re-render triggered by _load
+    const searchInput = this.$('#search-input');
+    if (searchInput) {
+      if (this._restoreSearchFocus) {
+        this._restoreSearchFocus = false;
+        const len = searchInput.value.length;
+        searchInput.focus();
+        searchInput.setSelectionRange(len, len);
+      }
+
+      searchInput.addEventListener('input', debounce((e) => {
+        // Update state without re-rendering — the input already shows the new value
+        this.state.search = e.target.value;
+        this.state.page = 1;
+        this._load({ page: 1, search: e.target.value });
+      }, 350));
+    }
+
+    // Status filter
+    const statusFilter = this.$('#status-filter');
+    if (statusFilter) {
+      statusFilter.addEventListener('change', (e) => {
+        const val = e.target.value;
+        statusFilter.className = `status-select badge-${val || 'draft'} filter-select`;
+        this.setState({ statusFilter: val, page: 1 });
+        this._load({ page: 1, status: val });
+      });
+    }
+
+    // Mount a TagsInput in every tags cell
+    if (!this.state.loading && !this.state.error) {
+      for (const post of this.state.posts) {
+        this._mountTagEditor(post);
+      }
+    }
+
+    // Status change buttons
+    this.$$('.status-change-btn').forEach((select) => {
+      select.addEventListener('change', async (e) => {
+        const id = parseInt(select.dataset.id, 10);
+        const newStatus = e.target.value;
+        await this._updatePostStatus(id, newStatus, select);
+      });
+    });
+
+    // Delete buttons
+    this.$$('.delete-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = parseInt(btn.dataset.id, 10);
+        const title = btn.dataset.title;
+        this._showConfirm('Delete post', `Delete post "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
+          this._deletePost(id);
+        });
+      });
+    });
+
+    // Select mode
+    this.$('#select-mode-btn').addEventListener('click', () => {
+      this.setState({ selectMode: !this.state.selectMode, selectedIds: new Set() });
+    });
+
+    if (this.state.selectMode) {
+      this.$('#select-all-cb').addEventListener('change', this._handleSelectAll.bind(this));
+      this.$$('.select-row-cb').forEach(cb => {
+        cb.addEventListener('change', this._handleSelectRow.bind(this));
+      });
+      this.$('#bulk-apply-btn').addEventListener('click', this._handleBulkApply.bind(this));
+      this.$('#bulk-delete-btn').addEventListener('click', this._handleBulkDelete.bind(this));
+      this._updateBulkToolbar();
+    }
+  }
+
+  _handleSelectAll(e) {
+    const isChecked = e.target.checked;
+    const { posts, selectedIds } = this.state;
+    this.$$('.select-row-cb').forEach(cb => {
+      cb.checked = isChecked;
+    });
+    if (isChecked) {
+      posts.forEach(p => selectedIds.add(p.id));
+    } else {
+      selectedIds.clear();
+    }
+    this._updateBulkToolbar();
+  }
+
+  _handleSelectRow(e) {
+    const id = parseInt(e.target.dataset.id, 10);
+    if (e.target.checked) {
+      this.state.selectedIds.add(id);
+    } else {
+      this.state.selectedIds.delete(id);
+    }
+    this._updateBulkToolbar();
+  }
+
+  _updateBulkToolbar() {
+    const n = this.state.selectedIds.size;
+    const bulkCount = this.$('#bulk-count');
+    const applyBtn = this.$('#bulk-apply-btn');
+    const deleteBtn = this.$('#bulk-delete-btn');
+    const selectAllCb = this.$('#select-all-cb');
+
+    if (bulkCount) bulkCount.textContent = `${n} selected`;
+    if (applyBtn) applyBtn.disabled = n === 0;
+    if (deleteBtn) deleteBtn.disabled = n === 0;
+
+    if (selectAllCb) {
+      const totalVisible = this.state.posts.length;
+      if (n === 0) {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = false;
+      } else if (n === totalVisible) {
+        selectAllCb.checked = true;
+        selectAllCb.indeterminate = false;
+      } else {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = true;
+      }
+    }
+  }
+
+  async _handleBulkApply() {
+    const status = this.$('#bulk-status-select').value;
+    const ids = Array.from(this.state.selectedIds);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const id of ids) {
+      try {
+        await setPostStatus(id, status);
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to update post ${id}:`, err);
+        failCount++;
+      }
+    }
+
+    let message = '';
+    if (failCount === 0) {
+      message = `All ${successCount} posts updated.`;
+    } else {
+      message = `${successCount} of ${ids.length} posts updated. ${failCount} failed.`;
+    }
+    store.set('toast', { message, type: failCount > 0 ? 'error' : 'success' });
+
+    this.setState({ selectMode: false, selectedIds: new Set() });
+    this._load();
+  }
+
+  _handleBulkDelete() {
+    const n = this.state.selectedIds.size;
+    this._showConfirm('Delete posts', `Delete ${n} posts? This cannot be undone.`, 'Delete', 'danger', async () => {
+      const ids = Array.from(this.state.selectedIds);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const id of ids) {
+        try {
+          await deletePost(id);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to delete post ${id}:`, err);
+          failCount++;
+        }
+      }
+
+      let message = '';
+      if (failCount === 0) {
+        message = `All ${successCount} posts deleted.`;
+      } else {
+        message = `${successCount} of ${ids.length} posts deleted. ${failCount} failed.`;
+      }
+      store.set('toast', { message, type: failCount > 0 ? 'error' : 'success' });
+
+      this.setState({ selectMode: false, selectedIds: new Set() });
+      this._load();
+    });
+  }
+
+  mount() {
+    super.mount();
+    this._perPage = this._calcPerPage();
+    this._load();
+
+    this._onResize = debounce(() => {
+      const next = this._calcPerPage();
+      if (next !== this._perPage) {
+        this._perPage = next;
+        this._load({ page: 1 });
+      }
+    }, 200);
+    window.addEventListener('resize', this._onResize);
+  }
+
+  beforeUnmount() {
+    if (this._onResize) window.removeEventListener('resize', this._onResize);
+  }
+
+  /** Measure how many table rows fit in the available container height. */
+  _calcPerPage() {
+    const container = this.$('.table-container');
+    const thead = this.$('thead');
+    const probeRow = this.$('tbody tr');
+    if (!container || !thead || !probeRow) return 20;
+    const bodyHeight = container.clientHeight - thead.offsetHeight;
+    // Each post item now takes two <tr> rows.
+    const rowHeight = (probeRow.offsetHeight || 44) * 2;
+    return Math.max(5, Math.floor(bodyHeight / rowHeight));
+  }
+
+  /** Update the browser URL to reflect current filters without triggering a full navigation. */
+  _syncUrl(overrides = {}) {
+    const status = overrides.status ?? this.state.statusFilter;
+    const search = overrides.search ?? this.state.search;
+    const page   = overrides.page   ?? this.state.page;
+
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (search) params.set('search', search);
+    if (page > 1) params.set('page', String(page));
+
+    const qs = params.toString();
+    const url = '/light/posts' + (qs ? '?' + qs : '');
+    history.replaceState(null, '', url);
+  }
+
+  async _load(overrides = {}) {
+    // Check focus before any DOM mutation so we can restore it after re-render
+    const searchEl = this.$('#search-input');
+    const searchHadFocus = searchEl && document.activeElement === searchEl;
+
+    // Show loading indicator in-place — no full re-render, no focus loss.
+    // The string is fully static (no user data), so innerHTML is safe here.
+    const tbody = this.$('#posts-tbody');
+    const colspan = this.state.selectMode ? 6 : 5;
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
+    }
+    this.state.loading = true;
+    this.state.error = null;
+
+    const params = {
+      page: overrides.page ?? this.state.page,
+      per_page: this._perPage ?? 20,
+    };
+    const status = overrides.status ?? this.state.statusFilter;
+    const search = overrides.search ?? this.state.search;
+    if (status) params.status = status;
+    if (search) params.q = search;
+
+    // Sync URL whenever filters change
+    this._syncUrl(overrides);
+
+    try {
+      const data = await listPosts(params);
+      this._restoreSearchFocus = searchHadFocus;
+      this.setState({
+        loading: false,
+        posts: (data.posts || data.items || []).map(p => ({ ...p, status: (p.status || '').toLowerCase() })),
+        pagination: {
+          page: data.page,
+          pages: data.pages,
+          total: data.total,
+          per_page: data.per_page,
+        },
+      });
+    } catch (err) {
+      this._restoreSearchFocus = searchHadFocus;
+      console.error('[PostsListPage] load error:', err);
+      store.set('toast', { message: 'Could not load posts.', type: 'error' });
+      this.setState({ loading: false });
+    }
+  }
+
+  /** Mount a TagsInput directly in the tags cell for a post row. Saves on change. */
+  _mountTagEditor(post) {
+    const mount = this.$(`#tags-cell-${post.id}`);
+    if (!mount) return;
+
+    const initialTags = (post.tags || []).map(t => typeof t === 'string' ? t : t.name);
+
+    this.mountChild(TagsInput, `#tags-cell-${post.id}`, {
+      tags: initialTags,
+      onChange: async (tags) => {
+        try {
+          const updated = await updatePostTags(post.id, tags);
+          // Update local state silently so re-render preserves the new tags
+          post.tags = updated.tags || tags.map(n => ({ name: n, slug: n }));
+          store.set('toast', { message: 'Tags saved.', type: 'success' });
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Failed to save tags.', type: 'error' });
+        }
+      },
+    });
+  }
+
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
+  }
+
+  async _deletePost(id) {
+    try {
+      await deletePost(id);
+      store.set('toast', { message: 'Post deleted.', type: 'success' });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
+    }
+  }
+
+  async _updatePostStatus(id, status, select) {
+    if (status === 'scheduled') {
+      navigate(`/light/posts/${id}/edit?openSchedule=1`);
+      return;
+    }
+    const originalStatus = this.state.posts.find(p => p.id === id)?.status || 'draft';
+    select.classList.add('badge-loading');
+    try {
+      const updated = await updatePost(id, { status });
+      // Update local state silently to prevent full re-render
+      const post = this.state.posts.find(p => p.id === id);
+      if (post) post.status = updated.status.toLowerCase();
+
+      // Update UI
+      select.className = `status-select badge-${updated.status.toLowerCase()} status-change-btn`;
+      store.set('toast', { message: 'Status updated.', type: 'success' });
+    } catch (err) {
+      // Revert select value on failure
+      select.value = originalStatus;
+      store.set('toast', { message: err.message || 'Update failed.', type: 'error' });
+    } finally {
+      select.classList.remove('badge-loading');
+    }
+  }
+
+  async _handleLogout() {
+    try { await logout(); } catch { /* ignore */ }
+    store.set('user', null);
+    navigate('/', { replace: true });
+  }
+}

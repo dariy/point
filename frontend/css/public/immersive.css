@@ -1,0 +1,453 @@
+/* ===========================
+   Immersive Layout (Full Screen Post)
+   =========================== */
+.immersive-layout .site-wrapper {
+    display: block;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+}
+
+.immersive-layout .site-header-group {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding-top: env(safe-area-inset-top, 0);
+    background: var(--header-bg);
+    backdrop-filter: blur(var(--site-header-group-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter));
+    border-bottom: none;
+    color: var(--text-primary);
+    transition: opacity 0.4s ease,
+        transform 0.4s ease,
+        background-color var(--transition-theme),
+        color var(--transition-theme),
+        border-color var(--transition-theme);
+}
+
+.immersive-layout .site-header .site-title,
+.immersive-layout .site-header .site-subtitle,
+.immersive-layout .site-header .light-link,
+.immersive-layout .site-header .breadcrumb-link,
+.immersive-layout .site-header .breadcrumb-current {
+    border-color: var(--color-white-alpha-30);
+    transition: color var(--transition-theme),
+        border-color var(--transition-theme),
+        background-color var(--transition-theme);
+}
+
+.immersive-layout .site-header svg,
+.immersive-layout .site-header .theme-toggle,
+.immersive-layout .site-header .create-post,
+.immersive-layout .site-header .header-action-btn {
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+    transition: color var(--transition-theme),
+        border-color var(--transition-theme),
+        background-color var(--transition-theme),
+        stroke var(--transition-theme),
+        fill var(--transition-theme);
+}
+
+[data-theme="light"].immersive-layout .site-header-group {
+    background: var(--color-white-alpha-75);
+    backdrop-filter: blur(var(--site-header-group-backdrop-filter-alt1));
+    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter-alt1));
+}
+
+[data-theme="light"].immersive-layout .site-header svg {
+    color: var(--text-primary);
+    stroke: var(--text-primary);
+}
+
+[data-theme="light"].immersive-layout .site-header .site-title,
+[data-theme="light"].immersive-layout .site-header .site-subtitle,
+[data-theme="light"].immersive-layout .site-header .light-link,
+[data-theme="light"].immersive-layout .site-header .breadcrumb-link,
+[data-theme="light"].immersive-layout .site-header .breadcrumb-current {
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+    transition: color var(--transition-theme), border-color var(--transition-theme);
+}
+
+[data-theme="light"].immersive-layout .site-header .breadcrumb-separator {
+    color: var(--text-tertiary);
+    transition: color var(--transition-theme);
+}
+
+.immersive-layout .site-header .header-action-btn:hover {
+    background: var(--color-white-alpha-10);
+}
+
+[data-theme="light"].immersive-layout .site-header .header-action-btn:hover {
+    background: var(--surface-hover);
+}
+
+.immersive-layout .site-main {
+    padding: 0;
+    margin-top: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+    margin-top: 0;
+}
+
+.immersive-layout .main-container {
+    max-width: none;
+    margin: 0;
+    height: 100%;
+    padding: 0;
+}
+
+/* Ensure the component mount point stretches to fill the container */
+.immersive-layout #content-mount {
+    display: block;
+    height: 100%;
+}
+
+.immersive-layout .site-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--footer-bg);
+    /*background: var(--color-black-alpha-60);*/
+    /*linear-gradient(to top, var(--color-black-alpha-95) 0%, var(--color-black-alpha-85) 40%, var(--color-black-alpha-40) 80%, transparent 100%);*/
+    color: var(--color-white-alpha-95);
+    border-top: none;
+    padding-top: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
+    transition: opacity 0.4s ease,
+        transform 0.4s ease,
+        background-color var(--transition-theme),
+        background var(--transition-theme),
+        color var(--transition-theme);
+    pointer-events: none;
+}
+
+.immersive-layout .site-footer .footer-content {
+    pointer-events: auto;
+}
+
+[data-theme="light"].immersive-layout .site-footer {
+    background: linear-gradient(to top, var(--color-white-alpha-95) 0%, var(--color-white-alpha-85) 40%, var(--color-white-alpha-40) 80%, transparent 100%);
+    color: var(--text-primary);
+}
+
+.immersive-layout .site-footer .footer-link,
+.immersive-layout .site-footer .footer-copyright {
+    color: var(--footer-text);
+    transition: color var(--transition-theme);
+}
+
+.immersive-layout .footer-content {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap-reverse;
+    align-items: baseline;
+    gap: var(--spacing-xs) var(--spacing-md);
+    text-align: left;
+}
+
+.immersive-layout .footer-content .footer-copyright {
+    flex-shrink: 0;
+    white-space: nowrap;
+    order: 0;
+}
+
+.immersive-layout .footer-content .immersive-tags {
+    flex: 1 1 0%;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+    pointer-events: auto;
+}
+
+[data-theme="light"].immersive-layout .site-footer .footer-link {
+    color: var(--text-primary);
+}
+
+[data-theme="light"].immersive-layout .site-footer .footer-copyright {
+    color: var(--footer-text);
+}
+
+/* Immersive Components */
+.immersive-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-primary);
+    touch-action: none; /* Prevent scroll bouncing on swipe */
+    overscroll-behavior: none; /* Prevent trackpad rubber-banding */
+}
+
+.immersive-visuals {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-carouselle);
+    transition: background-color var(--transition-theme);
+    will-change: transform, opacity;
+}
+
+.immersive-wrapper.zoomed .immersive-visuals {
+    cursor: grab;
+}
+
+.immersive-wrapper.zoomed .immersive-visuals:active {
+    cursor: grabbing;
+}
+
+.immersive-bg-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    /* Show the whole image */
+    transition: opacity 0.3s ease;
+}
+
+.immersive-tags .tag-link {
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    border: var(--border-width) solid var(--text-secondary);
+    backdrop-filter: blur(var(--tag-link-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--tag-link--webkit-backdrop-filter));
+    pointer-events: auto;
+}
+
+.immersive-tags .tag-link:hover {
+    color: var(--text-secondary);
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link {
+    background: var(--color-white-alpha-85);
+    color: var(--text-primary);
+    border: var(--border-width) solid var(--color-black-alpha-10);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link:hover {
+    background: var(--bg-overlay-hover);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+/* Ancestor flyout states — must beat .immersive-tags .tag-link (0,2,0)
+   and the light-theme variant (0,4,0) */
+.immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+.immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+.immersive-tags .tag-link.is-flyout-open:hover {
+    color: white;
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.has-flyout {
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"].immersive-layout .immersive-tags .tag-link.is-flyout-open {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+video.immersive-bg-image {
+    margin-bottom: 6em;
+}
+
+.immersive-audio-container {
+    width: 100%;
+    max-width: var(--immersive-audio-container-max-width);
+    padding: var(--spacing-xl);
+    background: var(--bg-overlay);
+    border-radius: var(--border-radius-lg);
+    backdrop-filter: blur(var(--immersive-audio-container-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--immersive-audio-container--webkit-backdrop-filter));
+    margin-bottom: 6em;
+}
+
+.immersive-audio-player {
+    width: 100%;
+}
+
+.audio-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+}
+
+.immersive-overlay-container {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+    /* Allow clicking through to toggle */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* Center the info card */
+    align-items: center;
+    padding: var(--immersive-overlay-container-padding-y) var(--immersive-overlay-container-padding-x);
+    /* Clear header/footer areas */
+    transition: opacity 0.4s ease,
+        transform 0.4s ease;
+    background: var(--color-black-alpha-30);
+    /* Slight dim to make text readable */
+}
+
+.post-info-card {
+    pointer-events: auto;
+    background: var(--color-white-alpha-95);
+    backdrop-filter: blur(var(--post-info-card-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-info-card--webkit-backdrop-filter));
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius-xl);
+    width: 100%;
+    max-width: var(--post-info-card-max-width);
+    max-height: 80vh;
+    /* Leave some space */
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 var(--post-info-card-box-shadow-1) var(--post-info-card-box-shadow-2) var(--color-black-alpha-30);
+    transition: opacity 0.3s ease,
+        background-color var(--transition-theme),
+        color var(--transition-theme),
+        border-color var(--transition-theme),
+        box-shadow var(--transition-theme);
+    overflow: hidden;
+    /* For inner scroll */
+}
+
+[data-theme="dark"] .post-info-card {
+    background: var(--color-rgb-30-30-30-alpha-85);
+    border: var(--border-width) solid var(--color-white-alpha-10);
+}
+
+.post-header-compact {
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: var(--border-width) solid var(--border-primary);
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.post-content-scrollable {
+    overflow-y: auto;
+    padding-right: var(--spacing-sm);
+    /* Avoid scrollbar covering text */
+    flex: 1;
+    /* Custom scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+
+/* Compact Nav */
+.post-footer-compact {
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: var(--border-width) solid var(--border-primary);
+    flex-shrink: 0;
+}
+
+.post-navigation-compact {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-xl);
+}
+
+.post-nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--post-nav-icon-width);
+    height: var(--post-nav-icon-height);
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.post-nav-icon:hover {
+    background: var(--color-primary);
+    color: white;
+    transform: scale(1.1);
+}
+
+.post-nav-icon.disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* UI Hidden State (toggled by JS) */
+.immersive-layout.ui-hidden .site-header-group {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.immersive-layout.ui-hidden .site-footer {
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.immersive-layout.ui-hidden .immersive-overlay-container {
+    opacity: 0;
+    transform: scale(0.98);
+    pointer-events: none;
+}
+
+.immersive-layout.ui-hidden .immersive-visuals {
+    cursor: none;
+    /* Hide cursor for better immersion */
+}
+
+/* Excerpt card — top-left overlay below the header */
+.post-excerpt-card {
+    position: absolute;
+    top: var(--post-excerpt-card-top); /* below fixed header */
+    left: var(--spacing-lg);
+    z-index: 25;
+    max-width: min(var(--post-excerpt-card-max-width), calc(100vw - var(--spacing-xl) * 2));
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-overlay);
+    color: var(--color-white-alpha-90);
+    border-radius: var(--border-radius);
+    backdrop-filter: blur(var(--post-excerpt-card-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--post-excerpt-card--webkit-backdrop-filter));
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    pointer-events: none;
+    transition: opacity 0.4s ease,
+        transform 0.4s ease;
+}
+
+[data-theme="light"] .post-excerpt-card {
+    background: var(--color-white-alpha-85);
+    color: var(--text-primary);
+}
+
+.immersive-layout.ui-hidden .post-excerpt-card {
+    opacity: 0;
+    transform: translateY(calc(var(--post-excerpt-card-transform) * -1));
+    pointer-events: none;
+}

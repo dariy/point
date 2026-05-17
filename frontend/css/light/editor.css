@@ -1,0 +1,538 @@
+/* ===========================
+   Post Editor
+   =========================== */
+.editor-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    width: 100%;
+}
+
+.editor-content {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    min-height: var(--editor-content-min-height);
+    width: 100%;
+}
+
+/* Window-level drag overlay */
+body.drag-active::after {
+    content: '';
+    position: fixed;
+    inset: var(--bodydrag-active--inset);
+    background: var(--color-primary-alpha-06);
+    border: var(--bodydrag-active--border) dashed var(--color-primary);
+    border-radius: var(--border-radius-lg);
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.preview-panel {
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    background: var(--surface-card);
+    min-height: var(--preview-panel-min-height);
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
+}
+
+.preview-panel img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Title row: [★] [status] [title input] */
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.title-input-wrapper {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.title-input-wrapper .editor-title {
+    width: 100%;
+    padding-right: var(--spacing-xl);
+}
+
+.title-input-wrapper .field-ai-btn {
+    position: absolute;
+    right: var(--spacing-xs);
+}
+
+/* Featured star toggle */
+.featured-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: var(--featured-btn-font-size);
+    line-height: 1;
+    padding: var(--featured-btn-padding) var(--spacing-xs);
+    color: var(--text-muted);
+    transition: color var(--transition-fast), transform 0.1s ease;
+    border-radius: var(--border-radius-sm, var(--border-radius-sm));
+}
+
+.featured-btn:hover {
+    color: var(--color-amber-500);
+    transform: scale(1.15);
+}
+
+.featured-btn.is-featured {
+    color: var(--color-amber-500);
+}
+
+/* AI fill button — appears at the end of title/tags/excerpt rows */
+.field-ai-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    line-height: 1;
+    padding: var(--field-ai-btn-padding) var(--spacing-xs);
+    color: var(--text-muted);
+    transition: color var(--transition-fast), transform 0.1s ease;
+    border-radius: var(--border-radius-sm, var(--border-radius-sm));
+    align-self: center;
+}
+
+.field-ai-btn:hover:not(:disabled) {
+    color: var(--color-primary);
+    transform: scale(1.2);
+}
+
+.field-ai-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Tags row: [TagsInput flex-1] [AI btn] */
+.tags-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+}
+
+.tags-input-wrapper {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+}
+
+.tags-input-wrapper .tags-row-input {
+    width: 100%;
+}
+
+/* Ensure the AI button fits over the tags input without colliding with text */
+.tags-input-wrapper .tags-row-input .tags-input {
+    padding-right: var(--spacing-xl);
+}
+
+.tags-input-wrapper .field-ai-btn {
+    position: absolute;
+    right: var(--spacing-xs);
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.tags-input-wrapper .field-ai-btn:hover:not(:disabled) {
+    transform: translateY(-50%) scale(1.2);
+}
+
+/* Excerpt row: positions the AI btn in the top-right corner */
+.excerpt-row {
+    position: relative;
+}
+
+.excerpt-row .field-ai-btn {
+    position: absolute;
+    top: var(--spacing-xs);
+    right: var(--spacing-xs);
+}
+
+/* Slug row: [/post/] [slug input] */
+.schedule-row {
+    display: flex;
+    align-items: center;
+}
+
+.schedule-input-wrapper {
+    position: relative;
+    display: block;
+    flex: 1;
+    min-width: 0;
+}
+
+.schedule-at-input {
+    color: var(--text-primary);
+}
+
+.schedule-input-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
+    color: var(--text-muted);
+    pointer-events: none;
+    user-select: none;
+}
+
+.slug-row {
+    display: flex;
+    align-items: center;
+}
+
+.slug-prefix {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+    color: var(--text-muted);
+    white-space: nowrap;
+    padding: 0 var(--spacing-xs) 0 var(--slug-prefix-padding);
+    user-select: none;
+}
+
+.editor-slug {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+    min-width: 0;
+}
+
+/* Give the excerpt textarea padding so text doesn't slide under the AI btn */
+.editor-excerpt {
+    padding-right: var(--editor-excerpt-padding-right);
+}
+
+/* Full-width editor page — override the global max-width */
+.editor-full-width {
+    max-width: var(--content-max-width);
+}
+
+/* ===========================
+   Editor mode toggle (Text / Visual)
+   =========================== */
+.editor-mode-toggle {
+    display: flex;
+    align-items: center;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-bottom: var(--spacing-sm);
+}
+
+.editor-mode-toggle button {
+    background: transparent;
+    border: none;
+    padding: var(--spacing-xs) var(--button-padding);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.editor-mode-toggle button.active {
+    background: var(--color-primary);
+    color: var(--color-white);
+}
+
+.editor-mode-toggle button:not(.active):hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+/* ===========================
+   VisualEditor
+   =========================== */
+.ve-root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.ve-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ve-list-gap);
+    min-height: var(--ve-list-min-height);
+    position: relative;
+}
+
+.ve-empty {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-md);
+    text-align: center;
+    border: var(--border-width) dashed var(--border-primary);
+    border-radius: var(--border-radius);
+}
+
+.ve-card {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: var(--ve-card-padding-1) var(--ve-card-padding-2) var(--ve-card-padding-3) 0;
+    transition: background var(--transition-fast), opacity var(--transition-fast);
+    user-select: none;
+}
+
+.ve-card:hover {
+    background: var(--surface-hover);
+}
+
+.ve-card.dragging {
+    opacity: 0.4;
+}
+
+/* Drag handle — dotted left zone */
+.ve-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ve-handle-width);
+    flex-shrink: 0;
+    align-self: stretch;
+    border-right: var(--border-width) dotted var(--border-primary);
+    cursor: grab;
+    color: var(--text-muted);
+}
+
+.ve-handle:active {
+    cursor: grabbing;
+}
+
+.ve-handle-dots {
+    display: block;
+    width: var(--ve-handle-dots-width);
+    height: var(--ve-handle-dots-height);
+    background-image: radial-gradient(circle, var(--text-muted) var(--ve-handle-dots-background-image-1), transparent var(--ve-handle-dots-background-image-2));
+    background-size: var(--ve-handle-dots-background-size-1) var(--ve-handle-dots-background-size-2);
+}
+
+.ve-thumb {
+    width: var(--ve-thumb-width);
+    height: var(--ve-thumb-height);
+    object-fit: cover;
+    border-radius: calc(var(--border-radius) - var(--ve-thumb-border-radius));
+    flex-shrink: 0;
+    cursor: zoom-in;
+    background: var(--surface-hover);
+}
+
+.ve-path {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.ve-path:hover {
+    color: var(--text-primary);
+    text-decoration: underline dotted;
+}
+
+/* Inline rename form */
+.ve-rename-form {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+.ve-rename-prefix,
+.ve-rename-ext {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.ve-rename-input {
+    flex: 1;
+    min-width: var(--ve-rename-input-min-width);
+    border: none;
+    border-bottom: var(--ve-rename-input-border-bottom) solid var(--color-primary);
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--text-primary);
+    padding: 0 var(--ve-rename-input-padding);
+    outline: none;
+}
+
+.ve-rename-input:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.ve-remove {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--ve-remove-font-size);
+    line-height: 1;
+    padding: var(--ve-remove-padding) var(--spacing-xs);
+    border-radius: var(--border-radius-sm, var(--border-radius-sm));
+    transition: color var(--transition-fast);
+}
+
+.ve-remove:hover {
+    color: var(--color-danger);
+}
+
+/* Drop indicator line */
+.ve-drop-indicator {
+    height: var(--ve-drop-indicator-height);
+    background: var(--color-primary);
+    border-radius: var(--ve-drop-indicator-border-radius);
+    pointer-events: none;
+    margin: 0 var(--spacing-xs);
+    flex-shrink: 0;
+}
+
+/* VisualEditor lightbox */
+.ve-lightbox {
+    position: fixed;
+    inset: 0;
+    background: var(--color-black-alpha-88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    cursor: zoom-out;
+}
+
+.ve-lightbox img {
+    max-width: 92vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+}
+
+/* ===========================
+   Text node card
+   =========================== */
+.ve-card--text {
+    align-items: flex-start;
+    padding-top: var(--ve-card--text-padding-top);
+    padding-bottom: var(--ve-card--text-padding-bottom);
+}
+
+/* Paragraph icon — same width as drag handle, dotted right border */
+.ve-text-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ve-text-icon-width);
+    flex-shrink: 0;
+    align-self: stretch;
+    border-right: var(--border-width) dotted var(--border-primary);
+    color: var(--text-muted);
+    font-size: var(--ve-text-icon-font-size);
+    user-select: none;
+    padding-right: var(--ve-text-icon-padding-right);
+}
+
+/* Auto-resizing textarea inside text card */
+.ve-text-area {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    color: var(--text-primary);
+    resize: none;
+    overflow: hidden;
+    min-height: var(--ve-text-area-min-height);
+    padding: var(--ve-text-area-padding) var(--spacing-xs);
+    outline: none;
+    transition: color var(--transition-theme);
+}
+
+.ve-text-area::placeholder {
+    color: var(--text-muted);
+}
+
+/* ===========================
+   Insert zone — appears between cards on list hover
+   =========================== */
+.ve-insert-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--ve-insert-zone-height);
+    position: relative;
+}
+
+.ve-insert-zone::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--ve-insert-zone--height);
+    background: var(--border-primary);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.ve-insert-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    position: relative;
+    z-index: 1;
+}
+
+.ve-insert-btn {
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-xl);
+    height: var(--ve-insert-btn-height);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--ve-insert-btn-padding);
+    line-height: 1;
+    transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.ve-list:hover .ve-insert-zone::before,
+.ve-list:hover .ve-insert-actions {
+    opacity: 1;
+}
+
+.ve-insert-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
