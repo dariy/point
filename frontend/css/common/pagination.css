@@ -1,0 +1,76 @@
+/* ===========================
+   Pagination
+   =========================== */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-xl);
+    flex-wrap: wrap;
+}
+
+.page-numbers {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+}
+
+.page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--page-btn-min-width);
+    height: var(--page-btn-height);
+    padding: 0 var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
+}
+
+.page-btn:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background-color: var(--color-primary-light);
+}
+
+.page-btn.active {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+    cursor: default;
+}
+
+.page-btn:disabled {
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.page-prev,
+.page-next {
+    font-size: var(--font-size-base);
+}
+
+.page-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--page-ellipsis-min-width);
+    height: var(--page-ellipsis-height);
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.page-info {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}

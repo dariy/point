@@ -1,0 +1,130 @@
+/**
+ * Unified Tag Strip Control
+ * Used in PostCard, PostContent, and PublicHeaderTagsBar.
+ */
+
+.tag-strip-track {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+.tag-strip-scroll {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: var(--spacing-sm);
+    overflow-x: auto;
+    overflow-y: visible;            /* Allow dropdowns to overflow vertically */
+    scrollbar-width: none;          /* Firefox */
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    padding-block: var(--tag-strip-scroll-padding-block);       /* Room for borders/shadows */
+}
+
+.tag-strip-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* 
+ * Dynamic Edge Fades 
+ * Uses mask-image for background-agnostic transparency fades.
+ * The .has-scroll-* classes are toggled by setupScrollableStrip JS.
+ * We disable the mask when a dropdown is open (.is-dropdown-open) because
+ * mask-image clips fixed-positioned dropdowns that overflow the strip on mobile.
+ */
+.tag-strip-track.has-scroll-right:not(.is-dropdown-open) .tag-strip-scroll {
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+.tag-strip-track.has-scroll-left:not(.is-dropdown-open) .tag-strip-scroll {
+    mask-image: linear-gradient(to left, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to left, black 85%, transparent 100%);
+}
+.tag-strip-track.has-scroll-left.has-scroll-right:not(.is-dropdown-open) .tag-strip-scroll {
+    mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+}
+
+/* Scroll Arrow Buttons */
+.tags-scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: var(--tags-scroll-btn-width);
+    height: var(--tags-scroll-btn-height);
+    border-radius: 50%;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, scale 0.2s ease;
+    padding: 0;
+}
+
+.tags-scroll-btn svg {
+    width: var(--svg-width-alt3);
+    height: var(--svg-height-alt3);
+}
+
+.tags-scroll-btn--left {
+    left: var(--spacing-xs);
+}
+.tags-scroll-btn--left svg {
+    transform: rotate(90deg);
+}
+
+.tags-scroll-btn--right {
+    right: var(--spacing-xs);
+}
+.tags-scroll-btn--right svg {
+    transform: rotate(-90deg);
+}
+
+.tag-strip-track.has-scroll-left .tags-scroll-btn--left,
+.tag-strip-track.has-scroll-right .tags-scroll-btn--right {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.tags-scroll-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Base tag link style within a strip */
+.tag-strip-scroll .tag-link {
+    backdrop-filter: blur(var(--tag-link-backdrop-filter-alt1));
+    -webkit-backdrop-filter: blur(var(--tag-link--webkit-backdrop-filter-alt1));
+    white-space: nowrap;
+    /* Prevent Android Chrome from absorbing taps as scroll gestures:
+       touch-action: manipulation fires click immediately for any tap. */
+    touch-action: manipulation;
+}
+
+/* Current-filter state — emitted by renderTagLink(tag, { active: true }) */
+.tag-link.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+/* Menu-open / first-tap activated state */
+.tag-link.is-active {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.tag-strip-scroll .tag-link {
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), scale var(--transition-fast);
+}

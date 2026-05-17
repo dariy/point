@@ -1,0 +1,460 @@
+/* ===========================
+   Header
+   =========================== */
+/* Sticky wrapper for header + tags bar */
+.site-header-group {
+    z-index: 101;
+    background: var(--header-bg);
+    border-bottom: var(--border-width) solid var(--border-primary);
+    backdrop-filter: blur(var(--site-header-group-backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter));
+    transition: background-color var(--transition-theme),
+        border-color var(--transition-theme);
+    overflow: visible;
+}
+
+/* Content-width constraint, like footer-container */
+.site-header-inner {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    /* Three-part layout: [site-header] [tags-bar] [site-nav] */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* site-header: logo/title on the left */
+.site-header {
+    flex: 0 0 auto;
+    order: 1;
+    overflow: visible;
+    display: flex;
+    align-items: center;
+    height: var(--header-height);
+    padding: 0 var(--spacing-md);
+}
+
+/* tags-bar: inline by default, fills the middle space */
+.header-tags-bar {
+    flex: 1;
+    min-width: 0; /* Prevent flex item from overflowing when tags exceed available space */
+    order: 2;
+    transition: border-color var(--transition-theme);
+}
+
+/* site-nav (direct child of inner): action buttons on the right */
+.site-header-inner > .site-nav {
+    flex: 0 0 auto;
+    order: 3;
+    padding: 0 var(--spacing-sm);
+    height: var(--header-height);
+    margin-left: auto;
+}
+
+/* JS toggles this class when tags collide with header/nav */
+.site-header-group.tags-stacked .header-tags-bar {
+    flex: 0 0 100%;
+    order: 3;
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+.site-header-group.tags-stacked .site-header-inner > .site-nav {
+    order: 2;
+    margin-left: auto;
+}
+
+.site-header-group.tags-stacked .site-header {
+    order: 1;
+}
+
+.header-container {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    overflow: visible;
+    /* Prevent clipping of dropdowns */
+}
+
+.site-branding {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.header-left-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+}
+
+.header-left-group>* {
+    height: var(----height);
+}
+
+/* Breadcrumb nav in the header */
+.site-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: var(--site-breadcrumb-gap);
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.site-breadcrumb .breadcrumb-separator {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    user-select: none;
+    transition: color var(--transition-theme);
+}
+
+.site-breadcrumb .breadcrumb-current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color var(--transition-theme);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.site-breadcrumb a.breadcrumb-current:hover {
+    color: var(--color-primary);
+}
+
+.site-breadcrumb .breadcrumb-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-theme);
+}
+
+.site-breadcrumb .breadcrumb-link:hover {
+    color: var(--color-primary);
+}
+
+.site-breadcrumb .site-subtitle {
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    color: var(--text-tertiary);
+    letter-spacing: 0;
+    transition: color var(--transition-theme);
+}
+
+.site-title {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    transition: color var(--transition-theme);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    line-height: 1;
+}
+
+.site-title-link:hover,
+.site-title-link:hover * {
+    color: var(--color-primary);
+}
+
+
+.app-logo {
+    display: inline-block;
+    vertical-align: middle;
+    width: var(--app-logo-width);
+    height: var(--app-logo-height);
+    flex-shrink: 0;
+}
+
+.app-logo .logo-shape {
+    fill: var(--text-primary);
+    transition: fill var(--transition-theme);
+}
+
+/* Authenticated indicator - site title color change */
+.site-title.authenticated {
+    color: var(--color-primary);
+}
+
+.site-title.authenticated:hover {
+    color: var(--color-primary-hover);
+}
+
+.site-subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin: 0;
+    transition: color var(--transition-theme);
+}
+
+.site-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+}
+
+.header-search-form {
+    display: flex;
+    align-items: center;
+    position: relative;
+    height: var(--header-search-form-height);
+    width: var(--header-search-form-width); /* Match button width to reserve space */
+    z-index: 105; /* place above tags-filters (which has 100) */
+}
+
+.header-search-form input[type="search"] {
+    width: 0;
+    opacity: 0;
+    padding: 0;
+    margin: 0;
+    border: var(--border-width) solid transparent;
+    background: transparent;
+    transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity var(--transition-fast), padding var(--transition-fast), border-color var(--transition-fast), scale var(--transition-fast);
+    height: var(--input-type--search---height);
+    border-radius: var(--input-type--search---border-radius);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+    position: absolute;
+    right: 0;
+    z-index: 10;
+}
+
+.header-search-form.is-active input[type="search"] {
+    width: var(--search-width);
+    opacity: 1;
+    padding: 0 var(--input-type--search---padding) 0 var(--spacing-md);
+    background: color-mix(in srgb, var(--surface-card) 95%, transparent);
+    backdrop-filter: blur(var(--input-type--search---backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--input-type--search----webkit-backdrop-filter));
+    border-color: var(--border-primary);
+}
+
+.header-search-form.is-active input[type="search"]:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 var(--input-type--search---box-shadow) var(--color-primary-alpha);
+}
+
+.header-search-form .search-toggle-btn {
+    position: relative;
+    z-index: 11;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast), scale var(--transition-fast);
+}
+
+.header-search-form.is-active .search-toggle-btn {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--text-primary); /* Darker icon when active */
+}
+
+/* Provide search icon active state hover */
+.header-search-form.is-active .search-toggle-btn:hover {
+    color: var(--color-primary);
+    transform: scale(1.05); /* Slight pop, keeping it simple instead of big box shadow */
+}
+
+@media (max-width: var(--media-query-1)) {
+    .header-search-form.is-active input[type="search"] {
+        width: var(--search-width);
+    }
+}
+
+.nav-dropdown {
+    position: relative;
+}
+
+.dropdown-toggle::after {
+    content: "";
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-left: var(--dropdown-toggle--margin-left);
+    border-left: var(--spacing-xs) solid transparent;
+    border-right: var(--spacing-xs) solid transparent;
+    border-top: var(--spacing-xs) solid currentColor;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: var(--dropdown-menu-min-width);
+    background: var(--bg-elevated);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-xs) 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(calc(var(--dropdown-menu-transform) * -1));
+    transition: opacity var(--transition-fast), visibility var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
+    z-index: 50;
+}
+
+.nav-dropdown:hover .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: block;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    transition: background-color var(--transition-fast), color var(--transition-fast), scale var(--transition-fast);
+}
+
+.dropdown-item:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+/* Post Header Bar (Immersive Mode) */
+.post-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.post-header-bar .header-left {
+    flex: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.post-header-bar .header-center {
+    flex: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.post-header-bar .header-right {
+    flex: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+}
+
+.post-header-bar .site-title {
+    margin: 0;
+    font-size: var(--font-size-xl);
+}
+
+.post-header-bar .post-meta {
+    font-size: var(--font-size-sm);
+    opacity: 0.9;
+    margin-bottom: 0;
+    color: inherit;
+}
+
+/* =   Header Action Buttons   = */
+/*
+ * Unified 40×40 icon-button style for all header controls.
+ * GUIDANCE — choose the right element:
+ *   <a class="header-action-btn" href="..." aria-label="...">      navigation
+ *   <button class="header-action-btn" type="button" aria-label="..."> action (no URL)
+ * Add `.theme-toggle` as a second class only when sun/moon icon toggling is needed.
+ */
+.header-action-btn,
+.theme-toggle,
+.create-post,
+.light-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--header-action-btn-width);
+    height: var(--header-action-btn-height);
+    padding: 0;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
+    text-decoration: none;
+    box-shadow: var(--shadow-sm);
+}
+
+.header-action-btn:hover,
+.theme-toggle:hover,
+.create-post:hover,
+.light-link:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow-md);
+}
+
+.header-action-btn:active,
+.theme-toggle:active,
+.create-post:active,
+.light-link:active {
+    background-color: var(--surface-hover);
+}
+
+.header-action-btn svg,
+.theme-toggle svg,
+.create-post svg,
+.light-link svg {
+    width: var(--svg-width);
+    height: var(--svg-height);
+}
+
+/* Theme Toggle (public overrides) */
+.site-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--site-nav-gap);
+}
+
+.logo.theme-toggle {
+    width: var(--logotheme-toggle-width);
+    height: var(--logotheme-toggle-height);
+    border: none;
+    align-items: end;
+}
+
+.logo.theme-toggle.authenticated * {
+    fill: var(--color-primary);
+}
+
+.logo.theme-toggle svg {
+    width: var(--svg-width-alt1);
+    height: var(--svg-height-alt1);
+}
+
+/* Immersive header: mobile title overflow handling */
+/* Step 1 — compact: hide blog title link and separator */
+.post-header-bar .header-center.header-compact .breadcrumb-link,
+.post-header-bar .header-center.header-compact .breadcrumb-separator {
+    display: none;
+}
+
+/* Step 2 — truncate: still overflows even after compact, clip with ellipsis */
+.post-header-bar .header-center.header-truncate .site-title {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}

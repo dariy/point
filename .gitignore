@@ -1,0 +1,174 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Environments
+.env
+.env.local
+.env.*.local
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ruff
+.ruff_cache/
+
+# Data directory (local development)
+data/
+*.db
+
+
+
+# Logs
+*.log
+logs/
+
+# Media uploads (local development)
+/media/
+
+# Cache
+cache/
+
+# Backups
+backups/
+scripts/backup-config.sh
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Secrets (never commit these!)
+*.pem
+*.key
+secrets/
+credentials.json
+
+# Production environment files
+.env.production
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Deployment artifacts
+deployment-*.log
+blog_shell.sh
+app/static/css/light.css
+app/static/css/main.css
+api/coverage.out
+api/coverage.html
+frontend/js/
+light.css
+main.css
+api/api*
+
+.claude/**
+.zed/**
+*/.serena/**
+.mcp.json
+jsconfig.json
+.gemini/**
+**/.serena/**
+node_modules/**
+
+# Dolt database files (added by bd init)
+.dolt/
+.beads/
+
+build/gemini*
+.worktrees/
+
+# Beads / Dolt files (added by bd init)
+.beads-credential-key
+.sqlhistory
+test-connection.sh
+
+# bv (beads viewer) local config and caches
+.bv/
+.zed/
+.metaswarm/
+.gemini/
+.claude/
+.agents/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+skills-lock.json
+coverage.out

@@ -1,0 +1,113 @@
+/* Tree View Styles */
+.tree-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tree-view-gap);
+}
+
+.tree-node {
+    display: flex;
+    flex-direction: column;
+}
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-sm) var(--tree-row-padding);
+    border-radius: var(--border-radius-sm);
+    transition: background-color var(--transition-fast);
+    border-bottom: var(--border-width) solid var(--border-primary);
+}
+
+.tree-row:hover {
+    background-color: var(--surface-hover);
+}
+
+.tree-toggle {
+    background: none;
+    border: none;
+    padding: var(--spacing-xs);
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--transition-fast);
+    width: var(--tree-toggle-width);
+}
+
+.tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.tree-indent {
+    width: var(--tree-indent-width);
+    flex-shrink: 0;
+}
+
+.tree-tag-name {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.tree-tag-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-right: var(--spacing-md);
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.tree-children {
+    padding-left: var(--spacing-lg);
+    display: none;
+    border-left: var(--border-width) dashed var(--border-primary);
+    margin-left: var(--tree-children-margin-left);
+}
+
+.tree-children.expanded {
+    display: block;
+}
+
+.tree-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+/* Tabs styles if not already present elsewhere */
+.tabs {
+    display: flex;
+    gap: var(--spacing-xs);
+    border-bottom: var(--border-width) solid var(--border-primary);
+    margin-bottom: var(--tabs-margin-bottom);
+}
+
+.tab-link {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-bottom: var(--tab-link-border-bottom) solid transparent;
+    font-weight: 500;
+}
+
+.tab-link:hover {
+    color: var(--color-primary);
+}
+
+.tab-link.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}

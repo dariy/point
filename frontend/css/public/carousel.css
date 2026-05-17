@@ -1,0 +1,200 @@
+/* ===========================
+   Carousel
+   =========================== */
+.carousel-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-carouselle);
+    transition: background-color var(--transition-theme);
+}
+
+.carousel-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.carousel-slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 10;
+}
+
+.carousel-prev,
+.carousel-next {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--color-black-alpha-30);
+    color: white;
+    border: none;
+    width: var(--carousel-prev-width);
+    height: var(--carousel-prev-height);
+    border-radius: 50%;
+    font-size: var(--font-size-2xl);
+    cursor: pointer;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-theme),
+        color var(--transition-theme),
+        transform 0.2s ease,
+        scale 0.2s ease;
+    backdrop-filter: blur(var(--carousel-prev-backdrop-filter));
+}
+
+.carousel-prev:hover,
+.carousel-next:hover {
+    background: var(--color-black-alpha-60);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-prev {
+    left: var(--carousel-prev-left);
+}
+
+.carousel-next {
+    right: var(--carousel-next-right);
+}
+
+.carousel-indicators {
+    position: absolute;
+    bottom: var(--carousel-indicators-bottom);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--carousel-indicators-gap);
+    z-index: 20;
+    background: var(--color-black-alpha-30);
+    padding: var(--spacing-sm) var(--carousel-indicators-padding);
+    border-radius: var(--carousel-indicators-border-radius);
+    backdrop-filter: blur(var(--carousel-indicators-backdrop-filter));
+    transition: background-color var(--transition-theme);
+}
+
+.carousel-dot {
+    width: var(--carousel-dot-width);
+    height: var(--carousel-dot-height);
+    border-radius: 50%;
+    background: var(--color-white-alpha-50);
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--transition-theme),
+        transform 0.2s ease,
+        scale 0.2s ease;
+    padding: 0;
+}
+
+.carousel-dot:hover {
+    background: var(--color-white-alpha-80);
+}
+
+.carousel-dot.active {
+    background: white;
+    transform: scale(1.2);
+}
+
+/* Light mode carousel controls */
+[data-theme="light"].immersive-layout .carousel-prev,
+[data-theme="light"].immersive-layout .carousel-next {
+    background: var(--color-black-alpha-60);
+    color: white;
+}
+
+[data-theme="light"].immersive-layout .carousel-prev:hover,
+[data-theme="light"].immersive-layout .carousel-next:hover {
+    background: var(--color-black-alpha-80);
+}
+
+[data-theme="light"].immersive-layout .carousel-indicators {
+    background: var(--color-black-alpha-50);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot {
+    background: var(--color-white-alpha-60);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot:hover {
+    background: var(--color-white-alpha-90);
+}
+
+[data-theme="light"].immersive-layout .carousel-dot.active {
+    background: white;
+}
+
+/* Hide carousel controls in UI hidden mode */
+.immersive-layout.ui-hidden .carousel-prev,
+.immersive-layout.ui-hidden .carousel-next,
+.immersive-layout.ui-hidden .carousel-indicators {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+
+/* Fade transitions for navigation */
+@keyframes immersiveFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes immersiveFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.immersive-fade-in {
+  animation: immersiveFadeIn 0.2s ease-out forwards;
+}
+.immersive-fade-out {
+  animation: immersiveFadeOut 0.2s ease-in forwards;
+}
+
+/* Navigation press hints — shown on pointerdown in left/right zones */
+.immersive-wrapper::before,
+.immersive-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 30%;
+    height: 100%;
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.immersive-wrapper::before {
+    left: 0;
+    background: linear-gradient(to right, var(--color-black-alpha-20), transparent);
+}
+
+.immersive-wrapper::after {
+    right: 0;
+    background: linear-gradient(to left, var(--color-black-alpha-20), transparent);
+}
+
+.immersive-wrapper.pressing-left::before { opacity: 1; }
+.immersive-wrapper.pressing-right::after  { opacity: 1; }
+
+/* Highlight the matching nav button on press (works even in ui-hidden mode) */
+.immersive-wrapper.pressing-left .carousel-prev,
+.immersive-layout.ui-hidden .immersive-wrapper.pressing-left .carousel-prev {
+    opacity: 1;
+    background: var(--color-black-alpha-65);
+    transform: translateY(-50%) scale(1.15);
+}
+
+.immersive-wrapper.pressing-right .carousel-next,
+.immersive-layout.ui-hidden .immersive-wrapper.pressing-right .carousel-next {
+    opacity: 1;
+    background: var(--color-black-alpha-65);
+    transform: translateY(-50%) scale(1.15);
+}

@@ -1,0 +1,254 @@
+/**
+ * Global Map Styles
+ */
+
+.map-container {
+    height: calc(100vh - var(--map-container-height));
+    min-height: var(--map-container-min-height);
+    width: 100%;
+    border-radius: var(--border-radius-xl);
+    overflow: hidden;
+    margin-top: var(--map-container-margin-top);
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 var(--map-container-box-shadow-1)
+        var(--map-container-box-shadow-2) var(--color-black-alpha-10);
+}
+
+.site-main--map .map-container {
+    height: 100%;
+    min-height: 0;
+    margin-top: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+[data-theme="dark"] .map-container {
+    box-shadow: 0 var(--map-container-box-shadow-1)
+        var(--map-container-box-shadow-2) var(--color-black-alpha-40);
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    background: var(--bg-secondary);
+}
+
+.map-title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md) 0 var(--spacing-sm);
+}
+
+.map-title-bar h1 {
+    font-size: var(--map-title-font-size, 1.5rem);
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.map-stats {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.map-header {
+    margin-bottom: var(--map-header-margin-bottom);
+}
+
+.map-title {
+    font-size: var(--map-title-font-size);
+    font-weight: 800;
+    margin-bottom: var(--map-title-margin-bottom);
+    color: var(--text-primary);
+}
+
+.map-subtitle {
+    color: var(--text-secondary);
+    font-size: var(--map-subtitle-font-size);
+}
+
+/* Custom Leaflet Marker Styling */
+.custom-marker-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.custom-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-primary);
+    color: white;
+    border-radius: 50%;
+    border: var(--custom-marker-border) solid white;
+    box-shadow: 0 var(--custom-marker-box-shadow-1)
+        var(--custom-marker-box-shadow-2) var(--color-black-alpha-30);
+    font-weight: bold;
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+    z-index: 2;
+}
+
+.marker-label {
+    position: absolute;
+    left: 100%;
+    margin-left: var(--spacing-sm);
+    white-space: nowrap;
+    background: var(--bg-primary, white);
+    color: var(--text-primary, black);
+    padding: var(--marker-label-padding-y) var(--marker-label-padding-x);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--marker-label-font-size);
+    font-weight: 600;
+    box-shadow: 0 var(--marker-label-box-shadow-1)
+        var(--marker-label-box-shadow-2) var(--color-black-alpha-20);
+    pointer-events: none;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    z-index: 1;
+}
+
+[data-theme="dark"] .marker-label {
+    background: var(--bg-secondary);
+    border: var(--border-width) solid var(--border-primary);
+}
+
+.custom-marker-wrapper:hover .marker-label {
+    opacity: 1;
+    z-index: 1001;
+}
+
+.custom-marker:hover {
+    transform: scale(1.2);
+    box-shadow: 0 var(--custom-marker-box-shadow-1-alt1)
+        var(--custom-marker-box-shadow-2-alt1) var(--color-black-alpha-40);
+    z-index: 1000 !important;
+}
+
+/* Leaflet Popup Styling
+ * !important is required because leaflet.css is loaded dynamically and may
+ * override these rules depending on load order. */
+.leaflet-popup-content-wrapper {
+    background: var(--surface-card) !important;
+    color: var(--text-primary) !important;
+    border-radius: var(--border-radius-lg) !important;
+    box-shadow: var(--shadow-md) !important;
+    padding: var(--leaflet-popup-content-wrapper-padding);
+}
+
+.leaflet-popup-tip {
+    background: var(--surface-card) !important;
+}
+
+.leaflet-popup-content a:not(.map-popup-tag) {
+    color: var(--color-primary);
+}
+
+.map-popup-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--map-popup-tag-padding-y) var(--map-popup-tag-padding-x);
+    margin-bottom: var(--map-popup-tag-margin-bottom);
+    font-size: var(--map-popup-tag-font-size);
+    font-weight: 600;
+    color: var(--text-primary) !important;
+    background: var(--surface-hover);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--map-popup-tag-border-radius);
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.map-popup-tag:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary) !important;
+}
+
+.tag-popup-title {
+    font-weight: bold;
+    font-size: var(--tag-popup-title-font-size);
+    margin-bottom: var(--spacing-xs);
+    display: block;
+}
+
+.tag-popup-count {
+    font-size: var(--tag-popup-count-font-size);
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.map-popup-years {
+    margin: var(--spacing-sm) 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.map-year-link {
+    display: inline-flex;
+    align-items: center;
+    height: var(--map-year-link-height);
+    padding: 0 var(--map-year-link-padding);
+    font-size: var(--map-year-link-font-size);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--map-year-link-border-radius);
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.map-year-link:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.leaflet-container {
+    background-color: var(--bg-secondary) !important;
+}
+
+/* Tooltip styling */
+.tag-tooltip {
+    padding: var(--tag-tooltip-padding) var(--spacing-xs);
+}
+
+/* Leaflet controls dark theme */
+[data-theme="dark"] .leaflet-bar a,
+[data-theme="dark"] .leaflet-control-zoom a {
+    background-color: var(--surface-card);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .leaflet-bar a:hover,
+[data-theme="dark"] .leaflet-control-zoom a:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .leaflet-bar a.leaflet-disabled {
+    background-color: var(--surface-card);
+    color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .leaflet-container .leaflet-control-attribution {
+    background-color: var(--surface-card);
+    color: var(--text-tertiary);
+    border: var(--border-width) solid var(--border-primary);
+}
+
+[data-theme="dark"] .leaflet-container .leaflet-control-attribution a {
+    color: var(--text-secondary);
+}

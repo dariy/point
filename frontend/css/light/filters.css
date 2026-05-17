@@ -1,0 +1,72 @@
+/* ===========================
+   Filters
+   =========================== */
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--surface-card);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-theme);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.filter-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.filter-select {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--spacing-lg) 0 var(--spacing-sm);
+    height: var(--filter-select-height);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--filter-select-border-radius);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-theme);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--spacing-sm) center;
+    background-size: var(--filter-select-background-size);
+}
+
+.filter-select:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(calc(var(--filter-select-transform) * -1));
+    border-color: var(--border-secondary);
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+}
+
+.filter-select option {
+    background-color: var(--surface-input);
+    color: var(--text-primary);
+}
+
+.filter-search {
+    flex: 1;
+    min-width: var(--filter-search-min-width);
+    height: var(--filter-search-height);
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-sm);
+    border-radius: var(--filter-search-border-radius);
+}
