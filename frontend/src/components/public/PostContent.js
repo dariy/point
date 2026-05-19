@@ -402,6 +402,11 @@ export class PostContent extends Component {
       // Update index immediately so gestures during transition reference the new slide.
       index = newIndex;
 
+      // Update URL hash to reflect the current slide (e.g. index 1 -> #2)
+      const hash = index === 0 ? "" : `#${index + 1}`;
+      const url = window.location.pathname + window.location.search + hash;
+      window.history.replaceState(null, "", url);
+
       const oldSlide = slides[oldIndex];
       const newSlide = slides[newIndex];
 

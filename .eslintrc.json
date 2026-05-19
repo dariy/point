@@ -15,6 +15,7 @@
     "localStorage": "readonly",
     "location": "readonly",
     "fetch": "readonly",
+    "URL": "readonly",
     "URLSearchParams": "readonly",
     "CustomEvent": "readonly",
     "setTimeout": "readonly",

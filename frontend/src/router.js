@@ -166,9 +166,13 @@ class Router {
    * @param {string} fullPath  pathname + optional search string
    */
   async _render(fullPath) {
-    const qIndex = fullPath.indexOf('?');
-    const pathname = qIndex === -1 ? fullPath : fullPath.slice(0, qIndex);
-    const search = qIndex === -1 ? '' : fullPath.slice(qIndex);
+    // Strip hash if present
+    const hashIndex = fullPath.indexOf('#');
+    const pathWithoutHash = hashIndex === -1 ? fullPath : fullPath.slice(0, hashIndex);
+
+    const qIndex = pathWithoutHash.indexOf('?');
+    const pathname = qIndex === -1 ? pathWithoutHash : pathWithoutHash.slice(0, qIndex);
+    const search = qIndex === -1 ? '' : pathWithoutHash.slice(qIndex);
     const query = this._parseSearch(search);
 
     // Login path: delegate entirely to the overlay system, never unmount current page.

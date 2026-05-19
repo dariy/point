@@ -106,7 +106,11 @@ export default class PostPage extends Component {
       nextPost: nav?.next || null,
       forceImmersive: immersive,
       startIndex: this.state.startIndex,
-      onEnterImmersive: (idx = 0) => this.setState({ forceImmersive: true, startIndex: idx }),
+      onEnterImmersive: (idx = 0) => {
+        const hash = idx === 0 ? "" : `#${idx + 1}`;
+        window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+        this.setState({ forceImmersive: true, startIndex: idx });
+      },
     });
   }
 
@@ -191,7 +195,7 @@ export default class PostPage extends Component {
       if (ogImageObj) {
         try {
           updateMeta('og:image', new URL(ogImageObj, window.location.origin).href);
-        } catch (e) { /* ignore invalid URL */ }
+        } catch (_) { /* ignore invalid URL */ }
       }
 
       this._injectJsonLd(post, descText, ogImageObj);
@@ -199,7 +203,19 @@ export default class PostPage extends Component {
       let postNav = null;
       try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }
 
-      this.setState({ loading: false, post, nav: postNav, error: null });
+      // Check for hash to set initial slide index (e.g. #2 -> index 1)
+      let startIndex = 0;
+      let forceImmersive = false;
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#')) {
+        const num = parseInt(hash.slice(1), 10);
+        if (!isNaN(num) && num > 0) {
+          startIndex = Math.max(0, num - 1);
+          if (num > 1) forceImmersive = true;
+        }
+      }
+
+      this.setState({ loading: false, post, nav: postNav, error: null, startIndex, forceImmersive });
     } catch (err) {
       const msg = err.status === 404 ? 'Post not found.' : (err.message || 'Failed to load post.');
       this.setState({ loading: false, post: null, nav: null, error: msg });

@@ -27,7 +27,7 @@ import { GestureController, TrackpadDetector, rubberBand } from '../../utils/ges
 export default class TagPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, data: null, post: null, error: null };
+    this.state = { loading: true, data: null, post: null, error: null, forceImmersive: false, startIndex: 0 };
   }
 
   _isPostView() {
@@ -126,7 +126,7 @@ export default class TagPage extends Component {
       const prevPost = postIndex > 0 ? posts[postIndex - 1] : null;
       const nextPost = postIndex !== -1 && postIndex < posts.length - 1 ? posts[postIndex + 1] : null;
 
-      const immersive = shouldUseImmersive(post);
+      const immersive = this.state.forceImmersive || shouldUseImmersive(post);
       const headerBreadcrumb = post
         ? [...breadcrumb, { name: post.title, slug: null }]
         : breadcrumb;
@@ -155,6 +155,13 @@ export default class TagPage extends Component {
         prevPost,
         nextPost,
         tagSlug: slug,
+        forceImmersive: immersive,
+        startIndex: this.state.startIndex,
+        onEnterImmersive: (idx = 0) => {
+          const hash = idx === 0 ? "" : `#${idx + 1}`;
+          window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+          this.setState({ forceImmersive: true, startIndex: idx });
+        },
       });
     } else {
       // ── Grid view ───────────────────────────────────────────────────────────
@@ -386,7 +393,20 @@ export default class TagPage extends Component {
         const post = await getPostBySlug(postSlug);
         document.title = `${post.title} — ${data.tag?.name || slug}`;
         setCanonical(`${window.location.origin}/posts/${post.slug}`);
-        this.setState({ loading: false, data, post, error: null });
+
+        // Check for hash to set initial slide index (e.g. #2 -> index 1)
+        let startIndex = 0;
+        let forceImmersive = false;
+        const hash = window.location.hash;
+        if (hash && hash.startsWith('#')) {
+          const num = parseInt(hash.slice(1), 10);
+          if (!isNaN(num) && num > 0) {
+            startIndex = Math.max(0, num - 1);
+            if (num > 1) forceImmersive = true;
+          }
+        }
+
+        this.setState({ loading: false, data, post, error: null, startIndex, forceImmersive });
       } else {
         document.title = `${data.tag?.name || slug} — Posts`;
         const pageNum = parseInt(this.props.query?.page || '1', 10);

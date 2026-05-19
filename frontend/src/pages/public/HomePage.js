@@ -110,7 +110,11 @@ export default class HomePage extends Component {
         showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
         forceImmersive: immersive,
         startIndex: startIndex,
-        onEnterImmersive: (idx = 0) => this.setState({ forceImmersive: true, startIndex: idx }),
+        onEnterImmersive: (idx = 0) => {
+          const hash = idx === 0 ? "" : `#${idx + 1}`;
+          window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+          this.setState({ forceImmersive: true, startIndex: idx });
+        },
       });
     } else {
       this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
@@ -324,7 +328,20 @@ export default class HomePage extends Component {
       const data = await getHomePage(params);
       // Merge settings from page response into store.
       if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
-      this.setState({ loading: false, data, error: null });
+
+      // Check for hash to set initial slide index (e.g. #2 -> index 1)
+      let startIndex = 0;
+      let forceImmersive = false;
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#')) {
+        const num = parseInt(hash.slice(1), 10);
+        if (!isNaN(num) && num > 0) {
+          startIndex = Math.max(0, num - 1);
+          if (num > 1) forceImmersive = true;
+        }
+      }
+
+      this.setState({ loading: false, data, error: null, startIndex, forceImmersive });
     } catch (err) {
       this.setState({ loading: false, data: null, error: err.message || 'Failed to load posts.' });
     }
