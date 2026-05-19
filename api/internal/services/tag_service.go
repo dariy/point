@@ -646,6 +646,7 @@ type NavTagNode struct {
 	ID              int64        `json:"id"`
 	Name            string       `json:"name"`
 	Slug            string       `json:"slug"`
+	URL             string       `json:"url,omitempty"`
 	PostCount       int64        `json:"post_count"`
 	IsRelated       bool         `json:"is_related"`
 	ShowInAncestors bool         `json:"show_in_ancestors"`

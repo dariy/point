@@ -81,10 +81,12 @@ export default class PostPage extends Component {
     }
     const breadcrumb = post ? [{ name: post.title, is_hidden: post.is_hidden || post.is_hidden_by_tag, tooltip: postTooltip }] : [];
 
-    // In immersive mode suppress the tag filter bar; tags go in the footer instead
+    // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
+    // but keep the custom menu visible since it contains explicit navigation links.
+    const isCustomMenu = settings.nav_menu_mode === 'custom';
     this.mountChild(PublicHeader, '#header-mount', {
       settings,
-      navTags: (!post || immersive) ? [] : navTags,
+      navTags: (!post || (immersive && !isCustomMenu)) ? [] : navTags,
       breadcrumb,
       currentPath: '',
       editUrl: post ? `/light/posts/${post.id}/edit` : null,
@@ -106,7 +108,11 @@ export default class PostPage extends Component {
       nextPost: nav?.next || null,
       forceImmersive: immersive,
       startIndex: this.state.startIndex,
-      onEnterImmersive: (idx = 0) => this.setState({ forceImmersive: true, startIndex: idx }),
+      onEnterImmersive: (idx = 0) => {
+        const hash = idx === 0 ? "" : `#${idx + 1}`;
+        window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+        this.setState({ forceImmersive: true, startIndex: idx });
+      },
     });
   }
 
@@ -191,7 +197,7 @@ export default class PostPage extends Component {
       if (ogImageObj) {
         try {
           updateMeta('og:image', new URL(ogImageObj, window.location.origin).href);
-        } catch (e) { /* ignore invalid URL */ }
+        } catch (_) { /* ignore invalid URL */ }
       }
 
       this._injectJsonLd(post, descText, ogImageObj);
@@ -199,7 +205,19 @@ export default class PostPage extends Component {
       let postNav = null;
       try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }
 
-      this.setState({ loading: false, post, nav: postNav, error: null });
+      // Check for hash to set initial slide index (e.g. #2 -> index 1)
+      let startIndex = 0;
+      let forceImmersive = false;
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#')) {
+        const num = parseInt(hash.slice(1), 10);
+        if (!isNaN(num) && num > 0) {
+          startIndex = Math.max(0, num - 1);
+          if (num > 1) forceImmersive = true;
+        }
+      }
+
+      this.setState({ loading: false, post, nav: postNav, error: null, startIndex, forceImmersive });
     } catch (err) {
       const msg = err.status === 404 ? 'Post not found.' : (err.message || 'Failed to load post.');
       this.setState({ loading: false, post: null, nav: null, error: msg });

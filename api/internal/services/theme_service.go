@@ -55,7 +55,7 @@ func (s *ThemeService) ListThemes() ([]Theme, error) {
 
 		themePath := filepath.Join(s.cfg.ThemesPath, entry.Name())
 		themeName := strings.TrimSuffix(entry.Name(), ".json")
-		
+
 		theme, err := s.ReadAndValidateTheme(themePath, themeName)
 		if err == nil {
 			themes = append(themes, theme)
@@ -75,7 +75,7 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 	if err := json.Unmarshal(data, &theme); err != nil {
 		return Theme{}, fmt.Errorf("invalid json in theme file: %w", err)
 	}
-	
+
 	theme.Name = name
 	theme.Path = path
 

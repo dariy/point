@@ -125,7 +125,7 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 	var postResp map[string]interface{}
 	_ = json.Unmarshal(rec.Body.Bytes(), &postResp)
 	postTags := postResp["tags"].([]interface{})
-	
+
 	foundLowInPost := false
 	for _, it := range postTags {
 		tag := it.(map[string]interface{})
@@ -261,7 +261,7 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 	}
 
 	tags := resp.Posts[0]["tags"].([]interface{})
-	
+
 	foundNormal := false
 	foundChild := false
 	foundPage := false

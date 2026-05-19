@@ -20,16 +20,16 @@ import (
 )
 
 type SystemHandler struct {
-	repo              *repository.Repository
-	mediaService      *services.MediaService
-	postService       *services.PostService
-	settingsService   *services.SettingsService
-	tagService        *services.TagService
-	systemService     *services.SystemService
-	cacheService      *services.CacheService
-	dataPath          string
-	logPath           string
-	appVersion        string
+	repo            *repository.Repository
+	mediaService    *services.MediaService
+	postService     *services.PostService
+	settingsService *services.SettingsService
+	tagService      *services.TagService
+	systemService   *services.SystemService
+	cacheService    *services.CacheService
+	dataPath        string
+	logPath         string
+	appVersion      string
 }
 
 var startTime = time.Now()
@@ -375,4 +375,3 @@ func (h *SystemHandler) GetDiskInfo(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, info)
 }
-

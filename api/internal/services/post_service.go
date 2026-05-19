@@ -2,7 +2,6 @@ package services
 
 import (
 	"bytes"
-	"sync"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -11,12 +10,15 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/utils"
 
+	"github.com/mdigger/goldmark-attributes"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
@@ -27,6 +29,7 @@ import (
 type PostService struct {
 	repo       *repository.Repository
 	md         goldmark.Markdown
+	policy     *bluemonday.Policy
 	viewBuffer map[int64]int
 	viewMu     sync.Mutex
 }
@@ -36,6 +39,7 @@ func NewPostService(repo *repository.Repository) *PostService {
 		goldmark.WithExtensions(
 			extension.GFM,
 			extension.Typographer,
+			attributes.Extension,
 			highlighting.NewHighlighting(
 				highlighting.WithStyle("monokai"),
 			),
@@ -46,12 +50,58 @@ func NewPostService(repo *repository.Repository) *PostService {
 		goldmark.WithRendererOptions(
 			html.WithHardWraps(),
 			html.WithXHTML(),
+			html.WithUnsafe(),
 		),
 	)
+
+	// Initialize sanitization policy
+	policy := bluemonday.NewPolicy()
+
+	// Standard text elements
+	policy.AllowElements("br", "h1", "h2", "h3", "h4", "h5", "h6", "p", "span", "em", "strong", "i", "b", "u", "s", "del", "ins", "mark")
+	policy.AllowElements("ul", "ol", "li", "blockquote", "code", "pre", "hr")
+
+	// Structural elements for landing pages
+	policy.AllowElements("header", "section", "div", "article", "aside", "main", "nav")
+
+	// Links
+	policy.AllowAttrs("href", "title", "target", "rel").OnElements("a")
+
+	// Media elements
+	policy.AllowElements("img", "video", "audio", "source", "figure", "figcaption")
+	policy.AllowAttrs("src", "alt", "title", "width", "height", "loading").OnElements("img")
+	policy.AllowAttrs("src", "type").OnElements("source")
+	policy.AllowAttrs("src", "controls", "autoplay", "muted", "loop", "playsinline", "poster", "preload", "width", "height").OnElements("video")
+	policy.AllowAttrs("src", "controls", "autoplay", "loop", "preload").OnElements("audio")
+
+	policy.AllowAttrs("class", "id").OnElements(
+		"header", "section", "div", "article", "aside", "main", "nav",
+		"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span", "em", "strong",
+		"ul", "ol", "li", "blockquote", "code", "pre", "hr",
+		"img", "video", "audio", "source", "figure", "figcaption",
+	)
+
+	// SVG Support
+	policy.AllowElements("svg", "g", "path", "circle", "rect", "line", "polyline", "polygon", "ellipse", "text", "tspan")
+	policy.AllowAttrs(
+		"viewBox", "fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin",
+		"d", "cx", "cy", "r", "x", "y", "width", "height", "rx", "ry", "x1", "y1", "x2", "y2",
+		"points", "transform", "opacity", "aria-hidden", "role", "aria-label",
+	).OnElements("svg", "g", "path", "circle", "rect", "line", "polyline", "polygon", "ellipse", "text", "tspan")
+
+	// Metadata and Accessibility
+	policy.AllowAttrs("aria-hidden", "role", "aria-label", "aria-labelledby", "aria-describedby").OnElements(
+		"header", "section", "div", "article", "aside", "main", "nav",
+		"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span",
+	)
+
+	// Styling (limited to safe properties)
+	policy.AllowStyling()
 
 	return &PostService{
 		repo:       repo,
 		md:         md,
+		policy:     policy,
 		viewBuffer: make(map[int64]int),
 	}
 }
@@ -59,21 +109,29 @@ func NewPostService(repo *repository.Repository) *PostService {
 // bareImageRe matches a line containing only a bare image path like /2026/02/file.jpg
 var bareImageRe = regexp.MustCompile(`(?m)^(/\d{4}/\d{2}/\S+)$`)
 var imageExtRe = regexp.MustCompile(`(?i)\.(jpg|jpeg|png|gif|webp|avif|svg|heic|heif|bmp)$`)
+var videoExtRe = regexp.MustCompile(`(?i)\.(mp4|webm|mov|ogv|m4v|avi|mkv)$`)
+var audioExtRe = regexp.MustCompile(`(?i)\.(mp3|m4a|ogg|wav|flac|aac|opus)$`)
 
 // markdownImageRe matches a markdown image whose src starts with /media/originals
 // (legacy format written before the URL refactor). Capture group 1 is the path
 // after that prefix, i.e. "/YYYY/MM/file" — the bare-path storage format.
 var markdownImageRe = regexp.MustCompile(`!\[[^\]]*\]\(/media/originals(/[^)]+)\)`)
 
-// preprocessContent expands bare image paths into markdown image syntax so
-// goldmark renders them as <img> tags.
+// preprocessContent expands bare image/video/audio paths into markdown or HTML syntax
+// so goldmark renders them as <img>, <video>, or <audio> tags.
 // e.g. /2026/02/photo.jpg → ![photo.jpg](/2026/02/photo.jpg)
 func preprocessContent(content string) string {
 	return bareImageRe.ReplaceAllStringFunc(content, func(p string) string {
-		if !imageExtRe.MatchString(p) {
-			return p
+		if imageExtRe.MatchString(p) {
+			return fmt.Sprintf("![%s](%s)", path.Base(p), p)
 		}
-		return fmt.Sprintf("![%s](%s)", path.Base(p), p)
+		if videoExtRe.MatchString(p) {
+			return fmt.Sprintf("<video src=\"%s\" controls></video>", p)
+		}
+		if audioExtRe.MatchString(p) {
+			return fmt.Sprintf("<audio src=\"%s\" controls></audio>", p)
+		}
+		return p
 	})
 }
 
@@ -90,7 +148,7 @@ func (s *PostService) RenderContent(content string) (string, error) {
 	if err := s.md.Convert([]byte(preprocessContent(content)), &buf); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return s.policy.Sanitize(buf.String()), nil
 }
 
 type ListPostsParams struct {
@@ -368,8 +426,35 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 	return tag, nil
 }
 
-func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error {
+func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) error {
+	return s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID})
+}
+
+func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error {
+	return s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID})
+}
+
+func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID int64) error {
 	return s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID})
+}
+
+func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32) ([]models.Post, int64, error) {
+	offset := (page - 1) * perPage
+	posts, err := s.repo.ListTrashedPosts(ctx, models.ListTrashedPostsParams{
+		Limit:  int64(perPage),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountTrashedPosts(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if posts == nil {
+		posts = []models.Post{}
+	}
+	return posts, total, nil
 }
 
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {

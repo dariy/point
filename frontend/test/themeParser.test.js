@@ -90,4 +90,26 @@ describe('themeParser', () => {
     
     global.fetch = originalFetch;
   });
+
+  test('should inject custom_css if provided', async () => {
+    const originalFetch = global.fetch;
+    const themeWithCSS = {
+      shared: { colors: { 'bg-primary': '#ffffff' } },
+      custom_css: '.hero { padding: 2rem; }'
+    };
+    
+    global.fetch = async () => ({
+      ok: true,
+      json: async () => themeWithCSS
+    });
+
+    const { parseTheme } = await import('../src/utils/themeParser.js');
+    const css = await parseTheme();
+    
+    assert.match(css, /--bg-primary: #ffffff/);
+    assert.match(css, /\/\* Custom Theme CSS \*\//);
+    assert.match(css, /\.hero \{ padding: 2rem; \}/);
+    
+    global.fetch = originalFetch;
+  });
 });

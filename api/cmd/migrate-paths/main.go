@@ -154,7 +154,7 @@ func previewContentPaths(db *sql.DB) (int, error) {
 		if err := rows.Scan(&id, &title, &content); err != nil {
 			return 0, err
 		}
-		
+
 		_, changed := cleanContent(content)
 		if changed {
 			fmt.Printf("content    post %4d  %-40s  (will be updated)\n",

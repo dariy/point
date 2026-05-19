@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type FeedsHandler struct {
@@ -66,7 +67,6 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	blogTitle := getSettingOr(settings, "blog_title", "Blog")
 	blogDesc := getSettingOr(settings, "blog_subtitle", "")
 	authorName := getSettingOr(settings, "author_name", "Author")
-	authorEmail := getSettingOr(settings, "author_email", "")
 	language := getSettingOr(settings, "default_language", "en")
 
 	posts, err := h.repo.GetPublishedPostsForFeed(ctx, 20)
@@ -108,7 +108,7 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
     <description>%s</description>
     <language>%s</language>
     <lastBuildDate>%s</lastBuildDate>
-    <managingEditor>%s (%s)</managingEditor>
+    <managingEditor>%s</managingEditor>
 %s  </channel>
 </rss>`,
 		xmlEscape(blogTitle),
@@ -116,7 +116,6 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 		xmlEscape(blogDesc),
 		xmlEscape(language),
 		buildDate,
-		xmlEscape(authorEmail),
 		xmlEscape(authorName),
 		items.String(),
 	)

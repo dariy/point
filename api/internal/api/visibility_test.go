@@ -1,8 +1,8 @@
 package api
 
 import (
-	"testing"
 	"point-api/internal/repository"
+	"testing"
 )
 
 func TestIsPostVisibleToPublic(t *testing.T) {

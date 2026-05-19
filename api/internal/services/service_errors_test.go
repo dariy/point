@@ -83,9 +83,9 @@ func TestPostService_ListPosts(t *testing.T) {
 
 	// List only published
 	posts, total, _ := service.ListPosts(ctx, ListPostsParams{
-		Page:       1,
-		PerPage:    10,
-		Status: "published",
+		Page:    1,
+		PerPage: 10,
+		Status:  "published",
 	})
 	if total != 1 {
 		t.Errorf("expected 1 published post, got %d", total)
@@ -96,8 +96,8 @@ func TestPostService_ListPosts(t *testing.T) {
 
 	// List all (admin)
 	_, total, _ = service.ListPosts(ctx, ListPostsParams{
-		Page:       1,
-		PerPage:    10,
+		Page:          1,
+		PerPage:       10,
 		IncludeDrafts: true,
 	})
 	if total != 2 {

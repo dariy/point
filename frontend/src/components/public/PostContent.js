@@ -402,6 +402,11 @@ export class PostContent extends Component {
       // Update index immediately so gestures during transition reference the new slide.
       index = newIndex;
 
+      // Update URL hash to reflect the current slide (e.g. index 1 -> #2)
+      const hash = index === 0 ? "" : `#${index + 1}`;
+      const url = window.location.pathname + window.location.search + hash;
+      window.history.replaceState(null, "", url);
+
       const oldSlide = slides[oldIndex];
       const newSlide = slides[newIndex];
 
@@ -661,7 +666,6 @@ export class PostContent extends Component {
         if (document.body.classList.contains("ui-hidden")) {
           showUI();
         } else {
-          _hideFromClickTime = Date.now();
           hideUI();
           clearTimeout(this._idleTimer);
         }
@@ -688,7 +692,8 @@ export class PostContent extends Component {
     });
 
     // ── UI show / hide ──
-    let _hideFromClickTime = 0;
+    let _mouseDownX = 0, _mouseDownY = 0, _mouseDragged = false;
+    const DRAG_THRESHOLD_PX = 6;
 
     const showUI = () => {
       if (document.body.classList.contains("ui-hidden")) {
@@ -724,14 +729,6 @@ export class PostContent extends Component {
         "End",
       ];
       if (e?.type === "keydown" && navKeys.includes(e.key)) return;
-      // Suppress mousemove-triggered show for a short window after a deliberate click/tap hide,
-      // otherwise the natural hand-wobble after clicking immediately re-shows the overlay.
-      if (
-        e?.type === "mousemove" &&
-        document.body.classList.contains("ui-hidden") &&
-        Date.now() - _hideFromClickTime < 600
-      )
-        return;
       showUI();
     };
 
@@ -765,17 +762,33 @@ export class PostContent extends Component {
     this._on(wrapper, "click", (e) => {
       if (Date.now() - lastTouchTime < 500) return; // Ignore simulated click from touch
       if (e.target.closest("a, button, input, .post-info-card")) return;
+      if (_mouseDragged) return; // Drag-to-slide — not a click
       if (document.body.classList.contains("ui-hidden")) {
         showUI();
       } else {
-        _hideFromClickTime = Date.now();
         hideUI();
         clearTimeout(this._idleTimer);
       }
     });
 
-    this._on(document, "mousemove", resetIdle, { passive: true });
-    this._on(document, "mousedown", pauseCountdown, { passive: true });
+    this._on(document, "mousemove", (e) => {
+      if (!_mouseDragged) {
+        const dx = e.clientX - _mouseDownX;
+        const dy = e.clientY - _mouseDownY;
+        if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX) _mouseDragged = true;
+      }
+      // Mouse movement only keeps the UI visible — never un-hides the overlay.
+      if (!document.body.classList.contains("ui-hidden")) {
+        clearTimeout(this._idleTimer);
+        this._idleTimer = setTimeout(hideUI, IDLE_MS);
+      }
+    }, { passive: true });
+    this._on(document, "mousedown", (e) => {
+      _mouseDownX = e.clientX;
+      _mouseDownY = e.clientY;
+      _mouseDragged = false;
+      pauseCountdown();
+    }, { passive: true });
     this._on(document, "mouseup", resumeCountdown, { passive: true });
     this._on(document, "keydown", resetIdle, { passive: true });
 

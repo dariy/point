@@ -89,7 +89,7 @@ func LoadConfig(path string) (config Config, err error) {
 	if config.ThemesPath == "" {
 		config.ThemesPath = filepath.Join(config.FrontendDir, "themes")
 	}
-	
+
 	// Clean database URL (remove python-specific aiosqlite prefix if present)
 	if strings.Contains(config.DatabaseURL, "sqlite+aiosqlite:///") {
 		config.DatabaseURL = strings.Replace(config.DatabaseURL, "sqlite+aiosqlite:///", "", 1)

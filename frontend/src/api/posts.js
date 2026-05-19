@@ -54,12 +54,30 @@ export function updatePost(id, data) {
 }
 
 /**
- * Delete a post.
+ * Move a post to trash (soft delete).
  * @param {number} id
  * @returns {Promise<null>}
  */
 export function deletePost(id) {
   return api.delete(`/api/posts/${id}`);
+}
+
+/**
+ * Restore a trashed post.
+ * @param {number} id
+ * @returns {Promise<null>}
+ */
+export function restorePost(id) {
+  return api.post(`/api/posts/${id}/restore`);
+}
+
+/**
+ * Permanently delete a post (must be in trash first).
+ * @param {number} id
+ * @returns {Promise<null>}
+ */
+export function permanentlyDeletePost(id) {
+  return api.delete(`/api/posts/${id}/permanent`);
 }
 
 /**

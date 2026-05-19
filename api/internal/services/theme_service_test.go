@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"point-api/internal/config"
 	"github.com/stretchr/testify/assert"
+	"point-api/internal/config"
 )
 
 func TestThemeService(t *testing.T) {
@@ -15,12 +15,12 @@ func TestThemeService(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 
 	settingsService := NewSettingsService(repo)
-	
+
 	themesDir := t.TempDir()
 	cfg := &config.Config{
 		ThemesPath: themesDir,
 	}
-	
+
 	themeService := NewThemeService(cfg, settingsService)
 	ctx := context.Background()
 
@@ -87,14 +87,14 @@ func TestThemeService(t *testing.T) {
 		_, err := ts.ListThemes()
 		assert.Error(t, err)
 	})
-	
+
 	t.Run("GetActiveTheme with no defaults", func(t *testing.T) {
 		emptyCfg := &config.Config{ThemesPath: t.TempDir()}
 		ts := NewThemeService(emptyCfg, settingsService)
 		_, err := ts.GetActiveTheme(ctx)
 		assert.Error(t, err)
 	})
-	
+
 	t.Run("ReadAndValidateTheme missing file", func(t *testing.T) {
 		_, err := themeService.ReadAndValidateTheme(filepath.Join(themesDir, "non_existent.json"), "non_existent")
 		assert.Error(t, err)

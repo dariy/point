@@ -16,7 +16,7 @@ func setupTimelineHandler(t *testing.T) (*TimelineHandler, *services.TimelineSer
 	repo := setupTestDB(t)
 	// Ensure system tags
 	_ = repo.EnsureSystemTags(context.Background())
-	
+
 	timelineSvc := services.NewTimelineService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)

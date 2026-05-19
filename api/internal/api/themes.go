@@ -2,7 +2,7 @@ package api
 
 import (
 	"net/http"
-	
+
 	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
 )

@@ -111,7 +111,8 @@
 }
 
 /* Ensure the component mount point stretches to fill the container */
-.immersive-layout #content-mount {
+.immersive-layout #content-mount,
+.immersive-layout #grid-mount {
     display: block;
     height: 100%;
 }
