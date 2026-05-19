@@ -105,6 +105,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	pagesHandler := api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
+	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
 
 	// Global middleware
 	e.Use(middleware.RequestLogger())
@@ -257,6 +258,10 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth))
 	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(svcs.Auth))
 	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(svcs.Auth))
+
+	// ── Nav Menu Routes (admin) ────────────────────────────────────────────────
+	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth))
+	e.PUT("/api/nav-menu", navMenuHandler.UpdateAdminNavMenu, api.AuthMiddleware(svcs.Auth))
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")

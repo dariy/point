@@ -354,12 +354,13 @@ export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
 export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
+  const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tag/${slug}`;
 
   const classes = ['tag-link', active ? 'active' : '', extra]
     .filter(Boolean)
     .join(' ');
 
-  return `<a href="/tag/${escapeHtml(slug)}" class="${classes}">${prefix}${escapeHtml(name)}${suffix}</a>`;
+  return `<a href="${escapeHtml(href)}" class="${classes}">${prefix}${escapeHtml(name)}${suffix}</a>`;
 }
 
 /**

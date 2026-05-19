@@ -271,6 +271,7 @@ const routes = [
   { path: '/light/media',          load: () => import('./pages/light/MediaPage.js') },
   { path: '/light/tags',           load: () => import('./pages/light/TagsManagerPage.js') },
   { path: '/light/tags/:slug',     load: () => import('./pages/light/TagsManagerPage.js') },
+  { path: '/light/menu',           load: () => import('./pages/light/MenuPage.js') },
   { path: '/light/themes',         load: () => import('./pages/light/ThemesPage.js') },
   { path: '/light/settings',       load: () => import('./pages/light/SettingsPage.js') },
   { path: '/light/security',       load: () => import('./pages/light/SecurityPage.js') },

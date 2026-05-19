@@ -37,6 +37,7 @@ var publicSettingKeys = map[string]bool{
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
 	"exif_visibility":         true,
+	"nav_menu_mode":           true,
 }
 
 // writableSecretKeys are secrets the admin may set through the API.

@@ -683,14 +683,26 @@ func getMinTagPostsSetting(settings map[string]string) int64 {
 	return v
 }
 
-// GetNavMenu returns the hierarchical tag tree for navigation, scoped to the
-// current user's auth level (public = visible tags only; admin = all tags).
+// GetNavMenu returns the hierarchical tag tree (or custom menu) for navigation,
+// scoped to the current user's auth level.
 // GET /api/pages/nav
 func (h *PagesHandler) GetNavMenu(c echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+
+	if allSettings["nav_menu_mode"] == "custom" {
+		raw := allSettings["custom_nav_menu"]
+		if raw != "" {
+			var nodes []services.NavTagNode
+			if err := json.Unmarshal([]byte(raw), &nodes); err == nil {
+				return c.JSON(http.StatusOK, map[string]interface{}{"menu": nodes})
+			}
+		}
+		return c.JSON(http.StatusOK, map[string]interface{}{"menu": []services.NavTagNode{}})
+	}
+
 	minPosts := int64(0)
 	if publicOnly {
 		minPosts = getMinTagPostsSetting(allSettings)
