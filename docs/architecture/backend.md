@@ -28,7 +28,8 @@ The backend is built with **Go** and follows a **Clean Architecture** approach:
 - **Layered Separation**: Clear boundaries between HTTP handlers, business logic (services), and data access (repositories).
 - **Minimal Dependencies**: Leveraging the Go standard library where possible, with Echo as a lightweight web framework.
 - **CGO-Free**: Using `modernc.org/sqlite` for a pure Go SQLite implementation, simplifying cross-compilation and deployment.
-- **Single Binary**: The entire application, including the embedded frontend, is delivered as a single executable.
+- **Single Container Deployment**: The entire application (API, database, and frontend) is delivered within a single Docker image, making it easy to deploy without external dependencies.
+- **Static Asset Serving**: The backend binary serves the frontend assets from the filesystem at runtime.
 
 ---
 
