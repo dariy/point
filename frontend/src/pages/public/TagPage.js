@@ -90,7 +90,8 @@ export default class TagPage extends Component {
     const settings = store.get('settings') || {};
     const rootMenu = store.get('navTags') || [];
     const navChildren = this.state.data?.nav_children || [];
-    const navTags = navChildren.length ? navChildren : rootMenu;
+    const isCustomMenu = settings.nav_menu_mode === 'custom';
+    const navTags = (!isCustomMenu && navChildren.length) ? navChildren : rootMenu;
     const slug     = this.props.params?.slug || '';
     const { data, post } = this.state;
 
