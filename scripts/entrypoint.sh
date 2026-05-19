@@ -4,7 +4,7 @@ set -e
 # Create data directories if missing (handles volume-mount overlay case).
 # Runs as root so it can write regardless of host ownership; exits gracefully
 # if the mount is genuinely unwritable (will surface as a clear app error).
-mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups 2>/dev/null || true
+mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups /data/themes 2>/dev/null || true
 
 # If running as root, try to drop privileges to appuser.
 # In some environments (like rootless Podman), su-exec might fail with

@@ -29,6 +29,7 @@ type Config struct {
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
 	ThemesPath               string `mapstructure:"THEMES_PATH"`
+	UserThemesPath           string `mapstructure:"USER_THEMES_PATH"`
 	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
 	PhotoLibraryPath         string `mapstructure:"PHOTO_LIBRARY_PATH"`
 
@@ -59,6 +60,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("STORAGE_PATH", "./data")
 	v.SetDefault("FRONTEND_DIR", "../frontend")
 	v.SetDefault("THEMES_PATH", "")
+	v.SetDefault("USER_THEMES_PATH", "")
 	v.SetDefault("APP_VERSION", "")
 	v.SetDefault("SESSION_EXPIRY_HOURS", 720)
 	v.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
@@ -88,6 +90,11 @@ func LoadConfig(path string) (config Config, err error) {
 	// If THEMES_PATH was not set (or set to empty), derive it from FRONTEND_DIR
 	if config.ThemesPath == "" {
 		config.ThemesPath = filepath.Join(config.FrontendDir, "themes")
+	}
+
+	// If USER_THEMES_PATH was not set, derive it from STORAGE_PATH
+	if config.UserThemesPath == "" {
+		config.UserThemesPath = filepath.Join(config.StoragePath, "themes")
 	}
 
 	// Clean database URL (remove python-specific aiosqlite prefix if present)
