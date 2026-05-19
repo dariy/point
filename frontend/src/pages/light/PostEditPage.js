@@ -41,7 +41,7 @@ function toDatetimeLocal(isoStr) {
  * @param {string} content
  * @returns {Array<{type:'image',path:string}|{type:'text',text:string}>}
  */
-function parseNodes(content) {
+export function parseNodes(content) {
   const lines = (content || '').split('\n');
   const nodes = [];
   let textBuf = [];
@@ -53,9 +53,12 @@ function parseNodes(content) {
   };
 
   for (const line of lines) {
-    if (IMAGE_PATH_RE.test(line.trim())) {
+    const trimmed = line.trim();
+    if (IMAGE_PATH_RE.test(trimmed)) {
       flushText();
-      nodes.push({ type: 'image', path: line.trim() });
+      nodes.push({ type: 'image', path: trimmed });
+    } else if (trimmed === '---') {
+      flushText();
     } else {
       textBuf.push(line);
     }
@@ -69,8 +72,11 @@ function parseNodes(content) {
  * @param {Array<{type:string,path?:string,text?:string}>} nodes
  * @returns {string}
  */
-function serializeNodes(nodes) {
-  return nodes.map((n) => (n.type === 'image' ? n.path : n.text)).join('\n');
+export function serializeNodes(nodes) {
+  return nodes.map((n) => {
+    if (n.type === 'image') return n.path;
+    return n.text + '\n---';
+  }).join('\n');
 }
 
 /** Extract tag name strings from either a string[] or {name,slug}[] array. */
