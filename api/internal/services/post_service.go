@@ -17,6 +17,8 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/utils"
 
+	"github.com/microcosm-cc/bluemonday"
+	"github.com/mdigger/goldmark-attributes"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
@@ -27,6 +29,7 @@ import (
 type PostService struct {
 	repo       *repository.Repository
 	md         goldmark.Markdown
+	policy     *bluemonday.Policy
 	viewBuffer map[int64]int
 	viewMu     sync.Mutex
 }
@@ -36,6 +39,7 @@ func NewPostService(repo *repository.Repository) *PostService {
 		goldmark.WithExtensions(
 			extension.GFM,
 			extension.Typographer,
+			attributes.Extension,
 			highlighting.NewHighlighting(
 				highlighting.WithStyle("monokai"),
 			),
@@ -46,12 +50,49 @@ func NewPostService(repo *repository.Repository) *PostService {
 		goldmark.WithRendererOptions(
 			html.WithHardWraps(),
 			html.WithXHTML(),
+			html.WithUnsafe(),
 		),
 	)
+
+	// Initialize sanitization policy
+	policy := bluemonday.NewPolicy()
+
+	// Standard text elements
+	policy.AllowElements("br", "h1", "h2", "h3", "h4", "h5", "h6", "p", "span", "em", "strong", "i", "b", "u", "s", "del", "ins", "mark")
+	policy.AllowElements("ul", "ol", "li", "blockquote", "code", "pre", "hr")
+
+	// Structural elements for landing pages
+	policy.AllowElements("header", "section", "div", "article", "aside", "main", "nav")
+
+	// Links
+	policy.AllowAttrs("href", "title", "target", "rel").OnElements("a")
+	policy.AllowAttrs("class", "id").OnElements(
+		"header", "section", "div", "article", "aside", "main", "nav",
+		"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span", "em", "strong",
+		"ul", "ol", "li", "blockquote", "code", "pre", "hr",
+	)
+
+	// SVG Support
+	policy.AllowElements("svg", "g", "path", "circle", "rect", "line", "polyline", "polygon", "ellipse", "text", "tspan")
+	policy.AllowAttrs(
+		"viewBox", "fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin",
+		"d", "cx", "cy", "r", "x", "y", "width", "height", "rx", "ry", "x1", "y1", "x2", "y2",
+		"points", "transform", "opacity", "aria-hidden", "role", "aria-label",
+	).OnElements("svg", "g", "path", "circle", "rect", "line", "polyline", "polygon", "ellipse", "text", "tspan")
+
+	// Metadata and Accessibility
+	policy.AllowAttrs("aria-hidden", "role", "aria-label", "aria-labelledby", "aria-describedby").OnElements(
+		"header", "section", "div", "article", "aside", "main", "nav",
+		"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span",
+	)
+
+	// Styling (limited to safe properties)
+	policy.AllowStyling()
 
 	return &PostService{
 		repo:       repo,
 		md:         md,
+		policy:     policy,
 		viewBuffer: make(map[int64]int),
 	}
 }
@@ -90,7 +131,7 @@ func (s *PostService) RenderContent(content string) (string, error) {
 	if err := s.md.Convert([]byte(preprocessContent(content)), &buf); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return s.policy.Sanitize(buf.String()), nil
 }
 
 type ListPostsParams struct {

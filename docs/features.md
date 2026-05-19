@@ -152,6 +152,6 @@ A complete feature listing for the Point self-hosted photo blog engine.
 | HTTP-only session cookies | Session tokens are set as HTTP-only cookies, invisible to JavaScript and immune to XSS token theft. |
 | Configurable session TTL | Session lifetime defaults to 30 days and is adjustable per deployment via environment variable. |
 | One-time password reset tokens | Reset tokens are hashed before storage, single-use, and expire after one hour. |
-| Secrets isolation | Sensitive values (API keys, reset tokens) are stored in a separate `blog_secrets` table and never returned by any API endpoint. |
+| Secrets isolation | Sensitive values (API keys, reset tokens) are never returned by API endpoints. |
 | Guest content filtering | All visibility rules are enforced server-side; guest responses contain only public-safe content — the frontend never makes access decisions. |
 | Auth-guarded admin routes | Every admin route requires a valid session; unauthenticated requests are redirected to the login page. |
