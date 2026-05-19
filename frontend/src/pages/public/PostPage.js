@@ -81,10 +81,12 @@ export default class PostPage extends Component {
     }
     const breadcrumb = post ? [{ name: post.title, is_hidden: post.is_hidden || post.is_hidden_by_tag, tooltip: postTooltip }] : [];
 
-    // In immersive mode suppress the tag filter bar; tags go in the footer instead
+    // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
+    // but keep the custom menu visible since it contains explicit navigation links.
+    const isCustomMenu = settings.nav_menu_mode === 'custom';
     this.mountChild(PublicHeader, '#header-mount', {
       settings,
-      navTags: (!post || immersive) ? [] : navTags,
+      navTags: (!post || (immersive && !isCustomMenu)) ? [] : navTags,
       breadcrumb,
       currentPath: '',
       editUrl: post ? `/light/posts/${post.id}/edit` : null,

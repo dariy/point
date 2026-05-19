@@ -134,7 +134,7 @@ export default class TagPage extends Component {
 
       this.mountChild(PublicHeader, '#header-mount', {
         settings,
-        navTags: immersive ? [] : navTags,
+        navTags: (immersive && !isCustomMenu) ? [] : navTags,
         currentTagSlug: slug,
         breadcrumb: headerBreadcrumb,
         currentPath: '',

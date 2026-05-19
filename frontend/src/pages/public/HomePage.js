@@ -86,11 +86,13 @@ export default class HomePage extends Component {
     this._trackpad?.destroy();
     const navTags = store.get('navTags') || [];
 
-    // In immersive mode suppress the tag filter bar; tags go in the footer instead
+    // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
+    // but keep the custom menu visible since it contains explicit navigation links.
+    const isCustomMenu = settings.nav_menu_mode === 'custom';
     this.mountChild(PublicHeader, '#header-mount', {
       settings,
       currentPath: '/',
-      navTags: immersive ? [] : navTags,
+      navTags: (immersive && !isCustomMenu) ? [] : navTags,
       editUrl: (isStaticHomePage && post) ? `/light/posts/${post.id}/edit` : null,
     });
 
