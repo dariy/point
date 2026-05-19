@@ -72,4 +72,3 @@ func TestFeedsHandler(t *testing.T) {
 		t.Fatalf("RSSFeed failed: %v", err)
 	}
 }
-

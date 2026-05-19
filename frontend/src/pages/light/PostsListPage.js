@@ -9,12 +9,12 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { TagsInput } from '../../components/light/TagsInput.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listPosts, deletePost, updatePostTags, updatePost, setPostStatus } from '../../api/posts.js';
+import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, updatePost, setPostStatus } from '../../api/posts.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
-import { EDIT_SVG, X_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG } from '../../utils/icons.js';
+import { EDIT_SVG, X_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG } from '../../utils/icons.js';
 
 const STATUS_LABELS = {
   published: 'Published',
@@ -22,6 +22,7 @@ const STATUS_LABELS = {
   hidden: 'Hidden',
   page: 'Page',
   scheduled: 'Scheduled',
+  trash: 'Trash',
 };
 
 export default class PostsListPage extends Component {
@@ -42,21 +43,22 @@ export default class PostsListPage extends Component {
 
   render() {
     const { loading, posts, error, statusFilter, search, selectMode, selectedIds } = this.state;
+    const isTrash = statusFilter === 'trash';
 
-    const statusOptions = ['', 'draft', 'published', 'scheduled', 'hidden', 'page'].map((s) => {
+    const statusOptions = ['', 'draft', 'published', 'scheduled', 'hidden', 'page', 'trash'].map((s) => {
       const label = s ? STATUS_LABELS[s] : 'All statuses';
       const sel = statusFilter === s ? ' selected' : '';
       return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(label)}</option>`;
     }).join('');
 
-    const colspan = selectMode ? 6 : 5;
+    const colspan = selectMode && !isTrash ? 6 : 5;
 
     const rows = loading
       ? `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`
       : error
         ? `<tr><td colspan="${colspan}" class="error-state">${escapeHtml(error)}</td></tr>`
         : !posts.length
-          ? `<tr><td colspan="${colspan}" class="empty-state">No posts found.</td></tr>`
+          ? `<tr><td colspan="${colspan}" class="empty-state">${isTrash ? 'Trash is empty.' : 'No posts found.'}</td></tr>`
           : posts.map((p) => {
               const mediaUrl = p.media_url || '';
               const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
@@ -74,6 +76,42 @@ export default class PostsListPage extends Component {
                 previewHtml = `<div class="post-preview-placeholder"></div>`;
               }
               const isChecked = selectedIds.has(p.id);
+
+              if (isTrash) {
+                const deletedAt = p.deleted_at?.value
+                  ? formatDateShort(p.deleted_at.value)
+                  : (p.deleted_at ? formatDateShort(p.deleted_at) : '');
+                return `
+                <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
+                  <td class="preview-col" rowspan="2">
+                    <div class="post-preview-placeholder" title="Trashed"></div>
+                  </td>
+                  <td class="status-col">
+                    <span class="badge badge-trash">Trash</span>
+                  </td>
+                  <td class="title-col">
+                    <span class="table-link muted">${escapeHtml(p.title)}</span>
+                  </td>
+                  <td class="updated-col">${escapeHtml(deletedAt)}</td>
+                  <td class="actions-col">
+                    <div class="actions">
+                      <button class="btn btn-sm restore-btn"
+                              data-id="${escapeHtml(String(p.id))}"
+                              data-title="${escapeHtml(p.title)}"
+                              title="Restore">${RESTORE_SVG}</button>
+                      <button class="btn btn-sm btn-danger perm-delete-btn"
+                              data-id="${escapeHtml(String(p.id))}"
+                              data-title="${escapeHtml(p.title)}"
+                              title="Delete permanently">${X_SVG}</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-tags">
+                  <td colspan="4" class="tags-col muted-tags">
+                    <span class="trash-status-label">Was: ${escapeHtml(STATUS_LABELS[p.status] || p.status)}</span>
+                  </td>
+                </tr>`;
+              }
 
               return `
               <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
@@ -114,7 +152,7 @@ export default class PostsListPage extends Component {
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"
                             data-title="${escapeHtml(p.title)}"
-                            title="Delete">${X_SVG}</button>
+                            title="Move to Trash">${X_SVG}</button>
                   </div>
                 </td>
               </tr>
@@ -132,7 +170,7 @@ export default class PostsListPage extends Component {
           <header class="light-header">
             <h1>Posts</h1>
             <div class="header-actions">
-              <button id="select-mode-btn" class="btn">${selectMode ? 'Cancel' : 'Select'}</button>
+              ${!isTrash ? `<button id="select-mode-btn" class="btn">${selectMode ? 'Cancel' : 'Select'}</button>` : ''}
               <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
             </div>
           </header>
@@ -141,10 +179,10 @@ export default class PostsListPage extends Component {
               <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || 'draft')} filter-select">
                 ${statusOptions}
               </select>
-              <input type="search" id="search-input" class="form-input filter-search"
-                     placeholder="Search posts…" value="${escapeHtml(search)}">
+              ${!isTrash ? `<input type="search" id="search-input" class="form-input filter-search"
+                     placeholder="Search posts…" value="${escapeHtml(search)}">` : ''}
             </div>
-            ${selectMode ? `
+            ${selectMode && !isTrash ? `
             <div class="bulk-toolbar" id="bulk-toolbar">
               <span id="bulk-count">0 selected</span>
               <select id="bulk-status-select">
@@ -153,17 +191,17 @@ export default class PostsListPage extends Component {
                 <option value="hidden">Hidden</option>
               </select>
               <button id="bulk-apply-btn" class="btn btn-sm" disabled>Apply</button>
-              <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled>Delete selected</button>
+              <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled>Move to Trash</button>
             </div>
             ` : ''}
             <div class="table-container">
               <table class="table">
                 <thead>
                   <tr>
-                    ${selectMode ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ''}
+                    ${selectMode && !isTrash ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ''}
                     <th class="preview-col" colspan="2">Post</th>
                     <th class="title-col"></th>
-                    <th class="updated-col">Last updated</th>
+                    <th class="updated-col">${isTrash ? 'Deleted' : 'Last updated'}</th>
                     <th class="actions-col"></th>
                   </tr>
                 </thead>
@@ -221,39 +259,66 @@ export default class PostsListPage extends Component {
       });
     }
 
-    // Mount a TagsInput in every tags cell
-    if (!this.state.loading && !this.state.error) {
+    const isTrash = this.state.statusFilter === 'trash';
+
+    // Mount a TagsInput in every tags cell (skip for trash view)
+    if (!isTrash && !this.state.loading && !this.state.error) {
       for (const post of this.state.posts) {
         this._mountTagEditor(post);
       }
     }
 
-    // Status change buttons
-    this.$$('.status-change-btn').forEach((select) => {
-      select.addEventListener('change', async (e) => {
-        const id = parseInt(select.dataset.id, 10);
-        const newStatus = e.target.value;
-        await this._updatePostStatus(id, newStatus, select);
+    // Status change buttons (skip for trash view)
+    if (!isTrash) {
+      this.$$('.status-change-btn').forEach((select) => {
+        select.addEventListener('change', async (e) => {
+          const id = parseInt(select.dataset.id, 10);
+          const newStatus = e.target.value;
+          await this._updatePostStatus(id, newStatus, select);
+        });
       });
-    });
+    }
 
-    // Delete buttons
+    // Delete buttons (move to trash)
     this.$$('.delete-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
-        this._showConfirm('Delete post', `Delete post "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
+        this._showConfirm('Move to Trash', `Move "${title}" to Trash? You can restore it later.`, 'Move to Trash', 'danger', () => {
           this._deletePost(id);
         });
       });
     });
 
-    // Select mode
-    this.$('#select-mode-btn').addEventListener('click', () => {
-      this.setState({ selectMode: !this.state.selectMode, selectedIds: new Set() });
+    // Restore buttons (trash view)
+    this.$$('.restore-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = parseInt(btn.dataset.id, 10);
+        const title = btn.dataset.title;
+        this._restorePost(id, title);
+      });
     });
 
-    if (this.state.selectMode) {
+    // Permanently delete buttons (trash view)
+    this.$$('.perm-delete-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = parseInt(btn.dataset.id, 10);
+        const title = btn.dataset.title;
+        this._showConfirm('Delete permanently', `Permanently delete "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
+          this._permanentlyDeletePost(id);
+        });
+      });
+    });
+
+    // Select mode (skip for trash view)
+    const selectModeBtn = this.$('#select-mode-btn');
+    if (selectModeBtn) {
+      selectModeBtn.addEventListener('click', () => {
+        this.setState({ selectMode: !this.state.selectMode, selectedIds: new Set() });
+      });
+    }
+
+    if (this.state.selectMode && !isTrash) {
       this.$('#select-all-cb').addEventListener('change', this._handleSelectAll.bind(this));
       this.$$('.select-row-cb').forEach(cb => {
         cb.addEventListener('change', this._handleSelectRow.bind(this));
@@ -344,7 +409,7 @@ export default class PostsListPage extends Component {
 
   _handleBulkDelete() {
     const n = this.state.selectedIds.size;
-    this._showConfirm('Delete posts', `Delete ${n} posts? This cannot be undone.`, 'Delete', 'danger', async () => {
+    this._showConfirm('Move to Trash', `Move ${n} posts to Trash? You can restore them later.`, 'Move to Trash', 'danger', async () => {
       const ids = Array.from(this.state.selectedIds);
       let successCount = 0;
       let failCount = 0;
@@ -354,16 +419,16 @@ export default class PostsListPage extends Component {
           await deletePost(id);
           successCount++;
         } catch (err) {
-          console.error(`Failed to delete post ${id}:`, err);
+          console.error(`Failed to move post ${id} to trash:`, err);
           failCount++;
         }
       }
 
       let message = '';
       if (failCount === 0) {
-        message = `All ${successCount} posts deleted.`;
+        message = `${successCount} posts moved to Trash.`;
       } else {
-        message = `${successCount} of ${ids.length} posts deleted. ${failCount} failed.`;
+        message = `${successCount} of ${ids.length} posts moved to Trash. ${failCount} failed.`;
       }
       store.set('toast', { message, type: failCount > 0 ? 'error' : 'success' });
 
@@ -506,7 +571,27 @@ export default class PostsListPage extends Component {
   async _deletePost(id) {
     try {
       await deletePost(id);
-      store.set('toast', { message: 'Post deleted.', type: 'success' });
+      store.set('toast', { message: 'Post moved to Trash.', type: 'success' });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Move to Trash failed.', type: 'error' });
+    }
+  }
+
+  async _restorePost(id, title) {
+    try {
+      await restorePost(id);
+      store.set('toast', { message: `"${title}" restored.`, type: 'success' });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Restore failed.', type: 'error' });
+    }
+  }
+
+  async _permanentlyDeletePost(id) {
+    try {
+      await permanentlyDeletePost(id);
+      store.set('toast', { message: 'Post permanently deleted.', type: 'success' });
       this._load();
     } catch (err) {
       store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });

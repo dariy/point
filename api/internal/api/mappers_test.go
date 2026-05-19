@@ -74,11 +74,11 @@ func TestPostByTagToResponse(t *testing.T) {
 
 func TestTagToListItem(t *testing.T) {
 	tag := models.Tag{
-		ID:          10,
-		Name:        "Places",
-		Slug:        "places",
-		
-		PostCount:   5,
+		ID:   10,
+		Name: "Places",
+		Slug: "places",
+
+		PostCount: 5,
 	}
 	item := tagToListItem(tag)
 	if item["id"] != int64(10) {
@@ -138,7 +138,7 @@ func TestInjectPostHiddenFields(t *testing.T) {
 	resp := map[string]interface{}{
 		"tags": []map[string]interface{}{{"name": "foo"}},
 	}
-	tags := []models.Tag{{ID: 1, }}
+	tags := []models.Tag{{ID: 1}}
 	hiddenPostsIDs := map[int64]bool{1: true}
 
 	injectPostHiddenFields(resp, "hidden", tags, hiddenPostsIDs)
@@ -155,7 +155,7 @@ func TestInjectPostHiddenFieldsFromInfo(t *testing.T) {
 	resp := map[string]interface{}{
 		"tags": []map[string]interface{}{{"name": "bar"}},
 	}
-	tags := []repository.PostTagInfo{{ID: 2, }}
+	tags := []repository.PostTagInfo{{ID: 2}}
 	hiddenPostsIDs := map[int64]bool{2: true}
 
 	injectPostHiddenFieldsFromInfo(resp, "published", tags, hiddenPostsIDs)
@@ -170,13 +170,13 @@ func TestInjectPostHiddenFieldsFromInfo(t *testing.T) {
 
 func TestMediaToResponse(t *testing.T) {
 	m := models.Medium{
-		ID:           1,
-		Filename:     "photo.jpg",
-		OriginalPath: "originals/2026/03/photo.jpg",
-		FileType:     "IMAGE",
-		MimeType:     "image/jpeg",
-		FileSize:     1024,
-		IsPublic:     1,
+		ID:            1,
+		Filename:      "photo.jpg",
+		OriginalPath:  "originals/2026/03/photo.jpg",
+		FileType:      "IMAGE",
+		MimeType:      "image/jpeg",
+		FileSize:      1024,
+		IsPublic:      1,
 		ThumbnailPath: sql.NullString{String: "thumbnails/2026/03/photo.jpg", Valid: true},
 	}
 	resp := mediaToResponse(m)

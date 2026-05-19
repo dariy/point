@@ -29,7 +29,7 @@ var publicSettingKeys = map[string]bool{
 	"google_analytics_id":     true,
 	"use_thumbnails":          true,
 	"about_post_id":           true,
-	"home_page_post_id":        true,
+	"home_page_post_id":       true,
 	"multi_user_mode":         true,
 	"show_tag_cloud":          true,
 	"map_mode":                true,
@@ -37,6 +37,7 @@ var publicSettingKeys = map[string]bool{
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
 	"exif_visibility":         true,
+	"nav_menu_mode":           true,
 }
 
 // writableSecretKeys are secrets the admin may set through the API.

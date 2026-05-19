@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 )
@@ -22,16 +21,6 @@ type AuthService struct {
 
 func NewAuthService(repo *repository.Repository) *AuthService {
 	return &AuthService{repo: repo}
-}
-
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
-func VerifyPassword(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
 }
 
 func HashToken(token string) string {
@@ -55,6 +44,18 @@ func (s *AuthService) Authenticate(ctx context.Context, username, password strin
 
 	if !VerifyPassword(password, user.PasswordHash) {
 		return models.User{}, errors.New("invalid username or password")
+	}
+
+	// Upgrade hash to Argon2id if it's still bcrypt
+	if IsBcryptHash(user.PasswordHash) {
+		newHash, err := HashPassword(password)
+		if err == nil {
+			_ = s.repo.UpdateUserPassword(ctx, models.UpdateUserPasswordParams{
+				PasswordHash: newHash,
+				ID:           user.ID,
+			})
+			user.PasswordHash = newHash
+		}
 	}
 
 	// Update last login

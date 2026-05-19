@@ -84,6 +84,11 @@ export async function parseTheme() {
     finalCSS += `[data-theme="dark"] {\n${mapToCSS(themeData.dark)}}\n`;
   }
 
+  // 4. Custom CSS injection
+  if (themeData.custom_css) {
+    finalCSS += `\n/* Custom Theme CSS */\n${themeData.custom_css}\n`;
+  }
+
   // Fallback for simple flat structures (legacy support)
   if (!themeData.light && !themeData.dark && !themeData.shared) {
     finalCSS = `:root {\n${mapToCSS(themeData)}}`;

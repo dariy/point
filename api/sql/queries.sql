@@ -95,18 +95,19 @@ WHERE key = ?;
 -- name: GetPost :one
 SELECT p.*
 FROM posts p
-WHERE p.id = ? LIMIT 1;
+WHERE p.id = ? AND p.deleted_at IS NULL LIMIT 1;
 
 -- name: GetPostBySlug :one
 SELECT p.*
 FROM posts p
-WHERE p.slug = ? LIMIT 1;
+WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1;
 
 -- name: ListPosts :many
 SELECT p.*
 FROM posts p
 WHERE
-    (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
+    p.deleted_at IS NULL
+    AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
@@ -130,7 +131,8 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 -- name: CountPosts :one
 SELECT COUNT(*) FROM posts p
 WHERE
-    (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
+    p.deleted_at IS NULL
+    AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN sqlc.arg('include_drafts') THEN 1=1
@@ -203,7 +205,28 @@ SET status = 'published',
     scheduled_at = NULL,
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
+AND deleted_at IS NULL
 RETURNING *;
+
+-- name: SoftDeletePost :exec
+UPDATE posts
+SET deleted_at = CURRENT_TIMESTAMP
+WHERE id = ? AND author_id = ? AND deleted_at IS NULL;
+
+-- name: RestorePost :exec
+UPDATE posts
+SET deleted_at = NULL
+WHERE id = ? AND author_id = ?;
+
+-- name: ListTrashedPosts :many
+SELECT * FROM posts
+WHERE deleted_at IS NOT NULL
+ORDER BY deleted_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountTrashedPosts :one
+SELECT COUNT(*) FROM posts
+WHERE deleted_at IS NOT NULL;
 
 -- name: SetPostPreviewToken :exec
 UPDATE posts
@@ -266,6 +289,7 @@ SELECT p.*
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
+AND p.deleted_at IS NULL
 AND (CASE
     WHEN sqlc.arg('include_drafts') THEN 1=1
     WHEN sqlc.arg('published_only_filter') THEN
@@ -285,6 +309,7 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
+AND p.deleted_at IS NULL
 AND (CASE
     WHEN sqlc.arg('include_drafts') THEN 1=1
     WHEN sqlc.arg('published_only_filter') THEN
@@ -303,7 +328,7 @@ UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
     JOIN posts ON post_tags.post_id = posts.id
-    WHERE post_tags.tag_id = tags.id AND posts.status != 'draft'
+    WHERE post_tags.tag_id = tags.id AND posts.status != 'draft' AND posts.deleted_at IS NULL
 )
 WHERE tags.id = ?;
 
@@ -312,7 +337,7 @@ UPDATE tags
 SET post_count = (
     SELECT COUNT(*) FROM post_tags
     JOIN posts ON post_tags.post_id = posts.id
-    WHERE tag_id = tags.id AND posts.status != 'draft'
+    WHERE tag_id = tags.id AND posts.status != 'draft' AND posts.deleted_at IS NULL
 );
 
 -- HIERARCHY

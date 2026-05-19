@@ -217,13 +217,13 @@ func TestPostService_DeletePost(t *testing.T) {
 	insertTestUser(t, svc)
 	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "ToDelete", Slug: "to-delete", AuthorID: 1, Status: "draft"})
 
-	if err := svc.DeletePost(ctx, post.ID, 1); err != nil {
-		t.Fatalf("DeletePost failed: %v", err)
+	if err := svc.SoftDeletePost(ctx, post.ID, 1); err != nil {
+		t.Fatalf("SoftDeletePost failed: %v", err)
 	}
 
 	_, err := svc.GetPostByID(ctx, post.ID)
 	if err == nil {
-		t.Error("expected error fetching deleted post")
+		t.Error("expected error fetching soft-deleted post")
 	}
 }
 
@@ -304,8 +304,8 @@ func TestPostService_ListPosts_YearRange(t *testing.T) {
 	// Also exercises ListPostsInYearRange + CountPostsInYearRange via the service layer
 	// Just verify the call doesn't error on an empty DB
 	posts, total, err := svc.ListPosts(ctx, ListPostsParams{
-		Page:    1,
-		PerPage: 10,
+		Page:     1,
+		PerPage:  10,
 		YearFrom: 2020,
 		YearTo:   2025,
 	})

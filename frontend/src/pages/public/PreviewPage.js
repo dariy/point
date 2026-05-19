@@ -10,7 +10,7 @@
 import { Component } from '../../components/Component.js';
 import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
-import { PostContent } from '../../components/public/PostContent.js';
+import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { api } from '../../api/client.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
@@ -18,7 +18,7 @@ import { escapeHtml } from '../../utils/helpers.js';
 export default class PreviewPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, post: null, error: null };
+    this.state = { loading: true, post: null, error: null, forceImmersive: false, startIndex: 0 };
   }
 
   render() {
@@ -68,11 +68,20 @@ export default class PreviewPage extends Component {
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
     if (this.state.post) {
+      const immersive = this.state.forceImmersive || shouldUseImmersive(this.state.post);
+
       this.mountChild(PostContent, '#content-mount', {
         post: this.state.post,
         showViewCount: false,
         prevPost: null,
         nextPost: null,
+        forceImmersive: immersive,
+        startIndex: this.state.startIndex,
+        onEnterImmersive: (idx = 0) => {
+          const hash = idx === 0 ? "" : `#${idx + 1}`;
+          window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+          this.setState({ forceImmersive: true, startIndex: idx });
+        },
       });
     }
   }
@@ -91,7 +100,20 @@ export default class PreviewPage extends Component {
     try {
       const post = await api.get(`/posts/preview/${encodeURIComponent(token)}`);
       document.title = `Preview: ${post.title}`;
-      this.setState({ loading: false, post, error: null });
+
+      // Check for hash to set initial slide index (e.g. #2 -> index 1)
+      let startIndex = 0;
+      let forceImmersive = false;
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#')) {
+        const num = parseInt(hash.slice(1), 10);
+        if (!isNaN(num) && num > 0) {
+          startIndex = Math.max(0, num - 1);
+          if (num > 1) forceImmersive = true;
+        }
+      }
+
+      this.setState({ loading: false, post, error: null, startIndex, forceImmersive });
     } catch (err) {
       const msg =
         err.status === 404 ? 'Preview link not found.' :

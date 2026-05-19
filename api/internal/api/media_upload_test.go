@@ -35,7 +35,7 @@ func TestMediaHandler_UploadMultipleExtended(t *testing.T) {
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	
+
 	p1, _ := writer.CreateFormFile("files", "f1.txt")
 	_, _ = p1.Write([]byte("f1 content"))
 	p2, _ := writer.CreateFormFile("files", "f2.txt")

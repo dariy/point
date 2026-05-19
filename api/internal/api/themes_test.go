@@ -52,7 +52,7 @@ func TestThemeHandler(t *testing.T) {
 		badCfg := &config.Config{ThemesPath: ""}
 		badThemeSvc := services.NewThemeService(badCfg, settingsSvc)
 		badHandler := NewThemeHandler(badThemeSvc)
-		
+
 		req := httptest.NewRequest(http.MethodGet, "/api/themes", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -70,17 +70,17 @@ func TestThemeHandler(t *testing.T) {
 		err := handler.GetActiveTheme(c)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rec.Code)
-		
+
 		var theme services.Theme
 		_ = json.Unmarshal(rec.Body.Bytes(), &theme)
 		assert.Equal(t, "default", theme.Name)
 	})
-	
+
 	t.Run("GetActiveTheme error", func(t *testing.T) {
 		badCfg := &config.Config{ThemesPath: t.TempDir()}
 		badThemeSvc := services.NewThemeService(badCfg, settingsSvc)
 		badHandler := NewThemeHandler(badThemeSvc)
-		
+
 		req := httptest.NewRequest(http.MethodGet, "/api/themes/active", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -106,7 +106,7 @@ func TestThemeHandler(t *testing.T) {
 		rec = httptest.NewRecorder()
 		c = e.NewContext(req, rec)
 		_ = handler.GetActiveTheme(c)
-		
+
 		var theme services.Theme
 		_ = json.Unmarshal(rec.Body.Bytes(), &theme)
 		assert.Equal(t, "custom", theme.Name)
@@ -123,7 +123,7 @@ func TestThemeHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
-	
+
 	t.Run("SetActiveTheme invalid json", func(t *testing.T) {
 		body := []byte(`{invalid}`)
 		req := httptest.NewRequest(http.MethodPut, "/api/themes/active", bytes.NewReader(body))
@@ -135,7 +135,7 @@ func TestThemeHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
-	
+
 	t.Run("SetActiveTheme invalid theme", func(t *testing.T) {
 		body := []byte(`{"name":"does_not_exist"}`)
 		req := httptest.NewRequest(http.MethodPut, "/api/themes/active", bytes.NewReader(body))

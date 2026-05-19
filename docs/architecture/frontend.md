@@ -2,7 +2,7 @@
 
 > **Created**: 2026-02-19
 > **Status**: Design Specification
-> **Companion**: [REFACTORING.md](./REFACTORING.md)
+> **Companion**: [backend.md](./backend.md), [REFACTORING.md](./REFACTORING.md)
 
 ---
 

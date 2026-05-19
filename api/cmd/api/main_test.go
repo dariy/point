@@ -1,14 +1,14 @@
 package main
 
 import (
-	"net/http"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"testing"
 	"point-api/internal/config"
 	"point-api/internal/repository"
+	"testing"
 )
 
 // mkdirs creates subdirectories inside base and returns their paths.

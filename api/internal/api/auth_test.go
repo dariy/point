@@ -348,4 +348,3 @@ func TestGenerateToken_Success(t *testing.T) {
 		t.Fatalf("Login failed: %v", err)
 	}
 }
-

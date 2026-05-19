@@ -51,6 +51,18 @@
     border-color: var(--color-warning-alpha-30);
 }
 
+.badge-trash {
+    background-color: var(--surface-hover);
+    color: var(--text-tertiary, var(--text-secondary));
+    border-color: var(--border-primary);
+}
+
+.status-select.badge-trash {
+    background-color: var(--surface-hover);
+    color: var(--text-tertiary, var(--text-secondary));
+    border-color: var(--border-primary);
+}
+
 .badge-success {
     background-color: var(--color-success-light);
     color: var(--color-success);

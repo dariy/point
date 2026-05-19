@@ -103,7 +103,7 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 			"meta_description": nullString(p.MetaDescription),
 			"formatter":        p.Formatter,
 			"tags":             postTagsMap[p.ID],
-			"media_url": extractMediaURL(p.ThumbnailPath, p.Content),
+			"media_url":        extractMediaURL(p.ThumbnailPath, p.Content),
 		}
 		postResponses[i] = resp
 	}

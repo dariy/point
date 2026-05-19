@@ -230,7 +230,8 @@ export class VisualEditor extends Component {
       if (node.type === 'image') return node.path;
       const card = this.container.querySelector(`.ve-card[data-index="${i}"]`);
       const ta = card?.querySelector('.ve-text-area');
-      return ta ? ta.value : (node.text || '');
+      const text = ta ? ta.value : (node.text || '');
+      return text + '\n---';
     }).join('\n');
   }
 
