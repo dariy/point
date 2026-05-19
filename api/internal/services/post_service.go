@@ -66,10 +66,19 @@ func NewPostService(repo *repository.Repository) *PostService {
 
 	// Links
 	policy.AllowAttrs("href", "title", "target", "rel").OnElements("a")
+
+	// Media elements
+	policy.AllowElements("img", "video", "audio", "source", "figure", "figcaption")
+	policy.AllowAttrs("src", "alt", "title", "width", "height", "loading").OnElements("img")
+	policy.AllowAttrs("src", "type").OnElements("source")
+	policy.AllowAttrs("src", "controls", "autoplay", "muted", "loop", "playsinline", "poster", "preload", "width", "height").OnElements("video")
+	policy.AllowAttrs("src", "controls", "autoplay", "loop", "preload").OnElements("audio")
+
 	policy.AllowAttrs("class", "id").OnElements(
 		"header", "section", "div", "article", "aside", "main", "nav",
 		"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span", "em", "strong",
 		"ul", "ol", "li", "blockquote", "code", "pre", "hr",
+		"img", "video", "audio", "source", "figure", "figcaption",
 	)
 
 	// SVG Support
@@ -100,21 +109,29 @@ func NewPostService(repo *repository.Repository) *PostService {
 // bareImageRe matches a line containing only a bare image path like /2026/02/file.jpg
 var bareImageRe = regexp.MustCompile(`(?m)^(/\d{4}/\d{2}/\S+)$`)
 var imageExtRe = regexp.MustCompile(`(?i)\.(jpg|jpeg|png|gif|webp|avif|svg|heic|heif|bmp)$`)
+var videoExtRe = regexp.MustCompile(`(?i)\.(mp4|webm|mov|ogv|m4v|avi|mkv)$`)
+var audioExtRe = regexp.MustCompile(`(?i)\.(mp3|m4a|ogg|wav|flac|aac|opus)$`)
 
 // markdownImageRe matches a markdown image whose src starts with /media/originals
 // (legacy format written before the URL refactor). Capture group 1 is the path
 // after that prefix, i.e. "/YYYY/MM/file" — the bare-path storage format.
 var markdownImageRe = regexp.MustCompile(`!\[[^\]]*\]\(/media/originals(/[^)]+)\)`)
 
-// preprocessContent expands bare image paths into markdown image syntax so
-// goldmark renders them as <img> tags.
+// preprocessContent expands bare image/video/audio paths into markdown or HTML syntax
+// so goldmark renders them as <img>, <video>, or <audio> tags.
 // e.g. /2026/02/photo.jpg → ![photo.jpg](/2026/02/photo.jpg)
 func preprocessContent(content string) string {
 	return bareImageRe.ReplaceAllStringFunc(content, func(p string) string {
-		if !imageExtRe.MatchString(p) {
-			return p
+		if imageExtRe.MatchString(p) {
+			return fmt.Sprintf("![%s](%s)", path.Base(p), p)
 		}
-		return fmt.Sprintf("![%s](%s)", path.Base(p), p)
+		if videoExtRe.MatchString(p) {
+			return fmt.Sprintf("<video src=\"%s\" controls></video>", p)
+		}
+		if audioExtRe.MatchString(p) {
+			return fmt.Sprintf("<audio src=\"%s\" controls></audio>", p)
+		}
+		return p
 	})
 }
 
