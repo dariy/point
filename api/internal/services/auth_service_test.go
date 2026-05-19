@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 )
@@ -211,7 +212,7 @@ func TestAuthService_ValidateSession_DBError(t *testing.T) {
 	}
 }
 
-// TestAuthService_ChangePassword_LongPassword covers HashPassword bcrypt error.
+// TestAuthService_ChangePassword_LongPassword covers that Argon2id supports long passwords.
 func TestAuthService_ChangePassword_LongPassword(t *testing.T) {
 	svc, repo := setupAuthService(t)
 	defer func() { _ = repo.Close() }()
@@ -220,10 +221,60 @@ func TestAuthService_ChangePassword_LongPassword(t *testing.T) {
 	hash, _ := HashPassword("correct")
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com',?,'U')`, hash)
 
-	// Password > 72 bytes triggers bcrypt.ErrPasswordTooLong
-	err := svc.ChangePassword(ctx, 1, "correct", strings.Repeat("x", 73))
-	if err == nil {
-		t.Error("ChangePassword long password: expected bcrypt error")
+	// Argon2id supports long passwords (unlike bcrypt's 72 byte limit)
+	err := svc.ChangePassword(ctx, 1, "correct", strings.Repeat("x", 100))
+	if err != nil {
+		t.Errorf("ChangePassword long password failed: %v", err)
+	}
+
+	// Verify it works
+	_, err = svc.Authenticate(ctx, "u", strings.Repeat("x", 100))
+	if err != nil {
+		t.Errorf("Authenticate with long password failed: %v", err)
+	}
+}
+
+func TestAuthService_Authenticate_HashUpgrade(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Manually create a user with a bcrypt hash
+	password := "legacy-password"
+	bcryptHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "legacyuser",
+		Email:        "legacy@example.com",
+		PasswordHash: string(bcryptHash),
+		DisplayName:  "Legacy User",
+	})
+	if err != nil {
+		t.Fatalf("failed to create legacy user: %v", err)
+	}
+
+	// Verify it's a bcrypt hash
+	if !IsBcryptHash(user.PasswordHash) {
+		t.Fatal("expected initial hash to be bcrypt")
+	}
+
+	// Authenticate should upgrade the hash
+	authenticatedUser, err := svc.Authenticate(ctx, "legacyuser", password)
+	if err != nil {
+		t.Fatalf("Authenticate failed: %v", err)
+	}
+
+	// Verify the hash is now Argon2id
+	if IsBcryptHash(authenticatedUser.PasswordHash) {
+		t.Error("expected hash to be upgraded from bcrypt")
+	}
+	if !strings.HasPrefix(authenticatedUser.PasswordHash, "$argon2id$") {
+		t.Errorf("expected Argon2id prefix, got %s", authenticatedUser.PasswordHash)
+	}
+
+	// Verify we can still authenticate with the new hash
+	_, err = svc.Authenticate(ctx, "legacyuser", password)
+	if err != nil {
+		t.Errorf("Authenticate with upgraded hash failed: %v", err)
 	}
 }
 
