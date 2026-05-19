@@ -10,10 +10,10 @@ func TestPostService_Sanitization(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 
 	tests := []struct {
-		name     string
-		content  string
-		want     []string
-		notWant  []string
+		name    string
+		content string
+		want    []string
+		notWant []string
 	}{
 		{
 			name:    "Allowed div and class",

@@ -304,8 +304,8 @@ func TestPostService_ListPosts_YearRange(t *testing.T) {
 	// Also exercises ListPostsInYearRange + CountPostsInYearRange via the service layer
 	// Just verify the call doesn't error on an empty DB
 	posts, total, err := svc.ListPosts(ctx, ListPostsParams{
-		Page:    1,
-		PerPage: 10,
+		Page:     1,
+		PerPage:  10,
 		YearFrom: 2020,
 		YearTo:   2025,
 	})

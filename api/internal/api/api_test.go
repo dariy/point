@@ -20,8 +20,6 @@ import (
 	"point-api/internal/services"
 )
 
-
-
 func TestFullWorkflow(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
@@ -78,7 +76,7 @@ func TestFullWorkflow(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	_ = authH.Login(c)
-	
+
 	session := models.GetSessionByTokenRow{UserID: user.ID, Username: user.Username}
 
 	// 3. Create Tag
@@ -92,10 +90,10 @@ func TestFullWorkflow(t *testing.T) {
 
 	// 4. Create Post
 	postBody, _ := json.Marshal(CreatePostRequest{
-		Title: "Hello World",
+		Title:   "Hello World",
 		Content: "Welcome",
-		Status: "published",
-		Tags: []string{"News"},
+		Status:  "published",
+		Tags:    []string{"News"},
 	})
 	req = httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(postBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -112,7 +110,7 @@ func TestFullWorkflow(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	var imgBuf bytes.Buffer
 	_ = png.Encode(&imgBuf, img)
-	
+
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	p, _ := writer.CreateFormFile("file", "image.png")
@@ -129,7 +127,7 @@ func TestFullWorkflow(t *testing.T) {
 	_ = systemH.GetStats(e.NewContext(httptest.NewRequest(http.MethodGet, "/stats", nil), rec))
 	rec = httptest.NewRecorder()
 	_ = systemH.ClearCache(e.NewContext(httptest.NewRequest(http.MethodPost, "/cache/clear", nil), rec))
-	
+
 	// Backup
 	rec = httptest.NewRecorder()
 	_ = systemH.CreateBackup(e.NewContext(httptest.NewRequest(http.MethodPost, "/system/backup", nil), rec))
@@ -220,7 +218,7 @@ func TestFullWorkflow(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &previewResp); err != nil {
 		t.Fatalf("Failed to unmarshal preview response: %v. Body: %s", err, rec.Body.String())
 	}
-	
+
 	token, ok := previewResp["token"].(string)
 	if !ok {
 		t.Fatalf("Token not found in response: %v", previewResp)
@@ -325,7 +323,6 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 }
 
-
 func TestOptionalAuthMiddleware(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
@@ -379,7 +376,7 @@ func TestCustomHTTPErrorHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	
+
 	var err error
 	err = echo.NewHTTPError(http.StatusNotFound, "not found test")
 	e.HTTPErrorHandler(err, c)
@@ -401,7 +398,7 @@ func TestCustomHTTPErrorHandler(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	
+
 	err = fmt.Errorf("generic error test")
 	e.HTTPErrorHandler(err, c)
 
@@ -426,5 +423,3 @@ func TestExtractUserID_Invalid(t *testing.T) {
 		t.Errorf("expected 0, got %d", id)
 	}
 }
-
-

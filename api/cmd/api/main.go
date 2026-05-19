@@ -47,7 +47,6 @@ func resolveJSDir(frontendDir string) string {
 	return ""
 }
 
-
 type AppServices struct {
 	Settings  *services.SettingsService
 	Auth      *services.AuthService
@@ -240,7 +239,6 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	themesGroup.GET("", themeHandler.ListThemes)
 	themesGroup.GET("/active", themeHandler.GetActiveTheme)
 	themesGroup.PUT("/active", themeHandler.SetActiveTheme, api.AuthMiddleware(svcs.Auth))
-
 
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")

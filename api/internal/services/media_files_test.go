@@ -562,7 +562,6 @@ func TestNewMediaServiceWithAPIKey(t *testing.T) {
 	}
 }
 
-
 // TestMediaService_AnalyzeByPath_InvalidPath covers the path traversal check.
 func TestMediaService_AnalyzeByPath_InvalidPath(t *testing.T) {
 	svc, tmpDir := setupMediaService(t)
@@ -652,7 +651,7 @@ func TestMediaService_parseAnalysisResult_StrictValidation(t *testing.T) {
 			},
 		},
 		{
-			name: "empty map",
+			name:   "empty map",
 			result: map[string]interface{}{},
 		},
 	}

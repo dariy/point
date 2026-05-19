@@ -178,7 +178,7 @@ func TestPagesHandler_TagsPageAdmin(t *testing.T) {
 
 	tagSvc := services.NewTagService(repo)
 	ctx := context.Background()
-	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel", })
+	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel"})
 	child, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Europe"})
 	_ = tagSvc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 	// Set post_count > 0 so they appear in ListTags(includeEmpty=false)

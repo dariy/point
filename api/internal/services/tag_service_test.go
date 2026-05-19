@@ -22,7 +22,6 @@ func TestTagService_CRUD(t *testing.T) {
 	tag, err := service.CreateTag(ctx, CreateTagParams{
 		Name:        "Test Tag",
 		Description: "Test Description",
-		
 	})
 	if err != nil {
 		t.Fatalf("CreateTag failed: %v", err)
@@ -61,9 +60,8 @@ func TestTagService_CRUD(t *testing.T) {
 
 	// Test Update
 	updated, err := service.UpdateTag(ctx, UpdateTagParams{
-		ID:          tag.ID,
-		Name:        "Updated Tag",
-		
+		ID:   tag.ID,
+		Name: "Updated Tag",
 	})
 	if err != nil {
 		t.Errorf("UpdateTag failed: %v", err)
@@ -115,8 +113,8 @@ func TestTagService_TagCloud(t *testing.T) {
 	ctx := context.Background()
 
 	// Create some tags (IsImportant=true so they appear in the tag cloud)
-	t1, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 1", })
-	t2, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 2", })
+	t1, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 1"})
+	t2, _ := service.CreateTag(ctx, CreateTagParams{Name: "Tag 2"})
 
 	// Create a user and posts so hierarchical counts work from actual post_tags data.
 	// Tag 1 gets 2 posts, Tag 2 gets 1 post → weights 1.0 and 0.5.
@@ -516,7 +514,7 @@ func TestTagService_GetHierarchicalNavTags(t *testing.T) {
 	}
 
 	// With tags
-	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel", })
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Travel"})
 	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Europe"})
 	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
 
@@ -558,8 +556,8 @@ func TestTagService_ListTagsPublicOnly(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a visible tag and a hidden tag
-	visible, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Visible", })
-	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "Hidden", })
+	visible, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Visible"})
+	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "Hidden"})
 
 	// publicOnly=false: should return both
 	all, err := svc.ListTags(ctx, true, false)
@@ -598,9 +596,9 @@ func TestTagService_GetTagChildrenPublicOnly(t *testing.T) {
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
-	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Parent", })
-	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Child", })
-	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "HiddenChild", })
+	parent, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Parent"})
+	child, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Child"})
+	_, _ = svc.CreateTag(ctx, CreateTagParams{Name: "HiddenChild"})
 
 	// Set up relationships
 	_ = svc.SetTagParents(ctx, child.ID, []int64{parent.ID})
@@ -664,7 +662,7 @@ func TestTagService_GetTagCloudWithData(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a tag, add a published post to it so hierarchical count > 0
-	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "CloudTag", })
+	tag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "CloudTag"})
 	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('cu','cu@t','h','CU')`)
 	var uid int64
 	_ = repo.DB().QueryRow(`SELECT id FROM users WHERE username='cu'`).Scan(&uid)

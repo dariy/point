@@ -66,14 +66,14 @@ func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsSe
 		})
 		if err == nil {
 			s.genaiClient = client
-			
+
 			// Try to load data.yml
 			configPath := filepath.Join(cfg.StoragePath, "data.yml")
 			// Try current dir if storage path failed
 			if _, err := os.Stat(configPath); os.IsNotExist(err) {
 				configPath = "data.yml"
 			}
-			
+
 			if configBytes, err := os.ReadFile(configPath); err == nil {
 				_ = yaml.Unmarshal(configBytes, &s.genaiConfig)
 			}
@@ -184,11 +184,11 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 
 	now := time.Now().UTC().Round(0)
 	datePath := fmt.Sprintf("%d/%02d", now.Year(), now.Month())
-	
+
 	// Create directories
 	originalsDir := filepath.Join(s.cfg.StoragePath, "media", "originals", datePath)
 	thumbnailsDir := filepath.Join(s.cfg.StoragePath, "media", "thumbnails", datePath)
-	
+
 	if err := os.MkdirAll(originalsDir, 0755); err != nil {
 		return models.Medium{}, err
 	}
@@ -252,19 +252,19 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 
 	// Save to DB
 	return s.repo.CreateMedia(ctx, models.CreateMediaParams{
-		Filename:      p.Filename,
-		OriginalPath:  originalRelPath,
-		ThumbnailPath: thumbnailRelPath,
-		FileType:      fileType,
-		MimeType:      p.MimeType,
-		FileSize:      int64(len(p.Content)),
-		Width:         width,
-		Height:        height,
-		PostID:        postID,
-		Checksum:      checksum,
-		AltText:       sql.NullString{String: p.AltText, Valid: p.AltText != ""},
-		Caption:       sql.NullString{String: p.Caption, Valid: p.Caption != ""},
-		Metadata:      metadataJSON,
+		Filename:         p.Filename,
+		OriginalPath:     originalRelPath,
+		ThumbnailPath:    thumbnailRelPath,
+		FileType:         fileType,
+		MimeType:         p.MimeType,
+		FileSize:         int64(len(p.Content)),
+		Width:            width,
+		Height:           height,
+		PostID:           postID,
+		Checksum:         checksum,
+		AltText:          sql.NullString{String: p.AltText, Valid: p.AltText != ""},
+		Caption:          sql.NullString{String: p.Caption, Valid: p.Caption != ""},
+		Metadata:         metadataJSON,
 		OriginalMetadata: metadataJSON,
 		UploadedAt:       now,
 	})
@@ -349,19 +349,19 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 	}
 
 	return s.repo.CreateMedia(ctx, models.CreateMediaParams{
-		Filename:      filename,
-		OriginalPath:  originalRelPath,
-		ThumbnailPath: thumbnailRelPath,
-		FileType:      fileType,
-		MimeType:      mimeType,
-		FileSize:      int64(len(content)),
-		Width:         width,
-		Height:        height,
-		PostID:        sql.NullInt64{},
-		Checksum:      checksum,
-		AltText:       sql.NullString{},
-		Caption:       sql.NullString{},
-		Metadata:      metadataJSON,
+		Filename:         filename,
+		OriginalPath:     originalRelPath,
+		ThumbnailPath:    thumbnailRelPath,
+		FileType:         fileType,
+		MimeType:         mimeType,
+		FileSize:         int64(len(content)),
+		Width:            width,
+		Height:           height,
+		PostID:           sql.NullInt64{},
+		Checksum:         checksum,
+		AltText:          sql.NullString{},
+		Caption:          sql.NullString{},
+		Metadata:         metadataJSON,
 		OriginalMetadata: metadataJSON,
 		UploadedAt:       now,
 	})
@@ -631,12 +631,12 @@ func (s *MediaService) CleanupOrphaned(ctx context.Context) (int, int64, error) 
 
 // StorageStats holds aggregate storage info.
 type StorageStats struct {
-	TotalBytes  int64 `json:"total_bytes"`
-	TotalFiles  int64 `json:"total_files"`
-	ImageCount  int64 `json:"image_count"`
-	VideoCount  int64 `json:"video_count"`
-	AudioCount  int64 `json:"audio_count"`
-	OtherCount  int64 `json:"other_count"`
+	TotalBytes int64 `json:"total_bytes"`
+	TotalFiles int64 `json:"total_files"`
+	ImageCount int64 `json:"image_count"`
+	VideoCount int64 `json:"video_count"`
+	AudioCount int64 `json:"audio_count"`
+	OtherCount int64 `json:"other_count"`
 }
 
 func (s *MediaService) GetStorageStats(ctx context.Context) (StorageStats, error) {
@@ -1014,7 +1014,6 @@ func (s *MediaService) analyzeImageDirectlyWithClient(ctx context.Context, clien
 
 	return s.parseAnalysisResult(result, filename)
 }
-
 
 func (s *MediaService) parseAnalysisResult(result map[string]interface{}, filename string) (*AnalysisResponse, error) {
 	// Require exactly title, tags, excerpt — no extra keys.

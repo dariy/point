@@ -45,7 +45,7 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_view_counts":       true,
 	"use_thumbnails":         true,
 	"about_post_id":          true,
-	"home_page_post_id":       true,
+	"home_page_post_id":      true,
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
 	"show_tag_cloud":         true,
@@ -210,7 +210,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	resp := map[string]interface{}{
-		"posts":      postResponses,
+		"posts": postResponses,
 		"pagination": map[string]interface{}{
 			"page":     page,
 			"per_page": perPage,

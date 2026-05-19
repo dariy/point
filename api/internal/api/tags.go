@@ -380,9 +380,9 @@ func toServiceLocations(in []TagLocationInput) []services.TagLocationInput {
 }
 
 type ReorderTagRequest struct {
-	TargetID *int64  `json:"target_id"`
-	Position  string  `json:"position"` // "before" or "after"
-	ParentID  *int64  `json:"parent_id"`
+	TargetID *int64 `json:"target_id"`
+	Position string `json:"position"` // "before" or "after"
+	ParentID *int64 `json:"parent_id"`
 }
 
 func (h *TagHandler) ReorderTag(c echo.Context) error {

@@ -461,14 +461,14 @@ func (r *Repository) DeleteMediaByIDs(ctx context.Context, ids []int64) error {
 
 // SystemStats holds aggregate statistics about the blog.
 type SystemStats struct {
-	PostCount       int64
-	PublishedCount  int64
-	DraftCount      int64
-	TagCount        int64
-	MediaCount      int64
-	StorageBytes    int64
-	UserCount       int64
-	SessionCount    int64
+	PostCount      int64
+	PublishedCount int64
+	DraftCount     int64
+	TagCount       int64
+	MediaCount     int64
+	StorageBytes   int64
+	UserCount      int64
+	SessionCount   int64
 }
 
 func (r *Repository) GetSystemStats(ctx context.Context) (SystemStats, error) {
@@ -1615,7 +1615,7 @@ func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publi
 		args = append(args, id)
 	}
 
-var statusClause string
+	var statusClause string
 	if includeDrafts {
 		statusClause = "1=1"
 	} else if includeHidden {
@@ -1705,7 +1705,6 @@ func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, pub
 		placeholders += "?"
 		args = append(args, id)
 	}
-
 
 	var statusClause string
 	if includeDrafts {
@@ -2479,6 +2478,7 @@ func (r *Repository) GetMediaByPaths(ctx context.Context, paths []string) ([]mod
 	}
 	return items, rows.Err()
 }
+
 // DropTagNameUnique rebuilds the tags table to remove the UNIQUE constraint
 // from the name column, keeping only slug as unique.
 // This allows a user tag (e.g. slug="root") to share a display name with a

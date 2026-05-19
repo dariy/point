@@ -31,7 +31,7 @@ func TestTimelineService_Timeline(t *testing.T) {
 	// 1. Setup tag hierarchy
 	// _in_timeline is already there from EnsureSystemTags
 	inTimeline, _ := svc.repo.GetTagBySlug(ctx, "_in_timeline")
-	
+
 	// Create some year/decade tags
 	y2024, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "2024"})
 	y2023, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "2023"})
@@ -44,7 +44,7 @@ func TestTimelineService_Timeline(t *testing.T) {
 	// 2. Create some posts and tag them
 	p1, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "Post 1", Status: "published", AuthorID: userID})
 	p2, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "Post 2", Status: "published", AuthorID: userID})
-	
+
 	_ = postSvc.UpdatePostTags(ctx, p1.ID, []string{"2024"})
 	_ = postSvc.UpdatePostTags(ctx, p2.ID, []string{"2020s"})
 

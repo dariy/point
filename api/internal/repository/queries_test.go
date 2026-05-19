@@ -60,7 +60,7 @@ func TestRepository_Tags(t *testing.T) {
 
 	// Insert tags
 	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug) VALUES ('T1', 't1'), ('T2', 't2')`)
-	
+
 	tags, err := repo.FindTagsByNames(ctx, []string{"t1", "t2"})
 	if err != nil || len(tags) != 2 {
 		t.Errorf("FindTagsByNames failed: %v, len=%d", err, len(tags))
@@ -150,7 +150,6 @@ func TestRepository_MediaIDs(t *testing.T) {
 	}
 }
 
-
 func TestRepository_Extra(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
@@ -212,7 +211,7 @@ func TestListPublishedPostStubs(t *testing.T) {
 	// Create two published posts
 	uid, _ := insertUserAndPost(t, repo, "first", "published")
 	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01 10:00:00' WHERE slug='first'`)
-	
+
 	// Second post, newer
 	_, _ = repo.DB().Exec(
 		`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('Second', 'second', 'C', ?, 'published', '2024-01-01 11:00:00')`,
@@ -1231,6 +1230,3 @@ func TestNewRepository_InvalidPath(t *testing.T) {
 	}
 	defer func() { _ = repo.Close() }()
 }
-
-
-

@@ -2,7 +2,6 @@ package services
 
 import (
 	"bytes"
-	"sync"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -11,14 +10,15 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/utils"
 
-	"github.com/microcosm-cc/bluemonday"
 	"github.com/mdigger/goldmark-attributes"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"

@@ -47,4 +47,3 @@ func setupPostService(t *testing.T) (*PostService, *repository.Repository) {
 	service := NewPostService(repo)
 	return service, repo
 }
-

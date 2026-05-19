@@ -10,8 +10,6 @@ import (
 	"point-api/internal/repository"
 )
 
-
-
 func TestAuthService_Authenticate(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
@@ -333,4 +331,3 @@ func TestAuthService_ResetPassword_BadToken(t *testing.T) {
 		t.Error("expected error for invalid reset token")
 	}
 }
-

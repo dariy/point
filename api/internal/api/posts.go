@@ -699,13 +699,13 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 
 	// Create the post with embedded audio reference
 	post, err := h.postService.CreatePost(c.Request().Context(), services.CreatePostParams{
-		Title:    title,
-		Content:  "[audio:" + strconv.FormatInt(media.ID, 10) + "]",
-		Slug:     "",
+		Title:     title,
+		Content:   "[audio:" + strconv.FormatInt(media.ID, 10) + "]",
+		Slug:      "",
 		Formatter: "markdown",
-		Status:   "draft",
-		AuthorID: authorID,
-		Tags:     tags,
+		Status:    "draft",
+		AuthorID:  authorID,
+		Tags:      tags,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
