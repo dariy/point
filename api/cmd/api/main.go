@@ -184,6 +184,8 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(svcs.Auth))
 	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(svcs.Auth))
 	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.POST("/:id/restore", postHandler.RestorePost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.DELETE("/:id/permanent", postHandler.PermanentlyDeletePost, api.AuthMiddleware(svcs.Auth))
 	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth))
 	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(svcs.Auth))
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth))
@@ -551,6 +553,14 @@ func main() {
 			 SELECT p.id, t.id FROM tags p, tags t
 			 WHERE p.slug = '_in_timeline'
 			   AND (t.slug GLOB '[0-9][0-9][0-9][0-9]' OR t.slug GLOB '[0-9][0-9][0-9][0-9]s')`,
+		},
+		{
+			"add_deleted_at_to_posts",
+			`ALTER TABLE posts ADD COLUMN deleted_at DATETIME`,
+		},
+		{
+			"add_deleted_at_to_posts_index",
+			`CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at)`,
 		},
 	}
 	for _, m := range migrations {

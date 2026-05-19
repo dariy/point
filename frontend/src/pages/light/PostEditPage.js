@@ -301,7 +301,7 @@ export default class PostEditPage extends Component {
     const deleteBtn = this.$('#delete-btn');
     deleteBtn?.addEventListener('click', () => {
       const title = this.$('#title-input')?.value || this.state.post?.title || 'this post';
-      this._showConfirm('Delete post', `Delete post "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
+      this._showConfirm('Move to Trash', `Move "${title}" to Trash? You can restore it from the Posts list.`, 'Move to Trash', 'danger', () => {
         this._deletePost(this.state.postId);
       });
     });
@@ -720,7 +720,7 @@ export default class PostEditPage extends Component {
     try {
       await deletePost(id);
       this._unmounted = true; // Prevent further state updates
-      store.set('toast', { message: 'Post deleted.', type: 'success' });
+      store.set('toast', { message: 'Post moved to Trash.', type: 'success' });
       navigate('/light/posts');
     } catch (err) {
       this.setState({ deleting: false });

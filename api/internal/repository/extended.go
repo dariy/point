@@ -21,7 +21,8 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
        p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 WHERE
-    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
@@ -74,7 +75,8 @@ func (r *Repository) CountPosts(ctx context.Context, arg models.CountPostsParams
 	const q = `
 SELECT COUNT(*) FROM posts p
 WHERE
-    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
@@ -137,6 +139,7 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
        p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
+    AND p.deleted_at IS NULL
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -208,6 +211,7 @@ _hide(id) AS (
 )
 SELECT COUNT(*) FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
+    AND p.deleted_at IS NULL
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -240,7 +244,8 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
        p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
 WHERE
-    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
@@ -312,7 +317,8 @@ WITH RECURSIVE ehp(id) AS (
 )
 SELECT COUNT(*) FROM posts p
 WHERE
-    (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
+    p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
         WHEN ? THEN 1=1
@@ -475,9 +481,9 @@ func (r *Repository) GetSystemStats(ctx context.Context) (SystemStats, error) {
 	var s SystemStats
 	const q = `
 SELECT
-  (SELECT COUNT(*) FROM posts) AS post_count,
-  (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'published') AS published_count,
-  (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'draft') AS draft_count,
+  (SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL) AS post_count,
+  (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'published' AND deleted_at IS NULL) AS published_count,
+  (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'draft' AND deleted_at IS NULL) AS draft_count,
   (SELECT COUNT(*) FROM tags) AS tag_count,
   (SELECT COUNT(*) FROM media) AS media_count,
   (SELECT COALESCE(SUM(file_size), 0) FROM media) AS storage_bytes,
@@ -501,8 +507,9 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.preview_expires_at
 FROM posts p
 WHERE LOWER(p.status) = 'published'
+AND p.deleted_at IS NULL
 AND p.id NOT IN (
-    SELECT pt.post_id FROM post_tags pt 
+    SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
             SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -548,8 +555,9 @@ func (r *Repository) GetPublishedPostsForSitemap(ctx context.Context) ([]struct 
 SELECT slug, COALESCE(updated_at, published_at, created_at) as updated_at
 FROM posts
 WHERE LOWER(status) = 'published'
+AND deleted_at IS NULL
 AND id NOT IN (
-    SELECT pt.post_id FROM post_tags pt 
+    SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
             SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -639,7 +647,7 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token,
        p.preview_expires_at
 FROM posts p
-WHERE p.preview_token = ? LIMIT 1`
+WHERE p.preview_token = ? AND p.deleted_at IS NULL LIMIT 1`
 
 	row := r.db.QueryRowContext(ctx, q, token)
 	var i models.Post
@@ -676,7 +684,7 @@ func (r *Repository) GetPostNavigation(ctx context.Context, postID int64, public
 
 	qPrev := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE (%s) AND (published_at < ? OR (published_at = ? AND id < ?))
+WHERE (%s) AND deleted_at IS NULL AND (published_at < ? OR (published_at = ? AND id < ?))
 ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter)
 	var p PostNavItem
 	if err2 := r.db.QueryRowContext(ctx, qPrev, publishedAt, publishedAt, postID).Scan(&p.ID, &p.Title, &p.Slug); err2 == nil {
@@ -685,7 +693,7 @@ ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter)
 
 	qNext := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE (%s) AND (published_at > ? OR (published_at = ? AND id > ?))
+WHERE (%s) AND deleted_at IS NULL AND (published_at > ? OR (published_at = ? AND id > ?))
 ORDER BY published_at ASC, id ASC LIMIT 1`, statusFilter)
 	var n PostNavItem
 	if err2 := r.db.QueryRowContext(ctx, qNext, publishedAt, publishedAt, postID).Scan(&n.ID, &n.Title, &n.Slug); err2 == nil {
@@ -768,10 +776,11 @@ SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_c
 FROM tags t
 JOIN post_tags pt ON t.id = pt.tag_id
 JOIN posts p ON pt.post_id = p.id
-WHERE pt.post_id IN (
+WHERE p.deleted_at IS NULL
+AND pt.post_id IN (
     SELECT pt2.post_id FROM post_tags pt2
     JOIN posts p2 ON pt2.post_id = p2.id
-    WHERE pt2.tag_id = ? %s
+    WHERE pt2.tag_id = ? AND p2.deleted_at IS NULL %s
 )
 AND t.id != ?
 AND t.slug NOT LIKE '\_%%' ESCAPE '\'
@@ -1347,8 +1356,9 @@ func (r *Repository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, er
 SELECT id, slug, published_at, created_at
 FROM posts
 WHERE LOWER(status) = 'published'
+AND deleted_at IS NULL
 AND id NOT IN (
-    SELECT pt.post_id FROM post_tags pt 
+    SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
             SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -1651,7 +1661,8 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-WHERE p.id IN (
+WHERE p.deleted_at IS NULL
+AND p.id IN (
     SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
 )
 AND (` + statusClause + `)
@@ -1738,7 +1749,8 @@ WITH RECURSIVE ehp(id) AS (
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
 SELECT COUNT(*) FROM posts p
-WHERE p.id IN (
+WHERE p.deleted_at IS NULL
+AND p.id IN (
     SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
 )
 AND (` + statusClause + `)
@@ -1822,7 +1834,8 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
 FROM posts p
-WHERE p.id IN (SELECT post_id FROM _yposts)
+WHERE p.deleted_at IS NULL
+AND p.id IN (SELECT post_id FROM _yposts)
 AND p.id IN (
     SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
 )
@@ -1921,7 +1934,8 @@ ehp(id) AS (
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
 SELECT COUNT(*) FROM posts p
-WHERE p.id IN (SELECT post_id FROM _yposts)
+WHERE p.deleted_at IS NULL
+AND p.id IN (SELECT post_id FROM _yposts)
 AND p.id IN (
     SELECT DISTINCT post_id FROM post_tags WHERE tag_id IN (` + placeholders + `)
 )
@@ -1988,7 +2002,7 @@ func (r *Repository) GetAllPublishedPostContents(ctx context.Context) ([]PostCon
 	const q = `
 SELECT p.id, p.content, COALESCE(p.thumbnail_path, '') as thumbnail_path
 FROM posts p
-WHERE LOWER(p.status) = 'published'`
+WHERE LOWER(p.status) = 'published' AND p.deleted_at IS NULL`
 
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
@@ -2099,12 +2113,13 @@ SELECT d.root_id, COUNT(DISTINCT pt.post_id)
 FROM descendants d
 JOIN post_tags pt ON pt.tag_id = d.tag_id
 JOIN posts p ON pt.post_id = p.id
-WHERE (CASE WHEN ? THEN LOWER(p.status) = 'published'
+WHERE p.deleted_at IS NULL
+AND (CASE WHEN ? THEN LOWER(p.status) = 'published'
            ELSE LOWER(p.status) IN ('published', 'hidden')
       END)
 
 AND (CASE WHEN ? THEN p.id NOT IN (
-    SELECT pt.post_id FROM post_tags pt 
+    SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
             SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')

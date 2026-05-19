@@ -426,8 +426,35 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 	return tag, nil
 }
 
-func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error {
+func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) error {
+	return s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID})
+}
+
+func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error {
+	return s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID})
+}
+
+func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID int64) error {
 	return s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID})
+}
+
+func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32) ([]models.Post, int64, error) {
+	offset := (page - 1) * perPage
+	posts, err := s.repo.ListTrashedPosts(ctx, models.ListTrashedPostsParams{
+		Limit:  int64(perPage),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountTrashedPosts(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if posts == nil {
+		posts = []models.Post{}
+	}
+	return posts, total, nil
 }
 
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {

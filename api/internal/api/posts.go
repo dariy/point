@@ -130,6 +130,31 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	includeDrafts := c.Get("user") != nil
 	search := c.QueryParam("q")
 
+	// Trash view: only admins can see trash.
+	if status == "trash" && c.Get("user") != nil {
+		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), int32(page), int32(perPage))
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		postResponses := make([]map[string]interface{}, len(posts))
+		for i, p := range posts {
+			resp := postToResponse(p, nil, nil)
+			resp["deleted_at"] = p.DeletedAt
+			postResponses[i] = resp
+		}
+		pages := int(math.Ceil(float64(total) / float64(perPage)))
+		if pages == 0 {
+			pages = 1
+		}
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"posts":    postResponses,
+			"total":    total,
+			"page":     page,
+			"per_page": perPage,
+			"pages":    pages,
+		})
+	}
+
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
 		Page:          int32(page),
 		PerPage:       int32(perPage),
@@ -567,17 +592,53 @@ func (h *PostHandler) DeletePost(c echo.Context) error {
 
 	authorID := extractUserID(c.Get("user"))
 
-	// Capture media paths before the post is deleted.
 	var mediaPaths []string
 	if post, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
 		mediaPaths = services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
 	}
 
-	if err := h.postService.DeletePost(c.Request().Context(), id, authorID); err != nil {
+	if err := h.postService.SoftDeletePost(c.Request().Context(), id, authorID); err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
 	}
 
 	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), mediaPaths)
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *PostHandler) RestorePost(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	authorID := extractUserID(c.Get("user"))
+
+	if err := h.postService.RestorePost(c.Request().Context(), id, authorID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+	}
+
+	// Recalculate media visibility after restore.
+	if post, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
+		mediaPaths := services.ExtractMediaPaths(post.Content, post.ThumbnailPath.String)
+		_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), mediaPaths)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *PostHandler) PermanentlyDeletePost(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	authorID := extractUserID(c.Get("user"))
+
+	// Fetch the trashed post to get media paths (GetPostByID excludes deleted, so query directly).
+	if err := h.postService.PermanentlyDeletePost(c.Request().Context(), id, authorID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+	}
 
 	return c.NoContent(http.StatusNoContent)
 }

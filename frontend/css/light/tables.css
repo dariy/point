@@ -189,3 +189,18 @@ th.status-col {
     min-width: var(--bulk-count-min-width);
     font-variant-numeric: tabular-nums;
 }
+
+/* Trash view styles */
+.muted {
+    color: var(--text-secondary);
+}
+
+.muted-tags {
+    opacity: 0.6;
+}
+
+.trash-status-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary, var(--text-secondary));
+    font-style: italic;
+}

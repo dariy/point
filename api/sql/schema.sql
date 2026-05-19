@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS posts (
     thumbnail_path VARCHAR(500),
     meta_description VARCHAR(300),
     preview_token VARCHAR(64) UNIQUE,
-    preview_expires_at DATETIME
+    preview_expires_at DATETIME,
+    deleted_at DATETIME
 );
 CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
