@@ -33,16 +33,44 @@ func NewThemeService(cfg *config.Config, settingsService *SettingsService) *Them
 	}
 }
 
-// ListThemes scans the ThemesPath directory, reads and validates themes
+// ListThemes scans both ThemesPath (system) and UserThemesPath (user) directories.
+// User themes override system themes with the same name.
 func (s *ThemeService) ListThemes() ([]Theme, error) {
 	if s.cfg.ThemesPath == "" {
 		return nil, fmt.Errorf("themes path is not configured")
 	}
 
-	entries, err := os.ReadDir(s.cfg.ThemesPath)
+	seen := make(map[string]bool)
+	var themes []Theme
+
+	// User themes take precedence — load them first
+	if s.cfg.UserThemesPath != "" {
+		userThemes, _ := s.scanThemesDir(s.cfg.UserThemesPath)
+		for _, t := range userThemes {
+			seen[t.Name] = true
+			themes = append(themes, t)
+		}
+	}
+
+	// System themes — skip any already provided by user
+	systemThemes, err := s.scanThemesDir(s.cfg.ThemesPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range systemThemes {
+		if !seen[t.Name] {
+			themes = append(themes, t)
+		}
+	}
+
+	return themes, nil
+}
+
+func (s *ThemeService) scanThemesDir(dir string) ([]Theme, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []Theme{}, nil
+			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to read themes directory: %w", err)
 	}
@@ -52,16 +80,12 @@ func (s *ThemeService) ListThemes() ([]Theme, error) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-
-		themePath := filepath.Join(s.cfg.ThemesPath, entry.Name())
+		themePath := filepath.Join(dir, entry.Name())
 		themeName := strings.TrimSuffix(entry.Name(), ".json")
-
-		theme, err := s.ReadAndValidateTheme(themePath, themeName)
-		if err == nil {
-			themes = append(themes, theme)
+		if t, err := s.ReadAndValidateTheme(themePath, themeName); err == nil {
+			themes = append(themes, t)
 		}
 	}
-
 	return themes, nil
 }
 
@@ -86,18 +110,28 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 	return theme, nil
 }
 
+// findTheme searches user themes path first, then system themes path.
+func (s *ThemeService) findTheme(name string) (Theme, error) {
+	if s.cfg.UserThemesPath != "" {
+		userPath := filepath.Join(s.cfg.UserThemesPath, name+".json")
+		if t, err := s.ReadAndValidateTheme(userPath, name); err == nil {
+			return t, nil
+		}
+	}
+	systemPath := filepath.Join(s.cfg.ThemesPath, name+".json")
+	return s.ReadAndValidateTheme(systemPath, name)
+}
+
 func (s *ThemeService) GetActiveTheme(ctx context.Context) (Theme, error) {
 	activeThemeName, err := s.settingsService.GetSetting(ctx, "active_css_theme", "default")
 	if err != nil || activeThemeName == "" {
 		activeThemeName = "default"
 	}
 
-	themePath := filepath.Join(s.cfg.ThemesPath, activeThemeName+".json")
-	theme, err := s.ReadAndValidateTheme(themePath, activeThemeName)
+	theme, err := s.findTheme(activeThemeName)
 	if err != nil {
 		// Fallback to default
-		themePath = filepath.Join(s.cfg.ThemesPath, "default.json")
-		theme, err = s.ReadAndValidateTheme(themePath, "default")
+		theme, err = s.findTheme("default")
 		if err != nil {
 			return Theme{}, fmt.Errorf("failed to load fallback theme: %w", err)
 		}
@@ -106,9 +140,8 @@ func (s *ThemeService) GetActiveTheme(ctx context.Context) (Theme, error) {
 }
 
 func (s *ThemeService) SetActiveTheme(ctx context.Context, name string) error {
-	// Validate that the theme exists and is valid
-	themePath := filepath.Join(s.cfg.ThemesPath, name+".json")
-	if _, err := s.ReadAndValidateTheme(themePath, name); err != nil {
+	// Validate that the theme exists and is valid (searches both paths)
+	if _, err := s.findTheme(name); err != nil {
 		return fmt.Errorf("invalid theme %q: %w", name, err)
 	}
 
@@ -128,7 +161,6 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 		return fmt.Errorf("failed to get active theme: %w", err)
 	}
 
-	themePath := filepath.Join(s.cfg.ThemesPath, activeTheme.Name+".json")
 	publicThemePath := filepath.Join(s.cfg.FrontendDir, "images", "theme.json")
 
 	// Ensure the target directory exists (useful in some environments/tests)
@@ -137,7 +169,7 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 	}
 
 	// Read raw content and write to public path (ensures all fields are preserved)
-	data, err := os.ReadFile(themePath)
+	data, err := os.ReadFile(activeTheme.Path)
 	if err != nil {
 		return fmt.Errorf("failed to read source theme file: %w", err)
 	}

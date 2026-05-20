@@ -55,7 +55,7 @@ RUN apk add --no-cache \
     curl \
     su-exec \
     && adduser -D -u 1000 appuser \
-    && mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups \
+    && mkdir -p /data/media/originals /data/media/thumbnails /data/logs /data/backups /data/themes \
     && chown -R appuser:appuser /app /data
 
 # Copy the binaries from the builder stage

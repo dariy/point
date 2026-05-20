@@ -106,3 +106,40 @@ func TestThemesPathDerivation(t *testing.T) {
 		t.Errorf("expected ThemesPath %s, got %s", expectedThemesPath, config.ThemesPath)
 	}
 }
+
+func TestUserThemesPathDerivation(t *testing.T) {
+	viper.Reset()
+	tmpDir, err := os.MkdirTemp("", "config-test-user-themes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	// Default: derived from STORAGE_PATH default
+	config, _ := LoadConfig(tmpDir)
+	expectedUserThemesPath := filepath.Join("./data", "themes")
+	if config.UserThemesPath != expectedUserThemesPath {
+		t.Errorf("expected UserThemesPath %s, got %s", expectedUserThemesPath, config.UserThemesPath)
+	}
+
+	// STORAGE_PATH set explicitly
+	viper.Reset()
+	_ = os.Setenv("STORAGE_PATH", "/data")
+	defer func() { _ = os.Unsetenv("STORAGE_PATH") }()
+	config, _ = LoadConfig(tmpDir)
+	if config.UserThemesPath != "/data/themes" {
+		t.Errorf("expected UserThemesPath /data/themes, got %s", config.UserThemesPath)
+	}
+
+	// USER_THEMES_PATH set explicitly overrides derivation
+	viper.Reset()
+	_ = os.Setenv("STORAGE_PATH", "/data")
+	_ = os.Setenv("USER_THEMES_PATH", "/custom/user-themes")
+	defer func() { _ = os.Unsetenv("USER_THEMES_PATH") }()
+	config, _ = LoadConfig(tmpDir)
+	if config.UserThemesPath != "/custom/user-themes" {
+		t.Errorf("expected UserThemesPath /custom/user-themes, got %s", config.UserThemesPath)
+	}
+}

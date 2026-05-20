@@ -100,3 +100,87 @@ func TestThemeService(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestThemeServiceUserThemes(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	settingsService := NewSettingsService(repo)
+	ctx := context.Background()
+
+	systemDir := t.TempDir()
+	userDir := t.TempDir()
+
+	validTheme := []byte(`{
+		"light": {"colors": {"bg-primary": "#fff"}},
+		"dark": {"colors": {"bg-primary": "#000"}}
+	}`)
+	userTheme := []byte(`{
+		"light": {"colors": {"bg-primary": "#123"}},
+		"dark": {"colors": {"bg-primary": "#456"}}
+	}`)
+
+	// System has "system-only" and "shared"; user has "user-only" and "shared" (override)
+	assert.NoError(t, os.WriteFile(filepath.Join(systemDir, "system-only.json"), validTheme, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(systemDir, "shared.json"), validTheme, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(userDir, "user-only.json"), userTheme, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(userDir, "shared.json"), userTheme, 0644))
+
+	cfg := &config.Config{ThemesPath: systemDir, UserThemesPath: userDir}
+	ts := NewThemeService(cfg, settingsService)
+
+	t.Run("ListThemes merges both dirs, user overrides system", func(t *testing.T) {
+		themes, err := ts.ListThemes()
+		assert.NoError(t, err)
+		assert.Len(t, themes, 3)
+
+		byName := make(map[string]Theme)
+		for _, th := range themes {
+			byName[th.Name] = th
+		}
+		assert.Contains(t, byName, "system-only")
+		assert.Contains(t, byName, "user-only")
+		assert.Contains(t, byName, "shared")
+		// "shared" should come from user dir
+		assert.Equal(t, filepath.Join(userDir, "shared.json"), byName["shared"].Path)
+	})
+
+	t.Run("GetActiveTheme prefers user theme", func(t *testing.T) {
+		assert.NoError(t, os.WriteFile(filepath.Join(userDir, "default.json"), userTheme, 0644))
+		theme, err := ts.GetActiveTheme(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, filepath.Join(userDir, "default.json"), theme.Path)
+	})
+
+	t.Run("SetActiveTheme finds user theme", func(t *testing.T) {
+		frontendDir := t.TempDir()
+		ts.cfg.FrontendDir = frontendDir
+
+		err := ts.SetActiveTheme(ctx, "user-only")
+		assert.NoError(t, err)
+
+		theme, err := ts.GetActiveTheme(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, "user-only", theme.Name)
+	})
+
+	t.Run("SetActiveTheme finds system theme", func(t *testing.T) {
+		frontendDir := t.TempDir()
+		ts.cfg.FrontendDir = frontendDir
+
+		err := ts.SetActiveTheme(ctx, "system-only")
+		assert.NoError(t, err)
+
+		theme, err := ts.GetActiveTheme(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, "system-only", theme.Name)
+	})
+
+	t.Run("ListThemes nonexistent user dir is silently ignored", func(t *testing.T) {
+		cfg2 := &config.Config{ThemesPath: systemDir, UserThemesPath: "/nonexistent/path"}
+		ts2 := NewThemeService(cfg2, settingsService)
+		themes, err := ts2.ListThemes()
+		assert.NoError(t, err)
+		assert.Len(t, themes, 2) // system-only + shared
+	})
+}
