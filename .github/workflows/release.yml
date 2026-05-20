@@ -2,17 +2,40 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*.*.*'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: api/go.sum
+
+      - name: Build CSS bundles
+        run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
+
+      - name: Run Go tests
+        run: |
+          cd api
+          go test ./... -coverprofile=coverage.txt -covermode=atomic
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          file: api/coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
   vulnerability-scan:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +54,7 @@ jobs:
           work-dir: api
 
   build-and-push:
-    needs: vulnerability-scan
+    needs: [test, vulnerability-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,9 +87,8 @@ jobs:
         with:
           images: ghcr.io/dariy/point
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{version}}
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=Point
             org.opencontainers.image.description=Self-hosted personal photo blog engine
@@ -75,18 +97,6 @@ jobs:
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
             org.opencontainers.image.revision=${{ github.sha }}
-
-      - name: Determine BUILD_VERSION
-        id: build_version
-        env:
-          GIT_REF: ${{ github.ref }}
-          GIT_REF_NAME: ${{ github.ref_name }}
-        run: |
-          if [[ "$GIT_REF" == refs/tags/v* ]]; then
-            echo "value=$GIT_REF_NAME" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=latest" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Build and push
         id: build_and_push
@@ -99,14 +109,14 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BUILD_VERSION=${{ steps.build_version.outputs.value }}
+            BUILD_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/dariy/point:${{ steps.build_version.outputs.value }}
+          image: ghcr.io/dariy/point:${{ github.ref_name }}
           artifact-name: point-sbom.spdx.json
           output-format: spdx-json
 
