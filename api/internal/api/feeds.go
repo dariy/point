@@ -169,7 +169,7 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 
 	for _, tag := range tags {
 		if !excludeIDs[tag.ID] {
-			writeURL(base+"/tag/"+tag.Slug, today, "0.6")
+			writeURL(base+"/tags/"+tag.Slug, today, "0.6")
 		}
 	}
 

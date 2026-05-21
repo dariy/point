@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestPagesHandler_GetHomePage(t *testing.T) {
@@ -55,7 +56,7 @@ func TestPagesHandler_TagPage(t *testing.T) {
 	handler := NewPagesHandler(repo, postService, tagSvc, mediaService, settingsService, cacheService)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/tag/news", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/news", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -221,7 +222,7 @@ func TestPagesHandler_TagPageNotFound(t *testing.T) {
 	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
-	req := httptest.NewRequest(http.MethodGet, "/tag/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/nonexistent", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -255,7 +256,7 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 	e := echo.New()
 
 	// Public user requesting hidden tag should get 404
-	req := httptest.NewRequest(http.MethodGet, "/tag/hidden-tag", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/hidden-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -282,7 +283,7 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
-	req := httptest.NewRequest(http.MethodGet, "/tag/auth-tag", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/auth-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -318,7 +319,7 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, 1)`)
 
 	// 1. Existing tag
-	req := httptest.NewRequest(http.MethodGet, "/tag/news", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/news", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -332,7 +333,7 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 	}
 
 	// 2. Non-existent tag
-	req = httptest.NewRequest(http.MethodGet, "/tag/missing", nil)
+	req = httptest.NewRequest(http.MethodGet, "/tags/missing", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	c.SetParamNames("slug")

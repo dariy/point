@@ -122,7 +122,7 @@ export default class MapPage extends Component {
     const yearParam = this.props.params?.year;
     let initialRange = null;
     if (yearParam) {
-      const parts = yearParam.split('-');
+      const parts = yearParam.split("-");
       if (parts.length === 2) {
         const from = parseInt(parts[0], 10);
         const to = parseInt(parts[1], 10);
@@ -181,11 +181,11 @@ export default class MapPage extends Component {
 
   _buildBreadcrumb() {
     if (!this._currentRange) {
-      return [{ name: 'map' }];
+      return [{ name: "map" }];
     }
     const { from, to } = this._currentRange;
     const label = from === to ? String(from) : `${from}–${to}`;
-    return [{ name: 'map', href: '/map' }, { name: label }];
+    return [{ name: "map", href: "/map" }, { name: label }];
   }
 
   async _onTimelineRangeChange({ from, to }) {
@@ -195,7 +195,7 @@ export default class MapPage extends Component {
 
     if (hasRange) {
       const rangeStr = from === to ? String(from) : `${from}-${to}`;
-      history.replaceState(null, '', `/map/${rangeStr}`);
+      history.replaceState(null, "", `/map/${rangeStr}`);
     }
     const params = hasRange ? { year_from: from, year_to: to } : {};
     try {
@@ -324,14 +324,14 @@ export default class MapPage extends Component {
                 tag.years
                   .map(
                     (y) =>
-                      `<a href="/tag/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`,
+                      `<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`,
                   )
                   .join(" ") +
                 `</div>`
               : "";
           const lockIcon = tag.is_hidden ? LOCK_SVG : "";
           layer.bindPopup(
-            `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${escapeHtml(tag.name)}</a>` +
+            `<a href="/tags/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${escapeHtml(tag.name)}</a>` +
               `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? "s" : ""}</div>` +
               yearsHtml,
           );
@@ -370,14 +370,14 @@ export default class MapPage extends Component {
             tag.years
               .map(
                 (y) =>
-                  `<a href="/tag/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`,
+                  `<a href="/tags/${encodeURIComponent(y.slug)}" class="map-year-link">${escapeHtml(y.name)}</a>`,
               )
               .join(" ") +
             `</div>`
           : "";
       const lockIcon = tag.is_hidden ? LOCK_SVG : "";
       marker.bindPopup(
-        `<a href="/tag/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${escapeHtml(tag.name)}</a>` +
+        `<a href="/tags/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${escapeHtml(tag.name)}</a>` +
           `<div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? "s" : ""}</div>` +
           yearsHtml,
       );

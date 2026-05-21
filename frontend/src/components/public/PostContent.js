@@ -32,16 +32,27 @@ const IDLE_MS = 2000; // hide UI after 5 s of inactivity
 const MIN_SHOW_MS = 2000; // UI must be visible ≥ 3 s before click-to-hide works
 let _overlayHidden = false; // persists across post navigations
 
-const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'm4v', 'avi', 'mkv']);
-const AUDIO_EXTS = new Set(['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac', 'opus']);
-const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'heic', 'heif', 'bmp']);
+const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
+const AUDIO_EXTS = new Set(["mp3", "m4a", "ogg", "wav", "flac", "aac", "opus"]);
+const IMAGE_EXTS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "avif",
+  "svg",
+  "heic",
+  "heif",
+  "bmp",
+]);
 
 /** Return 'video', 'audio', 'image', or null based on file extension. */
 function mediaTypeFromPath(path) {
-  const ext = (path.split('.').pop() || '').toLowerCase();
-  if (VIDEO_EXTS.has(ext)) return 'video';
-  if (AUDIO_EXTS.has(ext)) return 'audio';
-  if (IMAGE_EXTS.has(ext)) return 'image';
+  const ext = (path.split(".").pop() || "").toLowerCase();
+  if (VIDEO_EXTS.has(ext)) return "video";
+  if (AUDIO_EXTS.has(ext)) return "audio";
+  if (IMAGE_EXTS.has(ext)) return "image";
   return null;
 }
 
@@ -52,12 +63,17 @@ function mediaTypeFromPath(path) {
 export function shouldUseImmersive(post) {
   if (!post) return false;
 
-  const html = post.content_html || '';
-  if (html.includes('<hr>') || html.includes('<hr/>') || html.includes('<hr />')) return true;
+  const html = post.content_html || "";
+  if (
+    html.includes("<hr>") ||
+    html.includes("<hr/>") ||
+    html.includes("<hr />")
+  )
+    return true;
 
   const media = post.media || [];
   // Audio-only attachment posts stay in normal layout
-  if (media.length && media.every((m) => m.type === 'audio')) return false;
+  if (media.length && media.every((m) => m.type === "audio")) return false;
 
   // Strip all HTML tags; what remains is the visible text.
   const text = html
@@ -78,7 +94,7 @@ export function shouldUseImmersive(post) {
     if (!allMedia) return false;
   }
 
-  const hasVisualMedia = media.some((m) => m.type !== 'audio');
+  const hasVisualMedia = media.some((m) => m.type !== "audio");
   const hasContentMedia = html.trim().length > 0;
   return hasVisualMedia || hasContentMedia;
 }
@@ -370,7 +386,7 @@ export class PostContent extends Component {
       }
       setTimeout(() => {
         navigate(
-          tagSlug ? `/tag/${tagSlug}?slug=${p.slug}` : `/post/${p.slug}`,
+          tagSlug ? `/tags/${tagSlug}?slug=${p.slug}` : `/posts/${p.slug}`,
         );
       }, 400);
     };
@@ -563,14 +579,14 @@ export class PostContent extends Component {
         const data = await getPostPageLocation(post.slug, params);
         const url = tagSlug
           ? data.page > 1
-            ? `/tag/${tagSlug}?page=${data.page}`
-            : `/tag/${tagSlug}`
+            ? `/tags/${tagSlug}?page=${data.page}`
+            : `/tags/${tagSlug}`
           : data.page > 1
             ? `/?page=${data.page}`
             : "/";
         navigate(url);
       } catch {
-        navigate(tagSlug ? `/tag/${tagSlug}` : "/");
+        navigate(tagSlug ? `/tags/${tagSlug}` : "/");
       }
     };
 
@@ -692,7 +708,9 @@ export class PostContent extends Component {
     });
 
     // ── UI show / hide ──
-    let _mouseDownX = 0, _mouseDownY = 0, _mouseDragged = false;
+    let _mouseDownX = 0,
+      _mouseDownY = 0,
+      _mouseDragged = false;
     const DRAG_THRESHOLD_PX = 6;
 
     const showUI = () => {
@@ -771,24 +789,35 @@ export class PostContent extends Component {
       }
     });
 
-    this._on(document, "mousemove", (e) => {
-      if (!_mouseDragged) {
-        const dx = e.clientX - _mouseDownX;
-        const dy = e.clientY - _mouseDownY;
-        if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX) _mouseDragged = true;
-      }
-      // Mouse movement only keeps the UI visible — never un-hides the overlay.
-      if (!document.body.classList.contains("ui-hidden")) {
-        clearTimeout(this._idleTimer);
-        this._idleTimer = setTimeout(hideUI, IDLE_MS);
-      }
-    }, { passive: true });
-    this._on(document, "mousedown", (e) => {
-      _mouseDownX = e.clientX;
-      _mouseDownY = e.clientY;
-      _mouseDragged = false;
-      pauseCountdown();
-    }, { passive: true });
+    this._on(
+      document,
+      "mousemove",
+      (e) => {
+        if (!_mouseDragged) {
+          const dx = e.clientX - _mouseDownX;
+          const dy = e.clientY - _mouseDownY;
+          if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX)
+            _mouseDragged = true;
+        }
+        // Mouse movement only keeps the UI visible — never un-hides the overlay.
+        if (!document.body.classList.contains("ui-hidden")) {
+          clearTimeout(this._idleTimer);
+          this._idleTimer = setTimeout(hideUI, IDLE_MS);
+        }
+      },
+      { passive: true },
+    );
+    this._on(
+      document,
+      "mousedown",
+      (e) => {
+        _mouseDownX = e.clientX;
+        _mouseDownY = e.clientY;
+        _mouseDragged = false;
+        pauseCountdown();
+      },
+      { passive: true },
+    );
     this._on(document, "mouseup", resumeCountdown, { passive: true });
     this._on(document, "keydown", resetIdle, { passive: true });
 
@@ -847,14 +876,14 @@ export class PostContent extends Component {
     // Just commit on a clean horizontal swipe.
     this._gesture = new GestureController(this.container, {
       onSwipeCommit: (dir) => {
-        if (dir === "left" && backPost) navigate("/post/" + backPost.slug);
-        else if (dir === "right" && fwdPost) navigate("/post/" + fwdPost.slug);
+        if (dir === "left" && backPost) navigate("/posts/" + backPost.slug);
+        else if (dir === "right" && fwdPost) navigate("/posts/" + fwdPost.slug);
       },
     });
     this._trackpad = new TrackpadDetector(this.container, {
       onHorizontal: (dir) => {
-        if (dir === "left" && backPost) navigate("/post/" + backPost.slug);
-        else if (dir === "right" && fwdPost) navigate("/post/" + fwdPost.slug);
+        if (dir === "left" && backPost) navigate("/posts/" + backPost.slug);
+        else if (dir === "right" && fwdPost) navigate("/posts/" + fwdPost.slug);
       },
     });
   }
@@ -896,10 +925,10 @@ export class PostContent extends Component {
   _renderNormalPostArrows(prevPost, nextPost) {
     if (!prevPost && !nextPost) return "";
     const prev = prevPost
-      ? `<a href="/post/${escapeHtml(prevPost.slug)}" class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>`
+      ? `<a href="/posts/${escapeHtml(prevPost.slug)}" class="post-side-nav-btn prev" aria-label="Previous post">&#10094;</a>`
       : "";
     const next = nextPost
-      ? `<a href="/post/${escapeHtml(nextPost.slug)}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>`
+      ? `<a href="/posts/${escapeHtml(nextPost.slug)}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>`
       : "";
     return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
   }
@@ -1012,13 +1041,13 @@ export class PostContent extends Component {
   _renderNav(prev, next) {
     if (!prev && !next) return "";
     const prevLink = prev
-      ? `<a href="/post/${escapeHtml(prev.slug)}" class="post-nav-link prev" rel="prev">
+      ? `<a href="/posts/${escapeHtml(prev.slug)}" class="post-nav-link prev" rel="prev">
            <span class="nav-label">Previous</span>
            <span class="nav-title">${escapeHtml(prev.title)}</span>
          </a>`
       : "<span></span>";
     const nextLink = next
-      ? `<a href="/post/${escapeHtml(next.slug)}" class="post-nav-link next" rel="next">
+      ? `<a href="/posts/${escapeHtml(next.slug)}" class="post-nav-link next" rel="next">
            <span class="nav-label">Next</span>
            <span class="nav-title">${escapeHtml(next.title)}</span>
          </a>`
