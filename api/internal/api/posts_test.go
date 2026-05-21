@@ -140,7 +140,7 @@ func TestPostHandler_UpdatePostTags(t *testing.T) {
 	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
 		Username: "tagger", Email: "tagger@test.com", PasswordHash: "h", DisplayName: "Tagger",
 	})
-	post, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
+	post, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
 		Title: "Tag Me", Content: "content", Status: "published", AuthorID: user.ID,
 	})
 	session := models.GetSessionByTokenRow{UserID: user.ID}
@@ -199,7 +199,7 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
 		Username: "navuser", Email: "nav@test.com", PasswordHash: "h", DisplayName: "Nav",
 	})
-	post, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
+	post, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
 		Title: "Nav Post", Content: "content", Status: "published", AuthorID: user.ID,
 	})
 	_, _ = postSvc.PublishPost(ctx, post.ID)
@@ -266,7 +266,7 @@ func TestPostHandler_GetPostByID(t *testing.T) {
 	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
 		Username: "gbid", Email: "gbid@test.com", PasswordHash: "h", DisplayName: "G",
 	})
-	post, _ := postSvc.CreatePost(context.Background(), services.CreatePostParams{
+	post, _, _ := postSvc.CreatePost(context.Background(), services.CreatePostParams{
 		Title: "ID Post", Content: "C", Status: "published", AuthorID: user.ID,
 	})
 	req = httptest.NewRequest(http.MethodGet, "/posts/1", nil)
@@ -305,7 +305,7 @@ func TestPostHandler_GeneratePreviewLink(t *testing.T) {
 	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
 		Username: "prev", Email: "prev@test.com", PasswordHash: "h", DisplayName: "P",
 	})
-	post, _ := postSvc.CreatePost(context.Background(), services.CreatePostParams{
+	post, _, _ := postSvc.CreatePost(context.Background(), services.CreatePostParams{
 		Title: "Preview Post", Content: "C", Status: "draft", AuthorID: user.ID,
 	})
 	req = httptest.NewRequest(http.MethodPost, "/posts/preview", nil)
@@ -341,7 +341,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 	// newest (i=12) -> oldest (i=1)
 	for i := 1; i <= 12; i++ {
 		slug := fmt.Sprintf("post-%d", i)
-		post, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
+		post, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
 			Title:    fmt.Sprintf("Post %d", i),
 			Slug:     slug,
 			Status:   "published",
@@ -516,7 +516,7 @@ func TestUpdatePost_Success(t *testing.T) {
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
-	post, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+	post, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{
 		Title: "Original", Slug: "original", Content: "hello", Status: "draft", AuthorID: 1,
 	})
 	if err != nil {
@@ -550,7 +550,7 @@ func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
-	post, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+	post, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{
 		Title: "My Post", Slug: "my-post", Content: "hello", Status: "draft", AuthorID: 1,
 	})
 	if err != nil {
@@ -592,7 +592,7 @@ func TestPostHandler_GeneratePreviewLink_Success(t *testing.T) {
 	e := echo.New()
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
-	post, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+	post, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{
 		Title: "Preview", Slug: "preview-post", Status: "draft", AuthorID: 1,
 	})
 	if err != nil {
@@ -661,11 +661,11 @@ func TestUpdatePost_SlugConflict(t *testing.T) {
 
 	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
 
-	_, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Post A", Slug: "post-a", Status: "draft", AuthorID: 1})
+	_, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Post A", Slug: "post-a", Status: "draft", AuthorID: 1})
 	if err != nil {
 		t.Fatalf("CreatePost A: %v", err)
 	}
-	postB, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Post B", Slug: "post-b", Status: "draft", AuthorID: 1})
+	postB, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Post B", Slug: "post-b", Status: "draft", AuthorID: 1})
 	if err != nil {
 		t.Fatalf("CreatePost B: %v", err)
 	}

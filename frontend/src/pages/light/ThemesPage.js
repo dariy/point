@@ -77,6 +77,10 @@ export default class ThemesPage extends Component {
         <div class="theme-card-body">
           <h3 class="theme-name">${escapeHtml(theme.name)}</h3>
           <p class="theme-description">${escapeHtml(theme.description || 'No description available.')}</p>
+          <div class="theme-modes">
+            <span class="theme-mode-badge theme-mode-light" title="Light mode">&#9728;</span>
+            ${theme.has_dark_mode ? `<span class="theme-mode-badge theme-mode-dark" title="Dark mode">&#9790;</span>` : ''}
+          </div>
           <div class="theme-card-footer">
             ${isActive 
               ? `<button class="btn btn-sm btn-secondary" disabled>Currently Active</button>`

@@ -622,7 +622,7 @@ func main() {
 		}
 	}
 
-	// Synchronize active theme with public theme.json for the frontend
+	// Synchronize active theme with public theme.css for the frontend
 	if err := svcs.Theme.SyncActiveTheme(ctx); err != nil {
 		log.Printf("warning: failed to sync active theme: %v", err)
 	}

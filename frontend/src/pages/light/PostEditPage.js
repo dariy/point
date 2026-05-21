@@ -253,6 +253,13 @@ export default class PostEditPage extends Component {
                 ${modeToggle}
                 ${contentArea}
               </div>
+
+              <details class="form-group css-editor-details">
+                <summary class="css-editor-summary">Custom CSS</summary>
+                <textarea id="css-editor" class="form-input css-editor-textarea"
+                          rows="8" spellcheck="false"
+                          placeholder="/* Styles applied only to this post */">${escapeHtml(p.css || '')}</textarea>
+              </details>
             </div>
           </main>
         </div>
@@ -383,7 +390,8 @@ export default class PostEditPage extends Component {
     const titleInput = this.$('#title-input');
     const slugInput = this.$('#slug-input');
     const contentEditor = this.$('#content-editor');
-    [titleInput, slugInput, contentEditor].forEach((el) => {
+    const cssEditor = this.$('#css-editor');
+    [titleInput, slugInput, contentEditor, cssEditor].forEach((el) => {
       el?.addEventListener('input', () => this._debouncedAutosave());
     });
 
@@ -643,6 +651,7 @@ export default class PostEditPage extends Component {
       scheduled_at:     this.$('#schedule-input')?.value
         ? new Date(this.$('#schedule-input').value).toISOString()
         : '',
+      css:              this.$('#css-editor')?.value || '',
     };
   }
 
@@ -667,21 +676,27 @@ export default class PostEditPage extends Component {
       thumbnail_path:   data.thumbnail_path,
       meta_description: data.meta_description,
       tags:             (data.tags || []).map((name) => ({ name, slug: name })),
+      css:              data.css,
     };
 
     this.setState({ saving: true, post: postSnap });
     try {
-      let post;
+      let result;
       if (this.state.isNew) {
-        post = await createPost(data);
+        result = await createPost(data);
         this.state.isNew = false;
-        this.state.postId = post.id;
-        history.replaceState(null, '', `/light/posts/${post.id}/edit`);
+        this.state.postId = result.id;
+        history.replaceState(null, '', `/light/posts/${result.id}/edit`);
       } else {
-        post = await updatePost(this.state.postId, data);
+        result = await updatePost(this.state.postId, data);
       }
+      const { css_warnings, ...post } = result;
       this.setState({ saving: false, post });
-      store.set('toast', { message: 'Post saved.', type: 'success' });
+      if (css_warnings?.length) {
+        store.set('toast', { message: `Post saved. Some CSS was stripped: ${css_warnings.join(', ')}`, type: 'warning' });
+      } else {
+        store.set('toast', { message: 'Post saved.', type: 'success' });
+      }
     } catch (err) {
       this.setState({ saving: false, post: postSnap });
       store.set('toast', { message: err.message || 'Save failed.', type: 'error' });

@@ -873,10 +873,11 @@ export class PostContent extends Component {
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     const tags = renderTagStrip(post.tags, tagIndex);
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
+    const postCss = post.css ? `<style id="post-css">${post.css}</style>` : "";
 
     return `
       <article class="post-single${isHidden ? " is-hidden" : ""}" itemscope itemtype="https://schema.org/BlogPosting">
-        <div class="post-content" itemprop="articleBody">${post.content_html || ""}</div>
+        ${postCss}<div class="post-content" itemprop="articleBody">${post.content_html || ""}</div>
 
         ${
           tags

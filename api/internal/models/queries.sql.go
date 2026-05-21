@@ -65,7 +65,7 @@ SET status = 'published',
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
 AND deleted_at IS NULL
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css
 `
 
 func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error) {
@@ -97,6 +97,7 @@ func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error)
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
 			&i.DeletedAt,
+			&i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -312,11 +313,11 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css
 ) VALUES (
-    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), ?11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), ?11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?12
 )
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css
 `
 
 type CreatePostParams struct {
@@ -331,6 +332,7 @@ type CreatePostParams struct {
 	ThumbnailPath   sql.NullString `json:"thumbnail_path"`
 	MetaDescription sql.NullString `json:"meta_description"`
 	ScheduledAt     sql.NullTime   `json:"scheduled_at"`
+	Css             string         `json:"css"`
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
@@ -346,6 +348,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		arg.ThumbnailPath,
 		arg.MetaDescription,
 		arg.ScheduledAt,
+		arg.Css,
 	)
 	var i Post
 	err := row.Scan(
@@ -368,6 +371,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
 		&i.DeletedAt,
+		&i.Css,
 	)
 	return i, err
 }
@@ -707,7 +711,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 
 const getPost = `-- name: GetPost :one
 
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css
 FROM posts p
 WHERE p.id = ? AND p.deleted_at IS NULL LIMIT 1
 `
@@ -736,12 +740,13 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
 		&i.DeletedAt,
+		&i.Css,
 	)
 	return i, err
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css
 FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1
 `
@@ -769,12 +774,13 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
 		&i.DeletedAt,
+		&i.Css,
 	)
 	return i, err
 }
 
 const getPostsByTag = `-- name: GetPostsByTag :many
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
@@ -838,6 +844,7 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
 			&i.DeletedAt,
+			&i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -1270,7 +1277,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -1343,6 +1350,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
 			&i.DeletedAt,
+			&i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -1428,7 +1436,7 @@ func (q *Queries) ListTags(ctx context.Context, includeEmptyFilter interface{}) 
 }
 
 const listTrashedPosts = `-- name: ListTrashedPosts :many
-SELECT id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at FROM posts
+SELECT id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css FROM posts
 WHERE deleted_at IS NOT NULL
 ORDER BY deleted_at DESC
 LIMIT ? OFFSET ?
@@ -1468,6 +1476,7 @@ func (q *Queries) ListTrashedPosts(ctx context.Context, arg ListTrashedPostsPara
 			&i.PreviewToken,
 			&i.PreviewExpiresAt,
 			&i.DeletedAt,
+			&i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -1486,7 +1495,7 @@ const publishPost = `-- name: PublishPost :one
 UPDATE posts
 SET status = 'published', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css
 `
 
 func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
@@ -1512,6 +1521,7 @@ func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
 		&i.DeletedAt,
+		&i.Css,
 	)
 	return i, err
 }
@@ -1748,9 +1758,10 @@ SET title = ?1, slug = ?2, content = ?3, excerpt = ?4, formatter = ?5, status = 
         WHEN ?6 = 'scheduled'  THEN NULL
         ELSE published_at
     END),
+    css = ?11,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = ?11 AND author_id = ?12
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at
+WHERE id = ?12 AND author_id = ?13
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css
 `
 
 type UpdatePostParams struct {
@@ -1764,6 +1775,7 @@ type UpdatePostParams struct {
 	ThumbnailPath   sql.NullString `json:"thumbnail_path"`
 	MetaDescription sql.NullString `json:"meta_description"`
 	ScheduledAt     sql.NullTime   `json:"scheduled_at"`
+	Css             string         `json:"css"`
 	ID              int64          `json:"id"`
 	AuthorID        int64          `json:"author_id"`
 }
@@ -1780,6 +1792,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		arg.ThumbnailPath,
 		arg.MetaDescription,
 		arg.ScheduledAt,
+		arg.Css,
 		arg.ID,
 		arg.AuthorID,
 	)
@@ -1804,6 +1817,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
 		&i.DeletedAt,
+		&i.Css,
 	)
 	return i, err
 }
@@ -1948,7 +1962,7 @@ const withdrawPost = `-- name: WithdrawPost :one
 UPDATE posts
 SET status = 'draft', updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css
 `
 
 func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
@@ -1974,6 +1988,7 @@ func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
 		&i.PreviewToken,
 		&i.PreviewExpiresAt,
 		&i.DeletedAt,
+		&i.Css,
 	)
 	return i, err
 }

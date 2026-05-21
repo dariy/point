@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	_ "modernc.org/sqlite"
 	"point-api/internal/models"
@@ -57,6 +58,14 @@ func NewRepository(dbURL string) (*Repository, error) {
 			return nil, fmt.Errorf("failed to initialize database schema: %w", err)
 		}
 		log.Println("Database schema initialized successfully.")
+	} else {
+		// Run migrations for existing databases.
+		// SQLite returns an error if the column already exists — that's safe to ignore.
+		if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN css TEXT NOT NULL DEFAULT ''`); err != nil {
+			if !isDuplicateColumnError(err) {
+				return nil, fmt.Errorf("migration failed (add posts.css): %w", err)
+			}
+		}
 	}
 
 	queries := models.New(db)
@@ -68,6 +77,10 @@ func NewRepository(dbURL string) (*Repository, error) {
 
 func (r *Repository) Close() error {
 	return r.db.Close()
+}
+
+func isDuplicateColumnError(err error) bool {
+	return strings.Contains(err.Error(), "duplicate column name")
 }
 
 func (r *Repository) DB() *sql.DB {

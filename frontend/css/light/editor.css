@@ -536,3 +536,28 @@ body.drag-active::after {
     color: var(--color-primary);
     border-color: var(--color-primary);
 }
+
+/* Custom CSS editor */
+.css-editor-details {
+    margin-top: var(--space-2);
+}
+
+.css-editor-summary {
+    cursor: pointer;
+    font-size: var(--font-sm);
+    color: var(--text-muted);
+    user-select: none;
+    padding: var(--space-2) 0;
+}
+
+.css-editor-summary:hover {
+    color: var(--text-main);
+}
+
+.css-editor-textarea {
+    width: 100%;
+    margin-top: var(--space-2);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-sm);
+    resize: vertical;
+}

@@ -70,6 +70,7 @@ type Post struct {
 	PreviewToken     sql.NullString `json:"preview_token"`
 	PreviewExpiresAt sql.NullTime   `json:"preview_expires_at"`
 	DeletedAt        sql.NullTime   `json:"deleted_at"`
+	Css              string         `json:"css"`
 }
 
 type PostTag struct {

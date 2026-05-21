@@ -42,8 +42,8 @@ func TestTimelineService_Timeline(t *testing.T) {
 	_ = tagSvc.SetTagChildren(ctx, inTimeline.ID, []int64{y2024.ID, y2023.ID, d2020s.ID, garbage.ID})
 
 	// 2. Create some posts and tag them
-	p1, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "Post 1", Status: "published", AuthorID: userID})
-	p2, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "Post 2", Status: "published", AuthorID: userID})
+	p1, _, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "Post 1", Status: "published", AuthorID: userID})
+	p2, _, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "Post 2", Status: "published", AuthorID: userID})
 
 	_ = postSvc.UpdatePostTags(ctx, p1.ID, []string{"2024"})
 	_ = postSvc.UpdatePostTags(ctx, p2.ID, []string{"2020s"})
@@ -117,9 +117,9 @@ func TestTimelineService_LocationsFor(t *testing.T) {
 	_ = svc.repo.UpsertTagLocation(ctx, paris.ID, 48.8, 2.3)
 
 	// Create posts
-	p1, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "P1", Status: "published", AuthorID: userID})
-	p2, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "P2", Status: "published", AuthorID: userID})
-	p3, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "P3", Status: "published", AuthorID: userID})
+	p1, _, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "P1", Status: "published", AuthorID: userID})
+	p2, _, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "P2", Status: "published", AuthorID: userID})
+	p3, _, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "P3", Status: "published", AuthorID: userID})
 	t.Logf("Posts created: %d, %d, %d", p1.ID, p2.ID, p3.ID)
 
 	// p1, p2 in 2024 at Berlin
