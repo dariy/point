@@ -274,7 +274,7 @@ func TestPostHandler_CreatePost_SlugConflict(t *testing.T) {
 	defer h.close()
 	// Insert user first so FK constraint is satisfied
 	userID := insertUser(h.repo)
-	_, err := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, err := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "First", Slug: "conflict-slug", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	if err != nil {
@@ -577,7 +577,7 @@ func TestGetPostPage_DraftSlug(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	userID := insertUser(h.repo)
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Draft Post", Slug: "draft-post-page", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	c, _ := echoCtx(http.MethodGet, "/", "")
@@ -598,7 +598,7 @@ func TestGetPostNavigation_WithNeighbors(t *testing.T) {
 		{"nav-middle", "Middle"},
 		{"nav-last", "Last"},
 	} {
-		_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 			Title: st.title, Slug: st.slug, Status: "draft", Formatter: "markdown", AuthorID: userID,
 		})
 	}
@@ -622,7 +622,7 @@ func TestGetPostBySlug_Published_NoAuth(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	userID := insertUser(h.repo)
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Public Post", Slug: "public-slug-test", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE slug='public-slug-test'`)
@@ -672,7 +672,7 @@ func TestGetHomePage_AdminWithPost(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()
 	userID := insertUser(h.repo)
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Admin Post", Slug: "admin-home-post", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE slug='admin-home-post'`)
@@ -720,7 +720,7 @@ func TestGetHomePage_HiddenPostFiltered(t *testing.T) {
 	defer h.close()
 	userID := insertUser(h.repo)
 	hideTagID := insertHidePostsSystemTag(h)
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Hidden Home Post", Slug: "hidden-home-post", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	var postID int64
@@ -742,7 +742,7 @@ func TestGetTagPage_HiddenPostFiltered(t *testing.T) {
 	userID := insertUser(h.repo)
 	hideTagID := insertHidePostsSystemTag(h)
 	tag, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "VisibleTag", Slug: "visible-tag-filter"})
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Hidden Tag Post", Slug: "hidden-tag-post-filter", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	var postID int64
@@ -766,7 +766,7 @@ func TestGetPostBySlug_HiddenPostsTag(t *testing.T) {
 	defer h.close()
 	userID := insertUser(h.repo)
 	hideTagID := insertHidePostsSystemTag(h)
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Hidden Slug Post", Slug: "hidden-slug-post", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	var postID int64
@@ -787,7 +787,7 @@ func TestGetPostByID_HiddenPostsTag(t *testing.T) {
 	defer h.close()
 	userID := insertUser(h.repo)
 	hideTagID := insertHidePostsSystemTag(h)
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Hidden ID Post", Slug: "hidden-id-post", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	var postID int64
@@ -856,7 +856,7 @@ func TestGetPostBySlug_Admin(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	userID := insertUser(h.repo)
-	_, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
 		Title: "Admin View Post", Slug: "admin-view-post", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE slug='admin-view-post'`)

@@ -95,8 +95,22 @@ func NewPostService(repo *repository.Repository) *PostService {
 		"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span",
 	)
 
-	// Styling (limited to safe properties)
-	policy.AllowStyling()
+	// Inline style attributes — restricted to safe visual properties only.
+	// Excludes position, z-index, background-image, content, transform, animation.
+	policy.AllowStyles(
+		"color", "background-color", "background",
+		"font-size", "font-weight", "font-style", "font-family", "font-variant",
+		"text-align", "text-decoration", "text-transform", "text-indent",
+		"line-height", "letter-spacing", "word-spacing",
+		"margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+		"padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+		"border", "border-radius", "border-color", "border-width", "border-style",
+		"width", "max-width", "min-width", "height", "max-height", "min-height",
+		"display", "flex-direction", "flex-wrap", "justify-content", "align-items",
+		"align-self", "flex", "gap", "grid-template-columns",
+		"float", "clear", "overflow", "overflow-x", "overflow-y",
+		"opacity", "vertical-align", "list-style", "white-space",
+	).Globally()
 
 	return &PostService{
 		repo:       repo,
@@ -141,6 +155,51 @@ func preprocessContent(content string) string {
 // e.g. ![alt](/media/originals/2026/02/photo.jpg) → /2026/02/photo.jpg
 func normalizeContent(content string) string {
 	return markdownImageRe.ReplaceAllString(content, "$1")
+}
+
+// dangerousCSSRe matches CSS patterns that are unsafe to allow in per-post CSS blocks.
+var (
+	cssImportRe      = regexp.MustCompile(`(?i)@import\b[^;]*;?`)
+	cssExternalURLRe = regexp.MustCompile(`(?i)url\s*\(\s*['"]?https?://[^)]*['"]?\s*\)`)
+	cssPosFixedRe    = regexp.MustCompile(`(?i)\bposition\s*:\s*fixed\b`)
+	cssPosStickyRe   = regexp.MustCompile(`(?i)\bposition\s*:\s*sticky\b`)
+	cssZIndexRe      = regexp.MustCompile(`(?i)\bz-index\s*:[^;}]*`)
+	cssDangerContent = regexp.MustCompile(`(?i)\bcontent\s*:[^;}]*`)
+	cssScriptRe      = regexp.MustCompile(`(?i)<\s*script`)
+)
+
+// SanitizePostCSS strips dangerous CSS declarations from per-post CSS blocks.
+// Returns the sanitized CSS and a list of property names that were removed.
+func SanitizePostCSS(css string) (string, []string) {
+	if css == "" {
+		return "", nil
+	}
+
+	var stripped []string
+
+	type rule struct {
+		re   *regexp.Regexp
+		name string
+	}
+	rules := []rule{
+		{cssImportRe, "@import"},
+		{cssExternalURLRe, "url() with external resource"},
+		{cssPosFixedRe, "position: fixed"},
+		{cssPosStickyRe, "position: sticky"},
+		{cssZIndexRe, "z-index"},
+		{cssDangerContent, "content"},
+		{cssScriptRe, "<script>"},
+	}
+
+	result := css
+	for _, r := range rules {
+		if r.re.MatchString(result) {
+			stripped = append(stripped, r.name)
+			result = r.re.ReplaceAllString(result, "")
+		}
+	}
+
+	return strings.TrimSpace(result), stripped
 }
 
 func (s *PostService) RenderContent(content string) (string, error) {
@@ -232,6 +291,7 @@ func (s *PostService) ListPublishedPostStubs(ctx context.Context) ([]repository.
 type CreatePostParams struct {
 	Title           string
 	Content         string
+	CSS             string
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -244,15 +304,18 @@ type CreatePostParams struct {
 	ScheduledAt     *time.Time
 }
 
-func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, error) {
+func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (models.Post, []string, error) {
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Title)
 	}
+
+	sanitizedCSS, strippedProps := SanitizePostCSS(p.CSS)
 
 	post, err := s.repo.CreatePost(ctx, models.CreatePostParams{
 		Title:           p.Title,
 		Slug:            p.Slug,
 		Content:         normalizeContent(p.Content),
+		Css:             sanitizedCSS,
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
@@ -263,7 +326,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
-		return models.Post{}, err
+		return models.Post{}, strippedProps, err
 	}
 
 	// Handle tags
@@ -290,7 +353,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 	// Update tag counts
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 
-	return post, nil
+	return post, strippedProps, nil
 }
 
 func (s *PostService) IncrementViewCount(ctx context.Context, id int64) error {
@@ -337,6 +400,7 @@ type UpdatePostParams struct {
 	AuthorID        int64
 	Title           string
 	Content         string
+	CSS             string
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -348,15 +412,18 @@ type UpdatePostParams struct {
 	ScheduledAt     *time.Time
 }
 
-func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (models.Post, error) {
+func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (models.Post, []string, error) {
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Title)
 	}
+
+	sanitizedCSS, strippedProps := SanitizePostCSS(p.CSS)
 
 	post, err := s.repo.UpdatePost(ctx, models.UpdatePostParams{
 		Title:           p.Title,
 		Slug:            p.Slug,
 		Content:         normalizeContent(p.Content),
+		Css:             sanitizedCSS,
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
@@ -368,7 +435,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		ScheduledAt:     toNullTime(p.ScheduledAt),
 	})
 	if err != nil {
-		return models.Post{}, err
+		return models.Post{}, strippedProps, err
 	}
 
 	// Replace tags
@@ -383,7 +450,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 
-	return post, nil
+	return post, strippedProps, nil
 }
 
 func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames []string) error {

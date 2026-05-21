@@ -1,0 +1,55 @@
+/* theme-title: "Minimal" */
+/* description: "A distraction-free reading experience with classic typography." */
+/* preview-color: "#1a1a1a" */
+
+:root {
+  --bg-primary: #fdfdfb;
+  --bg-secondary: #f4f4f0;
+  --bg-tertiary: #e9e9e1;
+  --bg-elevated: #ffffff;
+  --surface-card: #ffffff;
+  --surface-input: #ffffff;
+  --surface-hover: #f4f4f0;
+  --text-primary: #1a1a1a;
+  --text-secondary: #404040;
+  --text-tertiary: #525252;
+  --text-muted: #737373;
+  --text-inverted: #ffffff;
+  --color-primary: #000000;
+  --color-primary-hover: #404040;
+  --border-primary: #d4d4d4;
+  --border-secondary: #a3a3a3;
+  --pt-colors-sidebar-bg: #171717;
+  --pt-colors-sidebar-text: #a3a3a3;
+  --pt-colors-sidebar-text-hover: #ffffff;
+  --pt-colors-sidebar-active-bg: #262626;
+  --pt-colors-sidebar-border: #404040;
+  --footer-link: #000000;
+  --font-family: Georgia, 'Times New Roman', serif;
+  --spacing-md: 1.125rem;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #171717;
+  --bg-secondary: #262626;
+  --bg-tertiary: #404040;
+  --bg-elevated: #262626;
+  --surface-card: #262626;
+  --surface-input: #262626;
+  --surface-hover: #404040;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --text-tertiary: #737373;
+  --text-muted: #525252;
+  --text-inverted: #171717;
+  --color-primary: #ffffff;
+  --color-primary-hover: #d4d4d4;
+  --border-primary: #404040;
+  --border-secondary: #525252;
+  --pt-colors-sidebar-bg: #0a0a0a;
+  --pt-colors-sidebar-text: #737373;
+  --pt-colors-sidebar-text-hover: #e5e5e5;
+  --pt-colors-sidebar-active-bg: #171717;
+  --pt-colors-sidebar-border: #262626;
+  --footer-link: #ffffff;
+}

@@ -91,7 +91,7 @@ function _showFlyout(anchorEl, ancestors, excludeEl) {
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
   ancestors.forEach((t) => {
     const a = document.createElement('a');
-    a.href = `/tag/${encodeURIComponent(t.slug)}`;
+    a.href = `/tags/${encodeURIComponent(t.slug)}`;
     a.className = 'tag-link';
     a.textContent = t.name;
     flyout.appendChild(a);
@@ -178,7 +178,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
 
   containerEl.querySelectorAll('.tag-link').forEach((link) => {
     if (!link.getAttribute('href')) return;
-    const slug = link.getAttribute('href').replace('/tag/', '');
+    const slug = link.getAttribute('href').replace('/tags/', '');
     const ancestors = getTagAncestors(slug, tagIndex);
     if (ancestors.length && !link.classList.contains('has-flyout')) {
       link.classList.add('has-flyout');
@@ -216,7 +216,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
       
       if (flyoutOpenForThisLink && !recentlyOpened) {
         _hideFlyout();
-        navigateFn(`/tag/${slug}`);
+        navigateFn(`/tags/${slug}`);
       } else {
         _hideFlyout();
         _activeLink = link;
@@ -354,7 +354,7 @@ export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
 export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
-  const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tag/${slug}`;
+  const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tags/${slug}`;
 
   const classes = ['tag-link', active ? 'active' : '', extra]
     .filter(Boolean)

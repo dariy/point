@@ -4,25 +4,40 @@
  * Fetches: GET /api/posts
  */
 
-import { Component } from '../../components/Component.js';
-import { LightSidebar } from '../../components/light/LightSidebar.js';
-import { TagsInput } from '../../components/light/TagsInput.js';
-import { Pagination } from '../../components/shared/Pagination.js';
-import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, updatePost, setPostStatus } from '../../api/posts.js';
-import { logout } from '../../api/auth.js';
-import { store } from '../../store.js';
-import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
-import { formatDateShort } from '../../utils/formatters.js';
-import { EDIT_SVG, X_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG } from '../../utils/icons.js';
+import { Component } from "../../components/Component.js";
+import { LightSidebar } from "../../components/light/LightSidebar.js";
+import { TagsInput } from "../../components/light/TagsInput.js";
+import { Pagination } from "../../components/shared/Pagination.js";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import {
+  listPosts,
+  deletePost,
+  restorePost,
+  permanentlyDeletePost,
+  updatePostTags,
+  updatePost,
+  setPostStatus,
+} from "../../api/posts.js";
+import { logout } from "../../api/auth.js";
+import { store } from "../../store.js";
+import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import { formatDateShort } from "../../utils/formatters.js";
+import {
+  EDIT_SVG,
+  X_SVG,
+  EXTERNAL_LINK_SVG,
+  PLAY_SVG,
+  MUSIC_SVG,
+  RESTORE_SVG,
+} from "../../utils/icons.js";
 
 const STATUS_LABELS = {
-  published: 'Published',
-  draft: 'Draft',
-  hidden: 'Hidden',
-  page: 'Page',
-  scheduled: 'Scheduled',
-  trash: 'Trash',
+  published: "Published",
+  draft: "Draft",
+  hidden: "Hidden",
+  page: "Page",
+  scheduled: "Scheduled",
+  trash: "Trash",
 };
 
 export default class PostsListPage extends Component {
@@ -33,23 +48,41 @@ export default class PostsListPage extends Component {
       posts: [],
       pagination: {},
       error: null,
-      statusFilter: props.query?.status || '',
-      search: props.query?.search || '',
-      page: parseInt(props.query?.page || '1', 10),
+      statusFilter: props.query?.status || "",
+      search: props.query?.search || "",
+      page: parseInt(props.query?.page || "1", 10),
       selectMode: false,
       selectedIds: new Set(),
     };
   }
 
   render() {
-    const { loading, posts, error, statusFilter, search, selectMode, selectedIds } = this.state;
-    const isTrash = statusFilter === 'trash';
+    const {
+      loading,
+      posts,
+      error,
+      statusFilter,
+      search,
+      selectMode,
+      selectedIds,
+    } = this.state;
+    const isTrash = statusFilter === "trash";
 
-    const statusOptions = ['', 'draft', 'published', 'scheduled', 'hidden', 'page', 'trash'].map((s) => {
-      const label = s ? STATUS_LABELS[s] : 'All statuses';
-      const sel = statusFilter === s ? ' selected' : '';
-      return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(label)}</option>`;
-    }).join('');
+    const statusOptions = [
+      "",
+      "draft",
+      "published",
+      "scheduled",
+      "hidden",
+      "page",
+      "trash",
+    ]
+      .map((s) => {
+        const label = s ? STATUS_LABELS[s] : "All statuses";
+        const sel = statusFilter === s ? " selected" : "";
+        return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(label)}</option>`;
+      })
+      .join("");
 
     const colspan = selectMode && !isTrash ? 6 : 5;
 
@@ -58,30 +91,39 @@ export default class PostsListPage extends Component {
       : error
         ? `<tr><td colspan="${colspan}" class="error-state">${escapeHtml(error)}</td></tr>`
         : !posts.length
-          ? `<tr><td colspan="${colspan}" class="empty-state">${isTrash ? 'Trash is empty.' : 'No posts found.'}</td></tr>`
-          : posts.map((p) => {
-              const mediaUrl = p.media_url || '';
-              const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
-              const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
-              const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
+          ? `<tr><td colspan="${colspan}" class="empty-state">${isTrash ? "Trash is empty." : "No posts found."}</td></tr>`
+          : posts
+              .map((p) => {
+                const mediaUrl = p.media_url || "";
+                const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(
+                  mediaUrl,
+                );
+                const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(
+                  mediaUrl,
+                );
+                const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(
+                  mediaUrl,
+                );
 
-              let previewHtml = '';
-              if (isImage && p.media_url) {
-                previewHtml = `<img src="${escapeHtml(p.media_url + '?thumb')}" class="post-preview-img" loading="lazy">`;
-              } else if (isVideo) {
-                previewHtml = `<div class="post-preview-placeholder" title="Video">${PLAY_SVG}</div>`;
-              } else if (isAudio) {
-                previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
-              } else {
-                previewHtml = `<div class="post-preview-placeholder"></div>`;
-              }
-              const isChecked = selectedIds.has(p.id);
+                let previewHtml = "";
+                if (isImage && p.media_url) {
+                  previewHtml = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy">`;
+                } else if (isVideo) {
+                  previewHtml = `<div class="post-preview-placeholder" title="Video">${PLAY_SVG}</div>`;
+                } else if (isAudio) {
+                  previewHtml = `<div class="post-preview-placeholder" title="Audio">${MUSIC_SVG}</div>`;
+                } else {
+                  previewHtml = `<div class="post-preview-placeholder"></div>`;
+                }
+                const isChecked = selectedIds.has(p.id);
 
-              if (isTrash) {
-                const deletedAt = p.deleted_at?.value
-                  ? formatDateShort(p.deleted_at.value)
-                  : (p.deleted_at ? formatDateShort(p.deleted_at) : '');
-                return `
+                if (isTrash) {
+                  const deletedAt = p.deleted_at?.value
+                    ? formatDateShort(p.deleted_at.value)
+                    : p.deleted_at
+                      ? formatDateShort(p.deleted_at)
+                      : "";
+                  return `
                 <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
                   <td class="preview-col" rowspan="2">
                     <div class="post-preview-placeholder" title="Trashed"></div>
@@ -111,11 +153,11 @@ export default class PostsListPage extends Component {
                     <span class="trash-status-label">Was: ${escapeHtml(STATUS_LABELS[p.status] || p.status)}</span>
                   </td>
                 </tr>`;
-              }
+                }
 
-              return `
+                return `
               <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-main">
-                ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-id="${p.id}" ${isChecked ? 'checked' : ''}></td>` : ''}
+                ${selectMode ? `<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-id="${p.id}" ${isChecked ? "checked" : ""}></td>` : ""}
                 <td class="preview-col" rowspan="2">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" title="Edit post">
                     ${previewHtml}
@@ -124,18 +166,28 @@ export default class PostsListPage extends Component {
                 <td class="status-col">
                   <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
                           name="status" data-id="${escapeHtml(String(p.id))}">
-                    ${['draft', 'published', 'scheduled', 'hidden', 'page'].map(s => `
-                      <option value="${s}"${p.status === s ? ' selected' : ''}>
+                    ${["draft", "published", "scheduled", "hidden", "page"]
+                      .map(
+                        (s) => `
+                      <option value="${s}"${p.status === s ? " selected" : ""}>
                         ${escapeHtml(STATUS_LABELS[s] || s)}
                       </option>
-                    `).join('')}
+                    `,
+                      )
+                      .join("")}
                   </select>
-                  ${p.status === 'scheduled' && p.scheduled_at
-                    ? `<span class="scheduled-date">${escapeHtml(new Date(p.scheduled_at).toLocaleString([], {
-                        month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      }))}</span>`
-                    : ''}
+                  ${
+                    p.status === "scheduled" && p.scheduled_at
+                      ? `<span class="scheduled-date">${escapeHtml(
+                          new Date(p.scheduled_at).toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }),
+                        )}</span>`
+                      : ""
+                  }
                 </td>
                 <td class="title-col">
                   <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="table-link">
@@ -147,7 +199,7 @@ export default class PostsListPage extends Component {
                   <div class="actions">
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
                        class="btn btn-sm" title="Edit">${EDIT_SVG}</a>
-                    <a href="/post/${escapeHtml(p.slug)}" class="btn btn-sm"
+                    <a href="/posts/${escapeHtml(p.slug)}" class="btn btn-sm"
                        title="View" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"
@@ -161,7 +213,8 @@ export default class PostsListPage extends Component {
                   <div id="tags-cell-${escapeHtml(String(p.id))}"></div>
                 </td>
               </tr>`;
-            }).join('');
+              })
+              .join("");
 
     return `
       <div class="light-layout">
@@ -170,19 +223,25 @@ export default class PostsListPage extends Component {
           <header class="light-header">
             <h1>Posts</h1>
             <div class="header-actions">
-              ${!isTrash ? `<button id="select-mode-btn" class="btn">${selectMode ? 'Cancel' : 'Select'}</button>` : ''}
+              ${!isTrash ? `<button id="select-mode-btn" class="btn">${selectMode ? "Cancel" : "Select"}</button>` : ""}
               <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
             </div>
           </header>
           <main class="light-content">
             <div class="filters">
-              <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || 'draft')} filter-select">
+              <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || "draft")} filter-select">
                 ${statusOptions}
               </select>
-              ${!isTrash ? `<input type="search" id="search-input" class="form-input filter-search"
-                     placeholder="Search posts…" value="${escapeHtml(search)}">` : ''}
+              ${
+                !isTrash
+                  ? `<input type="search" id="search-input" class="form-input filter-search"
+                     placeholder="Search posts…" value="${escapeHtml(search)}">`
+                  : ""
+              }
             </div>
-            ${selectMode && !isTrash ? `
+            ${
+              selectMode && !isTrash
+                ? `
             <div class="bulk-toolbar" id="bulk-toolbar">
               <span id="bulk-count">0 selected</span>
               <select id="bulk-status-select">
@@ -193,15 +252,17 @@ export default class PostsListPage extends Component {
               <button id="bulk-apply-btn" class="btn btn-sm" disabled>Apply</button>
               <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled>Move to Trash</button>
             </div>
-            ` : ''}
+            `
+                : ""
+            }
             <div class="table-container">
               <table class="table">
                 <thead>
                   <tr>
-                    ${selectMode && !isTrash ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ''}
+                    ${selectMode && !isTrash ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ""}
                     <th class="preview-col" colspan="2">Post</th>
                     <th class="title-col"></th>
-                    <th class="updated-col">${isTrash ? 'Deleted' : 'Last updated'}</th>
+                    <th class="updated-col">${isTrash ? "Deleted" : "Last updated"}</th>
                     <th class="actions-col"></th>
                   </tr>
                 </thead>
@@ -215,14 +276,14 @@ export default class PostsListPage extends Component {
   }
 
   afterRender() {
-    this.mountChild(LightSidebar, '#sidebar-mount', {
-      currentPath: '/light/posts',
-      user: store.get('user') || {},
+    this.mountChild(LightSidebar, "#sidebar-mount", {
+      currentPath: "/light/posts",
+      user: store.get("user") || {},
       onLogout: this._handleLogout.bind(this),
     });
 
     if (!this.state.loading && this.state.pagination.pages > 1) {
-      this.mountChild(Pagination, '#pagination-mount', {
+      this.mountChild(Pagination, "#pagination-mount", {
         page: this.state.pagination.page,
         pages: this.state.pagination.pages,
         total: this.state.pagination.total,
@@ -231,7 +292,7 @@ export default class PostsListPage extends Component {
     }
 
     // Restore focus to search input after a re-render triggered by _load
-    const searchInput = this.$('#search-input');
+    const searchInput = this.$("#search-input");
     if (searchInput) {
       if (this._restoreSearchFocus) {
         this._restoreSearchFocus = false;
@@ -240,26 +301,29 @@ export default class PostsListPage extends Component {
         searchInput.setSelectionRange(len, len);
       }
 
-      searchInput.addEventListener('input', debounce((e) => {
-        // Update state without re-rendering — the input already shows the new value
-        this.state.search = e.target.value;
-        this.state.page = 1;
-        this._load({ page: 1, search: e.target.value });
-      }, 350));
+      searchInput.addEventListener(
+        "input",
+        debounce((e) => {
+          // Update state without re-rendering — the input already shows the new value
+          this.state.search = e.target.value;
+          this.state.page = 1;
+          this._load({ page: 1, search: e.target.value });
+        }, 350),
+      );
     }
 
     // Status filter
-    const statusFilter = this.$('#status-filter');
+    const statusFilter = this.$("#status-filter");
     if (statusFilter) {
-      statusFilter.addEventListener('change', (e) => {
+      statusFilter.addEventListener("change", (e) => {
         const val = e.target.value;
-        statusFilter.className = `status-select badge-${val || 'draft'} filter-select`;
+        statusFilter.className = `status-select badge-${val || "draft"} filter-select`;
         this.setState({ statusFilter: val, page: 1 });
         this._load({ page: 1, status: val });
       });
     }
 
-    const isTrash = this.state.statusFilter === 'trash';
+    const isTrash = this.state.statusFilter === "trash";
 
     // Mount a TagsInput in every tags cell (skip for trash view)
     if (!isTrash && !this.state.loading && !this.state.error) {
@@ -270,8 +334,8 @@ export default class PostsListPage extends Component {
 
     // Status change buttons (skip for trash view)
     if (!isTrash) {
-      this.$$('.status-change-btn').forEach((select) => {
-        select.addEventListener('change', async (e) => {
+      this.$$(".status-change-btn").forEach((select) => {
+        select.addEventListener("change", async (e) => {
           const id = parseInt(select.dataset.id, 10);
           const newStatus = e.target.value;
           await this._updatePostStatus(id, newStatus, select);
@@ -280,19 +344,25 @@ export default class PostsListPage extends Component {
     }
 
     // Delete buttons (move to trash)
-    this.$$('.delete-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+    this.$$(".delete-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
-        this._showConfirm('Move to Trash', `Move "${title}" to Trash? You can restore it later.`, 'Move to Trash', 'danger', () => {
-          this._deletePost(id);
-        });
+        this._showConfirm(
+          "Move to Trash",
+          `Move "${title}" to Trash? You can restore it later.`,
+          "Move to Trash",
+          "danger",
+          () => {
+            this._deletePost(id);
+          },
+        );
       });
     });
 
     // Restore buttons (trash view)
-    this.$$('.restore-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+    this.$$(".restore-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
         this._restorePost(id, title);
@@ -300,31 +370,49 @@ export default class PostsListPage extends Component {
     });
 
     // Permanently delete buttons (trash view)
-    this.$$('.perm-delete-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+    this.$$(".perm-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
-        this._showConfirm('Delete permanently', `Permanently delete "${title}"? This cannot be undone.`, 'Delete', 'danger', () => {
-          this._permanentlyDeletePost(id);
-        });
+        this._showConfirm(
+          "Delete permanently",
+          `Permanently delete "${title}"? This cannot be undone.`,
+          "Delete",
+          "danger",
+          () => {
+            this._permanentlyDeletePost(id);
+          },
+        );
       });
     });
 
     // Select mode (skip for trash view)
-    const selectModeBtn = this.$('#select-mode-btn');
+    const selectModeBtn = this.$("#select-mode-btn");
     if (selectModeBtn) {
-      selectModeBtn.addEventListener('click', () => {
-        this.setState({ selectMode: !this.state.selectMode, selectedIds: new Set() });
+      selectModeBtn.addEventListener("click", () => {
+        this.setState({
+          selectMode: !this.state.selectMode,
+          selectedIds: new Set(),
+        });
       });
     }
 
     if (this.state.selectMode && !isTrash) {
-      this.$('#select-all-cb').addEventListener('change', this._handleSelectAll.bind(this));
-      this.$$('.select-row-cb').forEach(cb => {
-        cb.addEventListener('change', this._handleSelectRow.bind(this));
+      this.$("#select-all-cb").addEventListener(
+        "change",
+        this._handleSelectAll.bind(this),
+      );
+      this.$$(".select-row-cb").forEach((cb) => {
+        cb.addEventListener("change", this._handleSelectRow.bind(this));
       });
-      this.$('#bulk-apply-btn').addEventListener('click', this._handleBulkApply.bind(this));
-      this.$('#bulk-delete-btn').addEventListener('click', this._handleBulkDelete.bind(this));
+      this.$("#bulk-apply-btn").addEventListener(
+        "click",
+        this._handleBulkApply.bind(this),
+      );
+      this.$("#bulk-delete-btn").addEventListener(
+        "click",
+        this._handleBulkDelete.bind(this),
+      );
       this._updateBulkToolbar();
     }
   }
@@ -332,11 +420,11 @@ export default class PostsListPage extends Component {
   _handleSelectAll(e) {
     const isChecked = e.target.checked;
     const { posts, selectedIds } = this.state;
-    this.$$('.select-row-cb').forEach(cb => {
+    this.$$(".select-row-cb").forEach((cb) => {
       cb.checked = isChecked;
     });
     if (isChecked) {
-      posts.forEach(p => selectedIds.add(p.id));
+      posts.forEach((p) => selectedIds.add(p.id));
     } else {
       selectedIds.clear();
     }
@@ -355,10 +443,10 @@ export default class PostsListPage extends Component {
 
   _updateBulkToolbar() {
     const n = this.state.selectedIds.size;
-    const bulkCount = this.$('#bulk-count');
-    const applyBtn = this.$('#bulk-apply-btn');
-    const deleteBtn = this.$('#bulk-delete-btn');
-    const selectAllCb = this.$('#select-all-cb');
+    const bulkCount = this.$("#bulk-count");
+    const applyBtn = this.$("#bulk-apply-btn");
+    const deleteBtn = this.$("#bulk-delete-btn");
+    const selectAllCb = this.$("#select-all-cb");
 
     if (bulkCount) bulkCount.textContent = `${n} selected`;
     if (applyBtn) applyBtn.disabled = n === 0;
@@ -380,7 +468,7 @@ export default class PostsListPage extends Component {
   }
 
   async _handleBulkApply() {
-    const status = this.$('#bulk-status-select').value;
+    const status = this.$("#bulk-status-select").value;
     const ids = Array.from(this.state.selectedIds);
     let successCount = 0;
     let failCount = 0;
@@ -395,13 +483,13 @@ export default class PostsListPage extends Component {
       }
     }
 
-    let message = '';
+    let message = "";
     if (failCount === 0) {
       message = `All ${successCount} posts updated.`;
     } else {
       message = `${successCount} of ${ids.length} posts updated. ${failCount} failed.`;
     }
-    store.set('toast', { message, type: failCount > 0 ? 'error' : 'success' });
+    store.set("toast", { message, type: failCount > 0 ? "error" : "success" });
 
     this.setState({ selectMode: false, selectedIds: new Set() });
     this._load();
@@ -409,32 +497,41 @@ export default class PostsListPage extends Component {
 
   _handleBulkDelete() {
     const n = this.state.selectedIds.size;
-    this._showConfirm('Move to Trash', `Move ${n} posts to Trash? You can restore them later.`, 'Move to Trash', 'danger', async () => {
-      const ids = Array.from(this.state.selectedIds);
-      let successCount = 0;
-      let failCount = 0;
+    this._showConfirm(
+      "Move to Trash",
+      `Move ${n} posts to Trash? You can restore them later.`,
+      "Move to Trash",
+      "danger",
+      async () => {
+        const ids = Array.from(this.state.selectedIds);
+        let successCount = 0;
+        let failCount = 0;
 
-      for (const id of ids) {
-        try {
-          await deletePost(id);
-          successCount++;
-        } catch (err) {
-          console.error(`Failed to move post ${id} to trash:`, err);
-          failCount++;
+        for (const id of ids) {
+          try {
+            await deletePost(id);
+            successCount++;
+          } catch (err) {
+            console.error(`Failed to move post ${id} to trash:`, err);
+            failCount++;
+          }
         }
-      }
 
-      let message = '';
-      if (failCount === 0) {
-        message = `${successCount} posts moved to Trash.`;
-      } else {
-        message = `${successCount} of ${ids.length} posts moved to Trash. ${failCount} failed.`;
-      }
-      store.set('toast', { message, type: failCount > 0 ? 'error' : 'success' });
+        let message = "";
+        if (failCount === 0) {
+          message = `${successCount} posts moved to Trash.`;
+        } else {
+          message = `${successCount} of ${ids.length} posts moved to Trash. ${failCount} failed.`;
+        }
+        store.set("toast", {
+          message,
+          type: failCount > 0 ? "error" : "success",
+        });
 
-      this.setState({ selectMode: false, selectedIds: new Set() });
-      this._load();
-    });
+        this.setState({ selectMode: false, selectedIds: new Set() });
+        this._load();
+      },
+    );
   }
 
   mount() {
@@ -449,18 +546,18 @@ export default class PostsListPage extends Component {
         this._load({ page: 1 });
       }
     }, 200);
-    window.addEventListener('resize', this._onResize);
+    window.addEventListener("resize", this._onResize);
   }
 
   beforeUnmount() {
-    if (this._onResize) window.removeEventListener('resize', this._onResize);
+    if (this._onResize) window.removeEventListener("resize", this._onResize);
   }
 
   /** Measure how many table rows fit in the available container height. */
   _calcPerPage() {
-    const container = this.$('.table-container');
-    const thead = this.$('thead');
-    const probeRow = this.$('tbody tr');
+    const container = this.$(".table-container");
+    const thead = this.$("thead");
+    const probeRow = this.$("tbody tr");
     if (!container || !thead || !probeRow) return 20;
     const bodyHeight = container.clientHeight - thead.offsetHeight;
     // Each post item now takes two <tr> rows.
@@ -472,26 +569,26 @@ export default class PostsListPage extends Component {
   _syncUrl(overrides = {}) {
     const status = overrides.status ?? this.state.statusFilter;
     const search = overrides.search ?? this.state.search;
-    const page   = overrides.page   ?? this.state.page;
+    const page = overrides.page ?? this.state.page;
 
     const params = new URLSearchParams();
-    if (status) params.set('status', status);
-    if (search) params.set('search', search);
-    if (page > 1) params.set('page', String(page));
+    if (status) params.set("status", status);
+    if (search) params.set("search", search);
+    if (page > 1) params.set("page", String(page));
 
     const qs = params.toString();
-    const url = '/light/posts' + (qs ? '?' + qs : '');
-    history.replaceState(null, '', url);
+    const url = "/light/posts" + (qs ? "?" + qs : "");
+    history.replaceState(null, "", url);
   }
 
   async _load(overrides = {}) {
     // Check focus before any DOM mutation so we can restore it after re-render
-    const searchEl = this.$('#search-input');
+    const searchEl = this.$("#search-input");
     const searchHadFocus = searchEl && document.activeElement === searchEl;
 
     // Show loading indicator in-place — no full re-render, no focus loss.
     // The string is fully static (no user data), so innerHTML is safe here.
-    const tbody = this.$('#posts-tbody');
+    const tbody = this.$("#posts-tbody");
     const colspan = this.state.selectMode ? 6 : 5;
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
@@ -516,7 +613,10 @@ export default class PostsListPage extends Component {
       this._restoreSearchFocus = searchHadFocus;
       this.setState({
         loading: false,
-        posts: (data.posts || data.items || []).map(p => ({ ...p, status: (p.status || '').toLowerCase() })),
+        posts: (data.posts || data.items || []).map((p) => ({
+          ...p,
+          status: (p.status || "").toLowerCase(),
+        })),
         pagination: {
           page: data.page,
           pages: data.pages,
@@ -526,8 +626,8 @@ export default class PostsListPage extends Component {
       });
     } catch (err) {
       this._restoreSearchFocus = searchHadFocus;
-      console.error('[PostsListPage] load error:', err);
-      store.set('toast', { message: 'Could not load posts.', type: 'error' });
+      console.error("[PostsListPage] load error:", err);
+      store.set("toast", { message: "Could not load posts.", type: "error" });
       this.setState({ loading: false });
     }
   }
@@ -537,7 +637,9 @@ export default class PostsListPage extends Component {
     const mount = this.$(`#tags-cell-${post.id}`);
     if (!mount) return;
 
-    const initialTags = (post.tags || []).map(t => typeof t === 'string' ? t : t.name);
+    const initialTags = (post.tags || []).map((t) =>
+      typeof t === "string" ? t : t.name,
+    );
 
     this.mountChild(TagsInput, `#tags-cell-${post.id}`, {
       tags: initialTags,
@@ -545,25 +647,35 @@ export default class PostsListPage extends Component {
         try {
           const updated = await updatePostTags(post.id, tags);
           // Update local state silently so re-render preserves the new tags
-          post.tags = updated.tags || tags.map(n => ({ name: n, slug: n }));
-          store.set('toast', { message: 'Tags saved.', type: 'success' });
+          post.tags = updated.tags || tags.map((n) => ({ name: n, slug: n }));
+          store.set("toast", { message: "Tags saved.", type: "success" });
         } catch (err) {
-          store.set('toast', { message: err.message || 'Failed to save tags.', type: 'error' });
+          store.set("toast", {
+            message: err.message || "Failed to save tags.",
+            type: "error",
+          });
         }
       },
     });
   }
 
   _showConfirm(title, message, confirmText, variant, onConfirm) {
-    const mount = document.createElement('div');
+    const mount = document.createElement("div");
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
       title,
       message,
       confirmText,
       variant,
-      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
-      onCancel:  () => { dialog.unmount(); mount.remove(); },
+      onConfirm: () => {
+        dialog.unmount();
+        mount.remove();
+        onConfirm();
+      },
+      onCancel: () => {
+        dialog.unmount();
+        mount.remove();
+      },
     });
     dialog.mount();
   }
@@ -571,61 +683,81 @@ export default class PostsListPage extends Component {
   async _deletePost(id) {
     try {
       await deletePost(id);
-      store.set('toast', { message: 'Post moved to Trash.', type: 'success' });
+      store.set("toast", { message: "Post moved to Trash.", type: "success" });
       this._load();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Move to Trash failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Move to Trash failed.",
+        type: "error",
+      });
     }
   }
 
   async _restorePost(id, title) {
     try {
       await restorePost(id);
-      store.set('toast', { message: `"${title}" restored.`, type: 'success' });
+      store.set("toast", { message: `"${title}" restored.`, type: "success" });
       this._load();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Restore failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Restore failed.",
+        type: "error",
+      });
     }
   }
 
   async _permanentlyDeletePost(id) {
     try {
       await permanentlyDeletePost(id);
-      store.set('toast', { message: 'Post permanently deleted.', type: 'success' });
+      store.set("toast", {
+        message: "Post permanently deleted.",
+        type: "success",
+      });
       this._load();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Delete failed.",
+        type: "error",
+      });
     }
   }
 
   async _updatePostStatus(id, status, select) {
-    if (status === 'scheduled') {
+    if (status === "scheduled") {
       navigate(`/light/posts/${id}/edit?openSchedule=1`);
       return;
     }
-    const originalStatus = this.state.posts.find(p => p.id === id)?.status || 'draft';
-    select.classList.add('badge-loading');
+    const originalStatus =
+      this.state.posts.find((p) => p.id === id)?.status || "draft";
+    select.classList.add("badge-loading");
     try {
       const updated = await updatePost(id, { status });
       // Update local state silently to prevent full re-render
-      const post = this.state.posts.find(p => p.id === id);
+      const post = this.state.posts.find((p) => p.id === id);
       if (post) post.status = updated.status.toLowerCase();
 
       // Update UI
       select.className = `status-select badge-${updated.status.toLowerCase()} status-change-btn`;
-      store.set('toast', { message: 'Status updated.', type: 'success' });
+      store.set("toast", { message: "Status updated.", type: "success" });
     } catch (err) {
       // Revert select value on failure
       select.value = originalStatus;
-      store.set('toast', { message: err.message || 'Update failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Update failed.",
+        type: "error",
+      });
     } finally {
-      select.classList.remove('badge-loading');
+      select.classList.remove("badge-loading");
     }
   }
 
   async _handleLogout() {
-    try { await logout(); } catch { /* ignore */ }
-    store.set('user', null);
-    navigate('/', { replace: true });
+    try {
+      await logout();
+    } catch {
+      /* ignore */
+    }
+    store.set("user", null);
+    navigate("/", { replace: true });
   }
 }

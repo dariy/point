@@ -115,6 +115,18 @@
   line-height: 1.5;
 }
 
+.theme-modes {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.theme-mode-badge {
+  font-size: var(--font-sm);
+  opacity: 0.6;
+  line-height: 1;
+}
+
 .theme-card-footer {
   margin-top: auto;
   display: flex;

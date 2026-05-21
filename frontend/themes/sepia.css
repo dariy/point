@@ -1,0 +1,55 @@
+/* theme-title: "Sepia" */
+/* description: "A warm, classic photographic aesthetic with rich brown tones." */
+/* preview-color: "#8c6239" */
+
+:root {
+  --bg-primary: #f4ecd8;
+  --bg-secondary: #e8dfc4;
+  --bg-tertiary: #dbd0b0;
+  --bg-elevated: #fdf8ec;
+  --surface-card: #fdf8ec;
+  --surface-input: #fdf8ec;
+  --surface-hover: #e8dfc4;
+  --text-primary: #433422;
+  --text-secondary: #5e4a33;
+  --text-tertiary: #7a624a;
+  --text-muted: #9c866e;
+  --text-inverted: #f4ecd8;
+  --color-primary: #8c6239;
+  --color-primary-hover: #6d4c2c;
+  --border-primary: #c9bc9c;
+  --border-secondary: #b0a384;
+  --pt-colors-sidebar-bg: #363025;
+  --pt-colors-sidebar-text: #a89475;
+  --pt-colors-sidebar-text-hover: #f4ecd8;
+  --pt-colors-sidebar-active-bg: #423a2d;
+  --pt-colors-sidebar-border: #5e523d;
+  --footer-link: #8c6239;
+  --font-family: 'Georgia', serif;
+  --spacing-md: 1rem;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #2b261d;
+  --bg-secondary: #363025;
+  --bg-tertiary: #423a2d;
+  --bg-elevated: #363025;
+  --surface-card: #363025;
+  --surface-input: #363025;
+  --surface-hover: #423a2d;
+  --text-primary: #e3d1b0;
+  --text-secondary: #c9b594;
+  --text-tertiary: #a89475;
+  --text-muted: #7a6a52;
+  --text-inverted: #2b261d;
+  --color-primary: #bc9462;
+  --color-primary-hover: #d4aa7a;
+  --border-primary: #5e523d;
+  --border-secondary: #4a4130;
+  --pt-colors-sidebar-bg: #2b261d;
+  --pt-colors-sidebar-text: #a89475;
+  --pt-colors-sidebar-text-hover: #e3d1b0;
+  --pt-colors-sidebar-active-bg: #363025;
+  --pt-colors-sidebar-border: #423a2d;
+  --footer-link: #bc9462;
+}

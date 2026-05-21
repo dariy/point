@@ -9,19 +9,31 @@
  * thumbnail, meta description, drag-and-drop media upload, auto-save (draft).
  */
 
-import { Component } from '../../components/Component.js';
-import { LightSidebar } from '../../components/light/LightSidebar.js';
-import { TagsInput } from '../../components/light/TagsInput.js';
-import { MediaPickerDialog } from '../../components/light/MediaPickerDialog.js';
-import { getPost, createPost, updatePost, deletePost, generatePreviewLink } from '../../api/posts.js';
-import { uploadMedia, analyzeMedia, analyzeMediaByPath, listMedia, renameMedia } from '../../api/media.js';
-import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { getAllShareEntries, clearShareEntries } from '../../utils/idb.js';
-import { logout } from '../../api/auth.js';
-import { store } from '../../store.js';
-import { escapeHtml, navigate, debounce } from '../../utils/helpers.js';
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG } from '../../utils/icons.js';
-import { VisualEditor } from '../../components/light/VisualEditor.js';
+import { Component } from "../../components/Component.js";
+import { LightSidebar } from "../../components/light/LightSidebar.js";
+import { TagsInput } from "../../components/light/TagsInput.js";
+import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
+import {
+  getPost,
+  createPost,
+  updatePost,
+  deletePost,
+  generatePreviewLink,
+} from "../../api/posts.js";
+import {
+  uploadMedia,
+  analyzeMedia,
+  analyzeMediaByPath,
+  listMedia,
+  renameMedia,
+} from "../../api/media.js";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
+import { logout } from "../../api/auth.js";
+import { store } from "../../store.js";
+import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG } from "../../utils/icons.js";
+import { VisualEditor } from "../../components/light/VisualEditor.js";
 
 const AUTOSAVE_MS = 30_000;
 
@@ -29,9 +41,9 @@ const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
 /** Convert a UTC ISO string to a datetime-local input value (local time). */
 function toDatetimeLocal(isoStr) {
-  if (!isoStr) return '';
+  if (!isoStr) return "";
   const d = new Date(isoStr);
-  const pad = (n) => String(n).padStart(2, '0');
+  const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
@@ -42,13 +54,13 @@ function toDatetimeLocal(isoStr) {
  * @returns {Array<{type:'image',path:string}|{type:'text',text:string}>}
  */
 export function parseNodes(content) {
-  const lines = (content || '').split('\n');
+  const lines = (content || "").split("\n");
   const nodes = [];
   let textBuf = [];
 
   const flushText = () => {
-    const text = textBuf.join('\n').trim();
-    if (text) nodes.push({ type: 'text', text });
+    const text = textBuf.join("\n").trim();
+    if (text) nodes.push({ type: "text", text });
     textBuf = [];
   };
 
@@ -56,8 +68,8 @@ export function parseNodes(content) {
     const trimmed = line.trim();
     if (IMAGE_PATH_RE.test(trimmed)) {
       flushText();
-      nodes.push({ type: 'image', path: trimmed });
-    } else if (trimmed === '---') {
+      nodes.push({ type: "image", path: trimmed });
+    } else if (trimmed === "---") {
       flushText();
     } else {
       textBuf.push(line);
@@ -73,14 +85,17 @@ export function parseNodes(content) {
  * @returns {string}
  */
 export function serializeNodes(nodes) {
-  return nodes.map((n) => {
-    if (n.type === 'image') return n.path;
-    return n.text + '\n---';
-  }).join('\n');
+  return nodes
+    .map((n) => {
+      if (n.type === "image") return n.path;
+      return n.text + "\n---";
+    })
+    .join("\n");
 }
 
 /** Extract tag name strings from either a string[] or {name,slug}[] array. */
-const toTagNames = (tags) => (tags || []).map((t) => (typeof t === 'string' ? t : t.name));
+const toTagNames = (tags) =>
+  (tags || []).map((t) => (typeof t === "string" ? t : t.name));
 
 export default class PostEditPage extends Component {
   constructor(container, props = {}) {
@@ -96,7 +111,7 @@ export default class PostEditPage extends Component {
       error: null,
       isNew: !id,
       postId: id,
-      editorMode: 'visual',
+      editorMode: "visual",
     };
     this._tags = [];
     this._nodes = []; // canonical node list for visual mode
@@ -111,16 +126,26 @@ export default class PostEditPage extends Component {
   }
 
   render() {
-    const { loading, error, post, isNew, saving, deleting, generatingPreview, analyzingField } = this.state;
+    const {
+      loading,
+      error,
+      post,
+      isNew,
+      saving,
+      deleting,
+      generatingPreview,
+      analyzingField,
+    } = this.state;
     const analyzing = this._analyzing;
-    const anyActionInProgress = saving || analyzing || deleting || generatingPreview || !!analyzingField;
+    const anyActionInProgress =
+      saving || analyzing || deleting || generatingPreview || !!analyzingField;
 
     if (loading) {
       return `
         <div class="light-layout">
           <div id="sidebar-mount"></div>
           <div class="light-main">
-            <header class="light-header"><h1>${isNew ? 'New Post' : 'Edit Post'}</h1></header>
+            <header class="light-header"><h1>${isNew ? "New Post" : "Edit Post"}</h1></header>
             <main class="light-content">
               <div class="loading-spinner" aria-label="Loading…"></div>
             </main>
@@ -142,36 +167,40 @@ export default class PostEditPage extends Component {
     }
 
     const p = post || {};
-    const title    = escapeHtml(p.title || '');
-    const slug     = escapeHtml(p.slug || '');
-    const content  = p.content || '';
-    const status   = p.status || 'draft';
+    const title = escapeHtml(p.title || "");
+    const slug = escapeHtml(p.slug || "");
+    const content = p.content || "";
+    const status = p.status || "draft";
     const featured = p.is_featured || false;
-    const excerpt  = p.excerpt || '';
+    const excerpt = p.excerpt || "";
 
-    const statusOpts = ['draft', 'published', 'scheduled', 'hidden', 'page'].map((s) =>
-      `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`
-    ).join('');
+    const statusOpts = ["draft", "published", "scheduled", "hidden", "page"]
+      .map(
+        (s) =>
+          `<option value="${s}"${status === s ? " selected" : ""}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`,
+      )
+      .join("");
 
-    const saveLabel    = saving    ? 'Saving…'    : 'Save';
-    const analyzeLabel = analyzing ? 'Analyzing…' : 'Analyze';
+    const saveLabel = saving ? "Saving…" : "Save";
+    const analyzeLabel = analyzing ? "Analyzing…" : "Analyze";
     const aiBtnDisabled = anyActionInProgress;
     const aiBtn = (field) =>
       `<button class="field-ai-btn" data-field="${field}" type="button"
-               title="Fill with AI" ${aiBtnDisabled ? 'disabled' : ''}
+               title="Fill with AI" ${aiBtnDisabled ? "disabled" : ""}
                aria-label="AI fill ${field}">${SPARKLE_SVG}</button>`;
 
     const modeToggle = `
   <div class="editor-mode-toggle">
     <button id="mode-text-btn" type="button"
-            class="${this.state.editorMode === 'text' ? 'active' : ''}">Text</button>
+            class="${this.state.editorMode === "text" ? "active" : ""}">Text</button>
     <button id="mode-visual-btn" type="button"
-            class="${this.state.editorMode === 'visual' ? 'active' : ''}">Visual</button>
+            class="${this.state.editorMode === "visual" ? "active" : ""}">Visual</button>
   </div>`;
 
-    const contentArea = this.state.editorMode === 'visual'
-      ? `<div id="visual-editor-mount"></div>`
-      : `<textarea id="content-editor" class="editor-content"
+    const contentArea =
+      this.state.editorMode === "visual"
+        ? `<div id="visual-editor-mount"></div>`
+        : `<textarea id="content-editor" class="editor-content"
                rows="24" placeholder="Write your post content here\u2026">${escapeHtml(content)}</textarea>`;
 
     return `
@@ -179,19 +208,23 @@ export default class PostEditPage extends Component {
         <div id="sidebar-mount"></div>
         <div class="light-main">
           <header class="light-header">
-            <h1>${isNew ? 'New Post' : 'Edit Post'}</h1>
+            <h1>${isNew ? "New Post" : "Edit Post"}</h1>
             <div class="header-actions">
-              ${!isNew ? `
+              ${
+                !isNew
+                  ? `
                 <button id="delete-btn" class="btn btn-danger" type="button"
-                        title="Delete post" ${anyActionInProgress ? 'disabled' : ''}>Delete</button>
+                        title="Delete post" ${anyActionInProgress ? "disabled" : ""}>Delete</button>
                 <button id="preview-link-btn" class="btn btn-secondary" type="button"
                         title="Generate a shareable preview link (7 days)"
-                        ${anyActionInProgress ? 'disabled' : ''}>${generatingPreview ? 'Copying…' : 'Preview link'}</button>
-              ` : ''}
+                        ${anyActionInProgress ? "disabled" : ""}>${generatingPreview ? "Copying…" : "Preview link"}</button>
+              `
+                  : ""
+              }
               <button id="analyze-btn" class="btn btn-secondary" type="button"
-                      ${anyActionInProgress ? 'disabled' : ''}>${escapeHtml(analyzeLabel)}</button>
+                      ${anyActionInProgress ? "disabled" : ""}>${escapeHtml(analyzeLabel)}</button>
               <button id="save-btn" class="btn btn-primary" type="button"
-                      ${anyActionInProgress ? 'disabled' : ''}>${escapeHtml(saveLabel)}</button>
+                      ${anyActionInProgress ? "disabled" : ""}>${escapeHtml(saveLabel)}</button>
               <a href="/light/posts" class="btn btn-secondary">Cancel</a>
             </div>
           </header>
@@ -199,39 +232,39 @@ export default class PostEditPage extends Component {
             <div class="editor-main">
               <div class="title-row">
                 <input type="checkbox" id="featured-check" style="display:none"
-                       ${featured ? 'checked' : ''}>
+                       ${featured ? "checked" : ""}>
                 <button id="featured-toggle" type="button"
-                        class="featured-btn${featured ? ' is-featured' : ''}"
-                        title="${featured ? 'Unmark as featured' : 'Mark as featured'}"
-                        ${anyActionInProgress ? 'disabled' : ''}>
+                        class="featured-btn${featured ? " is-featured" : ""}"
+                        title="${featured ? "Unmark as featured" : "Mark as featured"}"
+                        ${anyActionInProgress ? "disabled" : ""}>
                   ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
                 </button>
                 <select id="status-select" class="status-select badge-${escapeHtml(status)}"
-                        ${anyActionInProgress ? 'disabled' : ''}>
+                        ${anyActionInProgress ? "disabled" : ""}>
                   ${statusOpts}
                 </select>
                 <div class="title-input-wrapper">
                   <input type="text" id="title-input" class="form-input editor-title"
                          placeholder="Post title" value="${title}" required>
-                  ${aiBtn('title')}
+                  ${aiBtn("title")}
                 </div>
               </div>
 
               <div class="schedule-row" id="schedule-row"
-                   style="display:${status === 'scheduled' ? 'flex' : 'none'}">
+                   style="display:${status === "scheduled" ? "flex" : "none"}">
                 <div class="schedule-input-wrapper">
                   <input type="datetime-local" id="schedule-input"
                          class="form-input schedule-at-input"
-                         value="${toDatetimeLocal(p.scheduled_at || '')}"
-                         ${anyActionInProgress ? 'disabled' : ''}>
+                         value="${toDatetimeLocal(p.scheduled_at || "")}"
+                         ${anyActionInProgress ? "disabled" : ""}>
                   <span class="schedule-input-hint"
                         id="schedule-hint"
-                        style="${p.scheduled_at ? 'display:none' : ''}">Publish at…</span>
+                        style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
                 </div>
               </div>
 
               <div class="slug-row">
-                <span class="slug-prefix">/post/</span>
+                <span class="slug-prefix">/posts/</span>
                 <input type="text" id="slug-input" class="form-input editor-slug"
                        placeholder="post-slug" value="${slug}" spellcheck="false">
               </div>
@@ -239,20 +272,27 @@ export default class PostEditPage extends Component {
               <div class="tags-row">
                 <div class="tags-input-wrapper">
                   <div id="tags-input-mount" class="tags-row-input"></div>
-                  ${aiBtn('tags')}
+                  ${aiBtn("tags")}
                 </div>
               </div>
 
               <div class="form-group excerpt-row">
                 <textarea id="excerpt-editor" class="form-input editor-excerpt"
                           rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
-                ${aiBtn('excerpt')}
+                ${aiBtn("excerpt")}
               </div>
 
               <div class="form-group">
                 ${modeToggle}
                 ${contentArea}
               </div>
+
+              <details class="form-group css-editor-details">
+                <summary class="css-editor-summary">Custom CSS</summary>
+                <textarea id="css-editor" class="form-input css-editor-textarea"
+                          rows="8" spellcheck="false"
+                          placeholder="/* Styles applied only to this post */">${escapeHtml(p.css || "")}</textarea>
+              </details>
             </div>
           </main>
         </div>
@@ -261,10 +301,10 @@ export default class PostEditPage extends Component {
 
   afterRender() {
     const postSlug = this.state.post?.slug;
-    this.mountChild(LightSidebar, '#sidebar-mount', {
-      currentPath: '/light/posts',
-      publicUrl: postSlug ? `/post/${postSlug}` : '/',
-      user: store.get('user') || {},
+    this.mountChild(LightSidebar, "#sidebar-mount", {
+      currentPath: "/light/posts",
+      publicUrl: postSlug ? `/posts/${postSlug}` : "/",
+      user: store.get("user") || {},
       onLogout: this._handleLogout.bind(this),
     });
 
@@ -278,41 +318,59 @@ export default class PostEditPage extends Component {
       this._mediaPicker.mount();
     }
 
-    this.$('#mode-text-btn')?.addEventListener('click', () => this._switchMode('text'));
-    this.$('#mode-visual-btn')?.addEventListener('click', () => this._switchMode('visual'));
+    this.$("#mode-text-btn")?.addEventListener("click", () =>
+      this._switchMode("text"),
+    );
+    this.$("#mode-visual-btn")?.addEventListener("click", () =>
+      this._switchMode("visual"),
+    );
 
     // Per-field AI fill buttons
-    this.container.querySelectorAll('.field-ai-btn').forEach((btn) => {
-      btn.addEventListener('click', () => this._analyzeField(btn.dataset.field));
+    this.container.querySelectorAll(".field-ai-btn").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        this._analyzeField(btn.dataset.field),
+      );
     });
 
     // Tags input
-    this._tagsInputRef = this.mountChild(TagsInput, '#tags-input-mount', {
+    this._tagsInputRef = this.mountChild(TagsInput, "#tags-input-mount", {
       tags: toTagNames(this.state.post?.tags),
-      onChange: (tags) => { this._tags = tags; this._debouncedAutosave(); },
+      onChange: (tags) => {
+        this._tags = tags;
+        this._debouncedAutosave();
+      },
     });
     this._tags = toTagNames(this.state.post?.tags);
 
     // Save button
-    const saveBtn = this.$('#save-btn');
-    saveBtn?.addEventListener('click', () => this._save());
+    const saveBtn = this.$("#save-btn");
+    saveBtn?.addEventListener("click", () => this._save());
 
     // Delete button
-    const deleteBtn = this.$('#delete-btn');
-    deleteBtn?.addEventListener('click', () => {
-      const title = this.$('#title-input')?.value || this.state.post?.title || 'this post';
-      this._showConfirm('Move to Trash', `Move "${title}" to Trash? You can restore it from the Posts list.`, 'Move to Trash', 'danger', () => {
-        this._deletePost(this.state.postId);
-      });
+    const deleteBtn = this.$("#delete-btn");
+    deleteBtn?.addEventListener("click", () => {
+      const title =
+        this.$("#title-input")?.value || this.state.post?.title || "this post";
+      this._showConfirm(
+        "Move to Trash",
+        `Move "${title}" to Trash? You can restore it from the Posts list.`,
+        "Move to Trash",
+        "danger",
+        () => {
+          this._deletePost(this.state.postId);
+        },
+      );
     });
 
     // Preview link button — generates a 7-day shareable URL and copies it to the clipboard
-    const previewLinkBtn = this.$('#preview-link-btn');
-    previewLinkBtn?.addEventListener('click', () => this._generatePreviewLink());
+    const previewLinkBtn = this.$("#preview-link-btn");
+    previewLinkBtn?.addEventListener("click", () =>
+      this._generatePreviewLink(),
+    );
 
     // Analyze button — uses first image path from content, or opens picker
-    const analyzeBtn = this.$('#analyze-btn');
-    analyzeBtn?.addEventListener('click', () => {
+    const analyzeBtn = this.$("#analyze-btn");
+    analyzeBtn?.addEventListener("click", () => {
       const path = this._extractImagePath();
       if (path) {
         this._handleAnalyze({ path });
@@ -322,114 +380,123 @@ export default class PostEditPage extends Component {
     });
 
     // Featured star toggle
-    const featuredToggle = this.$('#featured-toggle');
-    const featuredCheck  = this.$('#featured-check');
-    featuredToggle?.addEventListener('click', () => {
+    const featuredToggle = this.$("#featured-toggle");
+    const featuredCheck = this.$("#featured-check");
+    featuredToggle?.addEventListener("click", () => {
       const newVal = !featuredCheck.checked;
       featuredCheck.checked = newVal;
       featuredToggle.replaceChildren(
-        new DOMParser().parseFromString(newVal ? STAR_SVG : STAR_OUTLINE_SVG, 'image/svg+xml').documentElement
+        new DOMParser().parseFromString(
+          newVal ? STAR_SVG : STAR_OUTLINE_SVG,
+          "image/svg+xml",
+        ).documentElement,
       );
-      featuredToggle.classList.toggle('is-featured', newVal);
-      featuredToggle.title = newVal ? 'Unmark as featured' : 'Mark as featured';
+      featuredToggle.classList.toggle("is-featured", newVal);
+      featuredToggle.title = newVal ? "Unmark as featured" : "Mark as featured";
       this._autoSaveField({ is_featured: newVal });
     });
 
     // Status pill — auto-save on change; show/hide schedule row
-    const statusSelect = this.$('#status-select');
-    const scheduleRow  = this.$('#schedule-row');
-    const scheduleInput = this.$('#schedule-input');
+    const statusSelect = this.$("#status-select");
+    const scheduleRow = this.$("#schedule-row");
+    const scheduleInput = this.$("#schedule-input");
 
-    statusSelect?.addEventListener('change', () => {
+    statusSelect?.addEventListener("change", () => {
       const newStatus = statusSelect.value;
       statusSelect.className = `status-select badge-${newStatus}`;
-      if (newStatus === 'scheduled') {
-        if (scheduleRow) scheduleRow.style.display = 'flex';
+      if (newStatus === "scheduled") {
+        if (scheduleRow) scheduleRow.style.display = "flex";
         this._autoSaveField({ status: newStatus });
       } else {
-        if (scheduleRow) scheduleRow.style.display = 'none';
-        if (scheduleInput) scheduleInput.value = '';
-        this._autoSaveField({ status: newStatus, scheduled_at: '' });
+        if (scheduleRow) scheduleRow.style.display = "none";
+        if (scheduleInput) scheduleInput.value = "";
+        this._autoSaveField({ status: newStatus, scheduled_at: "" });
       }
     });
 
     // If navigated from the posts list with ?openSchedule=1, show and focus the date picker
     if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
-      scheduleRow.style.display = 'flex';
-      statusSelect.value = 'scheduled';
-      statusSelect.className = 'status-select badge-scheduled';
-      this._autoSaveField({ status: 'scheduled' });
-      setTimeout(() => scheduleInput.showPicker?.() || scheduleInput.focus(), 50);
+      scheduleRow.style.display = "flex";
+      statusSelect.value = "scheduled";
+      statusSelect.className = "status-select badge-scheduled";
+      this._autoSaveField({ status: "scheduled" });
+      setTimeout(
+        () => scheduleInput.showPicker?.() || scheduleInput.focus(),
+        50,
+      );
     }
 
     // Schedule picker — auto-save when date/time is set
-    const scheduleHint = this.$('#schedule-hint');
+    const scheduleHint = this.$("#schedule-hint");
 
-    scheduleInput?.addEventListener('focus', () => {
-      if (scheduleHint) scheduleHint.style.display = 'none';
+    scheduleInput?.addEventListener("focus", () => {
+      if (scheduleHint) scheduleHint.style.display = "none";
     });
-    scheduleInput?.addEventListener('blur', () => {
-      if (scheduleHint && !scheduleInput.value) scheduleHint.style.display = '';
+    scheduleInput?.addEventListener("blur", () => {
+      if (scheduleHint && !scheduleInput.value) scheduleHint.style.display = "";
     });
-    scheduleInput?.addEventListener('change', () => {
+    scheduleInput?.addEventListener("change", () => {
       const val = scheduleInput.value;
       if (val) {
-        if (scheduleHint) scheduleHint.style.display = 'none';
+        if (scheduleHint) scheduleHint.style.display = "none";
         this._autoSaveField({ scheduled_at: new Date(val).toISOString() });
       }
     });
 
     // Auto-save on content change
-    const titleInput = this.$('#title-input');
-    const slugInput = this.$('#slug-input');
-    const contentEditor = this.$('#content-editor');
-    [titleInput, slugInput, contentEditor].forEach((el) => {
-      el?.addEventListener('input', () => this._debouncedAutosave());
+    const titleInput = this.$("#title-input");
+    const slugInput = this.$("#slug-input");
+    const contentEditor = this.$("#content-editor");
+    const cssEditor = this.$("#css-editor");
+    [titleInput, slugInput, contentEditor, cssEditor].forEach((el) => {
+      el?.addEventListener("input", () => this._debouncedAutosave());
     });
 
-    if (this.state.editorMode === 'visual') {
+    if (this.state.editorMode === "visual") {
       this._mountVisualEditor();
     }
 
     // Window-level drag-and-drop media upload
     // Remove stale listeners from any previous render before re-attaching.
-    document.removeEventListener('dragenter', this._onDragEnter);
-    document.removeEventListener('dragleave', this._onDragLeave);
-    document.removeEventListener('dragover', this._onDragOver);
-    document.removeEventListener('drop', this._onDrop);
+    document.removeEventListener("dragenter", this._onDragEnter);
+    document.removeEventListener("dragleave", this._onDragLeave);
+    document.removeEventListener("dragover", this._onDragOver);
+    document.removeEventListener("drop", this._onDrop);
     this._dragCount = 0;
     this._onDragEnter = () => {
       this._dragCount++;
-      document.body.classList.add('drag-active');
+      document.body.classList.add("drag-active");
     };
     this._onDragLeave = () => {
       this._dragCount--;
-      if (this._dragCount === 0) document.body.classList.remove('drag-active');
+      if (this._dragCount === 0) document.body.classList.remove("drag-active");
     };
-    this._onDragOver = (e) => { e.preventDefault(); };
+    this._onDragOver = (e) => {
+      e.preventDefault();
+    };
     this._onDrop = (e) => {
       e.preventDefault();
       this._dragCount = 0;
-      document.body.classList.remove('drag-active');
+      document.body.classList.remove("drag-active");
       const files = Array.from(e.dataTransfer.files).filter(
-        (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+        (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
       );
       files.forEach((f) => this._uploadAndInsert(f));
     };
-    document.addEventListener('dragenter', this._onDragEnter);
-    document.addEventListener('dragleave', this._onDragLeave);
-    document.addEventListener('dragover', this._onDragOver);
-    document.addEventListener('drop', this._onDrop);
+    document.addEventListener("dragenter", this._onDragEnter);
+    document.addEventListener("dragleave", this._onDragLeave);
+    document.addEventListener("dragover", this._onDragOver);
+    document.addEventListener("drop", this._onDrop);
   }
 
   beforeUnmount() {
     this._unmounted = true; // Prevent pending debounced autosave from firing after navigation
     clearTimeout(this._autosaveTimer);
-    document.removeEventListener('dragenter', this._onDragEnter);
-    document.removeEventListener('dragleave', this._onDragLeave);
-    document.removeEventListener('dragover', this._onDragOver);
-    document.removeEventListener('drop', this._onDrop);
-    document.body.classList.remove('drag-active');
+    document.removeEventListener("dragenter", this._onDragEnter);
+    document.removeEventListener("dragleave", this._onDragLeave);
+    document.removeEventListener("dragover", this._onDragOver);
+    document.removeEventListener("drop", this._onDrop);
+    document.body.classList.remove("drag-active");
     this._mediaPicker?.destroy();
     this._mediaPicker = null;
     this._visualEditorRef = null;
@@ -437,22 +504,22 @@ export default class PostEditPage extends Component {
 
   _insertMediaPaths(items) {
     if (!items.length) return;
-    if (this.state.editorMode === 'visual') {
+    if (this.state.editorMode === "visual") {
       this._nodes = [
         ...this._nodes,
-        ...items.map((item) => ({ type: 'image', path: item.path })),
+        ...items.map((item) => ({ type: "image", path: item.path })),
       ];
       if (this._visualEditorRef) {
         this._visualEditorRef.setProps({ nodes: this._nodes });
-      } else if (this.$('#visual-editor-mount')) {
+      } else if (this.$("#visual-editor-mount")) {
         this._mountVisualEditor();
       }
       return;
     }
-    const editor = this.$('#content-editor');
+    const editor = this.$("#content-editor");
     if (!editor) return;
-    const paths = items.map((item) => item.path).join('\n');
-    editor.value = editor.value.trimEnd() + '\n' + paths;
+    const paths = items.map((item) => item.path).join("\n");
+    editor.value = editor.value.trimEnd() + "\n" + paths;
     editor.scrollTop = editor.scrollHeight;
   }
 
@@ -463,33 +530,41 @@ export default class PostEditPage extends Component {
       if (idx !== -1) this._children.splice(idx, 1);
       this._visualEditorRef = null;
     }
-    this._visualEditorRef = this.mountChild(VisualEditor, '#visual-editor-mount', {
-      nodes: this._nodes,
-      mediaByPath: this._mediaByPath || {},
-      onChange: (nodes) => {
-        this._nodes = nodes;
-        this._visualEditorRef?.setProps({ nodes });
-        this._debouncedAutosave();
-      },
-      onInput: () => {
-        this._debouncedAutosave();
-      },
-      onAddMedia: (index) => {
-        this._mediaPicker.open((items) => {
-          if (!items.length) return;
-          const newNodes = items.map((item) => ({ type: 'image', path: item.path }));
-          this._nodes.splice(index, 0, ...newNodes);
-          this._visualEditorRef?.setProps({ nodes: this._nodes });
+    this._visualEditorRef = this.mountChild(
+      VisualEditor,
+      "#visual-editor-mount",
+      {
+        nodes: this._nodes,
+        mediaByPath: this._mediaByPath || {},
+        onChange: (nodes) => {
+          this._nodes = nodes;
+          this._visualEditorRef?.setProps({ nodes });
           this._debouncedAutosave();
-        });
+        },
+        onInput: () => {
+          this._debouncedAutosave();
+        },
+        onAddMedia: (index) => {
+          this._mediaPicker.open((items) => {
+            if (!items.length) return;
+            const newNodes = items.map((item) => ({
+              type: "image",
+              path: item.path,
+            }));
+            this._nodes.splice(index, 0, ...newNodes);
+            this._visualEditorRef?.setProps({ nodes: this._nodes });
+            this._debouncedAutosave();
+          });
+        },
+        onRename: (oldPath, newFilename) =>
+          this._handleRename(oldPath, newFilename),
       },
-      onRename: (oldPath, newFilename) => this._handleRename(oldPath, newFilename),
-    });
+    );
   }
 
   async _handleRename(oldPath, newFilename) {
-    const lastSlash = oldPath.lastIndexOf('/');
-    const folder = oldPath.slice(1, lastSlash);    // strip leading /: "2026/02"
+    const lastSlash = oldPath.lastIndexOf("/");
+    const folder = oldPath.slice(1, lastSlash); // strip leading /: "2026/02"
     try {
       const result = await listMedia({ folder, per_page: 200 });
       const item = (result.media || []).find((m) => m.path === oldPath);
@@ -499,13 +574,16 @@ export default class PostEditPage extends Component {
       const newPath = updated.path;
 
       this._nodes = this._nodes.map((n) =>
-        n.type === 'image' && n.path === oldPath ? { ...n, path: newPath } : n
+        n.type === "image" && n.path === oldPath ? { ...n, path: newPath } : n,
       );
       this._visualEditorRef?.setProps({ nodes: this._nodes });
       this._debouncedAutosave();
-      store.set('toast', { message: 'File renamed.', type: 'success' });
+      store.set("toast", { message: "File renamed.", type: "success" });
     } catch (err) {
-      store.set('toast', { message: err.message || 'Rename failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Rename failed.",
+        type: "error",
+      });
       throw err;
     }
   }
@@ -513,15 +591,17 @@ export default class PostEditPage extends Component {
   _switchMode(targetMode) {
     if (this.state.editorMode === targetMode) return;
 
-    if (targetMode === 'visual') {
-      const content = this.$('#content-editor')?.value ?? (this.state.post?.content || '');
+    if (targetMode === "visual") {
+      const content =
+        this.$("#content-editor")?.value ?? (this.state.post?.content || "");
       this._nodes = parseNodes(content);
-      this.setState({ editorMode: 'visual' });
+      this.setState({ editorMode: "visual" });
     } else {
       // visual → text: serialize current nodes (reads live textarea values if editor mounted)
-      const content = this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes);
+      const content =
+        this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes);
       const post = { ...(this.state.post || {}), content };
-      this.setState({ editorMode: 'text', post });
+      this.setState({ editorMode: "text", post });
     }
   }
 
@@ -530,7 +610,7 @@ export default class PostEditPage extends Component {
     if (this.state.postId) {
       this._loadPost(this.state.postId);
     }
-    if (this.props.query?.share === 'pending') {
+    if (this.props.query?.share === "pending") {
       this._processShareQueue();
     }
   }
@@ -556,7 +636,7 @@ export default class PostEditPage extends Component {
 
     // Pre-fill title from share data if the editor title is still empty.
     if (current.title) {
-      const titleEl = this.$('#title-input');
+      const titleEl = this.$("#title-input");
       if (titleEl && !titleEl.value.trim()) titleEl.value = current.title;
     }
 
@@ -564,24 +644,32 @@ export default class PostEditPage extends Component {
     for (const fileEntry of current.files) {
       const blob = new Blob([fileEntry.data], { type: fileEntry.type });
       const file = new File([blob], fileEntry.name, { type: fileEntry.type });
-      await this._uploadAndInsert(file);   
+      await this._uploadAndInsert(file);
     }
 
     // Process offline backlog: one draft post per queued share entry.
     for (const entry of backlog) {
       try {
-        const title = entry.title || entry.files.map((f) => f.name).join(', ') || 'Shared photo';
-        const post  = await createPost({ title, status: 'draft', content: '' });  
-        let content = '';
+        const title =
+          entry.title ||
+          entry.files.map((f) => f.name).join(", ") ||
+          "Shared photo";
+        const post = await createPost({ title, status: "draft", content: "" });
+        let content = "";
         for (const fileEntry of entry.files) {
-          const blob  = new Blob([fileEntry.data], { type: fileEntry.type });
-          const file  = new File([blob], fileEntry.name, { type: fileEntry.type });
-          const media = await uploadMedia(file, { post_id: post.id });  
+          const blob = new Blob([fileEntry.data], { type: fileEntry.type });
+          const file = new File([blob], fileEntry.name, {
+            type: fileEntry.type,
+          });
+          const media = await uploadMedia(file, { post_id: post.id });
           content += `${media.path}\n`;
         }
-        await updatePost(post.id, { content: content.trim() });  
+        await updatePost(post.id, { content: content.trim() });
       } catch (err) {
-        store.set('toast', { message: `Failed to save offline share: ${err.message || 'unknown error'}`, type: 'error' });
+        store.set("toast", {
+          message: `Failed to save offline share: ${err.message || "unknown error"}`,
+          type: "error",
+        });
       }
     }
 
@@ -592,9 +680,9 @@ export default class PostEditPage extends Component {
     }
 
     if (backlog.length > 0) {
-      store.set('toast', {
-        message: `${backlog.length} offline share${backlog.length === 1 ? '' : 's'} saved as draft${backlog.length === 1 ? '' : 's'}.`,
-        type: 'success',
+      store.set("toast", {
+        message: `${backlog.length} offline share${backlog.length === 1 ? "" : "s"} saved as draft${backlog.length === 1 ? "" : "s"}.`,
+        type: "success",
       });
     }
   }
@@ -612,44 +700,55 @@ export default class PostEditPage extends Component {
       this._mediaByPath = {};
       try {
         const result = await listMedia({ post_id: post.id, per_page: 200 });
-        for (const m of (result.media || [])) {
+        for (const m of result.media || []) {
           if (m.path) this._mediaByPath[m.path] = m;
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
 
-      this.setState({ loading: false, post, error: null, editorMode: 'visual' });
+      this.setState({
+        loading: false,
+        post,
+        error: null,
+        editorMode: "visual",
+      });
     } catch (err) {
-      console.error('[PostEditPage] load error:', err);
-      store.set('toast', { message: 'Could not load post.', type: 'error' });
-      navigate('/light/posts', { replace: true });
+      console.error("[PostEditPage] load error:", err);
+      store.set("toast", { message: "Could not load post.", type: "error" });
+      navigate("/light/posts", { replace: true });
     }
   }
 
   _collectFormData() {
     return {
-      title:            (this.$('#title-input')?.value || '').trim(),
-      slug:             (this.$('#slug-input')?.value || '').trim() || null,
-      excerpt:          (this.$('#excerpt-editor')?.value || '').trim() || null,
-      content: this.state.editorMode === 'visual'
-        ? (this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes))
-        : (this.$('#content-editor')?.value || ''),
+      title: (this.$("#title-input")?.value || "").trim(),
+      slug: (this.$("#slug-input")?.value || "").trim() || null,
+      excerpt: (this.$("#excerpt-editor")?.value || "").trim() || null,
+      content:
+        this.state.editorMode === "visual"
+          ? (this._visualEditorRef?.serializeNodes() ??
+            serializeNodes(this._nodes))
+          : this.$("#content-editor")?.value || "",
       // Prefer DOM value; fall back to known state to prevent accidental reset to 'draft'.
-      status:           this.$('#status-select')?.value || this.state.post?.status || 'draft',
-      formatter:        this.$('#formatter-select')?.value || 'markdown',
-      is_featured:      this.$('#featured-check')?.checked || false,
-      thumbnail_path:   (this.$('#thumbnail-input')?.value || '').trim() || null,
-      meta_description: (this.$('#meta-input')?.value || '').trim() || null,
-      tags:             this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
-      scheduled_at:     this.$('#schedule-input')?.value
-        ? new Date(this.$('#schedule-input').value).toISOString()
-        : '',
+      status:
+        this.$("#status-select")?.value || this.state.post?.status || "draft",
+      formatter: this.$("#formatter-select")?.value || "markdown",
+      is_featured: this.$("#featured-check")?.checked || false,
+      thumbnail_path: (this.$("#thumbnail-input")?.value || "").trim() || null,
+      meta_description: (this.$("#meta-input")?.value || "").trim() || null,
+      tags: this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
+      scheduled_at: this.$("#schedule-input")?.value
+        ? new Date(this.$("#schedule-input").value).toISOString()
+        : "",
+      css: this.$("#css-editor")?.value || "",
     };
   }
 
   async _save() {
     const data = this._collectFormData();
     if (!data.title) {
-      store.set('toast', { message: 'Title is required.', type: 'error' });
+      store.set("toast", { message: "Title is required.", type: "error" });
       return;
     }
 
@@ -657,39 +756,57 @@ export default class PostEditPage extends Component {
     // (saving: true/false) restores what the user typed rather than stale state.post.
     const postSnap = {
       ...(this.state.post || {}),
-      title:            data.title,
-      slug:             data.slug,
-      excerpt:          data.excerpt,
-      content:          data.content,
-      status:           data.status,
-      is_featured:      data.is_featured,
-      formatter:        data.formatter,
-      thumbnail_path:   data.thumbnail_path,
+      title: data.title,
+      slug: data.slug,
+      excerpt: data.excerpt,
+      content: data.content,
+      status: data.status,
+      is_featured: data.is_featured,
+      formatter: data.formatter,
+      thumbnail_path: data.thumbnail_path,
       meta_description: data.meta_description,
-      tags:             (data.tags || []).map((name) => ({ name, slug: name })),
+      tags: (data.tags || []).map((name) => ({ name, slug: name })),
+      css: data.css,
     };
 
     this.setState({ saving: true, post: postSnap });
     try {
-      let post;
+      let result;
       if (this.state.isNew) {
-        post = await createPost(data);
+        result = await createPost(data);
         this.state.isNew = false;
-        this.state.postId = post.id;
-        history.replaceState(null, '', `/light/posts/${post.id}/edit`);
+        this.state.postId = result.id;
+        history.replaceState(null, "", `/light/posts/${result.id}/edit`);
       } else {
-        post = await updatePost(this.state.postId, data);
+        result = await updatePost(this.state.postId, data);
       }
+      const { css_warnings, ...post } = result;
       this.setState({ saving: false, post });
-      store.set('toast', { message: 'Post saved.', type: 'success' });
+      if (css_warnings?.length) {
+        store.set("toast", {
+          message: `Post saved. Some CSS was stripped: ${css_warnings.join(", ")}`,
+          type: "warning",
+        });
+      } else {
+        store.set("toast", { message: "Post saved.", type: "success" });
+      }
     } catch (err) {
       this.setState({ saving: false, post: postSnap });
-      store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Save failed.",
+        type: "error",
+      });
     }
   }
 
   async _autosave() {
-    if (this._unmounted || this.state.saving || this.state.deleting || this.state.isNew) return;
+    if (
+      this._unmounted ||
+      this.state.saving ||
+      this.state.deleting ||
+      this.state.isNew
+    )
+      return;
     const data = this._collectFormData();
     if (!data.title) return;
     try {
@@ -700,15 +817,22 @@ export default class PostEditPage extends Component {
   }
 
   _showConfirm(title, message, confirmText, variant, onConfirm) {
-    const mount = document.createElement('div');
+    const mount = document.createElement("div");
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
       title,
       message,
       confirmText,
       variant,
-      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
-      onCancel:  () => { dialog.unmount(); mount.remove(); },
+      onConfirm: () => {
+        dialog.unmount();
+        mount.remove();
+        onConfirm();
+      },
+      onCancel: () => {
+        dialog.unmount();
+        mount.remove();
+      },
     });
     dialog.mount();
   }
@@ -720,22 +844,25 @@ export default class PostEditPage extends Component {
     try {
       await deletePost(id);
       this._unmounted = true; // Prevent further state updates
-      store.set('toast', { message: 'Post moved to Trash.', type: 'success' });
-      navigate('/light/posts');
+      store.set("toast", { message: "Post moved to Trash.", type: "success" });
+      navigate("/light/posts");
     } catch (err) {
       this.setState({ deleting: false });
-      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Delete failed.",
+        type: "error",
+      });
     }
   }
 
   /** Extract first image path from the content textarea. */
   _extractImagePath() {
-    if (this.state.editorMode === 'visual') {
-      return this._nodes.find((n) => n.type === 'image')?.path ?? null;
+    if (this.state.editorMode === "visual") {
+      return this._nodes.find((n) => n.type === "image")?.path ?? null;
     }
-    const content = this.$('#content-editor')?.value || '';
+    const content = this.$("#content-editor")?.value || "";
     const match = content.match(
-      /(?:^|["'\s(])(\/\d{4}\/\d{2}\/.+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i
+      /(?:^|["'\s(])(\/\d{4}\/\d{2}\/.+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i,
     );
     return match ? match[1] : null;
   }
@@ -756,23 +883,25 @@ export default class PostEditPage extends Component {
     if (!item) return;
     const snap = this._collectFormData();
     // Disable all field AI buttons directly — avoid setState re-render which discards unsaved input.
-    this.$$(`.field-ai-btn`).forEach(b => { b.disabled = true; });
+    this.$$(`.field-ai-btn`).forEach((b) => {
+      b.disabled = true;
+    });
 
     // Build the post from snap before the API call so both success and error
     // paths can call setState with current form values (preventing re-render
     // from stale state.post from resetting unsaved title/slug/etc.).
     const post = {
       ...(this.state.post || {}),
-      title:            snap.title,
-      excerpt:          snap.excerpt,
-      content:          snap.content,
-      slug:             snap.slug,
-      status:           snap.status,
-      is_featured:      snap.is_featured,
-      formatter:        snap.formatter,
-      thumbnail_path:   snap.thumbnail_path,
+      title: snap.title,
+      excerpt: snap.excerpt,
+      content: snap.content,
+      slug: snap.slug,
+      status: snap.status,
+      is_featured: snap.is_featured,
+      formatter: snap.formatter,
+      thumbnail_path: snap.thumbnail_path,
       meta_description: snap.meta_description,
-      tags:             snap.tags.map((name) => ({ name, slug: name })),
+      tags: snap.tags.map((name) => ({ name, slug: name })),
     };
 
     try {
@@ -780,11 +909,11 @@ export default class PostEditPage extends Component {
         ? await analyzeMedia(item.id)
         : await analyzeMediaByPath(item.path);
 
-      const isEmpty = !result.title && !(result.tags?.length) && !result.excerpt;
+      const isEmpty = !result.title && !result.tags?.length && !result.excerpt;
 
-      if (field === 'title' && result.title) {
+      if (field === "title" && result.title) {
         post.title = result.title;
-      } else if (field === 'tags' && result.tags?.length) {
+      } else if (field === "tags" && result.tags?.length) {
         const currentTags = this._tags || [];
         const mergedTags = [
           ...currentTags,
@@ -792,17 +921,26 @@ export default class PostEditPage extends Component {
         ];
         this._tags = mergedTags;
         post.tags = mergedTags.map((name) => ({ name, slug: name }));
-      } else if (field === 'excerpt' && result.excerpt) {
+      } else if (field === "excerpt" && result.excerpt) {
         post.excerpt = result.excerpt;
       }
 
       if (isEmpty) {
-        store.set('toast', { message: 'AI disabled or no suggestions.', type: 'info' });
+        store.set("toast", {
+          message: "AI disabled or no suggestions.",
+          type: "info",
+        });
       } else {
-        store.set('toast', { message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`, type: 'success' });
+        store.set("toast", {
+          message: `${field.charAt(0).toUpperCase() + field.slice(1)} filled.`,
+          type: "success",
+        });
       }
     } catch (err) {
-      store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Analysis failed.",
+        type: "error",
+      });
     }
 
     this.setState({ analyzingField: null, post });
@@ -816,8 +954,11 @@ export default class PostEditPage extends Component {
 
     // Disable the analyze button directly without calling setState (which would re-render and discard input).
     this._analyzing = true;
-    const analyzeBtn = this.$('#analyze-btn');
-    if (analyzeBtn) { analyzeBtn.disabled = true; analyzeBtn.textContent = 'Analyzing…'; }
+    const analyzeBtn = this.$("#analyze-btn");
+    if (analyzeBtn) {
+      analyzeBtn.disabled = true;
+      analyzeBtn.textContent = "Analyzing…";
+    }
     try {
       const result = item.id
         ? await analyzeMedia(item.id)
@@ -828,27 +969,31 @@ export default class PostEditPage extends Component {
         ...(result.tags || []).filter((t) => !snap.tags.includes(t)),
       ];
 
-      const isEmpty = !result.title && !(result.tags?.length) && !result.excerpt;
+      const isEmpty = !result.title && !result.tags?.length && !result.excerpt;
 
       const post = {
         ...(this.state.post || {}),
-        title:            snap.title   || result.title   || '',
-        excerpt:          snap.excerpt || result.excerpt  || null,
-        content:          snap.content,
-        slug:             snap.slug,
-        status:           snap.status,
-        is_featured:      snap.is_featured,
-        formatter:        snap.formatter,
-        thumbnail_path:   snap.thumbnail_path,
+        title: snap.title || result.title || "",
+        excerpt: snap.excerpt || result.excerpt || null,
+        content: snap.content,
+        slug: snap.slug,
+        status: snap.status,
+        is_featured: snap.is_featured,
+        formatter: snap.formatter,
+        thumbnail_path: snap.thumbnail_path,
         meta_description: snap.meta_description,
-        tags:             mergedTags.map((name) => ({ name, slug: name })),
+        tags: mergedTags.map((name) => ({ name, slug: name })),
       };
-      if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
+      if (this.state.editorMode === "visual")
+        this._nodes = parseNodes(post.content);
 
       if (isEmpty) {
-        store.set('toast', { message: 'AI disabled or no suggestions.', type: 'info' });
+        store.set("toast", {
+          message: "AI disabled or no suggestions.",
+          type: "info",
+        });
       } else {
-        store.set('toast', { message: 'Analysis complete.', type: 'success' });
+        store.set("toast", { message: "Analysis complete.", type: "success" });
       }
       this._analyzing = false;
       this.setState({ post });
@@ -856,51 +1001,69 @@ export default class PostEditPage extends Component {
       // Restore the user's form values even on failure.
       const post = {
         ...(this.state.post || {}),
-        title:            snap.title,
-        excerpt:          snap.excerpt,
-        content:          snap.content,
-        slug:             snap.slug,
-        status:           snap.status,
-        is_featured:      snap.is_featured,
-        formatter:        snap.formatter,
-        thumbnail_path:   snap.thumbnail_path,
+        title: snap.title,
+        excerpt: snap.excerpt,
+        content: snap.content,
+        slug: snap.slug,
+        status: snap.status,
+        is_featured: snap.is_featured,
+        formatter: snap.formatter,
+        thumbnail_path: snap.thumbnail_path,
         meta_description: snap.meta_description,
-        tags:             snap.tags.map((name) => ({ name, slug: name })),
+        tags: snap.tags.map((name) => ({ name, slug: name })),
       };
-      if (this.state.editorMode === 'visual') this._nodes = parseNodes(post.content);
-      store.set('toast', { message: err.message || 'Analysis failed.', type: 'error' });
+      if (this.state.editorMode === "visual")
+        this._nodes = parseNodes(post.content);
+      store.set("toast", {
+        message: err.message || "Analysis failed.",
+        type: "error",
+      });
       this._analyzing = false;
       this.setState({ post });
     }
   }
 
   async _autoSaveField(patch) {
-    if (this._unmounted || this.state.isNew || this.state.saving || this.state.deleting) return;
+    if (
+      this._unmounted ||
+      this.state.isNew ||
+      this.state.saving ||
+      this.state.deleting
+    )
+      return;
     const formData = this._collectFormData();
     const fullData = { ...formData, ...patch };
     try {
       const post = await updatePost(this.state.postId, fullData);
       this.state.post = post;
-      store.set('toast', { message: 'Saved.', type: 'success' });
+      store.set("toast", { message: "Saved.", type: "success" });
     } catch (err) {
-      store.set('toast', { message: err.message || 'Auto-save failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Auto-save failed.",
+        type: "error",
+      });
     }
   }
 
   async _uploadAndInsert(file) {
     try {
-      const result = await uploadMedia(file, { post_id: this.state.postId || undefined });
-      if (this.state.editorMode === 'visual') {
+      const result = await uploadMedia(file, {
+        post_id: this.state.postId || undefined,
+      });
+      if (this.state.editorMode === "visual") {
         this._insertMediaPaths([{ path: result.path }]);
       } else {
-        const editor = this.$('#content-editor');
+        const editor = this.$("#content-editor");
         if (editor) {
           editor.value = editor.value.trimEnd() + `\n${result.path}`;
           editor.scrollTop = editor.scrollHeight;
         }
       }
     } catch (err) {
-      store.set('toast', { message: `Upload failed: ${err.message || file.name}`, type: 'error' });
+      store.set("toast", {
+        message: `Upload failed: ${err.message || file.name}`,
+        type: "error",
+      });
     }
   }
 
@@ -911,33 +1074,42 @@ export default class PostEditPage extends Component {
       const { preview_url } = await generatePreviewLink(this.state.postId);
       try {
         await navigator.clipboard.writeText(preview_url);
-        store.set('toast', { message: 'Preview link copied to clipboard.', type: 'success' });
+        store.set("toast", {
+          message: "Preview link copied to clipboard.",
+          type: "success",
+        });
       } catch {
         // Clipboard not available — show the link in a dialog so the user can copy it manually
         this._showPreviewLinkDialog(preview_url);
       }
     } catch (err) {
-      store.set('toast', { message: err.message || 'Could not generate preview link.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Could not generate preview link.",
+        type: "error",
+      });
     } finally {
       this.setState({ generatingPreview: false });
     }
   }
 
   _showPreviewLinkDialog(url) {
-    const mount = document.createElement('div');
+    const mount = document.createElement("div");
     document.body.appendChild(mount);
-    const close = () => { dialog.unmount(); mount.remove(); };
+    const close = () => {
+      dialog.unmount();
+      mount.remove();
+    };
     const dialog = new ConfirmDialog(mount, {
-      title: 'Preview link',
+      title: "Preview link",
       message: url,
-      confirmText: 'Close',
-      variant: 'primary',
+      confirmText: "Close",
+      variant: "primary",
       onConfirm: close,
       onCancel: close,
     });
     dialog.mount();
     // Select the URL text in the message element so it's easy to copy
-    const msgEl = mount.querySelector('.confirm-dialog__message, p');
+    const msgEl = mount.querySelector(".confirm-dialog__message, p");
     if (msgEl) {
       const range = document.createRange();
       range.selectNodeContents(msgEl);
@@ -948,8 +1120,12 @@ export default class PostEditPage extends Component {
   }
 
   async _handleLogout() {
-    try { await logout(); } catch { /* ignore */ }
-    store.set('user', null);
-    navigate('/', { replace: true });
+    try {
+      await logout();
+    } catch {
+      /* ignore */
+    }
+    store.set("user", null);
+    navigate("/", { replace: true });
   }
 }

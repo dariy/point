@@ -672,7 +672,7 @@ import { api } from './client.js';
 
 export const pagesApi = {
   getHome: (params)      => api.get('/pages/home', params),
-  getTag:  (slug, params) => api.get(`/pages/tag/${slug}`, params),
+  getTag:  (slug, params) => api.get(`/pages/tags/${slug}`, params),
   getTags: ()            => api.get('/pages/tags'),
 };
 ```
@@ -804,7 +804,7 @@ frontend/
 
 ### TagPage
 
-- Fetches `GET /api/pages/tag/:slug`
+- Fetches `GET /api/pages/tags/:slug`
 - Renders breadcrumb for tag hierarchy
 - Renders `PostGrid` with posts for this tag
 
@@ -818,7 +818,7 @@ frontend/
 - Fetches `GET /api/tags` (tags with location data)
 - Initializes Leaflet map (already vendored)
 - Places markers for each tag with a location
-- Clicking a marker navigates to `/tag/:slug`
+- Clicking a marker navigates to `/tags/:slug`
 
 ---
 
