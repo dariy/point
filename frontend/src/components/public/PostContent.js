@@ -215,9 +215,11 @@ export class PostContent extends Component {
         ? `<div class="post-excerpt-card">${escapeHtml(post.excerpt)}</div>`
         : "";
 
+    const postCss = post.css ? `<style id="post-css">${post.css}</style>` : "";
+
     return `
       <div class="immersive-wrapper">
-        <div class="immersive-visuals">${visuals}</div>
+        ${postCss}<div class="immersive-visuals">${visuals}</div>
         ${postNavArrows}
         ${excerptHtml}
       </div>`;
