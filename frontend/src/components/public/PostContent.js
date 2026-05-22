@@ -71,6 +71,9 @@ export function shouldUseImmersive(post) {
   )
     return true;
 
+  // Pages only go immersive when explicitly separated with ---; skip media fallback.
+  if (post.type === "page" || post.status === "page") return false;
+
   const media = post.media || [];
   // Audio-only attachment posts stay in normal layout
   if (media.length && media.every((m) => m.type === "audio")) return false;
