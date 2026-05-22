@@ -54,7 +54,6 @@
 
     --bg-overlay: rgba(0, 0, 0, 0.8);
 
-
     /* Sizes & Measures */
     --size-0-0625: 0.0625rem;
     --size-0-075: 0.075rem;
@@ -149,8 +148,8 @@
 
     /* Typography */
     --font-family:
-        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-        Oxygen, Ubuntu, sans-serif;
+        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, sans-serif;
     --font-serif: "Georgia", "Times New Roman", serif;
     --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     --font-size-xs: var(--size-0-75);
@@ -178,11 +177,25 @@
 
     /* Shadows */
     --shadow-sm: 0 var(--size-0-0625) var(--size-0-125) 0 rgba(0, 0, 0, 0.05);
-    --shadow: 0 var(--size-0-0625) var(--size-0-1875) 0 rgba(0, 0, 0, 0.1), 0 var(--size-0-0625) var(--size-0-125) -var(--size-0-0625) rgba(0, 0, 0, 0.1);
-    --shadow-md: 0 var(--size-0-25) var(--size-0-375) -var(--size-0-0625) rgba(0, 0, 0, 0.1), 0 var(--size-0-125) var(--size-0-25) -var(--size-0-125) rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 var(--size-0-625) var(--size-0-9375) -var(--size-0-1875) rgba(0, 0, 0, 0.1), 0 var(--size-0-25) var(--size-0-375) -var(--size-0-25) rgba(0, 0, 0, 0.1);
-    --shadow-xl: 0 var(--size-1-25) var(--size-1-5625) -var(--size-0-3125) rgba(0, 0, 0, 0.1), 0 var(--size-0-5) var(--size-0-625) -var(--size-0-375) rgba(0, 0, 0, 0.1);
-
+    --shadow:
+        0 var(--size-0-0625) var(--size-0-1875) 0 rgba(0, 0, 0, 0.1),
+        0 var(--size-0-0625) var(--size-0-125) -var(--size-0-0625)
+            rgba(0, 0, 0, 0.1);
+    --shadow-md:
+        0 var(--size-0-25) var(--size-0-375) -var(--size-0-0625)
+            rgba(0, 0, 0, 0.1),
+        0 var(--size-0-125) var(--size-0-25) -var(--size-0-125)
+            rgba(0, 0, 0, 0.1);
+    --shadow-lg:
+        0 var(--size-0-625) var(--size-0-9375) -var(--size-0-1875)
+            rgba(0, 0, 0, 0.1),
+        0 var(--size-0-25) var(--size-0-375) -var(--size-0-25)
+            rgba(0, 0, 0, 0.1);
+    --shadow-xl:
+        0 var(--size-1-25) var(--size-1-5625) -var(--size-0-3125)
+            rgba(0, 0, 0, 0.1),
+        0 var(--size-0-5) var(--size-0-625) -var(--size-0-375)
+            rgba(0, 0, 0, 0.1);
 
     /* Extracted Alpha Colors */
     --color-black-alpha-0: rgba(0, 0, 0, 0);
@@ -532,7 +545,7 @@
     --carousel-prev-backdrop-filter: var(--size-0-25);
     --carousel-prev-left: var(--size-1-25);
     --carousel-next-right: var(--size-1-25);
-    --carousel-indicators-bottom: var(--size-1-875);
+    --carousel-indicators-bottom: var(--size-4);
     --carousel-indicators-gap: var(--size-0-625);
     --carousel-indicators-padding: var(--size-0-75);
     --carousel-indicators-border-radius: var(--size-1-25);

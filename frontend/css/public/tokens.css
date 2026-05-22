@@ -28,7 +28,10 @@
 
     /* Semantic Colors - Borders */
     --border-primary: var(--pt-colors-border-primary, var(--color-gray-200));
-    --border-secondary: var(--pt-colors-border-secondary, var(--color-gray-300));
+    --border-secondary: var(
+        --pt-colors-border-secondary,
+        var(--color-gray-300)
+    );
     --border-focus: var(--pt-colors-accent, var(--color-primary));
 
     /* Semantic Colors - Surfaces */
@@ -95,9 +98,20 @@
 
     /* Shadows (darker for dark theme) */
     --shadow-sm: 0 var(--size-0-0625) var(--size-0-125) 0 rgba(0, 0, 0, 0.3);
-    --shadow: 0 var(--size-0-0625) var(--size-0-1875) 0 rgba(0, 0, 0, 0.4), 0 var(--size-0-0625) var(--size-0-125) -var(--size-0-0625) rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 var(--size-0-25) var(--size-0-375) -var(--size-0-0625) rgba(0, 0, 0, 0.4), 0 var(--size-0-125) var(--size-0-25) -var(--size-0-125) rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 var(--size-0-625) var(--size-0-9375) -var(--size-0-1875) rgba(0, 0, 0, 0.4), 0 var(--size-0-25) var(--size-0-375) -var(--size-0-25) rgba(0, 0, 0, 0.4);
+    --shadow:
+        0 var(--size-0-0625) var(--size-0-1875) 0 rgba(0, 0, 0, 0.4),
+        0 var(--size-0-0625) var(--size-0-125) -var(--size-0-0625)
+            rgba(0, 0, 0, 0.4);
+    --shadow-md:
+        0 var(--size-0-25) var(--size-0-375) -var(--size-0-0625)
+            rgba(0, 0, 0, 0.4),
+        0 var(--size-0-125) var(--size-0-25) -var(--size-0-125)
+            rgba(0, 0, 0, 0.4);
+    --shadow-lg:
+        0 var(--size-0-625) var(--size-0-9375) -var(--size-0-1875)
+            rgba(0, 0, 0, 0.4),
+        0 var(--size-0-25) var(--size-0-375) -var(--size-0-25)
+            rgba(0, 0, 0, 0.4);
 
     /* Component-specific */
     --header-bg: rgba(30, 30, 30, 0.8);
@@ -123,7 +137,7 @@
     --carousel-prev-backdrop-filter: var(--size-0-25);
     --carousel-prev-left: var(--size-1-25);
     --carousel-next-right: var(--size-1-25);
-    --carousel-indicators-bottom: var(--size-1-875);
+    --carousel-indicators-bottom: var(--size-4);
     --carousel-indicators-gap: var(--size-0-625);
     --carousel-indicators-padding: var(--size-0-75);
     --carousel-indicators-border-radius: var(--size-1-25);
