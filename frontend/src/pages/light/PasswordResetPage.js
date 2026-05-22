@@ -1,8 +1,7 @@
-import { Component } from '../../components/Component.js';
-import { escapeHtml } from '../../utils/helpers.js';
-import { sha256 } from '../../api/auth.js';
-import { api } from '../../api/client.js';
-import { router } from '../../router.js';
+import { Component } from "../../components/Component.js";
+import { escapeHtml } from "../../utils/helpers.js";
+import { sha256 } from "../../api/auth.js";
+import { api } from "../../api/client.js";
 
 export default class PasswordResetPage extends Component {
   constructor(container, props = {}) {
@@ -34,26 +33,30 @@ export default class PasswordResetPage extends Component {
             <p class="text-muted text-small">Enter your email address to receive a reset link.</p>
           </div>
           <div class="card-body">
-            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ''}
-            ${success ? `<div class="pss-success">${escapeHtml(success)}</div>` : `
+            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ""}
+            ${
+              success
+                ? `<div class="pss-success">${escapeHtml(success)}</div>`
+                : `
             <form id="pss-request-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="pss-email">Email Address</label>
                 <input type="text" id="pss-email" name="email" class="form-input"
                        required placeholder="you@example.com"
                        autocomplete="off"
-                       ${loading ? 'disabled' : ''}>
+                       ${loading ? "disabled" : ""}>
               </div>
               <div class="setup-submit-wrapper">
-                <button type="submit" class="btn btn-primary setup-submit-btn" ${loading ? 'disabled' : ''}>
-                  ${loading ? 'Sending…' : 'Send Reset Link'}
+                <button type="submit" class="btn btn-primary setup-submit-btn" ${loading ? "disabled" : ""}>
+                  ${loading ? "Sending…" : "Send Reset Link"}
                 </button>
               </div>
             </form>
             <div class="pss-back">
               <a href="/light/login" class="text-muted text-small">Back to login</a>
             </div>
-            `}
+            `
+            }
           </div>
         </div>
       </div>
@@ -69,35 +72,39 @@ export default class PasswordResetPage extends Component {
             <p class="text-muted text-small">Choose a strong password for your blog.</p>
           </div>
           <div class="card-body">
-            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ''}
-            ${success ? `
+            ${error ? `<div class="error-message" role="alert">${escapeHtml(error)}</div>` : ""}
+            ${
+              success
+                ? `
             <div class="pss-success">${escapeHtml(success)}</div>
             <div class="pss-back" style="margin-top:var(--spacing-lg)">
               <a href="/light/login" class="btn btn-primary setup-submit-btn">Go to Login</a>
             </div>
-            ` : `
+            `
+                : `
             <form id="pss-reset-form" novalidate>
               <div class="form-group">
                 <label class="form-label" for="pss-password">New Password</label>
                 <input type="password" id="pss-password" name="password" class="form-input"
                        required placeholder="Minimum 8 characters"
                        autocomplete="off"
-                       ${loading ? 'disabled' : ''}>
+                       ${loading ? "disabled" : ""}>
               </div>
               <div class="form-group">
                 <label class="form-label" for="pss-confirm">Confirm Password</label>
                 <input type="password" id="pss-confirm" name="confirm" class="form-input"
                        required placeholder="Repeat your password"
                        autocomplete="off"
-                       ${loading ? 'disabled' : ''}>
+                       ${loading ? "disabled" : ""}>
               </div>
               <div class="setup-submit-wrapper">
-                <button type="submit" class="btn btn-primary setup-submit-btn" ${loading ? 'disabled' : ''}>
-                  ${loading ? 'Saving…' : 'Set New Password'}
+                <button type="submit" class="btn btn-primary setup-submit-btn" ${loading ? "disabled" : ""}>
+                  ${loading ? "Saving…" : "Set New Password"}
                 </button>
               </div>
             </form>
-            `}
+            `
+            }
           </div>
         </div>
       </div>
@@ -113,59 +120,59 @@ export default class PasswordResetPage extends Component {
   }
 
   _bindRequestForm() {
-    const form = this.$('#pss-request-form');
+    const form = this.$("#pss-request-form");
     if (!form) return;
 
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const email = this.$('#pss-email')?.value.trim();
+      const email = this.$("#pss-email")?.value.trim();
       if (!email) {
-        this.setState({ error: 'Email address is required.' });
+        this.setState({ error: "Email address is required." });
         return;
       }
 
       this.setState({ loading: true, error: null });
 
       try {
-        const res = await api.post('/api/auth/forgot-password', { email });
+        const res = await api.post("/api/auth/forgot-password", { email });
         this.setState({ loading: false, success: res.detail });
       } catch (err) {
         this.setState({
           loading: false,
-          error: err.message || 'Something went wrong. Please try again.',
+          error: err.message || "Something went wrong. Please try again.",
         });
       }
     });
 
-    setTimeout(() => this.$('#pss-email')?.focus(), 80);
+    setTimeout(() => this.$("#pss-email")?.focus(), 80);
   }
 
   _bindResetForm() {
-    const form = this.$('#pss-reset-form');
+    const form = this.$("#pss-reset-form");
     if (!form) return;
 
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (this.state.loading) return;
 
-      const password = this.$('#pss-password')?.value || '';
-      const confirm = this.$('#pss-confirm')?.value || '';
+      const password = this.$("#pss-password")?.value || "";
+      const confirm = this.$("#pss-confirm")?.value || "";
 
       if (password.length < 8) {
-        this.setState({ error: 'Password must be at least 8 characters.' });
+        this.setState({ error: "Password must be at least 8 characters." });
         return;
       }
       if (password !== confirm) {
-        this.setState({ error: 'Passwords do not match.' });
+        this.setState({ error: "Passwords do not match." });
         return;
       }
 
       this.setState({ loading: true, error: null });
 
       try {
-        const res = await api.post('/api/auth/reset-password', {
+        const res = await api.post("/api/auth/reset-password", {
           token: this._token,
           name: await sha256(password),
         });
@@ -173,11 +180,11 @@ export default class PasswordResetPage extends Component {
       } catch (err) {
         this.setState({
           loading: false,
-          error: err.message || 'Reset failed. The link may have expired.',
+          error: err.message || "Reset failed. The link may have expired.",
         });
       }
     });
 
-    setTimeout(() => this.$('#pss-password')?.focus(), 80);
+    setTimeout(() => this.$("#pss-password")?.focus(), 80);
   }
 }
