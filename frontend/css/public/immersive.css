@@ -444,11 +444,6 @@ video.immersive-bg-image {
     pointer-events: none;
 }
 
-.immersive-layout.ui-hidden .immersive-visuals {
-    cursor: none;
-    /* Hide cursor for better immersion */
-}
-
 /* Excerpt card — top-left overlay below the header */
 .post-excerpt-card {
     position: absolute;

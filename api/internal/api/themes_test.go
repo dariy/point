@@ -15,19 +15,18 @@ import (
 	"point-api/internal/services"
 )
 
+const testThemeCSS = `:root { --bg-primary: #fff; --color-primary: #000; }`
+
 func TestThemeHandler(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
 	themesDir := t.TempDir()
-	validTheme := []byte(`{
-		"light": {"colors": {"bg-primary": "#fff"}},
-		"dark": {"colors": {"bg-primary": "#000"}}
-	}`)
-	_ = os.WriteFile(filepath.Join(themesDir, "default.json"), validTheme, 0644)
-	_ = os.WriteFile(filepath.Join(themesDir, "custom.json"), validTheme, 0644)
+	frontendDir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(themesDir, "default.css"), []byte(testThemeCSS), 0644)
+	_ = os.WriteFile(filepath.Join(themesDir, "custom.css"), []byte(testThemeCSS), 0644)
 
-	cfg := &config.Config{ThemesPath: themesDir}
+	cfg := &config.Config{ThemesPath: themesDir, FrontendDir: frontendDir}
 	settingsSvc := services.NewSettingsService(repo)
 	themeSvc := services.NewThemeService(cfg, settingsSvc)
 	handler := NewThemeHandler(themeSvc)

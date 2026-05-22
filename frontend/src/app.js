@@ -12,37 +12,36 @@
  *   5. Define all routes and start the router.
  */
 
-import { store } from './store.js';
-import { router } from './router.js';
-import { getMe } from './api/auth.js';
-import { getPublicSettings } from './api/settings.js';
-import { getNavMenu } from './api/pages.js';
-import { getVersion } from './api/system.js';
-import { normalizeSettings } from './utils/helpers.js';
-import { ToastContainer } from './components/shared/Toast.js';
-import { NotificationLogButton } from './components/shared/NotificationLogButton.js';
-import { initNotificationLog } from './utils/notificationLog.js';
-import { syncQueue } from './utils/sync.js';
+import { store } from "./store.js";
+import { router } from "./router.js";
+import { getMe } from "./api/auth.js";
+import { getPublicSettings } from "./api/settings.js";
+import { getNavMenu } from "./api/pages.js";
+import { getVersion } from "./api/system.js";
+import { normalizeSettings } from "./utils/helpers.js";
+import { ToastContainer } from "./components/shared/Toast.js";
+import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
+import { initNotificationLog } from "./utils/notificationLog.js";
+import { syncQueue } from "./utils/sync.js";
 
 // ── Theming Foundation ────────────────────────────────────────────────────
-import './utils/PointBus.js';
-import { parseTheme } from './utils/themeParser.js';
-import { PointPostList } from './components/shared/PointPostList.js';
-import { PointLightbox } from './components/shared/PointLightbox.js';
+import "./utils/PointBus.js";
+import { parseTheme } from "./utils/themeParser.js";
+import { PointPostList } from "./components/shared/PointPostList.js";
+import { PointLightbox } from "./components/shared/PointLightbox.js";
 
-if (typeof customElements !== 'undefined') {
-  customElements.define('point-post-list', PointPostList);
-  customElements.define('point-lightbox', PointLightbox);
+if (typeof customElements !== "undefined") {
+  customElements.define("point-post-list", PointPostList);
+  customElements.define("point-lightbox", PointLightbox);
 }
 
 // Initialise theme immediately to prevent FOUC
 parseTheme();
 
-
 // ── Login overlay ─────────────────────────────────────────────────────────
 
-const _loginOverlayEl = document.createElement('div');
-_loginOverlayEl.id = 'login-overlay';
+const _loginOverlayEl = document.createElement("div");
+_loginOverlayEl.id = "login-overlay";
 document.body.appendChild(_loginOverlayEl);
 
 let _loginModalInstance = null;
@@ -50,32 +49,34 @@ let _loginModalInstance = null;
 async function _showLoginOverlay(next) {
   if (_loginModalInstance) return;
 
-  const appEl = document.getElementById('app');
+  const appEl = document.getElementById("app");
 
   // If #app has no content yet (e.g. direct navigation to /light/login),
   // render the home page as the blurred background.
   if (!appEl || appEl.children.length === 0) {
-    const homeRoute = routes.find((r) => r.path === '/');
+    const homeRoute = routes.find((r) => r.path === "/");
     if (homeRoute) {
       try {
         const mod = await homeRoute.load();
         const PageClass = mod.default;
         const bgPage = new PageClass(appEl, { params: {}, query: {} });
         bgPage.mount();
-        _applySection('/');
-        store.set('route', { pathname: '/', params: {}, query: {} });
-      } catch { /* ignore */ }
+        _applySection("/");
+        store.set("route", { pathname: "/", params: {}, query: {} });
+      } catch {
+        /* ignore */
+      }
     }
   }
 
-  if (appEl) appEl.classList.add('login-blur');
+  if (appEl) appEl.classList.add("login-blur");
 
-  const { default: LoginPage } = await import('./pages/light/LoginPage.js');
+  const { default: LoginPage } = await import("./pages/light/LoginPage.js");
   _loginModalInstance = new LoginPage(_loginOverlayEl, {
     next,
     onSuccess: () => {
       _hideLoginOverlay(false);
-      router.navigate(next || '/light', { replace: true });
+      router.navigate(next || "/light", { replace: true });
     },
     onCancel: _hideLoginOverlay,
   });
@@ -83,19 +84,19 @@ async function _showLoginOverlay(next) {
 }
 
 function _hideLoginOverlay(restoreUrl = true) {
-  const appEl = document.getElementById('app');
-  if (appEl) appEl.classList.remove('login-blur');
+  const appEl = document.getElementById("app");
+  if (appEl) appEl.classList.remove("login-blur");
 
   _loginModalInstance?.unmount();
   _loginModalInstance = null;
 
-  if (restoreUrl && location.pathname.startsWith('/light/login')) {
-    const route = store.get('route');
-    history.replaceState(null, '', route?.pathname || '/');
+  if (restoreUrl && location.pathname.startsWith("/light/login")) {
+    const route = store.get("route");
+    history.replaceState(null, "", route?.pathname || "/");
   }
 }
 
-window.addEventListener('app:login-required', ({ detail }) => {
+window.addEventListener("app:login-required", ({ detail }) => {
   _showLoginOverlay(detail?.next || null);
 });
 
@@ -110,16 +111,16 @@ window.addEventListener('app:login-required', ({ detail }) => {
 // but the browser does not apply its rules. We swap media attributes
 // synchronously on every route change, before any page component mounts.
 
-const _cssPublic = document.getElementById('css-public');
-const _cssLight  = document.getElementById('css-light');
+const _cssPublic = document.getElementById("css-public");
+const _cssLight = document.getElementById("css-light");
 
 function _applySection(pathname) {
-  const isLight = pathname.startsWith('/light') || pathname === '/setup';
-  const pubMedia = isLight ? 'not all' : 'all';
-  const lgtMedia = isLight ? 'all' : 'not all';
+  const isLight = pathname.startsWith("/light") || pathname === "/setup";
+  const pubMedia = isLight ? "not all" : "all";
+  const lgtMedia = isLight ? "all" : "not all";
   if (_cssPublic && _cssPublic.media !== pubMedia) _cssPublic.media = pubMedia;
-  if (_cssLight  && _cssLight.media  !== lgtMedia) _cssLight.media  = lgtMedia;
-  document.documentElement.dataset.section = isLight ? 'light' : 'public';
+  if (_cssLight && _cssLight.media !== lgtMedia) _cssLight.media = lgtMedia;
+  document.documentElement.dataset.section = isLight ? "light" : "public";
 }
 
 // Apply immediately so the initial paint uses the correct bundle.
@@ -128,50 +129,58 @@ _applySection(location.pathname);
 // ── Theme ─────────────────────────────────────────────────────────────────
 
 function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme || 'auto');
-  store.set('theme', theme || 'auto');
+  document.documentElement.setAttribute("data-theme", theme || "auto");
+  store.set("theme", theme || "auto");
 }
 
 function loadTheme(settings) {
-  const saved = localStorage.getItem('theme');
-  applyTheme(saved || settings?.default_theme || 'auto');
+  const saved = localStorage.getItem("theme");
+  applyTheme(saved || settings?.default_theme || "auto");
 }
 
-store.subscribe('theme', (theme) => {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('theme', theme);
+store.subscribe("theme", (theme) => {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
   // Notify components that the theme has changed
-  document.dispatchEvent(new CustomEvent('themechange', { detail: { theme } }));
+  document.dispatchEvent(new CustomEvent("themechange", { detail: { theme } }));
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 
 async function bootstrap() {
   // 0. Register service worker (PWA shell cache + Web Share Target).
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('[SW] Registration failed:', err);
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("[SW] Registration failed:", err);
     });
   }
 
   // 0.1 Handle offline Treated as unauthenticated if network fails
   try {
-    const lastSync = await (await import('./utils/offlineStore.js')).getMeta('last_sync');
+    const lastSync = await (
+      await import("./utils/offlineStore.js")
+    ).getMeta("last_sync");
     if (lastSync) {
-      store.set('offline_status', { available: true, last_sync: lastSync });
+      store.set("offline_status", { available: true, last_sync: lastSync });
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // 1. Fetch public settings (best-effort — fall back to last cached values).
   let settings = {};
   try {
     settings = normalizeSettings(await getPublicSettings());
-    localStorage.setItem('settings', JSON.stringify(settings));
+    localStorage.setItem("settings", JSON.stringify(settings));
   } catch {
     // Offline or server unreachable — use last successfully fetched settings.
-    try { settings = JSON.parse(localStorage.getItem('settings') || '{}'); } catch { /* ignore */ }
+    try {
+      settings = JSON.parse(localStorage.getItem("settings") || "{}");
+    } catch {
+      /* ignore */
+    }
   }
-  store.set('settings', settings);
+  store.set("settings", settings);
   if (settings.blog_title) {
     document.title = settings.blog_title;
   }
@@ -186,24 +195,28 @@ async function bootstrap() {
   } catch {
     // Offline or server unreachable — proceed as unauthenticated.
   }
-  store.set('user', user);
+  store.set("user", user);
 
   // 3.1 Fetch version info (non-blocking)
-  getVersion().then(ver => {
-    store.set('version', ver.current);
-  }).catch(() => {
-    // If it fails, we can try to fall back to the stamped version in index.html if we want,
-    // but the API is more reliable for the actual running binary.
-  });
+  getVersion()
+    .then((ver) => {
+      store.set("version", ver.current);
+    })
+    .catch(() => {
+      // If it fails, we can try to fall back to the stamped version in index.html if we want,
+      // but the API is more reliable for the actual running binary.
+    });
 
   // 3.5 Load auth-scoped nav tag hierarchy so all pages have it from first render.
   try {
     const navData = await getNavMenu();
-    store.set('navTags', navData.menu || []);
-  } catch { /* ignore — pages fall back to store or empty */ }
+    store.set("navTags", navData.menu || []);
+  } catch {
+    /* ignore — pages fall back to store or empty */
+  }
 
   // 4. Mount toast container and initialise the notification log.
-  const toastsEl = document.getElementById('toasts');
+  const toastsEl = document.getElementById("toasts");
   if (toastsEl) {
     const toastContainer = new ToastContainer(toastsEl);
     toastContainer.mount();
@@ -215,25 +228,27 @@ async function bootstrap() {
   }
 
   // 5. Subscribe to route changes to swap CSS bundles before each page mounts.
-  store.subscribe('route', ({ pathname }) => _applySection(pathname));
+  store.subscribe("route", ({ pathname }) => _applySection(pathname));
 
   // 6. Start the router.
   router.init(routes, {
-    mountPoint: document.getElementById('app'),
-    authGuard: () => !!store.get('user'),
-    loginPath: '/light/login',
+    mountPoint: document.getElementById("app"),
+    authGuard: () => !!store.get("user"),
+    loginPath: "/light/login",
   });
 
   // 6.5 Refresh auth-scoped nav tags on login/logout.
-  store.subscribe('user', async () => {
+  store.subscribe("user", async () => {
     try {
       const navData = await getNavMenu();
-      store.set('navTags', navData.menu || []);
-    } catch { /* ignore */ }
+      store.set("navTags", navData.menu || []);
+    } catch {
+      /* ignore */
+    }
   });
 
   // 7. Sync queue when online
-  window.addEventListener('online', syncQueue);
+  window.addEventListener("online", syncQueue);
   if (navigator.onLine) syncQueue();
 }
 
@@ -247,46 +262,107 @@ async function bootstrap() {
 
 const routes = [
   // First-run setup wizard (public — no auth required)
-  { path: '/setup',       load: () => import('./pages/light/SetupPage.js'),   public: true },
+  {
+    path: "/setup",
+    load: () => import("./pages/light/SetupPage.js"),
+    public: true,
+  },
 
   // Password reset (public — no auth required)
-  { path: '/light/pss',        load: () => import('./pages/light/PasswordResetPage.js'), public: true },
-  { path: '/light/pss/:token', load: () => import('./pages/light/PasswordResetPage.js'), public: true },
+  {
+    path: "/light/pss",
+    load: () => import("./pages/light/PasswordResetPage.js"),
+    public: true,
+  },
+  {
+    path: "/light/pss/:token",
+    load: () => import("./pages/light/PasswordResetPage.js"),
+    public: true,
+  },
 
   // Public blog
-  { path: '/',            load: () => import('./pages/public/HomePage.js'),   public: true },
-  { path: '/post/:slug',  load: () => import('./pages/public/PostPage.js'),   public: true },
-  { path: '/tag/:slug',   load: () => import('./pages/public/TagPage.js'),    public: true },
-  { path: '/tags',        load: () => import('./pages/public/TagsPage.js'),   public: true },
-  { path: '/map/:year',   load: () => import('./pages/public/MapPage.js'),    public: true },
-  { path: '/map',         load: () => import('./pages/public/MapPage.js'),    public: true },
-  { path: '/search',      load: () => import('./pages/public/SearchPage.js'), public: true },
-  { path: '/preview/:token', load: () => import('./pages/public/PreviewPage.js'), public: true },
+  { path: "/", load: () => import("./pages/public/HomePage.js"), public: true },
+  {
+    path: "/posts/:slug",
+    load: () => import("./pages/public/PostPage.js"),
+    public: true,
+  },
+  {
+    path: "/tags/:slug",
+    load: () => import("./pages/public/TagPage.js"),
+    public: true,
+  },
+  {
+    path: "/tags",
+    load: () => import("./pages/public/TagsPage.js"),
+    public: true,
+  },
+  {
+    path: "/map/:year",
+    load: () => import("./pages/public/MapPage.js"),
+    public: true,
+  },
+  {
+    path: "/map",
+    load: () => import("./pages/public/MapPage.js"),
+    public: true,
+  },
+  {
+    path: "/search",
+    load: () => import("./pages/public/SearchPage.js"),
+    public: true,
+  },
+  {
+    path: "/preview/:token",
+    load: () => import("./pages/public/PreviewPage.js"),
+    public: true,
+  },
 
   // Admin (Light) — protected
-  { path: '/light',       load: () => import('./pages/light/DashboardPage.js') },
-  { path: '/light/posts', load: () => import('./pages/light/PostsListPage.js') },
-  { path: '/light/posts/new',      load: () => import('./pages/light/PostEditPage.js') },
-  { path: '/light/posts/:id/edit', load: () => import('./pages/light/PostEditPage.js') },
-  { path: '/light/media',          load: () => import('./pages/light/MediaPage.js') },
-  { path: '/light/tags',           load: () => import('./pages/light/TagsManagerPage.js') },
-  { path: '/light/tags/:slug',     load: () => import('./pages/light/TagsManagerPage.js') },
-  { path: '/light/menu',           load: () => import('./pages/light/MenuPage.js') },
-  { path: '/light/themes',         load: () => import('./pages/light/ThemesPage.js') },
-  { path: '/light/settings',       load: () => import('./pages/light/SettingsPage.js') },
-  { path: '/light/security',       load: () => import('./pages/light/SecurityPage.js') },
-  { path: '/light/system',         load: () => import('./pages/light/SystemPage.js') },
+  { path: "/light", load: () => import("./pages/light/DashboardPage.js") },
+  {
+    path: "/light/posts",
+    load: () => import("./pages/light/PostsListPage.js"),
+  },
+  {
+    path: "/light/posts/new",
+    load: () => import("./pages/light/PostEditPage.js"),
+  },
+  {
+    path: "/light/posts/:id/edit",
+    load: () => import("./pages/light/PostEditPage.js"),
+  },
+  { path: "/light/media", load: () => import("./pages/light/MediaPage.js") },
+  {
+    path: "/light/tags",
+    load: () => import("./pages/light/TagsManagerPage.js"),
+  },
+  {
+    path: "/light/tags/:slug",
+    load: () => import("./pages/light/TagsManagerPage.js"),
+  },
+  { path: "/light/menu", load: () => import("./pages/light/MenuPage.js") },
+  { path: "/light/themes", load: () => import("./pages/light/ThemesPage.js") },
+  {
+    path: "/light/settings",
+    load: () => import("./pages/light/SettingsPage.js"),
+  },
+  {
+    path: "/light/security",
+    load: () => import("./pages/light/SecurityPage.js"),
+  },
+  { path: "/light/system", load: () => import("./pages/light/SystemPage.js") },
 ];
 
 // ── Run ───────────────────────────────────────────────────────────────────
 
 bootstrap().catch((err) => {
-  console.error('[App] Bootstrap failed:', err);
-  const app = document.getElementById('app');
+  console.error("[App] Bootstrap failed:", err);
+  const app = document.getElementById("app");
   if (app) {
-    const p = document.createElement('p');
-    p.className = 'error-page';
-    p.textContent = 'Failed to start the application. Please reload the page.';
+    const p = document.createElement("p");
+    p.className = "error-page";
+    p.textContent = "Failed to start the application. Please reload the page.";
     app.appendChild(p);
   }
 });

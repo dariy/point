@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestPagesHandler_GetHomePage(t *testing.T) {
@@ -55,7 +56,7 @@ func TestPagesHandler_TagPage(t *testing.T) {
 	handler := NewPagesHandler(repo, postService, tagSvc, mediaService, settingsService, cacheService)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/tag/news", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/news", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -221,7 +222,7 @@ func TestPagesHandler_TagPageNotFound(t *testing.T) {
 	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
-	req := httptest.NewRequest(http.MethodGet, "/tag/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/nonexistent", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -255,7 +256,7 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 	e := echo.New()
 
 	// Public user requesting hidden tag should get 404
-	req := httptest.NewRequest(http.MethodGet, "/tag/hidden-tag", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/hidden-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -282,7 +283,7 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
 
-	req := httptest.NewRequest(http.MethodGet, "/tag/auth-tag", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/auth-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -318,7 +319,7 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, 1)`)
 
 	// 1. Existing tag
-	req := httptest.NewRequest(http.MethodGet, "/tag/news", nil)
+	req := httptest.NewRequest(http.MethodGet, "/tags/news", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -332,7 +333,7 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 	}
 
 	// 2. Non-existent tag
-	req = httptest.NewRequest(http.MethodGet, "/tag/missing", nil)
+	req = httptest.NewRequest(http.MethodGet, "/tags/missing", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	c.SetParamNames("slug")
@@ -390,7 +391,7 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	_ = repo.UpsertTagLocation(ctx, berlin.ID, 52.5, 13.4)
 
 	// Post in 2024 at Berlin
-	p1, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P1", Status: "published", AuthorID: userID})
+	p1, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P1", Status: "published", AuthorID: userID})
 	if err != nil {
 		t.Fatalf("p1 creation failed: %v", err)
 	}
@@ -404,7 +405,7 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: inTimeline.ID, ChildID: y2023.ID})
 	paris, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Paris"})
 	_ = repo.UpsertTagLocation(ctx, paris.ID, 48.8, 2.3)
-	p2, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P2", Status: "published", AuthorID: userID})
+	p2, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P2", Status: "published", AuthorID: userID})
 	_ = postSvc.UpdatePostTags(ctx, p2.ID, []string{"2023", "paris"})
 
 	// Verify repo has the link

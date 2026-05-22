@@ -357,7 +357,7 @@ export default class TagsManagerPage extends Component {
     const tagSlug = this.props?.params?.slug;
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/tags',
-      publicUrl: tagSlug ? `/tag/${tagSlug}` : '/',
+      publicUrl: tagSlug ? `/tags/${tagSlug}` : '/',
       user: store.get('user') || {},
       onLogout: this._handleLogout.bind(this),
     });
@@ -608,9 +608,9 @@ export default class TagsManagerPage extends Component {
       `        <input type="text" name="name" class="form-input editor-title" placeholder="Tag name" value="${escapeHtml(f.name || '')}"${isSystem ? ' readonly' : ' required'}>`,
       '      </div>',
 
-      // Slug (slug-row with /tag/ prefix, like post editor)
+      // Slug (slug-row with /tags/ prefix, like post editor)
       '      <div class="slug-row">',
-      '        <span class="slug-prefix">/tag/</span>',
+      '        <span class="slug-prefix">/tags/</span>',
       `        <input type="text" name="slug" id="modal-slug" class="form-input editor-slug" placeholder="tag-slug" value="${escapeHtml(f.slug || '')}" spellcheck="false"${isSystem ? ' readonly' : ''}>`,
       '      </div>',
 

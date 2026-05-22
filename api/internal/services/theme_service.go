@@ -2,36 +2,42 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"point-api/internal/config"
 )
 
 type Theme struct {
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	PreviewColor string         `json:"preview_color"`
-	Path         string         `json:"-"`
-	Light        map[string]any `json:"light"`
-	Dark         map[string]any `json:"dark"`
-	Shared       map[string]any `json:"shared,omitempty"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	PreviewColor string `json:"preview_color"`
+	HasDarkMode  bool   `json:"has_dark_mode"`
+	Path         string `json:"-"`
 }
 
 type ThemeService struct {
 	cfg             *config.Config
 	settingsService *SettingsService
+	darkModeCache   map[string]bool
 }
 
 func NewThemeService(cfg *config.Config, settingsService *SettingsService) *ThemeService {
 	return &ThemeService{
 		cfg:             cfg,
 		settingsService: settingsService,
+		darkModeCache:   make(map[string]bool),
 	}
 }
+
+var (
+	metaTitleRe   = regexp.MustCompile(`/\*\s*theme-title:\s*"([^"]+)"\s*\*/`)
+	metaDescRe    = regexp.MustCompile(`/\*\s*description:\s*"([^"]+)"\s*\*/`)
+	metaColorRe   = regexp.MustCompile(`/\*\s*preview-color:\s*"([^"]+)"\s*\*/`)
+)
 
 // ListThemes scans both ThemesPath (system) and UserThemesPath (user) directories.
 // User themes override system themes with the same name.
@@ -77,11 +83,11 @@ func (s *ThemeService) scanThemesDir(dir string) ([]Theme, error) {
 
 	var themes []Theme
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".css") {
 			continue
 		}
 		themePath := filepath.Join(dir, entry.Name())
-		themeName := strings.TrimSuffix(entry.Name(), ".json")
+		themeName := strings.TrimSuffix(entry.Name(), ".css")
 		if t, err := s.ReadAndValidateTheme(themePath, themeName); err == nil {
 			themes = append(themes, t)
 		}
@@ -95,30 +101,50 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 		return Theme{}, fmt.Errorf("failed to read theme file: %w", err)
 	}
 
-	var theme Theme
-	if err := json.Unmarshal(data, &theme); err != nil {
-		return Theme{}, fmt.Errorf("invalid json in theme file: %w", err)
+	content := string(data)
+
+	if !strings.Contains(content, ":root {") && !strings.Contains(content, ":root{") {
+		return Theme{}, fmt.Errorf("theme file missing :root { block")
 	}
 
-	theme.Name = name
-	theme.Path = path
+	hasDark, cached := s.darkModeCache[path]
+	if !cached {
+		hasDark = strings.Contains(content, `[data-theme="dark"]`)
+		s.darkModeCache[path] = hasDark
+	}
 
-	if theme.Light == nil || theme.Dark == nil {
-		return Theme{}, fmt.Errorf("theme missing required 'light' or 'dark' fields")
+	theme := Theme{
+		Name:        name,
+		Path:        path,
+		HasDarkMode: hasDark,
+	}
+
+	if m := metaTitleRe.FindStringSubmatch(content); len(m) == 2 {
+		theme.Name = m[1]
+	} else {
+		theme.Name = name
+	}
+
+	if m := metaDescRe.FindStringSubmatch(content); len(m) == 2 {
+		theme.Description = m[1]
+	}
+
+	if m := metaColorRe.FindStringSubmatch(content); len(m) == 2 {
+		theme.PreviewColor = m[1]
 	}
 
 	return theme, nil
 }
 
-// findTheme searches user themes path first, then system themes path.
+// findTheme searches user themes path first (<name>.css), then system themes path (<name>.css).
 func (s *ThemeService) findTheme(name string) (Theme, error) {
 	if s.cfg.UserThemesPath != "" {
-		userPath := filepath.Join(s.cfg.UserThemesPath, name+".json")
+		userPath := filepath.Join(s.cfg.UserThemesPath, name+".css")
 		if t, err := s.ReadAndValidateTheme(userPath, name); err == nil {
 			return t, nil
 		}
 	}
-	systemPath := filepath.Join(s.cfg.ThemesPath, name+".json")
+	systemPath := filepath.Join(s.cfg.ThemesPath, name+".css")
 	return s.ReadAndValidateTheme(systemPath, name)
 }
 
@@ -151,7 +177,7 @@ func (s *ThemeService) SetActiveTheme(ctx context.Context, name string) error {
 		return fmt.Errorf("failed to save active theme setting: %w", err)
 	}
 
-	// Synchronize the public-facing theme.json file for the frontend
+	// Synchronize the public-facing theme.css file for the frontend
 	return s.SyncActiveTheme(ctx)
 }
 
@@ -161,14 +187,13 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 		return fmt.Errorf("failed to get active theme: %w", err)
 	}
 
-	publicThemePath := filepath.Join(s.cfg.FrontendDir, "images", "theme.json")
+	// Theme CSS is served under /assets/css/theme.css → <FrontendDir>/css/theme.css
+	publicThemePath := filepath.Join(s.cfg.FrontendDir, "css", "theme.css")
 
-	// Ensure the target directory exists (useful in some environments/tests)
 	if err := os.MkdirAll(filepath.Dir(publicThemePath), 0755); err != nil {
-		return fmt.Errorf("failed to create public theme directory: %w", err)
+		return fmt.Errorf("failed to create css directory: %w", err)
 	}
 
-	// Read raw content and write to public path (ensures all fields are preserved)
 	data, err := os.ReadFile(activeTheme.Path)
 	if err != nil {
 		return fmt.Errorf("failed to read source theme file: %w", err)
@@ -176,7 +201,7 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 
 	err = os.WriteFile(publicThemePath, data, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to update public theme.json: %w", err)
+		return fmt.Errorf("failed to update public theme.css: %w", err)
 	}
 
 	return nil

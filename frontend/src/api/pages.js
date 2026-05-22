@@ -24,7 +24,7 @@ export function getHomePage(params = {}) {
  * @returns {Promise<{ tag: object, breadcrumbs: object[], posts: object }>}
  */
 export function getTagPage(slug, params = {}) {
-  return api.get(`/api/pages/tag/${encodeURIComponent(slug)}`, params);
+  return api.get(`/api/pages/tags/${encodeURIComponent(slug)}`, params);
 }
 
 /**
