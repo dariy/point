@@ -20,33 +20,6 @@
         --header-height: var(--base---header-height);
     }
 
-    /*.site-nav {
-        flex-direction: column;
-    }*/
-
-    .site-nav.open {
-        display: flex;
-    }
-
-    .nav-dropdown {
-        width: 100%;
-    }
-
-    .dropdown-menu {
-        position: static;
-        box-shadow: none;
-        border: none;
-        padding-left: var(--spacing-md);
-        opacity: 1;
-        visibility: visible;
-        transform: none;
-        display: none;
-    }
-
-    .nav-dropdown.open .dropdown-menu {
-        display: block;
-    }
-
     .posts-grid {
         grid-template-columns: repeat(2, 1fr);
     }
