@@ -292,8 +292,16 @@ export class PublicHeader extends Component {
 
   _overflows(inner) {
     void inner.offsetWidth; // force reflow
-    // scrollWidth is unreliable on overflow:visible flex containers in Chrome;
-    // compare the nav's right edge against the container's right edge instead.
+
+    // When a tags strip is present, treat any clipped pill as overflow.
+    // This fires fold-nav as soon as tags can't all be shown — not just when
+    // the nav physically exits the container boundary.
+    const tagsStrip = inner.querySelector('.tag-strip-scroll');
+    if (tagsStrip && tagsStrip.scrollWidth > tagsStrip.clientWidth + 2) return true;
+
+    // Fallback (no tags, or all tags fit): check if the nav exits the container.
+    // scrollWidth is unreliable on overflow:visible flex containers in Chrome,
+    // so compare bounding rects instead.
     const innerRight = inner.getBoundingClientRect().right;
     const navEl = inner.querySelector('.site-nav');
     if (navEl) return navEl.getBoundingClientRect().right > innerRight + 1;
