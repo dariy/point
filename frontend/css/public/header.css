@@ -450,8 +450,9 @@
    Progressive Fold System
    =========================== */
 
-/* Step 1: hide site-title text, keep logo */
-.site-header-group.fold-title .site-title-text {
+/* Step 1: hide site-title text and subtitle, keep logo */
+.site-header-group.fold-title .site-title-text,
+.site-header-group.fold-title .site-subtitle {
     display: none;
 }
 
