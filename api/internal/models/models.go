@@ -71,6 +71,7 @@ type Post struct {
 	PreviewExpiresAt sql.NullTime   `json:"preview_expires_at"`
 	DeletedAt        sql.NullTime   `json:"deleted_at"`
 	Css              string         `json:"css"`
+	ImmersiveMode    string         `json:"immersive_mode"`
 }
 
 type PostTag struct {

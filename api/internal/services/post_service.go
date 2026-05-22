@@ -204,6 +204,15 @@ func SanitizePostCSS(css string) (string, []string) {
 	return strings.TrimSpace(result), stripped
 }
 
+func normalizeImmersiveMode(mode string) string {
+	switch mode {
+	case "immersive", "non-immersive":
+		return mode
+	default:
+		return "auto"
+	}
+}
+
 func (s *PostService) RenderContent(content string) (string, error) {
 	var buf bytes.Buffer
 	if err := s.md.Convert([]byte(preprocessContent(content)), &buf); err != nil {
@@ -294,6 +303,7 @@ type CreatePostParams struct {
 	Title           string
 	Content         string
 	CSS             string
+	ImmersiveMode   string
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -318,6 +328,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		Slug:            p.Slug,
 		Content:         normalizeContent(p.Content),
 		Css:             sanitizedCSS,
+		ImmersiveMode:   normalizeImmersiveMode(p.ImmersiveMode),
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
@@ -403,6 +414,7 @@ type UpdatePostParams struct {
 	Title           string
 	Content         string
 	CSS             string
+	ImmersiveMode   string
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -426,6 +438,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		Slug:            p.Slug,
 		Content:         normalizeContent(p.Content),
 		Css:             sanitizedCSS,
+		ImmersiveMode:   normalizeImmersiveMode(p.ImmersiveMode),
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,

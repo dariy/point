@@ -287,11 +287,24 @@ export default class PostEditPage extends Component {
                 ${contentArea}
               </div>
 
-              <details class="form-group css-editor-details">
-                <summary class="css-editor-summary">Custom CSS</summary>
-                <textarea id="css-editor" class="form-input css-editor-textarea"
-                          rows="8" spellcheck="false"
-                          placeholder="/* Styles applied only to this post */">${escapeHtml(p.css || "")}</textarea>
+              <details class="form-group advanced-options-details">
+                <summary class="advanced-options-summary">Advanced options</summary>
+                <div class="advanced-options-body">
+                  <div class="form-group">
+                    <label class="form-label" for="immersive-mode-select">Immersive mode</label>
+                    <select id="immersive-mode-select" class="form-input immersive-mode-select">
+                      <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
+                      <option value="immersive"${p.immersive_mode === "immersive" ? " selected" : ""}>Immersive</option>
+                      <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="css-editor">Custom CSS</label>
+                    <textarea id="css-editor" class="form-input css-editor-textarea"
+                              rows="8" spellcheck="false"
+                              placeholder="/* Styles applied only to this post */">${escapeHtml(p.css || "")}</textarea>
+                  </div>
+                </div>
               </details>
             </div>
           </main>
@@ -742,6 +755,7 @@ export default class PostEditPage extends Component {
         ? new Date(this.$("#schedule-input").value).toISOString()
         : "",
       css: this.$("#css-editor")?.value || "",
+      immersive_mode: this.$("#immersive-mode-select")?.value || "auto",
     };
   }
 

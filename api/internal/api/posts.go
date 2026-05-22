@@ -63,6 +63,7 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		"content":          post.Content,
 		"content_html":     htmlContent,
 		"css":              post.Css,
+		"immersive_mode":   post.ImmersiveMode,
 		"excerpt":          nullString(post.Excerpt),
 		"status":           post.Status,
 		"is_featured":      post.IsFeatured,
@@ -395,6 +396,7 @@ type CreatePostRequest struct {
 	Title           string   `json:"title"`
 	Content         string   `json:"content"`
 	CSS             string   `json:"css"`
+	ImmersiveMode   string   `json:"immersive_mode"`
 	Excerpt         string   `json:"excerpt"`
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
@@ -448,6 +450,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		Title:           req.Title,
 		Content:         req.Content,
 		CSS:             req.CSS,
+		ImmersiveMode:   req.ImmersiveMode,
 		Excerpt:         req.Excerpt,
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
@@ -486,6 +489,7 @@ type UpdatePostRequest struct {
 	Title           string   `json:"title"`
 	Content         string   `json:"content"`
 	CSS             string   `json:"css"`
+	ImmersiveMode   string   `json:"immersive_mode"`
 	Excerpt         string   `json:"excerpt"`
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
@@ -533,6 +537,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		Title:           req.Title,
 		Content:         req.Content,
 		CSS:             req.CSS,
+		ImmersiveMode:   req.ImmersiveMode,
 		Excerpt:         req.Excerpt,
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,

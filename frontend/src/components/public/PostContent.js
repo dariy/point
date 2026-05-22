@@ -63,6 +63,10 @@ function mediaTypeFromPath(path) {
 export function shouldUseImmersive(post) {
   if (!post) return false;
 
+  // Explicit override from editor takes precedence over auto-detection.
+  if (post.immersive_mode === "immersive") return true;
+  if (post.immersive_mode === "non-immersive") return false;
+
   const html = post.content_html || "";
   if (
     html.includes("<hr>") ||
