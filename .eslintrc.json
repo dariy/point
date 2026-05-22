@@ -33,9 +33,21 @@
     "TextDecoder": "readonly",
     "requestAnimationFrame": "readonly",
     "cancelAnimationFrame": "readonly",
+    "requestIdleCallback": "readonly",
+    "cancelIdleCallback": "readonly",
     "history": "readonly",
     "indexedDB": "readonly",
-    "caches": "readonly"
+    "caches": "readonly",
+    "setInterval": "readonly",
+    "clearInterval": "readonly",
+    "alert": "readonly",
+    "confirm": "readonly",
+    "prompt": "readonly",
+    "DOMParser": "readonly",
+    "customElements": "readonly",
+    "HTMLElement": "readonly",
+    "ResizeObserver": "readonly",
+    "performance": "readonly"
   },
   "rules": {
     "constructor-super": "error",

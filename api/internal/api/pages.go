@@ -83,7 +83,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	if page == 1 && !hasYearFilter {
 		if hpIDStr, ok := allSettings["home_page_post_id"]; ok && hpIDStr != "" {
 			hpPost, err := h.postService.GetPostBySlug(ctx, hpIDStr)
-			if err == nil && (hpPost.Status == "published" || !publicOnly) {
+			if err == nil && (hpPost.Status == "published" || hpPost.Status == "page" || !publicOnly) {
 				postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, []int64{hpPost.ID})
 				hpPostType := getPostType(hpPost.Status, postTagsMap[hpPost.ID])
 				if hpPostType == "page" {

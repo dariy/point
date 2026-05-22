@@ -63,6 +63,10 @@ function mediaTypeFromPath(path) {
 export function shouldUseImmersive(post) {
   if (!post) return false;
 
+  // Explicit override from editor takes precedence over auto-detection.
+  if (post.immersive_mode === "immersive") return true;
+  if (post.immersive_mode === "non-immersive") return false;
+
   const html = post.content_html || "";
   if (
     html.includes("<hr>") ||
@@ -70,6 +74,9 @@ export function shouldUseImmersive(post) {
     html.includes("<hr />")
   )
     return true;
+
+  // Pages only go immersive when explicitly separated with ---; skip media fallback.
+  if (post.type === "page" || post.status === "page") return false;
 
   const media = post.media || [];
   // Audio-only attachment posts stay in normal layout

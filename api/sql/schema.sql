@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS posts (
     preview_token VARCHAR(64) UNIQUE,
     preview_expires_at DATETIME,
     deleted_at DATETIME,
-    css TEXT NOT NULL DEFAULT ''
+    css TEXT NOT NULL DEFAULT '',
+    immersive_mode TEXT NOT NULL DEFAULT 'auto'
 );
 CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);

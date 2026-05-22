@@ -12,6 +12,7 @@ require (
 	github.com/mozillazg/go-unidecode v0.2.0
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/spf13/viper v1.21.0
+	github.com/stefanfritsch/goldmark-fences v1.0.0
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.7.16
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
