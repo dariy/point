@@ -19,6 +19,7 @@ import (
 
 	"github.com/mdigger/goldmark-attributes"
 	"github.com/microcosm-cc/bluemonday"
+	fences "github.com/stefanfritsch/goldmark-fences"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
@@ -40,6 +41,7 @@ func NewPostService(repo *repository.Repository) *PostService {
 			extension.GFM,
 			extension.Typographer,
 			attributes.Extension,
+			&fences.Extender{},
 			highlighting.NewHighlighting(
 				highlighting.WithStyle("monokai"),
 			),
