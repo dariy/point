@@ -15,12 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"point-api/internal/api"
 	"point-api/internal/config"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 // Version is set at build time via -ldflags="-X main.Version=..."
@@ -272,7 +273,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	// ── Page compound data Routes (for SPA) ────────────────────────────────────
 	pagesGroup := e.Group("/api/pages")
 	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth))
-	pagesGroup.GET("/tag/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth))
+	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth))
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth))
@@ -330,7 +331,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	e.GET("/*", func(c echo.Context) error {
 		if _, err := os.Stat(indexHTML); err == nil {
 			path := c.Request().URL.Path
-			if slug, ok := strings.CutPrefix(path, "/post/"); ok {
+			if slug, ok := strings.CutPrefix(path, "/posts/"); ok {
 				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
 				if err == nil && strings.EqualFold(post.Status, "published") {
 					b, err := os.ReadFile(indexHTML)
@@ -622,7 +623,7 @@ func main() {
 		}
 	}
 
-	// Synchronize active theme with public theme.json for the frontend
+	// Synchronize active theme with public theme.css for the frontend
 	if err := svcs.Theme.SyncActiveTheme(ctx); err != nil {
 		log.Printf("warning: failed to sync active theme: %v", err)
 	}

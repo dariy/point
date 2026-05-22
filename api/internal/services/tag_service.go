@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/utils"
+
+	"github.com/labstack/echo/v4"
 )
 
 type TagService struct {
@@ -1114,7 +1115,7 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 
 func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPage int32, publicOnly bool, includeDrafts bool, yearFrom, yearTo int) ([]models.Post, int64, error) {
 	// Collect the tag itself plus all descendants so that a parent tag page
-	// (e.g. /tag/countries) shows posts from all nested sub-tags.
+	// (e.g. /tags/countries) shows posts from all nested sub-tags.
 	descendants, _ := s.repo.GetTagDescendants(ctx, tagID)
 	tagIDs := make([]int64, 0, 1+len(descendants))
 	tagIDs = append(tagIDs, tagID)

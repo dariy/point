@@ -43,12 +43,12 @@ export class PublicHeader extends Component {
           if (isLast) {
             const tooltipAttr = crumb.tooltip ? ` title="${escapeHtml(crumb.tooltip)}"` : '';
             if (crumb.slug) {
-              const href = `/tag/${escapeHtml(crumb.slug)}`;
+              const href = `/tags/${escapeHtml(crumb.slug)}`;
               return `<a href="${href}" class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</a>`;
             }
             return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
           }
-          const href = crumb.href || (crumb.slug ? `/tag/${escapeHtml(crumb.slug)}` : '/');
+          const href = crumb.href || (crumb.slug ? `/tags/${escapeHtml(crumb.slug)}` : '/');
           return `<a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}">${lockIcon}${escapeHtml(crumb.name)}</a>
                   <span class="breadcrumb-separator" aria-hidden="true">/</span>`;
         }),

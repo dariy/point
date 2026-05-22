@@ -752,7 +752,7 @@ func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
 
 	// Create a post whose content references the media path (no post_id on media)
 	mediaPath := "/" + strings.TrimPrefix(media.OriginalPath, "originals/")
-	post, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
+	post, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{
 		Title: "Photo Post", Content: mediaPath, Status: "published", AuthorID: user.ID,
 	})
 

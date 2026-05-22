@@ -63,7 +63,7 @@ func TestFeedsHandler(t *testing.T) {
 	// Create user
 	user, _ := repo.CreateUser(ctx, models.CreateUserParams{Username: "u", Email: "e", PasswordHash: "h", DisplayName: "U"})
 	// Create published post
-	_, _ = postService.CreatePost(ctx, services.CreatePostParams{Title: "P1", Content: "C1", Status: "published", AuthorID: user.ID})
+	_, _, _ = postService.CreatePost(ctx, services.CreatePostParams{Title: "P1", Content: "C1", Status: "published", AuthorID: user.ID})
 
 	req = httptest.NewRequest(http.MethodGet, "/feed.xml", nil)
 	rec = httptest.NewRecorder()

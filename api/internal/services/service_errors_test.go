@@ -33,7 +33,7 @@ func TestPostService_PreviewToken(t *testing.T) {
 
 	// 1. Create a draft post
 	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
-	post, _ := service.CreatePost(ctx, CreatePostParams{
+	post, _, _ := service.CreatePost(ctx, CreatePostParams{
 		Title:    "Draft",
 		Slug:     "draft",
 		Content:  "content",

@@ -10,6 +10,16 @@ import (
 	"point-api/internal/config"
 )
 
+const validThemeCSS = `/* theme-title: "Valid" */
+/* description: "A valid test theme." */
+/* preview-color: "#123456" */
+:root {
+  --bg-primary: #ffffff;
+  --color-primary: #123456;
+}`
+
+const minimalThemeCSS = `:root { --bg-primary: #fff; }`
+
 func TestThemeService(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
@@ -24,19 +34,10 @@ func TestThemeService(t *testing.T) {
 	themeService := NewThemeService(cfg, settingsService)
 	ctx := context.Background()
 
-	validTheme := []byte(`{
-		"light": {"colors": {"bg-primary": "#fff"}},
-		"dark": {"colors": {"bg-primary": "#000"}}
-	}`)
-	err := os.WriteFile(filepath.Join(themesDir, "valid.json"), validTheme, 0644)
+	err := os.WriteFile(filepath.Join(themesDir, "valid.css"), []byte(validThemeCSS), 0644)
 	assert.NoError(t, err)
 
-	invalidTheme := []byte(`{ "invalid": "json" `)
-	err = os.WriteFile(filepath.Join(themesDir, "invalid.json"), invalidTheme, 0644)
-	assert.NoError(t, err)
-
-	missingTheme := []byte(`{ "shared": {} }`)
-	err = os.WriteFile(filepath.Join(themesDir, "missing.json"), missingTheme, 0644)
+	err = os.WriteFile(filepath.Join(themesDir, "no-root.css"), []byte(`.hero { color: red; }`), 0644)
 	assert.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(themesDir, "not-a-theme.txt"), []byte("text"), 0644)
@@ -46,16 +47,18 @@ func TestThemeService(t *testing.T) {
 		themes, err := themeService.ListThemes()
 		assert.NoError(t, err)
 		assert.Len(t, themes, 1)
-		assert.Equal(t, "valid", themes[0].Name)
+		assert.Equal(t, "Valid", themes[0].Name)
+		assert.Equal(t, "#123456", themes[0].PreviewColor)
+		assert.Equal(t, "A valid test theme.", themes[0].Description)
 	})
 
 	t.Run("GetActiveTheme fallback", func(t *testing.T) {
-		err = os.WriteFile(filepath.Join(themesDir, "default.json"), validTheme, 0644)
+		err = os.WriteFile(filepath.Join(themesDir, "default.css"), []byte(validThemeCSS), 0644)
 		assert.NoError(t, err)
 
 		theme, err := themeService.GetActiveTheme(ctx)
 		assert.NoError(t, err)
-		assert.Equal(t, "default", theme.Name)
+		assert.Equal(t, filepath.Join(themesDir, "default.css"), theme.Path)
 	})
 
 	t.Run("SetActiveTheme success", func(t *testing.T) {
@@ -67,17 +70,17 @@ func TestThemeService(t *testing.T) {
 
 		theme, err := themeService.GetActiveTheme(ctx)
 		assert.NoError(t, err)
-		assert.Equal(t, "valid", theme.Name)
+		assert.Equal(t, "Valid", theme.Name)
 
-		// Verify theme.json sync
-		publicThemePath := filepath.Join(frontendDir, "images", "theme.json")
+		// Verify theme.css sync to <FrontendDir>/css/theme.css
+		publicThemePath := filepath.Join(frontendDir, "css", "theme.css")
 		data, err := os.ReadFile(publicThemePath)
 		assert.NoError(t, err)
-		assert.JSONEq(t, string(validTheme), string(data))
+		assert.Equal(t, validThemeCSS, string(data))
 	})
 
 	t.Run("SetActiveTheme invalid", func(t *testing.T) {
-		err := themeService.SetActiveTheme(ctx, "invalid")
+		err := themeService.SetActiveTheme(ctx, "no-root")
 		assert.Error(t, err)
 	})
 
@@ -96,7 +99,12 @@ func TestThemeService(t *testing.T) {
 	})
 
 	t.Run("ReadAndValidateTheme missing file", func(t *testing.T) {
-		_, err := themeService.ReadAndValidateTheme(filepath.Join(themesDir, "non_existent.json"), "non_existent")
+		_, err := themeService.ReadAndValidateTheme(filepath.Join(themesDir, "non_existent.css"), "non_existent")
+		assert.Error(t, err)
+	})
+
+	t.Run("ReadAndValidateTheme no :root block", func(t *testing.T) {
+		_, err := themeService.ReadAndValidateTheme(filepath.Join(themesDir, "no-root.css"), "no-root")
 		assert.Error(t, err)
 	})
 }
@@ -111,20 +119,14 @@ func TestThemeServiceUserThemes(t *testing.T) {
 	systemDir := t.TempDir()
 	userDir := t.TempDir()
 
-	validTheme := []byte(`{
-		"light": {"colors": {"bg-primary": "#fff"}},
-		"dark": {"colors": {"bg-primary": "#000"}}
-	}`)
-	userTheme := []byte(`{
-		"light": {"colors": {"bg-primary": "#123"}},
-		"dark": {"colors": {"bg-primary": "#456"}}
-	}`)
+	userThemeCSS := `/* theme-title: "shared" */
+:root { --bg-primary: #123; }`
 
 	// System has "system-only" and "shared"; user has "user-only" and "shared" (override)
-	assert.NoError(t, os.WriteFile(filepath.Join(systemDir, "system-only.json"), validTheme, 0644))
-	assert.NoError(t, os.WriteFile(filepath.Join(systemDir, "shared.json"), validTheme, 0644))
-	assert.NoError(t, os.WriteFile(filepath.Join(userDir, "user-only.json"), userTheme, 0644))
-	assert.NoError(t, os.WriteFile(filepath.Join(userDir, "shared.json"), userTheme, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(systemDir, "system-only.css"), []byte(minimalThemeCSS), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(systemDir, "shared.css"), []byte(minimalThemeCSS), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(userDir, "user-only.css"), []byte(minimalThemeCSS), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(userDir, "shared.css"), []byte(userThemeCSS), 0644))
 
 	cfg := &config.Config{ThemesPath: systemDir, UserThemesPath: userDir}
 	ts := NewThemeService(cfg, settingsService)
@@ -142,14 +144,14 @@ func TestThemeServiceUserThemes(t *testing.T) {
 		assert.Contains(t, byName, "user-only")
 		assert.Contains(t, byName, "shared")
 		// "shared" should come from user dir
-		assert.Equal(t, filepath.Join(userDir, "shared.json"), byName["shared"].Path)
+		assert.Equal(t, filepath.Join(userDir, "shared.css"), byName["shared"].Path)
 	})
 
 	t.Run("GetActiveTheme prefers user theme", func(t *testing.T) {
-		assert.NoError(t, os.WriteFile(filepath.Join(userDir, "default.json"), userTheme, 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(userDir, "default.css"), []byte(minimalThemeCSS), 0644))
 		theme, err := ts.GetActiveTheme(ctx)
 		assert.NoError(t, err)
-		assert.Equal(t, filepath.Join(userDir, "default.json"), theme.Path)
+		assert.Equal(t, filepath.Join(userDir, "default.css"), theme.Path)
 	})
 
 	t.Run("SetActiveTheme finds user theme", func(t *testing.T) {

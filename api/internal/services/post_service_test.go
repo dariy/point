@@ -23,7 +23,7 @@ func TestPostService_GetPostByID(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	post, err := svc.CreatePost(ctx, CreatePostParams{Title: "TestPost", Slug: "testpost", AuthorID: 1, Status: "draft"})
+	post, _, err := svc.CreatePost(ctx, CreatePostParams{Title: "TestPost", Slug: "testpost", AuthorID: 1, Status: "draft"})
 	if err != nil {
 		t.Fatalf("CreatePost failed: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestPostService_GetPostBySlug(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "SlugPost", Slug: "slug-post", AuthorID: 1, Status: "draft"})
+	post, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "SlugPost", Slug: "slug-post", AuthorID: 1, Status: "draft"})
 
 	got, err := svc.GetPostBySlug(ctx, "slug-post")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestPostService_ListPublishedPostStubs(t *testing.T) {
 	}
 
 	// Publish a post
-	p, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Pub", Slug: "pub", AuthorID: 1, Status: "draft"})
+	p, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Pub", Slug: "pub", AuthorID: 1, Status: "draft"})
 	_, _ = svc.PublishPost(ctx, p.ID)
 
 	stubs2, err := svc.ListPublishedPostStubs(ctx)
@@ -108,7 +108,7 @@ func TestPostService_IncrementAndFlushViewCounts(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Views", Slug: "views", AuthorID: 1, Status: "published"})
+	post, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Views", Slug: "views", AuthorID: 1, Status: "published"})
 	_, _ = svc.PublishPost(ctx, post.ID)
 
 	// Increment view count
@@ -141,7 +141,7 @@ func TestPostService_GetTagsForPost(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	post, _ := svc.CreatePost(ctx, CreatePostParams{
+	post, _, _ := svc.CreatePost(ctx, CreatePostParams{
 		Title:    "Tagged",
 		Slug:     "tagged",
 		AuthorID: 1,
@@ -164,8 +164,8 @@ func TestPostService_GetTagsByPostIDs(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	p1, _ := svc.CreatePost(ctx, CreatePostParams{Title: "P1", Slug: "p1", AuthorID: 1, Status: "draft", Tags: []string{"alpha"}})
-	p2, _ := svc.CreatePost(ctx, CreatePostParams{Title: "P2", Slug: "p2", AuthorID: 1, Status: "draft", Tags: []string{"beta"}})
+	p1, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "P1", Slug: "p1", AuthorID: 1, Status: "draft", Tags: []string{"alpha"}})
+	p2, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "P2", Slug: "p2", AuthorID: 1, Status: "draft", Tags: []string{"beta"}})
 
 	m, err := svc.GetTagsByPostIDs(ctx, []int64{p1.ID, p2.ID})
 	if err != nil {
@@ -185,9 +185,9 @@ func TestPostService_UpdatePost(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Original", Slug: "original", AuthorID: 1, Status: "draft"})
+	post, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Original", Slug: "original", AuthorID: 1, Status: "draft"})
 
-	updated, err := svc.UpdatePost(ctx, UpdatePostParams{
+	updated, _, err := svc.UpdatePost(ctx, UpdatePostParams{
 		ID:       post.ID,
 		AuthorID: 1,
 		Title:    "Updated Title",
@@ -203,7 +203,7 @@ func TestPostService_UpdatePost(t *testing.T) {
 	}
 
 	// Update non-existent post
-	_, err = svc.UpdatePost(ctx, UpdatePostParams{ID: 99999, AuthorID: 1, Title: "X", Slug: "x", Status: "draft"})
+	_, _, err = svc.UpdatePost(ctx, UpdatePostParams{ID: 99999, AuthorID: 1, Title: "X", Slug: "x", Status: "draft"})
 	if err == nil {
 		t.Error("expected error updating non-existent post")
 	}
@@ -215,7 +215,7 @@ func TestPostService_DeletePost(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "ToDelete", Slug: "to-delete", AuthorID: 1, Status: "draft"})
+	post, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "ToDelete", Slug: "to-delete", AuthorID: 1, Status: "draft"})
 
 	if err := svc.SoftDeletePost(ctx, post.ID, 1); err != nil {
 		t.Fatalf("SoftDeletePost failed: %v", err)
@@ -233,7 +233,7 @@ func TestPostService_PublishAndWithdraw(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	post, _ := svc.CreatePost(ctx, CreatePostParams{Title: "PubWd", Slug: "pub-wd", AuthorID: 1, Status: "draft"})
+	post, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "PubWd", Slug: "pub-wd", AuthorID: 1, Status: "draft"})
 
 	published, err := svc.PublishPost(ctx, post.ID)
 	if err != nil {
@@ -258,9 +258,9 @@ func TestPostService_GetPostNavigation(t *testing.T) {
 	ctx := context.Background()
 
 	insertTestUser(t, svc)
-	p1, _ := svc.CreatePost(ctx, CreatePostParams{Title: "First", Slug: "first", AuthorID: 1, Status: "draft"})
+	p1, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "First", Slug: "first", AuthorID: 1, Status: "draft"})
 	_, _ = svc.PublishPost(ctx, p1.ID)
-	p2, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Second", Slug: "second", AuthorID: 1, Status: "draft"})
+	p2, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Second", Slug: "second", AuthorID: 1, Status: "draft"})
 	_, _ = svc.PublishPost(ctx, p2.ID)
 
 	_, _, err := svc.GetPostNavigation(ctx, p1.ID, true)

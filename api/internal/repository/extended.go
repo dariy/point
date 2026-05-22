@@ -18,7 +18,7 @@ func (r *Repository) ListPosts(ctx context.Context, arg models.ListPostsParams) 
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -61,7 +61,7 @@ LIMIT ? OFFSET ?`
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
-			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -136,7 +136,7 @@ _hide(id) AS (
 )
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
     AND p.deleted_at IS NULL
@@ -170,7 +170,7 @@ LIMIT ? OFFSET ?`
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
-			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -241,7 +241,7 @@ WITH RECURSIVE ehp(id) AS (
 )
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -297,7 +297,7 @@ LIMIT ? OFFSET ?`
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
-			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -504,7 +504,7 @@ func (r *Repository) GetPublishedPostsForFeed(ctx context.Context, limit int) ([
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token,
-       p.preview_expires_at
+       p.preview_expires_at, p.css
 FROM posts p
 WHERE LOWER(p.status) = 'published'
 AND p.deleted_at IS NULL
@@ -537,7 +537,7 @@ LIMIT ?`
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
-			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -645,7 +645,7 @@ func (r *Repository) GetPostByPreviewToken(ctx context.Context, token string) (m
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
        p.author_id, p.thumbnail_path, p.meta_description, p.preview_token,
-       p.preview_expires_at
+       p.preview_expires_at, p.css
 FROM posts p
 WHERE p.preview_token = ? AND p.deleted_at IS NULL LIMIT 1`
 
@@ -655,7 +655,7 @@ WHERE p.preview_token = ? AND p.deleted_at IS NULL LIMIT 1`
 		&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 		&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 		&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
-		&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+		&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 	)
 	return i, err
 }
@@ -1659,7 +1659,7 @@ WITH RECURSIVE ehp(id) AS (
 )
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
-       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE p.deleted_at IS NULL
 AND p.id IN (
@@ -1688,7 +1688,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter, &i.Status,
 			&i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.CreatedAt, &i.UpdatedAt,
-			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
 		}
@@ -1832,7 +1832,7 @@ ehp(id) AS (
 )
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
-       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at
+       p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE p.deleted_at IS NULL
 AND p.id IN (SELECT post_id FROM _yposts)
@@ -1859,7 +1859,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter, &i.Status,
 			&i.IsFeatured, &i.ViewCount, &i.PublishedAt, &i.CreatedAt, &i.UpdatedAt,
-			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt,
+			&i.AuthorID, &i.ThumbnailPath, &i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
 		}

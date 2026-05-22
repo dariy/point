@@ -197,7 +197,7 @@ export default class MenuPage extends Component {
         <div class="menu-row-inputs">
           <input type="text" class="menu-label-input" placeholder="Label"
             value="${escapeHtml(item.label)}" data-index="${index}" data-field="label">
-          <input type="text" class="menu-url-input" placeholder="URL (e.g. /tag/travel)"
+          <input type="text" class="menu-url-input" placeholder="URL (e.g. /tags/travel)"
             value="${escapeHtml(item.url)}" data-index="${index}" data-field="url">
         </div>
         <div class="menu-row-actions">

@@ -62,6 +62,7 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		"type":             getPostTypeFromModels(post.Status, tags),
 		"content":          post.Content,
 		"content_html":     htmlContent,
+		"css":              post.Css,
 		"excerpt":          nullString(post.Excerpt),
 		"status":           post.Status,
 		"is_featured":      post.IsFeatured,
@@ -393,6 +394,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 type CreatePostRequest struct {
 	Title           string   `json:"title"`
 	Content         string   `json:"content"`
+	CSS             string   `json:"css"`
 	Excerpt         string   `json:"excerpt"`
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
@@ -442,9 +444,10 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		scheduledAt = nil
 	}
 
-	post, err := h.postService.CreatePost(c.Request().Context(), services.CreatePostParams{
+	post, cssWarnings, err := h.postService.CreatePost(c.Request().Context(), services.CreatePostParams{
 		Title:           req.Title,
 		Content:         req.Content,
+		CSS:             req.CSS,
 		Excerpt:         req.Excerpt,
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
@@ -472,6 +475,9 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	if len(cssWarnings) > 0 {
+		resp["css_warnings"] = cssWarnings
+	}
 
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -479,6 +485,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 type UpdatePostRequest struct {
 	Title           string   `json:"title"`
 	Content         string   `json:"content"`
+	CSS             string   `json:"css"`
 	Excerpt         string   `json:"excerpt"`
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
@@ -520,11 +527,12 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		oldPaths = services.ExtractMediaPaths(old.Content, old.ThumbnailPath.String)
 	}
 
-	updated, err := h.postService.UpdatePost(c.Request().Context(), services.UpdatePostParams{
+	updated, cssWarnings, err := h.postService.UpdatePost(c.Request().Context(), services.UpdatePostParams{
 		ID:              id,
 		AuthorID:        authorID,
 		Title:           req.Title,
 		Content:         req.Content,
+		CSS:             req.CSS,
 		Excerpt:         req.Excerpt,
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
@@ -548,6 +556,9 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	resp, err := h.getFullPostResponse(c, id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if len(cssWarnings) > 0 {
+		resp["css_warnings"] = cssWarnings
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -759,7 +770,7 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 	}
 
 	// Create the post with embedded audio reference
-	post, err := h.postService.CreatePost(c.Request().Context(), services.CreatePostParams{
+	post, _, err := h.postService.CreatePost(c.Request().Context(), services.CreatePostParams{
 		Title:     title,
 		Content:   "[audio:" + strconv.FormatInt(media.ID, 10) + "]",
 		Slug:      "",
