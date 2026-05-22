@@ -143,20 +143,15 @@ export class PublicHeaderTagsBar extends Component {
     this._cleanupStrip = setupScrollableStrip(track, filters);
 
     // Store bound refs so they can be removed in beforeUnmount
-    this._boundOutside       = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
-    this._boundCloseAll      = () => {
+    this._boundOutside  = (e) => { if (!this.container.contains(e.target)) this._closeAll(); };
+    this._boundCloseAll = () => {
       if (Date.now() - (this._lastOpenTime || 0) < 300) return;
       this._closeAll();
     };
-    this._boundCheckOverflow = () => this._checkOverflow();
 
     document.addEventListener('click',  this._boundOutside);
-    window.addEventListener('scroll',   this._boundCloseAll,      { passive: true });
-    window.addEventListener('resize',   this._boundCloseAll,      { passive: true });
-    window.addEventListener('resize',   this._boundCheckOverflow, { passive: true });
-
-    // Defer one frame so the header's flex layout has settled before measuring.
-    requestAnimationFrame(() => this._checkOverflow());
+    window.addEventListener('scroll',   this._boundCloseAll, { passive: true });
+    window.addEventListener('resize',   this._boundCloseAll, { passive: true });
   }
 
   beforeUnmount() {
@@ -166,24 +161,8 @@ export class PublicHeaderTagsBar extends Component {
     document.removeEventListener('click',  this._boundOutside);
     window.removeEventListener('scroll',   this._boundCloseAll);
     window.removeEventListener('resize',   this._boundCloseAll);
-    window.removeEventListener('resize',   this._boundCheckOverflow);
 
     this._cleanupStrip?.();
-  }
-
-  /**
-   * If the filter chips overflow the available inline space, apply
-   * `.tags-stacked` to the header group so the bar drops to a second line.
-   * Clears the class first to get an accurate measurement.
-   */
-  _checkOverflow() {
-    const headerGroup = this.container.closest('.site-header-group');
-    const filters     = this.container.querySelector('.tag-strip-scroll');
-    if (!headerGroup || !filters) return;
-
-    headerGroup.classList.remove('tags-stacked');
-    const overflows = filters.scrollWidth > filters.clientWidth + 2;
-    headerGroup.classList.toggle('tags-stacked', overflows);
   }
 
   // Open a dropdown, positioning it with position:fixed so it escapes
