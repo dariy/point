@@ -103,6 +103,8 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"slug":             p.Slug,
 		"type":             getPostType(p.Status, tags),
 		"content":          p.Content,
+		"css":              p.Css,
+		"immersive_mode":   p.ImmersiveMode,
 		"excerpt":          nullString(p.Excerpt),
 		"formatter":        p.Formatter,
 		"status":           p.Status,
