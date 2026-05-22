@@ -60,7 +60,14 @@ export function parseNodes(content) {
 
   const flushText = () => {
     const text = textBuf.join("\n").trim();
-    if (text) nodes.push({ type: "text", text });
+    if (text) {
+      const fenceMatch = text.match(/^:::\{\.([^}]+)\}\n([\s\S]*)\n:::$/);
+      if (fenceMatch) {
+        nodes.push({ type: "text", text: fenceMatch[2], blockClass: fenceMatch[1] });
+      } else {
+        nodes.push({ type: "text", text });
+      }
+    }
     textBuf = [];
   };
 
@@ -88,6 +95,7 @@ export function serializeNodes(nodes) {
   return nodes
     .map((n) => {
       if (n.type === "image") return n.path;
+      if (n.blockClass) return `:::{.${n.blockClass}}\n${n.text}\n:::\n---`;
       return n.text + "\n---";
     })
     .join("\n");

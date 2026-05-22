@@ -475,6 +475,32 @@ body.drag-active::after {
     padding-right: var(--ve-text-icon-padding-right);
 }
 
+/* Column wrapper for block class input + textarea */
+.ve-text-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Block class input — small, subtle, above the textarea */
+.ve-block-class {
+    border: none;
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    padding: 2px var(--spacing-xs);
+    outline: none;
+    width: 100%;
+    transition: color var(--transition-theme);
+}
+
+.ve-block-class::placeholder {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
 /* Auto-resizing textarea inside text card */
 .ve-text-area {
     flex: 1;
