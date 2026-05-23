@@ -240,10 +240,10 @@ export class PostContent extends Component {
     const backPost = feedMode ? nextPost : prevPost;
     const fwdPost = feedMode ? prevPost : nextPost;
     const prev = backPost
-      ? `<button class="carousel-prev" aria-label="Previous post">&#10094;</button>`
+      ? `<div class="immersive-nav-panel immersive-nav-prev" aria-label="Previous post"><div class="immersive-nav-gradient"></div></div>`
       : "";
     const next = fwdPost
-      ? `<button class="carousel-next" aria-label="Next post">&#10095;</button>`
+      ? `<div class="immersive-nav-panel immersive-nav-next" aria-label="Next post"><div class="immersive-nav-gradient"></div></div>`
       : "";
     return prev + next;
   }
@@ -269,8 +269,8 @@ export class PostContent extends Component {
     return `
       <div class="carousel-container" id="immersive-carousel">
         ${slides}
-        <button class="carousel-prev" aria-label="Previous">&#10094;</button>
-        <button class="carousel-next" aria-label="Next">&#10095;</button>
+        <div class="immersive-nav-panel immersive-nav-prev" aria-label="Previous"><div class="immersive-nav-gradient"></div></div>
+        <div class="immersive-nav-panel immersive-nav-next" aria-label="Next"><div class="immersive-nav-gradient"></div></div>
         <div class="carousel-indicators">${dots}</div>
       </div>`;
   }
@@ -465,11 +465,11 @@ export class PostContent extends Component {
     };
 
     if (carousel) {
-      this._on(carousel.querySelector(".carousel-prev"), "click", (e) => {
+      this._on(carousel.querySelector(".immersive-nav-prev"), "click", (e) => {
         e.stopPropagation();
         goTo(index - 1);
       });
-      this._on(carousel.querySelector(".carousel-next"), "click", (e) => {
+      this._on(carousel.querySelector(".immersive-nav-next"), "click", (e) => {
         e.stopPropagation();
         goTo(index + 1);
       });
@@ -483,11 +483,11 @@ export class PostContent extends Component {
       // Single-image post — wire up post-navigation arrows rendered by _renderImmersivePostNav.
       const wrapper = this.$(".immersive-wrapper");
       if (wrapper) {
-        this._on(wrapper.querySelector(".carousel-prev"), "click", (e) => {
+        this._on(wrapper.querySelector(".immersive-nav-prev"), "click", (e) => {
           e.stopPropagation();
           goToPost(backPost);
         });
-        this._on(wrapper.querySelector(".carousel-next"), "click", (e) => {
+        this._on(wrapper.querySelector(".immersive-nav-next"), "click", (e) => {
           e.stopPropagation();
           goToPost(fwdPost);
         });
@@ -502,6 +502,24 @@ export class PostContent extends Component {
     // ── Gestures & Zoom ──
     const wrapper = this.$(".immersive-wrapper");
     const visuals = this.$(".immersive-visuals");
+
+    // Cache nav gradient elements for mousemove updates
+    const navRoot = carousel || wrapper;
+    const navPrevGrad = navRoot?.querySelector(".immersive-nav-prev .immersive-nav-gradient");
+    const navNextGrad = navRoot?.querySelector(".immersive-nav-next .immersive-nav-gradient");
+
+    // Touch gradient feedback for nav panels
+    const addNavTouchFeedback = (selector) => {
+      const panel = navRoot?.querySelector(selector);
+      if (!panel) return;
+      const grad = panel.querySelector(".immersive-nav-gradient");
+      if (!grad) return;
+      this._on(panel, "touchstart", () => { grad.style.opacity = 0.5; }, { passive: true });
+      this._on(panel, "touchend",   () => { grad.style.opacity = 0; },   { passive: true });
+      this._on(panel, "touchcancel",() => { grad.style.opacity = 0; },   { passive: true });
+    };
+    addNavTouchFeedback(".immersive-nav-prev");
+    addNavTouchFeedback(".immersive-nav-next");
 
     this._resetZoom = () => {
       this._zoomState = { scale: 1, x: 0, y: 0 };
@@ -687,7 +705,7 @@ export class PostContent extends Component {
         // Don't hide/show the overlay when the tap landed on an interactive element
         // (nav arrows, info card, etc.) — those elements handle their own action.
         const tapped = document.elementFromPoint(x, y);
-        if (tapped?.closest("a, button, input, .post-info-card")) return;
+        if (tapped?.closest("a, button, .immersive-nav-panel, input, .post-info-card")) return;
         if (document.body.classList.contains("ui-hidden")) {
           showUI();
         } else {
@@ -792,7 +810,7 @@ export class PostContent extends Component {
 
     this._on(wrapper, "click", (e) => {
       if (Date.now() - lastTouchTime < 500) return; // Ignore simulated click from touch
-      if (e.target.closest("a, button, input, .post-info-card")) return;
+      if (e.target.closest("a, button, .immersive-nav-panel, input, .post-info-card")) return;
       if (_mouseDragged) return; // Drag-to-slide — not a click
       if (document.body.classList.contains("ui-hidden")) {
         showUI();
@@ -820,6 +838,21 @@ export class PostContent extends Component {
       },
       { passive: true },
     );
+    // Use pointermove (mouse only) for gradient tracking — avoids synthetic mouse
+    // events that mobile browsers fire after touch, which would re-show the gradient.
+    this._on(document, "pointermove", (e) => {
+      if (e.pointerType !== "mouse") return;
+      const x = e.clientX;
+      const w = window.innerWidth;
+      const zone = w / 3;
+      if (navPrevGrad) navPrevGrad.style.opacity = x < zone ? ((1 - x / zone) * 0.5).toFixed(3) : 0;
+      if (navNextGrad) navNextGrad.style.opacity = x > w - zone ? (((x - (w - zone)) / zone) * 0.5).toFixed(3) : 0;
+    }, { passive: true });
+    this._on(document, "pointerleave", (e) => {
+      if (e.pointerType !== "mouse") return;
+      if (navPrevGrad) navPrevGrad.style.opacity = 0;
+      if (navNextGrad) navNextGrad.style.opacity = 0;
+    }, { passive: true });
     this._on(
       document,
       "mousedown",

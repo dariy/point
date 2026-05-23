@@ -29,42 +29,34 @@
     z-index: 10;
 }
 
-.carousel-prev,
-.carousel-next {
+/* Immersive navigation panels — replace arrow buttons */
+.immersive-nav-panel {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: var(--color-black-alpha-30);
-    color: white;
-    border: none;
-    width: var(--carousel-prev-width);
-    height: var(--carousel-prev-height);
-    border-radius: 50%;
-    font-size: var(--font-size-2xl);
-    cursor: pointer;
+    top: 0;
+    width: 33.33%;
+    height: 100%;
     z-index: 20;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color var(--transition-theme),
-        color var(--transition-theme),
-        transform 0.2s ease,
-        scale 0.2s ease;
-    backdrop-filter: blur(var(--carousel-prev-backdrop-filter));
+    cursor: pointer;
+    user-select: none;
 }
 
-.carousel-prev:hover,
-.carousel-next:hover {
-    background: var(--color-black-alpha-60);
-    transform: translateY(-50%) scale(1.1);
+.immersive-nav-prev { left: 0; }
+.immersive-nav-next { right: 0; }
+
+.immersive-nav-gradient {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
 }
 
-.carousel-prev {
-    left: var(--carousel-prev-left);
+.immersive-nav-prev .immersive-nav-gradient {
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.5), transparent);
 }
 
-.carousel-next {
-    right: var(--carousel-next-right);
+.immersive-nav-next .immersive-nav-gradient {
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.5), transparent);
 }
 
 .carousel-indicators {
@@ -105,17 +97,6 @@
 }
 
 /* Light mode carousel controls */
-[data-theme="light"].immersive-layout .carousel-prev,
-[data-theme="light"].immersive-layout .carousel-next {
-    background: var(--color-black-alpha-60);
-    color: white;
-}
-
-[data-theme="light"].immersive-layout .carousel-prev:hover,
-[data-theme="light"].immersive-layout .carousel-next:hover {
-    background: var(--color-black-alpha-80);
-}
-
 [data-theme="light"].immersive-layout .carousel-indicators {
     background: var(--color-black-alpha-50);
 }
@@ -132,9 +113,7 @@
     background: white;
 }
 
-/* Hide carousel controls in UI hidden mode */
-.immersive-layout.ui-hidden .carousel-prev,
-.immersive-layout.ui-hidden .carousel-next,
+/* Hide carousel indicators in UI hidden mode */
 .immersive-layout.ui-hidden .carousel-indicators {
     opacity: 0;
     pointer-events: none;
@@ -155,46 +134,4 @@
 }
 .immersive-fade-out {
   animation: immersiveFadeOut 0.2s ease-in forwards;
-}
-
-/* Navigation press hints — shown on pointerdown in left/right zones */
-.immersive-wrapper::before,
-.immersive-wrapper::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    width: 30%;
-    height: 100%;
-    z-index: 15;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.12s ease;
-}
-
-.immersive-wrapper::before {
-    left: 0;
-    background: linear-gradient(to right, var(--color-black-alpha-20), transparent);
-}
-
-.immersive-wrapper::after {
-    right: 0;
-    background: linear-gradient(to left, var(--color-black-alpha-20), transparent);
-}
-
-.immersive-wrapper.pressing-left::before { opacity: 1; }
-.immersive-wrapper.pressing-right::after  { opacity: 1; }
-
-/* Highlight the matching nav button on press (works even in ui-hidden mode) */
-.immersive-wrapper.pressing-left .carousel-prev,
-.immersive-layout.ui-hidden .immersive-wrapper.pressing-left .carousel-prev {
-    opacity: 1;
-    background: var(--color-black-alpha-65);
-    transform: translateY(-50%) scale(1.15);
-}
-
-.immersive-wrapper.pressing-right .carousel-next,
-.immersive-layout.ui-hidden .immersive-wrapper.pressing-right .carousel-next {
-    opacity: 1;
-    background: var(--color-black-alpha-65);
-    transform: translateY(-50%) scale(1.15);
 }
