@@ -124,3 +124,14 @@ type User struct {
 	CreatedAt    time.Time      `json:"created_at"`
 	LastLogin    sql.NullTime   `json:"last_login"`
 }
+
+type WebauthnCredential struct {
+	ID           int64        `json:"id"`
+	UserID       int64        `json:"user_id"`
+	CredentialID []byte       `json:"credential_id"`
+	PublicKey    []byte       `json:"public_key"`
+	Aaguid       []byte       `json:"aaguid"`
+	SignCount    int64        `json:"sign_count"`
+	CreatedAt    time.Time    `json:"created_at"`
+	LastUsedAt   sql.NullTime `json:"last_used_at"`
+}

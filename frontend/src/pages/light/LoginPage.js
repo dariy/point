@@ -11,18 +11,22 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { login } from '../../api/auth.js';
+import { login, loginWithPasskey } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 
 export default class LoginPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: false, error: null };
+    this.state = {
+      loading: false,
+      error: null,
+      passkeySupported: typeof window.PublicKeyCredential !== 'undefined',
+    };
   }
 
   render() {
-    const { loading, error } = this.state;
+    const { loading, error, passkeySupported } = this.state;
     const settings = store.get('settings') || {};
     const multiUser = settings.multi_user_mode === 'true' || settings.multi_user_mode === true;
 
@@ -30,6 +34,11 @@ export default class LoginPage extends Component {
       <div class="login-overlay-backdrop" id="login-backdrop">
         <div class="login-modal-box">
           ${error ? `<p class="login-modal-error" role="alert">${escapeHtml(error)}</p>` : ''}
+          ${passkeySupported ? `
+          <button id="passkey-btn" class="btn btn-secondary login-passkey-btn" ${loading ? 'disabled' : ''}>
+            Sign in with Passkey
+          </button>
+          <div class="login-divider"><span>or</span></div>` : ''}
           <form id="login-form" class="login-modal-form" novalidate>
             ${multiUser ? `
             <input type="text" id="username-input" name="username"
@@ -47,6 +56,23 @@ export default class LoginPage extends Component {
   afterRender() {
     const form = this.$('#login-form');
     if (!form) return;
+
+    // Passkey sign-in button
+    this.$('#passkey-btn')?.addEventListener('click', async () => {
+      if (this.state.loading) return;
+      this.setState({ loading: true, error: null });
+      try {
+        const result = await loginWithPasskey();
+        store.set('user', result.user);
+        this.props.onSuccess?.(result.user);
+      } catch (err) {
+        if (err?.name !== 'NotAllowedError') {
+          this.setState({ loading: false, error: err?.message || 'Passkey login failed.' });
+        } else {
+          this.setState({ loading: false });
+        }
+      }
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

@@ -2569,3 +2569,95 @@ func (r *Repository) DeleteSecret(ctx context.Context, key string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM blog_secrets WHERE key = ?`, key)
 	return err
 }
+
+// WebAuthnCredential represents a stored passkey credential
+type WebAuthnCredential struct {
+	ID           int64
+	UserID       int64
+	CredentialID []byte
+	PublicKey    []byte
+	AAGUID       []byte
+	SignCount    uint32
+	CreatedAt    time.Time
+	LastUsedAt   *time.Time
+}
+
+func (r *Repository) CreateWebAuthnCredential(ctx context.Context, userID int64, credID, pubKey, aaguid []byte, signCount uint32) (*WebAuthnCredential, error) {
+	const q = `
+INSERT INTO webauthn_credentials (user_id, credential_id, public_key, aaguid, sign_count)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, created_at, last_used_at`
+
+	var id int64
+	var createdAt time.Time
+	var lastUsedAt *time.Time
+	err := r.db.QueryRowContext(ctx, q, userID, credID, pubKey, aaguid, signCount).Scan(&id, &createdAt, &lastUsedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WebAuthnCredential{
+		ID:           id,
+		UserID:       userID,
+		CredentialID: credID,
+		PublicKey:    pubKey,
+		AAGUID:       aaguid,
+		SignCount:    signCount,
+		CreatedAt:    createdAt,
+		LastUsedAt:   lastUsedAt,
+	}, nil
+}
+
+func (r *Repository) GetWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error) {
+	const q = `
+SELECT id, user_id, credential_id, public_key, aaguid, sign_count, created_at, last_used_at
+FROM webauthn_credentials
+WHERE user_id = ?`
+
+	rows, err := r.db.QueryContext(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var creds []WebAuthnCredential
+	for rows.Next() {
+		var cred WebAuthnCredential
+		err := rows.Scan(&cred.ID, &cred.UserID, &cred.CredentialID, &cred.PublicKey, &cred.AAGUID, &cred.SignCount, &cred.CreatedAt, &cred.LastUsedAt)
+		if err != nil {
+			return nil, err
+		}
+		creds = append(creds, cred)
+	}
+
+	return creds, rows.Err()
+}
+
+func (r *Repository) GetWebAuthnCredentialByCredentialID(ctx context.Context, credID []byte) (*WebAuthnCredential, error) {
+	const q = `
+SELECT id, user_id, credential_id, public_key, aaguid, sign_count, created_at, last_used_at
+FROM webauthn_credentials
+WHERE credential_id = ?`
+
+	row := r.db.QueryRowContext(ctx, q, credID)
+
+	var cred WebAuthnCredential
+	err := row.Scan(&cred.ID, &cred.UserID, &cred.CredentialID, &cred.PublicKey, &cred.AAGUID, &cred.SignCount, &cred.CreatedAt, &cred.LastUsedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cred, nil
+}
+
+func (r *Repository) DeleteWebAuthnCredentialByUserID(ctx context.Context, userID int64) error {
+	const q = `DELETE FROM webauthn_credentials WHERE user_id = ?`
+	_, err := r.db.ExecContext(ctx, q, userID)
+	return err
+}
+
+func (r *Repository) UpdateWebAuthnCredentialSignCount(ctx context.Context, credID []byte, signCount uint32) error {
+	const q = `UPDATE webauthn_credentials SET sign_count = ?, last_used_at = CURRENT_TIMESTAMP WHERE credential_id = ?`
+	_, err := r.db.ExecContext(ctx, q, signCount, credID)
+	return err
+}
