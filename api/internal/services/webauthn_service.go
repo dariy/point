@@ -53,6 +53,10 @@ func (u WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 				AAGUID:    c.AAGUID,
 				SignCount: c.SignCount,
 			},
+			Flags: webauthn.CredentialFlags{
+				BackupEligible: c.BackupEligible,
+				BackupState:    c.BackupState,
+			},
 		}
 	}
 	return creds
@@ -148,7 +152,7 @@ func (s *WebAuthnService) FinishRegistration(ctx context.Context, userID int64, 
 		return fmt.Errorf("failed to finish registration: %w", err)
 	}
 
-	_, err = s.repo.CreateWebAuthnCredential(ctx, userID, credential.ID, credential.PublicKey, credential.Authenticator.AAGUID, credential.Authenticator.SignCount)
+	_, err = s.repo.CreateWebAuthnCredential(ctx, userID, credential.ID, credential.PublicKey, credential.Authenticator.AAGUID, credential.Authenticator.SignCount, credential.Flags.BackupEligible, credential.Flags.BackupState)
 	if err != nil {
 		return fmt.Errorf("failed to save credential: %w", err)
 	}
@@ -206,9 +210,9 @@ func (s *WebAuthnService) FinishLogin(ctx context.Context, sessionKey string, r 
 		return 0, fmt.Errorf("failed to finish discoverable login: %w", err)
 	}
 
-	// If login was successful, update the credential's sign count.
-	if err := s.repo.UpdateWebAuthnCredentialSignCount(ctx, credential.ID, credential.Authenticator.SignCount); err != nil {
-		log.Printf("warning: failed to update sign count for credential %x: %v", credential.ID, err)
+	// Update sign count and backup state after successful login.
+	if err := s.repo.UpdateWebAuthnCredential(ctx, credential.ID, credential.Authenticator.SignCount, credential.Flags.BackupState); err != nil {
+		log.Printf("warning: failed to update credential after login for %x: %v", credential.ID, err)
 	}
 
 	// The UserID is stored on the credential object returned by FinishDiscoverableLogin

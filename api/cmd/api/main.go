@@ -604,6 +604,14 @@ func main() {
 			"create_webauthn_credentials_user_id_index",
 			`CREATE INDEX IF NOT EXISTS idx_webauthn_user_id ON webauthn_credentials(user_id)`,
 		},
+		{
+			"add_webauthn_backup_eligible_column",
+			`ALTER TABLE webauthn_credentials ADD COLUMN backup_eligible INTEGER NOT NULL DEFAULT 0`,
+		},
+		{
+			"add_webauthn_backup_state_column",
+			`ALTER TABLE webauthn_credentials ADD COLUMN backup_state INTEGER NOT NULL DEFAULT 0`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
