@@ -162,18 +162,26 @@ export class PostContent extends Component {
     }
   }
 
-  beforeUnmount() {
+  beforeRender() {
     _overlayHidden = document.body.classList.contains("ui-hidden");
-    // Body classes are kept intentionally — the next page's afterRender handles cleanup.
-    // Keeping them prevents the overlay blink when navigating between immersive posts.
     this._listeners.forEach(([t, type, fn, opts]) =>
       t.removeEventListener(type, fn, opts),
     );
     this._listeners = [];
     clearTimeout(this._idleTimer);
+    this._idleTimer = null;
     this._gesture?.destroy();
+    this._gesture = null;
     this._trackpad?.destroy();
+    this._trackpad = null;
     this._cleanupStrip?.();
+    this._cleanupStrip = null;
+  }
+
+  beforeUnmount() {
+    this.beforeRender();
+    // Body classes are kept intentionally — the next page's afterRender handles cleanup.
+    // Keeping them prevents the overlay blink when navigating between immersive posts.
   }
 
   // ── Immersive rendering ───────────────────────────────────────────────────
