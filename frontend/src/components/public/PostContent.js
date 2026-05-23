@@ -826,12 +826,6 @@ export class PostContent extends Component {
           if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX)
             _mouseDragged = true;
         }
-        // Update gradient panel opacity based on cursor proximity to edges
-        const x = e.clientX;
-        const w = window.innerWidth;
-        const zone = w / 3;
-        if (navPrevGrad) navPrevGrad.style.opacity = x < zone ? ((1 - x / zone) * 0.5).toFixed(3) : 0;
-        if (navNextGrad) navNextGrad.style.opacity = x > w - zone ? (((x - (w - zone)) / zone) * 0.5).toFixed(3) : 0;
         // Mouse movement only keeps the UI visible — never un-hides the overlay.
         if (!document.body.classList.contains("ui-hidden")) {
           clearTimeout(this._idleTimer);
@@ -840,7 +834,18 @@ export class PostContent extends Component {
       },
       { passive: true },
     );
-    this._on(document, "mouseleave", () => {
+    // Use pointermove (mouse only) for gradient tracking — avoids synthetic mouse
+    // events that mobile browsers fire after touch, which would re-show the gradient.
+    this._on(document, "pointermove", (e) => {
+      if (e.pointerType !== "mouse") return;
+      const x = e.clientX;
+      const w = window.innerWidth;
+      const zone = w / 3;
+      if (navPrevGrad) navPrevGrad.style.opacity = x < zone ? ((1 - x / zone) * 0.5).toFixed(3) : 0;
+      if (navNextGrad) navNextGrad.style.opacity = x > w - zone ? (((x - (w - zone)) / zone) * 0.5).toFixed(3) : 0;
+    }, { passive: true });
+    this._on(document, "pointerleave", (e) => {
+      if (e.pointerType !== "mouse") return;
       if (navPrevGrad) navPrevGrad.style.opacity = 0;
       if (navNextGrad) navNextGrad.style.opacity = 0;
     }, { passive: true });
