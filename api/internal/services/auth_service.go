@@ -193,6 +193,10 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword stri
 	return nil
 }
 
+func (s *AuthService) GetUserByID(ctx context.Context, userID int64) (models.User, error) {
+	return s.repo.GetUser(ctx, userID)
+}
+
 func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {

@@ -47,6 +47,11 @@ export default [
         HTMLElement: "readonly",
         ResizeObserver: "readonly",
         performance: "readonly",
+        atob: "readonly",
+        btoa: "readonly",
+        Uint8Array: "readonly",
+        ArrayBuffer: "readonly",
+        PublicKeyCredential: "readonly",
         // ES2021 globals
         Promise: "readonly",
         Map: "readonly",
