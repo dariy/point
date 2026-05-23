@@ -378,7 +378,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	if !isAdmin {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		excludeTagIDs, _ = h.tagService.PublicHid denTagIDs(ctx, minPosts)
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
