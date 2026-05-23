@@ -786,6 +786,10 @@ export class PostContent extends Component {
       capture: true,
     });
 
+    this._on(wrapper, "contextmenu", (e) => {
+      e.preventDefault();
+    });
+
     this._on(wrapper, "click", (e) => {
       if (Date.now() - lastTouchTime < 500) return; // Ignore simulated click from touch
       if (e.target.closest("a, button, input, .post-info-card")) return;

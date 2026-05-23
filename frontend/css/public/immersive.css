@@ -201,6 +201,9 @@
     background-color: var(--bg-primary);
     touch-action: none; /* Prevent scroll bouncing on swipe */
     overscroll-behavior: none; /* Prevent trackpad rubber-banding */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none; /* Block iOS long-tap image callout */
 }
 
 .immersive-visuals {
