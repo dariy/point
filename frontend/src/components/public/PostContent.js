@@ -28,8 +28,7 @@ import {
 } from "../../utils/gestures.js";
 import { getPostPageLocation } from "../../api/posts.js";
 
-const IDLE_MS = 2000; // hide UI after 5 s of inactivity
-const MIN_SHOW_MS = 2000; // UI must be visible ≥ 3 s before click-to-hide works
+const MIN_SHOW_MS = 2000; // UI must be visible ≥ 2 s before click-to-hide works
 let _overlayHidden = false; // persists across post navigations
 
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
@@ -109,7 +108,6 @@ export function shouldUseImmersive(post) {
 export class PostContent extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this._idleTimer = null;
     this._lastShowTime = 0;
     this._listeners = []; // [target, type, fn, opts]
     this._zoomState = { scale: 1, x: 0, y: 0 };
@@ -170,7 +168,6 @@ export class PostContent extends Component {
       t.removeEventListener(type, fn, opts),
     );
     this._listeners = [];
-    clearTimeout(this._idleTimer);
     this._gesture?.destroy();
     this._trackpad?.destroy();
     this._cleanupStrip?.();
@@ -710,7 +707,6 @@ export class PostContent extends Component {
           showUI();
         } else {
           hideUI();
-          clearTimeout(this._idleTimer);
         }
       },
       onDoubleTap: (x, y) => {
@@ -745,64 +741,20 @@ export class PostContent extends Component {
         document.body.classList.remove("ui-hidden");
         this._lastShowTime = Date.now();
       }
-      clearTimeout(this._idleTimer);
-      this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
     const hideUI = () => {
-      if (
-        document.querySelector(
-          ".header-search-form.is-active, .tag-group.is-open",
-        )
-      ) {
-        clearTimeout(this._idleTimer);
-        this._idleTimer = setTimeout(hideUI, IDLE_MS);
-        return;
-      }
+      if (document.querySelector(".header-search-form.is-active, .tag-group.is-open")) return;
       hideFlyout();
       document.body.classList.add("ui-hidden");
-    };
-
-    const resetIdle = (e) => {
-      const navKeys = [
-        "ArrowLeft",
-        "ArrowRight",
-        "ArrowUp",
-        "ArrowDown",
-        "PageUp",
-        "PageDown",
-        "Home",
-        "End",
-      ];
-      if (e?.type === "keydown" && navKeys.includes(e.key)) return;
-      showUI();
-    };
-
-    // Pause the hide countdown while the user is pressing/touching;
-    // restart it only after they release.
-    const pauseCountdown = () => clearTimeout(this._idleTimer);
-    const resumeCountdown = () => {
-      clearTimeout(this._idleTimer);
-      this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
 
     let lastTouchTime = 0;
     this._on(
       document,
       "touchstart",
-      () => {
-        lastTouchTime = Date.now();
-        pauseCountdown();
-      },
+      () => { lastTouchTime = Date.now(); },
       { passive: true, capture: true },
     );
-    this._on(document, "touchend", resumeCountdown, {
-      passive: true,
-      capture: true,
-    });
-    this._on(document, "touchcancel", resumeCountdown, {
-      passive: true,
-      capture: true,
-    });
 
     this._on(wrapper, "contextmenu", (e) => {
       e.preventDefault();
@@ -816,7 +768,6 @@ export class PostContent extends Component {
         showUI();
       } else {
         hideUI();
-        clearTimeout(this._idleTimer);
       }
     });
 
@@ -829,11 +780,6 @@ export class PostContent extends Component {
           const dy = e.clientY - _mouseDownY;
           if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX)
             _mouseDragged = true;
-        }
-        // Mouse movement only keeps the UI visible — never un-hides the overlay.
-        if (!document.body.classList.contains("ui-hidden")) {
-          clearTimeout(this._idleTimer);
-          this._idleTimer = setTimeout(hideUI, IDLE_MS);
         }
       },
       { passive: true },
@@ -860,12 +806,9 @@ export class PostContent extends Component {
         _mouseDownX = e.clientX;
         _mouseDownY = e.clientY;
         _mouseDragged = false;
-        pauseCountdown();
       },
       { passive: true },
     );
-    this._on(document, "mouseup", resumeCountdown, { passive: true });
-    this._on(document, "keydown", resetIdle, { passive: true });
 
     // ── Keyboard ──
     this._on(document, "keydown", (e) => {
@@ -897,17 +840,13 @@ export class PostContent extends Component {
           showUI();
         } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
           hideUI();
-          clearTimeout(this._idleTimer);
         }
       }
     });
 
-    // Restore overlay visibility from previous post, or start visible then auto-hide
     this._lastShowTime = Date.now();
     if (_overlayHidden) {
       hideUI();
-    } else {
-      this._idleTimer = setTimeout(hideUI, IDLE_MS);
     }
   }
 
