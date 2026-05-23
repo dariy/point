@@ -18,6 +18,10 @@ export default class PostPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, post: null, nav: null, error: null, forceImmersive: false, startIndex: 0 };
+    this._headerChild = null;
+    this._footerChild = null;
+    this._contentChild = null;
+    this._loadVersion = 0;
   }
 
   beforeUnmount() {
@@ -84,7 +88,7 @@ export default class PostPage extends Component {
     // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
     // but keep the custom menu visible since it contains explicit navigation links.
     const isCustomMenu = settings.nav_menu_mode === 'custom';
-    this.mountChild(PublicHeader, '#header-mount', {
+    this._headerChild = this.mountChild(PublicHeader, '#header-mount', {
       settings,
       navTags: (!post || (immersive && !isCustomMenu)) ? [] : navTags,
       breadcrumb,
@@ -93,14 +97,14 @@ export default class PostPage extends Component {
     });
 
     // Immersive footer shows post tags + post-to-post navigation; normal footer shows pagination slot
-    const immersiveTags = immersive ? (post.tags || []) : [];
+    const immersiveTags = immersive ? (post?.tags || []) : [];
     const immersiveNav = immersive ? { prev: nav?.prev || null, next: nav?.next || null } : null;
-    const exifMedia = immersive ? (post.media || []) : [];
-    this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags, immersiveNav, exifMedia });
+    const exifMedia = immersive ? (post?.media || []) : [];
+    this._footerChild = this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags, immersiveNav, exifMedia });
 
     if (!post) return;
 
-    this.mountChild(PostContent, '#content-mount', {
+    this._contentChild = this.mountChild(PostContent, '#content-mount', {
       post,
       showViewCount: !!settings.show_view_counts,
       showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
@@ -114,6 +118,117 @@ export default class PostPage extends Component {
         this.setState({ forceImmersive: true, startIndex: idx });
       },
     });
+  }
+
+  /**
+   * Called by the router when navigating to another post (same route pattern).
+   * Updates content in-place so header/footer don't blink.
+   */
+  onRouteUpdate(params, query) {
+    this.props = { ...this.props, params, query };
+    // Update state without re-rendering so a stale setState can't show old data.
+    this.state = { ...this.state, loading: true, post: null, nav: null, error: null };
+    const version = ++this._loadVersion;
+
+    // If #content-mount exists we're in loaded state — update content area in-place.
+    const contentEl = this.container.querySelector('#content-mount');
+    if (contentEl && this._contentChild) {
+      this._contentChild.unmount();
+      this._children = this._children.filter(c => c !== this._contentChild);
+      this._contentChild = null;
+      const spinner = document.createElement('div');
+      spinner.className = 'loading-spinner';
+      spinner.setAttribute('aria-label', 'Loading post…');
+      contentEl.textContent = '';
+      contentEl.appendChild(spinner);
+      this._load(version, true);
+    } else {
+      // Still in initial loading state — supersede the old load, fall back to full render.
+      this._load(version, false);
+    }
+  }
+
+  /**
+   * Apply a loaded post to header/footer/content without tearing down the page wrapper.
+   *
+   * Header and footer are updated via setProps() so their containers are never
+   * empty — the old markup is replaced atomically by the new markup in a single
+   * assignment, avoiding the layout shift that unmount() (which clears the
+   * container) would cause.  beforeRender() hooks on those components handle
+   * the cleanup (ResizeObserver, EXIF flyout, etc.) before the replacement.
+   *
+   * Content was explicitly unmounted in onRouteUpdate(), so it is always
+   * created fresh here.
+   */
+  _applyPostUpdate(post, nav, startIndex, forceImmersive) {
+    this.state = { loading: false, post, nav, error: null, startIndex, forceImmersive };
+
+    const settings = store.get('settings') || {};
+    const navTags  = store.get('navTags') || [];
+    const immersive = forceImmersive || shouldUseImmersive(post);
+
+    const dateStr = formatDate(post.published_at || post.created_at);
+    const viewStr = settings.show_view_counts && post.view_count != null
+      ? ` · ${post.view_count} views` : '';
+    const postTooltip = dateStr + viewStr;
+    const breadcrumb = [{ name: post.title, is_hidden: post.is_hidden || post.is_hidden_by_tag, tooltip: postTooltip }];
+    const isCustomMenu = settings.nav_menu_mode === 'custom';
+
+    const immersiveTags = immersive ? (post.tags || []) : [];
+    const immersiveNav = immersive ? { prev: nav?.prev || null, next: nav?.next || null } : null;
+    const exifMedia = immersive ? (post.media || []) : [];
+
+    // setProps() replaces container.innerHTML without clearing the container
+    // first, so the header/footer are never briefly empty during the update.
+    // beforeRender() on each component disconnects stale observers/listeners.
+    this._headerChild?.setProps({
+      settings,
+      navTags: immersive && !isCustomMenu ? [] : navTags,
+      breadcrumb,
+      currentPath: '',
+      editUrl: `/light/posts/${post.id}/edit`,
+    });
+
+    this._footerChild?.setProps({ settings, immersiveTags, immersiveNav, exifMedia });
+
+    // Content was unmounted in onRouteUpdate(); mount a fresh instance.
+    const contentEl = this.container.querySelector('#content-mount');
+    if (contentEl) {
+      const onEnterImmersive = (idx = 0) => {
+        const hash = idx === 0 ? "" : `#${idx + 1}`;
+        window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+        this.setState({ forceImmersive: true, startIndex: idx });
+      };
+      this._contentChild = new PostContent(contentEl, {
+        post,
+        showViewCount: !!settings.show_view_counts,
+        showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
+        prevPost: nav?.prev || null,
+        nextPost: nav?.next || null,
+        forceImmersive: immersive,
+        startIndex,
+        onEnterImmersive,
+      });
+      this._contentChild.mount();
+      this._children.push(this._contentChild);
+    }
+  }
+
+  _showContentError(msg) {
+    const contentEl = this.container.querySelector('#content-mount');
+    if (contentEl) {
+      if (this._contentChild) {
+        this._contentChild.unmount();
+        this._children = this._children.filter(c => c !== this._contentChild);
+        this._contentChild = null;
+      }
+      const p = document.createElement('p');
+      p.className = 'error-message';
+      p.setAttribute('role', 'alert');
+      p.textContent = msg;
+      contentEl.textContent = '';
+      contentEl.appendChild(p);
+    }
   }
 
   _injectJsonLd(post, descText, ogImageObj) {
@@ -151,18 +266,20 @@ export default class PostPage extends Component {
 
   mount() {
     super.mount();
-    this._load();
+    this._load(++this._loadVersion, false);
   }
 
-  async _load() {
+  async _load(version, isInPlaceUpdate) {
     const { slug } = this.props.params || {};
     if (!slug) {
-      this.setState({ loading: false, error: 'Invalid post URL.' });
+      if (isInPlaceUpdate) this._showContentError('Invalid post URL.');
+      else this.setState({ loading: false, error: 'Invalid post URL.' });
       return;
     }
 
     try {
       const post = await getPostBySlug(slug);
+      if (this._unmounted || version !== this._loadVersion) return;
 
       document.title = post.title;
       setCanonical(`${window.location.origin}/posts/${post.slug}`);
@@ -204,6 +321,7 @@ export default class PostPage extends Component {
 
       let postNav = null;
       try { postNav = await getPostNavigation(post.id); } catch { /* optional */ }
+      if (this._unmounted || version !== this._loadVersion) return;
 
       // Check for hash to set initial slide index (e.g. #2 -> index 1)
       let startIndex = 0;
@@ -217,10 +335,16 @@ export default class PostPage extends Component {
         }
       }
 
-      this.setState({ loading: false, post, nav: postNav, error: null, startIndex, forceImmersive });
+      if (isInPlaceUpdate) {
+        this._applyPostUpdate(post, postNav, startIndex, forceImmersive);
+      } else {
+        this.setState({ loading: false, post, nav: postNav, error: null, startIndex, forceImmersive });
+      }
     } catch (err) {
+      if (this._unmounted || version !== this._loadVersion) return;
       const msg = err.status === 404 ? 'Post not found.' : (err.message || 'Failed to load post.');
-      this.setState({ loading: false, post: null, nav: null, error: msg });
+      if (isInPlaceUpdate) this._showContentError(msg);
+      else this.setState({ loading: false, post: null, nav: null, error: msg });
     }
   }
 }

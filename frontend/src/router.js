@@ -44,6 +44,8 @@ class Router {
     this._setupPath = "/setup";
     /** @type {import('./components/Component.js').Component|null} */
     this._currentPage = null;
+    /** @type {{ path: string, load: Function, public?: boolean }|null} */
+    this._currentRoute = null;
 
     this._onPopState = this._onPopState.bind(this);
     this._onNavigate = this._onNavigate.bind(this);
@@ -258,9 +260,22 @@ class Router {
       return;
     }
 
+    // Same-route optimisation: reuse the existing page instance when navigating
+    // between pages that share the same route pattern (e.g. post → post).
+    if (
+      this._currentPage &&
+      this._currentRoute === matchedRoute &&
+      typeof this._currentPage.onRouteUpdate === "function"
+    ) {
+      store.set("route", { pathname, params, query });
+      this._currentPage.onRouteUpdate(params, query);
+      return;
+    }
+
     if (this._currentPage) {
       this._currentPage.unmount();
       this._currentPage = null;
+      this._currentRoute = null;
     }
 
     store.set("route", { pathname, params, query });
@@ -269,6 +284,7 @@ class Router {
       const mod = await matchedRoute.load();
       const PageClass = mod.default;
       this._currentPage = new PageClass(this._mountPoint, { params, query });
+      this._currentRoute = matchedRoute;
       this._currentPage.mount();
     } catch (err) {
       console.error("[Router] Failed to load page:", err);

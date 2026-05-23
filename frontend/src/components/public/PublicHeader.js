@@ -364,6 +364,11 @@ export class PublicHeader extends Component {
     group.classList.add('fold-current');
   }
 
+  beforeRender() {
+    this._ro?.disconnect();
+    this._ro = null;
+  }
+
   beforeUnmount() {
     this._ro?.disconnect();
   }

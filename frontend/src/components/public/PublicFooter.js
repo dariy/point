@@ -224,14 +224,20 @@ export class PublicFooter extends Component {
     this._exifDismiss = dismiss;
   }
 
-  beforeUnmount() {
+  beforeRender() {
     this._cleanupFlyout?.();
+    this._cleanupFlyout = null;
     this._exifHotZone?.stop();
+    this._exifHotZone = null;
     this._exifFlyout?.remove();
     this._exifFlyout = null;
     if (this._exifDismiss) {
       document.removeEventListener("click", this._exifDismiss);
       this._exifDismiss = null;
     }
+  }
+
+  beforeUnmount() {
+    this.beforeRender();
   }
 }
