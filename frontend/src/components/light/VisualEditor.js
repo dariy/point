@@ -73,7 +73,11 @@ export class VisualEditor extends Component {
               <span class="ve-handle-dots"></span>
             </div>
             <span class="ve-text-icon" aria-hidden="true">¶</span>
-            <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${escapeHtml(node.text || '')}</textarea>
+            <div class="ve-text-body">
+              <input class="ve-block-class" type="text" placeholder="Block class (optional)"
+                     value="${escapeHtml(node.blockClass || '')}" aria-label="Block class">
+              <textarea class="ve-text-area" placeholder="Add text\u2026" rows="1">${escapeHtml(node.text || '')}</textarea>
+            </div>
             <button class="ve-remove" data-index="${i}" type="button"
                     aria-label="Remove text block" title="Remove">&times;</button>
           </div>`;
@@ -230,7 +234,12 @@ export class VisualEditor extends Component {
       if (node.type === 'image') return node.path;
       const card = this.container.querySelector(`.ve-card[data-index="${i}"]`);
       const ta = card?.querySelector('.ve-text-area');
+      const blockClassInput = card?.querySelector('.ve-block-class');
       const text = ta ? ta.value : (node.text || '');
+      const blockClass = (blockClassInput ? blockClassInput.value : (node.blockClass || '')).trim();
+      if (blockClass) {
+        return `:::{.${blockClass}}\n${text}\n:::\n---`;
+      }
       return text + '\n---';
     }).join('\n');
   }
@@ -283,6 +292,19 @@ export class VisualEditor extends Component {
         if (this.props.onInput) {
           this.props.onInput();
         }
+      });
+    });
+
+    this.container.querySelectorAll('.ve-block-class').forEach((input) => {
+      input.addEventListener('input', () => {
+        const card = input.closest('.ve-card');
+        if (card) {
+          const idx = parseInt(card.dataset.index, 10);
+          if (this.props.nodes[idx]) {
+            this.props.nodes[idx].blockClass = input.value;
+          }
+        }
+        if (this.props.onInput) this.props.onInput();
       });
     });
   }
