@@ -150,7 +150,15 @@ export default class PostPage extends Component {
 
   /**
    * Apply a loaded post to header/footer/content without tearing down the page wrapper.
-   * All DOM updates here are synchronous so the browser paints them atomically.
+   *
+   * Header and footer are updated via setProps() so their containers are never
+   * empty — the old markup is replaced atomically by the new markup in a single
+   * assignment, avoiding the layout shift that unmount() (which clears the
+   * container) would cause.  beforeRender() hooks on those components handle
+   * the cleanup (ResizeObserver, EXIF flyout, etc.) before the replacement.
+   *
+   * Content was explicitly unmounted in onRouteUpdate(), so it is always
+   * created fresh here.
    */
   _applyPostUpdate(post, nav, startIndex, forceImmersive) {
     this.state = { loading: false, post, nav, error: null, startIndex, forceImmersive };
@@ -166,38 +174,25 @@ export default class PostPage extends Component {
     const breadcrumb = [{ name: post.title, is_hidden: post.is_hidden || post.is_hidden_by_tag, tooltip: postTooltip }];
     const isCustomMenu = settings.nav_menu_mode === 'custom';
 
-    const headerEl = this.container.querySelector('#header-mount');
-    const footerEl = this.container.querySelector('#footer-mount');
-    const contentEl = this.container.querySelector('#content-mount');
-
-    // Unmount and remount header (unmount triggers beforeUnmount for proper cleanup;
-    // both ops are synchronous so the browser sees them as a single frame).
-    if (this._headerChild && headerEl) {
-      this._headerChild.unmount();
-      this._children = this._children.filter(c => c !== this._headerChild);
-      this._headerChild = new PublicHeader(headerEl, {
-        settings,
-        navTags: immersive && !isCustomMenu ? [] : navTags,
-        breadcrumb,
-        currentPath: '',
-        editUrl: `/light/posts/${post.id}/edit`,
-      });
-      this._headerChild.mount();
-      this._children.push(this._headerChild);
-    }
-
     const immersiveTags = immersive ? (post.tags || []) : [];
     const immersiveNav = immersive ? { prev: nav?.prev || null, next: nav?.next || null } : null;
     const exifMedia = immersive ? (post.media || []) : [];
 
-    if (this._footerChild && footerEl) {
-      this._footerChild.unmount();
-      this._children = this._children.filter(c => c !== this._footerChild);
-      this._footerChild = new PublicFooter(footerEl, { settings, immersiveTags, immersiveNav, exifMedia });
-      this._footerChild.mount();
-      this._children.push(this._footerChild);
-    }
+    // setProps() replaces container.innerHTML without clearing the container
+    // first, so the header/footer are never briefly empty during the update.
+    // beforeRender() on each component disconnects stale observers/listeners.
+    this._headerChild?.setProps({
+      settings,
+      navTags: immersive && !isCustomMenu ? [] : navTags,
+      breadcrumb,
+      currentPath: '',
+      editUrl: `/light/posts/${post.id}/edit`,
+    });
 
+    this._footerChild?.setProps({ settings, immersiveTags, immersiveNav, exifMedia });
+
+    // Content was unmounted in onRouteUpdate(); mount a fresh instance.
+    const contentEl = this.container.querySelector('#content-mount');
     if (contentEl) {
       const onEnterImmersive = (idx = 0) => {
         const hash = idx === 0 ? "" : `#${idx + 1}`;
