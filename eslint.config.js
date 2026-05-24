@@ -30,9 +30,28 @@ export default [
         TextDecoder: "readonly",
         requestAnimationFrame: "readonly",
         cancelAnimationFrame: "readonly",
+        requestIdleCallback: "readonly",
+        cancelIdleCallback: "readonly",
         history: "readonly",
         indexedDB: "readonly",
         caches: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        alert: "readonly",
+        confirm: "readonly",
+        prompt: "readonly",
+        DOMParser: "readonly",
+        customElements: "readonly",
+        HTMLElement: "readonly",
+        ResizeObserver: "readonly",
+        performance: "readonly",
+        atob: "readonly",
+        btoa: "readonly",
+        Uint8Array: "readonly",
+        ArrayBuffer: "readonly",
+        PublicKeyCredential: "readonly",
         // ES2021 globals
         Promise: "readonly",
         Map: "readonly",
@@ -40,7 +59,7 @@ export default [
         JSON: "readonly",
         Math: "readonly",
         Date: "readonly",
-      }
+      },
     },
     rules: {
       // Basic recommended rules
@@ -97,7 +116,10 @@ export default [
       "no-unsafe-negation": "error",
       "no-unsafe-optional-chaining": "error",
       "no-unused-labels": "error",
-      "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
+      "no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
       "no-useless-backreference": "error",
       "no-useless-catch": "error",
       "no-useless-escape": "error",
@@ -107,6 +129,6 @@ export default [
       "valid-typeof": "error",
       "no-console": "off",
       "require-atomic-updates": "off",
-    }
-  }
+    },
+  },
 ];

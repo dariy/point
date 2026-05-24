@@ -28,8 +28,7 @@ import {
 } from "../../utils/gestures.js";
 import { getPostPageLocation } from "../../api/posts.js";
 
-const IDLE_MS = 2000; // hide UI after 5 s of inactivity
-const MIN_SHOW_MS = 2000; // UI must be visible ≥ 3 s before click-to-hide works
+const MIN_SHOW_MS = 2000; // UI must be visible ≥ 2 s before click-to-hide works
 let _overlayHidden = false; // persists across post navigations
 
 const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
@@ -63,6 +62,10 @@ function mediaTypeFromPath(path) {
 export function shouldUseImmersive(post) {
   if (!post) return false;
 
+  // Explicit override from editor takes precedence over auto-detection.
+  if (post.immersive_mode === "immersive") return true;
+  if (post.immersive_mode === "non-immersive") return false;
+
   const html = post.content_html || "";
   if (
     html.includes("<hr>") ||
@@ -70,6 +73,9 @@ export function shouldUseImmersive(post) {
     html.includes("<hr />")
   )
     return true;
+
+  // Pages only go immersive when explicitly separated with ---; skip media fallback.
+  if (post.type === "page" || post.status === "page") return false;
 
   const media = post.media || [];
   // Audio-only attachment posts stay in normal layout
@@ -102,7 +108,6 @@ export function shouldUseImmersive(post) {
 export class PostContent extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this._idleTimer = null;
     this._lastShowTime = 0;
     this._listeners = []; // [target, type, fn, opts]
     this._zoomState = { scale: 1, x: 0, y: 0 };
@@ -155,18 +160,24 @@ export class PostContent extends Component {
     }
   }
 
-  beforeUnmount() {
+  beforeRender() {
     _overlayHidden = document.body.classList.contains("ui-hidden");
-    // Body classes are kept intentionally — the next page's afterRender handles cleanup.
-    // Keeping them prevents the overlay blink when navigating between immersive posts.
     this._listeners.forEach(([t, type, fn, opts]) =>
       t.removeEventListener(type, fn, opts),
     );
     this._listeners = [];
-    clearTimeout(this._idleTimer);
     this._gesture?.destroy();
+    this._gesture = null;
     this._trackpad?.destroy();
+    this._trackpad = null;
     this._cleanupStrip?.();
+    this._cleanupStrip = null;
+  }
+
+  beforeUnmount() {
+    this.beforeRender();
+    // Body classes are kept intentionally — the next page's afterRender handles cleanup.
+    // Keeping them prevents the overlay blink when navigating between immersive posts.
   }
 
   // ── Immersive rendering ───────────────────────────────────────────────────
@@ -233,10 +244,10 @@ export class PostContent extends Component {
     const backPost = feedMode ? nextPost : prevPost;
     const fwdPost = feedMode ? prevPost : nextPost;
     const prev = backPost
-      ? `<button class="carousel-prev" aria-label="Previous post">&#10094;</button>`
+      ? `<div class="immersive-nav-panel immersive-nav-prev" aria-label="Previous post"><div class="immersive-nav-gradient"></div></div>`
       : "";
     const next = fwdPost
-      ? `<button class="carousel-next" aria-label="Next post">&#10095;</button>`
+      ? `<div class="immersive-nav-panel immersive-nav-next" aria-label="Next post"><div class="immersive-nav-gradient"></div></div>`
       : "";
     return prev + next;
   }
@@ -262,8 +273,8 @@ export class PostContent extends Component {
     return `
       <div class="carousel-container" id="immersive-carousel">
         ${slides}
-        <button class="carousel-prev" aria-label="Previous">&#10094;</button>
-        <button class="carousel-next" aria-label="Next">&#10095;</button>
+        <div class="immersive-nav-panel immersive-nav-prev" aria-label="Previous"><div class="immersive-nav-gradient"></div></div>
+        <div class="immersive-nav-panel immersive-nav-next" aria-label="Next"><div class="immersive-nav-gradient"></div></div>
         <div class="carousel-indicators">${dots}</div>
       </div>`;
   }
@@ -458,11 +469,11 @@ export class PostContent extends Component {
     };
 
     if (carousel) {
-      this._on(carousel.querySelector(".carousel-prev"), "click", (e) => {
+      this._on(carousel.querySelector(".immersive-nav-prev"), "click", (e) => {
         e.stopPropagation();
         goTo(index - 1);
       });
-      this._on(carousel.querySelector(".carousel-next"), "click", (e) => {
+      this._on(carousel.querySelector(".immersive-nav-next"), "click", (e) => {
         e.stopPropagation();
         goTo(index + 1);
       });
@@ -476,11 +487,11 @@ export class PostContent extends Component {
       // Single-image post — wire up post-navigation arrows rendered by _renderImmersivePostNav.
       const wrapper = this.$(".immersive-wrapper");
       if (wrapper) {
-        this._on(wrapper.querySelector(".carousel-prev"), "click", (e) => {
+        this._on(wrapper.querySelector(".immersive-nav-prev"), "click", (e) => {
           e.stopPropagation();
           goToPost(backPost);
         });
-        this._on(wrapper.querySelector(".carousel-next"), "click", (e) => {
+        this._on(wrapper.querySelector(".immersive-nav-next"), "click", (e) => {
           e.stopPropagation();
           goToPost(fwdPost);
         });
@@ -495,6 +506,24 @@ export class PostContent extends Component {
     // ── Gestures & Zoom ──
     const wrapper = this.$(".immersive-wrapper");
     const visuals = this.$(".immersive-visuals");
+
+    // Cache nav gradient elements for mousemove updates
+    const navRoot = carousel || wrapper;
+    const navPrevGrad = navRoot?.querySelector(".immersive-nav-prev .immersive-nav-gradient");
+    const navNextGrad = navRoot?.querySelector(".immersive-nav-next .immersive-nav-gradient");
+
+    // Touch gradient feedback for nav panels
+    const addNavTouchFeedback = (selector) => {
+      const panel = navRoot?.querySelector(selector);
+      if (!panel) return;
+      const grad = panel.querySelector(".immersive-nav-gradient");
+      if (!grad) return;
+      this._on(panel, "touchstart", () => { grad.style.opacity = 0.5; }, { passive: true });
+      this._on(panel, "touchend",   () => { grad.style.opacity = 0; },   { passive: true });
+      this._on(panel, "touchcancel",() => { grad.style.opacity = 0; },   { passive: true });
+    };
+    addNavTouchFeedback(".immersive-nav-prev");
+    addNavTouchFeedback(".immersive-nav-next");
 
     this._resetZoom = () => {
       this._zoomState = { scale: 1, x: 0, y: 0 };
@@ -680,12 +709,11 @@ export class PostContent extends Component {
         // Don't hide/show the overlay when the tap landed on an interactive element
         // (nav arrows, info card, etc.) — those elements handle their own action.
         const tapped = document.elementFromPoint(x, y);
-        if (tapped?.closest("a, button, input, .post-info-card")) return;
+        if (tapped?.closest("a, button, .immersive-nav-panel, input, .post-info-card")) return;
         if (document.body.classList.contains("ui-hidden")) {
           showUI();
         } else {
           hideUI();
-          clearTimeout(this._idleTimer);
         }
       },
       onDoubleTap: (x, y) => {
@@ -720,74 +748,33 @@ export class PostContent extends Component {
         document.body.classList.remove("ui-hidden");
         this._lastShowTime = Date.now();
       }
-      clearTimeout(this._idleTimer);
-      this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
     const hideUI = () => {
-      if (
-        document.querySelector(
-          ".header-search-form.is-active, .tag-group.is-open",
-        )
-      ) {
-        clearTimeout(this._idleTimer);
-        this._idleTimer = setTimeout(hideUI, IDLE_MS);
-        return;
-      }
+      if (document.querySelector(".header-search-form.is-active, .tag-group.is-open")) return;
       hideFlyout();
       document.body.classList.add("ui-hidden");
-    };
-
-    const resetIdle = (e) => {
-      const navKeys = [
-        "ArrowLeft",
-        "ArrowRight",
-        "ArrowUp",
-        "ArrowDown",
-        "PageUp",
-        "PageDown",
-        "Home",
-        "End",
-      ];
-      if (e?.type === "keydown" && navKeys.includes(e.key)) return;
-      showUI();
-    };
-
-    // Pause the hide countdown while the user is pressing/touching;
-    // restart it only after they release.
-    const pauseCountdown = () => clearTimeout(this._idleTimer);
-    const resumeCountdown = () => {
-      clearTimeout(this._idleTimer);
-      this._idleTimer = setTimeout(hideUI, IDLE_MS);
     };
 
     let lastTouchTime = 0;
     this._on(
       document,
       "touchstart",
-      () => {
-        lastTouchTime = Date.now();
-        pauseCountdown();
-      },
+      () => { lastTouchTime = Date.now(); },
       { passive: true, capture: true },
     );
-    this._on(document, "touchend", resumeCountdown, {
-      passive: true,
-      capture: true,
-    });
-    this._on(document, "touchcancel", resumeCountdown, {
-      passive: true,
-      capture: true,
+
+    this._on(wrapper, "contextmenu", (e) => {
+      e.preventDefault();
     });
 
     this._on(wrapper, "click", (e) => {
       if (Date.now() - lastTouchTime < 500) return; // Ignore simulated click from touch
-      if (e.target.closest("a, button, input, .post-info-card")) return;
+      if (e.target.closest("a, button, .immersive-nav-panel, input, .post-info-card")) return;
       if (_mouseDragged) return; // Drag-to-slide — not a click
       if (document.body.classList.contains("ui-hidden")) {
         showUI();
       } else {
         hideUI();
-        clearTimeout(this._idleTimer);
       }
     });
 
@@ -801,14 +788,24 @@ export class PostContent extends Component {
           if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX)
             _mouseDragged = true;
         }
-        // Mouse movement only keeps the UI visible — never un-hides the overlay.
-        if (!document.body.classList.contains("ui-hidden")) {
-          clearTimeout(this._idleTimer);
-          this._idleTimer = setTimeout(hideUI, IDLE_MS);
-        }
       },
       { passive: true },
     );
+    // Use pointermove (mouse only) for gradient tracking — avoids synthetic mouse
+    // events that mobile browsers fire after touch, which would re-show the gradient.
+    this._on(document, "pointermove", (e) => {
+      if (e.pointerType !== "mouse") return;
+      const x = e.clientX;
+      const w = window.innerWidth;
+      const zone = w / 3;
+      if (navPrevGrad) navPrevGrad.style.opacity = x < zone ? ((1 - x / zone) * 0.5).toFixed(3) : 0;
+      if (navNextGrad) navNextGrad.style.opacity = x > w - zone ? (((x - (w - zone)) / zone) * 0.5).toFixed(3) : 0;
+    }, { passive: true });
+    this._on(document, "pointerleave", (e) => {
+      if (e.pointerType !== "mouse") return;
+      if (navPrevGrad) navPrevGrad.style.opacity = 0;
+      if (navNextGrad) navNextGrad.style.opacity = 0;
+    }, { passive: true });
     this._on(
       document,
       "mousedown",
@@ -816,12 +813,9 @@ export class PostContent extends Component {
         _mouseDownX = e.clientX;
         _mouseDownY = e.clientY;
         _mouseDragged = false;
-        pauseCountdown();
       },
       { passive: true },
     );
-    this._on(document, "mouseup", resumeCountdown, { passive: true });
-    this._on(document, "keydown", resetIdle, { passive: true });
 
     // ── Keyboard ──
     this._on(document, "keydown", (e) => {
@@ -853,17 +847,13 @@ export class PostContent extends Component {
           showUI();
         } else if (Date.now() - this._lastShowTime >= MIN_SHOW_MS) {
           hideUI();
-          clearTimeout(this._idleTimer);
         }
       }
     });
 
-    // Restore overlay visibility from previous post, or start visible then auto-hide
     this._lastShowTime = Date.now();
     if (_overlayHidden) {
       hideUI();
-    } else {
-      this._idleTimer = setTimeout(hideUI, IDLE_MS);
     }
   }
 

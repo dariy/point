@@ -475,10 +475,34 @@ body.drag-active::after {
     padding-right: var(--ve-text-icon-padding-right);
 }
 
-/* Auto-resizing textarea inside text card */
-.ve-text-area {
+/* Block wrapper: fills row flex space, children stack vertically as blocks */
+.ve-text-body {
     flex: 1;
     min-width: 0;
+}
+
+/* Block class input — small, subtle, above the textarea */
+.ve-block-class {
+    border: none;
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    padding: 2px var(--spacing-xs);
+    outline: none;
+    width: 100%;
+    transition: color var(--transition-theme);
+}
+
+.ve-block-class::placeholder {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+/* Auto-resizing textarea inside text card */
+.ve-text-area {
+    width: 100%;
+    box-sizing: border-box;
     border: none;
     background: transparent;
     font-family: var(--font-sans);
@@ -557,12 +581,12 @@ body.drag-active::after {
     border-color: var(--color-primary);
 }
 
-/* Custom CSS editor */
-.css-editor-details {
+/* Advanced options (immersive mode + custom CSS) */
+.advanced-options-details {
     margin-top: var(--space-2);
 }
 
-.css-editor-summary {
+.advanced-options-summary {
     cursor: pointer;
     font-size: var(--font-sm);
     color: var(--text-muted);
@@ -570,13 +594,31 @@ body.drag-active::after {
     padding: var(--space-2) 0;
 }
 
-.css-editor-summary:hover {
+.advanced-options-summary:hover {
     color: var(--text-main);
+}
+
+.advanced-options-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+}
+
+.form-label {
+    display: block;
+    font-size: var(--font-sm);
+    color: var(--text-muted);
+    margin-bottom: var(--space-1);
+}
+
+.immersive-mode-select {
+    width: auto;
+    min-width: 220px;
 }
 
 .css-editor-textarea {
     width: 100%;
-    margin-top: var(--space-2);
     font-family: var(--font-mono, monospace);
     font-size: var(--font-sm);
     resize: vertical;

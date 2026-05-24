@@ -66,6 +66,11 @@ func NewRepository(dbURL string) (*Repository, error) {
 				return nil, fmt.Errorf("migration failed (add posts.css): %w", err)
 			}
 		}
+		if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN immersive_mode TEXT NOT NULL DEFAULT 'auto'`); err != nil {
+			if !isDuplicateColumnError(err) {
+				return nil, fmt.Errorf("migration failed (add posts.immersive_mode): %w", err)
+			}
+		}
 	}
 
 	queries := models.New(db)

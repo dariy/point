@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS posts (
     preview_token VARCHAR(64) UNIQUE,
     preview_expires_at DATETIME,
     deleted_at DATETIME,
-    css TEXT NOT NULL DEFAULT ''
+    css TEXT NOT NULL DEFAULT '',
+    immersive_mode TEXT NOT NULL DEFAULT 'auto'
 );
 CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
@@ -139,3 +140,18 @@ CREATE TABLE IF NOT EXISTS blog_secrets (
     value      TEXT,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- WebAuthn credentials (passkeys)
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    credential_id   BLOB NOT NULL UNIQUE,
+    public_key      BLOB NOT NULL,
+    aaguid          BLOB NOT NULL,
+    sign_count      INTEGER NOT NULL DEFAULT 0,
+    backup_eligible INTEGER NOT NULL DEFAULT 0,
+    backup_state    INTEGER NOT NULL DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at    DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON webauthn_credentials(user_id);

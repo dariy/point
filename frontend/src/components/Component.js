@@ -156,13 +156,17 @@ export class Component {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _rerender() {
+    // Optional hook called before every re-render including the first.
+    // Override in subclasses to release resources (timers, observers, DOM nodes
+    // appended outside the container) before the container is replaced.
+    // Unlike beforeUnmount() this also runs on setState() / setProps() calls.
+    this.beforeRender?.();
     this._unmountChildren();
     this._children = [];
-    // render() returns an HTML string. Subclasses must escape all user-supplied
-    // values with escapeHtml(). Server-generated HTML (e.g. post content_html)
-    // is sanitized server-side before storage and is safe to render directly.
     const markup = this.render();
-    this.container.innerHTML = markup;
+    // render() must escape all user-supplied values with escapeHtml().
+    // Server-generated HTML is sanitized server-side before storage.
+    this.container.innerHTML = markup; // eslint-disable-line no-unsanitized/property
     this.afterRender();
   }
 
