@@ -72,6 +72,7 @@ You can customize Point by editing the `.env` file.
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `DEPLOY_PORT` | `8000` | The host port Point listens on |
+| `APP_URL` | (None) | The external URL of your blog (e.g., https://blog.example.com) |
 | `DATA_PATH` | `./data` | Directory where the database, photos, and backups are stored |
 | `PHOTO_LIBRARY_PATH` | (None) | Path to your existing photo library (mounted read-only) |
 | `SECRET_KEY` | (Auto) | Secret key for signing sessions (generated automatically if blank) |
