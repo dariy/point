@@ -17,7 +17,8 @@ import { logout } from '../../api/auth.js';
 import { getNavMenu } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
-import { EDIT_SVG, X_SVG, REFRESH_SVG, LOCK_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG } from '../../utils/icons.js';
+import { EDIT_SVG, X_SVG, REFRESH_SVG, LOCK_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG } from '../../utils/icons.js';
+import { setupHeaderCompact } from '../../utils/headerCompact.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -62,13 +63,13 @@ export default class TagsManagerPage extends Component {
             <h1>Tags</h1>
             <div class="header-actions">
               <div class="tm-view-toggle">
-                <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${TREE_SVG} Tree</button>
-                <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG} List</button>
+                <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${TREE_SVG}<span class="btn-label"> Tree</span></button>
+                <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG}<span class="btn-label"> List</span></button>
               </div>
               ${view === 'tree' ? `
-              <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">\u21c5 Expand all</button>
-              <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">\u2012 Collapse all</button>` : ''}
-              <button id="add-root-tag-btn" class="btn btn-primary">+ New Tag</button>
+              <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">\u21c5<span class="btn-label"> Expand all</span></button>
+              <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">\u2012<span class="btn-label"> Collapse all</span></button>` : ''}
+              <button id="add-root-tag-btn" class="btn btn-primary" title="New Tag">${PLUS_SVG}<span class="btn-label"> New Tag</span></button>
               <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${REFRESH_SVG}</button>
             </div>
           </header>
@@ -351,9 +352,18 @@ export default class TagsManagerPage extends Component {
 
   mount() { super.mount(); this._load(); }
 
-  beforeUnmount() { this._closeModal(); }
+  beforeRender() {
+    this._cleanupHeaderCompact?.();
+    this._cleanupHeaderCompact = null;
+  }
+
+  beforeUnmount() {
+    this._cleanupHeaderCompact?.();
+    this._closeModal();
+  }
 
   afterRender() {
+    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
     const tagSlug = this.props?.params?.slug;
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/tags',

@@ -338,3 +338,46 @@ export const MENU_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="n
   <line x1="7" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   <line x1="11" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
 </svg>`;
+
+export const TRASH_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const CHECK_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polyline points="20 6 9 17 4 12" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const PLUS_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const SELECT_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="9 11 11 13 15 9" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="14" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="14" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <line x1="14" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const LINK_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;

@@ -244,6 +244,18 @@ body {
     display: flex;
     gap: var(--spacing-sm);
     text-wrap-mode: nowrap;
+    flex-shrink: 0;
+}
+
+/* Icon-only compact mode — triggered via JS when h1 overlaps actions */
+.light-header.compact .header-actions .btn-label {
+    display: none;
+}
+
+.light-header.compact .header-actions .btn {
+    padding: var(--spacing-sm);
+    min-width: var(--header-action-btn-height, 2.5rem);
+    justify-content: center;
 }
 
 .light-content {

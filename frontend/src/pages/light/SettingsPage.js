@@ -15,6 +15,8 @@ import {
   navigate,
   normalizeSettings,
 } from "../../utils/helpers.js";
+import { CHECK_SVG } from "../../utils/icons.js";
+import { setupHeaderCompact } from "../../utils/headerCompact.js";
 
 const SETTING_GROUPS = [
   {
@@ -108,8 +110,8 @@ export default class SettingsPage extends Component {
           <header class="light-header">
             <h1>Settings</h1>
             <div class="header-actions">
-              <button type="submit" form="settings-form" class="btn btn-primary" ${saving ? "disabled" : ""}>
-                ${saving ? "Saving…" : "Save Settings"}
+              <button type="submit" form="settings-form" class="btn btn-primary" title="Save Settings" ${saving ? "disabled" : ""}>
+                ${CHECK_SVG}<span class="btn-label">${saving ? "Saving…" : "Save Settings"}</span>
               </button>
             </div>
           </header>
@@ -284,7 +286,17 @@ export default class SettingsPage extends Component {
       </div>`;
   }
 
+  beforeRender() {
+    this._cleanupHeaderCompact?.();
+    this._cleanupHeaderCompact = null;
+  }
+
+  beforeUnmount() {
+    this._cleanupHeaderCompact?.();
+  }
+
   afterRender() {
+    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
     this.mountChild(LightSidebar, "#sidebar-mount", {
       currentPath: "/light/settings",
       user: store.get("user") || {},

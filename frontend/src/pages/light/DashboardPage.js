@@ -11,7 +11,8 @@ import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatFileSize } from '../../utils/formatters.js';
-import { REFRESH_SVG, WARNING_SVG } from '../../utils/icons.js';
+import { REFRESH_SVG, WARNING_SVG, PLUS_SVG } from '../../utils/icons.js';
+import { setupHeaderCompact } from '../../utils/headerCompact.js';
 
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {
@@ -53,7 +54,7 @@ export default class DashboardPage extends Component {
               ${syncPill}
             </div>
             <div class="header-actions">
-              <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
+              <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
             </div>
           </header>
           ${banner}
@@ -105,6 +106,7 @@ export default class DashboardPage extends Component {
   }
 
   afterRender() {
+    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light',
       user: store.get('user') || {},
@@ -124,6 +126,15 @@ export default class DashboardPage extends Component {
         this.setState({ versionBanner: null });
       }
     });
+  }
+
+  beforeRender() {
+    this._cleanupHeaderCompact?.();
+    this._cleanupHeaderCompact = null;
+  }
+
+  beforeUnmount() {
+    this._cleanupHeaderCompact?.();
   }
 
   mount() {
