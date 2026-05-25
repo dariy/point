@@ -88,7 +88,9 @@ jobs:
           images: ghcr.io/dariy/point
           tags: |
             type=semver,pattern={{version}}
+            type=ref,event=branch
             type=raw,value=latest
+            type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
           labels: |
             org.opencontainers.image.title=Point
             org.opencontainers.image.description=Self-hosted personal photo blog engine
@@ -109,14 +111,14 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BUILD_VERSION=${{ github.ref_name }}
+            BUILD_VERSION=${{ inputs.tag || github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/dariy/point:${{ github.ref_name }}
+          image: ghcr.io/dariy/point:${{ inputs.tag || github.ref_name }}
           artifact-name: point-sbom.spdx.json
           output-format: spdx-json
 
