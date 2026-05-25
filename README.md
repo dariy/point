@@ -11,7 +11,7 @@ Built with Go + Echo v4 backend and a Vanilla JS SPA frontend.
 ## Quick start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
+curl -fsSL https://short.darii.net/point-install | bash
 ```
 
 The wizard asks a few questions (sensible defaults — just hit Enter) and has Point running in minutes. Supports Docker, Podman, and native Linux binary installs.
