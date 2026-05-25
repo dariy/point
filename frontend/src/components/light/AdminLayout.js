@@ -15,6 +15,7 @@ import { Component } from '../Component.js';
 import { LightSidebar } from './LightSidebar.js';
 import { store } from '../../store.js';
 import { syncQueue } from '../../utils/sync.js';
+import { setupHeaderCompact } from '../../utils/headerCompact.js';
 
 export class AdminLayout extends Component {
   render() {
@@ -68,7 +69,17 @@ export class AdminLayout extends Component {
     return `<button class="${cls}" id="sync-pill-btn">${text}</button>`;
   }
 
+  beforeRender() {
+    this._cleanupHeaderCompact?.();
+    this._cleanupHeaderCompact = null;
+  }
+
+  beforeUnmount() {
+    this._cleanupHeaderCompact?.();
+  }
+
   afterRender() {
+    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: this.props.currentPath,
       user: this.props.user,

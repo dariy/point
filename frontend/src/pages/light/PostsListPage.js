@@ -29,7 +29,10 @@ import {
   PLAY_SVG,
   MUSIC_SVG,
   RESTORE_SVG,
+  SELECT_SVG,
+  PLUS_SVG,
 } from "../../utils/icons.js";
+import { setupHeaderCompact } from "../../utils/headerCompact.js";
 
 const STATUS_LABELS = {
   published: "Published",
@@ -223,8 +226,8 @@ export default class PostsListPage extends Component {
           <header class="light-header">
             <h1>Posts</h1>
             <div class="header-actions">
-              ${!isTrash ? `<button id="select-mode-btn" class="btn">${selectMode ? "Cancel" : "Select"}</button>` : ""}
-              <a href="/light/posts/new" class="btn btn-primary">+ New Post</a>
+              ${!isTrash ? `<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select posts"}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>` : ""}
+              <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
             </div>
           </header>
           <main class="light-content">
@@ -276,6 +279,7 @@ export default class PostsListPage extends Component {
   }
 
   afterRender() {
+    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
     this.mountChild(LightSidebar, "#sidebar-mount", {
       currentPath: "/light/posts",
       user: store.get("user") || {},
@@ -549,7 +553,13 @@ export default class PostsListPage extends Component {
     window.addEventListener("resize", this._onResize);
   }
 
+  beforeRender() {
+    this._cleanupHeaderCompact?.();
+    this._cleanupHeaderCompact = null;
+  }
+
   beforeUnmount() {
+    this._cleanupHeaderCompact?.();
     if (this._onResize) window.removeEventListener("resize", this._onResize);
   }
 
