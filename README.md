@@ -8,18 +8,15 @@ A self-hosted personal photo blog engine. Single container, SQLite storage, no e
 
 Built with Go + Echo v4 backend and a Vanilla JS SPA frontend.
 
-## Quick start with the prebuilt image
+## Quick start
 
 ```bash
-docker run -d --name point \
-  -p 8000:8000 \
-  -v point-data:/data \
-  ghcr.io/dariy/point:latest
+curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
 ```
 
-On first boot, visit `http://localhost:8000` to complete the setup wizard.
+The wizard asks a few questions (sensible defaults — just hit Enter) and has Point running in minutes. Supports Docker, Podman, and native Linux binary installs.
 
-For a full production setup with a compose file, persistent volumes, and optional photo library import, see [QUICKSTART.md](QUICKSTART.md).
+For manual steps, environment variables, and update instructions see [QUICKSTART.md](QUICKSTART.md).
 
 ## Key features
 
