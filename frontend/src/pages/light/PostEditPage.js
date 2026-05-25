@@ -32,8 +32,9 @@ import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { logout } from "../../api/auth.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHECK_SVG, X_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
+import { setupHeaderCompact } from "../../utils/headerCompact.js";
 
 const AUTOSAVE_MS = 30_000;
 
@@ -222,18 +223,20 @@ export default class PostEditPage extends Component {
                 !isNew
                   ? `
                 <button id="delete-btn" class="btn btn-danger" type="button"
-                        title="Delete post" ${anyActionInProgress ? "disabled" : ""}>Delete</button>
+                        title="Delete post" ${anyActionInProgress ? "disabled" : ""}>${TRASH_SVG}<span class="btn-label">Delete</span></button>
                 <button id="preview-link-btn" class="btn btn-secondary" type="button"
                         title="Generate a shareable preview link (7 days)"
-                        ${anyActionInProgress ? "disabled" : ""}>${generatingPreview ? "Copying…" : "Preview link"}</button>
+                        ${anyActionInProgress ? "disabled" : ""}>${LINK_SVG}<span class="btn-label">${generatingPreview ? "Copying…" : "Preview link"}</span></button>
               `
                   : ""
               }
               <button id="analyze-btn" class="btn btn-secondary" type="button"
-                      ${anyActionInProgress ? "disabled" : ""}>${escapeHtml(analyzeLabel)}</button>
+                      title="${escapeHtml(analyzeLabel)}"
+                      ${anyActionInProgress ? "disabled" : ""}>${SPARKLE_SVG}<span class="btn-label">${escapeHtml(analyzeLabel)}</span></button>
               <button id="save-btn" class="btn btn-primary" type="button"
-                      ${anyActionInProgress ? "disabled" : ""}>${escapeHtml(saveLabel)}</button>
-              <a href="/light/posts" class="btn btn-secondary">Cancel</a>
+                      title="${escapeHtml(saveLabel)}"
+                      ${anyActionInProgress ? "disabled" : ""}>${CHECK_SVG}<span class="btn-label">${escapeHtml(saveLabel)}</span></button>
+              <a href="/light/posts" class="btn btn-secondary" title="Cancel">${X_SVG}<span class="btn-label">Cancel</span></a>
             </div>
           </header>
           <main class="light-content editor-full-width">
@@ -321,6 +324,7 @@ export default class PostEditPage extends Component {
   }
 
   afterRender() {
+    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
     const postSlug = this.state.post?.slug;
     this.mountChild(LightSidebar, "#sidebar-mount", {
       currentPath: "/light/posts",
@@ -510,7 +514,13 @@ export default class PostEditPage extends Component {
     document.addEventListener("drop", this._onDrop);
   }
 
+  beforeRender() {
+    this._cleanupHeaderCompact?.();
+    this._cleanupHeaderCompact = null;
+  }
+
   beforeUnmount() {
+    this._cleanupHeaderCompact?.();
     this._unmounted = true; // Prevent pending debounced autosave from firing after navigation
     clearTimeout(this._autosaveTimer);
     document.removeEventListener("dragenter", this._onDragEnter);
