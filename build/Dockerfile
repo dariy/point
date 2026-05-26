@@ -1,5 +1,5 @@
 # Build stage
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.25-alpine3.21 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.3-alpine3.21 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
