@@ -5,7 +5,7 @@ Point is a self-hosted personal photo blog designed for simplicity and privacy. 
 ## One-Command Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dariy/point/main/quickstart/install.sh | bash
+curl -fsSL https://short.darii.net/point-install | bash
 ```
 
 The wizard will ask a few questions (all with sensible defaults — just hit Enter) and have Point running in minutes. See below for details and manual options.

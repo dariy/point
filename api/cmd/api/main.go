@@ -108,6 +108,21 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
 
+	// WebAuthn handler — nil service if AppURL is not configured (passkeys require HTTPS + known origin)
+	var webauthnSvc *services.WebAuthnService
+	if cfg.AppURL != "" {
+		origin := services.SanitizeOrigin(cfg.AppURL)
+		rpID := services.GetRPIDFromURL(cfg.AppURL)
+		if origin != "" && rpID != "" {
+			var waErr error
+			webauthnSvc, waErr = services.NewWebAuthnService(repo, rpID, cfg.AppName, origin)
+			if waErr != nil {
+				log.Printf("warning: WebAuthn service init failed: %v", waErr)
+			}
+		}
+	}
+	webAuthnHandler := api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg)
+
 	// Global middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
@@ -173,6 +188,15 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth))
 	authGroup.POST("/forgot-password", authHandler.ForgotPassword)
 	authGroup.POST("/reset-password", authHandler.ResetPassword)
+
+	// ── WebAuthn / Passkey Routes ──────────────────────────────────────────────
+	webauthnGroup := e.Group("/api/auth/webauthn")
+	webauthnGroup.POST("/register/begin", webAuthnHandler.BeginRegistration, api.AuthMiddleware(svcs.Auth))
+	webauthnGroup.POST("/register/finish", webAuthnHandler.FinishRegistration, api.AuthMiddleware(svcs.Auth))
+	webauthnGroup.POST("/login/begin", webAuthnHandler.BeginLogin)
+	webauthnGroup.POST("/login/finish", webAuthnHandler.FinishLogin)
+	webauthnGroup.GET("/status", webAuthnHandler.GetStatus, api.AuthMiddleware(svcs.Auth))
+	webauthnGroup.DELETE("/credential", webAuthnHandler.DeleteCredential, api.AuthMiddleware(svcs.Auth))
 
 	// ── Post Routes ────────────────────────────────────────────────────────────
 	postsGroup := e.Group("/api/posts")
@@ -568,6 +592,31 @@ func main() {
 		{
 			"add_deleted_at_to_posts_index",
 			`CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at)`,
+		},
+		{
+			"create_webauthn_credentials_table",
+			`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				credential_id BLOB NOT NULL UNIQUE,
+				public_key BLOB NOT NULL,
+				aaguid BLOB NOT NULL,
+				sign_count INTEGER NOT NULL DEFAULT 0,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				last_used_at DATETIME
+			)`,
+		},
+		{
+			"create_webauthn_credentials_user_id_index",
+			`CREATE INDEX IF NOT EXISTS idx_webauthn_user_id ON webauthn_credentials(user_id)`,
+		},
+		{
+			"add_webauthn_backup_eligible_column",
+			`ALTER TABLE webauthn_credentials ADD COLUMN backup_eligible INTEGER NOT NULL DEFAULT 0`,
+		},
+		{
+			"add_webauthn_backup_state_column",
+			`ALTER TABLE webauthn_credentials ADD COLUMN backup_state INTEGER NOT NULL DEFAULT 0`,
 		},
 	}
 	for _, m := range migrations {

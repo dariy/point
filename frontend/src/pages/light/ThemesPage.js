@@ -11,7 +11,8 @@ import { logout } from "../../api/auth.js";
 import { parseTheme } from "../../utils/themeParser.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
-import { STAR_SVG } from "../../utils/icons.js";
+import { STAR_SVG, SETTINGS_SVG } from "../../utils/icons.js";
+import { setupHeaderCompact } from "../../utils/headerCompact.js";
 
 export default class ThemesPage extends Component {
   constructor(container, props = {}) {
@@ -47,7 +48,7 @@ export default class ThemesPage extends Component {
           <header class="light-header">
             <h1>Themes</h1>
             <div class="header-actions">
-               <a href="/light/settings" class="btn btn-secondary">Settings</a>
+               <a href="/light/settings" class="btn btn-secondary" title="Settings">${SETTINGS_SVG}<span class="btn-label">Settings</span></a>
             </div>
           </header>
           <main class="light-content">
@@ -94,7 +95,17 @@ export default class ThemesPage extends Component {
       </div>`;
   }
 
+  beforeRender() {
+    this._cleanupHeaderCompact?.();
+    this._cleanupHeaderCompact = null;
+  }
+
+  beforeUnmount() {
+    this._cleanupHeaderCompact?.();
+  }
+
   afterRender() {
+    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
     this.mountChild(LightSidebar, "#sidebar-mount", {
       currentPath: "/light/themes",
       user: store.get("user") || {},

@@ -7,7 +7,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { getSessions, deleteSession, deleteAllOtherSessions, changePassword, logout } from '../../api/auth.js';
+import { getSessions, deleteSession, deleteAllOtherSessions, changePassword, logout, getPasskeyStatus, registerPasskey, deletePasskey } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
@@ -20,11 +20,14 @@ export default class SecurityPage extends Component {
       sessions: [],
       error: null,
       changingPassword: false,
+      passkeySupported: typeof window.PublicKeyCredential !== 'undefined',
+      passkeyStatus: null,
+      passkeyWorking: false,
     };
   }
 
   render() {
-    const { loading, error, sessions, changingPassword } = this.state;
+    const { loading, error, sessions, changingPassword, passkeySupported, passkeyStatus, passkeyWorking } = this.state;
 
     const sessionList = loading
       ? `<div class="loading-spinner" aria-label="Loading sessions…"></div>`
@@ -95,6 +98,27 @@ export default class SecurityPage extends Component {
               </div>
             </div>
 
+            ${passkeySupported && passkeyStatus?.configured !== false ? `
+            <div class="card" style="margin-bottom: var(--spacing-xl)">
+              <div class="card-header"><h2>Passkeys</h2></div>
+              <div class="card-body">
+                ${passkeyStatus === null
+                  ? `<div class="loading-spinner" aria-label="Loading passkey status…"></div>`
+                  : passkeyStatus.has_passkey
+                    ? `
+                      <p>A passkey is registered on this account. You can use it to sign in without a password.</p>
+                      <button id="remove-passkey-btn" class="btn btn-sm btn-danger" ${passkeyWorking ? 'disabled' : ''}>
+                        ${passkeyWorking ? 'Removing…' : 'Remove Passkey'}
+                      </button>`
+                    : `
+                      <p>No passkey registered. Register a passkey to sign in with biometrics or a hardware key.</p>
+                      <button id="add-passkey-btn" class="btn btn-sm btn-primary" ${passkeyWorking ? 'disabled' : ''}>
+                        ${passkeyWorking ? 'Registering…' : 'Register Passkey'}
+                      </button>`
+                }
+              </div>
+            </div>` : ''}
+
             <div class="card">
               <div class="card-header">
                 <h2>Active Sessions</h2>
@@ -135,6 +159,14 @@ export default class SecurityPage extends Component {
       });
     });
 
+    // Passkey actions
+    this.$('#add-passkey-btn')?.addEventListener('click', () => this._handleAddPasskey());
+    this.$('#remove-passkey-btn')?.addEventListener('click', () => {
+      this._showConfirm('Remove passkey', 'Remove the registered passkey? You will only be able to sign in with your password.', 'Remove', 'danger', () => {
+        this._handleRemovePasskey();
+      });
+    });
+
     // Revoke all other sessions
     this.$('#revoke-all-btn')?.addEventListener('click', () => {
       this._showConfirm('Revoke all sessions', 'Revoke all other active sessions? You will remain logged in on this device.', 'Revoke', 'danger', () => {
@@ -146,6 +178,7 @@ export default class SecurityPage extends Component {
   mount() {
     super.mount();
     this._load();
+    if (this.state.passkeySupported) this._loadPasskeyStatus();
   }
 
   _showConfirm(title, message, confirmText, variant, onConfirm) {
@@ -213,6 +246,43 @@ export default class SecurityPage extends Component {
       this._load();
     } catch (err) {
       store.set('toast', { message: err.message || 'Revoke failed.', type: 'error' });
+    }
+  }
+
+  async _loadPasskeyStatus() {
+    try {
+      const status = await getPasskeyStatus();
+      this.setState({ passkeyStatus: status });
+    } catch {
+      this.setState({ passkeyStatus: { has_passkey: false, configured: false } });
+    }
+  }
+
+  async _handleAddPasskey() {
+    this.setState({ passkeyWorking: true });
+    try {
+      await registerPasskey();
+      store.set('toast', { message: 'Passkey registered successfully.', type: 'success' });
+      await this._loadPasskeyStatus();
+    } catch (err) {
+      if (err?.name !== 'NotAllowedError') {
+        store.set('toast', { message: err?.message || 'Failed to register passkey.', type: 'error' });
+      }
+    } finally {
+      this.setState({ passkeyWorking: false });
+    }
+  }
+
+  async _handleRemovePasskey() {
+    this.setState({ passkeyWorking: true });
+    try {
+      await deletePasskey();
+      store.set('toast', { message: 'Passkey removed.', type: 'success' });
+      await this._loadPasskeyStatus();
+    } catch (err) {
+      store.set('toast', { message: err?.message || 'Failed to remove passkey.', type: 'error' });
+    } finally {
+      this.setState({ passkeyWorking: false });
     }
   }
 
