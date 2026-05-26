@@ -22,6 +22,7 @@ func TestLoadConfig(t *testing.T) {
 APP_NAME=TestApp
 PORT=9000
 DATABASE_URL=sqlite:///./test.db
+APP_URL=https://blog.example.com
 `
 	err = os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(envContent), 0644)
 	if err != nil {
@@ -41,6 +42,9 @@ DATABASE_URL=sqlite:///./test.db
 	}
 	if config.DatabaseURL != "./test.db" {
 		t.Errorf("expected DatabaseURL ./test.db, got %s", config.DatabaseURL)
+	}
+	if config.AppURL != "https://blog.example.com" {
+		t.Errorf("expected AppURL https://blog.example.com, got %s", config.AppURL)
 	}
 }
 
