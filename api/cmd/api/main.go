@@ -409,6 +409,12 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 }
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "-v" || arg == "--version" || arg == "-version" {
+			fmt.Println(Version)
+			os.Exit(0)
+		}
+	}
 
 	// Load configuration
 	cfg, err := config.LoadConfig(".")
