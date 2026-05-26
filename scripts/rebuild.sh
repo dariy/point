@@ -16,8 +16,9 @@ if [ "${1:-}" == "--clean" ]; then
 fi
 
 # Generate timestamp-based version for development builds
-PACKAGE_VERSION=$(grep '"version":' ../package.json | head -n 1 | cut -d'"' -f4)
-export DEV_BUILD_VERSION="${PACKAGE_VERSION}-dev-$(date +%Y%m%d-%H%M%S)"
+GIT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+VERSION_NUM=${GIT_VERSION#v}
+export DEV_BUILD_VERSION="${VERSION_NUM}-dev-$(date +%Y%m%d-%H%M%S)"
 
 echo "Building with version: $DEV_BUILD_VERSION"
 
