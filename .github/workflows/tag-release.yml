@@ -11,6 +11,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Calculate next version and create tag
         run: |
@@ -18,8 +20,11 @@ jobs:
           git fetch --tags --force
           
           # Get the latest tag. If no tags exist, start with v0.1.0
-          # We use --tags to include all tags and --abbrev=0 to get just the name
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+          # We use sort -V to handle semantic versioning correctly
+          LATEST_TAG=$(git tag -l "v*" | sort -V | tail -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.1.0"
+          fi
           echo "Latest tag found: $LATEST_TAG"
           
           # If the current commit already has a version tag, we skip
@@ -30,14 +35,12 @@ jobs:
           
           # Extract version numbers, stripping 'v' prefix
           VERSION_NUM=${LATEST_TAG#v}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUM"
           
-          # Fallback if parsing fails
-          if [ -z "$MAJOR" ] || [ -z "$MINOR" ] || [ -z "$PATCH" ]; then
-            MAJOR=0
-            MINOR=1
-            PATCH=0
-          fi
+          # Parse version parts, defaulting to 0 if missing
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUM"
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
           
           # Increment patch version
           NEW_PATCH=$((PATCH + 1))
