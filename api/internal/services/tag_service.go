@@ -408,7 +408,7 @@ func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
 
 	dragged, err := s.repo.GetTag(ctx, p.ID)
 	if err != nil {
-		return fmt.Errorf("tag %q not found", p.ID)
+		return fmt.Errorf("tag %d not found", p.ID)
 	}
 
 	var siblings []models.Tag
