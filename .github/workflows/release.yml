@@ -3,17 +3,17 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (overrides git ref if provided)'
+        description: "Tag to release (overrides git ref if provided)"
         required: false
         type: string
   workflow_call:
     inputs:
       tag:
-        description: 'Tag to release'
+        description: "Tag to release"
         required: true
         type: string
 
@@ -26,7 +26,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.26.3"
           cache-dependency-path: api/go.sum
 
       - name: Build CSS bundles
@@ -55,13 +55,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.26.3"
           cache-dependency-path: api/go.sum
 
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
-          go-version-input: '1.25'
+          go-version-input: "1.26.3"
           go-package: ./...
           work-dir: api
 
