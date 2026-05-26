@@ -45,17 +45,35 @@ func NewRepository(dbURL string) (*Repository, error) {
 		return nil, fmt.Errorf("database is not writable — check permissions on the data directory: %w", err)
 	}
 
-	// Check if the database needs initialization
+	// Check if the database needs initialization.
+	// We check for multiple core tables to detect partially-initialized databases.
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='blog_settings';").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('users', 'posts', 'tags', 'blog_settings');").Scan(&count)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check database schema: %w", err)
 	}
 
-	if count == 0 {
+	if count < 4 {
 		log.Println("Initializing new database with schema...")
-		if _, err := db.Exec(pointsql.SchemaSQL); err != nil {
-			return nil, fmt.Errorf("failed to initialize database schema: %w", err)
+		tx, err := db.Begin()
+		if err != nil {
+			return nil, fmt.Errorf("failed to begin transaction: %w", err)
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		// Use SplitSeq for efficient iteration without allocating a full slice
+		for stmt := range strings.SplitSeq(pointsql.SchemaSQL, ";") {
+			trimmed := strings.TrimSpace(stmt)
+			if trimmed == "" {
+				continue
+			}
+			if _, err := tx.Exec(trimmed); err != nil {
+				return nil, fmt.Errorf("failed to execute schema statement: %w\nStatement: %s", err, trimmed)
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("failed to commit schema transaction: %w", err)
 		}
 		log.Println("Database schema initialized successfully.")
 	} else {
