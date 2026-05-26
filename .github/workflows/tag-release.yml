@@ -11,14 +11,50 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read version and create tag
         run: |
-          VERSION=$(grep '"version":' package.json | head -n1 | cut -d'"' -f4)
-          TAG="v${VERSION}"
-          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG already exists, skipping"
-          else
-            git tag "$TAG"
-            git push origin "$TAG"
+          # Fetch all tags to find the latest
+          git fetch --tags --force
+          
+          # Get the latest tag. If no tags exist, start with v0.1.0
+          # We use sort -V to handle semantic versioning correctly
+          LATEST_TAG=$(git tag -l "v*" | sort -V | tail -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.1.0"
           fi
+          echo "Latest tag found: $LATEST_TAG"
+          
+          # If the current commit already has a version tag, we skip
+          if git tag --points-at HEAD | grep -q "^v[0-9]"; then
+            echo "Current commit already has a version tag, skipping."
+            exit 0
+          fi
+          
+          # Extract version numbers, stripping 'v' prefix
+          VERSION_NUM=${LATEST_TAG#v}
+          
+          # Parse version parts, defaulting to 0 if missing
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUM"
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          echo "New tag will be: $NEW_TAG"
+          
+          # Final safety check: ensure the tag doesn't exist on remote
+          if git ls-remote --tags origin "$NEW_TAG" | grep -q "$NEW_TAG"; then
+             echo "Tag $NEW_TAG already exists on remote, skipping."
+             exit 0
+          fi
+          
+          # Create and push the tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
