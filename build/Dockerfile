@@ -1,5 +1,5 @@
 # Build stage
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.3-alpine3.21 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.26.3-alpine3.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
@@ -44,7 +44,7 @@ COPY scripts/build-css.sh ./scripts/
 RUN sh ./scripts/build-css.sh
 
 # Runtime stage
-FROM docker.io/library/alpine:3.21
+FROM docker.io/library/alpine:3.23
 
 WORKDIR /app
 
