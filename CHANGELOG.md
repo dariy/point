@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Database initialization**: Improved reliability of first-run schema setup by splitting SQL statements and using transactions, fixing an issue where tables could be missing on some environments (e.g. rootless Podman).
+
 ## [0.1.0] - TBD
 
 ### Added
