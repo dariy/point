@@ -14,7 +14,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read version and create tag
+      - name: Calculate next version and create tag
         run: |
           # Fetch all tags to find the latest
           git fetch --tags --force
