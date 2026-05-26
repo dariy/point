@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,9 +17,15 @@ func setupTestDB(t *testing.T) (*Queries, *sql.DB) {
 		t.Fatal(err)
 	}
 
-	_, err = db.Exec(pointsql.SchemaSQL)
-	if err != nil {
-		t.Fatal(err)
+	// Use SplitSeq for efficient iteration without allocating a full slice
+	for stmt := range strings.SplitSeq(pointsql.SchemaSQL, ";") {
+		trimmed := strings.TrimSpace(stmt)
+		if trimmed == "" {
+			continue
+		}
+		if _, err := db.Exec(trimmed); err != nil {
+			t.Fatalf("failed to execute schema statement: %v\nStatement: %s", err, trimmed)
+		}
 	}
 
 	return New(db), db
