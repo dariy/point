@@ -13,6 +13,8 @@ services:
       - path: .env
         required: false
     environment:
+      - APP_NAME=${APP_NAME:-Point}
+      - APP_URL=${APP_URL:-}
       - DATABASE_URL=/data/point.db
       - STORAGE_PATH=/data
       - FRONTEND_DIR=/app/frontend
