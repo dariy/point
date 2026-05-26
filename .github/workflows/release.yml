@@ -4,6 +4,18 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (overrides git ref if provided)'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+        type: string
 
 jobs:
   test:
@@ -90,7 +102,7 @@ jobs:
             type=semver,pattern={{version}}
             type=ref,event=branch
             type=raw,value=latest
-            type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
           labels: |
             org.opencontainers.image.title=Point
             org.opencontainers.image.description=Self-hosted personal photo blog engine
