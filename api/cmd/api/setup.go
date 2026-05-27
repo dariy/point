@@ -22,9 +22,7 @@ func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
 		if trimmed == "setup" {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "setup ") {
-			trimmed = strings.TrimPrefix(trimmed, "setup ")
-		}
+		trimmed = strings.TrimPrefix(trimmed, "setup ")
 
 		// Split by spaces but respect quotes would be complex.
 		// For now, let's just split by whitespace and see if it helps.
