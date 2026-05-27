@@ -178,6 +178,13 @@ func TestThemeServiceUserThemes(t *testing.T) {
 		assert.Equal(t, "system-only", theme.Name)
 	})
 
+	t.Run("findTheme is case-insensitive (lowercases input)", func(t *testing.T) {
+		// systemDir has system-only.css
+		theme, err := ts.findTheme("System-Only")
+		assert.NoError(t, err)
+		assert.Equal(t, "system-only", theme.Name)
+	})
+
 	t.Run("ListThemes nonexistent user dir is silently ignored", func(t *testing.T) {
 		cfg2 := &config.Config{ThemesPath: systemDir, UserThemesPath: "/nonexistent/path"}
 		ts2 := NewThemeService(cfg2, settingsService)

@@ -138,6 +138,7 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 
 // findTheme searches user themes path first (<name>.css), then system themes path (<name>.css).
 func (s *ThemeService) findTheme(name string) (Theme, error) {
+	name = strings.ToLower(name)
 	if s.cfg.UserThemesPath != "" {
 		userPath := filepath.Join(s.cfg.UserThemesPath, name+".css")
 		if t, err := s.ReadAndValidateTheme(userPath, name); err == nil {
