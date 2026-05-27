@@ -50,5 +50,10 @@ func (h *ThemeHandler) SetActiveTheme(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"status": "success"})
+	theme, err := h.themeService.GetActiveTheme(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, theme)
 }
