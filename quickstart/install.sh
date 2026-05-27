@@ -478,10 +478,14 @@ prompt_account_setup() {
   local pass_hash; pass_hash=$(echo -n "$pass" | sha256sum | awk '{print $1}')
 
   say "Finalizing setup..."
+  local email_arg=""
+  [ -n "$email" ] && email_arg="--email=$email"
+
   if [ "$INSTALL_METHOD" = "docker" ]; then
-    (cd "$INSTALL_DIR" && $COMPOSE exec -T point /entrypoint.sh ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
+    say "Running setup inside container..."
+    (cd "$INSTALL_DIR" && $COMPOSE exec -T -u 1000 point /app/point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
   else
-    (cd "$INSTALL_DIR" && DATABASE_URL="$DATA_DIR/point.db" STORAGE_PATH="$DATA_DIR" ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
+    (cd "$INSTALL_DIR" && DATABASE_URL="$DATA_DIR/point.db" STORAGE_PATH="$DATA_DIR" ./point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
     chown point:point "$DATA_DIR/point.db"* 2>/dev/null || true
   fi
   ok "Admin account created!"
