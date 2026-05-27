@@ -479,10 +479,10 @@ prompt_account_setup() {
 
   say "Finalizing setup..."
   if [ "$INSTALL_METHOD" = "docker" ]; then
-    (cd "$INSTALL_DIR" && $COMPOSE exec -T point ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
+    (cd "$INSTALL_DIR" && $COMPOSE exec -T point /entrypoint.sh ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
   else
-    (cd "$INSTALL_DIR" && ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
-    chown point:point "$DATA_DIR/point.db" 2>/dev/null || true
+    (cd "$INSTALL_DIR" && DATABASE_URL="$DATA_DIR/point.db" STORAGE_PATH="$DATA_DIR" ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
+    chown point:point "$DATA_DIR/point.db"* 2>/dev/null || true
   fi
   ok "Admin account created!"
 }
