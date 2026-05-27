@@ -17,14 +17,14 @@ func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
 
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
-		if strings.HasPrefix(arg, "--title=") {
-			blogTitle = strings.TrimPrefix(arg, "--title=")
-		} else if strings.HasPrefix(arg, "--user=") {
-			authorName = strings.TrimPrefix(arg, "--user=")
-		} else if strings.HasPrefix(arg, "--email=") {
-			email = strings.TrimPrefix(arg, "--email=")
-		} else if strings.HasPrefix(arg, "--password=") {
-			password = strings.TrimPrefix(arg, "--password=")
+		if val, ok := strings.CutPrefix(arg, "--title="); ok {
+			blogTitle = val
+		} else if val, ok := strings.CutPrefix(arg, "--user="); ok {
+			authorName = val
+		} else if val, ok := strings.CutPrefix(arg, "--email="); ok {
+			email = val
+		} else if val, ok := strings.CutPrefix(arg, "--password="); ok {
+			password = val
 		}
 	}
 
