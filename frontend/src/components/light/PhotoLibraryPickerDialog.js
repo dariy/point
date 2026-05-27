@@ -170,7 +170,7 @@ export class PhotoLibraryPickerDialog extends Component {
 
   _navigateToBreadcrumb(index) {
     if (index === -1) { this._loadContents(''); return; }
-    const parts = this.state.currentPath.split('/').filter(Boolean);
+    const parts = (this.state.currentPath || '').split('/').filter(Boolean);
     this._loadContents(parts.slice(0, index + 1).join('/'));
   }
 
@@ -286,8 +286,8 @@ export class PhotoLibraryPickerDialog extends Component {
       this.state.importing = false;
       const msg = `Imported ${result.imported} photo${result.imported !== 1 ? 's' : ''}, skipped ${result.skipped} duplicate${result.skipped !== 1 ? 's' : ''}.`;
       store.set('toast', { message: msg, type: result.imported > 0 ? 'success' : 'info' });
-      this.props.onImport?.(result);
       this.close();
+      this.props.onImport?.(result);
     } catch (err) {
       this.state.importing = false;
       this._patchImportBtn(selected.size, false);
