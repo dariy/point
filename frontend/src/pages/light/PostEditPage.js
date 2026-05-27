@@ -622,16 +622,17 @@ export default class PostEditPage extends Component {
   _switchMode(targetMode) {
     if (this.state.editorMode === targetMode) return;
 
+    const data = this._collectFormData();
+    const post = {
+      ...(this.state.post || {}),
+      ...data,
+      tags: (data.tags || []).map((name) => ({ name, slug: name })),
+    };
+
     if (targetMode === "visual") {
-      const content =
-        this.$("#content-editor")?.value ?? (this.state.post?.content || "");
-      this._nodes = parseNodes(content);
-      this.setState({ editorMode: "visual" });
+      this._nodes = parseNodes(data.content);
+      this.setState({ editorMode: "visual", post });
     } else {
-      // visual → text: serialize current nodes (reads live textarea values if editor mounted)
-      const content =
-        this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes);
-      const post = { ...(this.state.post || {}), content };
       this.setState({ editorMode: "text", post });
     }
   }
