@@ -412,6 +412,42 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 }
 
 func main() {
+	// Verbose logging of ALL arguments using log.Printf to ensure visibility
+	log.Printf("[DEBUG-v4] Total args: %d", len(os.Args))
+	for i, arg := range os.Args {
+		log.Printf("[DEBUG-v4] arg[%d]: %q", i, arg)
+	}
+
+	// Check for CLI commands early.
+	isSetup := false
+	for _, arg := range os.Args {
+		trimmed := strings.Trim(arg, " \t\n\r\"'")
+		// Match "setup" as standalone OR part of a merged string like "point setup"
+		if trimmed == "setup" || strings.HasPrefix(trimmed, "setup ") || strings.Contains(trimmed, " setup ") || strings.HasSuffix(trimmed, " setup") {
+			isSetup = true
+			break
+		}
+	}
+
+	if isSetup {
+		log.Println("[INFO] CLI Setup command detected. Initializing...")
+		cfg, err := config.LoadConfig(".")
+		if err != nil {
+			log.Fatalf("setup: failed to load config: %v", err)
+		}
+		log.Printf("[DEBUG] DATABASE_URL: %q", cfg.DatabaseURL)
+		log.Printf("[DEBUG] STORAGE_PATH: %q", cfg.StoragePath)
+
+		repo, err := repository.NewRepository(cfg.DatabaseURL)
+		if err != nil {
+			log.Fatalf("setup: failed to initialize repository: %v", err)
+		}
+		svcs := initServices(&cfg, repo)
+		log.Println("[INFO] Running CLI setup...")
+		runSetupCLI(repo, svcs)
+		os.Exit(0)
+	}
+
 	for _, arg := range os.Args[1:] {
 		if arg == "-v" || arg == "--version" || arg == "-version" {
 			fmt.Println(Version)
@@ -438,6 +474,8 @@ func main() {
 			log.Printf("error closing repository: %v", err)
 		}
 	}()
+
+	svcs := initServices(&cfg, repo)
 
 	// Ensure media directories exist
 	for _, dir := range []string{"originals", "thumbnails"} {
@@ -661,8 +699,6 @@ func main() {
 	if err := repo.DropTagNameUnique(ctx); err != nil {
 		log.Printf("warning: drop_tags_name_unique: %v", err)
 	}
-
-	svcs := initServices(&cfg, repo)
 
 	// Ensure a secret key is available for session signing.
 	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {

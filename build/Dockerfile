@@ -24,14 +24,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-s -w -X main.Version=${BUILD_VERSION}" \
-    -o point cmd/api/main.go
+    -o point ./cmd/api
 
 # Build the path migration utility
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-s -w" \
-    -o migrate-paths cmd/migrate-paths/main.go
+    -o migrate-paths ./cmd/migrate-paths
 
 # Bundle and minify frontend JS
 COPY frontend/ ./frontend/
