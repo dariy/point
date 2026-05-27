@@ -48,7 +48,6 @@ func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
 
 	if blogTitle == "" || authorName == "" || password == "" {
 		fmt.Printf("[ERROR] missing required setup arguments. Title: %q, User: %q, Password: [set: %v]\n", blogTitle, authorName, password != "")
-		fmt.Printf("[DEBUG] Received parts: %v\n", allParts)
 		fmt.Println("Usage: point setup --title=\"Blog Title\" --user=\"Author Name\" --email=\"email@example.com\" --password=\"SHA256_HASH\"")
 		os.Exit(1)
 	}
