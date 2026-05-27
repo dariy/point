@@ -433,6 +433,9 @@ func main() {
 		if err != nil {
 			log.Fatalf("setup: failed to load config: %v", err)
 		}
+		fmt.Printf("[DEBUG] DATABASE_URL: %q\n", cfg.DatabaseURL)
+		fmt.Printf("[DEBUG] STORAGE_PATH: %q\n", cfg.StoragePath)
+
 		repo, err := repository.NewRepository(cfg.DatabaseURL)
 		if err != nil {
 			log.Fatalf("setup: failed to initialize repository: %v", err)

@@ -483,7 +483,7 @@ prompt_account_setup() {
 
   if [ "$INSTALL_METHOD" = "docker" ]; then
     say "Running setup inside container..."
-    (cd "$INSTALL_DIR" && $COMPOSE exec -T -u 1000 point /app/point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
+    (cd "$INSTALL_DIR" && $COMPOSE exec -T -u 1000 -e DATABASE_URL=/data/point.db -e STORAGE_PATH=/data point /app/point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
   else
     (cd "$INSTALL_DIR" && DATABASE_URL="$DATA_DIR/point.db" STORAGE_PATH="$DATA_DIR" ./point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
     chown point:point "$DATA_DIR/point.db"* 2>/dev/null || true
