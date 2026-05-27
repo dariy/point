@@ -115,7 +115,7 @@ collect_config() {
   echo ""
 
   if [ "$method" = "docker" ]; then
-    INSTALL_DIR=$(maybe_ask "Install directory" "$HOME/point")
+    INSTALL_DIR=$(maybe_ask "Install directory" "$(pwd)")
     DATA_DIR=$(maybe_ask "Data directory" "${INSTALL_DIR}/data")
     APP_PORT=$(maybe_ask "Host Port" "${AUTO_PORT:-8000}")
     PORT=8000
