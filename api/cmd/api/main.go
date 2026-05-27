@@ -412,12 +412,6 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 }
 
 func main() {
-	// Verbose logging of ALL arguments using log.Printf to ensure visibility
-	log.Printf("[DEBUG-v4] Total args: %d", len(os.Args))
-	for i, arg := range os.Args {
-		log.Printf("[DEBUG-v4] arg[%d]: %q", i, arg)
-	}
-
 	// Check for CLI commands early.
 	isSetup := false
 	for _, arg := range os.Args {
