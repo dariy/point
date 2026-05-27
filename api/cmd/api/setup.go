@@ -15,8 +15,26 @@ import (
 func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
 	var blogTitle, authorName, email, password string
 
+	// Collect all parts from all arguments (handles merged args like "setup --title=...")
+	var allParts []string
 	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
+		trimmed := strings.Trim(os.Args[i], " \t\n\r\"'")
+		if trimmed == "setup" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "setup ") {
+			trimmed = strings.TrimPrefix(trimmed, "setup ")
+		}
+
+		// Split by spaces but respect quotes would be complex.
+		// For now, let's just split by whitespace and see if it helps.
+		// Note: this will break titles with spaces IF they are passed as a single string.
+		// However, most container engines pass them as separate args if quoted.
+		parts := strings.Fields(trimmed)
+		allParts = append(allParts, parts...)
+	}
+
+	for _, arg := range allParts {
 		if val, ok := strings.CutPrefix(arg, "--title="); ok {
 			blogTitle = val
 		} else if val, ok := strings.CutPrefix(arg, "--user="); ok {
@@ -29,10 +47,13 @@ func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
 	}
 
 	if blogTitle == "" || authorName == "" || password == "" {
+		fmt.Printf("[ERROR] missing required setup arguments. Title: %q, User: %q, Password: [set: %v]\n", blogTitle, authorName, password != "")
+		fmt.Printf("[DEBUG] Received parts: %v\n", allParts)
 		fmt.Println("Usage: point setup --title=\"Blog Title\" --user=\"Author Name\" --email=\"email@example.com\" --password=\"SHA256_HASH\"")
 		os.Exit(1)
 	}
 
+	log.Printf("Starting CLI setup for blog %q with user %q", blogTitle, authorName)
 	ctx := context.Background()
 
 	// Check if already setup

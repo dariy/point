@@ -409,6 +409,40 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 }
 
 func main() {
+	// Verbose logging of ALL arguments to help debug container environment mangling
+	for i, arg := range os.Args {
+		fmt.Printf("[DEBUG] arg[%d]: %q\n", i, arg)
+	}
+
+	// Check for CLI commands early.
+	// Some container engines (like podman-compose) might merge the command and args
+	// into a single string. We check for both "setup" as a standalone arg AND
+	// as the prefix of any argument.
+	isSetup := false
+	for _, arg := range os.Args {
+		trimmed := strings.Trim(arg, " \t\n\r\"'")
+		if trimmed == "setup" || strings.HasPrefix(trimmed, "setup ") {
+			isSetup = true
+			break
+		}
+	}
+
+	if isSetup {
+		fmt.Println("[INFO] CLI Setup command detected. Initializing...")
+		cfg, err := config.LoadConfig(".")
+		if err != nil {
+			log.Fatalf("setup: failed to load config: %v", err)
+		}
+		repo, err := repository.NewRepository(cfg.DatabaseURL)
+		if err != nil {
+			log.Fatalf("setup: failed to initialize repository: %v", err)
+		}
+		svcs := initServices(&cfg, repo)
+		fmt.Println("[INFO] Running CLI setup...")
+		runSetupCLI(repo, svcs)
+		os.Exit(0)
+	}
+
 	for _, arg := range os.Args[1:] {
 		if arg == "-v" || arg == "--version" || arg == "-version" {
 			fmt.Println(Version)
@@ -435,6 +469,8 @@ func main() {
 			log.Printf("error closing repository: %v", err)
 		}
 	}()
+
+	svcs := initServices(&cfg, repo)
 
 	// Ensure media directories exist
 	for _, dir := range []string{"originals", "thumbnails"} {
@@ -657,15 +693,6 @@ func main() {
 	// can share its name with the system tag (slug="_root"). Only slug stays unique.
 	if err := repo.DropTagNameUnique(ctx); err != nil {
 		log.Printf("warning: drop_tags_name_unique: %v", err)
-	}
-
-	svcs := initServices(&cfg, repo)
-
-	for _, arg := range os.Args[1:] {
-		if arg == "setup" {
-			runSetupCLI(repo, svcs)
-			os.Exit(0)
-		}
 	}
 
 	// Ensure a secret key is available for session signing.
