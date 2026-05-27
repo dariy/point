@@ -661,6 +661,13 @@ func main() {
 
 	svcs := initServices(&cfg, repo)
 
+	for _, arg := range os.Args[1:] {
+		if arg == "setup" {
+			runSetupCLI(repo, svcs)
+			os.Exit(0)
+		}
+	}
+
 	// Ensure a secret key is available for session signing.
 	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
 		log.Fatalf("failed to ensure secret key: %v", err)

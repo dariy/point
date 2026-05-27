@@ -437,6 +437,56 @@ wait_for_health() {
   warn "Check logs with: journalctl -u point -f  (native)  or  docker logs point  (Docker)"
 }
 
+prompt_account_setup() {
+  if [ "$NON_INTERACTIVE" = "true" ]; then return; fi
+
+  # Check if setup is already complete
+  if curl -fsS "http://localhost:${APP_PORT}/api/setup/status" | grep -q '"setup_complete":true'; then
+    return
+  fi
+
+  echo ""
+  local do_setup
+  do_setup=$(ask_yn "Would you like to create an admin account now?" "y")
+  if [ "$do_setup" != "y" ]; then return; fi
+
+  echo ""
+  say "Admin Account Setup"
+  local title; title=$(ask "Blog Title" "My Photo Blog")
+  local name; name=$(ask "Your Name" "Admin")
+  local email; email=$(ask "Email Address" "")
+
+  local pass; local pass_confirm
+  while true; do
+    printf "${BOLD}Password: ${NC}" >&2
+    read -rs pass </dev/tty
+    echo "" >&2
+    printf "${BOLD}Confirm Password: ${NC}" >&2
+    read -rs pass_confirm </dev/tty
+    echo "" >&2
+    if [ "$pass" = "$pass_confirm" ] && [ -n "$pass" ]; then
+      if [ ${#pass} -lt 8 ]; then
+        err "Password must be at least 8 characters."
+      else
+        break
+      fi
+    else
+      err "Passwords do not match or are empty. Try again."
+    fi
+  done
+
+  local pass_hash; pass_hash=$(echo -n "$pass" | sha256sum | awk '{print $1}')
+
+  say "Finalizing setup..."
+  if [ "$INSTALL_METHOD" = "docker" ]; then
+    (cd "$INSTALL_DIR" && $COMPOSE exec -T point ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
+  else
+    (cd "$INSTALL_DIR" && ./point setup --title="$title" --user="$name" --email="$email" --password="$pass_hash")
+    chown point:point "$DATA_DIR/point.db" 2>/dev/null || true
+  fi
+  ok "Admin account created!"
+}
+
 show_success() {
   local url="http://localhost:${APP_PORT}"
   echo ""
@@ -446,8 +496,12 @@ show_success() {
   echo ""
   echo -e "  ${BOLD}Open in your browser:${NC}  ${url}"
   echo ""
-  echo -e "  The setup wizard will appear on first visit."
-  echo -e "  Create your admin account and you're done."
+  if ! curl -fsS "http://localhost:${APP_PORT}/api/setup/status" | grep -q '"setup_complete":true'; then
+    echo -e "  The setup wizard will appear on first visit."
+    echo -e "  Create your admin account and you're done."
+  else
+    echo -e "  Log in at ${url}/light with the account you just created."
+  fi
   echo ""
   if [ "$INSTALL_METHOD" = "docker" ]; then
     echo -e "  ${BOLD}Useful commands:${NC}"
@@ -482,7 +536,9 @@ main() {
   fi
 
   wait_for_health
+  prompt_account_setup
   show_success
 }
 
 main "$@"
+
