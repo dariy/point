@@ -596,7 +596,7 @@
 .photo-library-modal {
     width: 90vw;
     max-width: var(--media-picker-modal-max-width);
-    max-height: 90vh;
+    height: 85vh;
     display: flex;
     flex-direction: column;
 }
