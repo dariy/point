@@ -409,39 +409,38 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 }
 
 func main() {
-	// Verbose logging of ALL arguments to help debug container environment mangling
+	// Verbose logging of ALL arguments using log.Printf to ensure visibility
+	log.Printf("[DEBUG-v4] Total args: %d", len(os.Args))
 	for i, arg := range os.Args {
-		fmt.Printf("[DEBUG] arg[%d]: %q\n", i, arg)
+		log.Printf("[DEBUG-v4] arg[%d]: %q", i, arg)
 	}
 
 	// Check for CLI commands early.
-	// Some container engines (like podman-compose) might merge the command and args
-	// into a single string. We check for both "setup" as a standalone arg AND
-	// as the prefix of any argument.
 	isSetup := false
 	for _, arg := range os.Args {
 		trimmed := strings.Trim(arg, " \t\n\r\"'")
-		if trimmed == "setup" || strings.HasPrefix(trimmed, "setup ") {
+		// Match "setup" as standalone OR part of a merged string like "point setup"
+		if trimmed == "setup" || strings.HasPrefix(trimmed, "setup ") || strings.Contains(trimmed, " setup ") || strings.HasSuffix(trimmed, " setup") {
 			isSetup = true
 			break
 		}
 	}
 
 	if isSetup {
-		fmt.Println("[INFO] CLI Setup command detected. Initializing...")
+		log.Println("[INFO] CLI Setup command detected. Initializing...")
 		cfg, err := config.LoadConfig(".")
 		if err != nil {
 			log.Fatalf("setup: failed to load config: %v", err)
 		}
-		fmt.Printf("[DEBUG] DATABASE_URL: %q\n", cfg.DatabaseURL)
-		fmt.Printf("[DEBUG] STORAGE_PATH: %q\n", cfg.StoragePath)
+		log.Printf("[DEBUG] DATABASE_URL: %q", cfg.DatabaseURL)
+		log.Printf("[DEBUG] STORAGE_PATH: %q", cfg.StoragePath)
 
 		repo, err := repository.NewRepository(cfg.DatabaseURL)
 		if err != nil {
 			log.Fatalf("setup: failed to initialize repository: %v", err)
 		}
 		svcs := initServices(&cfg, repo)
-		fmt.Println("[INFO] Running CLI setup...")
+		log.Println("[INFO] Running CLI setup...")
 		runSetupCLI(repo, svcs)
 		os.Exit(0)
 	}

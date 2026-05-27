@@ -478,13 +478,21 @@ prompt_account_setup() {
   local pass_hash; pass_hash=$(echo -n "$pass" | sha256sum | awk '{print $1}')
 
   say "Finalizing setup..."
-  local email_arg=""
-  [ -n "$email" ] && email_arg="--email=$email"
 
   if [ "$INSTALL_METHOD" = "docker" ]; then
-    say "Running setup inside container..."
-    (cd "$INSTALL_DIR" && $COMPOSE exec -T -u 1000 -e DATABASE_URL=/data/point.db -e STORAGE_PATH=/data point /app/point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
+    say "Running setup via API..."
+    # Escape double-quotes and backslashes for safe JSON embedding
+    local title_j name_j email_j
+    title_j=$(printf '%s' "$title" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    name_j=$(printf '%s'  "$name"  | sed 's/\\/\\\\/g; s/"/\\"/g')
+    email_j=$(printf '%s' "$email" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    curl -fsS -X POST "http://localhost:${APP_PORT}/api/setup" \
+      -H "Content-Type: application/json" \
+      -d "{\"name\":\"${pass_hash}\",\"blog_title\":\"${title_j}\",\"author_name\":\"${name_j}\",\"email\":\"${email_j}\"}" \
+      >/dev/null
   else
+    local email_arg=""
+    [ -n "$email" ] && email_arg="--email=$email"
     (cd "$INSTALL_DIR" && DATABASE_URL="$DATA_DIR/point.db" STORAGE_PATH="$DATA_DIR" ./point setup "--title=$title" "--user=$name" $email_arg "--password=$pass_hash")
     chown point:point "$DATA_DIR/point.db"* 2>/dev/null || true
   fi
