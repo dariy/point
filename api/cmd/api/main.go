@@ -284,6 +284,9 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(svcs.Auth))
 	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth))
 	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/photo-library", systemHandler.GetPhotoLibraryContents, api.AuthMiddleware(svcs.Auth))
+	systemGroup.POST("/photo-library/import", systemHandler.ImportSelectedPhotos, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/photo-library/file", systemHandler.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth))
 	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(svcs.Auth))
 
 	// ── Nav Menu Routes (admin) ────────────────────────────────────────────────
