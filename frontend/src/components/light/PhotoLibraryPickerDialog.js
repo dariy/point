@@ -2,6 +2,7 @@
  * PhotoLibraryPickerDialog — browse the external photo library and selectively
  * import photos into site media.
  *
+ * Layout: folder tree sidebar on the left, large photo grid on the right.
  * Appended to document.body once and reused across open/close cycles.
  *
  * Usage:
@@ -50,16 +51,15 @@ export class PhotoLibraryPickerDialog extends Component {
     return `
       <div class="modal photo-library-modal">
         <header class="modal-header photo-library-header">
-          <div class="photo-library-title">
+          <div class="photo-library-title-row">
             <h3>Browse Photo Library</h3>
-            ${this._renderBreadcrumb(currentPath)}
+            <button class="modal-close" id="plpd-close-btn" aria-label="Close">&times;</button>
           </div>
-          <button class="modal-close" id="plpd-close-btn" aria-label="Close">&times;</button>
+          ${this._renderBreadcrumb(currentPath)}
         </header>
-        <div class="modal-body photo-library-body" id="plpd-body">
+        <div class="modal-body photo-library-body">
           ${loading ? '<div class="photo-library-loading">Loading&hellip;</div>' : ''}
-          ${!loading && contents ? this._renderContents(contents, selected) : ''}
-          ${!loading && !contents ? '' : ''}
+          ${!loading ? this._renderLayout(contents, selected) : ''}
         </div>
         <footer class="modal-footer">
           <button class="btn btn-secondary" id="plpd-cancel-btn">Cancel</button>
@@ -92,31 +92,43 @@ export class PhotoLibraryPickerDialog extends Component {
       </nav>`;
   }
 
-  _renderContents(contents, selected) {
-    const { folders, files } = contents;
-    if (!folders.length && !files.length) {
-      return '<p class="photo-library-empty">This folder is empty.</p>';
-    }
+  _renderLayout(contents, selected) {
+    const folders = contents?.folders || [];
+    const files = contents?.files || [];
 
-    const folderItems = folders.map(name => `
-      <button class="photo-library-item photo-library-folder" data-folder="${escapeHtml(name)}" title="${escapeHtml(name)}">
-        <span class="photo-library-folder-icon">&#128193;</span>
-        <span class="photo-library-item-label">${escapeHtml(name)}</span>
-      </button>`).join('');
+    const folderItems = folders.length
+      ? folders.map(name => `
+          <button class="photo-library-folder-btn" data-folder="${escapeHtml(name)}" title="${escapeHtml(name)}">
+            <span class="photo-library-folder-icon">&#128193;</span>
+            <span class="photo-library-item-label">${escapeHtml(name)}</span>
+          </button>`).join('')
+      : `<span class="photo-library-sidebar-empty">No subfolders</span>`;
 
-    const fileItems = files.map(file => {
-      const isSelected = selected.has(file.path);
-      const url = getPhotoLibraryFileUrl(file.path);
-      return `
-        <button class="photo-library-item photo-library-file${isSelected ? ' selected' : ''}"
-          data-path="${escapeHtml(file.path)}" title="${escapeHtml(file.name)}">
-          <img class="photo-library-thumb" src="${escapeHtml(url)}" alt="" loading="lazy">
-          <span class="photo-library-item-label">${escapeHtml(file.name)}</span>
-          ${isSelected ? '<span class="photo-library-check" aria-hidden="true">&#10003;</span>' : ''}
-        </button>`;
-    }).join('');
+    const fileGrid = !contents
+      ? ''
+      : !files.length
+        ? `<p class="photo-library-empty">No photos in this folder.</p>`
+        : `<div class="photo-library-grid">${files.map(file => {
+            const isSelected = selected.has(file.path);
+            const url = getPhotoLibraryFileUrl(file.path);
+            return `
+              <button class="photo-library-item${isSelected ? ' selected' : ''}"
+                data-path="${escapeHtml(file.path)}" title="${escapeHtml(file.name)}">
+                <img class="photo-library-thumb" src="${escapeHtml(url)}" alt="" loading="lazy">
+                <span class="photo-library-item-label">${escapeHtml(file.name)}</span>
+                ${isSelected ? '<span class="photo-library-check" aria-hidden="true">&#10003;</span>' : ''}
+              </button>`;
+          }).join('')}</div>`;
 
-    return `<div class="photo-library-grid">${folderItems}${fileItems}</div>`;
+    return `
+      <div class="photo-library-layout">
+        <nav class="photo-library-sidebar" aria-label="Folders">
+          ${folderItems}
+        </nav>
+        <div class="photo-library-content">
+          ${fileGrid}
+        </div>
+      </div>`;
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -135,12 +147,12 @@ export class PhotoLibraryPickerDialog extends Component {
     });
 
     // Folder navigation
-    this.$$('.photo-library-folder').forEach(btn => {
+    this.$$('.photo-library-folder-btn').forEach(btn => {
       btn.addEventListener('click', () => this._navigateInto(btn.dataset.folder));
     });
 
     // File selection toggle
-    this.$$('.photo-library-file').forEach(btn => {
+    this.$$('.photo-library-item').forEach(btn => {
       btn.addEventListener('click', () => this._toggleFile(btn.dataset.path));
     });
 

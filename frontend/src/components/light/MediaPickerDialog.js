@@ -13,6 +13,7 @@
 
 import { Component } from '../Component.js';
 import { MediaBrowser } from './MediaBrowser.js';
+import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.js';
 import { store } from '../../store.js';
 
 export class MediaPickerDialog extends Component {
@@ -26,6 +27,7 @@ export class MediaPickerDialog extends Component {
 
     super(container, { onConfirm });
     this._activeBrowser = null;
+    this._libraryPicker = null;
     this._keyHandler = null;
   }
 
@@ -38,6 +40,7 @@ export class MediaPickerDialog extends Component {
         </header>
         <div class="modal-body media-picker-body" id="mpd-browser-mount"></div>
         <footer class="modal-footer">
+          <button class="btn btn-secondary" id="mpd-library-btn">From Photo Library</button>
           <button class="btn btn-secondary" id="mpd-cancel-btn">Cancel</button>
           <button class="btn btn-primary" id="mpd-add-btn">Add selected</button>
         </footer>
@@ -48,6 +51,7 @@ export class MediaPickerDialog extends Component {
     this.$('#mpd-close-btn')?.addEventListener('click', () => this.close());
     this.$('#mpd-cancel-btn')?.addEventListener('click', () => this.close());
     this.$('#mpd-add-btn')?.addEventListener('click', () => this._handleAdd());
+    this.$('#mpd-library-btn')?.addEventListener('click', () => this._handleFromLibrary());
 
     // Close on backdrop click
     this.container.addEventListener('click', (e) => {
@@ -91,9 +95,28 @@ export class MediaPickerDialog extends Component {
   }
 
   destroy() {
+    this._libraryPicker?.destroy();
+    this._libraryPicker = null;
     this.close();
     this.unmount();
     this.container.remove();
+  }
+
+  _handleFromLibrary() {
+    if (!this._libraryPicker) {
+      this._libraryPicker = new PhotoLibraryPickerDialog({
+        onImport: (result) => {
+          const cb = this._onConfirmOverride || this.props.onConfirm;
+          if (result.items?.length > 0 && cb) {
+            cb(result.items);
+            this.close();
+          } else if (this._activeBrowser) {
+            this._activeBrowser._load();
+          }
+        },
+      });
+    }
+    this._libraryPicker.open();
   }
 
   _handleAdd() {

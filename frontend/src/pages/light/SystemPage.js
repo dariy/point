@@ -9,9 +9,8 @@ import { LightSidebar } from '../../components/light/LightSidebar.js';
 import {
   clearCache, listBackups,
   createBackup, restoreBackup, deleteBackup, getMigrations,
-  updateMapCoords, getStats, getDiskInfo,
+  updateMapCoords, getDiskInfo,
 } from '../../api/system.js';
-import { PhotoLibraryPickerDialog } from '../../components/light/PhotoLibraryPickerDialog.js';
 import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
 import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
 import { preCacheImages } from '../../utils/imageCache.js';
@@ -47,14 +46,12 @@ export default class SystemPage extends Component {
       // Sync queue state
       syncQueue: [],
 
-      // Photo library
-      importConfigured: false,
       diskInfo: null,
     };
   }
 
   render() {
-    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult, importConfigured, diskInfo } = this.state;
+    const { loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult, diskInfo } = this.state;
     const settings = store.get('settings') || {};
     const enableBackup = settings.enable_backup !== false;
 
@@ -121,26 +118,6 @@ export default class SystemPage extends Component {
             </div>
 
             ${this._renderSyncPanel(queue, lastSync)}
-
-            <div class="card">
-              <div class="card-header"><h2>Photo Library</h2></div>
-              <div class="card-body">
-                <div class="ops-list">
-                  <div class="op-item">
-                    <div class="op-info">
-                      <h4>Import from Photo Library</h4>
-                      ${importConfigured
-                        ? `<p class="text-muted">Browse the external photo library and select photos to import into site media.</p>`
-                        : `<p class="text-muted">No import path configured. Set <code>PHOTO_LIBRARY_PATH</code> in the server environment.</p>`
-                      }
-                    </div>
-                    <button id="browse-library-btn" class="btn btn-secondary" ${!importConfigured ? 'disabled' : ''}>
-                      Browse Library
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             <div class="card">
               <div class="card-header"><h2>Maintenance</h2></div>
@@ -321,9 +298,6 @@ export default class SystemPage extends Component {
     this.$('#dismiss-retry-btn')?.addEventListener('click', () => this._handleDismissRetry());
     this.subscribeStore(store, 'offline_status', () => this._refreshSyncState());
 
-    // Photo library browse
-    this.$('#browse-library-btn')?.addEventListener('click', () => this._handleBrowseLibrary());
-
     // Cache
     this.$('#clear-cache-btn')?.addEventListener('click', () => this._handleClearCache());
 
@@ -371,16 +345,15 @@ export default class SystemPage extends Component {
   async _loadInitial() {
     this.setState({ loading: true, error: null });
     try {
-      const [backups, migrations, lastSync, queue, stats, diskInfo] = await Promise.all([
+      const [backups, migrations, lastSync, queue, diskInfo] = await Promise.all([
         listBackups(),
         getMigrations(),
         getMeta('last_sync'),
         getQueue(),
-        getStats().catch(() => ({})),
         getDiskInfo().catch(() => null),
       ]);
       await updateStatus();
-      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue, importConfigured: !!stats.import_configured, diskInfo });
+      this.setState({ loading: false, backups, migrations, lastSync, syncQueue: queue, diskInfo });
     } catch (err) {
       console.error('[SystemPage] load error:', err);
       store.set('toast', { message: 'Could not load system data.', type: 'error' });
@@ -476,15 +449,6 @@ export default class SystemPage extends Component {
     }
   }
 
-  _handleBrowseLibrary() {
-    if (!this._photoLibraryPicker) {
-      this._photoLibraryPicker = new PhotoLibraryPickerDialog({
-        onImport: () => {},
-      });
-    }
-    this._photoLibraryPicker.open();
-  }
-
   async _handleClearCache() {
     try {
       const result = await clearCache();
@@ -567,8 +531,4 @@ export default class SystemPage extends Component {
     navigate('/', { replace: true });
   }
 
-  beforeUnmount() {
-    this._photoLibraryPicker?.destroy();
-    this._photoLibraryPicker = null;
-  }
 }

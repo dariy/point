@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 )
@@ -466,6 +467,7 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 
 	var imported, skipped int
 	errors := []string{}
+	importedItems := []models.Medium{}
 
 	for _, relPath := range req.Paths {
 		absPath, joinErr := safeJoin(libraryRoot, relPath)
@@ -489,10 +491,12 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 			continue
 		}
 
-		if _, importErr := h.mediaService.ImportFromPath(ctx, absPath); importErr != nil {
+		m, importErr := h.mediaService.ImportFromPath(ctx, absPath)
+		if importErr != nil {
 			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(relPath), importErr))
 			continue
 		}
+		importedItems = append(importedItems, m)
 		imported++
 	}
 
@@ -500,6 +504,7 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 		"imported": imported,
 		"skipped":  skipped,
 		"errors":   errors,
+		"items":    importedItems,
 	})
 }
 
