@@ -81,7 +81,7 @@ func (h *SystemHandler) GetVersion(c echo.Context) error {
 		// On fetch failure: keep existing cache.Latest (may be empty string).
 	}
 
-	updateAvailable := cache.Latest != "" && cache.Latest != current
+	updateAvailable := cache.Latest != "" && semverGreaterThan(cache.Latest, current)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"current":          current,
@@ -116,6 +116,37 @@ func fetchLatestGitHubRelease() (string, error) {
 		return "", err
 	}
 	return payload.TagName, nil
+}
+
+// semverGreaterThan returns true if version a is strictly greater than b.
+// Both strings may have an optional leading "v". Non-semver strings are treated as equal.
+func semverGreaterThan(a, b string) bool {
+	parse := func(v string) (int, int, int, bool) {
+		v = strings.TrimPrefix(v, "v")
+		parts := strings.SplitN(v, ".", 3)
+		if len(parts) != 3 {
+			return 0, 0, 0, false
+		}
+		major, e1 := strconv.Atoi(parts[0])
+		minor, e2 := strconv.Atoi(parts[1])
+		patch, e3 := strconv.Atoi(strings.SplitN(parts[2], "-", 2)[0])
+		if e1 != nil || e2 != nil || e3 != nil {
+			return 0, 0, 0, false
+		}
+		return major, minor, patch, true
+	}
+	aMaj, aMin, aPat, aOK := parse(a)
+	bMaj, bMin, bPat, bOK := parse(b)
+	if !aOK || !bOK {
+		return false
+	}
+	if aMaj != bMaj {
+		return aMaj > bMaj
+	}
+	if aMin != bMin {
+		return aMin > bMin
+	}
+	return aPat > bPat
 }
 
 func (h *SystemHandler) GetStats(c echo.Context) error {
