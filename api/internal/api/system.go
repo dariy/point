@@ -375,3 +375,154 @@ func (h *SystemHandler) GetDiskInfo(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, info)
 }
+
+type photoLibraryFileEntry struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+func (h *SystemHandler) getLibraryRoot(c echo.Context) (string, error) {
+	libraryRoot, _ := h.settingsService.GetSecret(c.Request().Context(), "photo_library_path")
+	if libraryRoot == "" {
+		return "", echo.NewHTTPError(http.StatusBadRequest, "photo_library_path not configured")
+	}
+	// Ensure root is cleaned (no trailing slash issues)
+	libraryRoot = filepath.Clean(libraryRoot)
+	return libraryRoot, nil
+}
+
+func safeJoin(libraryRoot, relPath string) (string, error) {
+	// Clean the relative path and join; reject traversal outside root
+	abs := filepath.Join(libraryRoot, filepath.Clean("/"+relPath))
+	if abs != libraryRoot && !strings.HasPrefix(abs, libraryRoot+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid path")
+	}
+	return abs, nil
+}
+
+func (h *SystemHandler) GetPhotoLibraryContents(c echo.Context) error {
+	libraryRoot, err := h.getLibraryRoot(c)
+	if err != nil {
+		return err
+	}
+
+	relPath := c.QueryParam("path")
+	targetPath, err := safeJoin(libraryRoot, relPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if _, statErr := os.Stat(targetPath); os.IsNotExist(statErr) {
+		return echo.NewHTTPError(http.StatusNotFound, "path not found")
+	}
+
+	entries, err := os.ReadDir(targetPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	folders := []string{}
+	files := []photoLibraryFileEntry{}
+
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		entryRelPath := filepath.Join(relPath, entry.Name())
+		if entry.IsDir() {
+			folders = append(folders, entry.Name())
+		} else {
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if importableExtensions[ext] {
+				files = append(files, photoLibraryFileEntry{
+					Name: entry.Name(),
+					Path: entryRelPath,
+				})
+			}
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"path":    relPath,
+		"folders": folders,
+		"files":   files,
+	})
+}
+
+func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	libraryRoot, err := h.getLibraryRoot(c)
+	if err != nil {
+		return err
+	}
+
+	var req struct {
+		Paths []string `json:"paths"`
+	}
+	if bindErr := c.Bind(&req); bindErr != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, bindErr.Error())
+	}
+
+	var imported, skipped int
+	errors := []string{}
+
+	for _, relPath := range req.Paths {
+		absPath, joinErr := safeJoin(libraryRoot, relPath)
+		if joinErr != nil {
+			errors = append(errors, fmt.Sprintf("%s: invalid path", relPath))
+			continue
+		}
+
+		f, openErr := os.Open(absPath)
+		if openErr != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(relPath), openErr))
+			continue
+		}
+		h256 := sha256.New()
+		_, _ = io.Copy(h256, f)
+		_ = f.Close()
+		checksum := hex.EncodeToString(h256.Sum(nil))
+
+		if _, lookupErr := h.repo.GetMediaByChecksum(ctx, checksum); lookupErr == nil {
+			skipped++
+			continue
+		}
+
+		if _, importErr := h.mediaService.ImportFromPath(ctx, absPath); importErr != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(relPath), importErr))
+			continue
+		}
+		imported++
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"imported": imported,
+		"skipped":  skipped,
+		"errors":   errors,
+	})
+}
+
+func (h *SystemHandler) GetPhotoLibraryFile(c echo.Context) error {
+	libraryRoot, err := h.getLibraryRoot(c)
+	if err != nil {
+		return err
+	}
+
+	relPath := c.QueryParam("path")
+	if relPath == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "path required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(relPath))
+	if !importableExtensions[ext] {
+		return echo.NewHTTPError(http.StatusBadRequest, "unsupported file type")
+	}
+
+	absPath, joinErr := safeJoin(libraryRoot, relPath)
+	if joinErr != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, joinErr.Error())
+	}
+
+	return c.File(absPath)
+}
