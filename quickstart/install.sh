@@ -230,6 +230,10 @@ EOF
   fi
   if [ -n "$PHOTO_LIB_PATH" ]; then
     echo "PHOTO_LIBRARY_PATH=${PHOTO_LIB_PATH}" >> "$env_path"
+    if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+      sed -i 's|# - PHOTO_LIBRARY_PATH=/photos|- PHOTO_LIBRARY_PATH=/photos|' "$INSTALL_DIR/docker-compose.yml"
+      sed -i 's|# - ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro,z|- ${PHOTO_LIBRARY_PATH:-./import}:/photos:ro,z|' "$INSTALL_DIR/docker-compose.yml"
+    fi
   fi
   ok ".env written"
 }
