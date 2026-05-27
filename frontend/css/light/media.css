@@ -589,3 +589,199 @@
 [data-theme="dark"] .dropped-media-preview img {
     outline-color: var(--color-white-alpha-10);
 }
+
+/* ===========================
+   PhotoLibraryPickerDialog
+   =========================== */
+.photo-library-modal {
+    width: 90vw;
+    max-width: var(--media-picker-modal-max-width);
+    height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.photo-library-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+}
+
+.photo-library-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.photo-library-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+    font-size: var(--font-size-sm);
+}
+
+.breadcrumb-btn {
+    background: none;
+    border: none;
+    padding: 0 2px;
+    color: var(--color-primary);
+    cursor: pointer;
+    font-size: inherit;
+}
+
+.breadcrumb-btn:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb-current {
+    font-weight: 500;
+    color: var(--text-primary);
+    padding: 0 2px;
+}
+
+.breadcrumb-sep {
+    color: var(--text-muted);
+    padding: 0 1px;
+}
+
+.photo-library-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.photo-library-loading {
+    padding: var(--spacing-xl);
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.photo-library-layout {
+    display: flex;
+    height: 100%;
+}
+
+.photo-library-sidebar {
+    width: 180px;
+    flex-shrink: 0;
+    border-right: var(--border-width) solid var(--border-primary);
+    overflow-y: auto;
+    padding: var(--spacing-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: border-color var(--transition-theme);
+}
+
+.photo-library-folder-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    text-align: left;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.photo-library-folder-btn:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.photo-library-folder-icon {
+    flex-shrink: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.photo-library-sidebar-empty {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-style: italic;
+}
+
+.photo-library-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+}
+
+.photo-library-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: var(--spacing-xl);
+}
+
+.photo-library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--spacing-sm);
+}
+
+.photo-library-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+    cursor: pointer;
+    overflow: hidden;
+    padding: 0;
+    transition: box-shadow var(--transition-fast), border-color var(--transition-fast), background-color var(--transition-theme);
+}
+
+.photo-library-item:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-secondary);
+}
+
+.photo-library-item.selected {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+    border-color: var(--color-primary);
+}
+
+.photo-library-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+}
+
+.photo-library-item-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    padding: 4px var(--spacing-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.photo-library-check {
+    position: absolute;
+    top: var(--spacing-xs);
+    right: var(--spacing-xs);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+}

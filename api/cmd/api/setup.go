@@ -22,9 +22,7 @@ func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
 		if trimmed == "setup" {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "setup ") {
-			trimmed = strings.TrimPrefix(trimmed, "setup ")
-		}
+		trimmed = strings.TrimPrefix(trimmed, "setup ")
 
 		// Split by spaces but respect quotes would be complex.
 		// For now, let's just split by whitespace and see if it helps.
@@ -48,7 +46,6 @@ func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
 
 	if blogTitle == "" || authorName == "" || password == "" {
 		fmt.Printf("[ERROR] missing required setup arguments. Title: %q, User: %q, Password: [set: %v]\n", blogTitle, authorName, password != "")
-		fmt.Printf("[DEBUG] Received parts: %v\n", allParts)
 		fmt.Println("Usage: point setup --title=\"Blog Title\" --user=\"Author Name\" --email=\"email@example.com\" --password=\"SHA256_HASH\"")
 		os.Exit(1)
 	}
