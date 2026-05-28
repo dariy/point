@@ -20,7 +20,10 @@ describe('PostEditPage', () => {
         style: {}, 
         classList: { add: () => {}, remove: () => {} },
         addEventListener: () => {},
-        removeEventListener: () => {}
+        removeEventListener: () => {},
+        setAttribute: () => {},
+        querySelector: () => null,
+        querySelectorAll: () => []
       }),
       body: { appendChild: () => {}, remove: () => {}, classList: { add: () => {}, remove: () => {} } },
       activeElement: {},
@@ -66,4 +69,111 @@ describe('PostEditPage', () => {
     assert.ok(html.includes('id="save-btn"') && html.includes('disabled'), 'Save button should be disabled');
     assert.ok(html.includes('id="analyze-btn"') && html.includes('disabled'), 'Analyze button should be disabled');
   });
-});
+test('should preserve other fields when switching from visual to text mode', () => {
+  // We need a more functional container for this test
+  const createMount = (overrides = {}) => ({ 
+    appendChild: () => {}, 
+    remove: () => {}, 
+    innerHTML: '', 
+    querySelector: () => null, 
+    querySelectorAll: () => [],
+    classList: { add: () => {}, remove: () => {} },
+    addEventListener: () => {},
+    closest: () => null,
+    replaceChildren: () => {},
+    setAttribute: () => {},
+    value: '',
+    checked: false,
+    ...overrides
+  });
+
+  const elements = {
+    '#title-input': createMount({ value: 'My Awesome Title' }),
+    '#slug-input': createMount({ value: 'my-awesome-title' }),
+    '#content-editor': createMount({ value: 'Some content' }),
+    '#excerpt-editor': createMount({ value: 'An excerpt' }),
+    '#featured-check': createMount({ checked: true }),
+    '#status-select': createMount({ value: 'published', className: '' }),
+    '#schedule-input': createMount({ value: '' }),
+    '#css-editor': createMount({ value: '' }),
+    '#immersive-mode-select': createMount({ value: 'auto' }),
+    '#sidebar-mount': createMount(),
+    '#tags-input-mount': createMount(),
+    '#visual-editor-mount': createMount(),
+    '.light-header': createMount()
+  };
+  const container = { 
+    querySelector: (selector) => elements[selector] || createMount(), 
+    querySelectorAll: () => [],
+    innerHTML: '',
+    addEventListener: () => {},
+    removeEventListener: () => {}
+  };
+
+  const props = { params: {} }; // New post
+  const page = new PostEditPage(container, props);
+  page.state.loading = false;
+  page.state.isNew = true;
+  page.state.editorMode = 'visual';
+  page.state.post = null; // New post starts with null post
+
+  // Simulate switching to text mode
+  page._switchMode('text');
+
+  // After switch, page.state.post should contain the values from the elements
+  assert.strictEqual(page.state.editorMode, 'text');
+  // If the bug is present, this will likely be null or not have the title
+  assert.ok(page.state.post, 'post state should be populated after switch');
+  assert.strictEqual(page.state.post.title, 'My Awesome Title', 'Title should be preserved');
+  assert.strictEqual(page.state.post.slug, 'my-awesome-title', 'Slug should be preserved');
+  });
+
+  test('should preserve other fields when switching from text to visual mode', () => {
+  const createMount = (overrides = {}) => ({ 
+    appendChild: () => {}, 
+    remove: () => {}, 
+    innerHTML: '', 
+    querySelector: () => null, 
+    querySelectorAll: () => [],
+    classList: { add: () => {}, remove: () => {} },
+    addEventListener: () => {},
+    closest: () => null,
+    replaceChildren: () => {},
+    setAttribute: () => {},
+    value: '',
+    checked: false,
+    ...overrides
+  });
+
+  const elements = {
+    '#title-input': createMount({ value: 'Text Mode Title' }),
+    '#content-editor': createMount({ value: 'Content from textarea' }),
+    '#sidebar-mount': createMount(),
+    '#tags-input-mount': createMount(),
+    '#visual-editor-mount': createMount(),
+    '.light-header': createMount()
+  };
+
+  const container = { 
+    querySelector: (selector) => elements[selector] || createMount(), 
+    querySelectorAll: () => [],
+    innerHTML: '',
+    addEventListener: () => {},
+    removeEventListener: () => {}
+  };
+
+  const props = { params: {} };
+  const page = new PostEditPage(container, props);
+  page.state.loading = false;
+  page.state.isNew = true;
+  page.state.editorMode = 'text';
+  page.state.post = null;
+
+  page._switchMode('visual');
+
+  assert.strictEqual(page.state.editorMode, 'visual');
+  assert.strictEqual(page.state.post.title, 'Text Mode Title');
+  assert.strictEqual(page.state.post.content, 'Content from textarea');
+  });
+  });
+

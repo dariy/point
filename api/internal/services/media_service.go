@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"mime"
@@ -209,7 +210,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	if strings.HasPrefix(p.MimeType, "image/") {
 		fileType = "image"
 		// Load image for dimensions and thumbnail
-		src, err := imaging.Decode(bytes.NewReader(p.Content))
+		src, err := safeImagingDecode(bytes.NewReader(p.Content))
 		if err == nil {
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -314,7 +315,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 
 	if strings.HasPrefix(mimeType, "image/") {
 		fileType = "image"
-		src, err := imaging.Decode(bytes.NewReader(content))
+		src, err := safeImagingDecode(bytes.NewReader(content))
 		if err == nil {
 			bounds := src.Bounds()
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
@@ -747,7 +748,7 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) 
 			continue
 		}
 
-		src, err := imaging.Decode(bytes.NewReader(data))
+		src, err := safeImagingDecode(bytes.NewReader(data))
 		if err != nil {
 			stats["errors"]++
 			continue
@@ -1203,4 +1204,16 @@ func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, 
 		}
 	}
 	return changed, nil
+}
+
+// safeImagingDecode wraps imaging.Decode to convert panics into errors.
+// The imaging library can panic on crafted TIFF files (CVE-2023-36308) and
+// there is no patched upstream version as of 2026-05.
+func safeImagingDecode(r io.Reader) (img image.Image, err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("image decode panic: %v", rec)
+		}
+	}()
+	return imaging.Decode(r)
 }

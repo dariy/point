@@ -96,7 +96,7 @@ HAS_NATIVE=false
 echo ""
 say "Detecting Point installations..."
 
-DOCKER_INSTALL_DIR="${INSTALL_DIR_ARG:-$HOME/point}"
+DOCKER_INSTALL_DIR="${INSTALL_DIR_ARG:-$(pwd)}"
 if [ -f "$DOCKER_INSTALL_DIR/docker-compose.yml" ] || [ -d "$DOCKER_INSTALL_DIR/data" ]; then
     HAS_DOCKER=true
     say "Found Docker installation at $DOCKER_INSTALL_DIR"
@@ -149,7 +149,7 @@ fi
 uninstall_docker() {
     hr
     say "Uninstalling Docker version..."
-    local dir="${INSTALL_DIR_ARG:-$HOME/point}"
+    local dir="${INSTALL_DIR_ARG:-$(pwd)}"
     if [ ! -d "$dir" ]; then
         warn "Directory $dir not found. Skipping docker compose down."
     else

@@ -65,10 +65,11 @@ func TestThemeService(t *testing.T) {
 		frontendDir := t.TempDir()
 		themeService.cfg.FrontendDir = frontendDir
 
-		err := themeService.SetActiveTheme(ctx, "valid")
+		theme, err := themeService.SetActiveTheme(ctx, "valid")
 		assert.NoError(t, err)
+		assert.Equal(t, "Valid", theme.Name)
 
-		theme, err := themeService.GetActiveTheme(ctx)
+		theme, err = themeService.GetActiveTheme(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, "Valid", theme.Name)
 
@@ -80,7 +81,7 @@ func TestThemeService(t *testing.T) {
 	})
 
 	t.Run("SetActiveTheme invalid", func(t *testing.T) {
-		err := themeService.SetActiveTheme(ctx, "no-root")
+		_, err := themeService.SetActiveTheme(ctx, "no-root")
 		assert.Error(t, err)
 	})
 
@@ -158,7 +159,7 @@ func TestThemeServiceUserThemes(t *testing.T) {
 		frontendDir := t.TempDir()
 		ts.cfg.FrontendDir = frontendDir
 
-		err := ts.SetActiveTheme(ctx, "user-only")
+		_, err := ts.SetActiveTheme(ctx, "user-only")
 		assert.NoError(t, err)
 
 		theme, err := ts.GetActiveTheme(ctx)
@@ -170,10 +171,17 @@ func TestThemeServiceUserThemes(t *testing.T) {
 		frontendDir := t.TempDir()
 		ts.cfg.FrontendDir = frontendDir
 
-		err := ts.SetActiveTheme(ctx, "system-only")
+		_, err := ts.SetActiveTheme(ctx, "system-only")
 		assert.NoError(t, err)
 
 		theme, err := ts.GetActiveTheme(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, "system-only", theme.Name)
+	})
+
+	t.Run("findTheme is case-insensitive (lowercases input)", func(t *testing.T) {
+		// systemDir has system-only.css
+		theme, err := ts.findTheme("System-Only")
 		assert.NoError(t, err)
 		assert.Equal(t, "system-only", theme.Name)
 	})

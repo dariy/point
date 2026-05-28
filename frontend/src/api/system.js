@@ -71,11 +71,30 @@ export function updateMapCoords() {
 }
 
 /**
- * Scan the configured photo library import path for new media.
+ * List folders and importable files in the external photo library.
+ * @param {string} [path] - Relative path within the library (default root)
+ * @returns {Promise<{path: string, folders: string[], files: Array<{name: string, path: string}>}>}
+ */
+export function getPhotoLibraryContents(path = '') {
+  return api.get('/api/system/photo-library', { path });
+}
+
+/**
+ * Import specific files from the external photo library into site media.
+ * @param {string[]} paths - Relative paths within the library
  * @returns {Promise<{imported: number, skipped: number, errors: string[]}>}
  */
-export function scanMediaImport() {
-  return api.post('/api/system/media/scan');
+export function importSelectedPhotos(paths) {
+  return api.post('/api/system/photo-library/import', { paths });
+}
+
+/**
+ * Get the URL to preview a file from the external photo library.
+ * @param {string} path - Relative path within the library
+ * @returns {string}
+ */
+export function getPhotoLibraryFileUrl(path) {
+  return `/api/system/photo-library/file?path=${encodeURIComponent(path)}`;
 }
 
 /**

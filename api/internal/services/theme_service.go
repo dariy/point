@@ -138,6 +138,7 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 
 // findTheme searches user themes path first (<name>.css), then system themes path (<name>.css).
 func (s *ThemeService) findTheme(name string) (Theme, error) {
+	name = strings.ToLower(name)
 	if s.cfg.UserThemesPath != "" {
 		userPath := filepath.Join(s.cfg.UserThemesPath, name+".css")
 		if t, err := s.ReadAndValidateTheme(userPath, name); err == nil {
@@ -165,20 +166,25 @@ func (s *ThemeService) GetActiveTheme(ctx context.Context) (Theme, error) {
 	return theme, nil
 }
 
-func (s *ThemeService) SetActiveTheme(ctx context.Context, name string) error {
+func (s *ThemeService) SetActiveTheme(ctx context.Context, name string) (Theme, error) {
 	// Validate that the theme exists and is valid (searches both paths)
-	if _, err := s.findTheme(name); err != nil {
-		return fmt.Errorf("invalid theme %q: %w", name, err)
+	theme, err := s.findTheme(name)
+	if err != nil {
+		return Theme{}, fmt.Errorf("invalid theme %q: %w", name, err)
 	}
 
 	// Persist the selection in DB
-	err := s.settingsService.SetSetting(ctx, "active_css_theme", name, "string")
+	err = s.settingsService.SetSetting(ctx, "active_css_theme", name, "string")
 	if err != nil {
-		return fmt.Errorf("failed to save active theme setting: %w", err)
+		return Theme{}, fmt.Errorf("failed to save active theme setting: %w", err)
 	}
 
 	// Synchronize the public-facing theme.css file for the frontend
-	return s.SyncActiveTheme(ctx)
+	if err := s.SyncActiveTheme(ctx); err != nil {
+		return Theme{}, err
+	}
+
+	return theme, nil
 }
 
 func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {

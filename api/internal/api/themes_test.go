@@ -100,15 +100,19 @@ func TestThemeHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		// Verify it was set
+		var theme services.Theme
+		_ = json.Unmarshal(rec.Body.Bytes(), &theme)
+		assert.Equal(t, "custom", theme.Name)
+
+		// Verify it was set in DB too
 		req = httptest.NewRequest(http.MethodGet, "/api/themes/active", nil)
 		rec = httptest.NewRecorder()
 		c = e.NewContext(req, rec)
 		_ = handler.GetActiveTheme(c)
 
-		var theme services.Theme
-		_ = json.Unmarshal(rec.Body.Bytes(), &theme)
-		assert.Equal(t, "custom", theme.Name)
+		var activeTheme services.Theme
+		_ = json.Unmarshal(rec.Body.Bytes(), &activeTheme)
+		assert.Equal(t, "custom", activeTheme.Name)
 	})
 
 	t.Run("SetActiveTheme missing name", func(t *testing.T) {

@@ -267,6 +267,43 @@ func TestSystemHandler_GetStats_Success(t *testing.T) {
 	}
 }
 
+func TestSemverGreaterThan(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		// major version differences
+		{"2.0.0", "1.0.0", true},
+		{"1.0.0", "2.0.0", false},
+		// minor version differences
+		{"1.2.0", "1.1.0", true},
+		{"1.1.0", "1.2.0", false},
+		// patch version differences
+		{"1.0.2", "1.0.1", true},
+		{"1.0.1", "1.0.2", false},
+		// equal versions
+		{"1.0.0", "1.0.0", false},
+		// v prefix stripped
+		{"v2.0.0", "v1.0.0", true},
+		{"v1.0.0", "v2.0.0", false},
+		// pre-release suffix ignored in comparison
+		{"1.0.2-beta", "1.0.1", true},
+		{"1.0.0-rc1", "1.0.0", false},
+		// invalid semver → false
+		{"not-a-version", "1.0.0", false},
+		{"1.0.0", "not-a-version", false},
+		{"1.0", "1.0.0", false},     // too few parts
+		{"1.0.abc", "1.0.0", false}, // non-numeric patch
+		{"a.0.0", "1.0.0", false},   // non-numeric major
+	}
+	for _, tc := range cases {
+		got := semverGreaterThan(tc.a, tc.b)
+		if got != tc.want {
+			t.Errorf("semverGreaterThan(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
 func TestSystemHandler_GetDiskInfo(t *testing.T) {
 	repo := setupTestDB(t)
 	tmpDir := t.TempDir()
