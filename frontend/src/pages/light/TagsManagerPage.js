@@ -19,6 +19,7 @@ import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { EDIT_SVG, X_SVG, REFRESH_SVG, LOCK_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG } from '../../utils/icons.js';
 import { setupHeaderCompact } from '../../utils/headerCompact.js';
+import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 
 export default class TagsManagerPage extends Component {
   constructor(container, props = {}) {
@@ -364,7 +365,9 @@ export default class TagsManagerPage extends Component {
 
   afterRender() {
     this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
+    setupTextareaMaximizer(this.container);
     const tagSlug = this.props?.params?.slug;
+
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/tags',
       publicUrl: tagSlug ? `/tags/${tagSlug}` : '/',
@@ -781,7 +784,9 @@ export default class TagsManagerPage extends Component {
     this._modalKeyHandler = e => { if (e.key === 'Escape') this._closeModal(); };
     document.addEventListener('keydown', this._modalKeyHandler);
     nameInput.focus();
+    setupTextareaMaximizer(modal);
   }
+
 
   /**
    * Render the four flag system tags (_hidden, _hide_posts, _is_in_breadcrumbs, _with_related)

@@ -150,3 +150,33 @@ func TestWriteEXIFToFile_MissingFile(t *testing.T) {
 		t.Fatal("expected error for missing file")
 	}
 }
+
+func TestWriteEXIFToFile_InvalidJPEGContent(t *testing.T) {
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "invalid.jpg")
+	_ = os.WriteFile(p, []byte("this is not a valid jpeg file"), 0644)
+	err := writeEXIFToFile(p, "image/jpeg", map[string]interface{}{"Make": "X"})
+	if err == nil {
+		t.Error("expected error for invalid JPEG content")
+	}
+}
+
+func TestWriteEXIFToFile_DateTimeOriginal(t *testing.T) {
+	tmp := t.TempDir()
+	jpegPath := filepath.Join(tmp, "photo.jpg")
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
+	_ = os.WriteFile(jpegPath, buf.Bytes(), 0644)
+
+	// DateTimeOriginal goes to ExifIFD; non-string field is skipped.
+	fields := map[string]interface{}{
+		"DateTimeOriginal": "2024:01:15 10:30:00",
+		"UnknownField":     "should be skipped",
+		"NonString":        42, // not a string → skipped
+	}
+	if err := writeEXIFToFile(jpegPath, "image/jpeg", fields); err != nil {
+		t.Fatalf("writeEXIFToFile with DateTimeOriginal: %v", err)
+	}
+}

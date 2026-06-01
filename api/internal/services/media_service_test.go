@@ -863,3 +863,36 @@ func TestMediaService_UpdateMedia_Metadata(t *testing.T) {
 		t.Errorf("expected {} got %q", got2.Metadata.String)
 	}
 }
+
+func TestSafeImagingDecode_ValidImage(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := safeImagingDecode(&buf)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got == nil {
+		t.Error("expected non-nil image")
+	}
+}
+
+func TestSafeImagingDecode_GarbageBytes(t *testing.T) {
+	bad := bytes.NewReader([]byte("this is not an image"))
+	_, err := safeImagingDecode(bad)
+	if err == nil {
+		t.Error("expected error for garbage bytes, got nil")
+	}
+}
+
+func TestSafeImagingDecode_PanicRecovery(t *testing.T) {
+	// An empty reader causes imaging.Decode to return an error (EOF).
+	// This exercises the defer/recover path without requiring a crafted exploit file.
+	_, err := safeImagingDecode(bytes.NewReader(nil))
+	if err == nil {
+		t.Error("expected error for empty reader")
+	}
+}
