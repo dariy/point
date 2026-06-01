@@ -277,11 +277,14 @@ export default class SettingsPage extends Component {
           : "settings-field";
         const displayLabel = isPromptComposite ? "Analysis Prompt" : label;
         const helpText = SETTING_HELP[key];
+        const helpTip = helpText
+          ? `<span class="settings-help-tip"><span class="settings-help-icon" tabindex="0" aria-label="Help">?</span><span class="settings-help-tooltip">${escapeHtml(helpText)}</span></span>`
+          : "";
         inputs.push(`
           <div class="${fieldClass}">
-            <div>
+            <div class="settings-field-label-row">
               <label class="settings-field-label"${isPromptComposite ? "" : ` for="${key}"`}>${escapeHtml(displayLabel)}</label>
-              ${helpText ? `<p class="settings-field-help">${escapeHtml(helpText)}</p>` : ""}
+              ${helpTip}
             </div>
             ${input}
           </div>`);
@@ -302,11 +305,16 @@ export default class SettingsPage extends Component {
           .map(
             ({ key, label, checked }) => {
               const help = SETTING_HELP[key];
+              const helpTip = help
+                ? `<span class="settings-help-tip"><span class="settings-help-icon" tabindex="0" aria-label="Help">?</span><span class="settings-help-tooltip">${escapeHtml(help)}</span></span>`
+                : "";
               return `
-          <label class="setting-pill"${help ? ` title="${escapeHtml(help)}"` : ""}>
-            <input type="checkbox" name="${key}" class="setting-pill-input" ${checked ? "checked" : ""}>
-            <span class="setting-pill-label">${escapeHtml(label)}</span>
-          </label>`;
+          <div class="setting-pill-item">
+            <label class="setting-pill">
+              <input type="checkbox" name="${key}" class="setting-pill-input" ${checked ? "checked" : ""}>
+              <span class="setting-pill-label">${escapeHtml(label)}</span>
+            </label>${helpTip}
+          </div>`;
             }
           )
           .join("")}
