@@ -142,7 +142,10 @@ export class PostContent extends Component {
     } else {
       document.body.classList.remove("immersive-layout", "ui-hidden");
       const bodyEl = this.$(".post-content");
-      if (bodyEl) this._enhanceMedia(bodyEl);
+      if (bodyEl) {
+        this._enhanceLinks(bodyEl);
+        this._enhanceMedia(bodyEl);
+      }
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
 
       this._cleanupStrip?.();
@@ -931,6 +934,16 @@ export class PostContent extends Component {
       ? `<a href="/posts/${escapeHtml(nextPost.slug)}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>`
       : "";
     return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
+  }
+
+  _enhanceLinks(body) {
+    body.querySelectorAll("a[href]").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      if (/^https?:\/\//.test(href)) {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+      }
+    });
   }
 
   _enhanceMedia(body) {
