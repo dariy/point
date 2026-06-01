@@ -468,14 +468,24 @@ export class PostContent extends Component {
       this._resetZoom();
     };
 
+    // If the click landed over a link hidden beneath the nav panel, follow it instead of navigating.
+    const navClickOrLink = (e, navigate) => {
+      const panel = e.currentTarget;
+      panel.style.pointerEvents = "none";
+      const underneath = document.elementFromPoint(e.clientX, e.clientY);
+      panel.style.pointerEvents = "";
+      const link = underneath?.closest("a");
+      if (link) { link.click(); return; }
+      e.stopPropagation();
+      navigate();
+    };
+
     if (carousel) {
       this._on(carousel.querySelector(".immersive-nav-prev"), "click", (e) => {
-        e.stopPropagation();
-        goTo(index - 1);
+        navClickOrLink(e, () => goTo(index - 1));
       });
       this._on(carousel.querySelector(".immersive-nav-next"), "click", (e) => {
-        e.stopPropagation();
-        goTo(index + 1);
+        navClickOrLink(e, () => goTo(index + 1));
       });
       dots.forEach((d, i) =>
         this._on(d, "click", (e) => {
@@ -488,12 +498,10 @@ export class PostContent extends Component {
       const wrapper = this.$(".immersive-wrapper");
       if (wrapper) {
         this._on(wrapper.querySelector(".immersive-nav-prev"), "click", (e) => {
-          e.stopPropagation();
-          goToPost(backPost);
+          navClickOrLink(e, () => goToPost(backPost));
         });
         this._on(wrapper.querySelector(".immersive-nav-next"), "click", (e) => {
-          e.stopPropagation();
-          goToPost(fwdPost);
+          navClickOrLink(e, () => goToPost(fwdPost));
         });
       }
     }
