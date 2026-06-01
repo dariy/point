@@ -40,8 +40,8 @@ Open `http://localhost:8000` in your browser. The setup wizard will appear — e
 ## Adding Your Photo Library
 
 If you already have a collection of photos, you can easily import them:
-1. Open your `.env` file in a text editor.
-2. Uncomment and set `PHOTO_LIBRARY_PATH` to the location of your photos (e.g., `PHOTO_LIBRARY_PATH=/home/user/Photos`).
+1. Open your `.env` file in a text editor and set `PHOTO_LIBRARY_PATH` to the location of your photos (e.g., `PHOTO_LIBRARY_PATH=/home/user/Photos`).
+2. Open `docker-compose.yml` and uncomment the `PHOTO_LIBRARY_PATH=/photos` environment variable and its corresponding volume mount.
 3. Restart the container: `docker compose up -d`.
 4. Log into the Point admin panel, go to **Media**, and click **Scan for New Photos**.
 

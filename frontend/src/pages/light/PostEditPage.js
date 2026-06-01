@@ -35,8 +35,10 @@ import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHECK_SVG, X_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
+import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 
 const AUTOSAVE_MS = 30_000;
+
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
@@ -325,7 +327,9 @@ export default class PostEditPage extends Component {
 
   afterRender() {
     this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
+    setupTextareaMaximizer(this.container);
     const postSlug = this.state.post?.slug;
+
     this.mountChild(LightSidebar, "#sidebar-mount", {
       currentPath: "/light/posts",
       publicUrl: postSlug ? `/posts/${postSlug}` : "/",
@@ -622,16 +626,17 @@ export default class PostEditPage extends Component {
   _switchMode(targetMode) {
     if (this.state.editorMode === targetMode) return;
 
+    const data = this._collectFormData();
+    const post = {
+      ...(this.state.post || {}),
+      ...data,
+      tags: (data.tags || []).map((name) => ({ name, slug: name })),
+    };
+
     if (targetMode === "visual") {
-      const content =
-        this.$("#content-editor")?.value ?? (this.state.post?.content || "");
-      this._nodes = parseNodes(content);
-      this.setState({ editorMode: "visual" });
+      this._nodes = parseNodes(data.content);
+      this.setState({ editorMode: "visual", post });
     } else {
-      // visual → text: serialize current nodes (reads live textarea values if editor mounted)
-      const content =
-        this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes);
-      const post = { ...(this.state.post || {}), content };
       this.setState({ editorMode: "text", post });
     }
   }
