@@ -7,7 +7,7 @@
  *  3. Offline API and Image serving.
  */
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
@@ -199,6 +199,14 @@ self.addEventListener("fetch", (event) => {
   // 5. SW and manifest must not be cached.
   if (url.pathname === "/sw.js" || url.pathname === "/manifest.webmanifest")
     return;
+
+  // 5b. theme.css changes at runtime when user activates a theme; always fetch from network.
+  if (url.pathname === "/assets/css/theme.css") {
+    event.respondWith(
+      fetch(request).catch(() => caches.match("/assets/css/theme.css")),
+    );
+    return;
+  }
 
   // 6. Navigation requests (HTML): cache-first (SPA shell).
   if (request.mode === "navigate") {

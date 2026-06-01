@@ -2,8 +2,10 @@
  * Theme loader. Fetches theme.css and injects it into the document head.
  */
 
-export async function parseTheme() {
-  const url = '/assets/css/theme.css';
+export async function parseTheme({ bust = false } = {}) {
+  const url = bust
+    ? `/assets/css/theme.css?t=${Date.now()}`
+    : '/assets/css/theme.css';
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Theme fetch failed: ${res.status}`);
