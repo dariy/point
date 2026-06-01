@@ -252,6 +252,11 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
+	} else {
+		showViewCountsStr, _ := h.settingsService.GetSetting(ctx, "show_view_counts", "false")
+		if showViewCountsStr != "true" {
+			delete(resp, "view_count")
+		}
 	}
 	return c.JSON(http.StatusOK, resp)
 }

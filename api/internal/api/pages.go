@@ -77,6 +77,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	showViewCounts := allSettings["show_view_counts"] == "true"
 
 	// Custom Home Page logic: if home_page_post_id is set, return that specific post.
 	// We only apply this on the first page of the index if no other filters are active.
@@ -99,6 +100,9 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 					resp := postToResponse(hpPost, postTagsMap[hpPost.ID], excludeTagIDs)
 					resp["type"] = "page" // Force type to page as we verified it above
+					if !showViewCounts {
+						delete(resp, "view_count")
+					}
 
 					htmlContent, _ := h.postService.RenderContent(hpPost.Content)
 					resp["content_html"] = htmlContent
@@ -189,6 +193,9 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}
+		if !showViewCounts {
+			delete(resp, "view_count")
+		}
 		postResponses = append(postResponses, resp)
 	}
 
@@ -267,6 +274,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	showViewCounts := allSettings["show_view_counts"] == "true"
 	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
 	perPage, _ := strconv.Atoi(perPageStr)
 	if perPage < 1 {
@@ -353,6 +361,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		resp := postToResponse(p, tagPostTagsMap[p.ID], excludeTagIDs)
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
+		}
+		if !showViewCounts {
+			delete(resp, "view_count")
 		}
 		postResponses = append(postResponses, resp)
 	}

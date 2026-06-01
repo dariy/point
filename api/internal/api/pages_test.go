@@ -454,3 +454,54 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 		}
 	}
 }
+
+func TestPagesHandler_ViewCountVisibility(t *testing.T) {
+	ctx := context.Background()
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('P','p','b',1,'published',datetime('now'))`)
+
+	makeHomeReq := func(h *PagesHandler) map[string]interface{} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if err := h.GetHomePage(c); err != nil {
+			t.Fatalf("GetHomePage failed: %v", err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return body
+	}
+
+	// Default (show_view_counts = "false"): view_count must be absent
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "false", "boolean")
+	body := makeHomeReq(handler)
+	posts := body["posts"].([]interface{})
+	if len(posts) == 0 {
+		t.Fatal("expected at least one post")
+	}
+	post := posts[0].(map[string]interface{})
+	if _, ok := post["view_count"]; ok {
+		t.Error("view_count should not be present when show_view_counts=false")
+	}
+
+	// Enabled (show_view_counts = "true"): use a fresh handler (fresh cache) to avoid cache hit from above
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "true", "boolean")
+	handler2 := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
+	body = makeHomeReq(handler2)
+	posts = body["posts"].([]interface{})
+	post = posts[0].(map[string]interface{})
+	if _, ok := post["view_count"]; !ok {
+		t.Error("view_count should be present when show_view_counts=true")
+	}
+}
