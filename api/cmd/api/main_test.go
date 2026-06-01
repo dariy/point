@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"point-api/internal/config"
+	"point-api/internal/models"
 	"point-api/internal/repository"
 	"testing"
 )
@@ -144,5 +146,62 @@ func TestCustomErrorHandlerInMain(t *testing.T) {
 
 	if resp["detail"] == "" {
 		t.Errorf("expected detail in response, got empty")
+	}
+}
+
+func TestRunSetupCLI_AlreadySetup(t *testing.T) {
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+
+	cfg := &config.Config{StoragePath: t.TempDir()}
+	svcs := initServices(cfg, repo)
+
+	// Pre-create a user so the CLI detects "already setup" and returns early.
+	ctx := context.Background()
+	_, err = repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "the_owner",
+		Email:        "test@example.com",
+		PasswordHash: "hash",
+		DisplayName:  "Test User",
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"point", "setup", "--title=My Blog", "--user=Admin", "--email=a@b.com", "--password=abc123"}
+
+	// Should return without calling os.Exit since user already exists.
+	runSetupCLI(repo, svcs)
+}
+
+func TestRunSetupCLI_NewSetup(t *testing.T) {
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create repo: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+
+	cfg := &config.Config{StoragePath: t.TempDir()}
+	svcs := initServices(cfg, repo)
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"point", "setup", "--title=My Blog", "--user=Admin", "--email=a@b.com", "--password=abc123"}
+
+	runSetupCLI(repo, svcs)
+
+	// Verify the user was created.
+	ctx := context.Background()
+	u, err := repo.GetFirstUser(ctx)
+	if err != nil {
+		t.Fatalf("GetFirstUser after setup: %v", err)
+	}
+	if u.DisplayName != "Admin" {
+		t.Errorf("expected display name 'Admin', got %q", u.DisplayName)
 	}
 }

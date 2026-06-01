@@ -338,3 +338,288 @@ func TestSystemHandler_GetDiskInfo(t *testing.T) {
 		}
 	}
 }
+
+// newSystemHandler is a test helper that builds a SystemHandler with a real temp DB and dir.
+func newSystemHandler(t *testing.T) (*SystemHandler, string) {
+	t.Helper()
+	repo := setupTestDB(t)
+	tmpDir := t.TempDir()
+	cfg := &config.Config{StoragePath: tmpDir}
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0.0")
+	return h, tmpDir
+}
+
+func TestSafeJoin(t *testing.T) {
+	root := "/data/library"
+	// safeJoin neutralizes traversal by prepending "/" before Clean, so paths like
+	// "../escape" become "/escape" and then get joined safely under root.
+	// The function only errors if the result somehow escapes the root prefix.
+	cases := []struct {
+		rel  string
+		want string
+	}{
+		{"", root},
+		{"subdir", root + "/subdir"},
+		{"subdir/file.jpg", root + "/subdir/file.jpg"},
+		{"../escape", root + "/escape"},             // traversal neutralized → inside root
+		{"../../etc/passwd", root + "/etc/passwd"}, // deeper traversal also neutralized
+	}
+	for _, tc := range cases {
+		got, err := safeJoin(root, tc.rel)
+		if err != nil {
+			t.Errorf("safeJoin(%q, %q): unexpected error: %v", root, tc.rel, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("safeJoin(%q, %q): got %q, want %q", root, tc.rel, got, tc.want)
+		}
+	}
+}
+
+func TestSystemHandler_GetPhotoLibraryContents_NotConfigured(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := h.GetPhotoLibraryContents(c)
+	if err == nil {
+		t.Fatal("expected error when photo_library_path not configured")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 HTTPError, got %v", err)
+	}
+}
+
+func TestSystemHandler_GetPhotoLibraryContents_Success(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	ctx := context.Background()
+
+	// Create a temp library dir with a subdirectory, a supported image, and a hidden file.
+	libDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(libDir, "Vacation"), 0755)
+	_ = os.WriteFile(filepath.Join(libDir, "photo.jpg"), []byte("fake-jpeg"), 0644)
+	_ = os.WriteFile(filepath.Join(libDir, ".hidden"), []byte("skip me"), 0644)
+	_ = os.WriteFile(filepath.Join(libDir, "readme.txt"), []byte("not media"), 0644)
+
+	// Set the secret so the handler can find the library root.
+	settingsSvc := services.NewSettingsService(h.repo)
+	if err := settingsSvc.SetSecret(ctx, "photo_library_path", libDir); err != nil {
+		t.Fatalf("SetSecret: %v", err)
+	}
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library?path=", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.GetPhotoLibraryContents(c); err != nil {
+		t.Fatalf("GetPhotoLibraryContents: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	folders, ok := resp["folders"].([]interface{})
+	if !ok {
+		t.Fatal("expected folders array")
+	}
+	if len(folders) != 1 || folders[0].(string) != "Vacation" {
+		t.Errorf("expected [Vacation], got %v", folders)
+	}
+
+	files, ok := resp["files"].([]interface{})
+	if !ok {
+		t.Fatal("expected files array")
+	}
+	if len(files) != 1 {
+		t.Errorf("expected 1 file (photo.jpg), got %d", len(files))
+	}
+}
+
+func TestSystemHandler_GetPhotoLibraryFile_NotConfigured(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library/file?path=photo.jpg", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := h.GetPhotoLibraryFile(c)
+	if err == nil {
+		t.Fatal("expected error when not configured")
+	}
+}
+
+func TestSystemHandler_GetPhotoLibraryFile_MissingPathParam(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	ctx := context.Background()
+	libDir := t.TempDir()
+	settingsSvc := services.NewSettingsService(h.repo)
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library/file", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := h.GetPhotoLibraryFile(c)
+	if err == nil {
+		t.Fatal("expected error when path param missing")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %v", err)
+	}
+}
+
+func TestSystemHandler_GetPhotoLibraryFile_UnsupportedExt(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	ctx := context.Background()
+	libDir := t.TempDir()
+	settingsSvc := services.NewSettingsService(h.repo)
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library/file?path=readme.txt", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := h.GetPhotoLibraryFile(c)
+	if err == nil {
+		t.Fatal("expected error for unsupported extension")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %v", err)
+	}
+}
+
+func TestSystemHandler_ImportSelectedPhotos_NotConfigured(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	e := echo.New()
+	body := `{"paths":["photo.jpg"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/system/photo-library/import", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := h.ImportSelectedPhotos(c)
+	if err == nil {
+		t.Fatal("expected error when not configured")
+	}
+}
+
+func TestSystemHandler_ImportSelectedPhotos_SkipsDuplicates(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	ctx := context.Background()
+	libDir := t.TempDir()
+
+	// Create a real importable file
+	imgData := makeMinimalJPEG(t)
+	imgPath := filepath.Join(libDir, "test.jpg")
+	if err := os.WriteFile(imgPath, imgData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	settingsSvc := services.NewSettingsService(h.repo)
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+
+	e := echo.New()
+	body := `{"paths":["test.jpg"]}`
+
+	// First import
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ImportSelectedPhotos(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+
+	// Second import — same file should be skipped
+	req2 := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req2.Header.Set("Content-Type", "application/json")
+	rec2 := httptest.NewRecorder()
+	if err := h.ImportSelectedPhotos(e.NewContext(req2, rec2)); err != nil {
+		t.Fatalf("second import: %v", err)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if skipped, _ := resp["skipped"].(float64); skipped != 1 {
+		t.Errorf("expected skipped=1, got %v", resp["skipped"])
+	}
+}
+
+func TestSystemHandler_ImportSelectedPhotos_InvalidPath(t *testing.T) {
+	h, _ := newSystemHandler(t)
+	ctx := context.Background()
+	libDir := t.TempDir()
+	settingsSvc := services.NewSettingsService(h.repo)
+	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+
+	e := echo.New()
+	body := `{"paths":["../../etc/passwd"]}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ImportSelectedPhotos(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	errors, _ := resp["errors"].([]interface{})
+	if len(errors) == 0 {
+		t.Error("expected path traversal to produce an error entry")
+	}
+}
+
+// makeMinimalJPEG creates a tiny valid JPEG for testing imports.
+func makeMinimalJPEG(t *testing.T) []byte {
+	t.Helper()
+	// Minimal 1×1 white JPEG
+	return []byte{
+		0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+		0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43,
+		0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
+		0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
+		0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20,
+		0x24, 0x2e, 0x27, 0x20, 0x22, 0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29,
+		0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27, 0x39, 0x3d, 0x38, 0x32,
+		0x3c, 0x2e, 0x33, 0x34, 0x32, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01,
+		0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xff, 0xc4, 0x00, 0x1f, 0x00, 0x00,
+		0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x09, 0x0a, 0x0b, 0xff, 0xc4, 0x00, 0xb5, 0x10, 0x00, 0x02, 0x01, 0x03,
+		0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00, 0x01, 0x7d,
+		0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06,
+		0x13, 0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xa1, 0x08,
+		0x23, 0x42, 0xb1, 0xc1, 0x15, 0x52, 0xd1, 0xf0, 0x24, 0x33, 0x62, 0x72,
+		0x82, 0x09, 0x0a, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x25, 0x26, 0x27, 0x28,
+		0x29, 0x2a, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x43, 0x44, 0x45,
+		0x46, 0x47, 0x48, 0x49, 0x4a, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
+		0x5a, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x73, 0x74, 0x75,
+		0x76, 0x77, 0x78, 0x79, 0x7a, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+		0x8a, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0xa2, 0xa3, 0xa4,
+		0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+		0xb8, 0xb9, 0xba, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xc9, 0xca,
+		0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0xda, 0xe1, 0xe2, 0xe3,
+		0xe4, 0xe5, 0xe6, 0xe7, 0xe8, 0xe9, 0xea, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5,
+		0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00,
+		0x00, 0x3f, 0x00, 0xfb, 0xd3, 0xff, 0xd9,
+	}
+}
