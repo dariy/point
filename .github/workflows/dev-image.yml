@@ -1,0 +1,63 @@
+name: Dev Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build (defaults to current branch)'
+        required: false
+        type: string
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        env:
+          INPUT_BRANCH: ${{ inputs.branch }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          BRANCH="${INPUT_BRANCH:-$REF_NAME}"
+          SAFE=$(echo "$BRANCH" | sed 's|[^a-zA-Z0-9._-]|-|g' | sed 's|^-||;s|-$||')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "branch_tag=ghcr.io/dariy/point:dev-${SAFE}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=ghcr.io/dariy/point:dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "build_version=dev-${SAFE}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.branch_tag }}
+            ${{ steps.tags.outputs.sha_tag }}
+          build-args: |
+            BUILD_VERSION=${{ steps.tags.outputs.build_version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

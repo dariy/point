@@ -21,6 +21,7 @@ app/static/css/light.css
 app/static/css/main.css
 api/coverage.out
 api/coverage.html
+api/cmd/api/cache/
 frontend/js/
 light.css
 main.css
