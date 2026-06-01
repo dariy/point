@@ -35,8 +35,10 @@ import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHECK_SVG, X_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
+import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 
 const AUTOSAVE_MS = 30_000;
+
 
 const IMAGE_PATH_RE = /^\/\d{4}\/\d{2}\/.+$/;
 
@@ -325,7 +327,9 @@ export default class PostEditPage extends Component {
 
   afterRender() {
     this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
+    setupTextareaMaximizer(this.container);
     const postSlug = this.state.post?.slug;
+
     this.mountChild(LightSidebar, "#sidebar-mount", {
       currentPath: "/light/posts",
       publicUrl: postSlug ? `/posts/${postSlug}` : "/",

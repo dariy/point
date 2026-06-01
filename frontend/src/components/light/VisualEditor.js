@@ -12,8 +12,10 @@ import { Component } from '../Component.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { updateMedia, reextractMediaEXIF } from '../../api/media.js';
 import { store } from '../../store.js';
+import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 
 export class VisualEditor extends Component {
+
   render() {
     const { nodes = [] } = this.props;
 
@@ -106,7 +108,9 @@ export class VisualEditor extends Component {
     this._bindInsertZones();
     this._bindTextCards();
     this._bindVeExif();
+    setupTextareaMaximizer(this.container);
   }
+
 
   _renderVeExifRows(media) {
     const metadata = (media && media.metadata) || {};

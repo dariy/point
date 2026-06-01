@@ -13,6 +13,7 @@ import { getAdminNavMenu, updateAdminNavMenu, getNavMenu } from '../../api/pages
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 
 // ── Markdown parser/serialiser ────────────────────────────────────────────────
 
@@ -224,7 +225,9 @@ export default class MenuPage extends Component {
   }
 
   afterRender() {
+    setupTextareaMaximizer(this.container);
     const user = store.get('user');
+
     const publicUrl = store.get('settings')?.public_url || '/';
 
     this.mountChild(LightSidebar, '#sidebar-mount', {

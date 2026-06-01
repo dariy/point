@@ -623,3 +623,68 @@ body.drag-active::after {
     font-size: var(--font-sm);
     resize: vertical;
 }
+
+/* Textarea Maximizer */
+.textarea-maximize-btn {
+    position: absolute;
+    top: var(--spacing-xs);
+    right: var(--spacing-xs);
+    z-index: 10;
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-muted);
+    width: var(--size-1-5, 1.5rem);
+    height: var(--size-1-5, 1.5rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast), transform 0.1s ease;
+    padding: 0;
+}
+
+.textarea-maximize-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    transform: scale(1.1);
+}
+
+/* If there is an AI button in the same container, shift the maximize button to the left */
+.excerpt-row .textarea-maximize-btn,
+.title-input-wrapper .textarea-maximize-btn,
+.tags-input-wrapper .textarea-maximize-btn {
+    right: calc(var(--spacing-xs) + var(--size-1-75, 1.75rem));
+}
+
+textarea.is-maximized {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 10000 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: var(--spacing-xl) !important;
+    background: var(--surface-input) !important;
+    color: var(--text-primary) !important;
+    resize: none !important;
+    font-size: var(--font-size-base) !important;
+    line-height: 1.6 !important;
+}
+
+.textarea-maximize-btn.is-maximized {
+    position: fixed !important;
+    top: var(--spacing-md) !important;
+    right: var(--spacing-md) !important;
+    z-index: 10001 !important;
+    background: var(--surface-hover) !important;
+    width: var(--size-2, 2rem) !important;
+    height: var(--size-2, 2rem) !important;
+}
+
+.textarea-maximized-body-lock {
+    overflow: hidden !important;
+}
+
