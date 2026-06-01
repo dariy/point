@@ -52,7 +52,6 @@ const SETTING_GROUPS = [
   {
     title: "Advanced",
     keys: [
-      "max_upload_size_mb",
       "thumbnail_width",
       "thumbnail_height",
       "jpeg_quality",
@@ -70,7 +69,6 @@ const SETTING_GROUPS = [
 ];
 
 const NUMERIC_KEYS = new Set([
-  "max_upload_size_mb",
   "thumbnail_width",
   "thumbnail_height",
   "jpeg_quality",

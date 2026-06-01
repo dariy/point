@@ -216,14 +216,16 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
 			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
 
-			// Generate thumbnail
-			thumb := imaging.Fill(src, s.thumbnailWidth(ctx), s.thumbnailHeight(ctx), imaging.Center, imaging.Lanczos)
-			thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
-			thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
-			thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
-
-			if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
-				thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
+			// Generate thumbnail (skip if either dimension is 0 — use original instead)
+			thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
+			if thumbW > 0 && thumbH > 0 {
+				thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
+				thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
+				thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
+				thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
+				if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
+					thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
+				}
 			}
 		}
 		// Extract EXIF
