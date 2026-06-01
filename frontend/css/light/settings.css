@@ -38,7 +38,7 @@
 .settings-field {
     display: grid;
     grid-template-columns: var(--settings-field-grid-template-columns) 1fr;
-    align-items: center;
+    align-items: start;
     gap: var(--spacing-lg);
     padding: var(--spacing-sm) 0;
     border-bottom: var(--border-width) solid var(--border-primary);
@@ -60,6 +60,13 @@
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text-secondary);
+}
+
+.settings-field-help {
+    margin: var(--spacing-xs) 0 0;
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--text-tertiary, var(--text-secondary));
+    line-height: 1.4;
 }
 
 /* Boolean setting tag pills */
