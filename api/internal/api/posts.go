@@ -116,7 +116,8 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 }
 
 func (h *PostHandler) ListPosts(c echo.Context) error {
-	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageParsed, _ := strconv.ParseInt(c.QueryParam("page"), 10, 32)
+	page := int32(pageParsed)
 	if page < 1 {
 		page = 1
 	}
@@ -134,7 +135,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 
 	// Trash view: only admins can see trash.
 	if status == "trash" && c.Get("user") != nil {
-		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), int32(page), int32(perPage))
+		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), page, int32(perPage))
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -158,7 +159,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
-	        Page:          int32(page),
+	        Page:          page,
 	        PerPage:       int32(perPage),
 	        Status:        status,
 	        FeaturedOnly:  featured,
