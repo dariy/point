@@ -211,6 +211,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	// ── Post Routes ────────────────────────────────────────────────────────────
 	postsGroup := e.Group("/api/posts")
 	postsGroup.GET("", postHandler.ListPosts, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/analytics", postHandler.GetPostAnalytics, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("", postHandler.CreatePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("/audio", postHandler.CreateAudioPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
