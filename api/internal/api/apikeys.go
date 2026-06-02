@@ -25,9 +25,15 @@ func (h *ApiKeyHandler) ListKeys(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
+	resp := make([]map[string]interface{}, len(keys))
+	for i, k := range keys {
+		resp[i] = apiKeyToResponse(k)
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"api_keys": keys,
-		"total":    len(keys),
+		"api_keys": resp,
+		"total":    len(resp),
 	})
 }
 
@@ -53,7 +59,7 @@ func (h *ApiKeyHandler) CreateKey(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"api_key": apiKey,
+		"api_key": apiKeyToResponse(apiKey),
 		"raw_key": rawKey, // Raw key returned only once
 	})
 }

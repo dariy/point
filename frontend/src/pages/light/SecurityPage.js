@@ -61,7 +61,7 @@ export default class SecurityPage extends Component {
                       <div class="key-prefix"><code style="font-size: 0.85em">${escapeHtml(k.prefix)}...</code></div>
                       ${k.revoked_at ? '<span class="badge badge-danger">Revoked</span>' : ''}
                     </td>
-                    <td>${k.last_used_at?.Valid ? escapeHtml(formatDateShort(k.last_used_at.Time)) : 'Never'}</td>
+                    <td>${k.last_used_at ? escapeHtml(formatDateShort(k.last_used_at)) : 'Never'}</td>
                     <td>${escapeHtml(formatDateShort(k.created_at))}</td>
                     <td>
                       ${!k.revoked_at
