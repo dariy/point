@@ -122,10 +122,15 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 		page = 1
 	}
 
-	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
+	perPage := 0
+	if parsedPerPage, err := strconv.ParseInt(c.QueryParam("per_page"), 10, 32); err == nil {
+		perPage = int(parsedPerPage)
+	}
 	if perPage < 1 {
 		perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
-		perPage, _ = strconv.Atoi(perPageStr)
+		if parsedPerPage, err := strconv.ParseInt(perPageStr, 10, 32); err == nil {
+			perPage = int(parsedPerPage)
+		}
 	}
 
 	status := c.QueryParam("status")
