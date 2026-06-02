@@ -43,6 +43,7 @@ type Querier interface {
 	GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([]Medium, error)
 	// POSTS
 	GetPost(ctx context.Context, id int64) (Post, error)
+	GetPostAnalytics(ctx context.Context) (GetPostAnalyticsRow, error)
 	GetPostBySlug(ctx context.Context, slug string) (Post, error)
 	GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]Post, error)
 	// SECRETS
@@ -66,6 +67,7 @@ type Querier interface {
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
+	ListPostsByViews(ctx context.Context, arg ListPostsByViewsParams) ([]Post, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
 	ListTrashedPosts(ctx context.Context, arg ListTrashedPostsParams) ([]Post, error)

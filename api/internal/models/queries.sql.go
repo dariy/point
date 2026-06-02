@@ -847,6 +847,28 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 	return i, err
 }
 
+const getPostAnalytics = `-- name: GetPostAnalytics :one
+SELECT
+    CAST(SUM(view_count) AS INTEGER) as total_views,
+    CAST(AVG(view_count) AS FLOAT) as average_views,
+    (SELECT id FROM posts WHERE deleted_at IS NULL AND status = 'published' ORDER BY view_count DESC LIMIT 1) as most_viewed_post_id
+FROM posts
+WHERE deleted_at IS NULL AND status = 'published'
+`
+
+type GetPostAnalyticsRow struct {
+	TotalViews       int64   `json:"total_views"`
+	AverageViews     float64 `json:"average_views"`
+	MostViewedPostID int64   `json:"most_viewed_post_id"`
+}
+
+func (q *Queries) GetPostAnalytics(ctx context.Context) (GetPostAnalyticsRow, error) {
+	row := q.db.QueryRowContext(ctx, getPostAnalytics)
+	var i GetPostAnalyticsRow
+	err := row.Scan(&i.TotalViews, &i.AverageViews, &i.MostViewedPostID)
+	return i, err
+}
+
 const getPostBySlug = `-- name: GetPostBySlug :one
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode
 FROM posts p
@@ -1458,6 +1480,96 @@ type ListPostsParams struct {
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {
 	rows, err := q.db.QueryContext(ctx, listPosts,
+		arg.StatusFilter,
+		arg.Status,
+		arg.FeaturedFilter,
+		arg.IncludeDrafts,
+		arg.IncludeHidden,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Post
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Slug,
+			&i.Content,
+			&i.Excerpt,
+			&i.Formatter,
+			&i.Status,
+			&i.IsFeatured,
+			&i.ViewCount,
+			&i.PublishedAt,
+			&i.ScheduledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorID,
+			&i.ThumbnailPath,
+			&i.MetaDescription,
+			&i.PreviewToken,
+			&i.PreviewExpiresAt,
+			&i.DeletedAt,
+			&i.Css,
+			&i.ImmersiveMode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsByViews = `-- name: ListPostsByViews :many
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode
+FROM posts p
+WHERE
+    p.deleted_at IS NULL
+    AND (CASE WHEN ?1 THEN p.status = ?2 ELSE 1=1 END)
+    AND (CASE WHEN ?3 THEN p.is_featured = 1 ELSE 1=1 END)
+    AND (CASE
+        WHEN ?4 THEN 1=1
+        WHEN ?5 THEN p.status IN ('published', 'hidden')
+        ELSE p.status = 'published'
+    END)
+
+    AND (CASE
+        WHEN ?4 THEN 1=1
+        WHEN ?5 THEN 1=1
+        ELSE p.id NOT IN (
+            SELECT pt.post_id FROM post_tags pt
+            WHERE pt.tag_id IN (
+                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            )
+        )
+    END)
+ORDER BY p.view_count DESC, p.published_at DESC
+LIMIT ?7 OFFSET ?6
+`
+
+type ListPostsByViewsParams struct {
+	StatusFilter   interface{} `json:"status_filter"`
+	Status         string      `json:"status"`
+	FeaturedFilter interface{} `json:"featured_filter"`
+	IncludeDrafts  interface{} `json:"include_drafts"`
+	IncludeHidden  interface{} `json:"include_hidden"`
+	Offset         int64       `json:"offset"`
+	Limit          int64       `json:"limit"`
+}
+
+func (q *Queries) ListPostsByViews(ctx context.Context, arg ListPostsByViewsParams) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsByViews,
 		arg.StatusFilter,
 		arg.Status,
 		arg.FeaturedFilter,

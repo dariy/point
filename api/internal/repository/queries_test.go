@@ -800,17 +800,17 @@ func TestRepository_ListPostsAndCountPosts(t *testing.T) {
 
 	posts, err := repo.ListPosts(ctx, models.ListPostsParams{
 		StatusFilter: false, FeaturedFilter: false, IncludeDrafts: true, Limit: 10,
-	})
-	if err != nil {
-		t.Fatalf("ListPosts failed: %v", err)
-	}
-	if len(posts) < 2 {
-		t.Errorf("expected at least 2 posts, got %d", len(posts))
-	}
+		})
+		if err != nil {
+		    t.Fatalf("ListPosts failed: %v", err)
+		}
+		if len(posts) < 2 {
+		    t.Errorf("expected at least 2 posts, got %d", len(posts))
+		}
 
-	posts, err = repo.ListPosts(ctx, models.ListPostsParams{
-		StatusFilter: true, Status: "published", FeaturedFilter: false, IncludeDrafts: false, Limit: 10,
-	})
+		posts, err = repo.ListPosts(ctx, models.ListPostsParams{
+		    StatusFilter: true, Status: "published", FeaturedFilter: false, IncludeDrafts: false, Limit: 10,
+		})
 	if err != nil {
 		t.Fatalf("ListPosts with status filter failed: %v", err)
 	}
