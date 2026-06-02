@@ -7,7 +7,12 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { getSessions, deleteSession, deleteAllOtherSessions, changePassword, logout, getPasskeyStatus, registerPasskey, deletePasskey } from '../../api/auth.js';
+import {
+  getSessions, deleteSession, deleteAllOtherSessions,
+  changePassword, logout,
+  getPasskeyStatus, registerPasskey, deletePasskey,
+  getApiKeys, createApiKey, revokeApiKey, deleteApiKey
+} from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
@@ -18,16 +23,57 @@ export default class SecurityPage extends Component {
     this.state = {
       loading: true,
       sessions: [],
+      apiKeys: [],
       error: null,
       changingPassword: false,
       passkeySupported: typeof window.PublicKeyCredential !== 'undefined',
       passkeyStatus: null,
       passkeyWorking: false,
+      creatingApiKey: false,
+      newRawKey: null,
     };
   }
 
   render() {
-    const { loading, error, sessions, changingPassword, passkeySupported, passkeyStatus, passkeyWorking } = this.state;
+    const {
+      loading, error, sessions, changingPassword,
+      passkeySupported, passkeyStatus, passkeyWorking,
+      apiKeys, creatingApiKey, newRawKey
+    } = this.state;
+
+    const apiKeyList = loading
+      ? `<div class="loading-spinner" aria-label="Loading API keys…"></div>`
+      : !apiKeys.length
+        ? `<p class="empty-state">No API keys found.</p>`
+        : `
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Name / Prefix</th><th>Last Used</th><th>Created</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${apiKeys.map(k => `
+                  <tr ${k.revoked_at ? 'class="revoked-row"' : ''}>
+                    <td>
+                      <div class="key-name"><strong>${escapeHtml(k.name)}</strong></div>
+                      <div class="key-prefix"><code style="font-size: 0.85em">${escapeHtml(k.prefix)}...</code></div>
+                      ${k.revoked_at ? '<span class="badge badge-danger">Revoked</span>' : ''}
+                    </td>
+                    <td>${k.last_used_at?.Valid ? escapeHtml(formatDateShort(k.last_used_at.Time)) : 'Never'}</td>
+                    <td>${escapeHtml(formatDateShort(k.created_at))}</td>
+                    <td>
+                      ${!k.revoked_at
+                        ? `<button class="btn btn-sm btn-secondary revoke-key-btn" data-id="${k.id}">Revoke</button>`
+                        : `<button class="btn btn-sm btn-danger delete-key-btn" data-id="${k.id}">Delete</button>`
+                      }
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>`;
 
     const sessionList = loading
       ? `<div class="loading-spinner" aria-label="Loading sessions…"></div>`
@@ -119,6 +165,21 @@ export default class SecurityPage extends Component {
               </div>
             </div>` : ''}
 
+            <div class="card" style="margin-bottom: var(--spacing-xl)">
+              <div class="card-header">
+                <h2>API Keys</h2>
+                <div class="header-actions">
+                  <button id="add-key-btn" class="btn btn-sm btn-primary">Generate New Key</button>
+                </div>
+              </div>
+              <div class="card-body">
+                <p class="text-muted" style="margin-bottom: var(--spacing-md)">
+                  API keys allow programmatic access to your blog. They should be treated as securely as your password.
+                </p>
+                ${apiKeyList}
+              </div>
+            </div>
+
             <div class="card">
               <div class="card-header">
                 <h2>Active Sessions</h2>
@@ -156,6 +217,27 @@ export default class SecurityPage extends Component {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         this._handleRevoke(id);
+      });
+    });
+
+    // API Key actions
+    this.$('#add-key-btn')?.addEventListener('click', () => this._handleCreateApiKey());
+
+    this.$$('.revoke-key-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = parseInt(btn.dataset.id, 10);
+        this._showConfirm('Revoke API Key', 'Revoke this API key? Any applications using it will no longer be able to authenticate.', 'Revoke', 'danger', () => {
+          this._handleRevokeApiKey(id);
+        });
+      });
+    });
+
+    this.$$('.delete-key-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = parseInt(btn.dataset.id, 10);
+        this._showConfirm('Delete API Key Record', 'Permanently delete this API key record from history?', 'Delete', 'danger', () => {
+          this._handleDeleteApiKey(id);
+        });
       });
     });
 
@@ -198,12 +280,72 @@ export default class SecurityPage extends Component {
   async _load() {
     this.setState({ loading: true, error: null });
     try {
-      const data = await getSessions();
-      this.setState({ loading: false, sessions: data.sessions || [] });
+      const [sessionData, apiKeyData] = await Promise.all([
+        getSessions(),
+        getApiKeys()
+      ]);
+      this.setState({
+        loading: false,
+        sessions: sessionData.sessions || [],
+        apiKeys: apiKeyData.api_keys || []
+      });
     } catch (err) {
       console.error('[SecurityPage] load error:', err);
-      store.set('toast', { message: 'Could not load sessions.', type: 'error' });
-      this.setState({ loading: false, sessions: [] });
+      store.set('toast', { message: 'Could not load security data.', type: 'error' });
+      this.setState({ loading: false, sessions: [], apiKeys: [] });
+    }
+  }
+
+  async _handleCreateApiKey() {
+    const name = window.prompt('Enter a name for this API key (e.g. "Mobile App", "CI/CD"):');
+    if (!name) return;
+
+    try {
+      const { api_key, raw_key } = await createApiKey(name);
+      
+      // Show raw key modal
+      const mount = document.createElement('div');
+      document.body.appendChild(mount);
+      const dialog = new ConfirmDialog(mount, {
+        title: 'API Key Created',
+        allowHtml: true,
+        message: `
+          <p>Your new API key <strong>"${escapeHtml(api_key.name)}"</strong> has been generated.</p>
+          <div class="alert alert-warning" style="margin: var(--spacing-md) 0">
+            <strong>CRITICAL:</strong> This is the only time you will see this key. Copy it now and store it securely.
+          </div>
+          <div class="form-group">
+            <input type="text" class="form-input" value="${escapeHtml(raw_key)}" readonly onclick="this.select()" style="font-family: monospace; font-size: 0.9em; background: var(--bg-secondary)">
+          </div>
+        `,
+        confirmText: 'I have saved the key',
+        variant: 'primary',
+        onConfirm: () => { dialog.unmount(); mount.remove(); this._load(); },
+        onCancel:  () => { dialog.unmount(); mount.remove(); this._load(); },
+      });
+      dialog.mount();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to create API key.', type: 'error' });
+    }
+  }
+
+  async _handleRevokeApiKey(id) {
+    try {
+      await revokeApiKey(id);
+      store.set('toast', { message: 'API key revoked.', type: 'success' });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Revoke failed.', type: 'error' });
+    }
+  }
+
+  async _handleDeleteApiKey(id) {
+    try {
+      await deleteApiKey(id);
+      store.set('toast', { message: 'API key record deleted.', type: 'success' });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
     }
   }
 

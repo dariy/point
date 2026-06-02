@@ -204,3 +204,16 @@ th.status-col {
     color: var(--text-tertiary, var(--text-secondary));
     font-style: italic;
 }
+
+/* API Keys */
+.revoked-row {
+    opacity: 0.6;
+}
+
+.key-name {
+    margin-bottom: 2px;
+}
+
+.key-prefix {
+    color: var(--text-secondary);
+}
