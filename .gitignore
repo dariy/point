@@ -26,6 +26,7 @@ frontend/js/
 light.css
 main.css
 api/api*
+api/cmd/api/cache/*
 
 # bv (beads viewer) local config and caches
 .bv/

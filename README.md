@@ -22,13 +22,17 @@ For manual steps, environment variables, and update instructions see [QUICKSTART
 
 - **Media-centric**: automatic thumbnail generation, image resizing, video support, EXIF extraction
 - **AI analysis**: Google Gemini integration for automatic title, tags, and excerpt suggestions
-- **Timeline navigation**: interactive SVG timeline with tag-based filtering and year/location drill-down
+- **Timeline navigation**: interactive timeline with tag-based filtering and year/location drill-down
+- **Tag hierarchy**: many-to many relationship.
+- **Geo-tags**: each tag can be bound to world coordinates.
+- **Map**: highlights all geo-tags on a world map. Thanks to leaflet.
 - **Post scheduling**: publish posts at a future date/time
 - **Drag-and-drop creation**: drop an image on any page to instantly create a post
 - **Immersive mode**: full-screen, distraction-free viewing
-- **Themes**: built-in dark/light/auto themes with CSS custom property overrides
+- **Themes**: several built-in css themes. Support for custom themes.
+- **Theme modes**: built-in dark/light/auto theme modes with CSS custom property overrides
 - **Single container**: multi-stage Dockerfile, runs as non-root, multi-arch (amd64 + arm64) GHCR images
-- **Self-hosted**: no external databases, no cloud services required
+- **Self-hosted**: no external databases, no cloud services required (Gemini is optional).
 
 ## Configuration
 
@@ -51,8 +55,7 @@ The app is configured via environment variables (or a `.env` file in the working
 ### Run locally
 
 ```bash
-cd api
-go run ./cmd/api
+cd api && go run ./cmd/api
 # API starts at http://localhost:8000 (reads .env if present)
 ```
 
@@ -67,12 +70,12 @@ go run ./cmd/api
 ### Build + deploy (Podman)
 
 ```bash
-cd build && ./rebuild.sh        # build + restart container
+scripts/rebuild.sh        # build + restart container
 ```
 
 ### Prerequisites
 
-- Go 1.25+ for local backend development
+- Go 1.26.3+ for local backend development
 - Docker or Podman for container builds
 
 ## Project structure
