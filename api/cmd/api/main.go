@@ -482,10 +482,12 @@ func main() {
 	svcs := initServices(&cfg, repo)
 
 	// API Key Creation CLI fallback
-	for _, arg := range os.Args[1:] {
+	for i, arg := range os.Args[1:] {
 		if val, ok := strings.CutPrefix(arg, "--create-api-key="); ok {
 			runCreateAPIKeyCLI(repo, svcs, val)
-			// runCreateAPIKeyCLI calls os.Exit(0)
+		}
+		if arg == "--create-api-key" && i+2 < len(os.Args) {
+			runCreateAPIKeyCLI(repo, svcs, os.Args[i+2])
 		}
 	}
 
