@@ -23,6 +23,11 @@ func NewRepository(dbURL string) (*Repository, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Limit to a single connection so PRAGMAs apply to every query and
+	// concurrent writers serialize at the Go level instead of racing at SQLite.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	// Set busy timeout to handle concurrent access
 	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
 		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
