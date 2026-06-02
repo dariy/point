@@ -33,6 +33,7 @@ For manual steps, environment variables, and update instructions see [QUICKSTART
 - **Theme modes**: built-in dark/light/auto theme modes with CSS custom property overrides
 - **Single container**: multi-stage Dockerfile, runs as non-root, multi-arch (amd64 + arm64) GHCR images
 - **Self-hosted**: no external databases, no cloud services required (Gemini is optional).
+- **API Key authentication**: long-lived, revocable keys for programmatic access via Bearer tokens
 
 ## Configuration
 

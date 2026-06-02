@@ -20,11 +20,14 @@ type Querier interface {
 	CountPosts(ctx context.Context, arg CountPostsParams) (int64, error)
 	CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error)
 	CountTrashedPosts(ctx context.Context) (int64, error)
+	// API KEYS
+	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteMedia(ctx context.Context, id int64) error
 	DeletePost(ctx context.Context, arg DeletePostParams) error
@@ -32,6 +35,7 @@ type Querier interface {
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTag(ctx context.Context, id int64) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error)
 	GetFirstUser(ctx context.Context) (User, error)
 	// MEDIA
 	GetMedia(ctx context.Context, id int64) (Medium, error)
@@ -59,6 +63,7 @@ type Querier interface {
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserSessions(ctx context.Context, userID int64) ([]Session, error)
 	IncrementPostViewCount(ctx context.Context, id int64) error
+	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
@@ -68,8 +73,10 @@ type Querier interface {
 	RemoveTagFromPost(ctx context.Context, arg RemoveTagFromPostParams) error
 	RemoveTagRelationship(ctx context.Context, arg RemoveTagRelationshipParams) error
 	RestorePost(ctx context.Context, arg RestorePostParams) error
+	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) error
 	SetPostPreviewToken(ctx context.Context, arg SetPostPreviewTokenParams) error
 	SoftDeletePost(ctx context.Context, arg SoftDeletePostParams) error
+	TouchAPIKeyLastUsed(ctx context.Context, id int64) error
 	UpdateAllTagPostCounts(ctx context.Context) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilenameParams) (Medium, error)

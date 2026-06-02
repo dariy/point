@@ -244,6 +244,48 @@ func (q *Queries) CountTrashedPosts(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createAPIKey = `-- name: CreateAPIKey :one
+
+INSERT INTO api_keys (
+    user_id, name, key_hash, prefix, expires_at, created_at
+) VALUES (
+    ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+)
+RETURNING id, user_id, name, key_hash, prefix, created_at, last_used_at, expires_at, revoked_at
+`
+
+type CreateAPIKeyParams struct {
+	UserID    int64        `json:"user_id"`
+	Name      string       `json:"name"`
+	KeyHash   string       `json:"key_hash"`
+	Prefix    string       `json:"prefix"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+}
+
+// API KEYS
+func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
+	row := q.db.QueryRowContext(ctx, createAPIKey,
+		arg.UserID,
+		arg.Name,
+		arg.KeyHash,
+		arg.Prefix,
+		arg.ExpiresAt,
+	)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.KeyHash,
+		&i.Prefix,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const createMedia = `-- name: CreateMedia :one
 INSERT INTO media (
     filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, original_metadata, uploaded_at
@@ -498,6 +540,21 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteAPIKey = `-- name: DeleteAPIKey :exec
+DELETE FROM api_keys
+WHERE id = ? AND user_id = ?
+`
+
+type DeleteAPIKeyParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error {
+	_, err := q.db.ExecContext(ctx, deleteAPIKey, arg.ID, arg.UserID)
+	return err
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
 DELETE FROM sessions
 WHERE expires_at < CURRENT_TIMESTAMP
@@ -581,6 +638,46 @@ type DeleteUserSessionsParams struct {
 func (q *Queries) DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error {
 	_, err := q.db.ExecContext(ctx, deleteUserSessions, arg.UserID, arg.ID)
 	return err
+}
+
+const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
+SELECT k.id, k.user_id, k.name, k.key_hash, k.prefix, k.created_at, k.last_used_at, k.expires_at, k.revoked_at, u.username, u.display_name
+FROM api_keys k
+JOIN users u ON k.user_id = u.id
+WHERE k.key_hash = ? AND k.revoked_at IS NULL LIMIT 1
+`
+
+type GetAPIKeyByHashRow struct {
+	ID          int64        `json:"id"`
+	UserID      int64        `json:"user_id"`
+	Name        string       `json:"name"`
+	KeyHash     string       `json:"key_hash"`
+	Prefix      string       `json:"prefix"`
+	CreatedAt   time.Time    `json:"created_at"`
+	LastUsedAt  sql.NullTime `json:"last_used_at"`
+	ExpiresAt   sql.NullTime `json:"expires_at"`
+	RevokedAt   sql.NullTime `json:"revoked_at"`
+	Username    string       `json:"username"`
+	DisplayName string       `json:"display_name"`
+}
+
+func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error) {
+	row := q.db.QueryRowContext(ctx, getAPIKeyByHash, keyHash)
+	var i GetAPIKeyByHashRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.KeyHash,
+		&i.Prefix,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.Username,
+		&i.DisplayName,
+	)
+	return i, err
 }
 
 const getFirstUser = `-- name: GetFirstUser :one
@@ -1223,6 +1320,45 @@ func (q *Queries) IncrementPostViewCount(ctx context.Context, id int64) error {
 	return err
 }
 
+const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
+SELECT id, user_id, name, key_hash, prefix, created_at, last_used_at, expires_at, revoked_at FROM api_keys
+WHERE user_id = ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error) {
+	rows, err := q.db.QueryContext(ctx, listAPIKeysByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ApiKey
+	for rows.Next() {
+		var i ApiKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.KeyHash,
+			&i.Prefix,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMedia = `-- name: ListMedia :many
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
@@ -1582,6 +1718,22 @@ func (q *Queries) RestorePost(ctx context.Context, arg RestorePostParams) error 
 	return err
 }
 
+const revokeAPIKey = `-- name: RevokeAPIKey :exec
+UPDATE api_keys
+SET revoked_at = CURRENT_TIMESTAMP
+WHERE id = ? AND user_id = ?
+`
+
+type RevokeAPIKeyParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) error {
+	_, err := q.db.ExecContext(ctx, revokeAPIKey, arg.ID, arg.UserID)
+	return err
+}
+
 const setPostPreviewToken = `-- name: SetPostPreviewToken :exec
 UPDATE posts
 SET preview_token = ?, preview_expires_at = ?
@@ -1612,6 +1764,17 @@ type SoftDeletePostParams struct {
 
 func (q *Queries) SoftDeletePost(ctx context.Context, arg SoftDeletePostParams) error {
 	_, err := q.db.ExecContext(ctx, softDeletePost, arg.ID, arg.AuthorID)
+	return err
+}
+
+const touchAPIKeyLastUsed = `-- name: TouchAPIKeyLastUsed :exec
+UPDATE api_keys
+SET last_used_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+func (q *Queries) TouchAPIKeyLastUsed(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, touchAPIKeyLastUsed, id)
 	return err
 }
 

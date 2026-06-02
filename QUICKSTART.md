@@ -99,6 +99,24 @@ You can customize Point by editing the `.env` file.
 You can manage your blog at: `http://your-server:8000/light`
 Log in using the username and password you created during the first-run setup.
 
+## API Keys
+
+Point supports long-lived, revocable API keys for programmatic access. These keys use Bearer authentication (`Authorization: Bearer <key>`) and can be used to interact with any protected route.
+
+### Creating an API Key
+- **Via UI:** API key management is available in the admin panel under **Settings > Security > API Keys** (Coming soon).
+- **Via CLI (Bootstrap):** If you need an API key before accessing the UI, you can generate one using the CLI:
+  ```bash
+  docker exec -it point ./point --create-api-key="My Key Name"
+  ```
+  This will print a raw key (starting with `point_pat_`) exactly once. Save it securely.
+
+### Using an API Key
+Send the key in the `Authorization` header of your requests:
+```bash
+curl -H "Authorization: Bearer point_pat_..." http://localhost:8000/api/posts
+```
+
 ## Troubleshooting
 
 1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.
