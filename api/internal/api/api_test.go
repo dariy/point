@@ -269,7 +269,8 @@ func TestAuthMiddleware(t *testing.T) {
 	}()
 
 	authSvc := services.NewAuthService(repo)
-	middleware := AuthMiddleware(authSvc)
+	apiKeySvc := services.NewApiKeyService(repo)
+	middleware := AuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
 	handler := func(c echo.Context) error {
@@ -330,7 +331,8 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	}()
 
 	authSvc := services.NewAuthService(repo)
-	middleware := OptionalAuthMiddleware(authSvc)
+	apiKeySvc := services.NewApiKeyService(repo)
+	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
 	handler := func(c echo.Context) error {

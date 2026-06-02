@@ -69,6 +69,18 @@
     border-color: var(--color-success-light);
 }
 
+.badge-danger {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+    border-color: var(--color-danger-light);
+}
+
+.badge-primary {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border-color: var(--color-primary-light);
+}
+
 /* Status Selector in tables */
 .status-change-wrapper {
     display: inline-flex;

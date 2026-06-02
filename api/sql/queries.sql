@@ -437,3 +437,38 @@ INSERT INTO blog_secrets (key, value, updated_at)
 VALUES (?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;
 
+
+-- API KEYS
+
+-- name: CreateAPIKey :one
+INSERT INTO api_keys (
+    user_id, name, key_hash, prefix, expires_at, created_at
+) VALUES (
+    ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+)
+RETURNING *;
+
+-- name: GetAPIKeyByHash :one
+SELECT k.*, u.username, u.display_name
+FROM api_keys k
+JOIN users u ON k.user_id = u.id
+WHERE k.key_hash = ? AND k.revoked_at IS NULL LIMIT 1;
+
+-- name: ListAPIKeysByUser :many
+SELECT * FROM api_keys
+WHERE user_id = ?
+ORDER BY created_at DESC;
+
+-- name: RevokeAPIKey :exec
+UPDATE api_keys
+SET revoked_at = CURRENT_TIMESTAMP
+WHERE id = ? AND user_id = ?;
+
+-- name: TouchAPIKeyLastUsed :exec
+UPDATE api_keys
+SET last_used_at = CURRENT_TIMESTAMP
+WHERE id = ?;
+
+-- name: DeleteAPIKey :exec
+DELETE FROM api_keys
+WHERE id = ? AND user_id = ?;

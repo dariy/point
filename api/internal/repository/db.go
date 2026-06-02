@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -21,6 +22,11 @@ func NewRepository(dbURL string) (*Repository, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	// Limit to a single connection so PRAGMAs apply to every query and
+	// concurrent writers serialize at the Go level instead of racing at SQLite.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	// Set busy timeout to handle concurrent access
 	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
@@ -92,10 +98,32 @@ func NewRepository(dbURL string) (*Repository, error) {
 	}
 
 	queries := models.New(db)
-	return &Repository{
+	repo := &Repository{
 		Queries: queries,
 		db:      db,
-	}, nil
+	}
+
+	if count >= 4 {
+		// Run migrations for existing databases.
+		if err := repo.ApplyMigration(context.Background(), "add_api_keys", `
+CREATE TABLE IF NOT EXISTS api_keys (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        VARCHAR(100) NOT NULL,
+    key_hash    VARCHAR(64) NOT NULL UNIQUE,
+    prefix      VARCHAR(16) NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME,
+    expires_at  DATETIME,
+    revoked_at  DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+`); err != nil {
+			return nil, fmt.Errorf("migration failed (add_api_keys): %w", err)
+		}
+	}
+
+	return repo, nil
 }
 
 func (r *Repository) Close() error {

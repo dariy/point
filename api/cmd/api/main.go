@@ -51,6 +51,7 @@ func resolveJSDir(frontendDir string) string {
 type AppServices struct {
 	Settings  *services.SettingsService
 	Auth      *services.AuthService
+	ApiKey    *services.ApiKeyService
 	Tag       *services.TagService
 	Post      *services.PostService
 	Media     *services.MediaService
@@ -64,6 +65,7 @@ type AppServices struct {
 func initServices(cfg *config.Config, repo *repository.Repository) *AppServices {
 	settingsService := services.NewSettingsService(repo)
 	authService := services.NewAuthService(repo)
+	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
 	postService := services.NewPostService(repo)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
@@ -76,6 +78,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	return &AppServices{
 		Settings:  settingsService,
 		Auth:      authService,
+		ApiKey:    apiKeyService,
 		Tag:       tagService,
 		Post:      postService,
 		Media:     mediaService,
@@ -96,6 +99,7 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 
 	// Handlers
 	authHandler := api.NewAuthHandler(svcs.Auth, &cfg, repo)
+	apiKeyHandler := api.NewApiKeyHandler(svcs.ApiKey)
 	tagHandler := api.NewTagHandler(svcs.Tag, svcs.Settings)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
@@ -181,139 +185,145 @@ func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices
 	authGroup := e.Group("/api/auth")
 	authGroup.POST("/login", authHandler.Login)
 	authGroup.POST("/logout", authHandler.Logout)
-	authGroup.GET("/me", authHandler.Me, api.AuthMiddleware(svcs.Auth))
-	authGroup.POST("/change-password", authHandler.ChangePassword, api.AuthMiddleware(svcs.Auth))
-	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(svcs.Auth))
-	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(svcs.Auth))
-	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth))
+	authGroup.GET("/me", authHandler.Me, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	authGroup.POST("/change-password", authHandler.ChangePassword, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.POST("/forgot-password", authHandler.ForgotPassword)
 	authGroup.POST("/reset-password", authHandler.ResetPassword)
 
+	// API Key Management
+	authGroup.GET("/api-keys", apiKeyHandler.ListKeys, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.POST("/api-keys", apiKeyHandler.CreateKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.POST("/api-keys/:id/revoke", apiKeyHandler.RevokeKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.DELETE("/api-keys/:id", apiKeyHandler.DeleteKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+
 	// ── WebAuthn / Passkey Routes ──────────────────────────────────────────────
 	webauthnGroup := e.Group("/api/auth/webauthn")
-	webauthnGroup.POST("/register/begin", webAuthnHandler.BeginRegistration, api.AuthMiddleware(svcs.Auth))
-	webauthnGroup.POST("/register/finish", webAuthnHandler.FinishRegistration, api.AuthMiddleware(svcs.Auth))
+	webauthnGroup.POST("/register/begin", webAuthnHandler.BeginRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	webauthnGroup.POST("/register/finish", webAuthnHandler.FinishRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	webauthnGroup.POST("/login/begin", webAuthnHandler.BeginLogin)
 	webauthnGroup.POST("/login/finish", webAuthnHandler.FinishLogin)
-	webauthnGroup.GET("/status", webAuthnHandler.GetStatus, api.AuthMiddleware(svcs.Auth))
-	webauthnGroup.DELETE("/credential", webAuthnHandler.DeleteCredential, api.AuthMiddleware(svcs.Auth))
+	webauthnGroup.GET("/status", webAuthnHandler.GetStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	webauthnGroup.DELETE("/credential", webAuthnHandler.DeleteCredential, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 
 	// ── Post Routes ────────────────────────────────────────────────────────────
 	postsGroup := e.Group("/api/posts")
-	postsGroup.GET("", postHandler.ListPosts, api.OptionalAuthMiddleware(svcs.Auth))
-	postsGroup.POST("", postHandler.CreatePost, api.AuthMiddleware(svcs.Auth))
-	postsGroup.POST("/audio", postHandler.CreateAudioPost, api.AuthMiddleware(svcs.Auth))
-	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(svcs.Auth))
-	postsGroup.GET("/:slug/page", postHandler.GetPostPage, api.OptionalAuthMiddleware(svcs.Auth))
-	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(svcs.Auth))
-	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(svcs.Auth))
-	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(svcs.Auth))
-	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(svcs.Auth))
-	postsGroup.POST("/:id/restore", postHandler.RestorePost, api.AuthMiddleware(svcs.Auth))
-	postsGroup.DELETE("/:id/permanent", postHandler.PermanentlyDeletePost, api.AuthMiddleware(svcs.Auth))
-	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth))
-	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(svcs.Auth))
-	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth))
+	postsGroup.GET("", postHandler.ListPosts, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("", postHandler.CreatePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/audio", postHandler.CreateAudioPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/:slug/page", postHandler.GetPostPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/:id/restore", postHandler.RestorePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.DELETE("/:id/permanent", postHandler.PermanentlyDeletePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/:id/navigation", postHandler.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/:id/publish", postHandler.PublishPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/preview/:token", postHandler.GetPostByPreviewToken)
-	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth))
+	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")
-	tagsGroup.GET("", tagHandler.ListTags, api.OptionalAuthMiddleware(svcs.Auth))
-	tagsGroup.GET("/cloud", tagHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth))
-	tagsGroup.POST("", tagHandler.CreateTag, api.AuthMiddleware(svcs.Auth))
-	tagsGroup.POST("/recalculate-counts", tagHandler.RecalculateCounts, api.AuthMiddleware(svcs.Auth))
-	tagsGroup.GET("/id/:id", tagHandler.GetTagByID, api.OptionalAuthMiddleware(svcs.Auth))
-	tagsGroup.GET("/slug/:slug", tagHandler.GetTagBySlug, api.OptionalAuthMiddleware(svcs.Auth))
-	tagsGroup.GET("/slug/:slug/posts", tagHandler.GetPostsByTag, api.OptionalAuthMiddleware(svcs.Auth))
-	tagsGroup.PUT("/:id", tagHandler.UpdateTag, api.AuthMiddleware(svcs.Auth))
-	tagsGroup.DELETE("/:id", tagHandler.DeleteTag, api.AuthMiddleware(svcs.Auth))
-	tagsGroup.POST("/:id/reorder", tagHandler.ReorderTag, api.AuthMiddleware(svcs.Auth))
-	tagsGroup.POST("/:id/geocode", tagHandler.GeocodeTag, api.AuthMiddleware(svcs.Auth))
+	tagsGroup.GET("", tagHandler.ListTags, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.GET("/cloud", tagHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.POST("", tagHandler.CreateTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.POST("/recalculate-counts", tagHandler.RecalculateCounts, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.GET("/id/:id", tagHandler.GetTagByID, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.GET("/slug/:slug", tagHandler.GetTagBySlug, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.GET("/slug/:slug/posts", tagHandler.GetPostsByTag, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.PUT("/:id", tagHandler.UpdateTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.DELETE("/:id", tagHandler.DeleteTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.POST("/:id/reorder", tagHandler.ReorderTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.POST("/:id/geocode", tagHandler.GeocodeTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Media Routes ───────────────────────────────────────────────────────────
 	mediaGroup := e.Group("/api/media")
-	mediaGroup.GET("", mediaHandler.ListMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.GET("/folders", mediaHandler.GetMediaFolders, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/analyze-path", mediaHandler.AnalyzeImageByPath, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.GET("/stats", mediaHandler.GetStorageStats, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.GET("/orphaned", mediaHandler.ListOrphanedMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.DELETE("/orphaned", mediaHandler.DeleteOrphanedMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/bulk-delete", mediaHandler.BulkDeleteMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/thumbnails/rebuild", mediaHandler.RebuildThumbnails, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.GET("/:id", mediaHandler.GetMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.PUT("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.PATCH("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/:id/reextract", mediaHandler.ReextractEXIF, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.PUT("/:id/exif", mediaHandler.UpdateEXIF, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.POST("/:id/revert-exif", mediaHandler.RevertEXIF, api.AuthMiddleware(svcs.Auth))
-	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(svcs.Auth))
+	mediaGroup.GET("", mediaHandler.ListMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.GET("/folders", mediaHandler.GetMediaFolders, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/analyze-path", mediaHandler.AnalyzeImageByPath, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.GET("/stats", mediaHandler.GetStorageStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.GET("/orphaned", mediaHandler.ListOrphanedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.DELETE("/orphaned", mediaHandler.DeleteOrphanedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/bulk-delete", mediaHandler.BulkDeleteMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/thumbnails/rebuild", mediaHandler.RebuildThumbnails, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.GET("/:id", mediaHandler.GetMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.PUT("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.PATCH("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/reextract", mediaHandler.ReextractEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.PUT("/:id/exif", mediaHandler.UpdateEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/revert-exif", mediaHandler.RevertEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.DELETE("/:id", mediaHandler.DeleteMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Settings Routes ────────────────────────────────────────────────────────
 	settingsGroup := e.Group("/api/settings")
 	settingsGroup.GET("/public", settingsHandler.GetPublicSettings)
-	settingsGroup.GET("", settingsHandler.GetSettings, api.AuthMiddleware(svcs.Auth))
-	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth))
-	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
-	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth))
+	settingsGroup.GET("", settingsHandler.GetSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Themes Routes ──────────────────────────────────────────────────────────
 	themesGroup := e.Group("/api/themes")
 	themesGroup.GET("", themeHandler.ListThemes)
 	themesGroup.GET("/active", themeHandler.GetActiveTheme)
-	themesGroup.PUT("/active", themeHandler.SetActiveTheme, api.AuthMiddleware(svcs.Auth))
+	themesGroup.PUT("/active", themeHandler.SetActiveTheme, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")
-	systemGroup.GET("/stats", systemHandler.GetStats, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/disk", systemHandler.GetDiskInfo, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/logs", systemHandler.GetLogs, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(svcs.Auth))
-	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(svcs.Auth))
-	systemGroup.POST("/map/update-coords", systemHandler.UpdateMapCoords, api.AuthMiddleware(svcs.Auth))
-	systemGroup.POST("/media/recalculate-visibility", systemHandler.RecalculateMediaVisibility, api.AuthMiddleware(svcs.Auth))
-	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(svcs.Auth))
-	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(svcs.Auth))
-	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth))
-	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/photo-library", systemHandler.GetPhotoLibraryContents, api.AuthMiddleware(svcs.Auth))
-	systemGroup.POST("/photo-library/import", systemHandler.ImportSelectedPhotos, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/photo-library/file", systemHandler.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth))
-	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(svcs.Auth))
+	systemGroup.GET("/stats", systemHandler.GetStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/disk", systemHandler.GetDiskInfo, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/logs", systemHandler.GetLogs, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/migrations", systemHandler.GetMigrations, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/map/update-coords", systemHandler.UpdateMapCoords, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/media/recalculate-visibility", systemHandler.RecalculateMediaVisibility, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/photo-library", systemHandler.GetPhotoLibraryContents, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/photo-library/import", systemHandler.ImportSelectedPhotos, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/photo-library/file", systemHandler.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Nav Menu Routes (admin) ────────────────────────────────────────────────
-	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth))
-	e.PUT("/api/nav-menu", navMenuHandler.UpdateAdminNavMenu, api.AuthMiddleware(svcs.Auth))
+	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	e.PUT("/api/nav-menu", navMenuHandler.UpdateAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")
-	utilGroup.GET("/parse-maps-coords", api.ParseMapsCoords, api.AuthMiddleware(svcs.Auth))
+	utilGroup.GET("/parse-maps-coords", api.ParseMapsCoords, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Page compound data Routes (for SPA) ────────────────────────────────────
 	pagesGroup := e.Group("/api/pages")
-	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth))
-	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth))
-	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth))
-	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth))
-	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth))
+	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Timeline Routes ────────────────────────────────────────────────────────
 	timelineGroup := e.Group("/api/timeline")
-	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth))
-	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth))
+	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
 	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(svcs.Auth))
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
@@ -470,6 +480,16 @@ func main() {
 	}()
 
 	svcs := initServices(&cfg, repo)
+
+	// API Key Creation CLI fallback
+	for i, arg := range os.Args[1:] {
+		if val, ok := strings.CutPrefix(arg, "--create-api-key="); ok {
+			runCreateAPIKeyCLI(repo, svcs, val)
+		}
+		if arg == "--create-api-key" && i+2 < len(os.Args) {
+			runCreateAPIKeyCLI(repo, svcs, os.Args[i+2])
+		}
+	}
 
 	// Ensure media directories exist
 	for _, dir := range []string{"originals", "thumbnails"} {
