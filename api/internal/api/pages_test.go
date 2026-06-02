@@ -454,3 +454,158 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 		}
 	}
 }
+
+func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
+	ctx := context.Background()
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
+	e := echo.New()
+
+	res, _ := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
+	userID, _ := res.LastInsertId()
+	tag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Tech", Slug: "tech"})
+	post, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "T1", Status: "published", AuthorID: userID})
+	_ = postSvc.UpdatePostTags(ctx, post.ID, []string{tag.Slug})
+
+	makeTagReq := func(h *PagesHandler) map[string]interface{} {
+		req := httptest.NewRequest(http.MethodGet, "/tags/tech", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("slug")
+		c.SetParamValues("tech")
+		if err := h.GetTagPage(c); err != nil {
+			t.Fatalf("GetTagPage failed: %v", err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return body
+	}
+
+	// show_view_counts=false: view_count must be absent
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "false", "boolean")
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
+	body := makeTagReq(handler)
+	posts := body["posts"].([]interface{})
+	if len(posts) == 0 {
+		t.Fatal("expected at least one post")
+	}
+	if _, ok := posts[0].(map[string]interface{})["view_count"]; ok {
+		t.Error("view_count should not be present when show_view_counts=false")
+	}
+
+	// show_view_counts=true: view_count must be present
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "true", "boolean")
+	handler2 := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
+	body = makeTagReq(handler2)
+	posts = body["posts"].([]interface{})
+	if _, ok := posts[0].(map[string]interface{})["view_count"]; !ok {
+		t.Error("view_count should be present when show_view_counts=true")
+	}
+}
+
+func TestPagesHandler_HomePageCustom_ViewCountVisibility(t *testing.T) {
+	ctx := context.Background()
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
+	e := echo.New()
+
+	res, _ := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
+	userID, _ := res.LastInsertId()
+
+	// Create a page-type post and wire it as the custom home page
+	p, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Home", Slug: "home", Status: "page", AuthorID: userID})
+	_ = settingsSvc.SetSetting(ctx, "home_page_post_id", p.Slug, "string")
+
+	makeReq := func(h *PagesHandler) map[string]interface{} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		if err := h.GetHomePage(e.NewContext(req, rec)); err != nil {
+			t.Fatalf("GetHomePage failed: %v", err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return body
+	}
+
+	// show_view_counts=false: view_count must be absent from the custom home page post
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "false", "boolean")
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
+	body := makeReq(handler)
+	posts := body["posts"].([]interface{})
+	if len(posts) == 0 {
+		t.Fatal("expected home page post")
+	}
+	if _, ok := posts[0].(map[string]interface{})["view_count"]; ok {
+		t.Error("view_count should not be present when show_view_counts=false")
+	}
+
+	// show_view_counts=true: view_count must be present
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "true", "boolean")
+	handler2 := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
+	body = makeReq(handler2)
+	posts = body["posts"].([]interface{})
+	if _, ok := posts[0].(map[string]interface{})["view_count"]; !ok {
+		t.Error("view_count should be present when show_view_counts=true")
+	}
+}
+
+func TestPagesHandler_ViewCountVisibility(t *testing.T) {
+	ctx := context.Background()
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	postSvc := services.NewPostService(repo)
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
+	cacheService := services.NewCacheService(t.TempDir())
+	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
+	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('P','p','b',1,'published',datetime('now'))`)
+
+	makeHomeReq := func(h *PagesHandler) map[string]interface{} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if err := h.GetHomePage(c); err != nil {
+			t.Fatalf("GetHomePage failed: %v", err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return body
+	}
+
+	// Default (show_view_counts = "false"): view_count must be absent
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "false", "boolean")
+	body := makeHomeReq(handler)
+	posts := body["posts"].([]interface{})
+	if len(posts) == 0 {
+		t.Fatal("expected at least one post")
+	}
+	post := posts[0].(map[string]interface{})
+	if _, ok := post["view_count"]; ok {
+		t.Error("view_count should not be present when show_view_counts=false")
+	}
+
+	// Enabled (show_view_counts = "true"): use a fresh handler (fresh cache) to avoid cache hit from above
+	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "true", "boolean")
+	handler2 := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
+	body = makeHomeReq(handler2)
+	posts = body["posts"].([]interface{})
+	post = posts[0].(map[string]interface{})
+	if _, ok := post["view_count"]; !ok {
+		t.Error("view_count should be present when show_view_counts=true")
+	}
+}
