@@ -644,22 +644,18 @@ type StorageStats struct {
 }
 
 func (s *MediaService) GetStorageStats(ctx context.Context) (StorageStats, error) {
-	const q = `
-SELECT
-  COALESCE(SUM(file_size), 0) as total_bytes,
-  COUNT(*) as total_files,
-  COALESCE(SUM(CASE WHEN file_type = 'image' THEN 1 ELSE 0 END), 0) as image_count,
-  COALESCE(SUM(CASE WHEN file_type = 'video' THEN 1 ELSE 0 END), 0) as video_count,
-  COALESCE(SUM(CASE WHEN file_type = 'audio' THEN 1 ELSE 0 END), 0) as audio_count,
-  COALESCE(SUM(CASE WHEN file_type NOT IN ('image','video','audio') THEN 1 ELSE 0 END), 0) as other_count
-FROM media`
-
-	var st StorageStats
-	err := s.repo.DB().QueryRowContext(ctx, q).Scan(
-		&st.TotalBytes, &st.TotalFiles,
-		&st.ImageCount, &st.VideoCount, &st.AudioCount, &st.OtherCount,
-	)
-	return st, err
+	st, err := s.repo.GetStorageStats(ctx)
+	if err != nil {
+		return StorageStats{}, err
+	}
+	return StorageStats{
+		TotalBytes: st.TotalBytes,
+		TotalFiles: st.TotalFiles,
+		ImageCount: st.ImageCount,
+		VideoCount: st.VideoCount,
+		AudioCount: st.AudioCount,
+		OtherCount: st.OtherCount,
+	}, nil
 }
 
 // RenameMedia renames a media file on disk and updates the database.
