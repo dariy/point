@@ -308,3 +308,40 @@ func TestServeSimplifiedMedia_MonthOutOfRange(t *testing.T) {
 		t.Errorf("expected 503 for out-of-range month, got %d", rec.Code)
 	}
 }
+
+func TestServeSimplifiedMedia_ChecksumGlobZeroMatches(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	// Request a file with checksum that doesn't exist in DB or on disk.
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "missing_12345678.jpg", false)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestServeSimplifiedMedia_ChecksumGlobMultipleMatches(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	dir := filepath.Join(storage, "media", "originals", "2024", "01")
+	_ = os.MkdirAll(dir, 0755)
+	_ = os.WriteFile(filepath.Join(dir, "file1_12345678.jpg"), []byte("data"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "file2_12345678.jpg"), []byte("data"), 0644)
+
+	// Since there are multiple matches, it should NOT serve the file and should fail to find in DB.
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "missing_12345678.jpg", false)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 due to ambiguous matches, got %d", rec.Code)
+	}
+}
+
+func TestServeSimplifiedMedia_ChecksumGlobDBLookupFail(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	dir := filepath.Join(storage, "media", "originals", "2024", "01")
+	_ = os.MkdirAll(dir, 0755)
+	_ = os.WriteFile(filepath.Join(dir, "private_12345678.jpg"), []byte("data"), 0644)
+
+	// Ensure DB does NOT have it, but the file exists on disk.
+	// Since we are unauthenticated and it's not in DB, it should be 404.
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "missing_12345678.jpg", false)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 because file not in DB, got %d", rec.Code)
+	}
+}
