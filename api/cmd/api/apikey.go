@@ -7,18 +7,25 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"golang.org/x/term"
 )
 
-func runCreateAPIKeyCLI(svcs *AppServices, name, password string) {
-	if password == "" {
-		log.Fatalf("--password is required to create an API key")
+func runCreateAPIKeyCLI(svcs *AppServices, name string) {
+	fmt.Fprint(os.Stderr, "Password: ")
+	rawBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr) // newline after the hidden input
+	if err != nil {
+		log.Fatalf("failed to read password: %v", err)
+	}
+	if len(rawBytes) == 0 {
+		log.Fatalf("password is required")
 	}
 
 	ctx := context.Background()
 
-	// Match the web frontend: passwords are verified as SHA-256(raw) so the
-	// raw password is never stored or transmitted in plain text.
-	h := sha256.Sum256([]byte(password))
+	// Match the web frontend: SHA-256 of the raw password before Authenticate.
+	h := sha256.Sum256(rawBytes)
 	user, err := svcs.Auth.Authenticate(ctx, "", hex.EncodeToString(h[:]))
 	if err != nil {
 		log.Fatalf("authentication failed: %v", err)

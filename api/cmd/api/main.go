@@ -483,7 +483,7 @@ func main() {
 	svcs := initServices(&cfg, repo)
 
 	// API Key Creation CLI fallback
-	var createAPIKeyName, createAPIKeyPassword string
+	var createAPIKeyName string
 	{
 		args := os.Args[1:]
 		for i, arg := range args {
@@ -491,15 +491,11 @@ func main() {
 				createAPIKeyName = val
 			} else if arg == "--create-api-key" && i+1 < len(args) {
 				createAPIKeyName = args[i+1]
-			} else if val, ok := strings.CutPrefix(arg, "--password="); ok {
-				createAPIKeyPassword = val
-			} else if arg == "--password" && i+1 < len(args) {
-				createAPIKeyPassword = args[i+1]
 			}
 		}
 	}
 	if createAPIKeyName != "" {
-		runCreateAPIKeyCLI(svcs, createAPIKeyName, createAPIKeyPassword)
+		runCreateAPIKeyCLI(svcs, createAPIKeyName)
 	}
 
 	// Ensure media directories exist
