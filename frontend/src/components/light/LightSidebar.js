@@ -9,6 +9,7 @@
  */
 
 import { Component } from '../Component.js';
+import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import {
   APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG,

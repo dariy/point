@@ -14,10 +14,18 @@ export default class AnalyticsPage extends Component {
     };
   }
 
-  async onMount() {
-    this.sidebar = new LightSidebar(this.el.querySelector('#sidebar-mount'));
-    this.sidebar.mount();
+  afterRender() {
+    this.mountChild(LightSidebar, '#sidebar-mount', {
+      currentPath: '/light/analytics',
+    });
 
+    if (this.state.loading && !this._fetchStarted) {
+      this._fetchStarted = true;
+      this._loadData();
+    }
+  }
+
+  async _loadData() {
     try {
       const [stats, topPostsResp] = await Promise.all([
         getPostAnalytics(),

@@ -483,13 +483,8 @@ func main() {
 	svcs := initServices(&cfg, repo)
 
 	// API Key Creation CLI fallback
-	for i, arg := range os.Args[1:] {
-		if val, ok := strings.CutPrefix(arg, "--create-api-key="); ok {
-			runCreateAPIKeyCLI(repo, svcs, val)
-		}
-		if arg == "--create-api-key" && i+2 < len(os.Args) {
-			runCreateAPIKeyCLI(repo, svcs, os.Args[i+2])
-		}
+	if name := parseCreateAPIKeyName(os.Args[1:]); name != "" {
+		runCreateAPIKeyCLI(svcs, name)
 	}
 
 	// Ensure media directories exist
@@ -762,6 +757,20 @@ func main() {
 		log.Printf("shutdown error: %v", err)
 	}
 	log.Println("graceful shutdown complete")
+}
+
+// parseCreateAPIKeyName scans args for --create-api-key=<name> or
+// --create-api-key <name> and returns the name, or "" if not present.
+func parseCreateAPIKeyName(args []string) string {
+	for i, arg := range args {
+		if val, ok := strings.CutPrefix(arg, "--create-api-key="); ok {
+			return val
+		}
+		if arg == "--create-api-key" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 // checksumRe matches the 8-char hex checksum embedded in a media filename,
