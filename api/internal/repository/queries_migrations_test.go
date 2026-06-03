@@ -173,3 +173,26 @@ func TestRepository_GetMigrations_WithRecord(t *testing.T) {
 		t.Error("expected at least 1 migration")
 	}
 }
+
+func TestRepository_EnsureSystemTags(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	ctx := context.Background()
+
+	if err := repo.EnsureSystemTags(ctx); err != nil {
+		t.Fatalf("EnsureSystemTags failed: %v", err)
+	}
+	// Idempotent
+	if err := repo.EnsureSystemTags(ctx); err != nil {
+		t.Fatalf("EnsureSystemTags idempotent failed: %v", err)
+	}
+
+	// Test conflict rename
+	_, _ = repo.DB().Exec(`DELETE FROM migration_history WHERE name = 'ensure_system_tags'`)
+	_, _ = repo.DB().Exec(`DELETE FROM tags WHERE slug = '_pending'`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug) VALUES ('_pending', 'pending')`)
+
+	if err := repo.EnsureSystemTags(ctx); err != nil {
+		t.Fatalf("EnsureSystemTags with conflict failed: %v", err)
+	}
+}

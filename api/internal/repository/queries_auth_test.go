@@ -106,3 +106,56 @@ func TestRepository_APIKeys(t *testing.T) {
 		t.Fatalf("DeleteAPIKey failed: %v", err)
 	}
 }
+
+func TestRepository_DeleteSecret(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO blog_secrets (key, value) VALUES ('k1', 'v1')`)
+	if err := repo.DeleteSecret(ctx, "k1"); err != nil {
+		t.Fatalf("DeleteSecret failed: %v", err)
+	}
+}
+
+func TestRepository_WebAuthnCredentials(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	ctx := context.Background()
+
+	uid, _ := insertUserAndPost(t, repo, "wa-post", "published")
+
+	// Create
+	credID := []byte("cred1")
+	pubKey := []byte("pub1")
+	aaguid := []byte("aaguid1")
+	cred, err := repo.CreateWebAuthnCredential(ctx, uid, credID, pubKey, aaguid, 1, true, true)
+	if err != nil {
+		t.Fatalf("CreateWebAuthnCredential failed: %v", err)
+	}
+	if cred.UserID != uid {
+		t.Errorf("expected userID %d, got %d", uid, cred.UserID)
+	}
+
+	// Get by user
+	creds, err := repo.GetWebAuthnCredentialsByUserID(ctx, uid)
+	if err != nil || len(creds) != 1 {
+		t.Fatalf("GetWebAuthnCredentialsByUserID failed: %v", err)
+	}
+
+	// Get by credID
+	got, err := repo.GetWebAuthnCredentialByCredentialID(ctx, credID)
+	if err != nil || got.ID != cred.ID {
+		t.Fatalf("GetWebAuthnCredentialByCredentialID failed: %v", err)
+	}
+
+	// Update
+	if err := repo.UpdateWebAuthnCredential(ctx, credID, 2, false); err != nil {
+		t.Fatalf("UpdateWebAuthnCredential failed: %v", err)
+	}
+
+	// Delete
+	if err := repo.DeleteWebAuthnCredentialByUserID(ctx, uid); err != nil {
+		t.Fatalf("DeleteWebAuthnCredentialByUserID failed: %v", err)
+	}
+}

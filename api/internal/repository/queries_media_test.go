@@ -158,3 +158,44 @@ func TestRepository_GetAllMediaPaths(t *testing.T) {
 		t.Errorf("expected 1 media path, got %d", len(items))
 	}
 }
+
+func TestRepository_GetMediaByPaths(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('f1','p1','file','text/plain',10,'c1'), ('f2','p2','file','text/plain',20,'c2')`)
+
+	items, err := repo.GetMediaByPaths(ctx, []string{"p1", "p2"})
+	if err != nil {
+		t.Fatalf("GetMediaByPaths failed: %v", err)
+	}
+	if len(items) != 2 {
+		t.Errorf("expected 2 items, got %d", len(items))
+	}
+
+	// empty input
+	items2, err := repo.GetMediaByPaths(ctx, nil)
+	if err != nil || len(items2) != 0 {
+		t.Errorf("expected empty for nil input")
+	}
+}
+
+func TestRepository_GetStorageStats(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	ctx := context.Background()
+
+	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('f1','p1','image','image/jpeg',100,'c1'), ('f2','p2','video','video/mp4',500,'c2')`)
+
+	stats, err := repo.GetStorageStats(ctx)
+	if err != nil {
+		t.Fatalf("GetStorageStats failed: %v", err)
+	}
+	if stats.TotalBytes != 600 {
+		t.Errorf("expected 600 bytes, got %d", stats.TotalBytes)
+	}
+	if stats.ImageCount != 1 || stats.VideoCount != 1 {
+		t.Errorf("wrong counts: %+v", stats)
+	}
+}

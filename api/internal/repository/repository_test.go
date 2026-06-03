@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -33,4 +34,16 @@ func insertUserAndPost(t *testing.T, repo Repository, slug, status string) (int6
 	}
 	pid, _ := res2.LastInsertId()
 	return uid, pid
+}
+
+func TestIsDuplicateColumnError(t *testing.T) {
+	err := fmt.Errorf("duplicate column name: test")
+	if !isDuplicateColumnError(err) {
+		t.Errorf("expected true for duplicate column error")
+	}
+
+	err2 := fmt.Errorf("some other error")
+	if isDuplicateColumnError(err2) {
+		t.Errorf("expected false for other error")
+	}
 }

@@ -340,3 +340,58 @@ func TestRepository_ListPostsAndCountPosts(t *testing.T) {
 		t.Errorf("expected 2 published, got %d", count)
 	}
 }
+
+func TestRepository_PostsInYearRange(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	ctx := context.Background()
+
+	_, pid := insertUserAndPost(t, repo, "year-post", "published")
+
+	// Setup _in_timeline -> 2024 -> year-post
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10, 'Timeline', '_in_timeline'), (11, '2024', '2024')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10, 11)`)
+	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, 11)`, pid)
+
+	arg := models.ListPostsParams{Limit: 10}
+	posts, err := repo.ListPostsInYearRange(ctx, 2024, 2024, arg)
+	if err != nil {
+		t.Fatalf("ListPostsInYearRange failed: %v", err)
+	}
+	if len(posts) != 1 {
+		t.Errorf("expected 1 post, got %d", len(posts))
+	}
+
+	count, err := repo.CountPostsInYearRange(ctx, 2024, 2024, models.CountPostsParams{})
+	if err != nil || count != 1 {
+		t.Errorf("CountPostsInYearRange failed: %v, count=%d", err, count)
+	}
+
+	// Tag IDs version
+	posts2, err := repo.GetPostsByTagIDsInYearRange(ctx, []int64{11}, 2024, 2024, true, false, false, 10, 0)
+	if err != nil || len(posts2) != 1 {
+		t.Errorf("GetPostsByTagIDsInYearRange failed: %v, len=%d", err, len(posts2))
+	}
+
+	count2, err := repo.CountPostsByTagIDsInYearRange(ctx, []int64{11}, 2024, 2024, true, false, false)
+	if err != nil || count2 != 1 {
+		t.Errorf("CountPostsByTagIDsInYearRange failed: %v, count=%d", err, count2)
+	}
+}
+
+func TestRepository_UpdatePostThumbnailPath(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	ctx := context.Background()
+
+	_, pid := insertUserAndPost(t, repo, "thumb-post", "published")
+	_, _ = repo.DB().Exec(`UPDATE posts SET thumbnail_path='old' WHERE id=?`, pid)
+
+	n, err := repo.UpdatePostThumbnailPath(ctx, "old", "new")
+	if err != nil {
+		t.Fatalf("UpdatePostThumbnailPath failed: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("expected 1 updated post, got %d", n)
+	}
+}
