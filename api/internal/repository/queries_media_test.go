@@ -161,7 +161,7 @@ func TestRepository_GetAllMediaPaths(t *testing.T) {
 
 func TestRepository_GetMediaByPaths(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('f1','p1','file','text/plain',10,'c1'), ('f2','p2','file','text/plain',20,'c2')`)
@@ -183,7 +183,7 @@ func TestRepository_GetMediaByPaths(t *testing.T) {
 
 func TestRepository_GetStorageStats(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum) VALUES ('f1','p1','image','image/jpeg',100,'c1'), ('f2','p2','video','video/mp4',500,'c2')`)

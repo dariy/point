@@ -55,7 +55,7 @@ func TestRepository_DeleteSessionPaths(t *testing.T) {
 
 func TestRepository_APIKeys(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	ctx := context.Background()
 
@@ -109,7 +109,7 @@ func TestRepository_APIKeys(t *testing.T) {
 
 func TestRepository_DeleteSecret(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO blog_secrets (key, value) VALUES ('k1', 'v1')`)
@@ -120,7 +120,7 @@ func TestRepository_DeleteSecret(t *testing.T) {
 
 func TestRepository_WebAuthnCredentials(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	uid, _ := insertUserAndPost(t, repo, "wa-post", "published")

@@ -247,7 +247,7 @@ func TestParseMapCoords_DegreeNotation(t *testing.T) {
 func TestParseCoordsFromPageBody_Error(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>no coords here</html>`))
+		_, _ = w.Write([]byte(`<html>no coords here</html>`))
 	}))
 	defer ts.Close()
 

@@ -29,8 +29,6 @@ export default class SecurityPage extends Component {
       passkeySupported: typeof window.PublicKeyCredential !== 'undefined',
       passkeyStatus: null,
       passkeyWorking: false,
-      creatingApiKey: false,
-      newRawKey: null,
     };
   }
 
@@ -38,7 +36,7 @@ export default class SecurityPage extends Component {
     const {
       loading, error, sessions, changingPassword,
       passkeySupported, passkeyStatus, passkeyWorking,
-      apiKeys, creatingApiKey, newRawKey
+      apiKeys
     } = this.state;
 
     const apiKeyList = loading

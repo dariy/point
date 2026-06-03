@@ -60,7 +60,9 @@ func TestWebAuthnHandler_Unconfigured(t *testing.T) {
 			t.Errorf("expected status 200, got %d", rec.Code)
 		}
 		var resp map[string]interface{}
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("json.Unmarshal failed: %v", err)
+		}
 		if resp["configured"] != false {
 			t.Errorf("expected configured to be false")
 		}

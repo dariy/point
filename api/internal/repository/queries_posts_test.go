@@ -343,7 +343,7 @@ func TestRepository_ListPostsAndCountPosts(t *testing.T) {
 
 func TestRepository_PostsInYearRange(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "year-post", "published")
@@ -381,7 +381,7 @@ func TestRepository_PostsInYearRange(t *testing.T) {
 
 func TestRepository_UpdatePostThumbnailPath(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "thumb-post", "published")

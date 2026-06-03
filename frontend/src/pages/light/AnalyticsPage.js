@@ -69,8 +69,6 @@ export default class AnalyticsPage extends Component {
   }
 
   _renderAnalytics(stats, topPosts) {
-    const mostViewedPost = topPosts.find(p => p.id === stats.most_viewed_post_id) || topPosts[0];
-
     return `
       <div class="stats-grid">
         <div class="stat-card">

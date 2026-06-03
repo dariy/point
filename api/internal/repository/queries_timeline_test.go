@@ -35,7 +35,7 @@ func TestRepository_GetYearTagsByLocationTagIDs(t *testing.T) {
 
 func TestRepository_TimelineQueries(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, pid := insertUserAndPost(t, repo, "timeline-post", "published")

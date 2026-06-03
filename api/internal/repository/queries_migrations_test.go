@@ -176,7 +176,7 @@ func TestRepository_GetMigrations_WithRecord(t *testing.T) {
 
 func TestRepository_EnsureSystemTags(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	if err := repo.EnsureSystemTags(ctx); err != nil {

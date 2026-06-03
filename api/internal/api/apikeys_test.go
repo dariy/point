@@ -17,7 +17,7 @@ import (
 
 func TestApiKeyHandler(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 
 	apiKeyService := services.NewApiKeyService(repo)
 	handler := NewApiKeyHandler(apiKeyService)
@@ -107,7 +107,9 @@ func TestApiKeyHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("json.Unmarshal failed: %v", err)
+		}
 
 		if resp["total"].(float64) < 1 {
 			t.Error("expected at least 1 key")

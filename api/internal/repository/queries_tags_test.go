@@ -116,7 +116,7 @@ func TestRepository_GetCoOccurringTags(t *testing.T) {
 
 func TestRepository_DropTagNameUnique(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	// Initially, NewRepository might have already run it if schema was detected.
