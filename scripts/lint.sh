@@ -9,7 +9,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "==> Linting Go backend..."
 cd "$ROOT_DIR/api"
-golangci-lint run --timeout 5m --fix
+golangci-lint run --timeout 5m --fix --build-tags integration
 
 echo "==> Linting JS frontend..."
 cd "$ROOT_DIR"

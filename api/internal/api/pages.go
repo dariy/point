@@ -77,7 +77,6 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		}
 	}
 
-	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	showViewCounts := allSettings["show_view_counts"] == "true"
 
 	// Custom Home Page logic: if home_page_post_id is set, return that specific post.
@@ -265,16 +264,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	}
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
-	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	showViewCounts := allSettings["show_view_counts"] == "true"
-	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
-	perPage, _ := strconv.Atoi(perPageStr)
-	if perPage < 1 {
-		perPage = 10
-	}
-	if qpp, _ := strconv.Atoi(c.QueryParam("per_page")); qpp > 0 {
-		perPage = qpp
-	}
 
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
