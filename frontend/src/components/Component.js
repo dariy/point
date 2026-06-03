@@ -166,7 +166,7 @@ export class Component {
     const markup = this.render();
     // render() must escape all user-supplied values with escapeHtml().
     // Server-generated HTML is sanitized server-side before storage.
-    this.container.innerHTML = markup; // eslint-disable-line no-unsanitized/property
+    this.container.innerHTML = markup;
     this.afterRender();
   }
 

@@ -10,20 +10,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type AuthHandler struct {
 	authService *services.AuthService
 	cfg         *config.Config
-	repo        *repository.Repository
+	repo        repository.Repository
 }
 
-func NewAuthHandler(authService *services.AuthService, cfg *config.Config, repo *repository.Repository) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, cfg *config.Config, repo repository.Repository) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		cfg:         cfg,
@@ -124,14 +125,25 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 }
 
 func (h *AuthHandler) Me(c echo.Context) error {
-	session, ok := c.Get("user").(models.GetSessionByTokenRow)
-	if !ok || session.UserID == 0 {
+	user := c.Get("user")
+	userID := extractUserID(user)
+	if userID == 0 {
 		return echo.NewHTTPError(http.StatusUnauthorized, "not authenticated")
 	}
+
+	var username, displayName string
+	if s, ok := user.(models.GetSessionByTokenRow); ok {
+		username = s.Username
+		displayName = s.DisplayName
+	} else if k, ok := user.(models.GetAPIKeyByHashRow); ok {
+		username = k.Username
+		displayName = k.DisplayName
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"id":           session.UserID,
-		"username":     session.Username,
-		"display_name": session.DisplayName,
+		"id":           userID,
+		"username":     username,
+		"display_name": displayName,
 	})
 }
 

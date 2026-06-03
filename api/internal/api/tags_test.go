@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestTagHandler_CRUD(t *testing.T) {
@@ -375,4 +377,294 @@ func TestGetMinTagPostsSetting(t *testing.T) {
 	if v := getMinTagPostsSetting(map[string]string{"min_tag_posts_to_show": "-5"}); v != 0 {
 		t.Errorf("expected 0 for negative, got %d", v)
 	}
+}
+
+func TestTagHandler_ListTags_DBError(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := th.ListTags(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestTagHandler_ListTags_WithRelationships(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+
+	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'Parent','parent'),(2,'Child','child')`)
+	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id,child_id) VALUES (1,2)`)
+
+	_, _ = h.repo.DB().Exec(`INSERT INTO tag_locations (tag_id,latitude,longitude) VALUES (1,48.85,2.35)`)
+
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?include_empty=true", nil)
+	rec := httptest.NewRecorder()
+	if err := th.ListTags(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ListTags: %v", err)
+	}
+}
+
+func TestTagHandler_GetTagByID_NotFound(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("9999")
+	err := th.GetTagByID(c)
+	if err == nil {
+		t.Error("expected error for non-existent tag")
+	}
+}
+
+func TestTagHandler_CreateTag_DBError(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	c, _ := echoCtx(http.MethodPost, "/", `{"name":"New","slug":"new"}`)
+	err := th.CreateTag(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestTagHandler_DeleteTag_DBError(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := th.DeleteTag(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestTagHandler_GeocodeTag_DBError(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := th.GeocodeTag(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestTagHandler_GetTagBySlug_NotFound(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("no-such-tag")
+	err := th.GetTagBySlug(c)
+	if err == nil {
+		t.Error("expected 404")
+	}
+}
+
+func TestTagHandler_ReorderTag_BadBind(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := th.ReorderTag(c)
+	if err == nil && rec.Code != http.StatusBadRequest {
+		t.Error("expected bind error")
+	}
+}
+
+func TestTagHandler_GetPostsByTag_DBError(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := th.GetPostsByTag(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+func setupTagHandlerClosed(t *testing.T) (*TagHandler, *testHandlers) {
+	h := setupHandlers(t)
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	_ = h.repo.Close()
+	return th, h
+}
+
+func TestTagHandler_GetTagCloud_DBError(t *testing.T) {
+	th, _ := setupTagHandlerClosed(t)
+	c, _ := echoCtx(http.MethodGet, "/", "")
+	err := th.GetTagCloud(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestTagHandler_GetTagByID_DBError(t *testing.T) {
+	th, _ := setupTagHandlerClosed(t)
+	c, _ := echoCtx(http.MethodGet, "/", "")
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	_ = th.GetTagByID(c)
+}
+
+func TestTagHandler_GetTagBySlug_DBError(t *testing.T) {
+	th, _ := setupTagHandlerClosed(t)
+	c, _ := echoCtx(http.MethodGet, "/", "")
+	c.SetParamNames("slug")
+	c.SetParamValues("sometag")
+	_ = th.GetTagBySlug(c)
+}
+
+func insertHiddenSystemTag(h *testHandlers) int64 {
+	var id int64
+	_ = h.repo.DB().QueryRow(
+		`INSERT INTO tags (name, slug, post_count, created_at) VALUES ('_hidden','_hidden',0,datetime('now')) RETURNING id`,
+	).Scan(&id)
+	return id
+}
+
+func TestTagHandler_GetTagByID_EffectivelyHidden(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+
+	hiddenID := insertHiddenSystemTag(h)
+	child, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "Secret", Slug: "secret-hidden"})
+	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (?,?)`, hiddenID, child.ID)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strings.Trim(mustJSON(child.ID), "\""))
+	err := th.GetTagByID(c)
+	if err == nil {
+		t.Error("expected 404 for effectively hidden tag (public)")
+	}
+}
+
+func TestTagHandler_GetTagBySlug_EffectivelyHidden(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+
+	hiddenID := insertHiddenSystemTag(h)
+	child, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "Secret2", Slug: "secret2-hidden"})
+	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (?,?)`, hiddenID, child.ID)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("secret2-hidden")
+	err := th.GetTagBySlug(c)
+	if err == nil {
+		t.Error("expected 404 for hidden tag by slug (public)")
+	}
+}
+
+func TestTagHandler_GetTagBySlug_AdminInjectHidden(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+
+	tag, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "AdminTag", Slug: "admintag"})
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", "admin")
+	c.SetParamNames("slug")
+	c.SetParamValues(tag.Slug)
+	err := th.GetTagBySlug(c)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestTagHandler_UpdateTag_BindError(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	th := NewTagHandler(h.tagSvc, h.settingsSvc)
+	tag, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "Bindme", Slug: "bindme"})
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader("{notjson}"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strings.Trim(mustJSON(tag.ID), "\""))
+	err := th.UpdateTag(c)
+	if err == nil {
+		t.Error("expected error for bind failure")
+	}
+}
+
+func TestTagHandler_ReorderTag_DBError(t *testing.T) {
+	th, _ := setupTagHandlerClosed(t)
+	c, _ := echoCtx(http.MethodPut, "/", `{"position":"before"}`)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	_ = th.ReorderTag(c)
+}
+
+func TestTagHandler_RecalculateCounts_DBError(t *testing.T) {
+	th, _ := setupTagHandlerClosed(t)
+	c, _ := echoCtx(http.MethodPost, "/", "")
+	err := th.RecalculateCounts(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func insertHidePostsSystemTag(h *testHandlers) int64 {
+	var sysID int64
+	_ = h.repo.DB().QueryRow(
+		`INSERT INTO tags (name, slug, post_count, created_at) VALUES ('_hide_posts','_hide_posts',0,datetime('now')) RETURNING id`,
+	).Scan(&sysID)
+	var childID int64
+	_ = h.repo.DB().QueryRow(
+		`INSERT INTO tags (name, slug, post_count, created_at) VALUES ('HidePosts','hide-posts-child',0,datetime('now')) RETURNING id`,
+	).Scan(&childID)
+	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (?,?)`, sysID, childID)
+	return childID
 }

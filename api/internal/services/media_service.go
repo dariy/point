@@ -21,18 +21,19 @@ import (
 	"time"
 	"unicode"
 
+	"point-api/internal/config"
+	"point-api/internal/models"
+	"point-api/internal/repository"
+
 	"github.com/disintegration/imaging"
 	"github.com/rwcarlsen/goexif/exif"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
 	"gopkg.in/yaml.v3"
-	"point-api/internal/config"
-	"point-api/internal/models"
-	"point-api/internal/repository"
 )
 
 type MediaService struct {
-	repo            *repository.Repository
+	repo            repository.Repository
 	cfg             *config.Config
 	settingsService *SettingsService
 	tagService      *TagService
@@ -45,7 +46,7 @@ type GenAIConfig struct {
 	Models []string `yaml:"models"`
 }
 
-func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsService *SettingsService, tagService *TagService) *MediaService {
+func NewMediaService(repo repository.Repository, cfg *config.Config, settingsService *SettingsService, tagService *TagService) *MediaService {
 	s := &MediaService{
 		repo:            repo,
 		cfg:             cfg,
@@ -216,14 +217,16 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			width = sql.NullInt64{Int64: int64(bounds.Dx()), Valid: true}
 			height = sql.NullInt64{Int64: int64(bounds.Dy()), Valid: true}
 
-			// Generate thumbnail
-			thumb := imaging.Fill(src, s.thumbnailWidth(ctx), s.thumbnailHeight(ctx), imaging.Center, imaging.Lanczos)
-			thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
-			thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
-			thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
-
-			if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
-				thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
+			// Generate thumbnail (skip if either dimension is 0 — use original instead)
+			thumbW, thumbH := s.thumbnailWidth(ctx), s.thumbnailHeight(ctx)
+			if thumbW > 0 && thumbH > 0 {
+				thumb := imaging.Fill(src, thumbW, thumbH, imaging.Center, imaging.Lanczos)
+				thumbFilename := strings.TrimSuffix(uniqueFilename, filepath.Ext(uniqueFilename)) + ".jpg"
+				thumbRel := filepath.Join("thumbnails", datePath, thumbFilename)
+				thumbFull := filepath.Join(s.cfg.StoragePath, "media", thumbRel)
+				if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err == nil {
+					thumbnailRelPath = sql.NullString{String: thumbRel, Valid: true}
+				}
 			}
 		}
 		// Extract EXIF
@@ -641,22 +644,18 @@ type StorageStats struct {
 }
 
 func (s *MediaService) GetStorageStats(ctx context.Context) (StorageStats, error) {
-	const q = `
-SELECT
-  COALESCE(SUM(file_size), 0) as total_bytes,
-  COUNT(*) as total_files,
-  COALESCE(SUM(CASE WHEN file_type = 'image' THEN 1 ELSE 0 END), 0) as image_count,
-  COALESCE(SUM(CASE WHEN file_type = 'video' THEN 1 ELSE 0 END), 0) as video_count,
-  COALESCE(SUM(CASE WHEN file_type = 'audio' THEN 1 ELSE 0 END), 0) as audio_count,
-  COALESCE(SUM(CASE WHEN file_type NOT IN ('image','video','audio') THEN 1 ELSE 0 END), 0) as other_count
-FROM media`
-
-	var st StorageStats
-	err := s.repo.DB().QueryRowContext(ctx, q).Scan(
-		&st.TotalBytes, &st.TotalFiles,
-		&st.ImageCount, &st.VideoCount, &st.AudioCount, &st.OtherCount,
-	)
-	return st, err
+	st, err := s.repo.GetStorageStats(ctx)
+	if err != nil {
+		return StorageStats{}, err
+	}
+	return StorageStats{
+		TotalBytes: st.TotalBytes,
+		TotalFiles: st.TotalFiles,
+		ImageCount: st.ImageCount,
+		VideoCount: st.VideoCount,
+		AudioCount: st.AudioCount,
+		OtherCount: st.OtherCount,
+	}, nil
 }
 
 // RenameMedia renames a media file on disk and updates the database.

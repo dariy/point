@@ -200,6 +200,19 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 	}
 }
 
+func apiKeyToResponse(k models.ApiKey) map[string]interface{} {
+	return map[string]interface{}{
+		"id":           k.ID,
+		"user_id":      k.UserID,
+		"name":         k.Name,
+		"prefix":       k.Prefix,
+		"created_at":   k.CreatedAt,
+		"last_used_at": nullTime(k.LastUsedAt),
+		"expires_at":   nullTime(k.ExpiresAt),
+		"revoked_at":   nullTime(k.RevokedAt),
+	}
+}
+
 // injectPostHiddenFields adds is_hidden/is_hidden_by_tag to a post response map for admin users.
 // It also adds is_hidden to each tag object in resp["tags"].
 // effectiveHiddenPostsTagIDs is the set of tag IDs that effectively hide their posts (including inherited).

@@ -231,3 +231,41 @@ export async function loginWithPasskey() {
 export function deletePasskey() {
   return api.delete('/api/auth/webauthn/credential');
 }
+
+// ── API Keys ──────────────────────────────────────────────────────────────
+
+/**
+ * List API keys for the current user.
+ * @returns {Promise<{ api_keys: object[], total: number }>}
+ */
+export function getApiKeys() {
+  return api.get('/api/auth/api-keys');
+}
+
+/**
+ * Create a new API key.
+ * @param {string} name
+ * @param {string|null} [expiresAt] ISO string
+ * @returns {Promise<{ api_key: object, raw_key: string }>}
+ */
+export function createApiKey(name, expiresAt = null) {
+  return api.post('/api/auth/api-keys', { name, expires_at: expiresAt });
+}
+
+/**
+ * Revoke an API key.
+ * @param {number} id
+ * @returns {Promise<void>}
+ */
+export function revokeApiKey(id) {
+  return api.post(`/api/auth/api-keys/${id}/revoke`);
+}
+
+/**
+ * Delete an API key record.
+ * @param {number} id
+ * @returns {Promise<void>}
+ */
+export function deleteApiKey(id) {
+  return api.delete(`/api/auth/api-keys/${id}`);
+}

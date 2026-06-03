@@ -14,14 +14,14 @@ import (
 )
 
 type FeedsHandler struct {
-	repo            *repository.Repository
+	repo            repository.Repository
 	postService     *services.PostService
 	settingsService *services.SettingsService
 	tagService      *services.TagService
 	cacheService    *services.CacheService
 }
 
-func NewFeedsHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService, cacheService *services.CacheService) *FeedsHandler {
+func NewFeedsHandler(repo repository.Repository, postService *services.PostService, tagService *services.TagService, settingsService *services.SettingsService, cacheService *services.CacheService) *FeedsHandler {
 	return &FeedsHandler{
 		repo:            repo,
 		postService:     postService,

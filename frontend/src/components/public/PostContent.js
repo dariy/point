@@ -142,7 +142,10 @@ export class PostContent extends Component {
     } else {
       document.body.classList.remove("immersive-layout", "ui-hidden");
       const bodyEl = this.$(".post-content");
-      if (bodyEl) this._enhanceMedia(bodyEl);
+      if (bodyEl) {
+        this._enhanceLinks(bodyEl);
+        this._enhanceMedia(bodyEl);
+      }
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
 
       this._cleanupStrip?.();
@@ -468,14 +471,24 @@ export class PostContent extends Component {
       this._resetZoom();
     };
 
+    // If the click landed over a link hidden beneath the nav panel, follow it instead of navigating.
+    const navClickOrLink = (e, navigate) => {
+      const panel = e.currentTarget;
+      panel.style.pointerEvents = "none";
+      const underneath = document.elementFromPoint(e.clientX, e.clientY);
+      panel.style.pointerEvents = "";
+      const link = underneath?.closest("a");
+      if (link) { link.click(); return; }
+      e.stopPropagation();
+      navigate();
+    };
+
     if (carousel) {
       this._on(carousel.querySelector(".immersive-nav-prev"), "click", (e) => {
-        e.stopPropagation();
-        goTo(index - 1);
+        navClickOrLink(e, () => goTo(index - 1));
       });
       this._on(carousel.querySelector(".immersive-nav-next"), "click", (e) => {
-        e.stopPropagation();
-        goTo(index + 1);
+        navClickOrLink(e, () => goTo(index + 1));
       });
       dots.forEach((d, i) =>
         this._on(d, "click", (e) => {
@@ -488,12 +501,10 @@ export class PostContent extends Component {
       const wrapper = this.$(".immersive-wrapper");
       if (wrapper) {
         this._on(wrapper.querySelector(".immersive-nav-prev"), "click", (e) => {
-          e.stopPropagation();
-          goToPost(backPost);
+          navClickOrLink(e, () => goToPost(backPost));
         });
         this._on(wrapper.querySelector(".immersive-nav-next"), "click", (e) => {
-          e.stopPropagation();
-          goToPost(fwdPost);
+          navClickOrLink(e, () => goToPost(fwdPost));
         });
       }
     }
@@ -923,6 +934,16 @@ export class PostContent extends Component {
       ? `<a href="/posts/${escapeHtml(nextPost.slug)}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>`
       : "";
     return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
+  }
+
+  _enhanceLinks(body) {
+    body.querySelectorAll("a[href]").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      if (/^https?:\/\//.test(href)) {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+      }
+    });
   }
 
   _enhanceMedia(body) {

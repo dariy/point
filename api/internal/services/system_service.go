@@ -16,11 +16,11 @@ import (
 )
 
 type SystemService struct {
-	repo     *repository.Repository
+	repo     repository.Repository
 	dataPath string
 }
 
-func NewSystemService(repo *repository.Repository, dataPath string) *SystemService {
+func NewSystemService(repo repository.Repository, dataPath string) *SystemService {
 	return &SystemService{
 		repo:     repo,
 		dataPath: dataPath,

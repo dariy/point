@@ -14,12 +14,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPostHandler_CRUD(t *testing.T) {
@@ -784,4 +785,303 @@ func TestCreatePost_ScheduledInPast_PublishesImmediately(t *testing.T) {
 		t.Errorf("expected status 'published', got %v", resp["status"])
 	}
 	assert.Nil(t, resp["scheduled_at"], "past scheduled_at should not be stored")
+}
+func setupPostHandler(t *testing.T) (*PostHandler, *testHandlers) {
+	h := setupHandlers(t)
+	ph := NewPostHandler(h.postSvc, h.settingsSvc, h.mediaSvc, h.tagSvc)
+	return ph, h
+}
+
+func TestPostHandler_ListPosts_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := ph.ListPosts(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_GetPostBySlug_NotFound(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("no-such-post")
+	err := ph.GetPostBySlug(c)
+	if err == nil {
+		t.Error("expected 404")
+	}
+}
+
+func TestPostHandler_GetPostBySlug_DraftBlocked(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	insertUser(h.repo)
+	_, _ = h.repo.DB().Exec(`INSERT INTO posts (title,slug,content,author_id,status) VALUES ('T','draft-post','body',1,'draft')`)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("draft-post")
+
+	err := ph.GetPostBySlug(c)
+	if err == nil {
+		t.Error("expected 404 for draft post to public")
+	}
+}
+
+func TestPostHandler_GetPostByID_Draft_Blocked(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	insertUser(h.repo)
+	_, _ = h.repo.DB().Exec(`INSERT INTO posts (id,title,slug,content,author_id,status) VALUES (99,'T','dp','body',1,'draft')`)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("99")
+
+	err := ph.GetPostByID(c)
+	if err == nil {
+		t.Error("expected 404 for draft post to public")
+	}
+}
+
+func TestPostHandler_GetPostByID_Admin_HiddenFields(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	insertUser(h.repo)
+	_, _ = h.repo.DB().Exec(`INSERT INTO posts (id,title,slug,content,author_id,status,published_at) VALUES (1,'T','pub','body',1,'published',datetime('now'))`)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	if err := ph.GetPostByID(c); err != nil {
+		t.Fatalf("GetPostByID: %v", err)
+	}
+}
+
+func TestPostHandler_CreatePost_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	c, _ := echoCtx(http.MethodPost, "/", `{"title":"T","status":"draft"}`)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	err := ph.CreatePost(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_UpdatePost_BadID(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("notanumber")
+	err := ph.UpdatePost(c)
+	if err == nil {
+		t.Error("expected bad id error")
+	}
+}
+
+func TestPostHandler_DeletePost_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	err := ph.DeletePost(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_PublishPost_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := ph.PublishPost(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_WithdrawPost_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := ph.WithdrawPost(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_GetPostByPreviewToken_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("token")
+	c.SetParamValues("sometoken")
+	err := ph.GetPostByPreviewToken(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_UpdatePostTags_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	c, _ := echoCtx(http.MethodPut, "/", `{"tags":["a"]}`)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := ph.UpdatePostTags(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_GetPostNavigation_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := ph.GetPostNavigation(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+func TestPostHandler_CreatePost_BindError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{notjson}"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", "admin")
+	err := ph.CreatePost(c)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestPostHandler_CreatePost_SlugConflict(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+
+	userID := insertUser(h.repo)
+	_, _, err := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "First", Slug: "conflict-slug", Status: "draft", Formatter: "markdown", AuthorID: userID,
+	})
+	if err != nil {
+		t.Fatalf("failed to create first post: %v", err)
+	}
+	body := `{"title":"Second","slug":"conflict-slug","status":"draft"}`
+	c, rec := echoCtx(http.MethodPost, "/", body)
+	c.Set("user", "admin")
+	if err := ph.CreatePost(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusConflict {
+		t.Errorf("expected 409 conflict, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPostHandler_UpdatePost_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	c, _ := echoCtx(http.MethodPut, "/", `{"title":"Updated"}`)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	c.Set("user", "admin")
+	_ = ph.UpdatePost(c)
+}
+
+func TestPostHandler_CreateAudioPost_NoFile(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=--boundary")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", "admin")
+	err := ph.CreateAudioPost(c)
+	if err == nil {
+		t.Error("expected error for missing file")
+	}
+}
+
+func TestPostHandler_CreateAudioPost_UploadError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+
+	boundary := "testboundary"
+	body := "--" + boundary + "\r\n" +
+		"Content-Disposition: form-data; name=\"file\"; filename=\"test.mp3\"\r\n" +
+		"Content-Type: audio/mpeg\r\n\r\n" +
+		"fake audio data\r\n" +
+		"--" + boundary + "--\r\n"
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", "admin")
+	err := ph.CreateAudioPost(c)
+	if err == nil {
+		t.Error("expected error from UploadFile with closed DB")
+	}
+}
+
+func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	c, _ := echoCtx(http.MethodGet, "/", "")
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := ph.GetPostNavigation(c)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

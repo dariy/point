@@ -20,11 +20,11 @@ import (
 )
 
 type TagService struct {
-	repo             *repository.Repository
+	repo             repository.Repository
 	nominatimBaseURL string
 }
 
-func NewTagService(repo *repository.Repository) *TagService {
+func NewTagService(repo repository.Repository) *TagService {
 	return &TagService{
 		repo:             repo,
 		nominatimBaseURL: "https://nominatim.openstreetmap.org/search",
