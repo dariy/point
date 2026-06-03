@@ -350,3 +350,29 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ── parseCreateAPIKeyName ──────────────────────────────────────────────────
+
+func TestParseCreateAPIKeyName(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"flag=value form", []string{"--create-api-key=mykey"}, "mykey"},
+		{"flag space value form", []string{"--create-api-key", "mykey"}, "mykey"},
+		{"flag space value with surrounding args", []string{"--port=8080", "--create-api-key", "mykey", "--other"}, "mykey"},
+		{"flag=value with surrounding args", []string{"--create-api-key=mykey", "--other"}, "mykey"},
+		{"no flag returns empty", []string{"--port=8080", "--other"}, ""},
+		{"empty args returns empty", []string{}, ""},
+		{"flag at end without value", []string{"--create-api-key"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseCreateAPIKeyName(tt.args)
+			if got != tt.want {
+				t.Errorf("parseCreateAPIKeyName(%v) = %q, want %q", tt.args, got, tt.want)
+			}
+		})
+	}
+}
