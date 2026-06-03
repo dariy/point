@@ -63,7 +63,7 @@ func (u WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 }
 
 type WebAuthnService struct {
-	repo    *repository.Repository
+	repo     *repository.Repository
 	webauthn *webauthn.WebAuthn
 	// sessionStore stores webauthn.SessionData for in-progress ceremonies
 	sessionStore sync.Map // string -> webauthn.SessionData

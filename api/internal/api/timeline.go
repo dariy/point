@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type TimelineHandler struct {

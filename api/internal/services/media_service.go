@@ -21,14 +21,15 @@ import (
 	"time"
 	"unicode"
 
+	"point-api/internal/config"
+	"point-api/internal/models"
+	"point-api/internal/repository"
+
 	"github.com/disintegration/imaging"
 	"github.com/rwcarlsen/goexif/exif"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/genai"
 	"gopkg.in/yaml.v3"
-	"point-api/internal/config"
-	"point-api/internal/models"
-	"point-api/internal/repository"
 )
 
 type MediaService struct {

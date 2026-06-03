@@ -910,3 +910,8 @@ func TestTagService_PageTagIDs(t *testing.T) {
 		t.Errorf("expected tag 201 to be a page tag ID")
 	}
 }
+func setupTagService(t *testing.T) (*TagService, *repository.Repository) {
+	repo := setupTestDB(t)
+	service := NewTagService(repo)
+	return service, repo
+}

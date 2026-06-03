@@ -9,10 +9,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
 	"point-api/internal/config"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
 
 const testThemeCSS = `:root { --bg-primary: #fff; --color-primary: #000; }`

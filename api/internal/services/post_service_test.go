@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"point-api/internal/repository"
 	"testing"
 )
 
@@ -316,4 +317,63 @@ func TestPostService_ListPosts_YearRange(t *testing.T) {
 	if posts == nil {
 		t.Error("expected non-nil posts slice")
 	}
+}
+func TestPostService_RestoreAndPermanentlyDelete(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertTestUser(t, svc)
+
+	t.Run("RestorePost", func(t *testing.T) {
+		post, _, err := svc.CreatePost(ctx, CreatePostParams{Title: "RestoreMe", Slug: "restore-me", AuthorID: 1, Status: "draft"})
+		if err != nil {
+			t.Fatalf("CreatePost: %v", err)
+		}
+		if err := svc.SoftDeletePost(ctx, post.ID, 1); err != nil {
+			t.Fatalf("SoftDeletePost: %v", err)
+		}
+		if err := svc.RestorePost(ctx, post.ID, 1); err != nil {
+			t.Fatalf("RestorePost: %v", err)
+		}
+	})
+
+	t.Run("PermanentlyDeletePost", func(t *testing.T) {
+		post, _, err := svc.CreatePost(ctx, CreatePostParams{Title: "DeleteMe", Slug: "delete-me", AuthorID: 1, Status: "draft"})
+		if err != nil {
+			t.Fatalf("CreatePost: %v", err)
+		}
+		if err := svc.PermanentlyDeletePost(ctx, post.ID, 1); err != nil {
+			t.Fatalf("PermanentlyDeletePost: %v", err)
+		}
+	})
+}
+
+func TestPostService_ListTrashedPosts(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertTestUser(t, svc)
+
+	post, _, err := svc.CreatePost(ctx, CreatePostParams{Title: "TrashMe", Slug: "trash-me", AuthorID: 1, Status: "draft"})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	if err := svc.SoftDeletePost(ctx, post.ID, 1); err != nil {
+		t.Fatalf("SoftDeletePost: %v", err)
+	}
+
+	posts, total, err := svc.ListTrashedPosts(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("ListTrashedPosts: %v", err)
+	}
+	if total == 0 || len(posts) == 0 {
+		t.Error("expected at least one trashed post")
+	}
+}
+func setupPostService(t *testing.T) (*PostService, *repository.Repository) {
+	repo := setupTestDB(t)
+	service := NewPostService(repo)
+	return service, repo
 }

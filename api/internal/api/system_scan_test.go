@@ -13,9 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestSystemHandler_Restore_Error(t *testing.T) {

@@ -2,13 +2,15 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"point-api/internal/models"
 	"point-api/internal/repository"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestAuthService_Authenticate(t *testing.T) {
@@ -420,5 +422,72 @@ func TestAuthService_ResetPassword_BadToken(t *testing.T) {
 	err := svc.ResetPassword(ctx, "invalid-token", "newpass")
 	if err == nil {
 		t.Error("expected error for invalid reset token")
+	}
+}
+func TestAuthService_GetUserByID(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	svc := NewAuthService(repo)
+	ctx := context.Background()
+
+	hash, _ := HashPassword("pass")
+	u, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "owner",
+		Email:        "owner@test.com",
+		PasswordHash: hash,
+		DisplayName:  "Owner",
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	got, err := svc.GetUserByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if got.ID != u.ID {
+		t.Errorf("expected ID %d, got %d", u.ID, got.ID)
+	}
+
+	_, err = svc.GetUserByID(ctx, 99999)
+	if err == nil {
+		t.Error("expected error for non-existent user")
+	}
+}
+
+func TestAuthService_ValidatePasswordResetToken_InvalidJSON(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	svc := NewAuthService(repo)
+	ctx := context.Background()
+
+	tokenHash := HashToken("badpayloadtoken")
+	_ = repo.UpsertSecret(ctx, models.UpsertSecretParams{
+		Key:   "pw_reset:" + tokenHash,
+		Value: sql.NullString{String: "not valid json {{{{", Valid: true},
+	})
+
+	_, err := svc.ValidatePasswordResetToken(ctx, "badpayloadtoken")
+	if err == nil {
+		t.Error("expected error for invalid JSON payload")
+	}
+}
+
+func TestAuthService_ValidatePasswordResetToken_Expired(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	svc := NewAuthService(repo)
+	ctx := context.Background()
+
+	expiredPayload := `{"user_id":1,"expires_at":"2020-01-01T00:00:00Z"}`
+	tokenHash := HashToken("expiredtoken")
+	_ = repo.UpsertSecret(ctx, models.UpsertSecretParams{
+		Key:   "pw_reset:" + tokenHash,
+		Value: sql.NullString{String: expiredPayload, Valid: true},
+	})
+
+	_, err := svc.ValidatePasswordResetToken(ctx, "expiredtoken")
+	if err == nil {
+		t.Error("expected error for expired token")
 	}
 }

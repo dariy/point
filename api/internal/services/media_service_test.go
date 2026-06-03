@@ -11,9 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"point-api/internal/config"
+	"point-api/internal/repository"
 
 	goexif "github.com/rwcarlsen/goexif/exif"
-	"point-api/internal/config"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestMediaService_AnalyzeImage_DisabledWithNoKey(t *testing.T) {
@@ -895,4 +899,384 @@ func TestSafeImagingDecode_PanicRecovery(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for empty reader")
 	}
+}
+func TestPreprocessContent(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		contain string
+	}{
+		{"bare jpg → markdown image", "/2024/01/photo.jpg", "![photo.jpg](/2024/01/photo.jpg)"},
+		{"bare mp4 → video tag", "/2024/01/clip.mp4", "<video src="},
+		{"bare mp3 → audio tag", "/2024/01/song.mp3", "<audio src="},
+		{"plain text unchanged", "Hello, world!", "Hello, world!"},
+		{"bare unknown ext → returned unchanged", "/2024/01/file.xyz", "/2024/01/file.xyz"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := preprocessContent(tc.input)
+			if !strings.Contains(got, tc.contain) {
+				t.Errorf("preprocessContent(%q) = %q; want to contain %q", tc.input, got, tc.contain)
+			}
+		})
+	}
+}
+
+func TestSanitizePostCSS(t *testing.T) {
+	t.Run("clean CSS passes through", func(t *testing.T) {
+		result, stripped := SanitizePostCSS(".post { color: red; }")
+		if len(stripped) != 0 {
+			t.Errorf("expected no stripped rules, got %v", stripped)
+		}
+		if !strings.Contains(result, "color: red") {
+			t.Errorf("expected clean CSS to pass through, got %q", result)
+		}
+	})
+
+	t.Run("@import stripped", func(t *testing.T) {
+		result, stripped := SanitizePostCSS("@import url('evil.css'); .p { color: red; }")
+		if !containsStr(stripped, "@import") {
+			t.Errorf("expected '@import' in stripped, got %v", stripped)
+		}
+		if strings.Contains(result, "@import") {
+			t.Errorf("expected @import removed from result, got %q", result)
+		}
+	})
+
+	t.Run("position fixed stripped", func(t *testing.T) {
+		result, _ := SanitizePostCSS(".el { position: fixed; top: 0; }")
+		if strings.Contains(result, "position: fixed") {
+			t.Error("expected position:fixed to be stripped")
+		}
+	})
+
+	t.Run("position sticky stripped", func(t *testing.T) {
+		result, _ := SanitizePostCSS(".el { position: sticky; }")
+		if strings.Contains(result, "position: sticky") {
+			t.Error("expected position:sticky to be stripped")
+		}
+	})
+
+	t.Run("z-index stripped", func(t *testing.T) {
+		result, stripped := SanitizePostCSS(".el { z-index: 9999; }")
+		if !containsStr(stripped, "z-index") {
+			t.Errorf("expected 'z-index' in stripped, got %v", stripped)
+		}
+		if strings.Contains(result, "9999") {
+			t.Errorf("expected z-index value removed, got %q", result)
+		}
+	})
+
+	t.Run("external url stripped", func(t *testing.T) {
+		result, _ := SanitizePostCSS(`.bg { background: url('https://evil.com/img.png'); }`)
+		if strings.Contains(result, "evil.com") {
+			t.Errorf("expected external URL removed, got %q", result)
+		}
+	})
+
+	t.Run("empty CSS returns empty", func(t *testing.T) {
+		result, stripped := SanitizePostCSS("")
+		if result != "" || len(stripped) != 0 {
+			t.Errorf("expected empty result for empty input, got %q / %v", result, stripped)
+		}
+	})
+}
+
+func containsStr(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func TestMediaService_GetMediaByPostID(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+
+	ctx := context.Background()
+	media, err := svc.GetMediaByPostID(ctx, 999)
+	if err != nil {
+		t.Fatalf("GetMediaByPostID: %v", err)
+	}
+	_ = media
+}
+
+func TestMediaService_GetMediaByContent(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+
+	ctx := context.Background()
+	media, err := svc.GetMediaByContent(ctx, "no media paths here", "")
+	if err != nil {
+		t.Fatalf("GetMediaByContent: %v", err)
+	}
+	_ = media
+}
+
+func TestMediaService_AnalyzeMediaByID_NotFound(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+	_, err := svc.AnalyzeMediaByID(context.Background(), 99999)
+	if err == nil {
+		t.Error("expected error for non-existent ID")
+	}
+}
+
+func TestMediaService_AnalyzeMediaByID_NotAnImage(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+	ctx := context.Background()
+
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("text content"),
+		Filename: "doc.txt",
+		MimeType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	_, err = svc.AnalyzeMediaByID(ctx, m.ID)
+	if err != ErrNotAnImage {
+		t.Errorf("expected ErrNotAnImage, got %v", err)
+	}
+}
+
+func TestMediaService_AnalyzeMediaByPath_TraversalRejected(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+	_, err := svc.AnalyzeMediaByPath(context.Background(), "../../etc/passwd")
+	if err == nil {
+		t.Error("expected error for path traversal")
+	}
+}
+
+func TestMediaService_AnalyzeMediaByPath_NotFound(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+	_, err := svc.AnalyzeMediaByPath(context.Background(), "/2024/01/nonexistent.jpg")
+	if err == nil {
+		t.Error("expected error for non-existent file")
+	}
+}
+
+func TestMediaService_ReextractEXIF_NotFound(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+
+	_, err := svc.ReextractEXIF(context.Background(), 99999)
+	if err == nil {
+		t.Error("expected error for non-existent media ID")
+	}
+}
+
+func TestMediaService_ReextractEXIF(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+	ctx := context.Background()
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "reextract.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+
+	_, err = svc.ReextractEXIF(ctx, m.ID)
+	if err != nil {
+		t.Fatalf("ReextractEXIF: %v", err)
+	}
+}
+
+func TestSanitizeOrigin(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"https://example.com", "https://example.com"},
+		{"https://example.com/path?q=1", "https://example.com"},
+		{"https://example.com:8080", "https://example.com:8080"},
+		{"https://example.com:8080/path", "https://example.com:8080"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		got := SanitizeOrigin(tc.in)
+		if got != tc.want {
+			t.Errorf("SanitizeOrigin(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestGetRPIDFromURL(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"https://example.com", "example.com"},
+		{"https://example.com:8080/path", "example.com"},
+		{"http://sub.domain.org", "sub.domain.org"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		got := GetRPIDFromURL(tc.in)
+		if got != tc.want {
+			t.Errorf("GetRPIDFromURL(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestMediaService_RevertEXIF_Success(t *testing.T) {
+	svc, tmpDir := setupMediaService(t)
+	defer func() { _ = os.RemoveAll(tmpDir); _ = svc.repo.Close() }()
+	ctx := context.Background()
+
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  []byte("text"),
+		Filename: "doc.txt",
+		MimeType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+
+	origMeta := `{"Make":"Canon"}`
+	if _, err := svc.repo.DB().ExecContext(ctx,
+		`UPDATE media SET original_metadata=? WHERE id=?`, origMeta, m.ID); err != nil {
+		t.Fatalf("set original_metadata: %v", err)
+	}
+
+	result, err := svc.RevertEXIF(ctx, m.ID)
+	if err != nil {
+		t.Fatalf("RevertEXIF: %v", err)
+	}
+	_ = result
+}
+
+func TestVerifyPasswordArgon2id_ErrorPaths(t *testing.T) {
+
+	_, err := verifyPasswordArgon2id("pass", "$argon2id$v=19$m=65536,t=2,p=1")
+	if err != ErrInvalidHash {
+		t.Errorf("expected ErrInvalidHash for wrong segments, got %v", err)
+	}
+
+	_, err = verifyPasswordArgon2id("pass", "$argon2id$v=0$m=65536,t=2,p=1$abc$def")
+	if err != ErrIncompatibleVersion {
+		t.Errorf("expected ErrIncompatibleVersion, got %v", err)
+	}
+
+	_, err = verifyPasswordArgon2id("pass", "$argon2id$v=19$m=65536,t=2,p=1$NOT!BASE64$def")
+	if err == nil {
+		t.Error("expected error for invalid base64 salt")
+	}
+
+	validSalt := "aGVsbG8="
+	_, err = verifyPasswordArgon2id("pass", "$argon2id$v=19$m=65536,t=2,p=1$"+validSalt+"$NOT!VALID!")
+	if err == nil {
+		t.Error("expected error for invalid base64 hash value")
+	}
+
+	_, err = verifyPasswordArgon2id("pass", "$argon2id$v=abc$m=65536,t=2,p=1$abc$def")
+	if err == nil {
+		t.Error("expected error for non-numeric version")
+	}
+
+	_, err = verifyPasswordArgon2id("pass", "$argon2id$v=19$m=bad,t=x,p=y$abc$def")
+	if err == nil {
+		t.Error("expected error for invalid m/t/p parameters")
+	}
+}
+
+func TestVerifyPassword_ArgonError(t *testing.T) {
+
+	malformedHash := "$argon2id$not-valid"
+	result := VerifyPassword("anypass", malformedHash)
+	if result {
+		t.Error("expected false for malformed argon2id hash")
+	}
+}
+
+func TestVerifyPassword_BcryptFallback(t *testing.T) {
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("bcrypt.GenerateFromPassword: %v", err)
+	}
+	bcryptHash := string(hashed)
+
+	if !VerifyPassword("password", bcryptHash) {
+		t.Error("expected true for correct bcrypt password")
+	}
+	if VerifyPassword("wrong", bcryptHash) {
+		t.Error("expected false for wrong password")
+	}
+}
+
+func TestToNullTime_NonNil(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertTestUser(t, svc)
+
+	schedTime := time.Now().Add(time.Hour)
+	post, _, err := svc.CreatePost(ctx, CreatePostParams{
+		Title:       "Scheduled",
+		Slug:        "scheduled",
+		AuthorID:    1,
+		Status:      "scheduled",
+		ScheduledAt: &schedTime,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost with ScheduledAt: %v", err)
+	}
+	if !post.ScheduledAt.Valid {
+		t.Error("expected ScheduledAt to be valid")
+	}
+}
+
+func TestSanitizeOrigin_InvalidURL(t *testing.T) {
+
+	result := SanitizeOrigin("://bad-url")
+	_ = result
+}
+
+func TestGetRPIDFromURL_InvalidURL(t *testing.T) {
+	result := GetRPIDFromURL("://bad")
+	_ = result
+}
+
+func setupTestDB(t *testing.T) *repository.Repository {
+	repo, err := repository.NewRepository(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create test repository: %v", err)
+	}
+
+	return repo
+}
+
+func setupMediaService(t *testing.T) (*MediaService, string) {
+	repo := setupTestDB(t)
+	tmpDir, err := os.MkdirTemp("", "media-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		StoragePath:     tmpDir,
+		ThumbnailWidth:  400,
+		ThumbnailHeight: 300,
+	}
+	settingsService := NewSettingsService(repo)
+	tagService := NewTagService(repo)
+	service := NewMediaService(repo, cfg, settingsService, tagService)
+
+	return service, tmpDir
 }

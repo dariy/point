@@ -14,9 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type SystemHandler struct {

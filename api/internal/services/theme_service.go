@@ -34,9 +34,9 @@ func NewThemeService(cfg *config.Config, settingsService *SettingsService) *Them
 }
 
 var (
-	metaTitleRe   = regexp.MustCompile(`/\*\s*theme-title:\s*"([^"]+)"\s*\*/`)
-	metaDescRe    = regexp.MustCompile(`/\*\s*description:\s*"([^"]+)"\s*\*/`)
-	metaColorRe   = regexp.MustCompile(`/\*\s*preview-color:\s*"([^"]+)"\s*\*/`)
+	metaTitleRe = regexp.MustCompile(`/\*\s*theme-title:\s*"([^"]+)"\s*\*/`)
+	metaDescRe  = regexp.MustCompile(`/\*\s*description:\s*"([^"]+)"\s*\*/`)
+	metaColorRe = regexp.MustCompile(`/\*\s*preview-color:\s*"([^"]+)"\s*\*/`)
 )
 
 // ListThemes scans both ThemesPath (system) and UserThemesPath (user) directories.

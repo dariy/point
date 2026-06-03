@@ -3,8 +3,9 @@ package api
 import (
 	"net/http"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type ThemeHandler struct {

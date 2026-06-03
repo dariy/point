@@ -13,7 +13,6 @@ func TestQueries_MissingCoverage(t *testing.T) {
 	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
-	// Create prerequisite records.
 	u, err := q.CreateUser(ctx, CreateUserParams{
 		Username:     "owner",
 		Email:        "owner@test.com",
@@ -37,7 +36,6 @@ func TestQueries_MissingCoverage(t *testing.T) {
 			t.Errorf("expected 'my_val', got %q", secret.Value.String)
 		}
 
-		// Upsert again (update path).
 		_ = q.UpsertSecret(ctx, UpsertSecretParams{Key: "my_key", Value: sql.NullString{String: "updated", Valid: true}})
 		secret2, _ := q.GetSecret(ctx, "my_key")
 		if secret2.Value.String != "updated" {
@@ -51,13 +49,11 @@ func TestQueries_MissingCoverage(t *testing.T) {
 			t.Fatalf("CreatePost: %v", err)
 		}
 
-		// AddPostViewCount
 		err = q.AddPostViewCount(ctx, AddPostViewCountParams{ID: p.ID, ViewCount: 5})
 		if err != nil {
 			t.Fatalf("AddPostViewCount: %v", err)
 		}
 
-		// Schedule the post and bulk-publish.
 		past := time.Now().Add(-time.Minute).UTC()
 		_, err = q.UpdatePost(ctx, UpdatePostParams{
 			ID:          p.ID,
@@ -83,13 +79,11 @@ func TestQueries_MissingCoverage(t *testing.T) {
 			t.Fatalf("CreatePost: %v", err)
 		}
 
-		// SoftDeletePost (the SQL itself sets deleted_at = CURRENT_TIMESTAMP)
 		err = q.SoftDeletePost(ctx, SoftDeletePostParams{ID: p.ID, AuthorID: u.ID})
 		if err != nil {
 			t.Fatalf("SoftDeletePost: %v", err)
 		}
 
-		// CountTrashedPosts
 		count, err := q.CountTrashedPosts(ctx)
 		if err != nil {
 			t.Fatalf("CountTrashedPosts: %v", err)
@@ -98,7 +92,6 @@ func TestQueries_MissingCoverage(t *testing.T) {
 			t.Error("expected at least 1 trashed post")
 		}
 
-		// ListTrashedPosts
 		trashed, err := q.ListTrashedPosts(ctx, ListTrashedPostsParams{Limit: 10, Offset: 0})
 		if err != nil {
 			t.Fatalf("ListTrashedPosts: %v", err)
@@ -107,7 +100,6 @@ func TestQueries_MissingCoverage(t *testing.T) {
 			t.Error("expected trashed posts, got none")
 		}
 
-		// RestorePost
 		err = q.RestorePost(ctx, RestorePostParams{ID: p.ID, AuthorID: u.ID})
 		if err != nil {
 			t.Fatalf("RestorePost: %v", err)

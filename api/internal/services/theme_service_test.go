@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"point-api/internal/config"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const validThemeCSS = `/* theme-title: "Valid" */
@@ -193,4 +195,40 @@ func TestThemeServiceUserThemes(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, themes, 2) // system-only + shared
 	})
+}
+
+func TestThemeService_SyncActiveTheme_NoThemes(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	cfg := &config.Config{ThemesPath: t.TempDir(), FrontendDir: t.TempDir()}
+	ts := NewThemeService(cfg, NewSettingsService(repo))
+
+	err := ts.SyncActiveTheme(t.Context())
+	if err == nil {
+		t.Error("expected error when no themes available")
+	}
+	if !strings.Contains(err.Error(), "failed to get active theme") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestThemeService_SyncActiveTheme_ReadOnlyFrontendDir(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	themesDir := t.TempDir()
+	frontendDir := t.TempDir()
+	cfg := &config.Config{ThemesPath: themesDir, FrontendDir: frontendDir}
+	ts := NewThemeService(cfg, NewSettingsService(repo))
+
+	themeContent := `:root { --bg: #fff; }`
+	_ = os.WriteFile(filepath.Join(themesDir, "default.css"), []byte(themeContent), 0644)
+
+	cssDir := filepath.Join(frontendDir, "css")
+	_ = os.WriteFile(cssDir, []byte("not a dir"), 0644)
+
+	err := ts.SyncActiveTheme(t.Context())
+	if err == nil {
+		t.Error("expected error when css dir blocked by file")
+	}
 }

@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func setupTimelineHandler(t *testing.T) (*TimelineHandler, *services.TimelineService, *services.SettingsService, *services.TagService, *repository.Repository) {

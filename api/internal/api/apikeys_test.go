@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestApiKeyHandler(t *testing.T) {
@@ -46,11 +47,11 @@ func TestApiKeyHandler(t *testing.T) {
 		}
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		
+
 		// Set user in context to simulate AuthMiddleware
 		session := models.GetSessionByTokenRow{UserID: user.ID, Username: user.Username}
 		c.Set("user", session)
-		
+
 		return c, rec
 	}
 
@@ -107,7 +108,7 @@ func TestApiKeyHandler(t *testing.T) {
 
 		var resp map[string]interface{}
 		json.Unmarshal(rec.Body.Bytes(), &resp)
-		
+
 		if resp["total"].(float64) < 1 {
 			t.Error("expected at least 1 key")
 		}
@@ -148,7 +149,7 @@ func TestApiKeyHandler(t *testing.T) {
 			t.Errorf("expected 204, got %d", rec.Code)
 		}
 	})
-	
+
 	t.Run("InvalidID", func(t *testing.T) {
 		c, _ := createCtx(http.MethodPost, "/api/auth/api-keys/invalid/revoke", nil)
 		c.SetParamNames("id")
@@ -157,7 +158,7 @@ func TestApiKeyHandler(t *testing.T) {
 		if err == nil {
 			t.Error("expected error for invalid id")
 		}
-		
+
 		c, _ = createCtx(http.MethodDelete, "/api/auth/api-keys/invalid", nil)
 		c.SetParamNames("id")
 		c.SetParamValues("invalid")

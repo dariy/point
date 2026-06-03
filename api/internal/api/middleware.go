@@ -3,9 +3,10 @@ package api
 import (
 	"net/http"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 // extractUserID pulls the user ID from the session or API key stored in echo context.

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -241,4 +242,64 @@ func TestParseMapCoords_DegreeNotation(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	_ = ParseMapsCoords(c)
+}
+
+func TestParseCoordsFromPageBody_Error(t *testing.T) {
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html>no coords here</html>`))
+	}))
+	defer ts.Close()
+
+	lat, lng, ok := parseCoordsFromPageBody(ts.URL)
+	if ok {
+		t.Errorf("expected ok=false, got lat=%f lng=%f", lat, lng)
+	}
+}
+
+func TestParseCoordsFromPageBody_ConnectionError(t *testing.T) {
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	tsURL := ts.URL
+	ts.Close()
+
+	_, _, ok := parseCoordsFromPageBody(tsURL)
+	if ok {
+		t.Error("expected ok=false for connection refused")
+	}
+}
+
+func TestParseCoordsFromDegreeString_SouthWest(t *testing.T) {
+
+	lat, lng, ok := parseCoordsFromDegreeString("45.5° S, 73.5° W")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if lat >= 0 {
+		t.Errorf("expected negative lat for S, got %f", lat)
+	}
+	if lng >= 0 {
+		t.Errorf("expected negative lng for W, got %f", lng)
+	}
+}
+
+func TestExtractMediaURL_Coverage(t *testing.T) {
+
+	result := extractMediaURL(sql.NullString{String: "/thumb/photo.jpg", Valid: true}, "")
+	if result == nil {
+		t.Error("expected non-nil result for valid thumb path")
+	}
+
+	result2 := extractMediaURL(sql.NullString{Valid: false}, "![alt](/media/photo.jpg)")
+	if result2 == nil {
+		t.Error("expected non-nil result for markdown image in content")
+	}
+
+	result3 := extractMediaURL(sql.NullString{String: "originals/photo.jpg", Valid: true}, "")
+	if result3 == nil {
+		t.Error("expected non-nil for originals/ thumb path")
+	}
+
+	result4 := extractMediaURL(sql.NullString{Valid: false}, "")
+	_ = result4
 }
