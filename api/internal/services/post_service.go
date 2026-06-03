@@ -17,7 +17,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/utils"
 
-	"github.com/mdigger/goldmark-attributes"
+	attributes "github.com/mdigger/goldmark-attributes"
 	"github.com/microcosm-cc/bluemonday"
 	fences "github.com/stefanfritsch/goldmark-fences"
 	"github.com/yuin/goldmark"
@@ -28,14 +28,14 @@ import (
 )
 
 type PostService struct {
-	repo       *repository.Repository
+	repo       repository.Repository
 	md         goldmark.Markdown
 	policy     *bluemonday.Policy
 	viewBuffer map[int64]int
 	viewMu     sync.Mutex
 }
 
-func NewPostService(repo *repository.Repository) *PostService {
+func NewPostService(repo repository.Repository) *PostService {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -231,6 +231,7 @@ type ListPostsParams struct {
 	Search        string
 	YearFrom      int
 	YearTo        int
+	SortBy        string
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
@@ -240,15 +241,6 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	var total int64
 	var err error
 
-	repoParams := models.ListPostsParams{
-		StatusFilter:   p.Status != "",
-		Status:         p.Status,
-		FeaturedFilter: p.FeaturedOnly,
-		IncludeDrafts:  p.IncludeDrafts,
-		Limit:          int64(p.PerPage),
-		Offset:         int64(offset),
-		IncludeHidden:  p.IncludeHidden,
-	}
 	countParams := models.CountPostsParams{
 		StatusFilter:   p.Status != "",
 		Status:         p.Status,
@@ -258,6 +250,15 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	}
 
 	if p.YearFrom > 0 && p.YearTo > 0 {
+		repoParams := models.ListPostsParams{
+			StatusFilter:   p.Status != "",
+			Status:         p.Status,
+			FeaturedFilter: p.FeaturedOnly,
+			IncludeDrafts:  p.IncludeDrafts,
+			Limit:          int64(p.PerPage),
+			Offset:         int64(offset),
+			IncludeHidden:  p.IncludeHidden,
+		}
 		posts, err = s.repo.ListPostsInYearRange(ctx, p.YearFrom, p.YearTo, repoParams)
 		if err != nil {
 			return nil, 0, err
@@ -270,7 +271,27 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		}
 		total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search)
 	} else {
-		posts, err = s.repo.ListPosts(ctx, repoParams)
+		if p.SortBy == "views" {
+			posts, err = s.repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
+				StatusFilter:   p.Status != "",
+				Status:         p.Status,
+				FeaturedFilter: p.FeaturedOnly,
+				IncludeDrafts:  p.IncludeDrafts,
+				Limit:          int64(p.PerPage),
+				Offset:         int64(offset),
+				IncludeHidden:  p.IncludeHidden,
+			})
+		} else {
+			posts, err = s.repo.ListPosts(ctx, models.ListPostsParams{
+				StatusFilter:   p.Status != "",
+				Status:         p.Status,
+				FeaturedFilter: p.FeaturedOnly,
+				IncludeDrafts:  p.IncludeDrafts,
+				Limit:          int64(p.PerPage),
+				Offset:         int64(offset),
+				IncludeHidden:  p.IncludeHidden,
+			})
+		}
 		if err != nil {
 			return nil, 0, err
 		}
@@ -285,6 +306,10 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	}
 
 	return posts, total, nil
+}
+
+func (s *PostService) GetPostAnalytics(ctx context.Context) (models.GetPostAnalyticsRow, error) {
+	return s.repo.GetPostAnalytics(ctx)
 }
 
 func (s *PostService) GetPostByID(ctx context.Context, id int64) (models.Post, error) {

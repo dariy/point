@@ -5,8 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestFeedsHandler_Sitemap(t *testing.T) {

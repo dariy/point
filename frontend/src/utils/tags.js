@@ -360,7 +360,10 @@ export function renderTagLink(tag, { active = false, extra = '', prefix = '', su
     .filter(Boolean)
     .join(' ');
 
-  return `<a href="${escapeHtml(href)}" class="${classes}">${prefix}${escapeHtml(name)}${suffix}</a>`;
+  const isExternal = /^https?:\/\//.test(href);
+  const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+  return `<a href="${escapeHtml(href)}" class="${classes}"${externalAttrs}>${prefix}${escapeHtml(name)}${suffix}</a>`;
 }
 
 /**

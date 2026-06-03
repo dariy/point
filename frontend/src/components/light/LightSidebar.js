@@ -9,13 +9,13 @@
  */
 
 import { Component } from '../Component.js';
+import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import {
   APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
-  THEMES_SVG, MENU_SVG,
+  THEMES_SVG, MENU_SVG, CHART_SVG,
 } from '../../utils/icons.js';
-import { store } from '../../store.js';
 
 const HAMBURGER_SVG = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="2" y1="5" x2="18" y2="5"/><line x1="2" y1="10" x2="18" y2="10"/><line x1="2" y1="15" x2="18" y2="15"/></svg>`;
 
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/light/posts',    label: 'Posts',     icon: POSTS_SVG     },
   { href: '/light/media',    label: 'Media',     icon: MEDIA_SVG     },
   { href: '/light/tags',     label: 'Tags',      icon: TAGS_SVG      },
+  { href: '/light/analytics', label: 'Analytics', icon: CHART_SVG     },
   { href: '/light/menu',     label: 'Menu',      icon: MENU_SVG      },
   { href: '/light/themes',   label: 'Themes',    icon: THEMES_SVG    },
   { href: '/light/settings', label: 'Settings',  icon: SETTINGS_SVG  },

@@ -14,13 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type SystemHandler struct {
-	repo            *repository.Repository
+	repo            repository.Repository
 	mediaService    *services.MediaService
 	postService     *services.PostService
 	settingsService *services.SettingsService
@@ -34,7 +35,7 @@ type SystemHandler struct {
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
+func NewSystemHandler(repo repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,
@@ -187,6 +188,9 @@ func (h *SystemHandler) GetLogs(c echo.Context) error {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		all = append(all, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read logs")
 	}
 
 	// Return last N lines

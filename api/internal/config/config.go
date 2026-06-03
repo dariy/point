@@ -18,7 +18,6 @@ type Config struct {
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
 	StoragePath string `mapstructure:"STORAGE_PATH"`
 
-	MaxUploadSizeMB int `mapstructure:"MAX_UPLOAD_SIZE_MB"`
 	MaxImageWidth   int `mapstructure:"MAX_IMAGE_WIDTH"`
 	JpegQuality     int `mapstructure:"JPEG_QUALITY"`
 	ThumbnailWidth  int `mapstructure:"THUMBNAIL_WIDTH"`
@@ -64,7 +63,6 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("APP_VERSION", "")
 	v.SetDefault("SESSION_EXPIRY_HOURS", 720)
 	v.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
-	v.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
 	v.SetDefault("THUMBNAIL_WIDTH", 400)
 	v.SetDefault("THUMBNAIL_HEIGHT", 300)
 	v.SetDefault("JPEG_QUALITY", 85)

@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestSystemHandler_OfflineStats(t *testing.T) {
@@ -145,5 +147,80 @@ func TestOfflineSnapshotWithData(t *testing.T) {
 	rec := httptest.NewRecorder()
 	if err := handler.GetOfflineSnapshot(e.NewContext(req, rec)); err != nil {
 		t.Fatalf("GetOfflineSnapshot with data failed: %v", err)
+	}
+}
+
+func TestOfflineStats_DBError(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(h.repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := sh.GetOfflineStats(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error from GetOfflineStats with closed DB")
+	}
+}
+
+func TestOfflineSnapshot_DBError(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(h.repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := sh.GetOfflineSnapshot(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error from GetOfflineSnapshot with closed DB")
+	}
+}
+func TestOfflineStats_NonImageMedia(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	_, _ = h.repo.DB().Exec(`
+		INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum, is_public, uploaded_at)
+		VALUES ('test.mp4', 'originals/test.mp4', 'video', 'video/mp4', 1024, 'abc123checksumvideo', 0, datetime('now'))
+	`)
+	tempDir := t.TempDir()
+	systemSvc := services.NewSystemService(h.repo, tempDir)
+	cacheSvc := services.NewCacheService(tempDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, tempDir, "1.0")
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := sh.GetOfflineStats(e.NewContext(req, rec))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestOfflineStats_WithThumbnail(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	dataDir := t.TempDir()
+
+	thumbDir := filepath.Join(dataDir, "media", "thumbnails")
+	_ = os.MkdirAll(thumbDir, 0755)
+	_ = os.WriteFile(filepath.Join(thumbDir, "test_thumb.jpg"), []byte("fake thumbnail data"), 0644)
+	_, _ = h.repo.DB().Exec(`
+		INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum, is_public, thumbnail_path, uploaded_at)
+		VALUES ('test.jpg', 'originals/test.jpg', 'image', 'image/jpeg', 2048, 'abc123thumbnail', 1, 'thumbnails/test_thumb.jpg', datetime('now'))
+	`)
+	systemSvc := services.NewSystemService(h.repo, dataDir)
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, dataDir, "1.0")
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := sh.GetOfflineStats(e.NewContext(req, rec))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

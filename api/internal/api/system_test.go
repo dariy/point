@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestSystemService_CreateBackup_InsufficientDisk(t *testing.T) {
@@ -367,7 +368,7 @@ func TestSafeJoin(t *testing.T) {
 		{"", root},
 		{"subdir", root + "/subdir"},
 		{"subdir/file.jpg", root + "/subdir/file.jpg"},
-		{"../escape", root + "/escape"},             // traversal neutralized → inside root
+		{"../escape", root + "/escape"},            // traversal neutralized → inside root
 		{"../../etc/passwd", root + "/etc/passwd"}, // deeper traversal also neutralized
 	}
 	for _, tc := range cases {
@@ -621,5 +622,199 @@ func makeMinimalJPEG(t *testing.T) []byte {
 		0xe4, 0xe5, 0xe6, 0xe7, 0xe8, 0xe9, 0xea, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5,
 		0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00,
 		0x00, 0x3f, 0x00, 0xfb, 0xd3, 0xff, 0xd9,
+	}
+}
+
+func TestSystemHandler_GetStats_DBError(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+
+	repo := setupTestDB(t)
+	_ = repo.Close()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{
+		StoragePath:     t.TempDir(),
+		ThumbnailWidth:  400,
+		ThumbnailHeight: 300,
+	}, settingsSvc, tagSvc)
+	tmpDir2 := t.TempDir()
+	systemSvc2 := services.NewSystemService(repo, tmpDir2)
+	cacheSvc2 := services.NewCacheService(tmpDir2)
+	h2 := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc2, cacheSvc2, tmpDir2, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := h2.GetStats(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error")
+	}
+	_ = h
+}
+
+func TestSystemHandler_GetLogs_NoFile(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	if err := h.GetLogs(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestSystemHandler_ListBackups_NotExist(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	if err := h.ListBackups(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ListBackups: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestSystemHandler_RestoreBackup_NotFound(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("filename")
+	c.SetParamValues("nonexistent.tar.gz")
+	err := h.RestoreBackup(c)
+	if err == nil {
+		t.Error("expected 404")
+	}
+}
+
+func TestSystemHandler_DeleteBackup_NotFound(t *testing.T) {
+	h, cleanup := setupSystemHandler(t)
+	defer cleanup()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("filename")
+	c.SetParamValues("nonexistent.tar.gz")
+	err := h.DeleteBackup(c)
+	if err == nil {
+		t.Error("expected 404")
+	}
+}
+
+func TestSystemHandler_GetMigrations_OK(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	err := h.GetMigrations(e.NewContext(req, rec))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestSystemHandler_ClearCache_DBError(t *testing.T) {
+	repo := setupTestDB(t)
+	_ = repo.Close()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	err := h.ClearCache(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestSystemHandler_RecalculateMediaVisibility_DBError(t *testing.T) {
+	repo := setupTestDB(t)
+	_ = repo.Close()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	err := h.RecalculateMediaVisibility(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestSystemHandler_UpdateMapCoords_DBError(t *testing.T) {
+	repo := setupTestDB(t)
+	_ = repo.Close()
+	settingsSvc := services.NewSettingsService(repo)
+	tagSvc := services.NewTagService(repo)
+	postSvc := services.NewPostService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir(), ThumbnailWidth: 400, ThumbnailHeight: 300}, settingsSvc, tagSvc)
+	tmpDir := t.TempDir()
+	systemSvc := services.NewSystemService(repo, tmpDir)
+	cacheSvc := services.NewCacheService(tmpDir)
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, tmpDir, "1.0")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	err := h.UpdateMapCoords(e.NewContext(req, rec))
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+func TestSystemHandler_GetLogs_ManyLines(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	dataDir := t.TempDir()
+	logsDir := filepath.Join(dataDir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+	logLines := strings.Repeat("log line entry\n", 150)
+	_ = os.WriteFile(filepath.Join(logsDir, "app.log"), []byte(logLines), 0644)
+
+	systemSvc := services.NewSystemService(h.repo, dataDir)
+	cacheSvc := services.NewCacheService(dataDir)
+	sh := NewSystemHandler(h.repo, h.mediaSvc, h.postSvc, h.settingsSvc, h.tagSvc, systemSvc, cacheSvc, dataDir, "1.0")
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?lines=50", nil)
+	rec := httptest.NewRecorder()
+	err := sh.GetLogs(e.NewContext(req, rec))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

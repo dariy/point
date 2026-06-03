@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
 	pointsql "point-api/sql"
+
+	_ "modernc.org/sqlite"
 )
 
 func setupTestDB(t *testing.T) (*Queries, *sql.DB) {

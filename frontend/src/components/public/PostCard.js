@@ -120,31 +120,36 @@ export class PostCard extends Component {
       }
     };
 
-    // Image cards have an overlay hidden until the first click/tap.
-    // First interaction: reveal the overlay. Second: navigate or follow tag links.
-    // This applies to all pointer types (mouse, touch, stylus).
+    // Image cards have an overlay hidden until the first tap (touch/stylus).
+    // On mouse devices the overlay is already visible via CSS :hover, so the
+    // first click navigates directly. Touch/stylus interactions still use the
+    // two-tap pattern: first tap reveals, second tap navigates.
     const hasOverlay = card.classList.contains("has-image");
+
+    let lastPointerType = "mouse";
+    card.addEventListener("pointerdown", (e) => {
+      lastPointerType = e.pointerType;
+    });
 
     if (hasOverlay) {
       card.addEventListener("click", (e) => {
         if (e.target.closest("a")) return;
-        if (!card.classList.contains("is-touched")) {
-          // Tag links with ancestor flyouts manage their own first-click behavior.
-          // Don't intercept — let setupTagFlyout handle it cleanly.
+        const needsTwoTap =
+          lastPointerType !== "mouse" && !card.classList.contains("is-touched");
+        if (needsTwoTap) {
+          // Tag links with ancestor flyouts manage their own first-tap behavior.
           if (e.target.closest(".has-flyout")) return;
 
-          // First click — reveal the overlay.
+          // First tap — reveal the overlay.
           e.preventDefault();
           e.stopPropagation();
 
-          // Dismiss any other revealed cards.
           document.querySelectorAll(".post-card.is-touched").forEach((c) => {
             if (c !== card) c.classList.remove("is-touched");
           });
 
           card.classList.add("is-touched");
 
-          // Dismiss when clicking outside this card.
           const dismiss = (ev) => {
             if (!card.contains(ev.target)) {
               card.classList.remove("is-touched");
@@ -153,7 +158,6 @@ export class PostCard extends Component {
           };
           document.addEventListener("click", dismiss, true);
         } else {
-          // Second click — behave normally.
           go();
         }
       });

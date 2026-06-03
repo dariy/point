@@ -4,14 +4,15 @@
 cd "$(dirname "$0")/.."
 
 # Go Test runner script
-# Usage: ./scripts/tests-go.sh [package_path] [options]
-# If no parameter provided, tests all Go packages in api/
+# Usage: ./scripts/run-tests.sh [package_path] [options]
+# If no parameter provided, tests all Go packages in api/ (including integration)
 # Options:
 #   --html          Generate HTML coverage report
 #   --verbose       Show verbose output
 #   --race          Enable race detector
 #   --short         Skip long running tests
 #   --bench         Run benchmarks
+#   --unit          Run unit tests only (exclude -tags=integration)
 
 TARGET="./..."
 if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
@@ -29,6 +30,7 @@ VERBOSE=""
 RACE=""
 SHORT=""
 BENCH=""
+TAGS="-tags=integration" # Run all tests by default
 
 # Parse additional arguments
 while [[ $# -gt 0 ]]; do
@@ -53,6 +55,15 @@ while [[ $# -gt 0 ]]; do
             BENCH="-bench=."
             shift
             ;;
+        --unit)
+            TAGS=""
+            shift
+            ;;
+        --integration)
+            # Already default, but keep for backward compatibility
+            TAGS="-tags=integration"
+            shift
+            ;;
         *)
             # If it's not a known option, it might be the target if TARGET was already set
             # but we'll just ignore unknown flags for now to stay simple
@@ -66,12 +77,12 @@ cd api
 
 # Run go test with coverage
 if [ "$REPORT_TYPE" = "html" ]; then
-    go test $VERBOSE $RACE $SHORT $BENCH -coverprofile=coverage.out "$TARGET"
+    go test $VERBOSE $RACE $SHORT $BENCH $TAGS -coverprofile=coverage.out "$TARGET"
     go tool cover -html=coverage.out -o coverage.html
     echo ""
     echo "HTML coverage report generated in api/coverage.html"
     # Also show summary in terminal
     go tool cover -func=coverage.out
 else
-    go test $VERBOSE $RACE $SHORT $BENCH -cover "$TARGET"
+    go test $VERBOSE $RACE $SHORT $BENCH $TAGS -cover "$TARGET"
 fi

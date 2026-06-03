@@ -9,6 +9,18 @@ import (
 	"time"
 )
 
+type ApiKey struct {
+	ID         int64        `json:"id"`
+	UserID     int64        `json:"user_id"`
+	Name       string       `json:"name"`
+	KeyHash    string       `json:"key_hash"`
+	Prefix     string       `json:"prefix"`
+	CreatedAt  time.Time    `json:"created_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+	ExpiresAt  sql.NullTime `json:"expires_at"`
+	RevokedAt  sql.NullTime `json:"revoked_at"`
+}
+
 type BlogSecret struct {
 	Key       string         `json:"key"`
 	Value     sql.NullString `json:"value"`
@@ -126,12 +138,14 @@ type User struct {
 }
 
 type WebauthnCredential struct {
-	ID           int64        `json:"id"`
-	UserID       int64        `json:"user_id"`
-	CredentialID []byte       `json:"credential_id"`
-	PublicKey    []byte       `json:"public_key"`
-	Aaguid       []byte       `json:"aaguid"`
-	SignCount    int64        `json:"sign_count"`
-	CreatedAt    time.Time    `json:"created_at"`
-	LastUsedAt   sql.NullTime `json:"last_used_at"`
+	ID             int64        `json:"id"`
+	UserID         int64        `json:"user_id"`
+	CredentialID   []byte       `json:"credential_id"`
+	PublicKey      []byte       `json:"public_key"`
+	Aaguid         []byte       `json:"aaguid"`
+	SignCount      int64        `json:"sign_count"`
+	BackupEligible int64        `json:"backup_eligible"`
+	BackupState    int64        `json:"backup_state"`
+	CreatedAt      time.Time    `json:"created_at"`
+	LastUsedAt     sql.NullTime `json:"last_used_at"`
 }

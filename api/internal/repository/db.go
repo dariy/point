@@ -1,26 +1,128 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 	"point-api/internal/models"
 	pointsql "point-api/sql"
 )
 
-type Repository struct {
+type Repository interface {
+	models.Querier
+	Close() error
+	DB() *sql.DB
+
+	// Auth / WebAuthn
+	DeleteSecret(ctx context.Context, key string) error
+	CreateWebAuthnCredential(ctx context.Context, userID int64, credID, pubKey, aaguid []byte, signCount uint32, backupEligible, backupState bool) (*WebAuthnCredential, error)
+	GetWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error)
+	GetWebAuthnCredentialByCredentialID(ctx context.Context, credID []byte) (*WebAuthnCredential, error)
+	DeleteWebAuthnCredentialByUserID(ctx context.Context, userID int64) error
+	UpdateWebAuthnCredential(ctx context.Context, credID []byte, signCount uint32, backupState bool) error
+
+	// Feed / Sitemap
+	GetPublishedPostsForFeed(ctx context.Context, limit int) ([]models.Post, error)
+	GetPublishedPostsForSitemap(ctx context.Context) ([]struct {
+		Slug      string
+		UpdatedAt time.Time
+	}, error)
+	GetPublicTagsForSitemap(ctx context.Context) ([]struct {
+		ID   int64
+		Slug string
+	}, error)
+
+	// Locations
+	UpsertTagLocation(ctx context.Context, tagID int64, lat, lon float64) error
+	GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error)
+	DeleteTagLocation(ctx context.Context, tagID int64) error
+
+	// Media
+	ListOrphanedMedia(ctx context.Context, limit, offset int64) ([]models.Medium, error)
+	CountOrphanedMedia(ctx context.Context) (int64, error)
+	GetMediaByIDs(ctx context.Context, ids []int64) ([]models.Medium, error)
+	DeleteMediaByIDs(ctx context.Context, ids []int64) error
+	ListOrphanedMediaByPage(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
+	ListMediaFolders(ctx context.Context, fileType string) ([]MediaFolder, error)
+	ListMediaFiltered(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error)
+	CountMediaFiltered(ctx context.Context, fileType, folder string) (int64, error)
+	GetMediaByPath(ctx context.Context, originalPath string) (models.Medium, error)
+	SetMediaPublic(ctx context.Context, mediaID int64, isPublic bool, postID *int64) error
+	GetAllMediaPaths(ctx context.Context) ([]models.Medium, error)
+	GetMediaByPaths(ctx context.Context, paths []string) ([]models.Medium, error)
+	GetStorageStats(ctx context.Context) (StorageStats, error)
+
+	// Migrations
+	GetMigrations(ctx context.Context) ([]MigrationRecord, error)
+	ApplyMigration(ctx context.Context, name, sql string) error
+	MigrateFlagsToSystemTags(ctx context.Context) error
+	RebuildTagsTableDropBooleans(ctx context.Context) error
+	EnsureSystemTags(ctx context.Context) error
+
+	// Posts
+	ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
+	CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
+	ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error)
+	CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error)
+	GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error)
+	GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error)
+	ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error)
+	UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error)
+	ListPublishedPostStubs(ctx context.Context) ([]PostStub, error)
+	GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
+	CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
+	GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
+	CountPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
+	GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error)
+	GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
+
+	// System
+	GetSystemStats(ctx context.Context) (SystemStats, error)
+	BackupDB(ctx context.Context, destPath string) error
+
+	// Tags
+	GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error)
+	GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error)
+	GetCoOccurringTags(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error)
+	GetAllTagRelationships(ctx context.Context) ([]TagRelationship, error)
+	ClearTagParents(ctx context.Context, childID int64) error
+	ClearTagChildren(ctx context.Context, parentID int64) error
+	GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error)
+	FindTagsByNames(ctx context.Context, names []string) ([]models.Tag, error)
+	GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]PostTagInfo, error)
+	GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error)
+	GetRootTags(ctx context.Context) ([]models.Tag, error)
+	UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error
+	DropTagNameUnique(ctx context.Context) error
+
+	// Timeline
+	ListMapTagsForYearRange(ctx context.Context, fromYear, toYear int) ([]MapYearRangeTag, error)
+	ListInTimelineDescendants(ctx context.Context) ([]InTimelineTag, error)
+	ListInTimelineDescendantsForTag(ctx context.Context, contextTagSlug string) ([]InTimelineTag, error)
+	GetLocationTagsCoOccurringWith(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]LocationTagCoOccurrence, error)
+	GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]PostTagInfo, error)
+}
+
+type sqliteRepository struct {
 	*models.Queries
 	db *sql.DB
 }
 
-func NewRepository(dbURL string) (*Repository, error) {
+func NewRepository(dbURL string) (Repository, error) {
 	db, err := sql.Open("sqlite", dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	// Limit to a single connection so PRAGMAs apply to every query and
+	// concurrent writers serialize at the Go level instead of racing at SQLite.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	// Set busy timeout to handle concurrent access
 	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
@@ -92,13 +194,35 @@ func NewRepository(dbURL string) (*Repository, error) {
 	}
 
 	queries := models.New(db)
-	return &Repository{
+	repo := &sqliteRepository{
 		Queries: queries,
 		db:      db,
-	}, nil
+	}
+
+	if count >= 4 {
+		// Run migrations for existing databases.
+		if err := repo.ApplyMigration(context.Background(), "add_api_keys", `
+CREATE TABLE IF NOT EXISTS api_keys (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        VARCHAR(100) NOT NULL,
+    key_hash    VARCHAR(64) NOT NULL UNIQUE,
+    prefix      VARCHAR(16) NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME,
+    expires_at  DATETIME,
+    revoked_at  DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+`); err != nil {
+			return nil, fmt.Errorf("migration failed (add_api_keys): %w", err)
+		}
+	}
+
+	return repo, nil
 }
 
-func (r *Repository) Close() error {
+func (r *sqliteRepository) Close() error {
 	return r.db.Close()
 }
 
@@ -106,6 +230,6 @@ func isDuplicateColumnError(err error) bool {
 	return strings.Contains(err.Error(), "duplicate column name")
 }
 
-func (r *Repository) DB() *sql.DB {
+func (r *sqliteRepository) DB() *sql.DB {
 	return r.db
 }
