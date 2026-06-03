@@ -116,16 +116,9 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 }
 
 func (h *PostHandler) ListPosts(c echo.Context) error {
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
-
-	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
-	if perPage < 1 {
-		perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
-		perPage, _ = strconv.Atoi(perPageStr)
-	}
+	perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
+	defaultPerPage, _ := strconv.Atoi(perPageStr)
+	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	status := c.QueryParam("status")
 	featured := c.QueryParam("featured") == "true"
@@ -134,7 +127,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 
 	// Trash view: only admins can see trash.
 	if status == "trash" && c.Get("user") != nil {
-		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), int32(page), int32(perPage))
+		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), page, perPage)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -158,8 +151,8 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
-		Page:          int32(page),
-		PerPage:       int32(perPage),
+		Page:          page,
+		PerPage:       perPage,
 		Status:        status,
 		FeaturedOnly:  featured,
 		IncludeDrafts: includeDrafts,

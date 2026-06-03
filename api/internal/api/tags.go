@@ -434,16 +434,9 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
-
-	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
-	if perPage < 1 {
-		perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
-		perPage, _ = strconv.Atoi(perPageStr)
-	}
+	perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
+	defaultPerPage, _ := strconv.Atoi(perPageStr)
+	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	publicOnly := c.Get("user") == nil
 	var minPosts int64
@@ -467,7 +460,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 		}
 	}
 
-	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, int32(page), int32(perPage), publicOnly, false, 0, 0)
+	posts, total, err := h.tagService.GetPostsByTag(c.Request().Context(), tag.ID, page, perPage, publicOnly, false, 0, 0)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

@@ -16,6 +16,12 @@ type SMTPConfig struct {
 	From     string
 }
 
+func sanitizeHeader(v string) string {
+	v = strings.ReplaceAll(v, "\r", "")
+	v = strings.ReplaceAll(v, "\n", "")
+	return v
+}
+
 // SendEmail sends a plain-text email via SMTP.
 // Port 465 uses implicit TLS; port 587 uses STARTTLS; others use plain SMTP.
 func SendEmail(cfg SMTPConfig, to, subject, body string) error {
@@ -24,9 +30,9 @@ func SendEmail(cfg SMTPConfig, to, subject, body string) error {
 	}
 
 	header := strings.Join([]string{
-		"From: " + cfg.From,
-		"To: " + to,
-		"Subject: " + subject,
+		"From: " + sanitizeHeader(cfg.From),
+		"To: " + sanitizeHeader(to),
+		"Subject: " + sanitizeHeader(subject),
 		"Content-Type: text/plain; charset=UTF-8",
 		"",
 		"",
@@ -51,13 +57,13 @@ func sendImplicitTLS(host, addr string, auth smtp.Auth, from, to string, msg []b
 	if err != nil {
 		return fmt.Errorf("SMTP TLS dial: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return fmt.Errorf("SMTP client: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	if auth != nil {
 		if err = c.Auth(auth); err != nil {
@@ -72,7 +78,7 @@ func sendSTARTTLS(host, addr string, auth smtp.Auth, from, to string, msg []byte
 	if err != nil {
 		return fmt.Errorf("SMTP dial: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	// Use STARTTLS when connecting to a non-local host.
 	if h, _, _ := net.SplitHostPort(addr); h != "localhost" && h != "127.0.0.1" {

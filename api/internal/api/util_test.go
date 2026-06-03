@@ -207,6 +207,83 @@ func TestBaseURL_WithForwardedProto(t *testing.T) {
 	}
 }
 
+func TestParsePaginationParams(t *testing.T) {
+	e := echo.New()
+	tests := []struct {
+		name           string
+		query          string
+		defaultPerPage int
+		wantPage       int32
+		wantPerPage    int32
+	}{
+		{
+			name:           "defaults",
+			query:          "",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+		{
+			name:           "valid values",
+			query:          "?page=2&per_page=20",
+			defaultPerPage: 10,
+			wantPage:       2,
+			wantPerPage:    20,
+		},
+		{
+			name:           "negative values",
+			query:          "?page=-1&per_page=-5",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+		{
+			name:           "invalid values",
+			query:          "?page=abc&per_page=def",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+		{
+			name:           "overflow values",
+			query:          "?page=3000000000&per_page=4000000000",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/"+tt.query, nil)
+			c := e.NewContext(req, httptest.NewRecorder())
+			page, perPage := ParsePaginationParams(c, tt.defaultPerPage)
+			if page != tt.wantPage || perPage != tt.wantPerPage {
+				t.Errorf("got (%v, %v), want (%v, %v)", page, perPage, tt.wantPage, tt.wantPerPage)
+			}
+		})
+	}
+}
+
+func TestParseMapsCoords_SSRF(t *testing.T) {
+	e := echo.New()
+
+	// Host-only URL (no path/query) that is allowed should still work
+	req := httptest.NewRequest(http.MethodGet, "/util/parse-maps-coords?q=https://maps.google.com", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	_ = ParseMapsCoords(c)
+
+	// URL that tries to sneak in a different host via auth
+	req = httptest.NewRequest(http.MethodGet, "/util/parse-maps-coords?q=https://google.com@evil.com", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	err := ParseMapsCoords(c)
+	if err == nil {
+		t.Error("expected error for URL with userinfo/SSRF attempt")
+	}
+}
+
 func TestTagHandler_ParseMapsCoordsCoverage(t *testing.T) {
 	e := echo.New()
 

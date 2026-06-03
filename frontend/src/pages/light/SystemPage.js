@@ -371,15 +371,15 @@ export default class SystemPage extends Component {
         title: 'Download for offline',
         message: `
           <div class="offline-stats">
-            <p>Download ${stats.post_count} posts and ${stats.image_count} images?</p>
+            <p>Download ${escapeHtml(String(stats.post_count))} posts and ${escapeHtml(String(stats.image_count))} images?</p>
             <div class="radio-group" style="margin-top: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem;">
-                <input type="radio" name="imageScope" value="thumbnails" checked> 
-                Thumbnails only (${formatFileSize(stats.thumbnail_bytes)})
+                <input type="radio" name="imageScope" value="thumbnails" checked>
+                Thumbnails only (${escapeHtml(formatFileSize(stats.thumbnail_bytes))})
               </label>
               <label style="display: block;">
-                <input type="radio" name="imageScope" value="full"> 
-                Thumbnails + originals (${formatFileSize(stats.original_bytes)})
+                <input type="radio" name="imageScope" value="full">
+                Thumbnails + originals (${escapeHtml(formatFileSize(stats.original_bytes))})
               </label>
             </div>
           </div>`,

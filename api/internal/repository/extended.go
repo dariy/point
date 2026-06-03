@@ -2622,7 +2622,7 @@ WHERE user_id = ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var creds []WebAuthnCredential
 	for rows.Next() {

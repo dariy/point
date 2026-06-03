@@ -212,7 +212,7 @@ export class PhotoLibraryPickerDialog extends Component {
     if (!el) return;
     const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
     const crumbs = [{ label: '/', index: -1 }, ...parts.map((p, i) => ({ label: p, index: i }))];
-    el.innerHTML = crumbs.map((crumb, i) => { // eslint-disable-line no-unsanitized/property
+    el.innerHTML = crumbs.map((crumb, i) => {
       const isLast = i === crumbs.length - 1;
       return isLast
         ? `<span class="breadcrumb-current">${escapeHtml(crumb.label)}</span>`
@@ -225,10 +225,10 @@ export class PhotoLibraryPickerDialog extends Component {
     const el = this.$('#plpd-sidebar');
     if (!el) return;
     if (folders === null) {
-      el.innerHTML = '<span class="photo-library-sidebar-empty">Loading…</span>'; // eslint-disable-line no-unsanitized/property
+      el.innerHTML = '<span class="photo-library-sidebar-empty">Loading…</span>';
       return;
     }
-    el.innerHTML = folders.length // eslint-disable-line no-unsanitized/property
+    el.innerHTML = folders.length
       ? folders.map(name => `
           <button class="photo-library-folder-btn" data-folder="${escapeHtml(name)}" title="${escapeHtml(name)}">
             <span class="photo-library-folder-icon">&#128193;</span>
@@ -241,14 +241,14 @@ export class PhotoLibraryPickerDialog extends Component {
     const el = this.$('#plpd-content');
     if (!el) return;
     if (files === null) {
-      el.innerHTML = '<div class="photo-library-loading">Loading…</div>'; // eslint-disable-line no-unsanitized/property
+      el.innerHTML = '<div class="photo-library-loading">Loading…</div>';
       return;
     }
     if (!files.length) {
-      el.innerHTML = '<p class="photo-library-empty">No photos in this folder.</p>'; // eslint-disable-line no-unsanitized/property
+      el.innerHTML = '<p class="photo-library-empty">No photos in this folder.</p>';
       return;
     }
-    el.innerHTML = `<div class="photo-library-grid">${files.map(file => { // eslint-disable-line no-unsanitized/property
+    el.innerHTML = `<div class="photo-library-grid">${files.map(file => {
       const isSelected = selected.has(file.path);
       const url = getPhotoLibraryFileUrl(file.path);
       return `

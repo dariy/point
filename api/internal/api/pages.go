@@ -59,10 +59,10 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
+	defaultPerPage, _ := strconv.Atoi(perPageStr)
+	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -75,8 +75,6 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
 		}
 	}
-
-	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 
 	// Custom Home Page logic: if home_page_post_id is set, return that specific post.
 	// We only apply this on the first page of the index if no other filters are active.
@@ -140,19 +138,10 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		}
 	}
 
-	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
-	perPage, _ := strconv.Atoi(perPageStr)
-	if perPage < 1 {
-		perPage = 10
-	}
-	if qpp, _ := strconv.Atoi(c.QueryParam("per_page")); qpp > 0 {
-		perPage = qpp
-	}
-
 	// Published posts
 	listParams := services.ListPostsParams{
-		Page:          int32(page),
-		PerPage:       int32(perPage),
+		Page:          page,
+		PerPage:       perPage,
 		IncludeDrafts: false,
 		IncludeHidden: !publicOnly,
 	}
@@ -238,10 +227,10 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
+	defaultPerPage, _ := strconv.Atoi(perPageStr)
+	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -265,16 +254,6 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
-
-	allSettings, _ := h.settingsService.GetAllSettings(ctx)
-	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
-	perPage, _ := strconv.Atoi(perPageStr)
-	if perPage < 1 {
-		perPage = 10
-	}
-	if qpp, _ := strconv.Atoi(c.QueryParam("per_page")); qpp > 0 {
-		perPage = qpp
-	}
 
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
@@ -327,7 +306,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
 
 	// Posts for this tag (published only)
-	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false, yearFrom, yearTo)
+	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, publicOnly, false, yearFrom, yearTo)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

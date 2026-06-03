@@ -147,7 +147,7 @@ func TestAuthHandler_ForgotPassword_SMTPNotConfigured(t *testing.T) {
 
 func TestAuthHandler_ForgotPassword_UserNotFound(t *testing.T) {
 	// When SMTP is configured but the user doesn't exist, return 200 (no enumeration).
-	h := newAuthHandlerForTest(t, &config.Config{SMTPHost: "smtp.example.com"})
+	h := newAuthHandlerForTest(t, &config.Config{SMTPHost: "smtp.example.com", AppURL: "http://localhost"})
 	e := echo.New()
 	body := `{"email":"nobody@example.com"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(body))

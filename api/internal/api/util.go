@@ -125,6 +125,21 @@ func parseCoordsFromDegreeString(s string) (lat, lng float64, ok bool) {
 	return la, lo, true
 }
 
+// ParsePaginationParams safely parses page and per_page query parameters as int32.
+func ParsePaginationParams(c echo.Context, defaultPerPage int) (int32, int32) {
+	p, err := strconv.ParseInt(c.QueryParam("page"), 10, 32)
+	if err != nil || p < 1 {
+		p = 1
+	}
+
+	pp, err := strconv.ParseInt(c.QueryParam("per_page"), 10, 32)
+	if err != nil || pp < 1 {
+		pp = int64(defaultPerPage)
+	}
+
+	return int32(p), int32(pp)
+}
+
 // ParseMapsCoords extracts coordinates from a Google/Apple Maps URL, short
 // link, or a degree-notation string (e.g. "45.50777° N, 73.55446° W").
 // Short links are resolved via HTTP before coordinate extraction.
@@ -149,11 +164,11 @@ func ParseMapsCoords(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "only Google Maps and Apple Maps URLs are supported")
 		}
 
-		urlToParse := q
+		urlToParse := parsed.String()
 
 		// Resolve short links before parsing.
 		if shortLinkHosts[parsed.Host] {
-			resp, err := httpClient.Head(q)
+			resp, err := httpClient.Head(urlToParse)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusBadGateway, "failed to resolve url")
 			}
