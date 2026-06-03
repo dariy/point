@@ -1223,10 +1223,64 @@ func TestNewRepository_MemorySharedCache(t *testing.T) {
 }
 
 func TestNewRepository_InvalidPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	repo, err := NewRepository(tmpDir)
+        tmpDir := t.TempDir()
+        repo, err := NewRepository(tmpDir)
+        if err != nil {
+                return
+        }
+        defer func() { _ = repo.Close() }()
+}
+
+func TestRepository_APIKeys(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+
+	ctx := context.Background()
+
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "keyuser",
+		Email:        "keyuser@example.com",
+		PasswordHash: "hash",
+		DisplayName:  "Key User",
+	})
+
+	// Create
+	apiKey, err := repo.CreateAPIKey(ctx, models.CreateAPIKeyParams{
+		UserID: user.ID,
+		Name:   "Test Key",
+		KeyHash: "testhash123",
+	})
 	if err != nil {
-		return
+		t.Fatalf("CreateAPIKey failed: %v", err)
 	}
-	defer func() { _ = repo.Close() }()
+
+	// List
+	keys, err := repo.ListAPIKeysByUser(ctx, user.ID)
+	if err != nil || len(keys) != 1 {
+		t.Fatalf("ListAPIKeysByUser failed or returned wrong count: %v", err)
+	}
+
+	// Get by hash
+	gotKey, err := repo.GetAPIKeyByHash(ctx, "testhash123")
+	if err != nil || gotKey.ID != apiKey.ID {
+		t.Fatalf("GetAPIKeyByHash failed or returned wrong key: %v", err)
+	}
+
+	// Touch
+	err = repo.TouchAPIKeyLastUsed(ctx, apiKey.ID)
+	if err != nil {
+		t.Fatalf("TouchAPIKeyLastUsed failed: %v", err)
+	}
+
+	// Revoke
+	err = repo.RevokeAPIKey(ctx, models.RevokeAPIKeyParams{ID: apiKey.ID, UserID: user.ID})
+	if err != nil {
+		t.Fatalf("RevokeAPIKey failed: %v", err)
+	}
+
+	// Delete
+	err = repo.DeleteAPIKey(ctx, models.DeleteAPIKeyParams{ID: apiKey.ID, UserID: user.ID})
+	if err != nil {
+		t.Fatalf("DeleteAPIKey failed: %v", err)
+	}
 }

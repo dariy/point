@@ -64,6 +64,46 @@ func TestAuthService_Authenticate(t *testing.T) {
 	}
 }
 
+func TestAuthService_AuthenticatePassword(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+
+	service := NewAuthService(repo)
+	ctx := context.Background()
+
+	// Create a test user
+	rawPassword := []byte("password123")
+	hexHash := HashToken(string(rawPassword)) // This mimics what Authenticate expects (the SHA256 hex)
+	finalHash, _ := HashPassword(hexHash)     // The DB stores Argon2id(SHA256(raw))
+
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "testuser",
+		Email:        "test@example.com",
+		PasswordHash: finalHash,
+		DisplayName:  "Test User",
+	})
+	if err != nil {
+		t.Fatalf("failed to create test user: %v", err)
+	}
+
+	// Test successful authentication
+	authenticatedUser, err := service.AuthenticatePassword(ctx, "testuser", rawPassword)
+	if err != nil {
+		t.Errorf("AuthenticatePassword failed: %v", err)
+	}
+	if authenticatedUser.ID != user.ID {
+		t.Errorf("expected user ID %d, got %d", user.ID, authenticatedUser.ID)
+	}
+
+	// Test failed authentication (wrong password)
+	_, err = service.AuthenticatePassword(ctx, "testuser", []byte("wrong"))
+	if err == nil {
+		t.Error("AuthenticatePassword should have failed with wrong password")
+	}
+}
+
 func TestAuthService_Sessions(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
