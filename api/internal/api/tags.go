@@ -436,7 +436,8 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	}
 
 	perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
-	defaultPerPage, _ := strconv.Atoi(perPageStr)
+	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
+	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	publicOnly := c.Get("user") == nil

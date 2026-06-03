@@ -62,7 +62,8 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
-	defaultPerPage, _ := strconv.Atoi(perPageStr)
+	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
+	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
@@ -238,7 +239,8 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
-	defaultPerPage, _ := strconv.Atoi(perPageStr)
+	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
+	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
