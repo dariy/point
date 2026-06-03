@@ -9,7 +9,7 @@ import (
 )
 
 // ListPosts returns all posts, with optional filters.
-func (r *Repository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
+func (r *sqliteRepository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
@@ -66,7 +66,7 @@ LIMIT ? OFFSET ?`
 }
 
 // CountPosts counts posts with optional filters.
-func (r *Repository) CountPosts(ctx context.Context, arg models.CountPostsParams) (int64, error) {
+func (r *sqliteRepository) CountPosts(ctx context.Context, arg models.CountPostsParams) (int64, error) {
 	const q = `
 SELECT COUNT(*) FROM posts p
 WHERE
@@ -100,7 +100,7 @@ WHERE
 
 // ListPostsInYearRange returns posts that carry an _in_timeline year tag whose
 // parsed year (CAST(slug AS INTEGER)) falls in [fromYear, toYear].
-func (r *Repository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
+func (r *sqliteRepository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE
 _it(id, slug) AS (
@@ -175,7 +175,7 @@ LIMIT ? OFFSET ?`
 }
 
 // CountPostsInYearRange counts posts matching the year range and standard filters.
-func (r *Repository) CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error) {
+func (r *sqliteRepository) CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error) {
 	const q = `
 WITH RECURSIVE
 _it(id, slug) AS (
@@ -227,7 +227,7 @@ WHERE p.id IN (SELECT post_id FROM _yposts)
 	return count, err
 }
 
-func (r *Repository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
+func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -303,7 +303,7 @@ LIMIT ? OFFSET ?`
 
 // CountPostsWithSearch counts posts matched by the extended search (title, slug,
 // content, tag name, tag slug).
-func (r *Repository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
+func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
@@ -354,7 +354,7 @@ WHERE
 }
 
 // GetPostByPreviewToken looks up a post by its preview token.
-func (r *Repository) GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error) {
+func (r *sqliteRepository) GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error) {
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
@@ -384,7 +384,7 @@ type PostNavItem struct {
 // GetPostNavigation returns the previous and next posts relative to
 // the given post's published_at timestamp. Either pointer may be nil when there
 // is no adjacent post.
-func (r *Repository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error) {
+func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error) {
 	const qDate = `SELECT CAST(published_at AS TEXT) FROM posts WHERE id = ? LIMIT 1`
 	var publishedAt string
 	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&publishedAt); err != nil {
@@ -420,7 +420,7 @@ ORDER BY published_at ASC, id ASC LIMIT 1`, statusFilter)
 // ReplacePostContentPath replaces all occurrences of oldPath with newPath in
 // every post's content column, and also updates the thumbnail_path column.
 // Returns the number of posts updated.
-func (r *Repository) ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error) {
+func (r *sqliteRepository) ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error) {
 	// Handle content replacement and thumbnail_path replacement in one transaction
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -471,7 +471,7 @@ func (r *Repository) ReplacePostContentPath(ctx context.Context, oldPath, newPat
 
 // UpdatePostThumbnailPath updates the thumbnail_path column for all posts
 // currently using oldPath to newPath. Returns number of posts updated.
-func (r *Repository) UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error) {
+func (r *sqliteRepository) UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error) {
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE posts SET thumbnail_path = ? WHERE thumbnail_path = ?`,
 		newPath, oldPath,
@@ -492,7 +492,7 @@ type PostStub struct {
 
 // ListPublishedPostStubs returns id, slug, published_at for all published,
 // non-hidden posts, ordered newest first. Does not include content.
-func (r *Repository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, error) {
+func (r *sqliteRepository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, error) {
 	const q = `
 SELECT id, slug, published_at, created_at
 FROM posts
@@ -530,7 +530,7 @@ ORDER BY published_at DESC, created_at DESC`
 
 // GetPostsByTagIDs returns paginated posts that have at least one tag from the
 // given set of tag IDs. The status filter mirrors CountPostsByTag / GetPostsByTag.
-func (r *Repository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
+func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
 	if len(tagIDs) == 0 {
 		return []models.Post{}, nil
 	}
@@ -622,7 +622,7 @@ LIMIT ? OFFSET ?`
 
 // CountPostsByTagIDs returns the total number of distinct posts that have at
 // least one tag from the given set of tag IDs.
-func (r *Repository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error) {
+func (r *sqliteRepository) CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error) {
 	if len(tagIDs) == 0 {
 		return 0, nil
 	}
@@ -686,7 +686,7 @@ AND (? OR NOT EXISTS (
 
 // GetPostsByTagIDsInYearRange returns paginated posts that have at least one tag from the
 // given set AND fall within [fromYear, toYear] via _in_timeline year tags.
-func (r *Repository) GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
+func (r *sqliteRepository) GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
 	if len(tagIDs) == 0 {
 		return []models.Post{}, nil
 	}
@@ -789,7 +789,7 @@ LIMIT ? OFFSET ?`
 }
 
 // CountPostsByTagIDsInYearRange counts posts in the tag set that fall within the year range.
-func (r *Repository) CountPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error) {
+func (r *sqliteRepository) CountPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error) {
 	if len(tagIDs) == 0 {
 		return 0, nil
 	}
@@ -880,7 +880,7 @@ type PostContentRow struct {
 
 // GetAllPublishedPostContents returns id, content, and thumbnail_path for every
 // published post, along with the IDs of its associated tags.
-func (r *Repository) GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error) {
+func (r *sqliteRepository) GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error) {
 	const q = `
 SELECT p.id, p.content, COALESCE(p.thumbnail_path, '') as thumbnail_path
 FROM posts p
@@ -947,7 +947,7 @@ WHERE LOWER(p.status) = 'published' AND p.deleted_at IS NULL`
 // where the count includes posts from all descendant tags (not just the tag itself).
 // If publishedOnly is true, only published posts are counted (public context).
 // If false, published + hidden posts are counted (admin context).
-func (r *Repository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
+func (r *sqliteRepository) GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error) {
 	// UNION (not UNION ALL) deduplicates (root_id, tag_id) pairs, preventing
 	// infinite recursion if tag_relationships contains a cycle.
 	const q = `

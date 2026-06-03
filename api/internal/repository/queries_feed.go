@@ -8,7 +8,7 @@ import (
 )
 
 // GetPublishedPostsForFeed returns the N most recent published posts for RSS/sitemap.
-func (r *Repository) GetPublishedPostsForFeed(ctx context.Context, limit int) ([]models.Post, error) {
+func (r *sqliteRepository) GetPublishedPostsForFeed(ctx context.Context, limit int) ([]models.Post, error) {
 	const q = `
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
        p.is_featured, p.view_count, p.published_at, p.created_at, p.updated_at,
@@ -56,7 +56,7 @@ LIMIT ?`
 }
 
 // GetPublishedPostsForSitemap returns all published post slugs and timestamps.
-func (r *Repository) GetPublishedPostsForSitemap(ctx context.Context) ([]struct {
+func (r *sqliteRepository) GetPublishedPostsForSitemap(ctx context.Context) ([]struct {
 	Slug      string
 	UpdatedAt time.Time
 }, error) {
@@ -114,7 +114,7 @@ ORDER BY published_at DESC, created_at DESC`
 }
 
 // GetPublicTagsForSitemap returns non-hidden tags with posts for the sitemap.
-func (r *Repository) GetPublicTagsForSitemap(ctx context.Context) ([]struct {
+func (r *sqliteRepository) GetPublicTagsForSitemap(ctx context.Context) ([]struct {
 	ID   int64
 	Slug string
 }, error) {

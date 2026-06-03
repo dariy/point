@@ -1,22 +1,11 @@
+//go:build integration
+
 package services
 
 import (
 	"context"
-	"point-api/internal/repository"
 	"testing"
 )
-
-func insertTestUser(t *testing.T, svc *PostService) int64 {
-	t.Helper()
-	res, err := svc.repo.DB().Exec(
-		`INSERT OR IGNORE INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`,
-	)
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	_ = res
-	return 1
-}
 
 func TestPostService_GetPostByID(t *testing.T) {
 	svc, repo := setupPostService(t)
@@ -371,9 +360,4 @@ func TestPostService_ListTrashedPosts(t *testing.T) {
 	if total == 0 || len(posts) == 0 {
 		t.Error("expected at least one trashed post")
 	}
-}
-func setupPostService(t *testing.T) (*PostService, *repository.Repository) {
-	repo := setupTestDB(t)
-	service := NewPostService(repo)
-	return service, repo
 }

@@ -17,10 +17,10 @@ import (
 type SetupHandler struct {
 	authService     *services.AuthService
 	settingsService *services.SettingsService
-	repo            *repository.Repository
+	repo            repository.Repository
 }
 
-func NewSetupHandler(authService *services.AuthService, settingsService *services.SettingsService, repo *repository.Repository) *SetupHandler {
+func NewSetupHandler(authService *services.AuthService, settingsService *services.SettingsService, repo repository.Repository) *SetupHandler {
 	return &SetupHandler{
 		authService:     authService,
 		settingsService: settingsService,

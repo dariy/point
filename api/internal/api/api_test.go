@@ -432,7 +432,7 @@ func TestExtractUserID_Invalid(t *testing.T) {
 func nil_ctx() context.Context { return context.Background() }
 
 type testHandlers struct {
-	repo        *repository.Repository
+	repo        repository.Repository
 	settingsSvc *services.SettingsService
 	tagSvc      *services.TagService
 	postSvc     *services.PostService
@@ -478,7 +478,7 @@ func echoCtx(method, target string, body string) (echo.Context, *httptest.Respon
 	return e.NewContext(req, rec), rec
 }
 
-func insertUser(repo *repository.Repository) int64 {
+func insertUser(repo repository.Repository) int64 {
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com','h','U')`)
 	return 1
 }
@@ -883,7 +883,7 @@ func TestGetPostBySlug_Admin(t *testing.T) {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
 }
-func setupTestDB(t *testing.T) *repository.Repository {
+func setupTestDB(t *testing.T) repository.Repository {
 	repo, err := repository.NewRepository(":memory:")
 	if err != nil {
 		t.Fatalf("failed to create test repository: %v", err)

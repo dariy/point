@@ -12,7 +12,7 @@ import (
 	"point-api/internal/services"
 )
 
-func runSetupCLI(repo *repository.Repository, svcs *AppServices) {
+func runSetupCLI(repo repository.Repository, svcs *AppServices) {
 	var blogTitle, authorName, email, password string
 
 	// Collect all parts from all arguments (handles merged args like "setup --title=...")

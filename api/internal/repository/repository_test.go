@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func setupTestDB(t *testing.T) *Repository {
+func setupTestDB(t *testing.T) Repository {
 	repo, err := NewRepository(":memory:")
 	if err != nil {
 		t.Fatalf("failed to create test repository: %v", err)
@@ -14,7 +14,7 @@ func setupTestDB(t *testing.T) *Repository {
 }
 
 // helpers: insert a user and a published post, return (userID, postID).
-func insertUserAndPost(t *testing.T, repo *Repository, slug, status string) (int64, int64) {
+func insertUserAndPost(t *testing.T, repo Repository, slug, status string) (int64, int64) {
 	t.Helper()
 	res, err := repo.DB().Exec(
 		`INSERT OR IGNORE INTO users (username, email, password_hash, display_name) VALUES ('u1','e1','h','D')`)

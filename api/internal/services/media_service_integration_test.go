@@ -1,3 +1,5 @@
+//go:build integration
+
 package services
 
 import (
@@ -14,7 +16,6 @@ import (
 	"time"
 
 	"point-api/internal/config"
-	"point-api/internal/repository"
 
 	goexif "github.com/rwcarlsen/goexif/exif"
 	"golang.org/x/crypto/bcrypt"
@@ -1251,32 +1252,4 @@ func TestSanitizeOrigin_InvalidURL(t *testing.T) {
 func TestGetRPIDFromURL_InvalidURL(t *testing.T) {
 	result := GetRPIDFromURL("://bad")
 	_ = result
-}
-
-func setupTestDB(t *testing.T) *repository.Repository {
-	repo, err := repository.NewRepository(":memory:")
-	if err != nil {
-		t.Fatalf("failed to create test repository: %v", err)
-	}
-
-	return repo
-}
-
-func setupMediaService(t *testing.T) (*MediaService, string) {
-	repo := setupTestDB(t)
-	tmpDir, err := os.MkdirTemp("", "media-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := &config.Config{
-		StoragePath:     tmpDir,
-		ThumbnailWidth:  400,
-		ThumbnailHeight: 300,
-	}
-	settingsService := NewSettingsService(repo)
-	tagService := NewTagService(repo)
-	service := NewMediaService(repo, cfg, settingsService, tagService)
-
-	return service, tmpDir
 }

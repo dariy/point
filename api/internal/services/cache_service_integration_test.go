@@ -1,3 +1,5 @@
+//go:build integration
+
 package services
 
 import (
@@ -6,16 +8,6 @@ import (
 	"testing"
 	"time"
 )
-
-func setupCacheService(t *testing.T) (*CacheService, string) {
-	t.Helper()
-	dir, err := os.MkdirTemp("", "cache-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc := NewCacheService(dir)
-	return svc, dir
-}
 
 func TestCacheService_SetAndGet(t *testing.T) {
 	svc, dir := setupCacheService(t)

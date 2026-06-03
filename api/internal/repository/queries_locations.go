@@ -8,7 +8,7 @@ import (
 
 // UpsertTagLocation inserts or updates a coordinate record for a tag.
 // Uses UPDATE-then-INSERT to avoid dependency on a named UNIQUE constraint.
-func (r *Repository) UpsertTagLocation(ctx context.Context, tagID int64, lat, lon float64) error {
+func (r *sqliteRepository) UpsertTagLocation(ctx context.Context, tagID int64, lat, lon float64) error {
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE tag_locations SET latitude = ?, longitude = ? WHERE tag_id = ?`,
 		lat, lon, tagID)
@@ -29,7 +29,7 @@ func (r *Repository) UpsertTagLocation(ctx context.Context, tagID int64, lat, lo
 
 // GetTagLocationsByTagIDs fetches all tag_locations rows for the given tag IDs.
 // Returns a map of tagID → TagLocation (one per tag due to UNIQUE constraint).
-func (r *Repository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error) {
+func (r *sqliteRepository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error) {
 	result := make(map[int64]models.TagLocation)
 	if len(tagIDs) == 0 {
 		return result, nil
@@ -65,7 +65,7 @@ func (r *Repository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64
 }
 
 // DeleteTagLocation removes the coordinate record for a tag (if any).
-func (r *Repository) DeleteTagLocation(ctx context.Context, tagID int64) error {
+func (r *sqliteRepository) DeleteTagLocation(ctx context.Context, tagID int64) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM tag_locations WHERE tag_id = ?`, tagID)
 	return err
 }

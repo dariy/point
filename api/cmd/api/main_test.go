@@ -213,7 +213,7 @@ func TestRunSetupCLI_NewSetup(t *testing.T) {
 
 // ── setupEcho additional coverage ─────────────────────────────────────────
 
-func newEchoWithRepo(t *testing.T) (*repository.Repository, config.Config) {
+func newEchoWithRepo(t *testing.T) (repository.Repository, config.Config) {
 	t.Helper()
 	repo, err := repository.NewRepository(":memory:")
 	if err != nil {

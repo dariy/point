@@ -18,7 +18,7 @@ import (
 )
 
 type PagesHandler struct {
-	repo            *repository.Repository
+	repo            repository.Repository
 	postService     *services.PostService
 	tagService      *services.TagService
 	mediaService    *services.MediaService
@@ -26,7 +26,7 @@ type PagesHandler struct {
 	cacheService    *services.CacheService
 }
 
-func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, mediaService *services.MediaService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
+func NewPagesHandler(repo repository.Repository, postService *services.PostService, tagService *services.TagService, mediaService *services.MediaService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
 	return &PagesHandler{
 		repo:            repo,
 		postService:     postService,
@@ -667,7 +667,7 @@ func tagToPostTagInfo(t models.Tag) repository.PostTagInfo {
 
 // fetchAncestorsMap fetches ancestor tags for each unique tag ID in the postTagsMap.
 // Results are cached per tag ID to avoid redundant queries.
-func fetchAncestorsMap(ctx context.Context, repo *repository.Repository, postTagsMap map[int64][]repository.PostTagInfo) map[int64][]repository.PostTagInfo {
+func fetchAncestorsMap(ctx context.Context, repo repository.Repository, postTagsMap map[int64][]repository.PostTagInfo) map[int64][]repository.PostTagInfo {
 	uniqueTagIDs := make(map[int64]bool)
 	for _, tags := range postTagsMap {
 		for _, t := range tags {

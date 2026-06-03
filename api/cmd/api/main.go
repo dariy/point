@@ -62,7 +62,7 @@ type AppServices struct {
 	Timeline  *services.TimelineService
 }
 
-func initServices(cfg *config.Config, repo *repository.Repository) *AppServices {
+func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	settingsService := services.NewSettingsService(repo)
 	authService := services.NewAuthService(repo)
 	apiKeyService := services.NewApiKeyService(repo)
@@ -90,7 +90,7 @@ func initServices(cfg *config.Config, repo *repository.Repository) *AppServices 
 	}
 }
 
-func setupEcho(cfg config.Config, repo *repository.Repository, svcs *AppServices) *echo.Echo {
+func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices) *echo.Echo {
 	// Initialize Echo
 
 	e := echo.New()
@@ -789,7 +789,7 @@ var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 //   - No query param serves the original (media/originals/…).
 //
 // Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTML string, repo *repository.Repository) echo.HandlerFunc {
+func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")

@@ -13,7 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func setupTimelineHandler(t *testing.T) (*TimelineHandler, *services.TimelineService, *services.SettingsService, *services.TagService, *repository.Repository) {
+func setupTimelineHandler(t *testing.T) (*TimelineHandler, *services.TimelineService, *services.SettingsService, *services.TagService, repository.Repository) {
 	repo := setupTestDB(t)
 	// Ensure system tags
 	_ = repo.EnsureSystemTags(context.Background())

@@ -28,14 +28,14 @@ import (
 )
 
 type PostService struct {
-	repo       *repository.Repository
+	repo       repository.Repository
 	md         goldmark.Markdown
 	policy     *bluemonday.Policy
 	viewBuffer map[int64]int
 	viewMu     sync.Mutex
 }
 
-func NewPostService(repo *repository.Repository) *PostService {
+func NewPostService(repo repository.Repository) *PostService {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,

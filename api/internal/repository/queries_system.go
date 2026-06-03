@@ -17,7 +17,7 @@ type SystemStats struct {
 	SessionCount   int64
 }
 
-func (r *Repository) GetSystemStats(ctx context.Context) (SystemStats, error) {
+func (r *sqliteRepository) GetSystemStats(ctx context.Context) (SystemStats, error) {
 	var s SystemStats
 	const q = `
 SELECT
@@ -39,7 +39,7 @@ SELECT
 }
 
 // BackupDB creates a SQL dump of the SQLite database using backup API.
-func (r *Repository) BackupDB(ctx context.Context, destPath string) error {
+func (r *sqliteRepository) BackupDB(ctx context.Context, destPath string) error {
 	_, err := r.db.ExecContext(ctx, "VACUUM INTO ?", destPath)
 	return err
 }

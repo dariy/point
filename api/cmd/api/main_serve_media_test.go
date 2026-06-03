@@ -15,7 +15,7 @@ import (
 	"point-api/internal/repository"
 )
 
-func newMediaRepo(t *testing.T) (*repository.Repository, string) {
+func newMediaRepo(t *testing.T) (repository.Repository, string) {
 	t.Helper()
 	repo, err := repository.NewRepository(":memory:")
 	if err != nil {
@@ -25,7 +25,7 @@ func newMediaRepo(t *testing.T) (*repository.Repository, string) {
 	return repo, t.TempDir()
 }
 
-func insertMedia(t *testing.T, repo *repository.Repository, year, month, filename string, isPublic int) {
+func insertMedia(t *testing.T, repo repository.Repository, year, month, filename string, isPublic int) {
 	t.Helper()
 	origPath := "originals/" + year + "/" + month + "/" + filename
 	ctx := context.Background()
@@ -43,11 +43,11 @@ func insertMedia(t *testing.T, repo *repository.Repository, year, month, filenam
 	}
 }
 
-func createPublicMedia(t *testing.T, repo *repository.Repository, year, month, filename string) {
+func createPublicMedia(t *testing.T, repo repository.Repository, year, month, filename string) {
 	insertMedia(t, repo, year, month, filename, 1)
 }
 
-func createPrivateMedia(t *testing.T, repo *repository.Repository, year, month, filename string) {
+func createPrivateMedia(t *testing.T, repo repository.Repository, year, month, filename string) {
 	insertMedia(t, repo, year, month, filename, 0)
 }
 
@@ -64,7 +64,7 @@ func makeMediaFile(t *testing.T, storagePath, year, month, filename string) stri
 	return p
 }
 
-func serveMediaRequest(t *testing.T, storagePath, indexHTML string, repo *repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
+func serveMediaRequest(t *testing.T, storagePath, indexHTML string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
 	handler := serveSimplifiedMedia(storagePath, indexHTML, repo)
 	e := echo.New()
@@ -179,7 +179,7 @@ func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 
 // ── Thumbnail serving ──────────────────────────────────────────────────────
 
-func serveThumbRequest(t *testing.T, storagePath string, repo *repository.Repository, year, month, filename string) *httptest.ResponseRecorder {
+func serveThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename string) *httptest.ResponseRecorder {
 	t.Helper()
 	handler := serveSimplifiedMedia(storagePath, "", repo)
 	e := echo.New()

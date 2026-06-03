@@ -9,7 +9,7 @@ import (
 )
 
 // GetTagAncestors returns the ancestor chain from root to the given tag.
-func (r *Repository) GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error) {
+func (r *sqliteRepository) GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error) {
 	// Iterative traversal: find parents of parents until no more parents
 	visited := map[int64]bool{tagID: true}
 	var ancestors []models.Tag
@@ -43,7 +43,7 @@ func (r *Repository) GetTagAncestors(ctx context.Context, tagID int64) ([]models
 }
 
 // GetTagWithChildren returns a tag with all its direct children.
-func (r *Repository) GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error) {
+func (r *sqliteRepository) GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error) {
 	visited := map[int64]bool{tagID: true}
 	var result []models.Tag
 	queue := []int64{tagID}
@@ -71,7 +71,7 @@ func (r *Repository) GetTagDescendants(ctx context.Context, tagID int64) ([]mode
 // GetCoOccurringTags returns tags that appear on the same posts as tagID,
 // ordered by co-occurrence count descending. System tags (slug starting with "_")
 // and the tag itself are excluded.
-func (r *Repository) GetCoOccurringTags(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error) {
+func (r *sqliteRepository) GetCoOccurringTags(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error) {
 	statusClause := ""
 	if publicOnly {
 		statusClause = "AND p.status = 'published'"
@@ -117,7 +117,7 @@ type TagRelationship struct {
 }
 
 // GetAllTagRelationships returns all (parent_id, child_id) pairs from tag_relationships.
-func (r *Repository) GetAllTagRelationships(ctx context.Context) ([]TagRelationship, error) {
+func (r *sqliteRepository) GetAllTagRelationships(ctx context.Context) ([]TagRelationship, error) {
 	const q = `SELECT parent_id, child_id FROM tag_relationships`
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
@@ -138,14 +138,14 @@ func (r *Repository) GetAllTagRelationships(ctx context.Context) ([]TagRelations
 }
 
 // ClearTagParents removes all parent relationships for a tag (rows where child_id = tagID).
-func (r *Repository) ClearTagParents(ctx context.Context, childID int64) error {
+func (r *sqliteRepository) ClearTagParents(ctx context.Context, childID int64) error {
 	const q = `DELETE FROM tag_relationships WHERE child_id = ?`
 	_, err := r.db.ExecContext(ctx, q, childID)
 	return err
 }
 
 // ClearTagChildren removes all child relationships for a tag (rows where parent_id = tagID).
-func (r *Repository) ClearTagChildren(ctx context.Context, parentID int64) error {
+func (r *sqliteRepository) ClearTagChildren(ctx context.Context, parentID int64) error {
 	const q = `DELETE FROM tag_relationships WHERE parent_id = ?`
 	_, err := r.db.ExecContext(ctx, q, parentID)
 	return err
@@ -153,7 +153,7 @@ func (r *Repository) ClearTagChildren(ctx context.Context, parentID int64) error
 
 // GetTagsWithoutLocation returns tags that have no row in tag_locations.
 // Only tags whose IDs are in the provided set are considered.
-func (r *Repository) GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error) {
+func (r *sqliteRepository) GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error) {
 	if len(tagIDs) == 0 {
 		return nil, nil
 	}
@@ -197,7 +197,7 @@ WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
 }
 
 // FindTagsByNames returns tags whose lowercased name is in the given list.
-func (r *Repository) FindTagsByNames(ctx context.Context, names []string) ([]models.Tag, error) {
+func (r *sqliteRepository) FindTagsByNames(ctx context.Context, names []string) ([]models.Tag, error) {
 	if len(names) == 0 {
 		return nil, nil
 	}
@@ -247,7 +247,7 @@ type PostTagInfo struct {
 
 // GetTagsByPostIDs bulk-fetches tags for a list of post IDs.
 // Returns a map of postID → []PostTagInfo.
-func (r *Repository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]PostTagInfo, error) {
+func (r *sqliteRepository) GetTagsByPostIDs(ctx context.Context, postIDs []int64) (map[int64][]PostTagInfo, error) {
 	result := make(map[int64][]PostTagInfo)
 	if len(postIDs) == 0 {
 		return result, nil
@@ -292,7 +292,7 @@ ORDER BY t.name ASC`
 // GetMigrations returns all rows from the migration_history table ordered by applied_at descending.
 // Returns an empty slice if the table does not exist yet.
 // GetChildrenOfTag returns direct children of parentID, ordered by sort_order ASC, name ASC.
-func (r *Repository) GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error) {
+func (r *sqliteRepository) GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error) {
 	const q = `
 SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
 FROM tags t
@@ -303,7 +303,7 @@ ORDER BY t.sort_order ASC, t.name ASC`
 }
 
 // GetRootTags returns tags that have no parents, ordered by sort_order ASC, name ASC.
-func (r *Repository) GetRootTags(ctx context.Context) ([]models.Tag, error) {
+func (r *sqliteRepository) GetRootTags(ctx context.Context) ([]models.Tag, error) {
 	const q = `
 SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
 FROM tags t
@@ -314,13 +314,13 @@ ORDER BY t.sort_order ASC, t.name ASC`
 }
 
 // UpdateTagSortOrder updates only the sort_order field for a tag.
-func (r *Repository) UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error {
+func (r *sqliteRepository) UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE tags SET sort_order = ? WHERE id = ?`, sortOrder, id)
 	return err
 }
 
 // scanTags is a helper that executes a query and scans the result rows into []models.Tag.
-func (r *Repository) scanTags(ctx context.Context, q string, args ...interface{}) ([]models.Tag, error) {
+func (r *sqliteRepository) scanTags(ctx context.Context, q string, args ...interface{}) ([]models.Tag, error) {
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -347,7 +347,7 @@ func (r *Repository) scanTags(ctx context.Context, q string, args ...interface{}
 // This allows a user tag (e.g. slug="root") to share a display name with a
 // system tag (e.g. slug="_root", name="root").
 // It is idempotent: recorded as "drop_tags_name_unique" in migration_history.
-func (r *Repository) DropTagNameUnique(ctx context.Context) error {
+func (r *sqliteRepository) DropTagNameUnique(ctx context.Context) error {
 	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

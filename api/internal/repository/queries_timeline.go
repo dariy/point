@@ -16,7 +16,7 @@ type MapYearRangeTag struct {
 // parsed year falls in [fromYear, toYear]. PostCount reflects the scoped count.
 //
 // Year parsing uses CAST(slug AS INTEGER): "2024" → 2024, "2020s" → 2020.
-func (r *Repository) ListMapTagsForYearRange(ctx context.Context, fromYear, toYear int) ([]MapYearRangeTag, error) {
+func (r *sqliteRepository) ListMapTagsForYearRange(ctx context.Context, fromYear, toYear int) ([]MapYearRangeTag, error) {
 	const q = `
 WITH RECURSIVE descendants(id, slug) AS (
     SELECT tr.child_id, c.slug
@@ -74,7 +74,7 @@ type InTimelineTag struct {
 
 // ListInTimelineDescendants returns all tags whose ancestor chain includes _in_timeline,
 // excluding _in_timeline itself and other system tags, ordered by slug ascending.
-func (r *Repository) ListInTimelineDescendants(ctx context.Context) ([]InTimelineTag, error) {
+func (r *sqliteRepository) ListInTimelineDescendants(ctx context.Context) ([]InTimelineTag, error) {
 	const q = `
 WITH RECURSIVE descendants(id) AS (
     SELECT tr.child_id
@@ -110,7 +110,7 @@ ORDER BY t.slug ASC`
 
 // ListInTimelineDescendantsForTag is like ListInTimelineDescendants but restricts
 // results to tags that co-occur with contextTagSlug on at least one shared post.
-func (r *Repository) ListInTimelineDescendantsForTag(ctx context.Context, contextTagSlug string) ([]InTimelineTag, error) {
+func (r *sqliteRepository) ListInTimelineDescendantsForTag(ctx context.Context, contextTagSlug string) ([]InTimelineTag, error) {
 	const q = `
 WITH RECURSIVE descendants(id) AS (
     SELECT tr.child_id
@@ -165,7 +165,7 @@ type LocationTagCoOccurrence struct {
 // that share at least one post with dateTagSlug. If contextTagSlug is non-empty, only
 // posts also tagged with contextTagSlug are considered. Results are ordered by
 // co-occurrence count desc and capped at limit.
-func (r *Repository) GetLocationTagsCoOccurringWith(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]LocationTagCoOccurrence, error) {
+func (r *sqliteRepository) GetLocationTagsCoOccurringWith(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]LocationTagCoOccurrence, error) {
 	contextJoin := ""
 	args := []interface{}{dateTagSlug}
 	if contextTagSlug != "" {
@@ -211,7 +211,7 @@ LIMIT ?`, contextJoin)
 
 // GetYearTagsByLocationTagIDs returns a map of locationTagID → []PostTagInfo (years).
 // A "year" tag is defined as a child of the provided yearParentID.
-func (r *Repository) GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]PostTagInfo, error) {
+func (r *sqliteRepository) GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]PostTagInfo, error) {
 	result := make(map[int64][]PostTagInfo)
 	if len(locTagIDs) == 0 {
 		return result, nil

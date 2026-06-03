@@ -14,7 +14,7 @@ type MigrationRecord struct {
 	AppliedAt time.Time `json:"applied_at"`
 }
 
-func (r *Repository) GetMigrations(ctx context.Context) ([]MigrationRecord, error) {
+func (r *sqliteRepository) GetMigrations(ctx context.Context) ([]MigrationRecord, error) {
 	const q = `SELECT id, name, applied_at FROM migration_history ORDER BY applied_at DESC`
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
@@ -41,7 +41,7 @@ func (r *Repository) GetMigrations(ctx context.Context) ([]MigrationRecord, erro
 
 // ApplyMigration executes raw SQL and records it in migration_history.
 // It is idempotent: if the migration name already exists it is skipped.
-func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error {
+func (r *sqliteRepository) ApplyMigration(ctx context.Context, name, sql string) error {
 	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,7 +84,7 @@ func (r *Repository) ApplyMigration(ctx context.Context, name, sql string) error
 // migrates the old boolean flag columns (is_featured, is_hidden, is_hidden_posts,
 // include_in_breadcrumbs, show_related_tags_as_children) into tag_relationships.
 // It records "system_tags_phase_a" in migration_history when complete.
-func (r *Repository) MigrateFlagsToSystemTags(ctx context.Context) error {
+func (r *sqliteRepository) MigrateFlagsToSystemTags(ctx context.Context) error {
 	// Ensure migration_history table exists.
 	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
@@ -184,7 +184,7 @@ func (r *Repository) MigrateFlagsToSystemTags(ctx context.Context) error {
 // RebuildTagsTableDropBooleans drops the 6 boolean columns from the tags table via
 // a table rebuild (SQLite does not support DROP COLUMN in older versions).
 // It is idempotent: it checks for "system_tags_phase_b" in migration_history first.
-func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
+func (r *sqliteRepository) RebuildTagsTableDropBooleans(ctx context.Context) error {
 	// Ensure migration_history table exists.
 	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
@@ -255,7 +255,7 @@ func (r *Repository) RebuildTagsTableDropBooleans(ctx context.Context) error {
 // EnsureSystemTags is an idempotent migration that guarantees all required
 // system tags exist and are linked to _system. It handles the case where a regular tag
 // was previously created with name="_pending" but slug="pending" (via Slugify).
-func (r *Repository) EnsureSystemTags(ctx context.Context) error {
+func (r *sqliteRepository) EnsureSystemTags(ctx context.Context) error {
 	if _, err := r.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS migration_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

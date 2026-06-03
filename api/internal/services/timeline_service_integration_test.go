@@ -1,28 +1,11 @@
+//go:build integration
+
 package services
 
 import (
 	"context"
 	"testing"
 )
-
-func setupTimelineService(t *testing.T) (*TimelineService, *TagService, *PostService, int64) {
-	repo := setupTestDB(t)
-	// Ensure system tags exist so _in_timeline is available
-	if err := repo.EnsureSystemTags(context.Background()); err != nil {
-		t.Fatalf("failed to ensure system tags: %v", err)
-	}
-	// Create a user for posts
-	res, err := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('test', 'test@test.com', 'hash', 'Test User')`)
-	if err != nil {
-		t.Fatalf("failed to create test user: %v", err)
-	}
-	userID, _ := res.LastInsertId()
-
-	timelineService := NewTimelineService(repo)
-	tagService := NewTagService(repo)
-	postService := NewPostService(repo)
-	return timelineService, tagService, postService, userID
-}
 
 func TestTimelineService_Timeline(t *testing.T) {
 	ctx := context.Background()

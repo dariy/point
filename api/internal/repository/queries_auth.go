@@ -9,7 +9,7 @@ import (
 )
 
 // DeleteSession removes a session and returns an error if not found.
-func (r *Repository) DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error {
+func (r *sqliteRepository) DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error {
 	res, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ? AND user_id = ?`, arg.ID, arg.UserID)
 	if err != nil {
 		return err
@@ -25,7 +25,7 @@ func (r *Repository) DeleteSession(ctx context.Context, arg models.DeleteSession
 }
 
 // DeleteSecret removes a secret by key (used to invalidate one-time tokens).
-func (r *Repository) DeleteSecret(ctx context.Context, key string) error {
+func (r *sqliteRepository) DeleteSecret(ctx context.Context, key string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM blog_secrets WHERE key = ?`, key)
 	return err
 }
@@ -44,7 +44,7 @@ type WebAuthnCredential struct {
 	LastUsedAt     *time.Time
 }
 
-func (r *Repository) CreateWebAuthnCredential(ctx context.Context, userID int64, credID, pubKey, aaguid []byte, signCount uint32, backupEligible, backupState bool) (*WebAuthnCredential, error) {
+func (r *sqliteRepository) CreateWebAuthnCredential(ctx context.Context, userID int64, credID, pubKey, aaguid []byte, signCount uint32, backupEligible, backupState bool) (*WebAuthnCredential, error) {
 	const q = `
 INSERT INTO webauthn_credentials (user_id, credential_id, public_key, aaguid, sign_count, backup_eligible, backup_state)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -72,7 +72,7 @@ RETURNING id, created_at, last_used_at`
 	}, nil
 }
 
-func (r *Repository) GetWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error) {
+func (r *sqliteRepository) GetWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error) {
 	const q = `
 SELECT id, user_id, credential_id, public_key, aaguid, sign_count, backup_eligible, backup_state, created_at, last_used_at
 FROM webauthn_credentials
@@ -97,7 +97,7 @@ WHERE user_id = ?`
 	return creds, rows.Err()
 }
 
-func (r *Repository) GetWebAuthnCredentialByCredentialID(ctx context.Context, credID []byte) (*WebAuthnCredential, error) {
+func (r *sqliteRepository) GetWebAuthnCredentialByCredentialID(ctx context.Context, credID []byte) (*WebAuthnCredential, error) {
 	const q = `
 SELECT id, user_id, credential_id, public_key, aaguid, sign_count, backup_eligible, backup_state, created_at, last_used_at
 FROM webauthn_credentials
@@ -114,14 +114,14 @@ WHERE credential_id = ?`
 	return &cred, nil
 }
 
-func (r *Repository) DeleteWebAuthnCredentialByUserID(ctx context.Context, userID int64) error {
+func (r *sqliteRepository) DeleteWebAuthnCredentialByUserID(ctx context.Context, userID int64) error {
 	const q = `DELETE FROM webauthn_credentials WHERE user_id = ?`
 	_, err := r.db.ExecContext(ctx, q, userID)
 	return err
 }
 
 // UpdateWebAuthnCredential updates the sign count, backup state, and last-used timestamp after a successful login.
-func (r *Repository) UpdateWebAuthnCredential(ctx context.Context, credID []byte, signCount uint32, backupState bool) error {
+func (r *sqliteRepository) UpdateWebAuthnCredential(ctx context.Context, credID []byte, signCount uint32, backupState bool) error {
 	const q = `UPDATE webauthn_credentials SET sign_count = ?, backup_state = ?, last_used_at = CURRENT_TIMESTAMP WHERE credential_id = ?`
 	_, err := r.db.ExecContext(ctx, q, signCount, backupState, credID)
 	return err

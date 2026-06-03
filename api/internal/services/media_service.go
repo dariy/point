@@ -33,7 +33,7 @@ import (
 )
 
 type MediaService struct {
-	repo            *repository.Repository
+	repo            repository.Repository
 	cfg             *config.Config
 	settingsService *SettingsService
 	tagService      *TagService
@@ -46,7 +46,7 @@ type GenAIConfig struct {
 	Models []string `yaml:"models"`
 }
 
-func NewMediaService(repo *repository.Repository, cfg *config.Config, settingsService *SettingsService, tagService *TagService) *MediaService {
+func NewMediaService(repo repository.Repository, cfg *config.Config, settingsService *SettingsService, tagService *TagService) *MediaService {
 	s := &MediaService{
 		repo:            repo,
 		cfg:             cfg,

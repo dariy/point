@@ -21,10 +21,10 @@ import (
 type AuthHandler struct {
 	authService *services.AuthService
 	cfg         *config.Config
-	repo        *repository.Repository
+	repo        repository.Repository
 }
 
-func NewAuthHandler(authService *services.AuthService, cfg *config.Config, repo *repository.Repository) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, cfg *config.Config, repo repository.Repository) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		cfg:         cfg,

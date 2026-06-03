@@ -21,7 +21,7 @@ import (
 )
 
 type SystemHandler struct {
-	repo            *repository.Repository
+	repo            repository.Repository
 	mediaService    *services.MediaService
 	postService     *services.PostService
 	settingsService *services.SettingsService
@@ -35,7 +35,7 @@ type SystemHandler struct {
 
 var startTime = time.Now()
 
-func NewSystemHandler(repo *repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
+func NewSystemHandler(repo repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
 		repo:            repo,
 		mediaService:    mediaService,

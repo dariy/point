@@ -1,3 +1,5 @@
+//go:build integration
+
 package services
 
 import (
@@ -9,23 +11,6 @@ import (
 	"point-api/internal/config"
 	"point-api/internal/repository"
 )
-
-func setupSystemService(t *testing.T) (*SystemService, string) {
-	t.Helper()
-	dir, err := os.MkdirTemp("", "system-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo, err := repository.NewRepository(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = repo.Close()
-		_ = os.RemoveAll(dir)
-	})
-	return NewSystemService(repo, dir), dir
-}
 
 func TestSystemService_NewSystemService(t *testing.T) {
 	svc, _ := setupSystemService(t)

@@ -15,10 +15,10 @@ import (
 )
 
 type ApiKeyService struct {
-	repo *repository.Repository
+	repo repository.Repository
 }
 
-func NewApiKeyService(repo *repository.Repository) *ApiKeyService {
+func NewApiKeyService(repo repository.Repository) *ApiKeyService {
 	return &ApiKeyService{repo: repo}
 }
 
