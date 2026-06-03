@@ -10,20 +10,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type AuthHandler struct {
 	authService *services.AuthService
 	cfg         *config.Config
-	repo        *repository.Repository
+	repo        repository.Repository
 }
 
-func NewAuthHandler(authService *services.AuthService, cfg *config.Config, repo *repository.Repository) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, cfg *config.Config, repo repository.Repository) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		cfg:         cfg,

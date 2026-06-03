@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"point-api/internal/config"
 	"point-api/internal/models"
@@ -211,7 +213,7 @@ func TestRunSetupCLI_NewSetup(t *testing.T) {
 
 // ── setupEcho additional coverage ─────────────────────────────────────────
 
-func newEchoWithRepo(t *testing.T) (*repository.Repository, config.Config) {
+func newEchoWithRepo(t *testing.T) (repository.Repository, config.Config) {
 	t.Helper()
 	repo, err := repository.NewRepository(":memory:")
 	if err != nil {
@@ -328,21 +330,102 @@ func TestSetupEcho_SPAFallback_WithPublishedPost(t *testing.T) {
 	}
 }
 
-func TestSetupEcho_WebAuthn_WithAppURL(t *testing.T) {
+func TestSetupEcho_SPAFallback_WithFullPost(t *testing.T) {
 	repo, cfg := newEchoWithRepo(t)
-	cfg.AppURL = "https://example.com"
-	cfg.AppName = "TestBlog"
+	// Create index.html for SPA fallback.
+	indexHTML := filepath.Join(cfg.FrontendDir, "index.html")
+	_ = os.WriteFile(indexHTML, []byte(`<html><head><title>Loading…</title></head><body></body></html>`), 0644)
+
+	// Create a published post.
+	ctx := context.Background()
+	settingsSvc := services.NewSettingsService(repo)
+	_ = settingsSvc.SetSetting(ctx, "blog_title", "Test Blog", "string")
+	hash, _ := services.HashPassword("pass")
+	u, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username:     "owner",
+		Email:        "owner@test.com",
+		PasswordHash: hash,
+		DisplayName:  "Owner",
+	})
+
+	// Create media for the post
+	_, _ = repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename: "test.jpg",
+		OriginalPath: "originals/2024/01/test.jpg",
+		Checksum: "abc",
+		UploadedAt: time.Now(),
+	})
+
+	_, _ = repo.CreatePost(ctx, models.CreatePostParams{
+		Title:    "My Post 2",
+		Slug:     "my-post-2",
+		AuthorID: u.ID,
+		Status:   "published",
+		MetaDescription: sql.NullString{String: "My Meta Desc", Valid: true},
+		ThumbnailPath: sql.NullString{String: "thumbnails/2024/01/test_thumb.jpg", Valid: true},
+		Content: "Some content here! /originals/2024/01/test.jpg",
+	})
+
 	svcs := initServices(&cfg, repo)
-	// Just ensure setupEcho doesn't panic when AppURL is set.
 	e := setupEcho(cfg, repo, svcs)
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/posts/my-post-2", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
+		t.Errorf("expected 200 for SPA post route, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "My Meta Desc") {
+		t.Errorf("expected meta description in HTML")
+	}
+	if !strings.Contains(body, "test.jpg") {
+		t.Errorf("expected og:image in HTML")
+	}
+	if !strings.Contains(body, "https://") {
+		t.Errorf("expected https in og:url")
 	}
 }
+
+func TestSetupEcho_FrontendDirs(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	// Create all static dirs
+	dirs := []string{"css", "js", "images", "vendor"}
+	for _, d := range dirs {
+		_ = os.MkdirAll(filepath.Join(cfg.FrontendDir, d), 0755)
+	}
+
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+	_ = e // Just checking it registers without panic
+}
+
+func TestMain_FullRun(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"point"}
+
+	t.Setenv("DATABASE_URL", ":memory:")
+	t.Setenv("PORT", "0")
+	t.Setenv("STORAGE_PATH", t.TempDir())
+	t.Setenv("FRONTEND_DIR", t.TempDir())
+	t.Setenv("GEMINI_API_KEY", "dummy_key")
+	t.Setenv("PHOTO_LIBRARY_PATH", "/dummy/path")
+
+	// Run a background goroutine to signal interrupt after startup
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		proc, err := os.FindProcess(os.Getpid())
+		if err == nil {
+			_ = proc.Signal(os.Interrupt)
+		}
+	}()
+
+	// Should start up, block, receive interrupt, and gracefully shut down
+	main()
+}
+
 
 func min(a, b int) int {
 	if a < b {

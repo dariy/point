@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
 	pointsql "point-api/sql"
+
+	_ "modernc.org/sqlite"
 )
 
 func setupTestDB(t *testing.T) (*Queries, *sql.DB) {
@@ -184,12 +185,12 @@ func TestQueryScanBodies(t *testing.T) {
 	_ = q.AddTagToPost(ctx, AddTagToPostParams{PostID: p.ID, TagID: parent.ID})
 
 	posts, err := q.ListPosts(ctx, ListPostsParams{
-	        StatusFilter:   false,
-	        IncludeDrafts:  true,
-	        IncludeHidden:  false,
-	        FeaturedFilter: false,
-	        Limit:          100,
-	        Offset:         0,
+		StatusFilter:   false,
+		IncludeDrafts:  true,
+		IncludeHidden:  false,
+		FeaturedFilter: false,
+		Limit:          100,
+		Offset:         0,
 	})
 	if err != nil {
 		t.Fatalf("ListPosts (scan) failed: %v", err)

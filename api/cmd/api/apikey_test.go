@@ -12,7 +12,7 @@ import (
 	"point-api/internal/services"
 )
 
-func newRepoWithUser(t *testing.T, rawPassword []byte) *repository.Repository {
+func newRepoWithUser(t *testing.T, rawPassword []byte) repository.Repository {
 	t.Helper()
 	repo, err := repository.NewRepository(":memory:")
 	if err != nil {

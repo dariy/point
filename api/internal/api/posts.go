@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type PostHandler struct {
@@ -164,13 +165,13 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
-	        Page:          page,
-	        PerPage:       int32(perPage),
-	        Status:        status,
-	        FeaturedOnly:  featured,
-	        IncludeDrafts: includeDrafts,
-	        Search:        search,
-	        SortBy:        c.QueryParam("sort"),
+		Page:          page,
+		PerPage:       int32(perPage),
+		Status:        status,
+		FeaturedOnly:  featured,
+		IncludeDrafts: includeDrafts,
+		Search:        search,
+		SortBy:        c.QueryParam("sort"),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -853,14 +854,14 @@ func (h *PostHandler) WithdrawPost(c echo.Context) error {
 }
 
 func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
-        stats, err := h.postService.GetPostAnalytics(c.Request().Context())
-        if err != nil {
-                return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-        }
+	stats, err := h.postService.GetPostAnalytics(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
 
-        return c.JSON(http.StatusOK, map[string]interface{}{
-                "total_views":            stats.TotalViews,
-                "average_views_per_post": stats.AverageViews,
-                "most_viewed_post_id":    stats.MostViewedPostID,
-        })
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"total_views":            stats.TotalViews,
+		"average_views_per_post": stats.AverageViews,
+		"most_viewed_post_id":    stats.MostViewedPostID,
+	})
 }

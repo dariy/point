@@ -14,12 +14,13 @@ import (
 	"strings"
 	"testing"
 
-	exif "github.com/dsoprea/go-exif/v3"
-	jpegstructure "github.com/dsoprea/go-jpeg-image-structure/v2"
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	exif "github.com/dsoprea/go-exif/v3"
+	jpegstructure "github.com/dsoprea/go-jpeg-image-structure/v2"
+	"github.com/labstack/echo/v4"
 )
 
 // makeJPEGWithEXIF creates a minimal JPEG with Make embedded so that

@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type NavMenuHandler struct {
@@ -47,7 +48,7 @@ func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	var body struct {
-		Mode  string               `json:"mode"`
+		Mode  string                `json:"mode"`
 		Items []services.NavTagNode `json:"items"`
 	}
 	if err := c.Bind(&body); err != nil {

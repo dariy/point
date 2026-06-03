@@ -5,8 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type ApiKeyHandler struct {

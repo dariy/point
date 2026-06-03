@@ -19,14 +19,13 @@ credentials.json
 deployment-*.log
 app/static/css/light.css
 app/static/css/main.css
-api/coverage.out
 api/coverage.html
-api/cmd/api/cache/
 frontend/js/
 light.css
 main.css
 api/api*
-api/cmd/api/cache/*
+api/cmd/api/cache/
+*.out
 
 # bv (beads viewer) local config and caches
 .bv/
