@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -24,9 +22,7 @@ func runCreateAPIKeyCLI(svcs *AppServices, name string) {
 
 	ctx := context.Background()
 
-	// Match the web frontend: SHA-256 of the raw password before Authenticate.
-	h := sha256.Sum256(rawBytes)
-	user, err := svcs.Auth.Authenticate(ctx, "", hex.EncodeToString(h[:]))
+	user, err := svcs.Auth.AuthenticatePassword(ctx, "", rawBytes)
 	if err != nil {
 		log.Fatalf("authentication failed: %v", err)
 	}

@@ -28,6 +28,14 @@ func HashToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
+// AuthenticatePassword is for callers that have the raw password bytes (e.g. CLI).
+// It applies the same SHA-256 pre-hash the web frontend performs before calling Authenticate,
+// so all authentication paths use the same stored credential format.
+func (s *AuthService) AuthenticatePassword(ctx context.Context, username string, rawPassword []byte) (models.User, error) {
+	h := sha256.Sum256(rawPassword)
+	return s.Authenticate(ctx, username, hex.EncodeToString(h[:]))
+}
+
 func (s *AuthService) Authenticate(ctx context.Context, username, password string) (models.User, error) {
 	var user models.User
 	var err error
