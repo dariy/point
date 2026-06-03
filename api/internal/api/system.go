@@ -189,6 +189,9 @@ func (h *SystemHandler) GetLogs(c echo.Context) error {
 	for scanner.Scan() {
 		all = append(all, scanner.Text())
 	}
+	if err := scanner.Err(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read logs")
+	}
 
 	// Return last N lines
 	if len(all) > lines {
