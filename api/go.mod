@@ -1,6 +1,6 @@
 module point-api
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/disintegration/imaging v1.6.2
