@@ -266,6 +266,31 @@ func TestParsePaginationParams(t *testing.T) {
 	}
 }
 
+func TestParseMapsCoords_ShortLinkRedirectSSRF(t *testing.T) {
+	// Simulate a short-link host that redirects to an internal/non-allowed URL.
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://169.254.169.254/metadata", http.StatusFound)
+	}))
+	defer redirectTarget.Close()
+
+	host := redirectTarget.Listener.Addr().String()
+	shortLinkHosts[host] = true
+	allowedHosts[host] = true
+	defer func() {
+		delete(shortLinkHosts, host)
+		delete(allowedHosts, host)
+	}()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?q=http://"+host+"/short", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := ParseMapsCoords(c)
+	if err == nil {
+		t.Error("expected error when short link redirects to non-allowed host (SSRF)")
+	}
+}
+
 func TestParseMapsCoords_SSRF(t *testing.T) {
 	e := echo.New()
 

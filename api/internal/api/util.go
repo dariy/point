@@ -175,6 +175,13 @@ func ParseMapsCoords(c echo.Context) error {
 			_ = resp.Body.Close()
 
 			urlToParse = resp.Request.URL.String()
+
+			// Validate the redirect destination is still a trusted host.
+			resolvedParsed, parseErr := url.Parse(urlToParse)
+			if parseErr != nil || !allowedHosts[resolvedParsed.Host] {
+				return echo.NewHTTPError(http.StatusBadGateway, "short link resolved to an unexpected host")
+			}
+
 			if i := strings.Index(urlToParse, "data=!"); i != -1 {
 				urlToParse = urlToParse[:i]
 			}
