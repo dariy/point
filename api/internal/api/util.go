@@ -168,7 +168,18 @@ func ParseMapsCoords(c echo.Context) error {
 
 		// Resolve short links before parsing.
 		if shortLinkHosts[parsed.Host] {
-			resp, err := httpClient.Head(urlToParse)
+			// Construct HEAD request URL with a server-controlled scheme+host to prevent
+			// SSRF: host is a constant string selected via switch, never user-supplied.
+			var headURL string
+			switch parsed.Host {
+			case "maps.app.goo.gl":
+				headURL = "https://maps.app.goo.gl" + parsed.RequestURI()
+			case "maps.apple":
+				headURL = "https://maps.apple" + parsed.RequestURI()
+			default:
+				return echo.NewHTTPError(http.StatusBadRequest, "only Google Maps and Apple Maps URLs are supported")
+			}
+			resp, err := httpClient.Head(headURL)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusBadGateway, "failed to resolve url")
 			}
