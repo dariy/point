@@ -73,20 +73,13 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 }
 
 func (h *MediaHandler) ListMedia(c echo.Context) error {
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
-	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
-	if perPage < 1 {
-		perPage = 20
-	}
+	page, perPage := ParsePaginationParams(c, 20)
 	fileType := c.QueryParam("file_type")
 	folder := c.QueryParam("folder")
 
 	media, total, err := h.mediaService.ListMedia(c.Request().Context(), services.ListMediaParams{
-		Page:     int32(page),
-		PerPage:  int32(perPage),
+		Page:     page,
+		PerPage:  perPage,
 		FileType: fileType,
 		Folder:   folder,
 	})
@@ -242,16 +235,9 @@ func (h *MediaHandler) RevertEXIF(c echo.Context) error {
 }
 
 func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
-	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
-	if perPage < 1 {
-		perPage = 20
-	}
+	page, perPage := ParsePaginationParams(c, 20)
 
-	media, total, err := h.mediaService.ListOrphanedMedia(c.Request().Context(), int32(page), int32(perPage))
+	media, total, err := h.mediaService.ListOrphanedMedia(c.Request().Context(), page, perPage)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

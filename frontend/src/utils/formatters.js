@@ -98,7 +98,12 @@ export function truncate(str, max) {
  */
 export function stripHtml(html) {
   if (!html) return '';
-  return html.replace(/<[^>]*>/g, '');
+  let previous;
+  do {
+    previous = html;
+    html = html.replace(/<[^<>]*>/g, '');
+  } while (html !== previous);
+  return html.replace(/<|>/g, '');
 }
 
 /**

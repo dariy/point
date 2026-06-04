@@ -11,7 +11,7 @@ import (
 
 func TestCacheService_SetAndGet(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	data := []byte("hello cache")
@@ -30,7 +30,7 @@ func TestCacheService_SetAndGet(t *testing.T) {
 
 func TestCacheService_Get_Missing(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	_, err := svc.Get(ctx, "nonexistent")
@@ -41,7 +41,7 @@ func TestCacheService_Get_Missing(t *testing.T) {
 
 func TestCacheService_Get_Empty(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	// Write an empty file manually
@@ -57,7 +57,7 @@ func TestCacheService_Get_Empty(t *testing.T) {
 
 func TestCacheService_Invalidate(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	_ = svc.Set(ctx, "key2", []byte("data"))
@@ -73,7 +73,7 @@ func TestCacheService_Invalidate(t *testing.T) {
 
 func TestCacheService_Clear(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	_ = svc.Set(ctx, "a", []byte("1"))
@@ -91,7 +91,7 @@ func TestCacheService_Clear(t *testing.T) {
 
 func TestCacheService_GetWithTTL_Valid(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	_ = svc.Set(ctx, "ttlkey", []byte("fresh"))
@@ -107,7 +107,7 @@ func TestCacheService_GetWithTTL_Valid(t *testing.T) {
 
 func TestCacheService_GetWithTTL_Expired(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	_ = svc.Set(ctx, "expkey", []byte("stale"))
@@ -121,7 +121,7 @@ func TestCacheService_GetWithTTL_Expired(t *testing.T) {
 
 func TestCacheService_GetWithTTL_Missing(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	_, err := svc.GetWithTTL(ctx, "nosuchkey", 1*time.Hour)
@@ -132,7 +132,7 @@ func TestCacheService_GetWithTTL_Missing(t *testing.T) {
 
 func TestCacheService_GetWithTTL_Empty(t *testing.T) {
 	svc, dir := setupCacheService(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	ctx := context.Background()
 
 	_ = os.WriteFile(svc.cacheDir+"/emptykey2", []byte{}, 0644)

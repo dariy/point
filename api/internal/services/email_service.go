@@ -16,6 +16,12 @@ type SMTPConfig struct {
 	From     string
 }
 
+func sanitizeHeader(v string) string {
+	v = strings.ReplaceAll(v, "\r", "")
+	v = strings.ReplaceAll(v, "\n", "")
+	return v
+}
+
 // SendEmail sends a plain-text email via SMTP.
 // Port 465 uses implicit TLS; port 587 uses STARTTLS; others use plain SMTP.
 func SendEmail(cfg SMTPConfig, to, subject, body string) error {
@@ -24,9 +30,9 @@ func SendEmail(cfg SMTPConfig, to, subject, body string) error {
 	}
 
 	header := strings.Join([]string{
-		"From: " + cfg.From,
-		"To: " + to,
-		"Subject: " + subject,
+		"From: " + sanitizeHeader(cfg.From),
+		"To: " + sanitizeHeader(to),
+		"Subject: " + sanitizeHeader(subject),
 		"Content-Type: text/plain; charset=UTF-8",
 		"",
 		"",

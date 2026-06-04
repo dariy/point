@@ -87,7 +87,7 @@ func TestSchedulerService_New(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 
 	dir, _ := os.MkdirTemp("", "sched-test")
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	cfg := &config.Config{StoragePath: dir}
 	settingsSvc := NewSettingsService(repo)

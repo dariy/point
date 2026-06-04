@@ -11,15 +11,6 @@ import (
 	"point-api/internal/repository"
 )
 
-func setupTestDB(t *testing.T) repository.Repository {
-	repo, err := repository.NewRepository(":memory:")
-	if err != nil {
-		t.Fatalf("failed to create test repository: %v", err)
-	}
-
-	return repo
-}
-
 func setupPostService(t *testing.T) (*PostService, repository.Repository) {
 	repo := setupTestDB(t)
 	service := NewPostService(repo)
@@ -68,11 +59,9 @@ func setupCacheService(t *testing.T) (*CacheService, string) {
 
 func setupTimelineService(t *testing.T) (*TimelineService, *TagService, *PostService, int64) {
 	repo := setupTestDB(t)
-	// Ensure system tags exist so _in_timeline is available
 	if err := repo.EnsureSystemTags(context.Background()); err != nil {
 		t.Fatalf("failed to ensure system tags: %v", err)
 	}
-	// Create a user for posts
 	res, err := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('test', 'test@test.com', 'hash', 'Test User')`)
 	if err != nil {
 		t.Fatalf("failed to create test user: %v", err)

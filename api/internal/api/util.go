@@ -125,6 +125,21 @@ func parseCoordsFromDegreeString(s string) (lat, lng float64, ok bool) {
 	return la, lo, true
 }
 
+// ParsePaginationParams safely parses page and per_page query parameters as int32.
+func ParsePaginationParams(c echo.Context, defaultPerPage int) (int32, int32) {
+	p, err := strconv.ParseInt(c.QueryParam("page"), 10, 32)
+	if err != nil || p < 1 {
+		p = 1
+	}
+
+	pp, err := strconv.ParseInt(c.QueryParam("per_page"), 10, 32)
+	if err != nil || pp < 1 {
+		pp = int64(defaultPerPage)
+	}
+
+	return int32(p), int32(pp)
+}
+
 // ParseMapsCoords extracts coordinates from a Google/Apple Maps URL, short
 // link, or a degree-notation string (e.g. "45.50777° N, 73.55446° W").
 // Short links are resolved via HTTP before coordinate extraction.
@@ -149,17 +164,35 @@ func ParseMapsCoords(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "only Google Maps and Apple Maps URLs are supported")
 		}
 
-		urlToParse := q
+		urlToParse := parsed.String()
 
 		// Resolve short links before parsing.
 		if shortLinkHosts[parsed.Host] {
-			resp, err := httpClient.Head(q)
+			// Construct HEAD request URL with a server-controlled scheme+host to prevent
+			// SSRF: host is a constant string selected via switch, never user-supplied.
+			var headURL string
+			switch parsed.Host {
+			case "maps.app.goo.gl":
+				headURL = "https://maps.app.goo.gl" + parsed.RequestURI()
+			case "maps.apple":
+				headURL = "https://maps.apple" + parsed.RequestURI()
+			default:
+				return echo.NewHTTPError(http.StatusBadRequest, "only Google Maps and Apple Maps URLs are supported")
+			}
+			resp, err := httpClient.Head(headURL)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusBadGateway, "failed to resolve url")
 			}
 			_ = resp.Body.Close()
 
 			urlToParse = resp.Request.URL.String()
+
+			// Validate the redirect destination is still a trusted host.
+			resolvedParsed, parseErr := url.Parse(urlToParse)
+			if parseErr != nil || !allowedHosts[resolvedParsed.Host] {
+				return echo.NewHTTPError(http.StatusBadGateway, "short link resolved to an unexpected host")
+			}
+
 			if i := strings.Index(urlToParse, "data=!"); i != -1 {
 				urlToParse = urlToParse[:i]
 			}
