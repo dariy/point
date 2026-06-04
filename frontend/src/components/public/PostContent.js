@@ -55,6 +55,16 @@ function mediaTypeFromPath(path) {
   return null;
 }
 
+function stripHtml(html) {
+  if (!html) return "";
+  let previous;
+  do {
+    previous = html;
+    html = html.replace(/<[^>]*>/g, "");
+  } while (html !== previous);
+  return html;
+}
+
 /**
  * Returns true when the post should render in immersive (full-screen) mode.
  * Exported so PostPage can use the same check to configure its child components.
@@ -82,10 +92,7 @@ export function shouldUseImmersive(post) {
   if (media.length && media.every((m) => m.type === "audio")) return false;
 
   // Strip all HTML tags; what remains is the visible text.
-  const text = html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .trim();
+  const text = stripHtml(html).replace(/&nbsp;/g, " ").trim();
 
   // If there is text, check whether every non-empty line is a bare media path.
   // If so it counts as media, not prose.
@@ -142,7 +149,10 @@ export class PostContent extends Component {
     } else {
       document.body.classList.remove("immersive-layout", "ui-hidden");
       const bodyEl = this.$(".post-content");
-      if (bodyEl) this._enhanceMedia(bodyEl);
+      if (bodyEl) {
+        this._enhanceLinks(bodyEl);
+        this._enhanceMedia(bodyEl);
+      }
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
 
       this._cleanupStrip?.();
@@ -314,10 +324,7 @@ export class PostContent extends Component {
 
         // Extract media from this segment to see if it's a bare media slide.
         const segmentMedia = this._extractMedia(trimmed);
-        const text = trimmed
-          .replace(/<[^>]+>/g, "")
-          .replace(/&nbsp;/g, " ")
-          .trim();
+        const text = stripHtml(trimmed).replace(/&nbsp;/g, " ").trim();
 
         if (
           segmentMedia.length === 1 &&
@@ -354,7 +361,7 @@ export class PostContent extends Component {
     }
     // Fallback: bare media paths rendered as plain text by the markdown parser.
     if (items.length === 0) {
-      const text = html.replace(/<[^>]+>/g, "").trim();
+      const text = stripHtml(html).trim();
       for (const line of text.split(/\n+/)) {
         const url = line.trim();
         if (!url) continue;
@@ -468,14 +475,24 @@ export class PostContent extends Component {
       this._resetZoom();
     };
 
+    // If the click landed over a link hidden beneath the nav panel, follow it instead of navigating.
+    const navClickOrLink = (e, navigate) => {
+      const panel = e.currentTarget;
+      panel.style.pointerEvents = "none";
+      const underneath = document.elementFromPoint(e.clientX, e.clientY);
+      panel.style.pointerEvents = "";
+      const link = underneath?.closest("a");
+      if (link) { link.click(); return; }
+      e.stopPropagation();
+      navigate();
+    };
+
     if (carousel) {
       this._on(carousel.querySelector(".immersive-nav-prev"), "click", (e) => {
-        e.stopPropagation();
-        goTo(index - 1);
+        navClickOrLink(e, () => goTo(index - 1));
       });
       this._on(carousel.querySelector(".immersive-nav-next"), "click", (e) => {
-        e.stopPropagation();
-        goTo(index + 1);
+        navClickOrLink(e, () => goTo(index + 1));
       });
       dots.forEach((d, i) =>
         this._on(d, "click", (e) => {
@@ -488,12 +505,10 @@ export class PostContent extends Component {
       const wrapper = this.$(".immersive-wrapper");
       if (wrapper) {
         this._on(wrapper.querySelector(".immersive-nav-prev"), "click", (e) => {
-          e.stopPropagation();
-          goToPost(backPost);
+          navClickOrLink(e, () => goToPost(backPost));
         });
         this._on(wrapper.querySelector(".immersive-nav-next"), "click", (e) => {
-          e.stopPropagation();
-          goToPost(fwdPost);
+          navClickOrLink(e, () => goToPost(fwdPost));
         });
       }
     }
@@ -923,6 +938,16 @@ export class PostContent extends Component {
       ? `<a href="/posts/${escapeHtml(nextPost.slug)}" class="post-side-nav-btn next" aria-label="Next post">&#10095;</a>`
       : "";
     return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
+  }
+
+  _enhanceLinks(body) {
+    body.querySelectorAll("a[href]").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      if (/^https?:\/\//.test(href)) {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+      }
+    });
   }
 
   _enhanceMedia(body) {

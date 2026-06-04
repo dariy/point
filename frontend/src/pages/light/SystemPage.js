@@ -82,6 +82,24 @@ export default class SystemPage extends Component {
     }
     const { downloadingOffline, offlineProgress, offlineStatusText, lastSync, syncQueue: queue } = this.state;
 
+    const pending  = queue.filter(op => op.status === 'pending').length;
+    const syncing  = queue.filter(op => op.status === 'syncing').length;
+    const failedOp = queue.find(op => op.status === 'failed');
+    const isOnline = navigator.onLine;
+    const syncBtnDisabled = !isOnline || (!pending && !syncing) || !!syncing;
+    const syncBtnLabel = syncing ? 'Syncing…' : 'Sync now';
+    const statusParts = [];
+    if (pending + syncing > 0) statusParts.push(`${pending + syncing} pending`);
+    if (lastSync) statusParts.push(`Last synced: ${escapeHtml(formatDateShort(lastSync))}`);
+    const syncStatusText = statusParts.length ? statusParts.join(' · ') : (lastSync ? `Last synced: ${escapeHtml(formatDateShort(lastSync))}` : 'No data downloaded yet');
+    const syncErrorCard = failedOp ? `
+      <div class="sync-error-card" style="margin-top: 1rem;">
+        <strong>${WARNING_SVG} Sync halted</strong>
+        <p>Failed: <code>${escapeHtml(failedOp.method)} ${escapeHtml(failedOp.url)}</code></p>
+        <p class="sync-error-msg">${escapeHtml(failedOp.error || 'Unknown error')}</p>
+        <button id="dismiss-retry-btn" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">Dismiss &amp; retry</button>
+      </div>` : '';
+
     return `
       <div class="light-layout">
         <div id="sidebar-mount"></div>
@@ -93,7 +111,7 @@ export default class SystemPage extends Component {
 
             <div class="card">
               <div class="card-header">
-                <h2>Offline Data</h2>
+                <h2>Offline</h2>
                 ${lastSync ? `<span class="header-meta">Last synced: ${escapeHtml(formatDateShort(lastSync))}</span>` : ''}
               </div>
               <div class="card-body">
@@ -113,11 +131,17 @@ export default class SystemPage extends Component {
                       ${downloadingOffline ? 'Downloading…' : 'Download for offline'}
                     </button>
                   </div>
+                  <div class="op-item">
+                    <div class="op-info">
+                      <h4>Sync queue</h4>
+                      <p>${syncStatusText}</p>
+                      ${syncErrorCard}
+                    </div>
+                    <button id="sync-now-btn" class="btn btn-secondary" ${syncBtnDisabled ? 'disabled' : ''}>${syncBtnLabel}</button>
+                  </div>
                 </div>
               </div>
             </div>
-
-            ${this._renderSyncPanel(queue, lastSync)}
 
             <div class="card">
               <div class="card-header"><h2>Maintenance</h2></div>
@@ -241,46 +265,6 @@ export default class SystemPage extends Component {
       </div>`;
   }
 
-  _renderSyncPanel(queue, lastSync) {
-    const pending  = queue.filter(op => op.status === 'pending').length;
-    const syncing  = queue.filter(op => op.status === 'syncing').length;
-    const failedOp = queue.find(op => op.status === 'failed');
-    const isOnline = navigator.onLine;
-
-    const syncBtnDisabled = !isOnline || (!pending && !syncing) || !!syncing;
-    const syncBtnLabel = syncing ? 'Syncing…' : 'Sync now';
-
-    const statusParts = [];
-    if (pending + syncing > 0) statusParts.push(`${pending + syncing} pending`);
-    if (lastSync) statusParts.push(`Last synced: ${escapeHtml(formatDateShort(lastSync))}`);
-    const statusText = statusParts.length ? statusParts.join(' · ') : (lastSync ? `Last synced: ${escapeHtml(formatDateShort(lastSync))}` : 'No data downloaded yet');
-
-    const errorCard = failedOp ? `
-      <div class="sync-error-card" style="margin-top: 1rem;">
-        <strong>${WARNING_SVG} Sync halted</strong>
-        <p>Failed: <code>${escapeHtml(failedOp.method)} ${escapeHtml(failedOp.url)}</code></p>
-        <p class="sync-error-msg">${escapeHtml(failedOp.error || 'Unknown error')}</p>
-        <button id="dismiss-retry-btn" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">Dismiss &amp; retry</button>
-      </div>` : '';
-
-    return `
-      <div class="card">
-        <div class="card-header"><h2>Offline Sync</h2></div>
-        <div class="card-body">
-          <div class="ops-list">
-            <div class="op-item">
-              <div class="op-info">
-                <h4>Mutation queue</h4>
-                <p>${statusText}</p>
-                ${errorCard}
-              </div>
-              <button id="sync-now-btn" class="btn btn-primary" ${syncBtnDisabled ? 'disabled' : ''}>${syncBtnLabel}</button>
-            </div>
-          </div>
-        </div>
-      </div>`;
-  }
-
   afterRender() {
     this.mountChild(LightSidebar, '#sidebar-mount', {
       currentPath: '/light/system',
@@ -371,15 +355,15 @@ export default class SystemPage extends Component {
         title: 'Download for offline',
         message: `
           <div class="offline-stats">
-            <p>Download ${stats.post_count} posts and ${stats.image_count} images?</p>
+            <p>Download ${escapeHtml(String(stats.post_count))} posts and ${escapeHtml(String(stats.image_count))} images?</p>
             <div class="radio-group" style="margin-top: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem;">
-                <input type="radio" name="imageScope" value="thumbnails" checked> 
-                Thumbnails only (${formatFileSize(stats.thumbnail_bytes)})
+                <input type="radio" name="imageScope" value="thumbnails" checked>
+                Thumbnails only (${escapeHtml(formatFileSize(stats.thumbnail_bytes))})
               </label>
               <label style="display: block;">
-                <input type="radio" name="imageScope" value="full"> 
-                Thumbnails + originals (${formatFileSize(stats.original_bytes)})
+                <input type="radio" name="imageScope" value="full">
+                Thumbnails + originals (${escapeHtml(formatFileSize(stats.original_bytes))})
               </label>
             </div>
           </div>`,

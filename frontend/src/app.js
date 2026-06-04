@@ -348,6 +348,10 @@ const routes = [
     load: () => import("./pages/light/SettingsPage.js"),
   },
   {
+    path: "/light/analytics",
+    load: () => import("./pages/light/AnalyticsPage.js"),
+  },
+  {
     path: "/light/security",
     load: () => import("./pages/light/SecurityPage.js"),
   },

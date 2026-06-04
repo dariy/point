@@ -8,8 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestSettingsHandler_GetPublicSettings(t *testing.T) {
@@ -152,4 +153,45 @@ func TestUpdateSettings_InvalidBind(t *testing.T) {
 	if err := h.UpdateSettings(e.NewContext(req, rec)); err == nil {
 		t.Error("expected bind error")
 	}
+}
+
+func TestSettingsHandler_DBErrors(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	e := echo.New()
+	sh := NewSettingsHandler(h.settingsSvc)
+
+	t.Run("GetPublicSettings", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		err := sh.GetPublicSettings(e.NewContext(req, rec))
+		if err == nil {
+			t.Error("expected error")
+		}
+	})
+
+	t.Run("GetSettings", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		err := sh.GetSettings(e.NewContext(req, rec))
+		if err == nil {
+			t.Error("expected error")
+		}
+	})
+
+	t.Run("UpdateSettings_EmptyMap_GetAllError", func(t *testing.T) {
+		c, _ := echoCtx(http.MethodPut, "/", `{}`)
+		err := sh.UpdateSettings(c)
+		if err == nil {
+			t.Error("expected error from GetAllSettings on closed DB")
+		}
+	})
+
+	t.Run("UpdateSettings_WithKey_SetSettingError", func(t *testing.T) {
+		c, _ := echoCtx(http.MethodPut, "/", `{"foo":"bar"}`)
+		err := sh.UpdateSettings(c)
+		if err == nil {
+			t.Error("expected error from SetSetting on closed DB")
+		}
+	})
 }

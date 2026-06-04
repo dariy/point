@@ -10,14 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/repository"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type PagesHandler struct {
-	repo            *repository.Repository
+	repo            repository.Repository
 	postService     *services.PostService
 	tagService      *services.TagService
 	mediaService    *services.MediaService
@@ -25,7 +26,7 @@ type PagesHandler struct {
 	cacheService    *services.CacheService
 }
 
-func NewPagesHandler(repo *repository.Repository, postService *services.PostService, tagService *services.TagService, mediaService *services.MediaService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
+func NewPagesHandler(repo repository.Repository, postService *services.PostService, tagService *services.TagService, mediaService *services.MediaService, settingsService *services.SettingsService, cacheService *services.CacheService) *PagesHandler {
 	return &PagesHandler{
 		repo:            repo,
 		postService:     postService,
@@ -59,10 +60,11 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
+	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
+	defaultPerPage := int(defaultPerPage64)
+	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -76,7 +78,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		}
 	}
 
-	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	showViewCounts := allSettings["show_view_counts"] == "true"
 
 	// Custom Home Page logic: if home_page_post_id is set, return that specific post.
 	// We only apply this on the first page of the index if no other filters are active.
@@ -99,6 +101,9 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 					resp := postToResponse(hpPost, postTagsMap[hpPost.ID], excludeTagIDs)
 					resp["type"] = "page" // Force type to page as we verified it above
+					if !showViewCounts {
+						delete(resp, "view_count")
+					}
 
 					htmlContent, _ := h.postService.RenderContent(hpPost.Content)
 					resp["content_html"] = htmlContent
@@ -140,19 +145,10 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		}
 	}
 
-	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
-	perPage, _ := strconv.Atoi(perPageStr)
-	if perPage < 1 {
-		perPage = 10
-	}
-	if qpp, _ := strconv.Atoi(c.QueryParam("per_page")); qpp > 0 {
-		perPage = qpp
-	}
-
 	// Published posts
 	listParams := services.ListPostsParams{
-		Page:          int32(page),
-		PerPage:       int32(perPage),
+		Page:          page,
+		PerPage:       perPage,
 		IncludeDrafts: false,
 		IncludeHidden: !publicOnly,
 	}
@@ -188,6 +184,9 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		resp := postToResponse(p, postTagsMap[p.ID], excludeTagIDs)
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
+		}
+		if !showViewCounts {
+			delete(resp, "view_count")
 		}
 		postResponses = append(postResponses, resp)
 	}
@@ -238,10 +237,11 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	if page < 1 {
-		page = 1
-	}
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
+	defaultPerPage64, _ := strconv.ParseInt(perPageStr, 10, 32)
+	defaultPerPage := int(defaultPerPage64)
+	page, perPage := ParsePaginationParams(c, defaultPerPage)
 
 	yearFrom, _ := strconv.Atoi(c.QueryParam("year_from"))
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
@@ -266,15 +266,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	}
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
-	allSettings, _ := h.settingsService.GetAllSettings(ctx)
-	perPageStr := getSettingOr(allSettings, "posts_per_page", "10")
-	perPage, _ := strconv.Atoi(perPageStr)
-	if perPage < 1 {
-		perPage = 10
-	}
-	if qpp, _ := strconv.Atoi(c.QueryParam("per_page")); qpp > 0 {
-		perPage = qpp
-	}
+	showViewCounts := allSettings["show_view_counts"] == "true"
 
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
@@ -327,7 +319,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	rootNavTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
 
 	// Posts for this tag (published only)
-	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, int32(page), int32(perPage), publicOnly, false, yearFrom, yearTo)
+	posts, total, err := h.tagService.GetPostsByTag(ctx, tag.ID, page, perPage, publicOnly, false, yearFrom, yearTo)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -353,6 +345,9 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		resp := postToResponse(p, tagPostTagsMap[p.ID], excludeTagIDs)
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
+		}
+		if !showViewCounts {
+			delete(resp, "view_count")
 		}
 		postResponses = append(postResponses, resp)
 	}
@@ -655,7 +650,7 @@ func tagToPostTagInfo(t models.Tag) repository.PostTagInfo {
 
 // fetchAncestorsMap fetches ancestor tags for each unique tag ID in the postTagsMap.
 // Results are cached per tag ID to avoid redundant queries.
-func fetchAncestorsMap(ctx context.Context, repo *repository.Repository, postTagsMap map[int64][]repository.PostTagInfo) map[int64][]repository.PostTagInfo {
+func fetchAncestorsMap(ctx context.Context, repo repository.Repository, postTagsMap map[int64][]repository.PostTagInfo) map[int64][]repository.PostTagInfo {
 	uniqueTagIDs := make(map[int64]bool)
 	for _, tags := range postTagsMap {
 		for _, t := range tags {

@@ -155,7 +155,7 @@ export default class ThemesPage extends Component {
       });
 
       // Re-parse the theme so the admin UI reflects the new theme immediately
-      await parseTheme();
+      await parseTheme({ bust: true });
 
       this.setState({ saving: false, activeTheme });
     } catch (err) {

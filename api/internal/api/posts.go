@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 type PostHandler struct {
@@ -116,15 +117,21 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 }
 
 func (h *PostHandler) ListPosts(c echo.Context) error {
-	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageParsed, _ := strconv.ParseInt(c.QueryParam("page"), 10, 32)
+	page := int32(pageParsed)
 	if page < 1 {
 		page = 1
 	}
 
-	perPage, _ := strconv.Atoi(c.QueryParam("per_page"))
+	perPage := 0
+	if parsedPerPage, err := strconv.ParseInt(c.QueryParam("per_page"), 10, 32); err == nil {
+		perPage = int(parsedPerPage)
+	}
 	if perPage < 1 {
 		perPageStr, _ := h.settingsService.GetSetting(c.Request().Context(), "posts_per_page", "10")
-		perPage, _ = strconv.Atoi(perPageStr)
+		if parsedPerPage, err := strconv.ParseInt(perPageStr, 10, 32); err == nil {
+			perPage = int(parsedPerPage)
+		}
 	}
 
 	status := c.QueryParam("status")
@@ -134,7 +141,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 
 	// Trash view: only admins can see trash.
 	if status == "trash" && c.Get("user") != nil {
-		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), int32(page), int32(perPage))
+		posts, total, err := h.postService.ListTrashedPosts(c.Request().Context(), page, int32(perPage))
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -158,12 +165,13 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
-		Page:          int32(page),
+		Page:          page,
 		PerPage:       int32(perPage),
 		Status:        status,
 		FeaturedOnly:  featured,
 		IncludeDrafts: includeDrafts,
 		Search:        search,
+		SortBy:        c.QueryParam("sort"),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -252,6 +260,11 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
+	} else {
+		showViewCountsStr, _ := h.settingsService.GetSetting(ctx, "show_view_counts", "false")
+		if showViewCountsStr != "true" {
+			delete(resp, "view_count")
+		}
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -838,4 +851,17 @@ func (h *PostHandler) WithdrawPost(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
+	stats, err := h.postService.GetPostAnalytics(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"total_views":            stats.TotalViews,
+		"average_views_per_post": stats.AverageViews,
+		"most_viewed_post_id":    stats.MostViewedPostID,
+	})
 }

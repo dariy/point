@@ -41,11 +41,11 @@ type LocationLink struct {
 
 // TimelineService assembles timeline payload from repository data.
 type TimelineService struct {
-	repo *repository.Repository
+	repo repository.Repository
 }
 
 // NewTimelineService creates a new TimelineService.
-func NewTimelineService(repo *repository.Repository) *TimelineService {
+func NewTimelineService(repo repository.Repository) *TimelineService {
 	return &TimelineService{repo: repo}
 }
 

@@ -22,6 +22,12 @@
     gap: var(--op-item-gap);
 }
 
+.op-item .btn {
+    min-width: 10rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
 .op-info h4 {
     margin: 0 0 var(--h4-margin) 0;
 }

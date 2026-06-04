@@ -52,7 +52,6 @@ const SETTING_GROUPS = [
   {
     title: "Advanced",
     keys: [
-      "max_upload_size_mb",
       "thumbnail_width",
       "thumbnail_height",
       "jpeg_quality",
@@ -70,11 +69,43 @@ const SETTING_GROUPS = [
 ];
 
 const NUMERIC_KEYS = new Set([
-  "max_upload_size_mb",
   "thumbnail_width",
   "thumbnail_height",
   "jpeg_quality",
 ]);
+
+const SETTING_HELP = {
+  // General
+  blog_title: "The name of your blog, shown in the browser tab and header.",
+  blog_subtitle: "A short tagline shown below the blog title.",
+  author_name: "Default author name displayed on posts.",
+  about_post_id: "A page post linked from 'About' in navigation. Only page-type posts appear here.",
+  home_page_post_id: "Show this page post instead of the default post list on the homepage. Leave blank to use the standard feed.",
+  // Display — inputs/selects
+  posts_per_page: "Number of posts shown per page on the homepage and tag archive pages.",
+  min_tag_posts_to_show: "Tags with fewer posts than this number are hidden from public visitors. Set to 0 to show all tags.",
+  default_theme: "The colour theme applied to the public-facing site.",
+  immersive_nav_direction: "Direction of the left/right navigation arrows in immersive (full-screen) post mode.",
+  exif_visibility: "Who can see photo EXIF metadata (camera model, exposure settings, etc.).",
+  map_mode: "Controls who can access the /map page. 'Hidden' means admins only.",
+  timeline_mode: "Controls who can access the /timeline page. 'Hidden' means admins only.",
+  // Display — toggles
+  show_view_counts: "Show the number of views on each post, visible to all visitors.",
+  use_thumbnails: "Display auto-generated thumbnail images in the post list on the homepage and tag pages.",
+  show_tag_cloud: "Show a tag cloud widget listing the most-used tags (respects the min-posts threshold above).",
+  show_immersive_excerpt: "Show a short excerpt overlaid on the hero image in immersive (full-screen) post mode.",
+  // Storage & System
+  storage_quota_mb: "Maximum allowed storage in MB. Set to 0 for no limit.",
+  enable_backup: "Enable scheduled automatic database backups.",
+  backup_interval_hours: "How often to create automatic backups, in hours.",
+  // Advanced
+  thumbnail_width: "Width in pixels for auto-generated post thumbnails.",
+  thumbnail_height: "Height in pixels for auto-generated post thumbnails.",
+  jpeg_quality: "JPEG compression quality for thumbnails (1–100). Higher = better quality, larger files.",
+  // AI
+  gemini_api_key: "Your Google Gemini API key for AI-assisted title, tag, and excerpt generation on image uploads.",
+  gemini_prompt_title: "Customize the prompt sent to Gemini to generate post metadata from uploaded images.",
+};
 
 export default class SettingsPage extends Component {
   constructor(container, props = {}) {
@@ -243,9 +274,16 @@ export default class SettingsPage extends Component {
           ? "settings-field settings-field-top"
           : "settings-field";
         const displayLabel = isPromptComposite ? "Analysis Prompt" : label;
+        const helpText = SETTING_HELP[key];
+        const helpTip = helpText
+          ? `<span class="settings-help-tip"><span class="settings-help-icon" tabindex="0" aria-label="Help">?</span><span class="settings-help-tooltip">${escapeHtml(helpText)}</span></span>`
+          : "";
         inputs.push(`
           <div class="${fieldClass}">
-            <label class="settings-field-label"${isPromptComposite ? "" : ` for="${key}"`}>${escapeHtml(displayLabel)}</label>
+            <div class="settings-field-label-row">
+              <label class="settings-field-label"${isPromptComposite ? "" : ` for="${key}"`}>${escapeHtml(displayLabel)}</label>
+              ${helpTip}
+            </div>
             ${input}
           </div>`);
       }
@@ -263,11 +301,19 @@ export default class SettingsPage extends Component {
       <div class="setting-pill-group${inputs.length ? " setting-pill-group-divided" : ""}">
         ${toggles
           .map(
-            ({ key, label, checked }) => `
-          <label class="setting-pill">
-            <input type="checkbox" name="${key}" class="setting-pill-input" ${checked ? "checked" : ""}>
-            <span class="setting-pill-label">${escapeHtml(label)}</span>
-          </label>`,
+            ({ key, label, checked }) => {
+              const help = SETTING_HELP[key];
+              const helpTip = help
+                ? `<span class="settings-help-tip"><span class="settings-help-icon" tabindex="0" aria-label="Help">?</span><span class="settings-help-tooltip">${escapeHtml(help)}</span></span>`
+                : "";
+              return `
+          <div class="setting-pill-item">
+            <label class="setting-pill">
+              <input type="checkbox" name="${key}" class="setting-pill-input" ${checked ? "checked" : ""}>
+              <span class="setting-pill-label">${escapeHtml(label)}</span>
+            </label>${helpTip}
+          </div>`;
+            }
           )
           .join("")}
       </div>`

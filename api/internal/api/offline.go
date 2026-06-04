@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/models"
+
+	"github.com/labstack/echo/v4"
 )
 
 // GetOfflineStats returns counts and sizes of posts and media for offline caching.

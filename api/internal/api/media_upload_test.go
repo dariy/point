@@ -9,10 +9,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestMediaHandler_UploadMultipleExtended(t *testing.T) {

@@ -31,6 +31,8 @@ export class ConfirmDialog extends Component {
     const body = modal.getBodyMount();
     if (body) {
       if (this.props.allowHtml) {
+        // Caution: using innerHTML can lead to XSS if message is not sanitized.
+        // Ensure all dynamic parts of the message are escaped by the caller.
         body.innerHTML = message;
       } else {
         const p = document.createElement('p');

@@ -7,6 +7,7 @@
 import { Component } from '../../components/Component.js';
 import { LightSidebar } from '../../components/light/LightSidebar.js';
 import { getStats, getVersion } from '../../api/system.js';
+import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
 import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
@@ -17,17 +18,17 @@ import { setupHeaderCompact } from '../../utils/headerCompact.js';
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, stats: null, error: null, versionBanner: null };
+    this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], error: null, versionBanner: null };
   }
 
   render() {
-    const { loading, stats, error, versionBanner } = this.state;
+    const { loading, stats, analyticsStats, topPosts, error, versionBanner } = this.state;
 
     const content = loading
       ? `<div class="loading-spinner" aria-label="Loading…"></div>`
       : error
         ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
-        : this._renderStats(stats);
+        : this._renderStats(stats, analyticsStats, topPosts);
 
     const offline = store.get('offline_status') || {};
     let syncPill = '';
@@ -63,13 +64,55 @@ export default class DashboardPage extends Component {
       </div>`;
   }
 
-  _renderStats(s) {
+  _renderStats(s, analytics, topPosts) {
     if (!s) return '';
 
     const usagePercent = s.storage_quota_mb
       ? Math.min(100, Math.round((s.storage_used_mb / s.storage_quota_mb) * 100))
       : 0;
     const barClass = usagePercent >= 90 ? 'danger' : usagePercent >= 70 ? 'warning' : '';
+
+    const analyticsCards = analytics ? `
+        <div class="stat-card">
+          <div class="stat-label">Total Views</div>
+          <div class="stat-value stat-primary">${escapeHtml(String(analytics.total_views ?? 0))}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Views / Post</div>
+          <div class="stat-value">${escapeHtml(String(Math.round(analytics.average_views_per_post ?? 0)))}</div>
+        </div>` : '';
+
+    const topPostsTable = topPosts.length > 0 ? `
+      <div class="card" style="margin-top: var(--spacing-xl)">
+        <div class="card-header"><h2>Top Posts by Views</h2></div>
+        <div class="card-body">
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Post Title</th>
+                  <th class="text-right">Views</th>
+                  <th class="text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${topPosts.map(post => `
+                  <tr>
+                    <td>
+                      <a href="/light/posts/${escapeHtml(String(post.id))}/edit" class="post-title-link">
+                        ${escapeHtml(post.title)}
+                      </a>
+                    </td>
+                    <td class="text-right font-mono">${escapeHtml(String(post.view_count ?? 0))}</td>
+                    <td class="text-right">
+                      <span class="status-pill status-${escapeHtml(post.status)}">${escapeHtml(post.status)}</span>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>` : '';
 
     return `
       <div class="stats-grid">
@@ -89,6 +132,7 @@ export default class DashboardPage extends Component {
           <div class="stat-label">Media Files</div>
           <div class="stat-value">${escapeHtml(String(s.total_media ?? 0))}</div>
         </div>
+        ${analyticsCards}
       </div>
 
       <div class="card" style="margin-top: var(--spacing-xl)">
@@ -102,7 +146,8 @@ export default class DashboardPage extends Component {
             <div class="storage-bar-fill ${barClass}" style="width: ${escapeHtml(String(usagePercent))}%"></div>
           </div>
         </div>
-      </div>`;
+      </div>
+      ${topPostsTable}`;
   }
 
   afterRender() {
@@ -144,8 +189,18 @@ export default class DashboardPage extends Component {
 
   async _load() {
     try {
-      const stats = await getStats();
-      this.setState({ loading: false, stats, error: null });
+      const [stats, analyticsStats, topPostsResp] = await Promise.all([
+        getStats(),
+        getPostAnalytics().catch(() => null),
+        getTopPosts(10).catch(() => ({ posts: [] })),
+      ]);
+      this.setState({
+        loading: false,
+        stats,
+        analyticsStats,
+        topPosts: topPostsResp.posts || [],
+        error: null,
+      });
     } catch (err) {
       console.error('[DashboardPage] load error:', err);
       store.set('toast', { message: 'Could not load dashboard stats.', type: 'error' });

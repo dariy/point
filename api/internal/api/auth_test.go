@@ -7,13 +7,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/services"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestAuthHandler_Login(t *testing.T) {
@@ -346,5 +348,229 @@ func TestGenerateToken_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 	if err := h.Login(e.NewContext(req, rec)); err != nil {
 		t.Fatalf("Login failed: %v", err)
+	}
+}
+func TestAuthHandler_ProductionCookie(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	insertUser(h.repo)
+	hash, _ := services.HashPassword("pass1234")
+	_, _ = h.repo.DB().Exec(`UPDATE users SET password_hash=? WHERE id=1`, hash)
+
+	cfg := &config.Config{AppEnv: "production"}
+	authH := NewAuthHandler(h.authSvc, cfg, h.repo)
+	e := echo.New()
+
+	body := `{"username":"u","name":"pass1234","remember_me":false}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := authH.Login(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	cookies := rec.Result().Cookies()
+	found := false
+	for _, c := range cookies {
+		if c.Name == "session" && c.Secure {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected Secure=true cookie in production mode")
+	}
+}
+
+func TestAuthHandler_ListSessions_WithData(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	insertUser(h.repo)
+
+	_, _ = h.repo.DB().Exec(`INSERT INTO sessions (user_id,token,ip_address,user_agent,expires_at) VALUES (1,'tok','127.0.0.1','ua',datetime('now','+1 hour'))`)
+
+	authH := NewAuthHandler(h.authSvc, h.cfg, h.repo)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1, ID: 1})
+	if err := authH.ListSessions(c); err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+}
+
+func TestAuthHandler_DBErrors(t *testing.T) {
+	h := setupHandlers(t)
+	_ = h.repo.Close()
+	authH := NewAuthHandler(h.authSvc, h.cfg, h.repo)
+	e := echo.New()
+
+	t.Run("ListSessions_Error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+		err := authH.ListSessions(c)
+		if err == nil {
+			t.Error("expected error")
+		}
+	})
+
+	t.Run("DeleteOtherSessions_Error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set("user", models.GetSessionByTokenRow{UserID: 1, ID: 1})
+		err := authH.DeleteOtherSessions(c)
+		if err == nil {
+			t.Error("expected error")
+		}
+	})
+}
+
+func TestAuthHandler_Login_SessionCreateError(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+
+	hash, _ := services.HashPassword("password123")
+	_, _ = h.repo.CreateUser(nil_ctx(), models.CreateUserParams{
+		Username: "testlogin", Email: "", PasswordHash: hash, DisplayName: "Test",
+	})
+
+	_ = h.repo.Close()
+	ah := NewAuthHandler(h.authSvc, h.cfg, h.repo)
+	body := `{"username":"testlogin","name":"password123"}`
+	c, _ := echoCtx(http.MethodPost, "/", body)
+	err := ah.Login(c)
+
+	_ = err
+}
+
+func TestAuthHandler_Logout_WithValidSession(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+
+	hash, _ := services.HashPassword("password123")
+	user, _ := h.repo.CreateUser(nil_ctx(), models.CreateUserParams{
+		Username: "logoutuser", Email: "", PasswordHash: hash, DisplayName: "Logout",
+	})
+	token := GenerateToken()
+	expiry := time.Now().Add(24 * time.Hour).UTC()
+	_, _ = h.authSvc.CreateSession(nil_ctx(), user.ID, "127.0.0.1", "test", expiry, token)
+
+	ah := NewAuthHandler(h.authSvc, h.cfg, h.repo)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	rec := httptest.NewRecorder()
+	err := ah.Logout(e.NewContext(req, rec))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+func newAuthHandlerForTest(t *testing.T, cfg *config.Config) *AuthHandler {
+	t.Helper()
+	repo := setupTestDB(t)
+	authSvc := services.NewAuthService(repo)
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	return NewAuthHandler(authSvc, cfg, repo)
+}
+
+func TestAuthHandler_ForgotPassword_EmptyEmail(t *testing.T) {
+	h := newAuthHandlerForTest(t, nil)
+	e := echo.New()
+	body := `{"email":""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ForgotPassword(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty email, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_ForgotPassword_SMTPNotConfigured(t *testing.T) {
+	h := newAuthHandlerForTest(t, &config.Config{SMTPHost: ""})
+	e := echo.New()
+	body := `{"email":"test@example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ForgotPassword(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 when SMTP not configured, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_ForgotPassword_UserNotFound(t *testing.T) {
+
+	h := newAuthHandlerForTest(t, &config.Config{SMTPHost: "smtp.example.com", AppURL: "http://localhost"})
+	e := echo.New()
+	body := `{"email":"nobody@example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ForgotPassword(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 (no enumeration) when user not found, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_ResetPassword_MissingFields(t *testing.T) {
+	h := newAuthHandlerForTest(t, nil)
+	e := echo.New()
+	body := `{"token":"","name":""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ResetPassword(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing fields, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_ResetPassword_InvalidPasswordLength(t *testing.T) {
+	h := newAuthHandlerForTest(t, nil)
+	e := echo.New()
+
+	body := `{"token":"some-token","name":"tooshort"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ResetPassword(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid password length, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_ResetPassword_InvalidToken(t *testing.T) {
+	h := newAuthHandlerForTest(t, nil)
+	e := echo.New()
+
+	hash64 := strings.Repeat("a", 64)
+	reqBody, _ := json.Marshal(map[string]string{"token": "bogus-token", "name": hash64})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", bytes.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ResetPassword(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid token, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

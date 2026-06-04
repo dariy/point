@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,6 +208,108 @@ func TestBaseURL_WithForwardedProto(t *testing.T) {
 	}
 }
 
+func TestParsePaginationParams(t *testing.T) {
+	e := echo.New()
+	tests := []struct {
+		name           string
+		query          string
+		defaultPerPage int
+		wantPage       int32
+		wantPerPage    int32
+	}{
+		{
+			name:           "defaults",
+			query:          "",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+		{
+			name:           "valid values",
+			query:          "?page=2&per_page=20",
+			defaultPerPage: 10,
+			wantPage:       2,
+			wantPerPage:    20,
+		},
+		{
+			name:           "negative values",
+			query:          "?page=-1&per_page=-5",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+		{
+			name:           "invalid values",
+			query:          "?page=abc&per_page=def",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+		{
+			name:           "overflow values",
+			query:          "?page=3000000000&per_page=4000000000",
+			defaultPerPage: 10,
+			wantPage:       1,
+			wantPerPage:    10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/"+tt.query, nil)
+			c := e.NewContext(req, httptest.NewRecorder())
+			page, perPage := ParsePaginationParams(c, tt.defaultPerPage)
+			if page != tt.wantPage || perPage != tt.wantPerPage {
+				t.Errorf("got (%v, %v), want (%v, %v)", page, perPage, tt.wantPage, tt.wantPerPage)
+			}
+		})
+	}
+}
+
+func TestParseMapsCoords_ShortLinkRedirectSSRF(t *testing.T) {
+	// Simulate a short-link host that redirects to an internal/non-allowed URL.
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://169.254.169.254/metadata", http.StatusFound)
+	}))
+	defer redirectTarget.Close()
+
+	host := redirectTarget.Listener.Addr().String()
+	shortLinkHosts[host] = true
+	allowedHosts[host] = true
+	defer func() {
+		delete(shortLinkHosts, host)
+		delete(allowedHosts, host)
+	}()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?q=http://"+host+"/short", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := ParseMapsCoords(c)
+	if err == nil {
+		t.Error("expected error when short link redirects to non-allowed host (SSRF)")
+	}
+}
+
+func TestParseMapsCoords_SSRF(t *testing.T) {
+	e := echo.New()
+
+	// Host-only URL (no path/query) that is allowed should still work
+	req := httptest.NewRequest(http.MethodGet, "/util/parse-maps-coords?q=https://maps.google.com", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	_ = ParseMapsCoords(c)
+
+	// URL that tries to sneak in a different host via auth
+	req = httptest.NewRequest(http.MethodGet, "/util/parse-maps-coords?q=https://google.com@evil.com", nil)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	err := ParseMapsCoords(c)
+	if err == nil {
+		t.Error("expected error for URL with userinfo/SSRF attempt")
+	}
+}
+
 func TestTagHandler_ParseMapsCoordsCoverage(t *testing.T) {
 	e := echo.New()
 
@@ -241,4 +344,64 @@ func TestParseMapCoords_DegreeNotation(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	_ = ParseMapsCoords(c)
+}
+
+func TestParseCoordsFromPageBody_Error(t *testing.T) {
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html>no coords here</html>`))
+	}))
+	defer ts.Close()
+
+	lat, lng, ok := parseCoordsFromPageBody(ts.URL)
+	if ok {
+		t.Errorf("expected ok=false, got lat=%f lng=%f", lat, lng)
+	}
+}
+
+func TestParseCoordsFromPageBody_ConnectionError(t *testing.T) {
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	tsURL := ts.URL
+	ts.Close()
+
+	_, _, ok := parseCoordsFromPageBody(tsURL)
+	if ok {
+		t.Error("expected ok=false for connection refused")
+	}
+}
+
+func TestParseCoordsFromDegreeString_SouthWest(t *testing.T) {
+
+	lat, lng, ok := parseCoordsFromDegreeString("45.5° S, 73.5° W")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if lat >= 0 {
+		t.Errorf("expected negative lat for S, got %f", lat)
+	}
+	if lng >= 0 {
+		t.Errorf("expected negative lng for W, got %f", lng)
+	}
+}
+
+func TestExtractMediaURL_Coverage(t *testing.T) {
+
+	result := extractMediaURL(sql.NullString{String: "/thumb/photo.jpg", Valid: true}, "")
+	if result == nil {
+		t.Error("expected non-nil result for valid thumb path")
+	}
+
+	result2 := extractMediaURL(sql.NullString{Valid: false}, "![alt](/media/photo.jpg)")
+	if result2 == nil {
+		t.Error("expected non-nil result for markdown image in content")
+	}
+
+	result3 := extractMediaURL(sql.NullString{String: "originals/photo.jpg", Valid: true}, "")
+	if result3 == nil {
+		t.Error("expected non-nil for originals/ thumb path")
+	}
+
+	result4 := extractMediaURL(sql.NullString{Valid: false}, "")
+	_ = result4
 }
