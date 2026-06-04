@@ -808,7 +808,7 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 		}
 
 		// Prevent path traversal in the filename segment.
-		if filename == "" || filename == ".." || filename == "." {
+		if filename == "" || filename == "." || strings.Contains(filename, "..") || strings.ContainsAny(filename, "/\\") {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid path")
 		}
 

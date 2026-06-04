@@ -255,6 +255,11 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 			"detail": "Password reset is not configured. Set SMTP_HOST in your .env file.",
 		})
 	}
+	if strings.TrimSpace(h.cfg.AppURL) == "" {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{
+			"detail": "Password reset is not configured. Set APP_URL in your .env file.",
+		})
+	}
 
 	ctx := c.Request().Context()
 	user, err := h.repo.GetUserByEmail(ctx, strings.TrimSpace(req.Email))
@@ -269,15 +274,7 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "could not generate reset token"})
 	}
 
-	appURL := h.cfg.AppURL
-	if appURL == "" {
-		scheme := c.Scheme()
-		if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
-			scheme = fwd
-		}
-		appURL = fmt.Sprintf("%s://%s", scheme, c.Request().Host)
-	}
-	appURL = strings.TrimRight(appURL, "/")
+	appURL := strings.TrimRight(strings.TrimSpace(h.cfg.AppURL), "/")
 
 	resetLink := fmt.Sprintf("%s/light/pss/%s", appURL, token)
 	body := fmt.Sprintf(

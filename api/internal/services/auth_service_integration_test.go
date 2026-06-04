@@ -216,6 +216,7 @@ func TestAuthService_ChangePassword(t *testing.T) {
 	// Test wrong current password
 	err = service.ChangePassword(ctx, user.ID, "wrongpassword", "anotherpassword")
 	if err == nil || err.Error() != "current password incorrect" {
+		t.Errorf("expected error 'current password incorrect', got: %v", err)
 	}
 }
 

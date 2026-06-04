@@ -55,6 +55,16 @@ function mediaTypeFromPath(path) {
   return null;
 }
 
+function stripHtml(html) {
+  if (!html) return "";
+  let previous;
+  do {
+    previous = html;
+    html = html.replace(/<[^>]*>/g, "");
+  } while (html !== previous);
+  return html;
+}
+
 /**
  * Returns true when the post should render in immersive (full-screen) mode.
  * Exported so PostPage can use the same check to configure its child components.
@@ -82,10 +92,7 @@ export function shouldUseImmersive(post) {
   if (media.length && media.every((m) => m.type === "audio")) return false;
 
   // Strip all HTML tags; what remains is the visible text.
-  const text = html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .trim();
+  const text = stripHtml(html).replace(/&nbsp;/g, " ").trim();
 
   // If there is text, check whether every non-empty line is a bare media path.
   // If so it counts as media, not prose.
@@ -317,10 +324,7 @@ export class PostContent extends Component {
 
         // Extract media from this segment to see if it's a bare media slide.
         const segmentMedia = this._extractMedia(trimmed);
-        const text = trimmed
-          .replace(/<[^>]+>/g, "")
-          .replace(/&nbsp;/g, " ")
-          .trim();
+        const text = stripHtml(trimmed).replace(/&nbsp;/g, " ").trim();
 
         if (
           segmentMedia.length === 1 &&
@@ -357,7 +361,7 @@ export class PostContent extends Component {
     }
     // Fallback: bare media paths rendered as plain text by the markdown parser.
     if (items.length === 0) {
-      const text = html.replace(/<[^>]+>/g, "").trim();
+      const text = stripHtml(html).trim();
       for (const line of text.split(/\n+/)) {
         const url = line.trim();
         if (!url) continue;
