@@ -151,20 +151,46 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 	return theme, nil
 }
 
+// pathWithinDir resolves symlinks and verifies the path stays inside dir.
+func pathWithinDir(path, dir string) error {
+	resolvedDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		resolvedDir = filepath.Clean(dir)
+	}
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		// File doesn't exist yet; verify clean join stays within dir without symlink resolution.
+		clean := filepath.Clean(path)
+		if !strings.HasPrefix(clean, resolvedDir+string(filepath.Separator)) {
+			return fmt.Errorf("path escapes base directory")
+		}
+		return nil
+	}
+	if !strings.HasPrefix(resolvedPath, resolvedDir+string(filepath.Separator)) {
+		return fmt.Errorf("path escapes base directory")
+	}
+	return nil
+}
+
 // findTheme searches user themes path first (<name>.css), then system themes path (<name>.css).
 func (s *ThemeService) findTheme(name string) (Theme, error) {
-	if name == "." || strings.Contains(name, "..") || strings.ContainsAny(name, "/\\") {
+	name = strings.ToLower(name)
+	if !themeNameSafeRe.MatchString(name) {
 		return Theme{}, fmt.Errorf("invalid theme name")
 	}
-	name = strings.ToLower(name)
 	if s.cfg.UserThemesPath != "" {
-		userPath := filepath.Join(s.cfg.UserThemesPath, normalizedName+".css")
-		if t, err := s.ReadAndValidateTheme(userPath, normalizedName); err == nil {
-			return t, nil
+		userPath := filepath.Join(s.cfg.UserThemesPath, name+".css")
+		if pathWithinDir(userPath, s.cfg.UserThemesPath) == nil {
+			if t, err := s.ReadAndValidateTheme(userPath, name); err == nil {
+				return t, nil
+			}
 		}
 	}
-	systemPath := filepath.Join(s.cfg.ThemesPath, normalizedName+".css")
-	return s.ReadAndValidateTheme(systemPath, normalizedName)
+	systemPath := filepath.Join(s.cfg.ThemesPath, name+".css")
+	if err := pathWithinDir(systemPath, s.cfg.ThemesPath); err != nil {
+		return Theme{}, err
+	}
+	return s.ReadAndValidateTheme(systemPath, name)
 }
 
 func (s *ThemeService) GetActiveTheme(ctx context.Context) (Theme, error) {
