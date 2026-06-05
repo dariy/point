@@ -6,13 +6,15 @@
 
 import { Component } from "../../components/Component.js";
 import { LightSidebar } from "../../components/light/LightSidebar.js";
-import { getThemes, getActiveTheme, setActiveTheme } from "../../api/themes.js";
+import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.js";
 import { logout } from "../../api/auth.js";
 import { parseTheme } from "../../utils/themeParser.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { STAR_SVG, SETTINGS_SVG } from "../../utils/icons.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
+import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
+import { CssEditor } from "../../components/light/CssEditor.js";
 
 export default class ThemesPage extends Component {
   constructor(container, props = {}) {
@@ -21,13 +23,15 @@ export default class ThemesPage extends Component {
       loading: true,
       themes: [],
       activeTheme: null,
+      customCSS: "",
       error: null,
       saving: false,
+      savingCSS: false,
     };
   }
 
   render() {
-    const { loading, error, themes, activeTheme, saving } = this.state;
+    const { loading, error, themes, activeTheme, saving, customCSS, savingCSS } = this.state;
 
     let content = "";
     if (loading) {
@@ -38,7 +42,22 @@ export default class ThemesPage extends Component {
       content = `
         <div class="themes-grid">
           ${themes.map((theme) => this._renderThemeCard(theme, activeTheme, saving)).join("")}
-        </div>`;
+        </div>
+        
+        <section class="custom-css-section">
+          <div class="section-header">
+            <h2>Custom CSS</h2>
+            <p class="section-desc">Add global CSS definitions that apply site-wide, across all pages and themes.</p>
+          </div>
+          <div class="form-group">
+            <div id="custom-css-editor-mount"></div>
+          </div>
+          <div class="form-actions">
+            <button id="save-css-btn" class="btn btn-primary" ${savingCSS ? "disabled" : ""}>
+              ${savingCSS ? "Saving…" : "Save Custom CSS"}
+            </button>
+          </div>
+        </section>`;
     }
 
     return `
@@ -114,10 +133,21 @@ export default class ThemesPage extends Component {
 
     if (this.state.loading || this.state.error) return;
 
+    setupTextareaMaximizer(this.container);
+
+    this._cssEditorRef = this.mountChild(CssEditor, "#custom-css-editor-mount", {
+      value: this.state.customCSS || "",
+      onChange: () => {},
+    });
+
     this.$$(".activate-theme-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         this._handleActivate(btn.dataset.name);
       });
+    });
+
+    this.$("#save-css-btn")?.addEventListener("click", () => {
+      this._handleSaveCSS();
     });
   }
 
@@ -129,14 +159,16 @@ export default class ThemesPage extends Component {
   async _load() {
     this.setState({ loading: true, error: null });
     try {
-      const [themes, activeTheme] = await Promise.all([
+      const [themes, activeTheme, customCSSData] = await Promise.all([
         getThemes(),
         getActiveTheme(),
+        getCustomCSS(),
       ]);
       this.setState({
         loading: false,
         themes: themes || [],
         activeTheme: activeTheme,
+        customCSS: customCSSData?.css || "",
       });
     } catch (err) {
       console.error("[ThemesPage] load error:", err);
@@ -165,6 +197,30 @@ export default class ThemesPage extends Component {
         type: "error",
       });
       this.setState({ saving: false });
+    }
+  }
+
+  async _handleSaveCSS() {
+    const css = this._cssEditorRef ? this._cssEditorRef.getValue() : this.state.customCSS;
+    this.setState({ savingCSS: true });
+    try {
+      await updateCustomCSS(css);
+      store.set("toast", {
+        message: "Custom CSS saved successfully.",
+        type: "success",
+      });
+
+      // Refresh the theme in the UI
+      await parseTheme({ bust: true });
+
+      this.setState({ savingCSS: false, customCSS: css });
+    } catch (err) {
+      console.error("[ThemesPage] save css error:", err);
+      store.set("toast", {
+        message: err.message || "Failed to save custom CSS.",
+        type: "error",
+      });
+      this.setState({ savingCSS: false });
     }
   }
 
