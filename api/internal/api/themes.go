@@ -55,10 +55,9 @@ func (h *ThemeHandler) SetActiveTheme(c echo.Context) error {
 }
 
 func (h *ThemeHandler) GetCustomCSS(c echo.Context) error {
-	css, err := h.themeService.GetCustomCSS(c.Request().Context())
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
-	}
+	// GetSetting always returns nil error (silently falls back to default on DB error),
+	// so we ignore the error here.
+	css, _ := h.themeService.GetCustomCSS(c.Request().Context())
 	return c.JSON(http.StatusOK, map[string]string{"css": css})
 }
 

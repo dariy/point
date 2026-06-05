@@ -188,4 +188,33 @@ func TestThemeHandler(t *testing.T) {
 		assert.Contains(t, string(data), "body { background: red; }")
 		assert.Contains(t, string(data), "System Custom CSS")
 	})
+
+	t.Run("UpdateCustomCSS bind error", func(t *testing.T) {
+		body := []byte(`{invalid json}`)
+		req := httptest.NewRequest(http.MethodPut, "/api/themes/custom-css", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		err := handler.UpdateCustomCSS(c)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("UpdateCustomCSS service error", func(t *testing.T) {
+		emptyDir := t.TempDir()
+		badCfg := &config.Config{ThemesPath: emptyDir, FrontendDir: t.TempDir()}
+		badThemeSvc := services.NewThemeService(badCfg, settingsSvc)
+		badHandler := NewThemeHandler(badThemeSvc)
+
+		body := []byte(`{"css":"body { color: red; }"}`)
+		req := httptest.NewRequest(http.MethodPut, "/api/themes/custom-css", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		err := badHandler.UpdateCustomCSS(c)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
 }
