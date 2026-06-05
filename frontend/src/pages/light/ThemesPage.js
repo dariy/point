@@ -14,6 +14,7 @@ import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { STAR_SVG, SETTINGS_SVG } from "../../utils/icons.js";
 import { setupHeaderCompact } from "../../utils/headerCompact.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
+import { CssEditor } from "../../components/light/CssEditor.js";
 
 export default class ThemesPage extends Component {
   constructor(container, props = {}) {
@@ -49,9 +50,7 @@ export default class ThemesPage extends Component {
             <p class="section-desc">Add global CSS definitions that apply site-wide, across all pages and themes.</p>
           </div>
           <div class="form-group">
-            <textarea id="custom-css-editor" class="form-input css-editor-textarea" 
-                      rows="12" spellcheck="false" 
-                      placeholder="/* Add your custom CSS here */">${escapeHtml(customCSS || "")}</textarea>
+            <div id="custom-css-editor-mount"></div>
           </div>
           <div class="form-actions">
             <button id="save-css-btn" class="btn btn-primary" ${savingCSS ? "disabled" : ""}>
@@ -136,6 +135,11 @@ export default class ThemesPage extends Component {
 
     setupTextareaMaximizer(this.container);
 
+    this._cssEditorRef = this.mountChild(CssEditor, "#custom-css-editor-mount", {
+      value: this.state.customCSS || "",
+      onChange: () => {},
+    });
+
     this.$$(".activate-theme-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         this._handleActivate(btn.dataset.name);
@@ -197,7 +201,7 @@ export default class ThemesPage extends Component {
   }
 
   async _handleSaveCSS() {
-    const css = this.$("#custom-css-editor")?.value || "";
+    const css = this._cssEditorRef ? this._cssEditorRef.getValue() : this.state.customCSS;
     this.setState({ savingCSS: true });
     try {
       await updateCustomCSS(css);

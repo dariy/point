@@ -13,6 +13,7 @@ import { Component } from "../../components/Component.js";
 import { LightSidebar } from "../../components/light/LightSidebar.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
+import { CssEditor } from "../../components/light/CssEditor.js";
 import {
   getPost,
   createPost,
@@ -313,9 +314,7 @@ export default class PostEditPage extends Component {
                   </div>
                   <div class="form-group">
                     <label class="form-label" for="css-editor">Custom CSS</label>
-                    <textarea id="css-editor" class="form-input css-editor-textarea"
-                              rows="8" spellcheck="false"
-                              placeholder="/* Styles applied only to this post */">${escapeHtml(p.css || "")}</textarea>
+                    <div id="css-editor-mount"></div>
                   </div>
                 </div>
               </details>
@@ -370,6 +369,11 @@ export default class PostEditPage extends Component {
       },
     });
     this._tags = toTagNames(this.state.post?.tags);
+
+    this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
+      value: this.state.post?.css || "",
+      onChange: () => this._debouncedAutosave(),
+    });
 
     // Save button
     const saveBtn = this.$("#save-btn");
@@ -777,7 +781,7 @@ export default class PostEditPage extends Component {
       scheduled_at: this.$("#schedule-input")?.value
         ? new Date(this.$("#schedule-input").value).toISOString()
         : "",
-      css: this.$("#css-editor")?.value || "",
+      css: this._cssEditorRef ? this._cssEditorRef.getValue() : (this.state.post?.css || ""),
       immersive_mode: this.$("#immersive-mode-select")?.value || "auto",
     };
   }
