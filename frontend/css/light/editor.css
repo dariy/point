@@ -657,7 +657,8 @@ body.drag-active::after {
     right: calc(var(--spacing-xs) + var(--size-1-75, 1.75rem));
 }
 
-textarea.is-maximized {
+textarea.is-maximized,
+.codejar-editor.is-maximized {
     position: fixed !important;
     inset: 0 !important;
     z-index: 10000 !important;
@@ -672,6 +673,7 @@ textarea.is-maximized {
     resize: none !important;
     font-size: var(--font-size-base) !important;
     line-height: 1.6 !important;
+    overflow: auto !important;
 }
 
 .textarea-maximize-btn.is-maximized {
@@ -686,5 +688,13 @@ textarea.is-maximized {
 
 .textarea-maximized-body-lock {
     overflow: hidden !important;
+}
+
+/* Placeholder for CodeJar */
+.codejar-editor:empty:before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    opacity: 0.5;
+    pointer-events: none;
 }
 

@@ -236,6 +236,20 @@ func (s *ThemeService) SetActiveTheme(ctx context.Context, name string) (Theme, 
 	return theme, nil
 }
 
+func (s *ThemeService) GetCustomCSS(ctx context.Context) (string, error) {
+	return s.settingsService.GetSetting(ctx, "system_custom_css", "")
+}
+
+func (s *ThemeService) UpdateCustomCSS(ctx context.Context, css string) error {
+	err := s.settingsService.SetSetting(ctx, "system_custom_css", css, "string")
+	if err != nil {
+		return fmt.Errorf("failed to save custom css setting: %w", err)
+	}
+
+	// Update the public theme.css with the new custom CSS
+	return s.SyncActiveTheme(ctx)
+}
+
 func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 	activeTheme, err := s.GetActiveTheme(ctx)
 	if err != nil {
@@ -252,6 +266,13 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 	data, err := os.ReadFile(activeTheme.Path)
 	if err != nil {
 		return fmt.Errorf("failed to read source theme file: %w", err)
+	}
+
+	// Append system-wide custom CSS if configured
+	customCSS, _ := s.GetCustomCSS(ctx)
+	if customCSS != "" {
+		data = append(data, []byte("\n\n/* System Custom CSS */\n")...)
+		data = append(data, []byte(customCSS)...)
 	}
 
 	err = os.WriteFile(publicThemePath, data, 0644)

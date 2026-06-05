@@ -13,6 +13,8 @@ import { Component } from "../../components/Component.js";
 import { LightSidebar } from "../../components/light/LightSidebar.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
+import { CssEditor } from "../../components/light/CssEditor.js";
+import { MarkdownEditor } from "../../components/light/MarkdownEditor.js";
 import {
   getPost,
   createPost,
@@ -133,6 +135,7 @@ export default class PostEditPage extends Component {
     this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_MS);
     this._mediaPicker = null;
     this._visualEditorRef = null;
+    this._markdownEditorRef = null;
     this._dragCount = 0;
   }
 
@@ -211,8 +214,7 @@ export default class PostEditPage extends Component {
     const contentArea =
       this.state.editorMode === "visual"
         ? `<div id="visual-editor-mount"></div>`
-        : `<textarea id="content-editor" class="editor-content"
-               rows="24" placeholder="Write your post content here\u2026">${escapeHtml(content)}</textarea>`;
+        : `<div id="content-editor-mount"></div>`;
 
     return `
       <div class="light-layout">
@@ -313,9 +315,7 @@ export default class PostEditPage extends Component {
                   </div>
                   <div class="form-group">
                     <label class="form-label" for="css-editor">Custom CSS</label>
-                    <textarea id="css-editor" class="form-input css-editor-textarea"
-                              rows="8" spellcheck="false"
-                              placeholder="/* Styles applied only to this post */">${escapeHtml(p.css || "")}</textarea>
+                    <div id="css-editor-mount"></div>
                   </div>
                 </div>
               </details>
@@ -370,6 +370,22 @@ export default class PostEditPage extends Component {
       },
     });
     this._tags = toTagNames(this.state.post?.tags);
+
+    this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
+      value: this.state.post?.css || "",
+      onChange: () => this._debouncedAutosave(),
+    });
+
+    if (this.state.editorMode === "text") {
+      this._markdownEditorRef = this.mountChild(
+        MarkdownEditor,
+        "#content-editor-mount",
+        {
+          value: this.state.post?.content || "",
+          onChange: () => this._debouncedAutosave(),
+        },
+      );
+    }
 
     // Save button
     const saveBtn = this.$("#save-btn");
@@ -472,12 +488,10 @@ export default class PostEditPage extends Component {
       }
     });
 
-    // Auto-save on content change
+    // Auto-save on title/slug change (content editors use their own onChange)
     const titleInput = this.$("#title-input");
     const slugInput = this.$("#slug-input");
-    const contentEditor = this.$("#content-editor");
-    const cssEditor = this.$("#css-editor");
-    [titleInput, slugInput, contentEditor, cssEditor].forEach((el) => {
+    [titleInput, slugInput].forEach((el) => {
       el?.addEventListener("input", () => this._debouncedAutosave());
     });
 
@@ -551,11 +565,11 @@ export default class PostEditPage extends Component {
       }
       return;
     }
-    const editor = this.$("#content-editor");
-    if (!editor) return;
     const paths = items.map((item) => item.path).join("\n");
-    editor.value = editor.value.trimEnd() + "\n" + paths;
-    editor.scrollTop = editor.scrollHeight;
+    if (this._markdownEditorRef) {
+      this._markdownEditorRef.insertAtEnd(paths);
+      return;
+    }
   }
 
   _mountVisualEditor() {
@@ -765,7 +779,7 @@ export default class PostEditPage extends Component {
         this.state.editorMode === "visual"
           ? (this._visualEditorRef?.serializeNodes() ??
             serializeNodes(this._nodes))
-          : this.$("#content-editor")?.value || "",
+          : this._markdownEditorRef?.getValue() ?? "",
       // Prefer DOM value; fall back to known state to prevent accidental reset to 'draft'.
       status:
         this.$("#status-select")?.value || this.state.post?.status || "draft",
@@ -777,7 +791,7 @@ export default class PostEditPage extends Component {
       scheduled_at: this.$("#schedule-input")?.value
         ? new Date(this.$("#schedule-input").value).toISOString()
         : "",
-      css: this.$("#css-editor")?.value || "",
+      css: this._cssEditorRef ? this._cssEditorRef.getValue() : (this.state.post?.css || ""),
       immersive_mode: this.$("#immersive-mode-select")?.value || "auto",
     };
   }
@@ -897,7 +911,7 @@ export default class PostEditPage extends Component {
     if (this.state.editorMode === "visual") {
       return this._nodes.find((n) => n.type === "image")?.path ?? null;
     }
-    const content = this.$("#content-editor")?.value || "";
+    const content = this._markdownEditorRef?.getValue() ?? "";
     const match = content.match(
       /(?:^|["'\s(])(\/\d{4}\/\d{2}\/.+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i,
     );
@@ -1089,12 +1103,8 @@ export default class PostEditPage extends Component {
       });
       if (this.state.editorMode === "visual") {
         this._insertMediaPaths([{ path: result.path }]);
-      } else {
-        const editor = this.$("#content-editor");
-        if (editor) {
-          editor.value = editor.value.trimEnd() + `\n${result.path}`;
-          editor.scrollTop = editor.scrollHeight;
-        }
+      } else if (this._markdownEditorRef) {
+        this._markdownEditorRef.insertAtEnd(result.path);
       }
     } catch (err) {
       store.set("toast", {
