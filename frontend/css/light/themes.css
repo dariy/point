@@ -154,3 +154,42 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Custom CSS Section */
+.custom-css-section {
+  margin-top: var(--space-8);
+  padding: var(--space-6);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.custom-css-section .section-header {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.custom-css-section h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-xl);
+  color: var(--text-main);
+}
+
+.section-desc {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.custom-css-section .form-group {
+  margin-bottom: var(--space-4);
+}
+
+.custom-css-section .form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+

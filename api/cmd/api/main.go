@@ -278,6 +278,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	themesGroup.GET("", themeHandler.ListThemes)
 	themesGroup.GET("/active", themeHandler.GetActiveTheme)
 	themesGroup.PUT("/active", themeHandler.SetActiveTheme, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	themesGroup.GET("/custom-css", themeHandler.GetCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	themesGroup.PUT("/custom-css", themeHandler.UpdateCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")

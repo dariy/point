@@ -53,3 +53,29 @@ func (h *ThemeHandler) SetActiveTheme(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, theme)
 }
+
+func (h *ThemeHandler) GetCustomCSS(c echo.Context) error {
+	css, err := h.themeService.GetCustomCSS(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"css": css})
+}
+
+type updateCustomCSSRequest struct {
+	CSS string `json:"css"`
+}
+
+func (h *ThemeHandler) UpdateCustomCSS(c echo.Context) error {
+	var req updateCustomCSSRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request format"})
+	}
+
+	err := h.themeService.UpdateCustomCSS(c.Request().Context(), req.CSS)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}

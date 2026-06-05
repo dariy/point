@@ -30,3 +30,20 @@ export function getActiveTheme() {
 export function setActiveTheme(name) {
   return api.put('/api/themes/active', { name });
 }
+
+/**
+ * Get the system-wide custom CSS.
+ * @returns {Promise<object>} { css: string }
+ */
+export function getCustomCSS() {
+  return api.get('/api/themes/custom-css');
+}
+
+/**
+ * Update the system-wide custom CSS.
+ * @param {string} css
+ * @returns {Promise<void>}
+ */
+export function updateCustomCSS(css) {
+  return api.put('/api/themes/custom-css', { css });
+}

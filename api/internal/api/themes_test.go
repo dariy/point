@@ -151,4 +151,41 @@ func TestThemeHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
+
+	t.Run("CustomCSS", func(t *testing.T) {
+		// 1. Get initial (empty)
+		req := httptest.NewRequest(http.MethodGet, "/api/themes/custom-css", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		err := handler.GetCustomCSS(c)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var res map[string]string
+		_ = json.Unmarshal(rec.Body.Bytes(), &res)
+		assert.Equal(t, "", res["css"])
+
+		// 2. Update
+		body := []byte(`{"css":"body { background: red; }"}`)
+		req = httptest.NewRequest(http.MethodPut, "/api/themes/custom-css", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec = httptest.NewRecorder()
+		c = e.NewContext(req, rec)
+		err = handler.UpdateCustomCSS(c)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// 3. Get updated
+		req = httptest.NewRequest(http.MethodGet, "/api/themes/custom-css", nil)
+		rec = httptest.NewRecorder()
+		c = e.NewContext(req, rec)
+		_ = handler.GetCustomCSS(c)
+		_ = json.Unmarshal(rec.Body.Bytes(), &res)
+		assert.Equal(t, "body { background: red; }", res["css"])
+
+		// 4. Verify file sync
+		publicThemePath := filepath.Join(frontendDir, "css", "theme.css")
+		data, _ := os.ReadFile(publicThemePath)
+		assert.Contains(t, string(data), "body { background: red; }")
+		assert.Contains(t, string(data), "System Custom CSS")
+	})
 }
