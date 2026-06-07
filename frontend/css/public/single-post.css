@@ -121,6 +121,43 @@
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);
     transition: background-color var(--transition-theme);
+    position: relative;
+}
+
+.code-copy-btn {
+    position: absolute;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: var(--color-white-alpha-10);
+    color: var(--code-text);
+    border: none;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast), scale var(--transition-fast);
+}
+
+.post-content pre:hover .code-copy-btn,
+.code-copy-btn:focus-visible {
+    opacity: 1;
+}
+
+.code-copy-btn:hover {
+    background: var(--color-white-alpha-20);
+}
+
+.code-copy-btn:active {
+    scale: 0.97;
+}
+
+.code-copy-btn.copied {
+    color: var(--color-success, #22c55e);
 }
 
 .post-content code {

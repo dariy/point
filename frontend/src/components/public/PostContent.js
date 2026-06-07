@@ -14,6 +14,7 @@
 
 import { Component } from "../Component.js";
 import { escapeHtml, safeUrl, navigate } from "../../utils/helpers.js";
+import { COPY_SVG, CHECK_SVG } from "../../utils/icons.js";
 import {
   buildTagIndex,
   renderTagStrip,
@@ -152,6 +153,7 @@ export class PostContent extends Component {
       if (bodyEl) {
         this._enhanceLinks(bodyEl);
         this._enhanceMedia(bodyEl);
+        this._enhanceCodeBlocks(bodyEl);
       }
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
 
@@ -1053,6 +1055,37 @@ export class PostContent extends Component {
         });
       });
     }
+  }
+
+  _enhanceCodeBlocks(body) {
+    const parseSvg = (svgString) => {
+      const doc = new DOMParser().parseFromString(svgString, "image/svg+xml");
+      return doc.documentElement;
+    };
+
+    body.querySelectorAll("pre").forEach((pre) => {
+      const code = pre.querySelector("code");
+      if (!code) return;
+
+      const btn = document.createElement("button");
+      btn.className = "code-copy-btn";
+      btn.setAttribute("aria-label", "Copy code");
+      btn.appendChild(parseSvg(COPY_SVG));
+
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(code.textContent || "").then(() => {
+          btn.replaceChildren(parseSvg(CHECK_SVG));
+          btn.classList.add("copied");
+          setTimeout(() => {
+            btn.replaceChildren(parseSvg(COPY_SVG));
+            btn.classList.remove("copied");
+          }, 1500);
+        }).catch(() => {});
+      });
+
+      pre.appendChild(btn);
+    });
   }
 
   _renderNav(prev, next) {
