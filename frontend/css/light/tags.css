@@ -433,9 +433,7 @@
     padding: 0;
 }
 
-.tm-tree.level-1,
-.tm-tree.level-2,
-.tm-tree.level-3 {
+.tm-tree:not(.level-0) {
     padding-left: var(--tm-treelevel-1-padding-left-alt1);
     border-left: var(--border-width) dashed var(--border-primary);
     margin-left: var(--tm-treelevel-1-margin-left-alt1);
@@ -802,13 +800,10 @@
     padding: 0;
 }
 
-.tag-toggle-tree.level-1,
-.tag-toggle-tree.level-2,
-.tag-toggle-tree.level-3,
-.tag-toggle-tree.level-4 {
+.tag-toggle-tree:not(.level-0) {
     padding-left: var(--tag-toggle-treelevel-1-padding-left);
     border-left: var(--border-width) dashed var(--border-primary);
-    margin-left: var(--spacing-sm);
+    margin-left: 0.9375rem;
     margin-top: var(--tag-toggle-treelevel-1-margin-top);
     margin-bottom: var(--tag-toggle-treelevel-1-margin-bottom);
 }
