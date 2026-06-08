@@ -2,8 +2,71 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"path/filepath"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
+
+// TestRepository_InstagramColumnsMigration verifies that opening a pre-existing
+// database (one created before the Instagram integration) backfills the new
+// posts.instagram_* columns via the ADD COLUMN migration path (point-xq28).
+func TestRepository_InstagramColumnsMigration(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "old.db")
+
+	// Seed an "old" database: the four core tables NewRepository checks for,
+	// with a posts table that predates the Instagram columns.
+	seed, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open seed db: %v", err)
+	}
+	for _, stmt := range []string{
+		`CREATE TABLE users (id INTEGER PRIMARY KEY)`,
+		`CREATE TABLE tags (id INTEGER PRIMARY KEY)`,
+		`CREATE TABLE blog_settings (id INTEGER PRIMARY KEY)`,
+		`CREATE TABLE posts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			slug TEXT NOT NULL,
+			content TEXT NOT NULL,
+			author_id INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'draft'
+		)`,
+	} {
+		if _, err := seed.Exec(stmt); err != nil {
+			t.Fatalf("seed stmt %q: %v", stmt, err)
+		}
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+
+	// Reopen through the real constructor, which runs the migrations.
+	repo, err := NewRepository(dbPath)
+	if err != nil {
+		t.Fatalf("NewRepository (migrate) failed: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+
+	for _, col := range []string{
+		"instagram_share",
+		"instagram_status",
+		"instagram_media_id",
+		"instagram_published_at",
+		"instagram_error",
+	} {
+		var count int
+		if err := repo.DB().QueryRow(
+			`SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name = ?`, col,
+		).Scan(&count); err != nil {
+			t.Fatalf("pragma_table_info(%q): %v", col, err)
+		}
+		if count != 1 {
+			t.Errorf("expected migrated column posts.%s to exist, found %d", col, count)
+		}
+	}
+}
 
 func TestRepository_Migrations(t *testing.T) {
 	repo := setupTestDB(t)

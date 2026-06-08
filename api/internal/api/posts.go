@@ -113,6 +113,7 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 	injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
+	injectPostInstagramFields(resp, post)
 	return resp, nil
 }
 
@@ -260,6 +261,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
+		injectPostInstagramFields(resp, post)
 	} else {
 		showViewCountsStr, _ := h.settingsService.GetSetting(ctx, "show_view_counts", "false")
 		if showViewCountsStr != "true" {
@@ -400,6 +402,7 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
+		injectPostInstagramFields(resp, post)
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -410,6 +413,7 @@ type CreatePostRequest struct {
 	Content         string   `json:"content"`
 	CSS             string   `json:"css"`
 	ImmersiveMode   string   `json:"immersive_mode"`
+	InstagramShare  bool     `json:"instagram_share"`
 	Excerpt         string   `json:"excerpt"`
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
@@ -464,6 +468,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		Content:         req.Content,
 		CSS:             req.CSS,
 		ImmersiveMode:   req.ImmersiveMode,
+		InstagramShare:  req.InstagramShare,
 		Excerpt:         req.Excerpt,
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
@@ -503,6 +508,7 @@ type UpdatePostRequest struct {
 	Content         string   `json:"content"`
 	CSS             string   `json:"css"`
 	ImmersiveMode   string   `json:"immersive_mode"`
+	InstagramShare  bool     `json:"instagram_share"`
 	Excerpt         string   `json:"excerpt"`
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
@@ -551,6 +557,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		Content:         req.Content,
 		CSS:             req.CSS,
 		ImmersiveMode:   req.ImmersiveMode,
+		InstagramShare:  req.InstagramShare,
 		Excerpt:         req.Excerpt,
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,

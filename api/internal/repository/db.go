@@ -191,6 +191,23 @@ func NewRepository(dbURL string) (Repository, error) {
 				return nil, fmt.Errorf("migration failed (add posts.immersive_mode): %w", err)
 			}
 		}
+		// Instagram cross-posting columns (point-xq28).
+		for _, m := range []struct {
+			name string
+			stmt string
+		}{
+			{"instagram_share", `ALTER TABLE posts ADD COLUMN instagram_share BOOLEAN NOT NULL DEFAULT 0`},
+			{"instagram_status", `ALTER TABLE posts ADD COLUMN instagram_status TEXT NOT NULL DEFAULT 'none'`},
+			{"instagram_media_id", `ALTER TABLE posts ADD COLUMN instagram_media_id TEXT`},
+			{"instagram_published_at", `ALTER TABLE posts ADD COLUMN instagram_published_at DATETIME`},
+			{"instagram_error", `ALTER TABLE posts ADD COLUMN instagram_error TEXT`},
+		} {
+			if _, err := db.Exec(m.stmt); err != nil {
+				if !isDuplicateColumnError(err) {
+					return nil, fmt.Errorf("migration failed (add posts.%s): %w", m.name, err)
+				}
+			}
+		}
 	}
 
 	queries := models.New(db)

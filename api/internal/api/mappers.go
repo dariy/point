@@ -235,6 +235,18 @@ func injectPostHiddenFields(resp map[string]interface{}, status string, tags []m
 	}
 }
 
+// injectPostInstagramFields adds the per-post Instagram cross-posting fields to a
+// post response map. These are admin-only (editor) concerns — instagram_error and
+// status are operational details that must not leak to unauthenticated visitors —
+// so callers must invoke this only for authenticated admins.
+func injectPostInstagramFields(resp map[string]interface{}, p models.Post) {
+	resp["instagram_share"] = p.InstagramShare
+	resp["instagram_status"] = p.InstagramStatus
+	resp["instagram_media_id"] = nullString(p.InstagramMediaID)
+	resp["instagram_published_at"] = nullTime(p.InstagramPublishedAt)
+	resp["instagram_error"] = nullString(p.InstagramError)
+}
+
 // injectPostHiddenFieldsFromInfo adds is_hidden/is_hidden_by_tag for list endpoints using PostTagInfo.
 // It also adds is_hidden_posts to each tag object in resp["tags"].
 func injectPostHiddenFieldsFromInfo(resp map[string]interface{}, status string, tags []repository.PostTagInfo, effectiveHiddenPostsTagIDs map[int64]bool) {

@@ -329,6 +329,7 @@ type CreatePostParams struct {
 	Content         string
 	CSS             string
 	ImmersiveMode   string
+	InstagramShare  bool
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -354,6 +355,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		Content:         normalizeContent(p.Content),
 		Css:             sanitizedCSS,
 		ImmersiveMode:   normalizeImmersiveMode(p.ImmersiveMode),
+		InstagramShare:  p.InstagramShare,
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
@@ -440,6 +442,7 @@ type UpdatePostParams struct {
 	Content         string
 	CSS             string
 	ImmersiveMode   string
+	InstagramShare  bool
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -464,6 +467,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		Content:         normalizeContent(p.Content),
 		Css:             sanitizedCSS,
 		ImmersiveMode:   normalizeImmersiveMode(p.ImmersiveMode),
+		InstagramShare:  p.InstagramShare,
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,

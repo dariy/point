@@ -29,3 +29,4 @@ api/cmd/api/cache/
 
 # bv (beads viewer) local config and caches
 .bv/
+.worktrees/

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -44,7 +45,32 @@ var publicSettingKeys = map[string]bool{
 // writableSecretKeys are secrets the admin may set through the API.
 // Values are routed to blog_secrets and never returned in responses.
 var writableSecretKeys = map[string]bool{
-	"gemini_api_key": true,
+	"gemini_api_key":             true,
+	"instagram_app_id":           true,
+	"instagram_app_secret":       true,
+	"instagram_access_token":     true,
+	"instagram_user_id":          true,
+	"instagram_token_expires_at": true,
+}
+
+// secretIsSetKeys are secret keys whose presence (but never value) is surfaced to
+// the admin UI as "<key>_is_set" booleans on the settings response.
+var secretIsSetKeys = []string{
+	"gemini_api_key",
+	"photo_library_path",
+	"instagram_app_id",
+	"instagram_app_secret",
+	"instagram_access_token",
+	"instagram_user_id",
+	"instagram_token_expires_at",
+}
+
+// addSecretIsSetFlags annotates the settings map with "<key>_is_set" booleans
+// reflecting whether each secret has a stored value, without exposing the value.
+func (h *SettingsHandler) addSecretIsSetFlags(ctx context.Context, settings map[string]string) {
+	for _, key := range secretIsSetKeys {
+		settings[key+"_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, key))
+	}
 }
 
 func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
@@ -67,8 +93,7 @@ func (h *SettingsHandler) GetSettings(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	all["gemini_api_key_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "gemini_api_key"))
-	all["photo_library_path_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "photo_library_path"))
+	h.addSecretIsSetFlags(ctx, all)
 	return c.JSON(http.StatusOK, all)
 }
 
@@ -105,7 +130,6 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	all["gemini_api_key_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "gemini_api_key"))
-	all["photo_library_path_is_set"] = strconv.FormatBool(h.settingsService.SecretIsSet(ctx, "photo_library_path"))
+	h.addSecretIsSetFlags(ctx, all)
 	return c.JSON(http.StatusOK, all)
 }
