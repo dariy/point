@@ -781,6 +781,24 @@ export default class TagsManagerPage extends Component {
       await this._handleSave(e.target, isEdit ? f.id : null);
     });
 
+    modal.addEventListener('textarea:save', async () => {
+      const form = modal.querySelector('#tag-editor-form');
+      if (form) {
+        await this._handleSave(form, isEdit ? f.id : null, { closeAfter: false });
+      }
+    });
+
+    modal.addEventListener('keydown', async (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        const form = modal.querySelector('#tag-editor-form');
+        if (form) {
+          const isMaximized = !!modal.querySelector('.is-maximized');
+          await this._handleSave(form, isEdit ? f.id : null, { closeAfter: !isMaximized });
+        }
+      }
+    });
+
     this._modalKeyHandler = e => { if (e.key === 'Escape') this._closeModal(); };
     document.addEventListener('keydown', this._modalKeyHandler);
     nameInput.focus();
@@ -1040,7 +1058,7 @@ export default class TagsManagerPage extends Component {
     }
   }
 
-  async _handleSave(form, tagId) {
+  async _handleSave(form, tagId, { closeAfter = true } = {}) {
     const fd = new FormData(form);
 
     const payload = {
@@ -1071,7 +1089,9 @@ export default class TagsManagerPage extends Component {
         await createTag(payload);
         store.set('toast', { message: 'Tag created.', type: 'success' });
       }
-      this._closeModal();
+      if (closeAfter) {
+        this._closeModal();
+      }
       this._load();
       this._refreshNavTags();
     } catch (err) {

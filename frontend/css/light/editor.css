@@ -625,7 +625,8 @@ body.drag-active::after {
 }
 
 /* Textarea Maximizer */
-.textarea-maximize-btn {
+.textarea-maximize-btn,
+.textarea-save-btn {
     position: absolute;
     top: var(--spacing-xs);
     right: var(--spacing-xs);
@@ -644,7 +645,12 @@ body.drag-active::after {
     padding: 0;
 }
 
-.textarea-maximize-btn:hover {
+.textarea-save-btn {
+    display: none; /* Only show when maximized */
+}
+
+.textarea-maximize-btn:hover,
+.textarea-save-btn:hover {
     color: var(--color-primary);
     border-color: var(--color-primary);
     transform: scale(1.1);
@@ -676,15 +682,27 @@ textarea.is-maximized,
     overflow: auto !important;
 }
 
-.textarea-maximize-btn.is-maximized {
+.textarea-maximize-btn.is-maximized,
+.textarea-save-btn.is-maximized {
     position: fixed !important;
     top: var(--spacing-md) !important;
-    right: var(--spacing-md) !important;
     z-index: 10001 !important;
     background: var(--surface-hover) !important;
     width: var(--size-2, 2rem) !important;
     height: var(--size-2, 2rem) !important;
 }
+
+.textarea-maximize-btn.is-maximized {
+    right: var(--spacing-md) !important;
+}
+
+.textarea-save-btn.is-maximized {
+    display: flex;
+    right: calc(var(--spacing-md) + var(--size-2, 2rem) + var(--spacing-sm)) !important;
+    color: var(--color-success, #28a745);
+    border-color: var(--color-success, #28a745);
+}
+
 
 .textarea-maximized-body-lock {
     overflow: hidden !important;
