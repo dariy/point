@@ -389,10 +389,12 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 						if desc != "" {
 							fmt.Fprintf(&sb, "\n  <meta name=\"description\" content=\"%s\">", html.EscapeString(desc))
 							fmt.Fprintf(&sb, "\n  <meta property=\"og:description\" content=\"%s\">", html.EscapeString(desc))
+							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:description\" content=\"%s\">", html.EscapeString(desc))
 						}
 
 						sb.WriteString("\n  <meta property=\"og:type\" content=\"article\">")
 						fmt.Fprintf(&sb, "\n  <meta property=\"og:title\" content=\"%s\">", html.EscapeString(post.Title))
+						fmt.Fprintf(&sb, "\n  <meta name=\"twitter:title\" content=\"%s\">", html.EscapeString(post.Title))
 
 						scheme := c.Scheme()
 						if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
@@ -405,7 +407,11 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 						if len(media) > 0 {
 							mPath := "/" + strings.TrimPrefix(media[0].OriginalPath, "originals/")
 							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, mPath)
+							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary_large_image\">")
 							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
+							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:image\" content=\"%s\">", html.EscapeString(imgURL))
+						} else {
+							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
 						sb.WriteString("\n</head>")
@@ -842,6 +848,13 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
 
+		// Media files can be renamed or replaced at the same URL (e.g. rename to
+		// name.png, delete, re-upload a different image, rename again to name.png).
+		// Without this header browsers use heuristic caching and serve the stale
+		// version. no-cache still allows local caching but requires revalidation,
+		// so a 304 is returned on repeated loads when nothing changed.
+		c.Response().Header().Set("Cache-Control", "no-cache")
+
 		// Determine which file to serve.
 		_, wantThumb := c.Request().URL.Query()["thumb"]
 		if wantThumb {
@@ -857,14 +870,14 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 
 		// Serve original — try exact path first, then checksum-glob fallback.
 		origDir := filepath.Join(storagePath, "media", "originals", year, month)
-		origFile := filepath.Join(origDir, filename)
+		origFile := filepath.Join(origDir, filepath.Base(filename))
 		if _, err := os.Stat(origFile); err == nil {
 			return c.File(origFile)
 		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {
 			matches, _ := filepath.Glob(filepath.Join(origDir, "*_"+m[1]+".*"))
 			if len(matches) == 1 {
-				return c.File(matches[0])
+				return c.File(filepath.Join(origDir, filepath.Base(matches[0])))
 			}
 		}
 

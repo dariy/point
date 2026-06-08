@@ -25,6 +25,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/util"
 )
 
 type PostService struct {
@@ -36,7 +37,23 @@ type PostService struct {
 }
 
 func NewPostService(repo repository.Repository) *PostService {
+	// Build a parser without SetextHeadingParser (priority 100) so that --- and ===
+	// are never treated as heading underlines. --- always acts as a card separator.
+	var blockParsers []util.PrioritizedValue
+	for _, p := range parser.DefaultBlockParsers() {
+		if p.Priority != 100 {
+			blockParsers = append(blockParsers, p)
+		}
+	}
+	customParser := parser.NewParser(
+		parser.WithBlockParsers(blockParsers...),
+		parser.WithInlineParsers(parser.DefaultInlineParsers()...),
+		parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
+		parser.WithAutoHeadingID(),
+	)
+
 	md := goldmark.New(
+		goldmark.WithParser(customParser),
 		goldmark.WithExtensions(
 			extension.GFM,
 			extension.Typographer,
@@ -45,9 +62,6 @@ func NewPostService(repo repository.Repository) *PostService {
 			highlighting.NewHighlighting(
 				highlighting.WithStyle("monokai"),
 			),
-		),
-		goldmark.WithParserOptions(
-			parser.WithAutoHeadingID(),
 		),
 		goldmark.WithRendererOptions(
 			html.WithHardWraps(),
@@ -128,6 +142,11 @@ var imageExtRe = regexp.MustCompile(`(?i)\.(jpg|jpeg|png|gif|webp|avif|svg|heic|
 var videoExtRe = regexp.MustCompile(`(?i)\.(mp4|webm|mov|ogv|m4v|avi|mkv)$`)
 var audioExtRe = regexp.MustCompile(`(?i)\.(mp3|m4a|ogg|wav|flac|aac|opus)$`)
 
+// setextH1Re matches a non-empty line immediately followed by a setext h1 underline (===).
+// Converted to ATX-style heading since the setext parser is disabled and === would
+// otherwise render as a literal paragraph.
+var setextH1Re = regexp.MustCompile(`(?m)^([^\n\r]+)\n(=+[ \t]*)$`)
+
 // markdownImageRe matches a markdown image whose src starts with /media/originals
 // (legacy format written before the URL refactor). Capture group 1 is the path
 // after that prefix, i.e. "/YYYY/MM/file" — the bare-path storage format.
@@ -136,7 +155,12 @@ var markdownImageRe = regexp.MustCompile(`!\[[^\]]*\]\(/media/originals(/[^)]+)\
 // preprocessContent expands bare image/video/audio paths into markdown or HTML syntax
 // so goldmark renders them as <img>, <video>, or <audio> tags.
 // e.g. /2026/02/photo.jpg → ![photo.jpg](/2026/02/photo.jpg)
+// It also converts setext h1 (===) to ATX style since the setext parser is disabled.
 func preprocessContent(content string) string {
+	content = setextH1Re.ReplaceAllStringFunc(content, func(m string) string {
+		matches := setextH1Re.FindStringSubmatch(m)
+		return "# " + strings.TrimSpace(matches[1])
+	})
 	return bareImageRe.ReplaceAllStringFunc(content, func(p string) string {
 		if imageExtRe.MatchString(p) {
 			return fmt.Sprintf("![%s](%s)", path.Base(p), p)
