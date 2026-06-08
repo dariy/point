@@ -260,14 +260,14 @@ func TestServeSimplifiedMedia_ThumbServed(t *testing.T) {
 
 func TestServeSimplifiedMedia_OrigServedViaChecksumGlob(t *testing.T) {
 	repo, storage := newMediaRepo(t)
-	// DB has the record, file is NOT at exact path but checksum glob finds it.
-	createPublicMedia(t, repo, "2024", "01", "video_89abcdef.mp4")
-	// Put the file under the same checksum-matched name (glob: *_89abcdef.*)
+	// DB has the record under requested name
+	createPublicMedia(t, repo, "2024", "01", "requested_89abcdef.mp4")
+	// Put the file on disk under a DIFFERENT name but with same checksum
 	dir := filepath.Join(storage, "media", "originals", "2024", "01")
 	_ = os.MkdirAll(dir, 0755)
-	_ = os.WriteFile(filepath.Join(dir, "video_89abcdef.mp4"), []byte("video"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "actual_89abcdef.mp4"), []byte("video"), 0644)
 
-	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "video_89abcdef.mp4", false)
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "requested_89abcdef.mp4", false)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}

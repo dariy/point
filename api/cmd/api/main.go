@@ -857,14 +857,14 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 
 		// Serve original — try exact path first, then checksum-glob fallback.
 		origDir := filepath.Join(storagePath, "media", "originals", year, month)
-		origFile := filepath.Join(origDir, filename)
+		origFile := filepath.Join(origDir, filepath.Base(filename))
 		if _, err := os.Stat(origFile); err == nil {
 			return c.File(origFile)
 		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {
 			matches, _ := filepath.Glob(filepath.Join(origDir, "*_"+m[1]+".*"))
 			if len(matches) == 1 {
-				return c.File(matches[0])
+				return c.File(filepath.Join(origDir, filepath.Base(matches[0])))
 			}
 		}
 
