@@ -193,3 +193,65 @@
   justify-content: flex-end;
 }
 
+/* Light-mode token color overrides for CssEditor.
+   The embedded okaidia theme uses near-white (#f8f8f2) and low-contrast
+   yellows/cyans designed for dark backgrounds. Override them here so the
+   editor remains readable on its white surface-input background. */
+:root:not([data-theme="dark"]) .codejar-editor .token.comment,
+:root:not([data-theme="dark"]) .codejar-editor .token.prolog,
+:root:not([data-theme="dark"]) .codejar-editor .token.doctype,
+:root:not([data-theme="dark"]) .codejar-editor .token.cdata {
+    color: #6e7781;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.punctuation {
+    color: #24292f;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.property,
+:root:not([data-theme="dark"]) .codejar-editor .token.tag,
+:root:not([data-theme="dark"]) .codejar-editor .token.constant,
+:root:not([data-theme="dark"]) .codejar-editor .token.symbol,
+:root:not([data-theme="dark"]) .codejar-editor .token.deleted {
+    color: #cf222e;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.boolean,
+:root:not([data-theme="dark"]) .codejar-editor .token.number {
+    color: #0550ae;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.selector,
+:root:not([data-theme="dark"]) .codejar-editor .token.attr-name,
+:root:not([data-theme="dark"]) .codejar-editor .token.string,
+:root:not([data-theme="dark"]) .codejar-editor .token.char,
+:root:not([data-theme="dark"]) .codejar-editor .token.builtin,
+:root:not([data-theme="dark"]) .codejar-editor .token.inserted {
+    color: #116329;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.operator,
+:root:not([data-theme="dark"]) .codejar-editor .token.entity,
+:root:not([data-theme="dark"]) .codejar-editor .token.url,
+:root:not([data-theme="dark"]) .codejar-editor .language-css .token.string,
+:root:not([data-theme="dark"]) .codejar-editor .style .token.string,
+:root:not([data-theme="dark"]) .codejar-editor .token.variable {
+    color: #24292f;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.atrule,
+:root:not([data-theme="dark"]) .codejar-editor .token.attr-value,
+:root:not([data-theme="dark"]) .codejar-editor .token.function,
+:root:not([data-theme="dark"]) .codejar-editor .token.class-name {
+    color: #8250df;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.keyword {
+    color: #cf222e;
+}
+
+:root:not([data-theme="dark"]) .codejar-editor .token.regex,
+:root:not([data-theme="dark"]) .codejar-editor .token.important {
+    color: #953800;
+}
+

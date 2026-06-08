@@ -401,6 +401,9 @@ export default class TagPage extends Component {
     const slug = this.props.params?.slug || "";
 
     const timelineParam = from === to ? `${from}` : `${from}-${to}`;
+    const currentTimeline = new URLSearchParams(location.search).get("timeline");
+    if (currentTimeline === timelineParam) return;
+
     const url = new URL(location.href);
     url.searchParams.set("timeline", timelineParam);
     url.searchParams.delete("page");

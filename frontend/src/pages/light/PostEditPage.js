@@ -125,6 +125,7 @@ export default class PostEditPage extends Component {
       isNew: !id,
       postId: id,
       editorMode: "visual",
+      maximizedField: null, // 'content' | 'css' | 'excerpt' | 'title' | 'tags'
     };
     this._tags = [];
     this._nodes = []; // canonical node list for visual mode
@@ -183,7 +184,6 @@ export default class PostEditPage extends Component {
     const p = post || {};
     const title = escapeHtml(p.title || "");
     const slug = escapeHtml(p.slug || "");
-    const content = p.content || "";
     const status = p.status || "draft";
     const featured = p.is_featured || false;
     const excerpt = p.excerpt || "";
@@ -292,7 +292,7 @@ export default class PostEditPage extends Component {
               </div>
 
               <div class="form-group excerpt-row">
-                <textarea id="excerpt-editor" class="form-input editor-excerpt"
+                <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}"
                           rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
                 ${aiBtn("excerpt")}
               </div>
@@ -373,6 +373,7 @@ export default class PostEditPage extends Component {
 
     this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
       value: this.state.post?.css || "",
+      isMaximized: this.state.maximizedField === "css",
       onChange: () => this._debouncedAutosave(),
     });
 
@@ -382,6 +383,7 @@ export default class PostEditPage extends Component {
         "#content-editor-mount",
         {
           value: this.state.post?.content || "",
+          isMaximized: this.state.maximizedField === "content",
           onChange: () => this._debouncedAutosave(),
         },
       );
@@ -390,6 +392,40 @@ export default class PostEditPage extends Component {
     // Save button
     const saveBtn = this.$("#save-btn");
     saveBtn?.addEventListener("click", () => this._save());
+
+    // Handle save triggered from maximized textareas
+    this.container.addEventListener("textarea:save", () => this._save());
+
+    // Handle maximize events to preserve state across re-renders
+    this.container.addEventListener("textarea:maximize", (e) => {
+      const { isMaximized } = e.detail;
+      let field = null;
+
+      if (isMaximized) {
+        // Identify the field
+        const target = e.target;
+        if (target.id === "title-input") field = "title";
+        else if (target.id === "excerpt-editor") field = "excerpt";
+        else if (target.closest("#tags-input-mount")) field = "tags";
+        else if (target.closest("#css-editor-mount")) field = "css";
+        else if (target.closest("#content-editor-mount")) field = "content";
+      }
+
+      // Update state without full re-render if possible? 
+      // Actually, we NEED to re-render if we want child components to know they should be maximized.
+      // But if we just update the variable, it might be enough if we are already maximized.
+      this.state.maximizedField = field;
+    });
+
+    // Page-level Ctrl+S
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        this._save();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    this._onKeyDown = onKeyDown;
 
     // Delete button
     const deleteBtn = this.$("#delete-btn");
@@ -549,6 +585,9 @@ export default class PostEditPage extends Component {
     this._mediaPicker?.destroy();
     this._mediaPicker = null;
     this._visualEditorRef = null;
+    if (this._onKeyDown) {
+      document.removeEventListener("keydown", this._onKeyDown);
+    }
   }
 
   _insertMediaPaths(items) {

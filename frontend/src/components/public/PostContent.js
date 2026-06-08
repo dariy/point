@@ -14,6 +14,7 @@
 
 import { Component } from "../Component.js";
 import { escapeHtml, safeUrl, navigate } from "../../utils/helpers.js";
+import { COPY_SVG, CHECK_SVG } from "../../utils/icons.js";
 import {
   buildTagIndex,
   renderTagStrip,
@@ -152,6 +153,7 @@ export class PostContent extends Component {
       if (bodyEl) {
         this._enhanceLinks(bodyEl);
         this._enhanceMedia(bodyEl);
+        this._enhanceCodeBlocks(bodyEl);
       }
       if (prevPost || nextPost) this._initNormal(prevPost, nextPost);
 
@@ -552,9 +554,18 @@ export class PostContent extends Component {
       if (!img || (!img.complete && img.tagName === "IMG")) return 2;
       const rect = img.getBoundingClientRect();
       const naturalWidth = img.naturalWidth || img.videoWidth;
-      if (!naturalWidth) return 2;
-      const max = naturalWidth / rect.width;
-      return max > 1 ? max : 1;
+      const naturalHeight = img.naturalHeight || img.videoHeight;
+      if (!naturalWidth || !naturalHeight) return 2;
+
+      const fillScale = Math.max(
+        window.innerWidth / rect.width,
+        window.innerHeight / rect.height,
+      );
+      const naturalScale = naturalWidth / rect.width;
+
+      // Allow zooming to at least fill the screen, or natural size, or at least 2x.
+      const max = Math.max(fillScale, naturalScale, 2);
+      return max;
     };
 
     this._constrainZoom = (animate = false) => {
@@ -1053,6 +1064,37 @@ export class PostContent extends Component {
         });
       });
     }
+  }
+
+  _enhanceCodeBlocks(body) {
+    const parseSvg = (svgString) => {
+      const doc = new DOMParser().parseFromString(svgString, "image/svg+xml");
+      return doc.documentElement;
+    };
+
+    body.querySelectorAll("pre").forEach((pre) => {
+      const code = pre.querySelector("code");
+      if (!code) return;
+
+      const btn = document.createElement("button");
+      btn.className = "code-copy-btn";
+      btn.setAttribute("aria-label", "Copy code");
+      btn.appendChild(parseSvg(COPY_SVG));
+
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(code.textContent || "").then(() => {
+          btn.replaceChildren(parseSvg(CHECK_SVG));
+          btn.classList.add("copied");
+          setTimeout(() => {
+            btn.replaceChildren(parseSvg(COPY_SVG));
+            btn.classList.remove("copied");
+          }, 1500);
+        }).catch(() => {});
+      });
+
+      pre.appendChild(btn);
+    });
   }
 
   _renderNav(prev, next) {

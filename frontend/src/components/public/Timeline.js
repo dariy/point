@@ -24,6 +24,7 @@ export class Timeline extends Component {
       popover: null,
       isLoading: true,
     };
+    this._lastLiveEmit = 0;
   }
 
   /**
@@ -182,8 +183,9 @@ export class Timeline extends Component {
         this._isDragging = false;
         if (wasDragging) {
           clearTimeout(this._emitTimer);
-          this._snapToCenterPill();
-          if (this.props.mode === "filter") this._emitRange();
+          this._snapToCenterPill(() => {
+            if (this.props.mode === "filter") this._emitRange();
+          });
         }
       },
       onSwipeCommit: () => {
@@ -196,8 +198,9 @@ export class Timeline extends Component {
         touchDragged = false;
         this._isDragging = false;
         clearTimeout(this._emitTimer);
-        this._snapToCenterPill();
-        if (this.props.mode === "filter") this._emitRange();
+        this._snapToCenterPill(() => {
+          if (this.props.mode === "filter") this._emitRange();
+        });
       },
     });
 
@@ -262,8 +265,9 @@ export class Timeline extends Component {
       trackWrapper.classList.remove("grabbing");
       if (hasDragged) {
         clearTimeout(this._emitTimer);
-        this._snapToCenterPill();
-        if (this.props.mode === "filter") this._emitRange();
+        this._snapToCenterPill(() => {
+          if (this.props.mode === "filter") this._emitRange();
+        });
       }
     };
 
@@ -356,8 +360,13 @@ export class Timeline extends Component {
     const maxYear = parseInt(el.dataset.max, 10);
 
     if (this.props.mode === "filter") {
-      this._centerOnYear((minYear + maxYear) / 2, true);
-      this.props.onRangeChange?.({ from: minYear, to: maxYear, source: "center" });
+      this._centerOnYear((minYear + maxYear) / 2, true, () => {
+        this.props.onRangeChange?.({
+          from: minYear,
+          to: maxYear,
+          source: "center",
+        });
+      });
       return;
     }
 
@@ -371,10 +380,13 @@ export class Timeline extends Component {
     }
   }
 
-  _zoomToFit(minYear, maxYear, animate = false) {
+  _zoomToFit(minYear, maxYear, animate = false, onComplete = null) {
     const { extent } = this.state;
     const track = this.$(".timeline-track");
-    if (!track) return;
+    if (!track) {
+      if (onComplete) onComplete();
+      return;
+    }
     const trackWidth = track.clientWidth;
 
     const usableWidth = trackWidth - 2 * EDGE_PAD;
@@ -393,11 +405,12 @@ export class Timeline extends Component {
     const clampedPanX = Math.min(maxPanX, Math.max(minPanX, targetPanX));
 
     if (animate) {
-      this._animateTo(clampedPanX, clampedZoom, 320);
+      this._animateTo(clampedPanX, clampedZoom, 320, onComplete);
     } else {
       this.state.zoom = clampedZoom;
       this.state.panX = clampedPanX;
       this._layout();
+      if (onComplete) onComplete();
     }
 
     this._debounceEmitRange();
@@ -409,10 +422,11 @@ export class Timeline extends Component {
     if (!pill) return;
 
     if (this.props.mode === "filter") {
-      this._centerOnYear(pill.year, true);
-      const from = pill.year;
-      const to = pill.is_decade ? from + 9 : from;
-      this.props.onRangeChange?.({ from, to, source: "center" });
+      this._centerOnYear(pill.year, true, () => {
+        const from = pill.year;
+        const to = pill.is_decade ? from + 9 : from;
+        this.props.onRangeChange?.({ from, to, source: "center" });
+      });
     } else {
       this._openPopover(el, pill);
     }
@@ -515,8 +529,9 @@ export class Timeline extends Component {
         if (!pill) return;
         if (this.props.mode === "filter") {
           this._closePopover();
-          this._centerOnYear(pill.year, true);
-          this._emitRange();
+          this._centerOnYear(pill.year, true, () => {
+            this._emitRange();
+          });
         } else {
           this._openPopover(el, pill);
         }
@@ -572,7 +587,7 @@ export class Timeline extends Component {
     popoverEl.style.left = `${Math.max(8, Math.min(window.innerWidth - popoverRect.width - 8, left))}px`;
   }
 
-  _animateTo(targetPanX, targetZoom, duration) {
+  _animateTo(targetPanX, targetZoom, duration, onComplete = null) {
     this._cancelAnimation();
     const startPanX = this.state.panX;
     const startZoom = this.state.zoom;
@@ -591,6 +606,7 @@ export class Timeline extends Component {
         this._animRaf = requestAnimationFrame(step);
       } else {
         this._animRaf = null;
+        if (onComplete) onComplete();
       }
     };
 
@@ -613,13 +629,19 @@ export class Timeline extends Component {
     this._layout();
   }
 
-  _centerOnYear(year, animate = false) {
+  _centerOnYear(year, animate = false, onComplete = null) {
     const track = this.$(".timeline-track");
-    if (!track) return;
+    if (!track) {
+      if (onComplete) onComplete();
+      return;
+    }
     const trackWidth = track.clientWidth;
     const { extent, zoom } = this.state;
     const usableWidth = trackWidth - 2 * EDGE_PAD;
-    if (extent.max === extent.min || usableWidth === 0) return;
+    if (extent.max === extent.min || usableWidth === 0) {
+      if (onComplete) onComplete();
+      return;
+    }
 
     const progress = (year - extent.min) / (extent.max - extent.min);
     const currentX = EDGE_PAD + progress * usableWidth * zoom + this.state.panX;
@@ -629,19 +651,23 @@ export class Timeline extends Component {
     const clampedPanX = Math.max(minPanX, Math.min(maxPanX, newPanX));
 
     if (animate) {
-      this._animateTo(clampedPanX, zoom, 320);
+      this._animateTo(clampedPanX, zoom, 320, onComplete);
     } else {
       this.state.panX = clampedPanX;
       this._layout();
+      if (onComplete) onComplete();
     }
   }
 
-  _snapToCenterPill() {
+  _snapToCenterPill(onComplete = null) {
     const item = this._findCenteredItem();
-    if (!item) return;
+    if (!item) {
+      if (onComplete) onComplete();
+      return;
+    }
     const year =
       item.type === "cluster" ? (item.minYear + item.maxYear) / 2 : item.year;
-    this._centerOnYear(year, true);
+    this._centerOnYear(year, true, onComplete);
   }
 
   _findCenteredItem() {
@@ -674,10 +700,30 @@ export class Timeline extends Component {
 
   _debounceEmitRange() {
     clearTimeout(this._emitTimer);
+
+    // Live refresh while dragging/zooming (throttled)
+    if (this._isDragging && this.props.mode === "filter") {
+      const now = Date.now();
+      if (now - this._lastLiveEmit > 100) {
+        this._emitRange();
+        this._lastLiveEmit = now;
+      }
+    }
+
     this._emitTimer = setTimeout(() => {
-      if (!this._isDragging) this._snapToCenterPill();
-      if (this.props.mode === "filter") this._emitRange();
-    }, 200);
+      if (this._isDragging) {
+        if (this.props.mode === "filter") {
+          this._emitRange();
+          this._lastLiveEmit = Date.now();
+        }
+        return;
+      }
+      this._snapToCenterPill(() => {
+        if (this.props.mode === "filter" && !this._isDragging) {
+          this._emitRange();
+        }
+      });
+    }, 150);
   }
 
   _emitRange() {

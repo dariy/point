@@ -73,6 +73,7 @@ export default class MapPage extends Component {
     this._tileLayer = null;
     this._themeListener = null;
     this._markerLayer = null;
+    this._tagMarkers = new Map();
     this._allTagsCount = 0;
     this._currentRange = null;
     this._headerChild = null;
@@ -190,11 +191,22 @@ export default class MapPage extends Component {
 
   async _onTimelineRangeChange({ from, to }) {
     const hasRange = from !== undefined && to !== undefined;
+    const rangeStr = hasRange ? (from === to ? String(from) : `${from}-${to}`) : null;
+    
+    // Skip redundant updates if the range hasn't actually changed.
+    if (this._currentRange) {
+        const currentStr = this._currentRange.from === this._currentRange.to 
+            ? String(this._currentRange.from) 
+            : `${this._currentRange.from}-${this._currentRange.to}`;
+        if (rangeStr === currentStr) return;
+    } else if (!hasRange) {
+        return;
+    }
+
     this._currentRange = hasRange ? { from, to } : null;
     this._headerChild?.setProps({ breadcrumb: this._buildBreadcrumb() });
 
     if (hasRange) {
-      const rangeStr = from === to ? String(from) : `${from}-${to}`;
       history.replaceState(null, "", `/map/${rangeStr}`);
     }
     const params = hasRange ? { year_from: from, year_to: to } : {};
@@ -336,6 +348,7 @@ export default class MapPage extends Component {
               yearsHtml,
           );
           layer.on("click", (e) => layer.openPopup(e.latlng));
+          this._tagMarkers.set(tag.slug, layer);
         },
       }).addTo(this._markerLayer);
     }
@@ -382,11 +395,34 @@ export default class MapPage extends Component {
           yearsHtml,
       );
       marker.on("click", () => marker.openPopup());
+      this._tagMarkers.set(tag.slug, marker);
       bounds.push([tag.lat, tag.lng]);
     });
 
     if (bounds.length && !this._currentRange) {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+    }
+
+    const tagSlug = new URLSearchParams(window.location.search).get("tag");
+    if (tagSlug) {
+      this._openTagPopup(tagSlug);
+    }
+  }
+
+  _openTagPopup(tagSlug) {
+    const marker = this._tagMarkers.get(tagSlug);
+    if (marker && this._map) {
+      // For GeoJSON layers, the popup might need a location.
+      // Circle markers have a getLatLng().
+      if (marker.getLatLng) {
+        this._map.setView(marker.getLatLng(), 8);
+        marker.openPopup();
+      } else if (marker.getBounds) {
+        // GeoJSON layer
+        const bounds = marker.getBounds();
+        this._map.fitBounds(bounds, { maxZoom: 6 });
+        marker.openPopup(bounds.getCenter());
+      }
     }
   }
 

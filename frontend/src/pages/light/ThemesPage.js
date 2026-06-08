@@ -27,11 +27,12 @@ export default class ThemesPage extends Component {
       error: null,
       saving: false,
       savingCSS: false,
+      isMaximized: false,
     };
   }
 
   render() {
-    const { loading, error, themes, activeTheme, saving, customCSS, savingCSS } = this.state;
+    const { loading, error, themes, activeTheme, saving, savingCSS } = this.state;
 
     let content = "";
     if (loading) {
@@ -121,6 +122,9 @@ export default class ThemesPage extends Component {
 
   beforeUnmount() {
     this._cleanupHeaderCompact?.();
+    if (this._onKeyDown) {
+      document.removeEventListener("keydown", this._onKeyDown);
+    }
   }
 
   afterRender() {
@@ -135,8 +139,12 @@ export default class ThemesPage extends Component {
 
     setupTextareaMaximizer(this.container);
 
+    const editorValue = this._cssEditorRef
+      ? this._cssEditorRef.getValue()
+      : (this.state.customCSS || "");
     this._cssEditorRef = this.mountChild(CssEditor, "#custom-css-editor-mount", {
-      value: this.state.customCSS || "",
+      value: editorValue,
+      isMaximized: this.state.isMaximized,
       onChange: () => {},
     });
 
@@ -149,6 +157,24 @@ export default class ThemesPage extends Component {
     this.$("#save-css-btn")?.addEventListener("click", () => {
       this._handleSaveCSS();
     });
+
+    this.container.addEventListener("textarea:save", () => {
+      this._handleSaveCSS();
+    });
+
+    this.container.addEventListener("textarea:maximize", (e) => {
+      this.state.isMaximized = e.detail.isMaximized;
+    });
+
+    // Page-level Ctrl+S
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        this._handleSaveCSS();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    this._onKeyDown = onKeyDown;
   }
 
   mount() {
