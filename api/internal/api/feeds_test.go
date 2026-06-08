@@ -20,7 +20,7 @@ func TestFeedsHandler(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postService := services.NewPostService(repo)
+	postService := services.NewPostService(repo, nil, nil)
 	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
 	cacheService := services.NewCacheService(t.TempDir())

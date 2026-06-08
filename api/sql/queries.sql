@@ -237,6 +237,14 @@ WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURR
 AND deleted_at IS NULL
 RETURNING *;
 
+-- name: UpdatePostInstagramStatus :exec
+UPDATE posts
+SET instagram_status = ?,
+    instagram_media_id = ?,
+    instagram_published_at = ?,
+    instagram_error = ?
+WHERE id = ?;
+
 -- name: SoftDeletePost :exec
 UPDATE posts
 SET deleted_at = CURRENT_TIMESTAMP

@@ -13,7 +13,7 @@ import (
 
 func setupPostService(t *testing.T) (*PostService, repository.Repository) {
 	repo := setupTestDB(t)
-	service := NewPostService(repo)
+	service := NewPostService(repo, nil, nil)
 	return service, repo
 }
 
@@ -70,7 +70,7 @@ func setupTimelineService(t *testing.T) (*TimelineService, *TagService, *PostSer
 
 	timelineService := NewTimelineService(repo)
 	tagService := NewTagService(repo)
-	postService := NewPostService(repo)
+	postService := NewPostService(repo, nil, nil)
 	return timelineService, tagService, postService, userID
 }
 

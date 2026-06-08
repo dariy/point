@@ -68,13 +68,13 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	authService := services.NewAuthService(repo)
 	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
-	postService := services.NewPostService(repo)
+	instagramService := services.NewInstagramService(settingsService)
+	postService := services.NewPostService(repo, settingsService, instagramService)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
-	instagramService := services.NewInstagramService(settingsService)
 	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService)
 
 	return &AppServices{

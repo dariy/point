@@ -2166,6 +2166,34 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 	return i, err
 }
 
+const updatePostInstagramStatus = `-- name: UpdatePostInstagramStatus :exec
+UPDATE posts
+SET instagram_status = ?,
+    instagram_media_id = ?,
+    instagram_published_at = ?,
+    instagram_error = ?
+WHERE id = ?
+`
+
+type UpdatePostInstagramStatusParams struct {
+	InstagramStatus      string         `json:"instagram_status"`
+	InstagramMediaID     sql.NullString `json:"instagram_media_id"`
+	InstagramPublishedAt sql.NullTime   `json:"instagram_published_at"`
+	InstagramError       sql.NullString `json:"instagram_error"`
+	ID                   int64          `json:"id"`
+}
+
+func (q *Queries) UpdatePostInstagramStatus(ctx context.Context, arg UpdatePostInstagramStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updatePostInstagramStatus,
+		arg.InstagramStatus,
+		arg.InstagramMediaID,
+		arg.InstagramPublishedAt,
+		arg.InstagramError,
+		arg.ID,
+	)
+	return err
+}
+
 const updateSessionActivity = `-- name: UpdateSessionActivity :exec
 UPDATE sessions
 SET last_activity = CURRENT_TIMESTAMP

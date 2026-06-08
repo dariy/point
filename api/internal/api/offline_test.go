@@ -25,7 +25,7 @@ func TestSystemHandler_OfflineStats(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -68,7 +68,7 @@ func TestSystemHandler_OfflineSnapshot(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -108,7 +108,7 @@ func TestOfflineStatsWithData(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -132,7 +132,7 @@ func TestOfflineSnapshotWithData(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
