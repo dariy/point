@@ -5,7 +5,7 @@
     background: var(--surface-card);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow);
-    overflow: hidden;
+    overflow: visible;
     transition: background-color var(--transition-theme);
     margin-bottom: var(--spacing-lg);
 }
@@ -13,6 +13,8 @@
 .card-header {
     padding: var(--spacing-md) var(--spacing-lg);
     border-bottom: var(--border-width) solid var(--border-primary);
+    border-top-left-radius: var(--border-radius-lg);
+    border-top-right-radius: var(--border-radius-lg);
     background-color: var(--surface-hover);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
     cursor: pointer;
@@ -36,6 +38,8 @@
 .card-footer {
     padding: var(--spacing-md) var(--spacing-lg);
     border-top: var(--border-width) solid var(--border-primary);
+    border-bottom-left-radius: var(--border-radius-lg);
+    border-bottom-right-radius: var(--border-radius-lg);
     background-color: var(--surface-hover);
     transition: background-color var(--transition-theme), border-color var(--transition-theme);
 }
