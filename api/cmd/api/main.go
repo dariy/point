@@ -60,6 +60,7 @@ type AppServices struct {
 	Scheduler *services.SchedulerService
 	Theme     *services.ThemeService
 	Timeline  *services.TimelineService
+	Instagram *services.InstagramService
 }
 
 func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
@@ -74,6 +75,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
+	instagramService := services.NewInstagramService(settingsService)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -87,6 +89,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Scheduler: schedulerService,
 		Theme:     themeService,
 		Timeline:  timelineService,
+		Instagram: instagramService,
 	}
 }
 
