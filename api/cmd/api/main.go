@@ -114,6 +114,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
+	instagramHandler := api.NewInstagramHandler(svcs.Instagram, svcs.Settings, &cfg)
 
 	// WebAuthn handler — nil service if AppURL is not configured (passkeys require HTTPS + known origin)
 	var webauthnSvc *services.WebAuthnService
@@ -275,6 +276,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+
+	// ── Instagram Routes ──────────────────────────────────────────────────────
+	igGroup := e.Group("/api/instagram", api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	igGroup.GET("/connect", instagramHandler.Connect)
+	igGroup.GET("/callback", instagramHandler.Callback)
+	igGroup.POST("/disconnect", instagramHandler.Disconnect)
+	igGroup.GET("/status", instagramHandler.Status)
 
 	// ── Themes Routes ──────────────────────────────────────────────────────────
 	themesGroup := e.Group("/api/themes")

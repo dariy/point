@@ -90,6 +90,10 @@ func (s *SettingsService) SetSecret(ctx context.Context, key, value string) erro
 	})
 }
 
+func (s *SettingsService) DeleteSecret(ctx context.Context, key string) error {
+	return s.repo.DeleteSecret(ctx, key)
+}
+
 func (s *SettingsService) SecretIsSet(ctx context.Context, key string) bool {
 	val, err := s.GetSecret(ctx, key)
 	return err == nil && val != ""
