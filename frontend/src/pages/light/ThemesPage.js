@@ -135,8 +135,11 @@ export default class ThemesPage extends Component {
 
     setupTextareaMaximizer(this.container);
 
+    const editorValue = this._cssEditorRef
+      ? this._cssEditorRef.getValue()
+      : (this.state.customCSS || "");
     this._cssEditorRef = this.mountChild(CssEditor, "#custom-css-editor-mount", {
-      value: this.state.customCSS || "",
+      value: editorValue,
       onChange: () => {},
     });
 
