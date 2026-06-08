@@ -862,6 +862,10 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail available")
 			}
 			thumbFile := filepath.Join(storagePath, "media", media.ThumbnailPath.String)
+			mediaBase := filepath.Clean(filepath.Join(storagePath, "media"))
+			if !strings.HasPrefix(thumbFile, mediaBase+string(filepath.Separator)) {
+				return echo.NewHTTPError(http.StatusBadRequest, "invalid thumbnail path")
+			}
 			if _, err := os.Stat(thumbFile); err != nil {
 				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
 			}
