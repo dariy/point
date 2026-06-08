@@ -389,10 +389,12 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 						if desc != "" {
 							fmt.Fprintf(&sb, "\n  <meta name=\"description\" content=\"%s\">", html.EscapeString(desc))
 							fmt.Fprintf(&sb, "\n  <meta property=\"og:description\" content=\"%s\">", html.EscapeString(desc))
+							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:description\" content=\"%s\">", html.EscapeString(desc))
 						}
 
 						sb.WriteString("\n  <meta property=\"og:type\" content=\"article\">")
 						fmt.Fprintf(&sb, "\n  <meta property=\"og:title\" content=\"%s\">", html.EscapeString(post.Title))
+						fmt.Fprintf(&sb, "\n  <meta name=\"twitter:title\" content=\"%s\">", html.EscapeString(post.Title))
 
 						scheme := c.Scheme()
 						if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
@@ -405,7 +407,11 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 						if len(media) > 0 {
 							mPath := "/" + strings.TrimPrefix(media[0].OriginalPath, "originals/")
 							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, mPath)
+							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary_large_image\">")
 							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
+							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:image\" content=\"%s\">", html.EscapeString(imgURL))
+						} else {
+							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
 						sb.WriteString("\n</head>")
