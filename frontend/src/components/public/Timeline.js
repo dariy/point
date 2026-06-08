@@ -24,6 +24,7 @@ export class Timeline extends Component {
       popover: null,
       isLoading: true,
     };
+    this._lastLiveEmit = 0;
   }
 
   /**
@@ -699,13 +700,30 @@ export class Timeline extends Component {
 
   _debounceEmitRange() {
     clearTimeout(this._emitTimer);
+
+    // Live refresh while dragging/zooming (throttled)
+    if (this._isDragging && this.props.mode === "filter") {
+      const now = Date.now();
+      if (now - this._lastLiveEmit > 100) {
+        this._emitRange();
+        this._lastLiveEmit = now;
+      }
+    }
+
     this._emitTimer = setTimeout(() => {
-      if (this._isDragging) return;
-      this._snapToCenterPill(() => {
-        if (this.props.mode === "filter" && !this._isDragging)
+      if (this._isDragging) {
+        if (this.props.mode === "filter") {
           this._emitRange();
+          this._lastLiveEmit = Date.now();
+        }
+        return;
+      }
+      this._snapToCenterPill(() => {
+        if (this.props.mode === "filter" && !this._isDragging) {
+          this._emitRange();
+        }
       });
-    }, 200);
+    }, 150);
   }
 
   _emitRange() {
