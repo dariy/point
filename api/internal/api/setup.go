@@ -3,7 +3,7 @@ package api
 import (
 	"database/sql"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -65,7 +65,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		return c.JSON(http.StatusConflict, map[string]string{"detail": "setup already complete"})
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		log.Printf("setup: GetFirstUser error: %v", err)
+		slog.Error("setup: GetFirstUser failed", "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "database error"})
 	}
 
@@ -81,7 +81,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		DisplayName:  req.AuthorName,
 	})
 	if err != nil {
-		log.Printf("setup: CreateUser error: %v", err)
+		slog.Error("setup: CreateUser failed", "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "failed to create user"})
 	}
 

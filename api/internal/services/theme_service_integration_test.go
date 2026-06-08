@@ -77,8 +77,8 @@ func TestThemeService(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "Valid", theme.Name)
 
-		// Verify theme.css sync to <FrontendDir>/css/theme.css
-		publicThemePath := filepath.Join(frontendDir, "css", "theme.css")
+		// Verify theme.css sync to <FrontendDir>/css/common/theme.css
+		publicThemePath := filepath.Join(frontendDir, "css", "common", "theme.css")
 		data, err := os.ReadFile(publicThemePath)
 		assert.NoError(t, err)
 		assert.Equal(t, validThemeCSS, string(data))

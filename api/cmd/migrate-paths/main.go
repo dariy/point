@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"regexp"
 	"strings"
@@ -31,22 +32,34 @@ func cleanContent(c string) (string, bool) {
 }
 
 func main() {
+	// Initialize slog with TextHandler for logfmt output
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
+	// Redirect standard log to slog to handle legacy log.Printf calls
+	log.SetOutput(slog.NewLogLogger(logger.Handler(), slog.LevelInfo).Writer())
+	log.SetFlags(0)
+
 	dbPath := flag.String("db", "data/point.db", "path to the SQLite database")
 	apply := flag.Bool("apply", false, "commit changes (default is dry run)")
 	flag.Parse()
 
 	db, err := sql.Open("sqlite", *dbPath)
 	if err != nil {
-		log.Fatalf("open db: %v", err)
+		slog.Error("open db", "error", err)
+		os.Exit(1)
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Printf("error closing db: %v", err)
+			slog.Error("error closing db", "error", err)
 		}
 	}()
 
 	if err := db.Ping(); err != nil {
-		log.Fatalf("ping db: %v", err)
+		slog.Error("ping db", "error", err)
+		os.Exit(1)
 	}
 
 	fmt.Fprintf(os.Stderr, "database: %s\n", *dbPath)
@@ -59,12 +72,14 @@ func main() {
 
 	thumbnailCount, err := previewThumbnailPaths(db)
 	if err != nil {
-		log.Fatalf("preview thumbnail_path: %v", err)
+		slog.Error("preview thumbnail_path", "error", err)
+		os.Exit(1)
 	}
 
 	contentCount, err := previewContentPaths(db)
 	if err != nil {
-		log.Fatalf("preview content: %v", err)
+		slog.Error("preview content", "error", err)
+		os.Exit(1)
 	}
 
 	fmt.Fprintf(os.Stderr, "\nSummary: %d thumbnail_path rows, %d content rows will be updated.\n",
@@ -83,21 +98,25 @@ func main() {
 	// Apply within a transaction so it's atomic.
 	tx, err := db.Begin()
 	if err != nil {
-		log.Fatalf("begin tx: %v", err)
+		slog.Error("begin tx", "error", err)
+		os.Exit(1)
 	}
 
 	if err := applyThumbnailPaths(tx); err != nil {
 		_ = tx.Rollback()
-		log.Fatalf("update thumbnail_path: %v", err)
+		slog.Error("update thumbnail_path", "error", err)
+		os.Exit(1)
 	}
 
 	if err := applyContentPaths(tx, db); err != nil {
 		_ = tx.Rollback()
-		log.Fatalf("update content: %v", err)
+		slog.Error("update content", "error", err)
+		os.Exit(1)
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Fatalf("commit: %v", err)
+		slog.Error("commit", "error", err)
+		os.Exit(1)
 	}
 
 	fmt.Fprintln(os.Stderr, "Done.")

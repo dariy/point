@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 
 	"point-api/internal/config"
@@ -102,7 +102,7 @@ func (s *SettingsService) EnsureSecretKey(ctx context.Context, cfg *config.Confi
 	existing, err := s.GetSecret(ctx, "_secret_key")
 	if err == nil && existing != "" {
 		cfg.SecretKey = existing
-		log.Printf("loaded secret key from database secrets")
+		slog.Info("loaded secret key from database secrets")
 		return nil
 	}
 	raw := make([]byte, 32)
@@ -114,6 +114,6 @@ func (s *SettingsService) EnsureSecretKey(ctx context.Context, cfg *config.Confi
 		return fmt.Errorf("store secret key: %w", err)
 	}
 	cfg.SecretKey = key
-	log.Printf("generated and stored new secret key in database secrets")
+	slog.Info("generated and stored new secret key in database secrets")
 	return nil
 }

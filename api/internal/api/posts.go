@@ -531,17 +531,38 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": err.Error()})
 	}
+
+	// Load old post for merging and media path tracking
+	old, err := h.postService.GetPostByID(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+	}
+
+	// Capture pre-update paths so that images removed from the post are also re-evaluated.
+	oldPaths := services.ExtractMediaPaths(old.Content, old.ThumbnailPath.String)
+
+	// Merge fields if they are empty in the request (pragmatic partial PUT support)
+	if req.Title == "" {
+		req.Title = old.Title
+	}
+	if req.Content == "" {
+		req.Content = old.Content
+	}
+	if req.Slug == "" {
+		req.Slug = old.Slug
+	}
+	if req.Formatter == "" {
+		req.Formatter = old.Formatter
+	}
+	if req.Status == "" {
+		req.Status = old.Status
+	}
+
 	if scheduledAt != nil && time.Now().Before(*scheduledAt) {
 		req.Status = "scheduled"
 	} else if scheduledAt != nil {
 		req.Status = "published"
 		scheduledAt = nil
-	}
-
-	// Capture pre-update paths so that images removed from the post are also re-evaluated.
-	var oldPaths []string
-	if old, err := h.postService.GetPostByID(c.Request().Context(), id); err == nil {
-		oldPaths = services.ExtractMediaPaths(old.Content, old.ThumbnailPath.String)
 	}
 
 	updated, cssWarnings, err := h.postService.UpdatePost(c.Request().Context(), services.UpdatePostParams{
@@ -577,6 +598,40 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	}
 	if len(cssWarnings) > 0 {
 		resp["css_warnings"] = cssWarnings
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if req.Status == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "status is required")
+	}
+
+	updated, err := h.postService.UpdatePostStatus(c.Request().Context(), id, req.Status)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Post not found or access denied")
+	}
+
+	// Status changes affect media visibility (e.g. going from draft to published)
+	paths := services.ExtractMediaPaths(updated.Content, updated.ThumbnailPath.String)
+	_ = h.mediaService.UpdateMediaVisibilityForPaths(c.Request().Context(), paths)
+
+	resp, err := h.getFullPostResponse(c, id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, resp)

@@ -214,7 +214,8 @@ export default class PostEditPage extends Component {
     const contentArea =
       this.state.editorMode === "visual"
         ? `<div id="visual-editor-mount"></div>`
-        : `<div id="content-editor-mount"></div>`;
+        : `<label class="form-label" for="content-editor">Content</label>
+           <div id="content-editor-mount"></div>`;
 
     return `
       <div class="light-layout">
@@ -292,6 +293,7 @@ export default class PostEditPage extends Component {
               </div>
 
               <div class="form-group excerpt-row">
+                <label class="form-label" for="excerpt-editor">Excerpt</label>
                 <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}"
                           rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
                 ${aiBtn("excerpt")}
@@ -372,6 +374,7 @@ export default class PostEditPage extends Component {
     this._tags = toTagNames(this.state.post?.tags);
 
     this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
+      id: "css-editor",
       value: this.state.post?.css || "",
       isMaximized: this.state.maximizedField === "css",
       onChange: () => this._debouncedAutosave(),
@@ -382,6 +385,7 @@ export default class PostEditPage extends Component {
         MarkdownEditor,
         "#content-editor-mount",
         {
+          id: "content-editor",
           value: this.state.post?.content || "",
           isMaximized: this.state.maximizedField === "content",
           onChange: () => this._debouncedAutosave(),

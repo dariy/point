@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -878,7 +878,7 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 		// Fallback to pre-initialized client if any
 		analysis, err = s.analyzeImageDirectlyWithClient(ctx, s.genaiClient, content, filename, mimeType)
 	} else {
-		log.Printf("warning: AI features disabled (gemini_api_key is absent)")
+		slog.Warn("AI features disabled (gemini_api_key is absent)")
 		return &AnalysisResponse{Tags: []string{}}, nil
 	}
 
@@ -889,9 +889,9 @@ func (s *MediaService) AnalyzeImage(ctx context.Context, content []byte, filenam
 		// Check if it's an authorization/authentication error
 		var apiErr *googleapi.Error
 		if errors.As(err, &apiErr) && (apiErr.Code == 400 || apiErr.Code == 401 || apiErr.Code == 403) {
-			log.Printf("warning: AI features disabled (GEMINI_API_KEY is wrong or lacks permissions): %v", err)
+			slog.Warn("AI features disabled (GEMINI_API_KEY is wrong or lacks permissions)", "error", err)
 		} else {
-			log.Printf("warning: AI features soft-failed: %v", err)
+			slog.Warn("AI features soft-failed", "error", err)
 		}
 		return &AnalysisResponse{Tags: []string{}}, nil
 	}
@@ -1142,7 +1142,7 @@ func (s *MediaService) UpdateMediaVisibilityForPaths(ctx context.Context, paths 
 				pid = &postID
 			}
 			if err := s.repo.SetMediaPublic(ctx, m.ID, shouldBePublic, pid); err != nil {
-				log.Printf("warning: failed to update media %d visibility: %v", m.ID, err)
+				slog.Warn("failed to update media visibility", "media_id", m.ID, "error", err)
 			}
 		}
 	}

@@ -183,7 +183,7 @@ func TestThemeHandler(t *testing.T) {
 		assert.Equal(t, "body { background: red; }", res["css"])
 
 		// 4. Verify file sync
-		publicThemePath := filepath.Join(frontendDir, "css", "theme.css")
+		publicThemePath := filepath.Join(frontendDir, "css", "common", "theme.css")
 		data, _ := os.ReadFile(publicThemePath)
 		assert.Contains(t, string(data), "body { background: red; }")
 		assert.Contains(t, string(data), "System Custom CSS")
