@@ -1,6 +1,6 @@
 import { Component } from '../Component.js';
 import { CodeJar } from '../../../vendor/codejar/codejar.js';
-import { MAXIMIZE_SVG, MINIMIZE_SVG } from '../../utils/icons.js';
+import { MAXIMIZE_SVG, MINIMIZE_SVG, CHECK_SVG } from '../../utils/icons.js';
 
 import Prism from '../../../vendor/prismjs/prism-core.js';
 window.Prism = Prism;
@@ -29,17 +29,21 @@ export class MarkdownEditor extends Component {
     this.placeholder = props.placeholder || 'Write your post content here…';
     this.onChange = props.onChange || (() => {});
     this.jar = null;
-    this.isMaximized = false;
+    this.isMaximized = props.isMaximized || false;
     this.id = props.id || `md-editor-${Math.random().toString(36).substring(2, 9)}`;
   }
 
   render() {
+    const isMaximizedClass = this.isMaximized ? 'is-maximized' : '';
     return `
       <div class="markdown-editor-container" style="position: relative; border: var(--border-width, 1px) solid var(--border-primary, #ccc); border-radius: var(--border-radius, 4px); background: var(--surface-input, #fff); overflow: hidden; min-height: var(--editor-content-min-height, 400px); display: flex; flex-direction: column;">
-        <button type="button" class="textarea-maximize-btn" title="Maximize">
-          ${MAXIMIZE_SVG}
+        <button type="button" class="textarea-maximize-btn ${isMaximizedClass}" title="${this.isMaximized ? 'Minimize' : 'Maximize'}">
+          ${this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG}
         </button>
-        <div id="${this.id}" class="codejar-editor language-point-md"
+        <button type="button" class="textarea-save-btn ${isMaximizedClass}" title="Save">
+          ${CHECK_SVG}
+        </button>
+        <div id="${this.id}" class="codejar-editor language-point-md ${isMaximizedClass}"
              style="flex: 1; min-height: var(--editor-content-min-height, 400px); padding: 1rem; font-family: var(--font-mono, monospace); font-size: var(--font-size-sm, 14px); line-height: 1.6; color: var(--text-primary, #000); outline: none; white-space: pre-wrap; word-wrap: break-word;"
              data-placeholder="${this.placeholder}"></div>
       </div>
@@ -49,8 +53,13 @@ export class MarkdownEditor extends Component {
   afterRender() {
     const editorElement = this.container.querySelector(`#${this.id}`);
     const maximizeBtn = this.container.querySelector('.textarea-maximize-btn');
+    const saveBtn = this.container.querySelector('.textarea-save-btn');
 
     if (!editorElement) return;
+
+    if (this.isMaximized) {
+      document.body.classList.add('textarea-maximized-body-lock');
+    }
 
     const lang = Prism.languages['point-md'] || Prism.languages.markdown;
     const langKey = Prism.languages['point-md'] ? 'point-md' : 'markdown';
@@ -73,24 +82,42 @@ export class MarkdownEditor extends Component {
       maximizeBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this._toggleMaximize(editorElement, maximizeBtn);
+        this._toggleMaximize(editorElement, maximizeBtn, saveBtn);
+      });
+    }
+
+    if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.container.dispatchEvent(new CustomEvent('textarea:save', { bubbles: true }));
       });
     }
 
     editorElement.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isMaximized) {
-        this._toggleMaximize(editorElement, maximizeBtn);
+        this._toggleMaximize(editorElement, maximizeBtn, saveBtn);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        this.container.dispatchEvent(new CustomEvent('textarea:save', { bubbles: true }));
       }
     });
   }
 
-  _toggleMaximize(editorElement, btn) {
+  _toggleMaximize(editorElement, btn, saveBtn) {
     this.isMaximized = !this.isMaximized;
     editorElement.classList.toggle('is-maximized', this.isMaximized);
     btn.classList.toggle('is-maximized', this.isMaximized);
+    if (saveBtn) saveBtn.classList.toggle('is-maximized', this.isMaximized);
     btn.innerHTML = this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG;
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
     document.body.classList.toggle('textarea-maximized-body-lock', this.isMaximized);
+
+    this.container.dispatchEvent(new CustomEvent('textarea:maximize', {
+      bubbles: true,
+      detail: { isMaximized: this.isMaximized }
+    }));
   }
 
   beforeUnmount() {
