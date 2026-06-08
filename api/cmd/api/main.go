@@ -815,6 +815,11 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 			})
 		}
 
+		// Sanitize year and month by reconstructing them from the validated integers.
+		// This ensures they contain only digits and satisfies static analysis.
+		year = strconv.Itoa(yearInt)
+		month = fmt.Sprintf("%02d", monthInt)
+
 		// Prevent path traversal in the filename segment.
 		if filename == "" || filename == "." || strings.Contains(filename, "..") || strings.ContainsAny(filename, "/\\") {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid path")
@@ -861,11 +866,13 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 			if !media.ThumbnailPath.Valid {
 				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail available")
 			}
-			thumbFile := filepath.Join(storagePath, "media", media.ThumbnailPath.String)
-			mediaBase := filepath.Clean(filepath.Join(storagePath, "media"))
-			if !strings.HasPrefix(thumbFile, mediaBase+string(filepath.Separator)) {
-				return echo.NewHTTPError(http.StatusBadRequest, "invalid thumbnail path")
+			thumbFile := filepath.Clean(filepath.Join(storagePath, "media", media.ThumbnailPath.String))
+
+			// Security: ensure the resolved file is within the media storage directory.
+			if !strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
+				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
 			}
+
 			if _, err := os.Stat(thumbFile); err != nil {
 				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
 			}
@@ -874,14 +881,24 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 
 		// Serve original — try exact path first, then checksum-glob fallback.
 		origDir := filepath.Join(storagePath, "media", "originals", year, month)
-		origFile := filepath.Join(origDir, filepath.Base(filename))
+		origFile := filepath.Clean(filepath.Join(origDir, filepath.Base(filename)))
+
+		// Security: ensure the resolved file is within the expected originals directory.
+		if !strings.HasPrefix(origFile, filepath.Join(storagePath, "media", "originals")) {
+			return echo.NewHTTPError(http.StatusNotFound, "media not found")
+		}
+
 		if _, err := os.Stat(origFile); err == nil {
 			return c.File(origFile)
 		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {
 			matches, _ := filepath.Glob(filepath.Join(origDir, "*_"+m[1]+".*"))
 			if len(matches) == 1 {
-				return c.File(filepath.Join(origDir, filepath.Base(matches[0])))
+				matchFile := filepath.Clean(filepath.Join(origDir, filepath.Base(matches[0])))
+				// Security: double-check the globbed file prefix.
+				if strings.HasPrefix(matchFile, filepath.Join(storagePath, "media", "originals")) {
+					return c.File(matchFile)
+				}
 			}
 		}
 

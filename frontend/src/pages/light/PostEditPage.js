@@ -184,7 +184,6 @@ export default class PostEditPage extends Component {
     const p = post || {};
     const title = escapeHtml(p.title || "");
     const slug = escapeHtml(p.slug || "");
-    const content = p.content || "";
     const status = p.status || "draft";
     const featured = p.is_featured || false;
     const excerpt = p.excerpt || "";

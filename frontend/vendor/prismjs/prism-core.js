@@ -1261,3 +1261,5 @@ if (typeof global !== 'undefined') {
  * @global
  * @public
  */
+
+export default Prism;

@@ -32,7 +32,7 @@ export default class ThemesPage extends Component {
   }
 
   render() {
-    const { loading, error, themes, activeTheme, saving, customCSS, savingCSS } = this.state;
+    const { loading, error, themes, activeTheme, saving, savingCSS } = this.state;
 
     let content = "";
     if (loading) {
