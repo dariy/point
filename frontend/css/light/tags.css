@@ -338,7 +338,7 @@
     opacity: 1;
 }
 
-.tm-flag-toggle.active, .tm-flag-static.active {
+.tm-flag-toggle.active, .tm-flag-static.active, .tm-flag-link.active {
     opacity: 1;
     background: var(--surface-hover);
     color: var(--text-primary);
@@ -348,6 +348,24 @@
 
 .tm-flag-static {
     cursor: default;
+}
+
+.tm-flag-link {
+    width: auto;
+    padding: 0 var(--spacing-sm);
+    text-decoration: none;
+}
+
+.tm-flag-link:hover {
+    border-color: var(--color-primary);
+    background-color: var(--surface-hover);
+    opacity: 1;
+    color: var(--color-primary);
+}
+
+.tm-flag-link .btn-label {
+    margin-left: var(--spacing-xs);
+    font-weight: 500;
 }
 
 .tm-flag-static:disabled {
@@ -369,7 +387,7 @@
 .tm-flag-toggle.active.tm-flag-include-in-breadcrumbs { color: var(--color-purple-500); border-color: var(--color-purple-500); background: var(--color-purple-50); }
 .tm-flag-toggle.active.tm-flag-show-related-tags-as-children { color: var(--color-success); border-color: var(--color-success); background: var(--color-success-light); }
 
-.tm-flag-static.active.tm-flag-location { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-light); opacity: 1; }
+.tm-flag-static.active.tm-flag-location, .tm-flag-link.active.tm-flag-location { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-light); opacity: 1; }
 
 
 .tm-flag {

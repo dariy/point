@@ -127,8 +127,12 @@ export default class TagsManagerPage extends Component {
           <td><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
           <td class="text-center"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a></td>
           <td class="text-center">
-            <span class="tm-flag-static ${hasLocation ? 'active' : ''} tm-flag-location"
-                  title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">${MAP_SVG}</span>
+            ${hasLocation ? `
+              <a href="/map?tag=${encodeURIComponent(tag.slug)}" class="btn btn-sm tm-flag-link active tm-flag-location" title="View on map">
+                ${MAP_SVG}<span class="btn-label"> Map</span>
+              </a>` : `
+              <span class="tm-flag-static tm-flag-location" title="No coordinates">${MAP_SVG}</span>
+            `}
           </td>
           <td><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">\u2014</span>'}</div></td>
           <td class="tm-actions">
@@ -312,8 +316,11 @@ export default class TagsManagerPage extends Component {
       : `<span class="tm-toggle-spacer"></span>`;
 
     const hasLocation = node.locations?.length > 0;
-    const locationFlag = `<button type="button" disabled class="btn btn-sm tm-flag-static ${hasLocation ? 'active' : ''} tm-flag-location"
-                                title="${hasLocation ? 'Has coordinates' : 'No coordinates'}">${MAP_SVG}</button>`;
+    const locationFlag = hasLocation ? `
+      <a href="/map?tag=${encodeURIComponent(node.slug)}" class="btn btn-sm tm-flag-link active tm-flag-location" title="View on map">
+        ${MAP_SVG}<span class="btn-label"> Map</span>
+      </a>` : `
+      <span class="tm-flag-static tm-flag-location" title="No coordinates">${MAP_SVG}</span>`;
 
     const isSystem = !!node.is_system;
     const systemBadge = isSystem ? ` <span class="tm-system-badge" title="System tag">${LOCK_SVG}</span>` : '';
