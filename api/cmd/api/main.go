@@ -842,6 +842,13 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 			return echo.NewHTTPError(http.StatusNotFound, "media not found")
 		}
 
+		// Media files can be renamed or replaced at the same URL (e.g. rename to
+		// name.png, delete, re-upload a different image, rename again to name.png).
+		// Without this header browsers use heuristic caching and serve the stale
+		// version. no-cache still allows local caching but requires revalidation,
+		// so a 304 is returned on repeated loads when nothing changed.
+		c.Response().Header().Set("Cache-Control", "no-cache")
+
 		// Determine which file to serve.
 		_, wantThumb := c.Request().URL.Query()["thumb"]
 		if wantThumb {

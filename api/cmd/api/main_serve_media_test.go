@@ -167,6 +167,19 @@ func TestServeSimplifiedMedia_PublicMedia_FileExists(t *testing.T) {
 	}
 }
 
+func TestServeSimplifiedMedia_NoCacheHeader(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "photo.jpg")
+	makeMediaFile(t, storage, "2024", "01", "photo.jpg")
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "photo.jpg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("expected Cache-Control: no-cache, got %q", cc)
+	}
+}
+
 func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 	repo, storage := newMediaRepo(t)
 	createPublicMedia(t, repo, "2024", "01", "ghost.jpg")
