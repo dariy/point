@@ -554,9 +554,18 @@ export class PostContent extends Component {
       if (!img || (!img.complete && img.tagName === "IMG")) return 2;
       const rect = img.getBoundingClientRect();
       const naturalWidth = img.naturalWidth || img.videoWidth;
-      if (!naturalWidth) return 2;
-      const max = naturalWidth / rect.width;
-      return max > 1 ? max : 1;
+      const naturalHeight = img.naturalHeight || img.videoHeight;
+      if (!naturalWidth || !naturalHeight) return 2;
+
+      const fillScale = Math.max(
+        window.innerWidth / rect.width,
+        window.innerHeight / rect.height,
+      );
+      const naturalScale = naturalWidth / rect.width;
+
+      // Allow zooming to at least fill the screen, or natural size, or at least 2x.
+      const max = Math.max(fillScale, naturalScale, 2);
+      return max;
     };
 
     this._constrainZoom = (animate = false) => {
