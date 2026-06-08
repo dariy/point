@@ -191,11 +191,22 @@ export default class MapPage extends Component {
 
   async _onTimelineRangeChange({ from, to }) {
     const hasRange = from !== undefined && to !== undefined;
+    const rangeStr = hasRange ? (from === to ? String(from) : `${from}-${to}`) : null;
+    
+    // Skip redundant updates if the range hasn't actually changed.
+    if (this._currentRange) {
+        const currentStr = this._currentRange.from === this._currentRange.to 
+            ? String(this._currentRange.from) 
+            : `${this._currentRange.from}-${this._currentRange.to}`;
+        if (rangeStr === currentStr) return;
+    } else if (!hasRange) {
+        return;
+    }
+
     this._currentRange = hasRange ? { from, to } : null;
     this._headerChild?.setProps({ breadcrumb: this._buildBreadcrumb() });
 
     if (hasRange) {
-      const rangeStr = from === to ? String(from) : `${from}-${to}`;
       history.replaceState(null, "", `/map/${rangeStr}`);
     }
     const params = hasRange ? { year_from: from, year_to: to } : {};
