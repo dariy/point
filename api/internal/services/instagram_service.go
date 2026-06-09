@@ -13,8 +13,8 @@ import (
 
 type InstagramService struct {
 	settingsService      *SettingsService
-	apiBaseURL           string // api.instagram.com — OAuth token exchange
-	graphBaseURL         string // graph.instagram.com — Graph API calls
+	apiBaseURL           string // graph.facebook.com — OAuth token exchange
+	graphBaseURL         string // graph.facebook.com — Graph API calls
 	httpClient           *http.Client
 	containerWaitInitial time.Duration // wait before first status poll
 	containerWaitPoll    time.Duration // wait between subsequent polls
@@ -23,8 +23,8 @@ type InstagramService struct {
 func NewInstagramService(settingsService *SettingsService) *InstagramService {
 	return &InstagramService{
 		settingsService:      settingsService,
-		apiBaseURL:           "https://api.instagram.com",
-		graphBaseURL:         "https://graph.instagram.com",
+		apiBaseURL:           "https://graph.facebook.com/v25.0",
+		graphBaseURL:         "https://graph.facebook.com/v25.0",
 		httpClient:           &http.Client{Timeout: 30 * time.Second},
 		containerWaitInitial: 2 * time.Second,
 		containerWaitPoll:    4 * time.Second,

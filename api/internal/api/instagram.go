@@ -63,7 +63,7 @@ func (h *InstagramHandler) Connect(c echo.Context) error {
 		"scope":         {"instagram_business_basic,instagram_business_content_publish"},
 		"response_type": {"code"},
 	}
-	return c.Redirect(http.StatusFound, "https://www.instagram.com/oauth/authorize?"+params.Encode())
+	return c.Redirect(http.StatusFound, "https://www.facebook.com/v25.0/dialog/oauth?"+params.Encode())
 }
 
 // Callback handles the OAuth redirect from Meta.
