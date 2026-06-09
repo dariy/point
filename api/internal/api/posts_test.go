@@ -1146,13 +1146,13 @@ func TestPostHandler_PublishToInstagram_NotConnected(t *testing.T) {
 		Title: "IG Not Connected", Slug: "ig-not-connected", Status: "published",
 		Formatter: "markdown", AuthorID: userID, InstagramShare: true,
 	})
-	c, rec := echoCtx(http.MethodPost, "/", "")
+	c, _ := echoCtx(http.MethodPost, "/", "")
 	c.SetParamNames("id")
 	c.SetParamValues(strconv.FormatInt(post.ID, 10))
 	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 	if err := ph.PublishToInstagram(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
-  }
+	}
 }
 
 func TestPostHandler_UpdatePostStatus_Success(t *testing.T) {
@@ -1234,9 +1234,11 @@ func TestPostHandler_GetPostAnalytics_Success(t *testing.T) {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	var resp map[string]interface{}
-	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-	if resp["instagram_status"] != "error" {
-		t.Errorf("expected instagram_status 'error', got %v", resp["instagram_status"])
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := resp["total_views"]; !ok {
+		t.Error("response should contain total_views")
 	}
 }
 
@@ -1266,12 +1268,6 @@ func TestPostHandler_PublishToInstagram_NoImage(t *testing.T) {
 	}
 	if resp["instagram_error"] != "Post has no images" {
 		t.Errorf("expected instagram_error 'Post has no images', got %v", resp["instagram_error"])
-
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if _, ok := resp["total_views"]; !ok {
-		t.Error("response should contain total_views")
 	}
 }
 

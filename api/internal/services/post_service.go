@@ -39,6 +39,19 @@ type PostService struct {
 }
 
 func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService) *PostService {
+	var blockParsers []util.PrioritizedValue
+	for _, p := range parser.DefaultBlockParsers() {
+		if p.Priority != 100 {
+			blockParsers = append(blockParsers, p)
+		}
+	}
+	customParser := parser.NewParser(
+		parser.WithBlockParsers(blockParsers...),
+		parser.WithInlineParsers(parser.DefaultInlineParsers()...),
+		parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
+		parser.WithAutoHeadingID(),
+	)
+
 	md := goldmark.New(
 		goldmark.WithParser(customParser),
 		goldmark.WithExtensions(
