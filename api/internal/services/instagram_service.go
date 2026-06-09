@@ -43,8 +43,9 @@ func (s *InstagramService) withBaseURL(u string) *InstagramService {
 }
 
 type igTokenResponse struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int64  `json:"expires_in"`
+	AccessToken string      `json:"access_token"`
+	UserID      json.Number `json:"user_id"`
+	ExpiresIn   int64       `json:"expires_in"`
 }
 
 type igContainerResponse struct {
@@ -121,16 +122,17 @@ func (s *InstagramService) post(ctx context.Context, rawURL string, params url.V
 }
 
 // ExchangeCodeForLongLivedToken exchanges an OAuth authorization code for a
-// long-lived Instagram access token. Returns the token and seconds until expiry.
+// long-lived Instagram access token. Returns the token, the canonical user ID
+// from the short-lived token response, and seconds until expiry.
 // Two Graph API calls are made: code → short-lived token, then short-lived → long-lived.
-func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, code, redirectURI string) (string, int64, error) {
+func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, code, redirectURI string) (string, string, int64, error) {
 	appID, err := s.secret(ctx, "instagram_app_id")
 	if err != nil {
-		return "", 0, err
+		return "", "", 0, err
 	}
 	appSecret, err := s.secret(ctx, "instagram_app_secret")
 	if err != nil {
-		return "", 0, err
+		return "", "", 0, err
 	}
 
 	shortParams := url.Values{
@@ -142,27 +144,27 @@ func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, co
 	}
 	body, err := s.post(ctx, s.apiBaseURL+"/oauth/access_token", shortParams)
 	if err != nil {
-		return "", 0, fmt.Errorf("exchange code: %w", err)
+		return "", "", 0, fmt.Errorf("exchange code: %w", err)
 	}
 	var shortToken igTokenResponse
 	if err := json.Unmarshal(body, &shortToken); err != nil {
-		return "", 0, fmt.Errorf("decode short-lived token: %w", err)
+		return "", "", 0, fmt.Errorf("decode short-lived token: %w", err)
 	}
 
 	longParams := url.Values{
-		"grant_type":   {"ig_exchange_token"},
+		"grant_type":    {"ig_exchange_token"},
 		"client_secret": {appSecret},
-		"access_token": {shortToken.AccessToken},
+		"access_token":  {shortToken.AccessToken},
 	}
 	body2, err := s.get(ctx, s.graphBaseURL+"/access_token?"+longParams.Encode())
 	if err != nil {
-		return "", 0, fmt.Errorf("exchange long-lived token: %w", err)
+		return "", "", 0, fmt.Errorf("exchange long-lived token: %w", err)
 	}
 	var longToken igTokenResponse
 	if err := json.Unmarshal(body2, &longToken); err != nil {
-		return "", 0, fmt.Errorf("decode long-lived token: %w", err)
+		return "", "", 0, fmt.Errorf("decode long-lived token: %w", err)
 	}
-	return longToken.AccessToken, longToken.ExpiresIn, nil
+	return longToken.AccessToken, shortToken.UserID.String(), longToken.ExpiresIn, nil
 }
 
 // RefreshLongLivedToken refreshes the stored long-lived token before expiry.
@@ -194,7 +196,7 @@ func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, i
 		return "", "", err
 	}
 	params := url.Values{
-		"fields":       {"id,username"},
+		"fields":       {"user_id,username,account_type"},
 		"access_token": {token},
 	}
 	body, err := s.get(ctx, s.graphBaseURL+"/me?"+params.Encode())
@@ -202,13 +204,13 @@ func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, i
 		return "", "", fmt.Errorf("get connected account: %w", err)
 	}
 	var result struct {
-		ID       string `json:"id"`
-		Username string `json:"username"`
+		UserID   json.Number `json:"user_id"`
+		Username string      `json:"username"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", "", fmt.Errorf("decode account response: %w", err)
 	}
-	return result.Username, result.ID, nil
+	return result.Username, result.UserID.String(), nil
 }
 
 // CreateImageContainer creates a single-image media container on Instagram.

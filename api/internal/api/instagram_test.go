@@ -17,11 +17,11 @@ import (
 
 // mockInstagramConnector is a test double for instagramConnector.
 type mockInstagramConnector struct {
-	exchangeFn    func(code, redirectURI string) (string, int64, error)
+	exchangeFn    func(code, redirectURI string) (string, string, int64, error)
 	getAccountFn  func() (string, string, error)
 }
 
-func (m *mockInstagramConnector) ExchangeCodeForLongLivedToken(_ context.Context, code, redirectURI string) (string, int64, error) {
+func (m *mockInstagramConnector) ExchangeCodeForLongLivedToken(_ context.Context, code, redirectURI string) (string, string, int64, error) {
 	return m.exchangeFn(code, redirectURI)
 }
 
@@ -88,8 +88,8 @@ func TestInstagramHandler_Connect_RedirectsToMeta(t *testing.T) {
 		t.Fatalf("expected 302, got %d", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	if !strings.Contains(loc, "www.facebook.com/dialog/oauth") {
-		t.Errorf("redirect should point to Meta OAuth, got: %s", loc)
+	if !strings.Contains(loc, "www.instagram.com/oauth/authorize") {
+		t.Errorf("redirect should point to Instagram OAuth, got: %s", loc)
 	}
 	if !strings.Contains(loc, "client_id=APP123") {
 		t.Errorf("redirect should include client_id, got: %s", loc)
@@ -159,8 +159,8 @@ func TestInstagramHandler_Callback_BadState(t *testing.T) {
 
 func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(_, _ string) (string, int64, error) {
-			return "", 0, fmt.Errorf("invalid code")
+		exchangeFn: func(_, _ string) (string, string, int64, error) {
+			return "", "", 0, fmt.Errorf("invalid code")
 		},
 	}
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
@@ -180,8 +180,8 @@ func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 
 func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(_, _ string) (string, int64, error) {
-			return "longtoken", 5184000, nil
+		exchangeFn: func(_, _ string) (string, string, int64, error) {
+			return "longtoken", "1234567890", 5184000, nil
 		},
 		getAccountFn: func() (string, string, error) {
 			return "", "", fmt.Errorf("API error")
@@ -208,11 +208,11 @@ func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 
 func TestInstagramHandler_Callback_Success(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(code, _ string) (string, int64, error) {
+		exchangeFn: func(code, _ string) (string, string, int64, error) {
 			if code != "authcode" {
-				return "", 0, fmt.Errorf("unexpected code")
+				return "", "", 0, fmt.Errorf("unexpected code")
 			}
-			return "long-lived-token", 5184000, nil
+			return "long-lived-token", "1234567890", 5184000, nil
 		},
 		getAccountFn: func() (string, string, error) {
 			return "testuser", "1234567890", nil

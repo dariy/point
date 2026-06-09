@@ -52,7 +52,7 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 				http.Error(w, "bad params", http.StatusBadRequest)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token", "user_id": 987654321})
 		case "/access_token":
 			// long-lived exchange (GET, ig_exchange_token grant)
 			q := r.URL.Query()
@@ -71,12 +71,15 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 		"instagram_app_secret": "secret456",
 	}, handler)
 
-	token, expires, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "mycode", "https://example.com/callback")
+	token, userID, expires, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "mycode", "https://example.com/callback")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if token != "long-token" {
 		t.Errorf("token = %q, want %q", token, "long-token")
+	}
+	if userID != "987654321" {
+		t.Errorf("userID = %q, want %q", userID, "987654321")
 	}
 	if expires != 5183944 {
 		t.Errorf("expires_in = %d, want 5183944", expires)
@@ -88,7 +91,7 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 
 func TestInstagram_ExchangeCodeForLongLivedToken_MissingSecret(t *testing.T) {
 	svc := NewInstagramService(mockSecrets(map[string]string{}))
-	_, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "code", "https://example.com/cb")
+	_, _, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "code", "https://example.com/cb")
 	if err == nil || !strings.Contains(err.Error(), "instagram_app_id") {
 		t.Errorf("expected missing secret error, got %v", err)
 	}
@@ -106,7 +109,7 @@ func TestInstagram_ExchangeCodeForLongLivedToken_APIError(t *testing.T) {
 		"instagram_app_secret": "secret456",
 	}, handler)
 
-	_, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "bad-code", "https://example.com/cb")
+	_, _, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "bad-code", "https://example.com/cb")
 	if err == nil || !strings.Contains(err.Error(), "190") {
 		t.Errorf("expected API error, got %v", err)
 	}
@@ -172,7 +175,7 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 			http.Error(w, "unexpected path", http.StatusBadRequest)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "ig-user-999", "username": "testuser"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"user_id": "999", "username": "testuser"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
@@ -184,8 +187,8 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 	if username != "testuser" {
 		t.Errorf("username = %q, want %q", username, "testuser")
 	}
-	if igUserID != "ig-user-999" {
-		t.Errorf("igUserID = %q, want %q", igUserID, "ig-user-999")
+	if igUserID != "999" {
+		t.Errorf("igUserID = %q, want %q", igUserID, "999")
 	}
 }
 
