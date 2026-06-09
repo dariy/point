@@ -164,11 +164,12 @@ func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, co
 	}
 
 	longParams := url.Values{
-		"grant_type":    {"ig_exchange_token"},
-		"client_secret": {appSecret},
-		"access_token":  {shortToken.AccessToken},
+		"grant_type":        {"fb_exchange_token"},
+		"client_id":         {appID},
+		"client_secret":     {appSecret},
+		"fb_exchange_token": {shortToken.AccessToken},
 	}
-	body2, err := s.get(ctx, s.graphBaseURL+"/access_token?"+longParams.Encode())
+	body2, err := s.get(ctx, s.graphBaseURL+"/oauth/access_token?"+longParams.Encode())
 	if err != nil {
 		return "", "", 0, fmt.Errorf("exchange long-lived token: %w", err)
 	}
@@ -177,6 +178,35 @@ func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, co
 		return "", "", 0, fmt.Errorf("decode long-lived token: %w", err)
 	}
 	return longToken.AccessToken, shortToken.UserID.String(), longToken.ExpiresIn, nil
+}
+
+// ExchangeShortLivedForLongLived exchanges a short-lived user access token (received
+// directly via response_type=token OAuth flow) for a long-lived token.
+func (s *InstagramService) ExchangeShortLivedForLongLived(ctx context.Context, shortLivedToken string) (string, int64, error) {
+	appID, err := s.secret(ctx, "instagram_app_id")
+	if err != nil {
+		return "", 0, err
+	}
+	appSecret, err := s.secret(ctx, "instagram_app_secret")
+	if err != nil {
+		return "", 0, err
+	}
+
+	params := url.Values{
+		"grant_type":        {"fb_exchange_token"},
+		"client_id":         {appID},
+		"client_secret":     {appSecret},
+		"fb_exchange_token": {shortLivedToken},
+	}
+	body, err := s.get(ctx, s.graphBaseURL+"/oauth/access_token?"+params.Encode())
+	if err != nil {
+		return "", 0, fmt.Errorf("exchange long-lived token: %w", err)
+	}
+	var resp igTokenResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", 0, fmt.Errorf("decode long-lived token: %w", err)
+	}
+	return resp.AccessToken, resp.ExpiresIn, nil
 }
 
 // RefreshLongLivedToken refreshes the stored long-lived token before expiry.
@@ -202,28 +232,41 @@ func (s *InstagramService) RefreshLongLivedToken(ctx context.Context) (string, i
 }
 
 // GetConnectedAccount returns the username, IG user ID, and account_type for the stored token.
+// Business Login returns a Facebook User token; the Instagram account is retrieved via
+// the connected Facebook Page using the /me/accounts endpoint.
 func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error) {
 	token, err := s.secret(ctx, "instagram_access_token")
 	if err != nil {
 		return "", "", "", err
 	}
 	params := url.Values{
-		"fields":       {"user_id,username,account_type"},
+		"fields":       {"instagram_business_account{id,username}"},
 		"access_token": {token},
 	}
-	body, err := s.get(ctx, s.graphBaseURL+"/me?"+params.Encode())
+	body, err := s.get(ctx, s.graphBaseURL+"/me/accounts?"+params.Encode())
 	if err != nil {
 		return "", "", "", fmt.Errorf("get connected account: %w", err)
 	}
 	var result struct {
-		UserID      json.Number `json:"user_id"`
-		Username    string      `json:"username"`
-		AccountType string      `json:"account_type"`
+		Data []struct {
+			InstagramBusinessAccount *struct {
+				ID       json.Number `json:"id"`
+				Username string      `json:"username"`
+			} `json:"instagram_business_account"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", "", "", fmt.Errorf("decode account response: %w", err)
 	}
-	return result.Username, result.UserID.String(), result.AccountType, nil
+	for _, page := range result.Data {
+		if page.InstagramBusinessAccount != nil {
+			acc := page.InstagramBusinessAccount
+			// Business Login only surfaces Business/Creator accounts — Personal accounts
+			// don't expose an instagram_business_account node.
+			return acc.Username, acc.ID.String(), "BUSINESS", nil
+		}
+	}
+	return "", "", "", fmt.Errorf("get connected account: no Instagram Business Account linked to your Facebook Pages")
 }
 
 // CreateImageContainer creates a single-image media container on Instagram.

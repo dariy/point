@@ -17,8 +17,8 @@ import (
 
 // mockInstagramConnector is a test double for instagramConnector.
 type mockInstagramConnector struct {
-	exchangeFn    func(code, redirectURI string) (string, string, int64, error)
-	getAccountFn  func() (string, string, string, error)
+	exchangeFn   func(code, redirectURI string) (string, string, int64, error)
+	getAccountFn func() (string, string, string, error)
 }
 
 func (m *mockInstagramConnector) ExchangeCodeForLongLivedToken(_ context.Context, code, redirectURI string) (string, string, int64, error) {
@@ -181,7 +181,7 @@ func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 	mock := &mockInstagramConnector{
 		exchangeFn: func(_, _ string) (string, string, int64, error) {
-			return "longtoken", "1234567890", 5184000, nil
+			return "longtoken", "fbuid", 5184000, nil
 		},
 		getAccountFn: func() (string, string, string, error) {
 			return "", "", "", fmt.Errorf("API error")
@@ -212,7 +212,7 @@ func TestInstagramHandler_Callback_Success(t *testing.T) {
 			if code != "authcode" {
 				return "", "", 0, fmt.Errorf("unexpected code")
 			}
-			return "long-lived-token", "1234567890", 5184000, nil
+			return "long-lived-token", "fbuid", 5184000, nil
 		},
 		getAccountFn: func() (string, string, string, error) {
 			return "testuser", "1234567890", "BUSINESS", nil
@@ -258,7 +258,7 @@ func TestInstagramHandler_Callback_Success(t *testing.T) {
 func TestInstagramHandler_Callback_PersonalAccount(t *testing.T) {
 	mock := &mockInstagramConnector{
 		exchangeFn: func(_, _ string) (string, string, int64, error) {
-			return "longtoken", "1234567890", 5184000, nil
+			return "longtoken", "fbuid", 5184000, nil
 		},
 		getAccountFn: func() (string, string, string, error) {
 			return "personaluser", "1234567890", "PERSONAL", nil

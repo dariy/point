@@ -72,11 +72,12 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 					Title:          "Test Post",
 					Slug:           "test-post",
 					InstagramShare: true,
+					Content:        "![img](/2026/06/test.jpg)",
 				}, nil
 			},
-			MockGetMediaByPostID: func(_ context.Context, postID sql.NullInt64) ([]models.Medium, error) {
+			MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
 				return []models.Medium{
-					{OriginalPath: "/2026/06/test.jpg"},
+					{OriginalPath: "originals/2026/06/test.jpg"},
 				}, nil
 			},
 			MockGetTagsForPost: func(_ context.Context, postID int64) ([]models.Tag, error) {
@@ -93,7 +94,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, igSvc)
+		postSvc := NewPostService(repo, settingsSvc, igSvc, ts.URL)
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -145,12 +146,13 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 					Title:          "Test Carousel",
 					Slug:           "test-carousel",
 					InstagramShare: true,
+					Content:        "![img](/2026/06/test1.jpg)\n![img2](/2026/06/test2.jpg)",
 				}, nil
 			},
-			MockGetMediaByPostID: func(_ context.Context, postID sql.NullInt64) ([]models.Medium, error) {
+			MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
 				return []models.Medium{
-					{OriginalPath: "/2026/06/test1.jpg"},
-					{OriginalPath: "/2026/06/test2.jpg"},
+					{OriginalPath: "originals/2026/06/test1.jpg"},
+					{OriginalPath: "originals/2026/06/test2.jpg"},
 				}, nil
 			},
 			MockGetTagsForPost: func(_ context.Context, postID int64) ([]models.Tag, error) {
@@ -164,7 +166,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, igSvc)
+		postSvc := NewPostService(repo, settingsSvc, igSvc, ts.URL)
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -202,10 +204,10 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		var capturedStatus, capturedError string
 		repo := &mockRepository{
 			MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
-				return models.Post{ID: id, Title: "T", Slug: "t", InstagramShare: true}, nil
+				return models.Post{ID: id, Title: "T", Slug: "t", InstagramShare: true, Content: "![img](/2026/06/test.jpg)"}, nil
 			},
-			MockGetMediaByPostID: func(_ context.Context, _ sql.NullInt64) ([]models.Medium, error) {
-				return []models.Medium{{OriginalPath: "/2026/06/test.jpg"}}, nil
+			MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
+				return []models.Medium{{OriginalPath: "originals/2026/06/test.jpg"}}, nil
 			},
 			MockGetTagsForPost: func(_ context.Context, _ int64) ([]models.Tag, error) {
 				return nil, nil
@@ -217,7 +219,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, igSvc)
+		postSvc := NewPostService(repo, settingsSvc, igSvc, ts.URL)
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -251,7 +253,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, nil)
+		postSvc := NewPostService(repo, settingsSvc, nil, "")
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -284,7 +286,7 @@ func igMockServer(t *testing.T) *httptest.Server {
 func igPostSvc(settings map[string]string, repo *mockRepository, ts *httptest.Server) *PostService {
 	settingsSvc := mockSettings(settings)
 	igSvc := NewInstagramService(settingsSvc).withBaseURL(ts.URL)
-	return NewPostService(repo, settingsSvc, igSvc)
+	return NewPostService(repo, settingsSvc, igSvc, ts.URL)
 }
 
 // igShareRepo builds a minimal mockRepository for publish-hook tests.
@@ -292,13 +294,13 @@ func igPostSvc(settings map[string]string, repo *mockRepository, ts *httptest.Se
 func igShareRepo(shareEnabled bool, done chan<- string) *mockRepository {
 	return &mockRepository{
 		MockPublishPost: func(_ context.Context, id int64) (models.Post, error) {
-			return models.Post{ID: id, InstagramShare: shareEnabled}, nil
+			return models.Post{ID: id, InstagramShare: shareEnabled, Content: "![img](/2026/06/test.jpg)"}, nil
 		},
 		MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
-			return models.Post{ID: id, InstagramShare: shareEnabled}, nil
+			return models.Post{ID: id, InstagramShare: shareEnabled, Content: "![img](/2026/06/test.jpg)"}, nil
 		},
-		MockGetMediaByPostID: func(_ context.Context, _ sql.NullInt64) ([]models.Medium, error) {
-			return []models.Medium{{OriginalPath: "/2026/06/test.jpg"}}, nil
+		MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
+			return []models.Medium{{OriginalPath: "originals/2026/06/test.jpg"}}, nil
 		},
 		MockGetTagsForPost: func(_ context.Context, _ int64) ([]models.Tag, error) {
 			return nil, nil
@@ -441,10 +443,10 @@ func TestPostService_PublishDueScheduledPosts_NoDoublePublish(t *testing.T) {
 			}, nil
 		},
 		MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
-			return models.Post{ID: id, InstagramShare: true}, nil
+			return models.Post{ID: id, InstagramShare: true, Content: "![img](/2026/06/test.jpg)"}, nil
 		},
-		MockGetMediaByPostID: func(_ context.Context, _ sql.NullInt64) ([]models.Medium, error) {
-			return []models.Medium{{OriginalPath: "/2026/06/test.jpg"}}, nil
+		MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
+			return []models.Medium{{OriginalPath: "originals/2026/06/test.jpg"}}, nil
 		},
 		MockGetTagsForPost: func(_ context.Context, _ int64) ([]models.Tag, error) {
 			return nil, nil

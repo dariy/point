@@ -29,7 +29,7 @@ func TestPostHandler_CRUD(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postService := services.NewPostService(repo, nil, nil)
+	postService := services.NewPostService(repo, nil, nil, "")
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
 	mediaService := services.NewMediaService(repo, nil, settingsService, tagService)
@@ -133,7 +133,7 @@ func TestPostHandler_UpdatePostTags(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	handler := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	e := echo.New()
 
@@ -192,7 +192,7 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	handler := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	e := echo.New()
 
@@ -237,7 +237,7 @@ func TestPostHandler_GetPostByID(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	handler := NewPostHandler(postSvc, settingsSvc, nil, tagSvc)
@@ -286,7 +286,7 @@ func TestPostHandler_GeneratePreviewLink(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	handler := NewPostHandler(postSvc, settingsSvc, nil, tagSvc)
@@ -329,7 +329,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 
@@ -509,7 +509,7 @@ func TestUpdatePost_Success(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -543,7 +543,7 @@ func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -585,7 +585,7 @@ func TestPostHandler_GeneratePreviewLink_Success(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -619,7 +619,7 @@ func TestCreateAudioPost_NoTitleWithTags(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{
@@ -653,7 +653,7 @@ func TestUpdatePost_SlugConflict(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -693,7 +693,7 @@ func TestUpdatePost_BadID(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -715,7 +715,7 @@ func TestCreatePost_Scheduled(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -754,7 +754,7 @@ func TestCreatePost_ScheduledInPast_PublishesImmediately(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -1091,7 +1091,7 @@ func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 func setupPostHandlerFull(t *testing.T) (*PostHandler, *testHandlers) {
 	t.Helper()
 	h := setupHandlers(t)
-	postSvc := services.NewPostService(h.repo, h.settingsSvc, nil)
+	postSvc := services.NewPostService(h.repo, h.settingsSvc, nil, "https://example.com")
 	ph := NewPostHandler(postSvc, h.settingsSvc, h.mediaSvc, h.tagSvc)
 	return ph, h
 }

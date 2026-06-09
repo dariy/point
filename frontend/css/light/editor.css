@@ -716,3 +716,33 @@ textarea.is-maximized,
     pointer-events: none;
 }
 
+/* Instagram section in post editor */
+.ig-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.ig-connection-note {
+    display: block;
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+.ig-connection-note--warn {
+    color: var(--color-warning);
+}
+
+.ig-connection-note--warn a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.ig-error-msg {
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--color-danger);
+}
+
