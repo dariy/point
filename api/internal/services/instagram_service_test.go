@@ -226,9 +226,8 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 				{
 					"id": "page123",
 					"instagram_business_account": map[string]any{
-						"id":           "999",
-						"username":     "testuser",
-						"account_type": "BUSINESS",
+						"id":       "999",
+						"username": "testuser",
 					},
 				},
 			},

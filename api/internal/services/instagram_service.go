@@ -240,7 +240,7 @@ func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, i
 		return "", "", "", err
 	}
 	params := url.Values{
-		"fields":       {"instagram_business_account{id,username,account_type}"},
+		"fields":       {"instagram_business_account{id,username}"},
 		"access_token": {token},
 	}
 	body, err := s.get(ctx, s.graphBaseURL+"/me/accounts?"+params.Encode())
@@ -250,9 +250,8 @@ func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, i
 	var result struct {
 		Data []struct {
 			InstagramBusinessAccount *struct {
-				ID          json.Number `json:"id"`
-				Username    string      `json:"username"`
-				AccountType string      `json:"account_type"`
+				ID       json.Number `json:"id"`
+				Username string      `json:"username"`
 			} `json:"instagram_business_account"`
 		} `json:"data"`
 	}
@@ -262,11 +261,9 @@ func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, i
 	for _, page := range result.Data {
 		if page.InstagramBusinessAccount != nil {
 			acc := page.InstagramBusinessAccount
-			at := acc.AccountType
-			if at == "" {
-				at = "BUSINESS"
-			}
-			return acc.Username, acc.ID.String(), at, nil
+			// Business Login only surfaces Business/Creator accounts — Personal accounts
+			// don't expose an instagram_business_account node.
+			return acc.Username, acc.ID.String(), "BUSINESS", nil
 		}
 	}
 	return "", "", "", fmt.Errorf("get connected account: no Instagram Business Account linked to your Facebook Pages")
