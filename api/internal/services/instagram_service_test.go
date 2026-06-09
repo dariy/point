@@ -41,26 +41,28 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 	callCount := 0
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
-		if r.URL.Path != "/oauth/access_token" {
-			http.Error(w, "unexpected path", http.StatusBadRequest)
-			return
-		}
-		q := r.URL.Query()
-		switch callCount {
-		case 1:
-			// short-lived exchange
-			if q.Get("code") != "mycode" || q.Get("redirect_uri") != "https://example.com/callback" {
+		switch r.URL.Path {
+		case "/oauth/access_token":
+			// short-lived exchange (POST, authorization_code grant)
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "parse error", http.StatusBadRequest)
+				return
+			}
+			if r.FormValue("code") != "mycode" || r.FormValue("redirect_uri") != "https://example.com/callback" {
 				http.Error(w, "bad params", http.StatusBadRequest)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token"})
-		case 2:
-			// long-lived exchange
-			if q.Get("grant_type") != "fb_exchange_token" || q.Get("fb_exchange_token") != "short-token" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token", "user_id": 987654321})
+		case "/access_token":
+			// long-lived exchange (GET, ig_exchange_token grant)
+			q := r.URL.Query()
+			if q.Get("grant_type") != "ig_exchange_token" || q.Get("access_token") != "short-token" {
 				http.Error(w, "bad params", http.StatusBadRequest)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "long-token", "expires_in": 5183944})
+		default:
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusBadRequest)
 		}
 	})
 
@@ -69,12 +71,15 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 		"instagram_app_secret": "secret456",
 	}, handler)
 
-	token, expires, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "mycode", "https://example.com/callback")
+	token, userID, expires, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "mycode", "https://example.com/callback")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if token != "long-token" {
 		t.Errorf("token = %q, want %q", token, "long-token")
+	}
+	if userID != "987654321" {
+		t.Errorf("userID = %q, want %q", userID, "987654321")
 	}
 	if expires != 5183944 {
 		t.Errorf("expires_in = %d, want 5183944", expires)
@@ -86,7 +91,7 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 
 func TestInstagram_ExchangeCodeForLongLivedToken_MissingSecret(t *testing.T) {
 	svc := NewInstagramService(mockSecrets(map[string]string{}))
-	_, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "code", "https://example.com/cb")
+	_, _, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "code", "https://example.com/cb")
 	if err == nil || !strings.Contains(err.Error(), "instagram_app_id") {
 		t.Errorf("expected missing secret error, got %v", err)
 	}
@@ -104,7 +109,7 @@ func TestInstagram_ExchangeCodeForLongLivedToken_APIError(t *testing.T) {
 		"instagram_app_secret": "secret456",
 	}, handler)
 
-	_, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "bad-code", "https://example.com/cb")
+	_, _, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "bad-code", "https://example.com/cb")
 	if err == nil || !strings.Contains(err.Error(), "190") {
 		t.Errorf("expected API error, got %v", err)
 	}
@@ -170,20 +175,23 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 			http.Error(w, "unexpected path", http.StatusBadRequest)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "ig-user-999", "username": "testuser"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"user_id": "999", "username": "testuser", "account_type": "BUSINESS"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
 
-	username, igUserID, err := svc.GetConnectedAccount(context.Background())
+	username, igUserID, accountType, err := svc.GetConnectedAccount(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if username != "testuser" {
 		t.Errorf("username = %q, want %q", username, "testuser")
 	}
-	if igUserID != "ig-user-999" {
-		t.Errorf("igUserID = %q, want %q", igUserID, "ig-user-999")
+	if igUserID != "999" {
+		t.Errorf("igUserID = %q, want %q", igUserID, "999")
+	}
+	if accountType != "BUSINESS" {
+		t.Errorf("accountType = %q, want %q", accountType, "BUSINESS")
 	}
 }
 
@@ -196,7 +204,7 @@ func TestInstagram_GetConnectedAccount_APIError(t *testing.T) {
 	})
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
 
-	_, _, err := svc.GetConnectedAccount(context.Background())
+	_, _, _, err := svc.GetConnectedAccount(context.Background())
 	if err == nil {
 		t.Error("expected error")
 	}
@@ -368,5 +376,134 @@ func TestInstagram_PublishContainer_APIError(t *testing.T) {
 	_, err := svc.PublishContainer(context.Background(), "not-ready")
 	if err == nil || !strings.Contains(err.Error(), "9007") {
 		t.Errorf("expected API error with code, got %v", err)
+	}
+}
+
+// ── WaitForContainerReady ─────────────────────────────────────────────────────
+
+func TestInstagram_WaitForContainerReady_FINISHED(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("fields") == "" {
+			http.Error(w, "missing fields param", http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "FINISHED"})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	if err := svc.WaitForContainerReady(context.Background(), "container-abc"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_MultiPollThenFinished(t *testing.T) {
+	calls := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls < 3 {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "IN_PROGRESS"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "FINISHED"})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	if err := svc.WaitForContainerReady(context.Background(), "container-abc"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 3 {
+		t.Errorf("expected 3 polls, got %d", calls)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_ERROR(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "ERROR", "status": "media upload failed"})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	err := svc.WaitForContainerReady(context.Background(), "container-abc")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "ERROR") {
+		t.Errorf("error should mention ERROR status, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "media upload failed") {
+		t.Errorf("error should include status text, got: %v", err)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_EXPIRED(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "EXPIRED", "status": ""})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	err := svc.WaitForContainerReady(context.Background(), "container-abc")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "EXPIRED") {
+		t.Errorf("error should mention EXPIRED, got: %v", err)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_MissingSecret(t *testing.T) {
+	svc := NewInstagramService(mockSecrets(map[string]string{}))
+	err := svc.WaitForContainerReady(context.Background(), "container-abc")
+	if err == nil || !strings.Contains(err.Error(), "instagram_access_token") {
+		t.Errorf("expected missing secret error, got %v", err)
+	}
+}
+
+// ── Error Parsing ────────────────────────────────────────────────────────────
+
+func TestInstagram_APIErrorParsing_WithUserMsg(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"message":        "Original meta message",
+				"code":           100,
+				"error_subcode":  33,
+				"error_user_msg": "Friendly user message",
+				"fbtrace_id":     "ABC123XYZ",
+			},
+		})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
+
+	_, _, _, err := svc.GetConnectedAccount(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	expected := "get connected account: instagram API error 100 (subcode 33, fbtrace ABC123XYZ): Friendly user message"
+	if err.Error() != expected {
+		t.Errorf("error = %q, want %q", err.Error(), expected)
+	}
+}
+
+func TestInstagram_APIErrorParsing_WithoutUserMsg(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"message":       "Original meta message",
+				"code":          100,
+				"error_subcode": 33,
+				"fbtrace_id":    "ABC123XYZ",
+			},
+		})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
+
+	_, _, _, err := svc.GetConnectedAccount(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	expected := "get connected account: instagram API error 100 (subcode 33, fbtrace ABC123XYZ): Original meta message"
+	if err.Error() != expected {
+		t.Errorf("error = %q, want %q", err.Error(), expected)
 	}
 }

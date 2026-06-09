@@ -937,6 +937,9 @@ func (h *PostHandler) PublishToInstagram(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
+	ctx, cancel := context.WithTimeout(ctx, 180*time.Second)
+	defer cancel()
+
 	// CrossPostToInstagram handles status updates in the database.
 	_ = h.postService.CrossPostToInstagram(ctx, id)
 

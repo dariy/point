@@ -134,6 +134,7 @@ class Router {
       href.startsWith("//") ||
       href.startsWith("mailto:") ||
       href.startsWith("#") ||
+      href.startsWith("/api/") ||
       anchor.hasAttribute("data-external") ||
       anchor.target === "_blank"
     ) {

@@ -631,7 +631,7 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
 			go func() {
-				ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 				defer cancel()
 				_ = s.CrossPostToInstagram(ctx2, id)
 			}()
@@ -699,7 +699,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 					if p.InstagramShare {
 						id := p.ID
 						go func() {
-							ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+							ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 							defer cancel()
 							_ = s.CrossPostToInstagram(ctx2, id)
 						}()
@@ -758,6 +758,9 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	if len(images) == 1 {
 		imageURL := appURL + images[0].OriginalPath
 		creationID, err = s.instagramService.CreateImageContainer(ctx, imageURL, caption)
+		if err == nil {
+			err = s.instagramService.WaitForContainerReady(ctx, creationID)
+		}
 	} else {
 		if len(images) > 10 {
 			images = images[:10]
@@ -770,9 +773,16 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 				_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
 				return err
 			}
+			if err := s.instagramService.WaitForContainerReady(ctx, childID); err != nil {
+				_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
+				return err
+			}
 			childIDs = append(childIDs, childID)
 		}
 		creationID, err = s.instagramService.CreateCarousel(ctx, childIDs, caption)
+		if err == nil {
+			err = s.instagramService.WaitForContainerReady(ctx, creationID)
+		}
 	}
 
 	if err != nil {
@@ -794,9 +804,6 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 	res = strings.ReplaceAll(res, "{title}", post.Title)
 
 	excerpt := post.Excerpt.String
-	if excerpt == "" {
-		excerpt = ""
-	}
 	res = strings.ReplaceAll(res, "{excerpt}", excerpt)
 
 	link := fmt.Sprintf("%s/%s", appURL, post.Slug)

@@ -504,6 +504,20 @@ export default class SettingsPage extends Component {
 
   mount() {
     super.mount();
+
+    // Check for Instagram connection errors from redirect
+    const query = new URLSearchParams(location.search);
+    if (query.get("error") === "instagram_personal") {
+      store.set("toast", {
+        message: "Only Instagram Business or Creator accounts can be connected.",
+        type: "error",
+      });
+      // Clean up the URL
+      const url = new URL(location);
+      url.searchParams.delete("error");
+      history.replaceState({}, "", url);
+    }
+
     // Delegated listener on the container so it survives re-renders.
     this.container.addEventListener("change", (e) => {
       if (e.target.classList.contains("setting-pill-input")) {

@@ -17,15 +17,15 @@ import (
 
 // mockInstagramConnector is a test double for instagramConnector.
 type mockInstagramConnector struct {
-	exchangeFn    func(code, redirectURI string) (string, int64, error)
-	getAccountFn  func() (string, string, error)
+	exchangeFn    func(code, redirectURI string) (string, string, int64, error)
+	getAccountFn  func() (string, string, string, error)
 }
 
-func (m *mockInstagramConnector) ExchangeCodeForLongLivedToken(_ context.Context, code, redirectURI string) (string, int64, error) {
+func (m *mockInstagramConnector) ExchangeCodeForLongLivedToken(_ context.Context, code, redirectURI string) (string, string, int64, error) {
 	return m.exchangeFn(code, redirectURI)
 }
 
-func (m *mockInstagramConnector) GetConnectedAccount(_ context.Context) (string, string, error) {
+func (m *mockInstagramConnector) GetConnectedAccount(_ context.Context) (string, string, string, error) {
 	return m.getAccountFn()
 }
 
@@ -159,8 +159,8 @@ func TestInstagramHandler_Callback_BadState(t *testing.T) {
 
 func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(_, _ string) (string, int64, error) {
-			return "", 0, fmt.Errorf("invalid code")
+		exchangeFn: func(_, _ string) (string, string, int64, error) {
+			return "", "", 0, fmt.Errorf("invalid code")
 		},
 	}
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
@@ -180,11 +180,11 @@ func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 
 func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(_, _ string) (string, int64, error) {
-			return "longtoken", 5184000, nil
+		exchangeFn: func(_, _ string) (string, string, int64, error) {
+			return "longtoken", "1234567890", 5184000, nil
 		},
-		getAccountFn: func() (string, string, error) {
-			return "", "", fmt.Errorf("API error")
+		getAccountFn: func() (string, string, string, error) {
+			return "", "", "", fmt.Errorf("API error")
 		},
 	}
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
@@ -208,14 +208,14 @@ func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 
 func TestInstagramHandler_Callback_Success(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(code, _ string) (string, int64, error) {
+		exchangeFn: func(code, _ string) (string, string, int64, error) {
 			if code != "authcode" {
-				return "", 0, fmt.Errorf("unexpected code")
+				return "", "", 0, fmt.Errorf("unexpected code")
 			}
-			return "long-lived-token", 5184000, nil
+			return "long-lived-token", "1234567890", 5184000, nil
 		},
-		getAccountFn: func() (string, string, error) {
-			return "testuser", "1234567890", nil
+		getAccountFn: func() (string, string, string, error) {
+			return "testuser", "1234567890", "BUSINESS", nil
 		},
 	}
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
@@ -248,6 +248,47 @@ func TestInstagramHandler_Callback_Success(t *testing.T) {
 	if !settingsSvc.SecretIsSet(ctx, "instagram_username") {
 		t.Error("username should be stored")
 	}
+
+	// State token consumed
+	if settingsSvc.SecretIsSet(ctx, "instagram_oauth_state") {
+		t.Error("OAuth state should be deleted after use")
+	}
+}
+
+func TestInstagramHandler_Callback_PersonalAccount(t *testing.T) {
+	mock := &mockInstagramConnector{
+		exchangeFn: func(_, _ string) (string, string, int64, error) {
+			return "longtoken", "1234567890", 5184000, nil
+		},
+		getAccountFn: func() (string, string, string, error) {
+			return "personaluser", "1234567890", "PERSONAL", nil
+		},
+	}
+	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
+	_ = settingsSvc.SetSecret(context.Background(), "instagram_oauth_state", "validstate")
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?code=good&state=validstate", nil)
+	rec := httptest.NewRecorder()
+	if err := h.Callback(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302, got %d", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.Contains(loc, "/light/settings?error=instagram_personal#instagram") {
+		t.Errorf("expected personal account error redirect, got: %s", loc)
+	}
+
+	ctx := context.Background()
+	// Credentials should NOT be stored
+	if settingsSvc.SecretIsSet(ctx, "instagram_access_token") {
+		t.Error("access token should not be stored for personal account")
+	}
+	if settingsSvc.SecretIsSet(ctx, "instagram_user_id") {
+		t.Error("user_id should not be stored for personal account")
+	}
+
 	// State token consumed
 	if settingsSvc.SecretIsSet(ctx, "instagram_oauth_state") {
 		t.Error("OAuth state should be deleted after use")
