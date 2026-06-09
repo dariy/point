@@ -60,7 +60,7 @@ func (h *InstagramHandler) Connect(c echo.Context) error {
 		"client_id":     {appID},
 		"redirect_uri":  {appURL + "/api/instagram/callback"},
 		"state":         {state},
-		"scope":         {"instagram_business_basic,instagram_business_content_publish"},
+		"scope":         {"instagram_basic,instagram_content_publish,pages_read_engagement,business_management,pages_show_list"},
 		"response_type": {"code"},
 	}
 	return c.Redirect(http.StatusFound, "https://www.facebook.com/dialog/oauth?"+params.Encode())
@@ -105,7 +105,7 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 		_ = h.settings.DeleteSecret(ctx, "instagram_token_expires_at")
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fetch Instagram account: "+err.Error())
 	}
-	
+
 	if accountType == "PERSONAL" {
 		_ = h.settings.DeleteSecret(ctx, "instagram_access_token")
 		_ = h.settings.DeleteSecret(ctx, "instagram_token_expires_at")
