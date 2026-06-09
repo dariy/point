@@ -714,7 +714,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 }
 
 // CrossPostToInstagram publishes a post's images to Instagram if enabled.
-// Images are posted with no caption; a follow-up comment carries the excerpt, tags, and link.
+// It resolves absolute image URLs using APP_URL and builds a caption from a template.
 func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) error {
 	post, err := s.repo.GetPost(ctx, postID)
 	if err != nil {
@@ -756,14 +756,14 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 		return appURL + strings.TrimPrefix(orig, "originals")
 	}
 
-	// 3. Build comment text (excerpt + tags + link); post itself has no caption.
-	commentTemplate, _ := s.settingsService.GetSetting(ctx, "instagram_caption_template", "{excerpt}\n\n{tags}\n\n{link}")
-	comment := strings.TrimSpace(s.expandCaptionTemplate(ctx, commentTemplate, post, appURL))
+	// 3. Build caption from template.
+	template, _ := s.settingsService.GetSetting(ctx, "instagram_caption_template", "{title}\n\n{excerpt}\n\n{tags}\n\n{link}")
+	caption := s.expandCaptionTemplate(ctx, template, post, appURL)
 
-	// 4. Create and publish containers (no caption).
+	// 4. Create and publish containers.
 	var creationID string
 	if len(images) == 1 {
-		creationID, err = s.instagramService.CreateImageContainer(ctx, mediaURL(images[0].OriginalPath), "")
+		creationID, err = s.instagramService.CreateImageContainer(ctx, mediaURL(images[0].OriginalPath), caption)
 		if err == nil {
 			err = s.instagramService.WaitForContainerReady(ctx, creationID)
 		}
@@ -784,7 +784,7 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 			}
 			childIDs = append(childIDs, childID)
 		}
-		creationID, err = s.instagramService.CreateCarousel(ctx, childIDs, "")
+		creationID, err = s.instagramService.CreateCarousel(ctx, childIDs, caption)
 		if err == nil {
 			err = s.instagramService.WaitForContainerReady(ctx, creationID)
 		}
@@ -799,11 +799,6 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	if err != nil {
 		_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
 		return err
-	}
-
-	// 5. Add excerpt + tags as a first comment so the post itself stays image-only.
-	if comment != "" {
-		_, _ = s.instagramService.CreateComment(ctx, mediaID, comment)
 	}
 
 	return s.updateInstagramStatus(ctx, post.ID, "published", mediaID, "")

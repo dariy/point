@@ -401,27 +401,6 @@ func (s *InstagramService) WaitForContainerReady(ctx context.Context, containerI
 	}
 }
 
-// CreateComment adds a comment to a published Instagram media object.
-func (s *InstagramService) CreateComment(ctx context.Context, mediaID, text string) (string, error) {
-	token, err := s.secret(ctx, "instagram_access_token")
-	if err != nil {
-		return "", err
-	}
-	params := url.Values{
-		"message":      {text},
-		"access_token": {token},
-	}
-	body, err := s.post(ctx, fmt.Sprintf("%s/%s/comments", s.graphBaseURL, mediaID), params)
-	if err != nil {
-		return "", fmt.Errorf("create comment: %w", err)
-	}
-	var resp igContainerResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("decode comment response: %w", err)
-	}
-	return resp.ID, nil
-}
-
 // PublishContainer publishes a media container to Instagram.
 func (s *InstagramService) PublishContainer(ctx context.Context, creationID string) (string, error) {
 	token, err := s.secret(ctx, "instagram_access_token")
