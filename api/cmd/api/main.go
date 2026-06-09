@@ -231,6 +231,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/preview/:token", postHandler.GetPostByPreviewToken)
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/:id/instagram/publish", postHandler.PublishToInstagram, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")

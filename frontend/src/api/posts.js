@@ -136,3 +136,12 @@ export function getPostNavigation(id) {
 export function getPostPageLocation(slug, params = {}) {
   return api.get(`/api/posts/${slug}/page`, params);
 }
+
+/**
+ * Manually cross-post a post to Instagram.
+ * @param {number} id
+ * @returns {Promise<object>}  Updated post with instagram_status/error fields
+ */
+export function publishPostToInstagram(id) {
+  return api.post(`/api/posts/${id}/instagram/publish`);
+}

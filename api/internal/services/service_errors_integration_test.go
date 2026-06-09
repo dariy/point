@@ -184,7 +184,7 @@ func TestServiceDBErrors2(t *testing.T) {
 	tagSvc := NewTagService(mediaSvc.repo)
 	authSvc := NewAuthService(mediaSvc.repo)
 	settingsSvc := NewSettingsService(mediaSvc.repo)
-	postSvc := NewPostService(mediaSvc.repo)
+	postSvc := NewPostService(mediaSvc.repo, nil, nil)
 	ctx := context.Background()
 
 	// Insert some data before closing.

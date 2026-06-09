@@ -872,3 +872,23 @@ func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
 		"most_viewed_post_id":    stats.MostViewedPostID,
 	})
 }
+
+// PublishToInstagram manually triggers cross-posting to Instagram for a post.
+// POST /api/posts/:id/instagram/publish
+func (h *PostHandler) PublishToInstagram(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	ctx := c.Request().Context()
+	// CrossPostToInstagram handles status updates in the database.
+	_ = h.postService.CrossPostToInstagram(ctx, id)
+
+	resp, err := h.getFullPostResponse(c, id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}

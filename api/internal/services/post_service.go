@@ -573,7 +573,21 @@ func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32)
 }
 
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {
-	return s.repo.PublishPost(ctx, id)
+	post, err := s.repo.PublishPost(ctx, id)
+	if err != nil {
+		return post, err
+	}
+	if s.settingsService != nil && post.InstagramShare {
+		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
+		if enabledStr == "true" || enabledStr == "1" {
+			go func() {
+				ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				_ = s.CrossPostToInstagram(ctx2, id)
+			}()
+		}
+	}
+	return post, nil
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
@@ -628,6 +642,21 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
 		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
+		if s.settingsService != nil {
+			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
+			if enabledStr == "true" || enabledStr == "1" {
+				for _, p := range published {
+					if p.InstagramShare {
+						id := p.ID
+						go func() {
+							ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+							defer cancel()
+							_ = s.CrossPostToInstagram(ctx2, id)
+						}()
+					}
+				}
+			}
+		}
 	}
 	return published, nil
 }
