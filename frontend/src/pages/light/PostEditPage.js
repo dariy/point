@@ -323,7 +323,7 @@ export default class PostEditPage extends Component {
                     <label class="form-label" for="css-editor">Custom CSS</label>
                     <div id="css-editor-mount"></div>
                   </div>
-                  ${igStatus?.enabled ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress) : ""}
+                  ${igStatus?.enabled ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
                 </div>
               </details>
             </div>
@@ -332,8 +332,8 @@ export default class PostEditPage extends Component {
       </div>`;
   }
 
-  _renderInstagramSection(post, igStatus, publishingToInstagram, anyActionInProgress) {
-    const igShare = post.instagram_share ?? false;
+  _renderInstagramSection(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
+    const igShare = isNew ? (igStatus.default_share ?? false) : (post.instagram_share ?? false);
     const igSt = post.instagram_status || "none";
     const igError = post.instagram_error || "";
 
@@ -341,7 +341,7 @@ export default class PostEditPage extends Component {
       ? `<span class="ig-status-badge ig-status-badge--${escapeHtml(igSt)}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>`
       : "";
 
-    const canPublishNow = igStatus.connected && igShare && igSt !== "published";
+    const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
     const publishNowBtn = canPublishNow
       ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button"
                ${anyActionInProgress ? "disabled" : ""}>
@@ -711,6 +711,11 @@ export default class PostEditPage extends Component {
     super.mount();
     if (this.state.postId) {
       this._loadPost(this.state.postId);
+    } else {
+      // New post — load igStatus so the toggle can show with the default_share value.
+      getInstagramStatus().catch(() => null).then((igStatus) => {
+        if (!this._unmounted) this.setState({ igStatus });
+      });
     }
     if (this.props.query?.share === "pending") {
       this._processShareQueue();
@@ -849,7 +854,7 @@ export default class PostEditPage extends Component {
         : "",
       css: this._cssEditorRef ? this._cssEditorRef.getValue() : (this.state.post?.css || ""),
       immersive_mode: this.$("#immersive-mode-select")?.value || "auto",
-      instagram_share: this.$("#ig-share-input")?.checked ?? (this.state.post?.instagram_share || false),
+      instagram_share: this.$("#ig-share-input")?.checked ?? (this.state.isNew ? (this.state.igStatus?.default_share ?? false) : (this.state.post?.instagram_share ?? false)),
     };
   }
 

@@ -132,6 +132,7 @@ type InstagramStatusResponse struct {
 	Username       string `json:"username"`
 	TokenExpiresAt string `json:"token_expires_at"`
 	Enabled        bool   `json:"enabled"`
+	DefaultShare   bool   `json:"default_share"`
 }
 
 // Status returns the Instagram connection status.
@@ -144,11 +145,14 @@ func (h *InstagramHandler) Status(c echo.Context) error {
 	tokenExpiresAt, _ := h.settings.GetSecret(ctx, "instagram_token_expires_at")
 	enabledStr, _ := h.settings.GetSetting(ctx, "enable_instagram", "false")
 	enabled := enabledStr == "true" || enabledStr == "1"
+	defaultShareStr, _ := h.settings.GetSetting(ctx, "instagram_default_share", "false")
+	defaultShare := defaultShareStr == "true" || defaultShareStr == "1"
 
 	return c.JSON(http.StatusOK, InstagramStatusResponse{
 		Connected:      connected,
 		Username:       username,
 		TokenExpiresAt: tokenExpiresAt,
 		Enabled:        enabled,
+		DefaultShare:   defaultShare,
 	})
 }

@@ -336,4 +336,29 @@ func TestInstagramHandler_Status_Connected(t *testing.T) {
 	if !resp.Enabled {
 		t.Error("should be enabled")
 	}
+	if resp.DefaultShare {
+		t.Error("default_share should be false when setting not set")
+	}
+}
+
+func TestInstagramHandler_Status_DefaultShare(t *testing.T) {
+	mock := &mockInstagramConnector{}
+	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
+	ctx := context.Background()
+	_ = settingsSvc.SetSecret(ctx, "instagram_access_token", "tok")
+	_ = settingsSvc.SetSetting(ctx, "enable_instagram", "true", "boolean")
+	_ = settingsSvc.SetSetting(ctx, "instagram_default_share", "true", "boolean")
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/status", nil)
+	rec := httptest.NewRecorder()
+	if err := h.Status(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var resp InstagramStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if !resp.DefaultShare {
+		t.Error("default_share should be true when setting is 'true'")
+	}
 }
