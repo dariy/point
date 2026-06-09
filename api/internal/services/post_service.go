@@ -557,6 +557,34 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 	return tag, nil
 }
 
+func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status string) (models.Post, error) {
+	// Verify the post exists.
+	post, err := s.repo.GetPost(ctx, id)
+	if err != nil {
+		return models.Post{}, err
+	}
+
+	params := models.UpdatePostParams{
+		ID:              post.ID,
+		AuthorID:        post.AuthorID,
+		Title:           post.Title,
+		Slug:            post.Slug,
+		Content:         post.Content,
+		Css:             post.Css,
+		ImmersiveMode:   post.ImmersiveMode,
+		Excerpt:         post.Excerpt,
+		Formatter:       post.Formatter,
+		Status:          strings.ToLower(status),
+		IsFeatured:      post.IsFeatured,
+		ThumbnailPath:   post.ThumbnailPath,
+		MetaDescription: post.MetaDescription,
+		ScheduledAt:     post.ScheduledAt,
+	}
+
+	// published_at logic handled in repository.UpdatePost based on status
+	return s.repo.UpdatePost(ctx, params)
+}
+
 func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) error {
 	return s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID})
 }

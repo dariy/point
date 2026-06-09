@@ -256,8 +256,8 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 		return fmt.Errorf("failed to get active theme: %w", err)
 	}
 
-	// Theme CSS is served under /assets/css/theme.css → <FrontendDir>/css/theme.css
-	publicThemePath := filepath.Join(s.cfg.FrontendDir, "css", "theme.css")
+	// Theme CSS is served under /assets/css/common/theme.css → <FrontendDir>/css/common/theme.css
+	publicThemePath := filepath.Join(s.cfg.FrontendDir, "css", "common", "theme.css")
 
 	if err := os.MkdirAll(filepath.Dir(publicThemePath), 0755); err != nil {
 		return fmt.Errorf("failed to create css directory: %w", err)

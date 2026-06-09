@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -38,7 +38,7 @@ func (h *WebAuthnHandler) BeginRegistration(c echo.Context) error {
 
 	options, sessionKey, err := h.webauthn.BeginRegistration(c.Request().Context(), userID)
 	if err != nil {
-		log.Printf("ERROR: BeginRegistration: %v", err)
+		slog.Error("BeginRegistration failed", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not begin registration")
 	}
 
@@ -71,7 +71,7 @@ func (h *WebAuthnHandler) FinishRegistration(c echo.Context) error {
 
 	userID := extractUserID(c.Get("user"))
 	if err := h.webauthn.FinishRegistration(c.Request().Context(), userID, cookie.Value, c.Request()); err != nil {
-		log.Printf("ERROR: FinishRegistration: %v", err)
+		slog.Error("FinishRegistration failed", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not finish registration")
 	}
 
@@ -87,7 +87,7 @@ func (h *WebAuthnHandler) BeginLogin(c echo.Context) error {
 
 	options, sessionKey, err := h.webauthn.BeginLoginWithoutUser(c.Request().Context())
 	if err != nil {
-		log.Printf("ERROR: BeginLogin: %v", err)
+		slog.Error("BeginLogin failed", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not begin login")
 	}
 
@@ -120,7 +120,7 @@ func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
 
 	userID, err := h.webauthn.FinishLogin(c.Request().Context(), cookie.Value, c.Request())
 	if err != nil {
-		log.Printf("ERROR: FinishLogin: %v", err)
+		slog.Error("FinishLogin failed", "error", err)
 		return echo.NewHTTPError(http.StatusUnauthorized, "Login failed")
 	}
 
@@ -130,7 +130,7 @@ func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
 
 	_, err = h.auth.CreateSession(c.Request().Context(), userID, c.RealIP(), c.Request().UserAgent(), expiresAt, token)
 	if err != nil {
-		log.Printf("ERROR: Failed to create session after webauthn login: %v", err)
+		slog.Error("Failed to create session after webauthn login", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not create session")
 	}
 
@@ -172,7 +172,7 @@ func (h *WebAuthnHandler) DeleteCredential(c echo.Context) error {
 
 	userID := extractUserID(c.Get("user"))
 	if err := h.webauthn.DeleteCredential(c.Request().Context(), userID); err != nil {
-		log.Printf("ERROR: DeleteCredential: %v", err)
+		slog.Error("DeleteCredential failed", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not delete credential")
 	}
 
@@ -189,7 +189,7 @@ func (h *WebAuthnHandler) GetStatus(c echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	hasCredential, err := h.webauthn.HasCredential(c.Request().Context(), userID)
 	if err != nil {
-		log.Printf("ERROR: GetStatus: %v", err)
+		slog.Error("GetStatus failed", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not check credential status")
 	}
 

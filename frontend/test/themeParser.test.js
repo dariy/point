@@ -16,7 +16,7 @@ describe('themeParser', () => {
   test('should fetch theme.css and inject into style element', async () => {
     const sampleCSS = ':root { --bg-primary: #ffffff; --color-primary: #2563eb; }';
     global.fetch = async (url) => {
-      assert.equal(url, '/assets/css/theme.css');
+      assert.equal(url, '/assets/css/common/theme.css');
       return { ok: true, text: async () => sampleCSS };
     };
 

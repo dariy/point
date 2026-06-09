@@ -361,3 +361,80 @@ func TestPostService_ListTrashedPosts(t *testing.T) {
 		t.Error("expected at least one trashed post")
 	}
 }
+
+func TestPostService_GetPostAnalytics(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertTestUser(t, svc)
+
+	// Need at least one published post; the SQL uses SUM/AVG which return NULL on empty sets.
+	p, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "AnalyticsPost", Slug: "analytics-post", AuthorID: 1, Status: "draft"})
+	_, _ = svc.PublishPost(ctx, p.ID)
+
+	stats, err := svc.GetPostAnalytics(ctx)
+	if err != nil {
+		t.Fatalf("GetPostAnalytics: %v", err)
+	}
+	if stats.TotalViews < 0 {
+		t.Error("TotalViews should not be negative")
+	}
+	if stats.MostViewedPostID != p.ID {
+		t.Errorf("expected most viewed post ID %d, got %d", p.ID, stats.MostViewedPostID)
+	}
+}
+
+func TestPostService_UpdatePostStatus(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertTestUser(t, svc)
+
+	post, _, err := svc.CreatePost(ctx, CreatePostParams{Title: "StatusTest", Slug: "status-test", AuthorID: 1, Status: "draft"})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+
+	updated, err := svc.UpdatePostStatus(ctx, post.ID, "published")
+	if err != nil {
+		t.Fatalf("UpdatePostStatus: %v", err)
+	}
+	if updated.Status != "published" {
+		t.Errorf("expected status 'published', got %q", updated.Status)
+	}
+
+	// Non-existent post should return an error.
+	_, err = svc.UpdatePostStatus(ctx, 99999, "published")
+	if err == nil {
+		t.Error("expected error for non-existent post")
+	}
+}
+
+func TestPostService_ListPosts_SortByViews(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertTestUser(t, svc)
+
+	// Create and publish two posts.
+	for _, slug := range []string{"views-a", "views-b"} {
+		p, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: slug, Slug: slug, AuthorID: 1, Status: "draft"})
+		_, _ = svc.PublishPost(ctx, p.ID)
+	}
+
+	posts, total, err := svc.ListPosts(ctx, ListPostsParams{
+		Page:    1,
+		PerPage: 10,
+		SortBy:  "views",
+		Status:  "published",
+	})
+	if err != nil {
+		t.Fatalf("ListPosts (sort by views): %v", err)
+	}
+	if total == 0 || len(posts) == 0 {
+		t.Error("expected at least one post")
+	}
+}

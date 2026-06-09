@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"golang.org/x/term"
@@ -14,13 +14,16 @@ func runCreateAPIKeyCLI(svcs *AppServices, name string) {
 	rawBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr) // newline after the hidden input
 	if err != nil {
-		log.Fatalf("failed to read password: %v", err)
+		slog.Error("failed to read password", "error", err)
+		os.Exit(1)
 	}
 	if len(rawBytes) == 0 {
-		log.Fatalf("password is required")
+		slog.Error("password is required")
+		os.Exit(1)
 	}
 	if err := execCreateAPIKey(svcs, name, rawBytes); err != nil {
-		log.Fatalf("%v", err)
+		slog.Error("failed to create API key", "error", err)
+		os.Exit(1)
 	}
 	os.Exit(0)
 }

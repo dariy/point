@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
@@ -163,7 +163,7 @@ func (s *WebAuthnService) FinishRegistration(ctx context.Context, userID int64, 
 func (s *WebAuthnService) BeginLoginWithoutUser(ctx context.Context) (*protocol.CredentialAssertion, string, error) {
 	options, sessionData, err := s.webauthn.BeginDiscoverableLogin()
 	if err != nil {
-		log.Printf("Failed to begin discoverable login: %v", err)
+		slog.Error("Failed to begin discoverable login", "error", err)
 		return nil, "", fmt.Errorf("failed to begin discoverable login: %w", err)
 	}
 
@@ -212,7 +212,7 @@ func (s *WebAuthnService) FinishLogin(ctx context.Context, sessionKey string, r 
 
 	// Update sign count and backup state after successful login.
 	if err := s.repo.UpdateWebAuthnCredential(ctx, credential.ID, credential.Authenticator.SignCount, credential.Flags.BackupState); err != nil {
-		log.Printf("warning: failed to update credential after login for %x: %v", credential.ID, err)
+		slog.Warn("failed to update credential after login", "credential_id", fmt.Sprintf("%x", credential.ID), "error", err)
 	}
 
 	// The UserID is stored on the credential object returned by FinishDiscoverableLogin
