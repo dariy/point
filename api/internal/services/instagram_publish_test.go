@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"point-api/internal/models"
 )
@@ -191,4 +193,224 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			t.Fatal("expected error, got nil")
 		}
 	})
+}
+
+// igMockServer returns a test HTTP server that handles single-image IG API calls successfully.
+func igMockServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/media") {
+			w.Write([]byte(`{"id":"creation-id"}`))
+			return
+		}
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/media_publish") {
+			w.Write([]byte(`{"id":"media-id"}`))
+			return
+		}
+		http.Error(w, "unexpected: "+r.URL.Path, http.StatusInternalServerError)
+	}))
+}
+
+// igPostSvc wires a PostService with a settings map and an ig test server.
+func igPostSvc(settings map[string]string, repo *mockRepository, ts *httptest.Server) *PostService {
+	settingsSvc := mockSettings(settings)
+	igSvc := NewInstagramService(settingsSvc).withBaseURL(ts.URL)
+	return NewPostService(repo, settingsSvc, igSvc)
+}
+
+// igShareRepo builds a minimal mockRepository for publish-hook tests.
+// The done channel receives the instagram_status from UpdatePostInstagramStatus.
+func igShareRepo(shareEnabled bool, done chan<- string) *mockRepository {
+	return &mockRepository{
+		MockPublishPost: func(_ context.Context, id int64) (models.Post, error) {
+			return models.Post{ID: id, InstagramShare: shareEnabled}, nil
+		},
+		MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
+			return models.Post{ID: id, InstagramShare: shareEnabled}, nil
+		},
+		MockGetMediaByPostID: func(_ context.Context, _ sql.NullInt64) ([]models.Medium, error) {
+			return []models.Medium{{OriginalPath: "/2026/06/test.jpg"}}, nil
+		},
+		MockGetTagsForPost: func(_ context.Context, _ int64) ([]models.Tag, error) {
+			return nil, nil
+		},
+		MockUpdatePostInstagramStatus: func(_ context.Context, arg models.UpdatePostInstagramStatusParams) error {
+			if done != nil {
+				done <- arg.InstagramStatus
+			}
+			return nil
+		},
+	}
+}
+
+func TestPostService_PublishPost_TriggersInstagramCrossPost(t *testing.T) {
+	ts := igMockServer(t)
+	defer ts.Close()
+
+	done := make(chan string, 1)
+	svc := igPostSvc(map[string]string{
+		"enable_instagram":       "true",
+		"instagram_access_token": "tok",
+		"instagram_user_id":      "uid",
+		"app_url":                "https://example.com",
+	}, igShareRepo(true, done), ts)
+
+	if _, err := svc.PublishPost(context.Background(), 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	select {
+	case status := <-done:
+		if status != "published" {
+			t.Errorf("expected status 'published', got %q", status)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("CrossPostToInstagram was not triggered within 2 seconds")
+	}
+}
+
+func TestPostService_PublishPost_SkipsWhenInstagramDisabled(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("Instagram API must not be called when enable_instagram=false")
+	}))
+	defer ts.Close()
+
+	repo := igShareRepo(true, nil)
+	repo.MockUpdatePostInstagramStatus = func(_ context.Context, _ models.UpdatePostInstagramStatusParams) error {
+		t.Error("UpdatePostInstagramStatus must not be called when enable_instagram=false")
+		return nil
+	}
+
+	svc := igPostSvc(map[string]string{"enable_instagram": "false"}, repo, ts)
+	if _, err := svc.PublishPost(context.Background(), 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPostService_PublishPost_SkipsWhenShareOptOut(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("Instagram API must not be called when instagram_share=false")
+	}))
+	defer ts.Close()
+
+	repo := igShareRepo(false, nil)
+	repo.MockUpdatePostInstagramStatus = func(_ context.Context, _ models.UpdatePostInstagramStatusParams) error {
+		t.Error("UpdatePostInstagramStatus must not be called when instagram_share=false")
+		return nil
+	}
+
+	svc := igPostSvc(map[string]string{"enable_instagram": "true"}, repo, ts)
+	if _, err := svc.PublishPost(context.Background(), 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPostService_PublishDueScheduledPosts_TriggersInstagramCrossPost(t *testing.T) {
+	ts := igMockServer(t)
+	defer ts.Close()
+
+	done := make(chan string, 1)
+	repo := igShareRepo(true, done)
+	repo.MockPublishPost = nil // unused in this path
+	repo.MockBulkPublishScheduledPosts = func(_ context.Context) ([]models.Post, error) {
+		return []models.Post{{ID: 1, InstagramShare: true}}, nil
+	}
+
+	svc := igPostSvc(map[string]string{
+		"enable_instagram":       "true",
+		"instagram_access_token": "tok",
+		"instagram_user_id":      "uid",
+		"app_url":                "https://example.com",
+	}, repo, ts)
+
+	if _, err := svc.PublishDueScheduledPosts(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	select {
+	case status := <-done:
+		if status != "published" {
+			t.Errorf("expected status 'published', got %q", status)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("CrossPostToInstagram was not triggered within 2 seconds")
+	}
+}
+
+func TestPostService_PublishDueScheduledPosts_SkipsOptOut(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("Instagram API must not be called for opt-out posts")
+	}))
+	defer ts.Close()
+
+	repo := &mockRepository{
+		MockBulkPublishScheduledPosts: func(_ context.Context) ([]models.Post, error) {
+			return []models.Post{{ID: 1, InstagramShare: false}}, nil
+		},
+		MockUpdatePostInstagramStatus: func(_ context.Context, _ models.UpdatePostInstagramStatusParams) error {
+			t.Error("UpdatePostInstagramStatus must not be called for opt-out posts")
+			return nil
+		},
+	}
+
+	svc := igPostSvc(map[string]string{"enable_instagram": "true"}, repo, ts)
+	if _, err := svc.PublishDueScheduledPosts(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPostService_PublishDueScheduledPosts_NoDoublePublish(t *testing.T) {
+	ts := igMockServer(t)
+	defer ts.Close()
+
+	calls := make(chan int64, 10)
+	repo := &mockRepository{
+		MockBulkPublishScheduledPosts: func(_ context.Context) ([]models.Post, error) {
+			return []models.Post{
+				{ID: 1, InstagramShare: true},  // should fire
+				{ID: 2, InstagramShare: false}, // should be skipped
+			}, nil
+		},
+		MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
+			return models.Post{ID: id, InstagramShare: true}, nil
+		},
+		MockGetMediaByPostID: func(_ context.Context, _ sql.NullInt64) ([]models.Medium, error) {
+			return []models.Medium{{OriginalPath: "/2026/06/test.jpg"}}, nil
+		},
+		MockGetTagsForPost: func(_ context.Context, _ int64) ([]models.Tag, error) {
+			return nil, nil
+		},
+		MockUpdatePostInstagramStatus: func(_ context.Context, arg models.UpdatePostInstagramStatusParams) error {
+			calls <- arg.ID
+			return nil
+		},
+	}
+
+	svc := igPostSvc(map[string]string{
+		"enable_instagram":       "true",
+		"instagram_access_token": "tok",
+		"instagram_user_id":      "uid",
+		"app_url":                "https://example.com",
+	}, repo, ts)
+
+	if _, err := svc.PublishDueScheduledPosts(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	select {
+	case postID := <-calls:
+		if postID != 1 {
+			t.Errorf("expected cross-post for post 1, got post %d", postID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("no cross-post was triggered within 2 seconds")
+	}
+
+	// Verify post 2 (InstagramShare=false) was not cross-posted.
+	select {
+	case postID := <-calls:
+		t.Errorf("unexpected cross-post for post %d (InstagramShare=false should be skipped)", postID)
+	case <-time.After(100 * time.Millisecond):
+		// correct — no second call
+	}
 }
