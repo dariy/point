@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -270,7 +270,7 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 
 	token, err := h.authService.CreatePasswordResetToken(ctx, user.ID)
 	if err != nil {
-		log.Printf("forgot-password: create token: %v", err)
+		slog.Error("forgot-password: create token failed", "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "could not generate reset token"})
 	}
 
@@ -298,7 +298,7 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 	}
 
 	if err := services.SendEmail(smtpCfg, user.Email, "Password Reset Request", body); err != nil {
-		log.Printf("forgot-password: send email: %v", err)
+		slog.Error("forgot-password: send email failed", "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": "failed to send reset email"})
 	}
 

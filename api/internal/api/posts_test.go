@@ -1152,6 +1152,83 @@ func TestPostHandler_PublishToInstagram_NotConnected(t *testing.T) {
 	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 	if err := ph.PublishToInstagram(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+  }
+}
+
+func TestPostHandler_UpdatePostStatus_Success(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	userID := insertUser(h.repo)
+	post, _, err := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "StatusPost", Slug: "status-post", Status: "draft", AuthorID: userID,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+
+	body := `{"status":"published"}`
+	c, rec := echoCtx(http.MethodPatch, "/", body)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
+	if err := ph.UpdatePostStatus(c); err != nil {
+		t.Fatalf("UpdatePostStatus: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPostHandler_UpdatePostStatus_BadID(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	c, _ := echoCtx(http.MethodPatch, "/", `{"status":"published"}`)
+	c.SetParamNames("id")
+	c.SetParamValues("notanumber")
+	err := ph.UpdatePostStatus(c)
+	if err == nil {
+		t.Error("expected error for bad id")
+	}
+}
+
+func TestPostHandler_UpdatePostStatus_MissingStatus(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	c, _ := echoCtx(http.MethodPatch, "/", `{"status":""}`)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	err := ph.UpdatePostStatus(c)
+	if err == nil {
+		t.Error("expected error for empty status")
+	}
+}
+
+func TestPostHandler_UpdatePostStatus_NotFound(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	c, _ := echoCtx(http.MethodPatch, "/", `{"status":"published"}`)
+	c.SetParamNames("id")
+	c.SetParamValues("9999")
+	err := ph.UpdatePostStatus(c)
+	if err == nil {
+		t.Error("expected error for non-existent post")
+	}
+}
+
+func TestPostHandler_GetPostAnalytics_Success(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	userID := insertUser(h.repo)
+	// Need at least one published post so SUM/AVG don't return NULL.
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "Analytics Post", Slug: "analytics-post", Status: "draft", Formatter: "markdown", AuthorID: userID,
+	})
+	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE slug='analytics-post'`)
+
+	c, rec := echoCtx(http.MethodGet, "/posts/analytics", "")
+	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
+	if err := ph.GetPostAnalytics(c); err != nil {
+		t.Fatalf("GetPostAnalytics: %v", err)
 	}
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -1189,5 +1266,47 @@ func TestPostHandler_PublishToInstagram_NoImage(t *testing.T) {
 	}
 	if resp["instagram_error"] != "Post has no images" {
 		t.Errorf("expected instagram_error 'Post has no images', got %v", resp["instagram_error"])
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := resp["total_views"]; !ok {
+		t.Error("response should contain total_views")
+	}
+}
+
+func TestPostHandler_GetPostAnalytics_DBError(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	_ = h.repo.Close()
+	c, _ := echoCtx(http.MethodGet, "/posts/analytics", "")
+	err := ph.GetPostAnalytics(c)
+	if err == nil {
+		t.Error("expected error when DB is closed")
+	}
+}
+
+func TestPostHandler_GetPostBySlug_ViewCountHidden(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	userID := insertUser(h.repo)
+	_, _, _ = h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "View Count Post", Slug: "view-count-post", Status: "draft", Formatter: "markdown", AuthorID: userID,
+	})
+	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE slug='view-count-post'`)
+
+	// show_view_counts defaults to false, so view_count should be absent for public users
+	c, rec := echoCtx(http.MethodGet, "/", "")
+	c.SetParamNames("slug")
+	c.SetParamValues("view-count-post")
+	if err := ph.GetPostBySlug(c); err != nil {
+		t.Fatalf("GetPostBySlug: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if _, ok := resp["view_count"]; ok {
+		t.Error("view_count should be hidden when show_view_counts is false")
 	}
 }

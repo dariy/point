@@ -185,9 +185,7 @@
     }
 
     /* Reduce per-level indentation so deeply nested tags stay readable */
-    .tm-tree.level-1,
-    .tm-tree.level-2,
-    .tm-tree.level-3 {
+    .tm-tree:not(.level-0) {
         padding-left: var(--tm-treelevel-1-padding-left);
         margin-left: var(--tm-treelevel-1-margin-left);
     }

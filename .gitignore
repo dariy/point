@@ -15,17 +15,18 @@ docker-compose.override.yml
 secrets/
 credentials.json
 
-# Deployment artifacts
+# Deployment & Generated artifacts
 deployment-*.log
-app/static/css/light.css
-app/static/css/main.css
 api/coverage.html
-frontend/js/
-light.css
-main.css
 api/api*
 api/cmd/api/cache/
 *.out
+
+# Frontend generated files
+frontend/js/
+frontend/css/main.css
+frontend/css/light.css
+frontend/css/common/theme.css
 
 # bv (beads viewer) local config and caches
 .bv/

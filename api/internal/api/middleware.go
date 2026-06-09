@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"log/slog"
 
 	"point-api/internal/models"
 	"point-api/internal/services"
@@ -141,7 +142,7 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 			})
 		}
 		if err != nil {
-			c.Logger().Error(err)
+			slog.Error("error handler failed to send response", "error", err)
 		}
 	}
 }

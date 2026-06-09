@@ -4,8 +4,8 @@
 
 export async function parseTheme({ bust = false } = {}) {
   const url = bust
-    ? `/assets/css/theme.css?t=${Date.now()}`
-    : '/assets/css/theme.css';
+    ? `/assets/css/common/theme.css?t=${Date.now()}`
+    : '/assets/css/common/theme.css';
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Theme fetch failed: ${res.status}`);

@@ -170,6 +170,11 @@ test('should preserve other fields when switching from visual to text mode', () 
   page.state.post = null;
   page._markdownEditorRef = { getValue: () => 'Content from textarea' };
 
+  // Mock MarkdownEditor reference
+  page._markdownEditorRef = {
+    getValue: () => 'Content from textarea'
+  };
+
   page._switchMode('visual');
 
   assert.strictEqual(page.state.editorMode, 'visual');

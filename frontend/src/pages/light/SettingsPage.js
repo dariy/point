@@ -486,10 +486,10 @@ export default class SettingsPage extends Component {
         let link = wrapper?.querySelector(".settings-preview-link");
         if (slug) {
           if (link) {
-            link.href = `/posts/${slug}`;
+            link.href = `/posts/${encodeURIComponent(slug)}`;
           } else {
             const a = document.createElement("a");
-            a.href = `/posts/${slug}`;
+            a.href = `/posts/${encodeURIComponent(slug)}`;
             a.target = "_blank";
             a.className = "settings-preview-link";
             a.textContent = "Preview ↗";

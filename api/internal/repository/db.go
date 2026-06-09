@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -156,7 +156,7 @@ func NewRepository(dbURL string) (Repository, error) {
 	}
 
 	if count < 4 {
-		log.Println("Initializing new database with schema...")
+		slog.Info("Initializing new database with schema...")
 		tx, err := db.Begin()
 		if err != nil {
 			return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -177,7 +177,7 @@ func NewRepository(dbURL string) (Repository, error) {
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("failed to commit schema transaction: %w", err)
 		}
-		log.Println("Database schema initialized successfully.")
+		slog.Info("Database schema initialized successfully.")
 	} else {
 		// Run migrations for existing databases.
 		// SQLite returns an error if the column already exists — that's safe to ignore.

@@ -107,6 +107,7 @@ export default class MenuPage extends Component {
       mode: 'tags',        // 'tags' | 'custom'
       editorMode: 'visual', // 'visual' | 'markdown'
       items: [],           // flat [{label, url, depth}]
+      isMaximized: false,
     };
   }
 
@@ -219,9 +220,15 @@ export default class MenuPage extends Component {
           Use <code>- [Label](url)</code> for linked items, <code>- Label</code> for group headers.
           Indent with 2 spaces per level.
         </p>
-        <textarea class="menu-markdown-textarea" id="menu-markdown-textarea" spellcheck="false"
+        <textarea class="menu-markdown-textarea ${this.state.isMaximized ? 'is-maximized' : ''}" id="menu-markdown-textarea" spellcheck="false"
           rows="20">${escapeHtml(text)}</textarea>
       </div>`;
+  }
+
+  beforeUnmount() {
+    if (this._onKeyDown) {
+      document.removeEventListener('keydown', this._onKeyDown);
+    }
   }
 
   afterRender() {
@@ -261,6 +268,22 @@ export default class MenuPage extends Component {
 
     // Save button
     this.$('#save-btn')?.addEventListener('click', () => this._save());
+
+    this.container.addEventListener('textarea:save', () => this._save());
+
+    this.container.addEventListener('textarea:maximize', (e) => {
+      this.state.isMaximized = e.detail.isMaximized;
+    });
+
+    // Page-level Ctrl+S
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        this._save();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    this._onKeyDown = onKeyDown;
 
     // Visual editor: field changes
     this.$$('.menu-label-input, .menu-url-input').forEach((input) => {

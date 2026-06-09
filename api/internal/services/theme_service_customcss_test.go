@@ -50,7 +50,7 @@ func TestThemeService_UpdateCustomCSS(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "body { color: red; }", css)
 
-		data, _ := os.ReadFile(filepath.Join(frontendDir, "css", "theme.css"))
+		data, _ := os.ReadFile(filepath.Join(frontendDir, "css", "common", "theme.css"))
 		assert.Contains(t, string(data), "body { color: red; }")
 		assert.Contains(t, string(data), "System Custom CSS")
 	})
@@ -98,7 +98,7 @@ func TestThemeService_SyncActiveTheme_WithCustomCSS(t *testing.T) {
 	err := ts.SyncActiveTheme(ctx)
 	assert.NoError(t, err)
 
-	data, _ := os.ReadFile(filepath.Join(frontendDir, "css", "theme.css"))
+	data, _ := os.ReadFile(filepath.Join(frontendDir, "css", "common", "theme.css"))
 	assert.Contains(t, string(data), customCSSTheme)
 	assert.Contains(t, string(data), "System Custom CSS")
 	assert.Contains(t, string(data), "body { background: blue; }")

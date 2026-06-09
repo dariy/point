@@ -220,8 +220,8 @@
     --tag-editor-modal-width-2: var(--size-2-5);
     --light-header-row-gap: var(--size-0-375);
     --tm-row-padding: var(--size-0-375);
-    --tm-treelevel-1-padding-left: var(--size-0-75);
-    --tm-treelevel-1-margin-left: var(--size-0-375);
+    --tm-treelevel-1-padding-left: 0.625rem;
+    --tm-treelevel-1-margin-left: 1.3125rem;
     --tag-editor-modal-width: var(--size-2-5);
     --settings-container-max-width: var(--size-50);
     --section-title-margin-bottom: var(--size-1-25);
@@ -307,8 +307,8 @@
     --tm-parents-cell-max-width: var(--size-12-5);
     --tm-sort-icon-font-size: var(--size-0-625);
     --tm-sort-icon-width: var(--size-0-625);
-    --tm-treelevel-1-padding-left-alt1: var(--size-1-25);
-    --tm-treelevel-1-margin-left-alt1: var(--size-0-6875);
+    --tm-treelevel-1-padding-left-alt1: 0.625rem;
+    --tm-treelevel-1-margin-left-alt1: 2.3125rem;
     --tm-treelevel-1-margin-top: var(--size-0-125);
     --tm-treelevel-1-margin-bottom: var(--size-0-125);
     --tm-row-gap: var(--size-0-75);
@@ -376,7 +376,7 @@
     --tree-row-padding: var(--size-0-75);
     --tree-toggle-width: var(--size-1-5);
     --tree-indent-width: var(--size-1-5);
-    --tree-children-margin-left: var(--size-0-6875);
+    --tree-children-margin-left: 1.5rem;
     --tabs-margin-bottom: var(--size-1);
     --tab-link-border-bottom: var(--size-0-125);
     --base---spacing-xs: var(--size-0-25);
