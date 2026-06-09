@@ -48,8 +48,6 @@ export class CssEditor extends Component {
       if (window.Prism && window.Prism.languages.css) {
         const code = editor.textContent;
         editor.innerHTML = window.Prism.highlight(code, window.Prism.languages.css, 'css');
-      } else {
-        editor.textContent = editor.textContent;
       }
     };
 

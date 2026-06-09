@@ -189,7 +189,6 @@ export default class PostEditPage extends Component {
     const p = post || {};
     const title = escapeHtml(p.title || "");
     const slug = escapeHtml(p.slug || "");
-    const content = p.content || "";
     const status = p.status || "draft";
     const featured = p.is_featured || false;
     const excerpt = p.excerpt || "";
@@ -1181,7 +1180,7 @@ export default class PostEditPage extends Component {
     this.setState({ publishingToInstagram: true });
     try {
       const result = await publishPostToInstagram(this.state.postId);
-      const { css_warnings, ...post } = result;
+      const post = result;
       this.setState({ publishingToInstagram: false, post });
       const st = post.instagram_status;
       if (st === "published") {

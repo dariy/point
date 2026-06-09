@@ -101,7 +101,7 @@ func TestScheduler_RefreshInstagramToken_WithinWindow(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"access_token":"new-token","expires_in":5184000}`))
+		_, _ = w.Write([]byte(`{"access_token":"new-token","expires_in":5184000}`))
 	})
 
 	sched := newTestScheduler(store, handler)
@@ -131,7 +131,7 @@ func TestScheduler_RefreshInstagramToken_ExactlyAtWindow(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"access_token":"refreshed","expires_in":5184000}`))
+		_, _ = w.Write([]byte(`{"access_token":"refreshed","expires_in":5184000}`))
 	})
 
 	sched := newTestScheduler(store, handler)

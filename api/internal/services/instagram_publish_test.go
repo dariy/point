@@ -44,11 +44,11 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost {
 				if r.URL.Path == "/ig-user-id/media" {
-					w.Write([]byte(`{"id": "creation-id"}`))
+					_, _ = w.Write([]byte(`{"id": "creation-id"}`))
 					return
 				}
 				if r.URL.Path == "/ig-user-id/media_publish" {
-					w.Write([]byte(`{"id": "media-id"}`))
+					_, _ = w.Write([]byte(`{"id": "media-id"}`))
 					return
 				}
 			}
@@ -110,14 +110,14 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 				if r.URL.Path == "/ig-user-id/media" {
 					if r.Form.Get("is_carousel_item") == "true" {
 						childCount++
-						w.Write([]byte(fmt.Sprintf(`{"id": "child-id-%d"}`, childCount)))
+						_, _ = fmt.Fprintf(w, `{"id": "child-id-%d"}`, childCount)
 						return
 					}
-					w.Write([]byte(`{"id": "carousel-creation-id"}`))
+					_, _ = w.Write([]byte(`{"id": "carousel-creation-id"}`))
 					return
 				}
 				if r.URL.Path == "/ig-user-id/media_publish" {
-					w.Write([]byte(`{"id": "media-id"}`))
+					_, _ = w.Write([]byte(`{"id": "media-id"}`))
 					return
 				}
 			}
@@ -200,11 +200,11 @@ func igMockServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/media") {
-			w.Write([]byte(`{"id":"creation-id"}`))
+			_, _ = w.Write([]byte(`{"id":"creation-id"}`))
 			return
 		}
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/media_publish") {
-			w.Write([]byte(`{"id":"media-id"}`))
+			_, _ = w.Write([]byte(`{"id":"media-id"}`))
 			return
 		}
 		http.Error(w, "unexpected: "+r.URL.Path, http.StatusInternalServerError)

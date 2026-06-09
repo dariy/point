@@ -53,14 +53,14 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 				http.Error(w, "bad params", http.StatusBadRequest)
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token"})
 		case 2:
 			// long-lived exchange
 			if q.Get("grant_type") != "fb_exchange_token" || q.Get("fb_exchange_token") != "short-token" {
 				http.Error(w, "bad params", http.StatusBadRequest)
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]any{"access_token": "long-token", "expires_in": 5183944})
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "long-token", "expires_in": 5183944})
 		}
 	})
 
@@ -95,7 +95,7 @@ func TestInstagram_ExchangeCodeForLongLivedToken_MissingSecret(t *testing.T) {
 func TestInstagram_ExchangeCodeForLongLivedToken_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{"message": "Invalid OAuth access token", "code": 190},
 		})
 	})
@@ -122,7 +122,7 @@ func TestInstagram_RefreshLongLivedToken_Success(t *testing.T) {
 			http.Error(w, "bad grant_type", http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"access_token": "refreshed-token", "expires_in": 5183000})
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "refreshed-token", "expires_in": 5183000})
 	})
 
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "old-token"}, handler)
@@ -150,7 +150,7 @@ func TestInstagram_RefreshLongLivedToken_MissingSecret(t *testing.T) {
 func TestInstagram_RefreshLongLivedToken_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{"message": "Token expired", "code": 463},
 		})
 	})
@@ -170,7 +170,7 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 			http.Error(w, "unexpected path", http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "ig-user-999", "username": "testuser"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "ig-user-999", "username": "testuser"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
@@ -190,7 +190,7 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 func TestInstagram_GetConnectedAccount_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{"message": "Invalid token", "code": 190},
 		})
 	})
@@ -214,12 +214,12 @@ func TestInstagram_CreateImageContainer_Success(t *testing.T) {
 			http.Error(w, "unexpected path", http.StatusBadRequest)
 			return
 		}
-		r.ParseForm()
+		_ = r.ParseForm()
 		if r.FormValue("is_carousel_item") != "" {
 			http.Error(w, "should not be carousel item", http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "container-111"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "container-111"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{
@@ -239,7 +239,7 @@ func TestInstagram_CreateImageContainer_Success(t *testing.T) {
 func TestInstagram_CreateImageContainer_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{"message": "Insufficient permissions", "code": 200},
 		})
 	})
@@ -258,12 +258,12 @@ func TestInstagram_CreateImageContainer_APIError(t *testing.T) {
 
 func TestInstagram_CreateCarouselChild_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+		_ = r.ParseForm()
 		if r.FormValue("is_carousel_item") != "true" {
 			http.Error(w, "expected is_carousel_item=true", http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "child-222"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "child-222"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{
@@ -292,7 +292,7 @@ func TestInstagram_CreateCarouselChild_MissingSecret(t *testing.T) {
 
 func TestInstagram_CreateCarousel_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+		_ = r.ParseForm()
 		if r.FormValue("media_type") != "CAROUSEL" {
 			http.Error(w, "expected media_type=CAROUSEL", http.StatusBadRequest)
 			return
@@ -302,7 +302,7 @@ func TestInstagram_CreateCarousel_Success(t *testing.T) {
 			http.Error(w, "unexpected children: "+children, http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "carousel-333"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "carousel-333"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{
@@ -331,12 +331,12 @@ func TestInstagram_PublishContainer_Success(t *testing.T) {
 			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusBadRequest)
 			return
 		}
-		r.ParseForm()
+		_ = r.ParseForm()
 		if r.FormValue("creation_id") != "container-444" {
 			http.Error(w, "bad creation_id", http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"id": "published-555"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "published-555"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{
@@ -356,7 +356,7 @@ func TestInstagram_PublishContainer_Success(t *testing.T) {
 func TestInstagram_PublishContainer_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{"message": "Container not ready", "code": 9007},
 		})
 	})
