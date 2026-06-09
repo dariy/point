@@ -52,6 +52,10 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 					return
 				}
 			}
+			if r.Method == http.MethodGet && r.URL.Query().Get("fields") != "" {
+				_, _ = w.Write([]byte(`{"status_code":"FINISHED"}`))
+				return
+			}
 			http.Error(w, "not found", http.StatusNotFound)
 		})
 
@@ -121,6 +125,10 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 					return
 				}
 			}
+			if r.Method == http.MethodGet && r.URL.Query().Get("fields") != "" {
+				_, _ = w.Write([]byte(`{"status_code":"FINISHED"}`))
+				return
+			}
 			http.Error(w, "not found", http.StatusNotFound)
 		})
 
@@ -166,6 +174,62 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		}
 	})
 
+	t.Run("Container ERROR marks post error", func(t *testing.T) {
+		data := map[string]string{
+			"instagram_access_token": "test-token",
+			"instagram_user_id":      "ig-user-id",
+			"app_url":                "https://example.com",
+		}
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/media") {
+				_, _ = w.Write([]byte(`{"id": "creation-id"}`))
+				return
+			}
+			if r.Method == http.MethodGet && r.URL.Query().Get("fields") != "" {
+				_, _ = w.Write([]byte(`{"status_code":"ERROR","status":"media processing failed"}`))
+				return
+			}
+			http.Error(w, "not found", http.StatusNotFound)
+		})
+
+		ts := httptest.NewServer(handler)
+		defer ts.Close()
+
+		settingsSvc := mockSettings(data)
+		igSvc := NewInstagramService(settingsSvc).withBaseURL(ts.URL)
+
+		var capturedStatus, capturedError string
+		repo := &mockRepository{
+			MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
+				return models.Post{ID: id, Title: "T", Slug: "t", InstagramShare: true}, nil
+			},
+			MockGetMediaByPostID: func(_ context.Context, _ sql.NullInt64) ([]models.Medium, error) {
+				return []models.Medium{{OriginalPath: "/2026/06/test.jpg"}}, nil
+			},
+			MockGetTagsForPost: func(_ context.Context, _ int64) ([]models.Tag, error) {
+				return nil, nil
+			},
+			MockUpdatePostInstagramStatus: func(_ context.Context, arg models.UpdatePostInstagramStatusParams) error {
+				capturedStatus = arg.InstagramStatus
+				capturedError = arg.InstagramError.String
+				return nil
+			},
+		}
+
+		postSvc := NewPostService(repo, settingsSvc, igSvc)
+		err := postSvc.CrossPostToInstagram(ctx, 1)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if capturedStatus != "error" {
+			t.Errorf("expected instagram_status='error', got %q", capturedStatus)
+		}
+		if !strings.Contains(capturedError, "media processing failed") {
+			t.Errorf("expected error text in instagram_error, got %q", capturedError)
+		}
+	})
+
 	t.Run("Failure - Localhost APP_URL", func(t *testing.T) {
 		data := map[string]string{
 			"app_url": "http://localhost:8080",
@@ -205,6 +269,11 @@ func igMockServer(t *testing.T) *httptest.Server {
 		}
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/media_publish") {
 			_, _ = w.Write([]byte(`{"id":"media-id"}`))
+			return
+		}
+		// Container status poll: GET /{containerID}?fields=status_code,...
+		if r.Method == http.MethodGet && r.URL.Query().Get("fields") != "" {
+			_, _ = w.Write([]byte(`{"status_code":"FINISHED"}`))
 			return
 		}
 		http.Error(w, "unexpected: "+r.URL.Path, http.StatusInternalServerError)

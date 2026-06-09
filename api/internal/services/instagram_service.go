@@ -12,26 +12,33 @@ import (
 )
 
 type InstagramService struct {
-	settingsService *SettingsService
-	apiBaseURL      string // api.instagram.com — OAuth token exchange
-	graphBaseURL    string // graph.instagram.com — Graph API calls
-	httpClient      *http.Client
+	settingsService      *SettingsService
+	apiBaseURL           string // api.instagram.com — OAuth token exchange
+	graphBaseURL         string // graph.instagram.com — Graph API calls
+	httpClient           *http.Client
+	containerWaitInitial time.Duration // wait before first status poll
+	containerWaitPoll    time.Duration // wait between subsequent polls
 }
 
 func NewInstagramService(settingsService *SettingsService) *InstagramService {
 	return &InstagramService{
-		settingsService: settingsService,
-		apiBaseURL:      "https://api.instagram.com",
-		graphBaseURL:    "https://graph.instagram.com",
-		httpClient:      &http.Client{Timeout: 30 * time.Second},
+		settingsService:      settingsService,
+		apiBaseURL:           "https://api.instagram.com",
+		graphBaseURL:         "https://graph.instagram.com",
+		httpClient:           &http.Client{Timeout: 30 * time.Second},
+		containerWaitInitial: 2 * time.Second,
+		containerWaitPoll:    4 * time.Second,
 	}
 }
 
-// withBaseURL returns a shallow copy with both base URLs overridden (tests only).
+// withBaseURL returns a shallow copy with both base URLs overridden and poll
+// intervals zeroed (tests only).
 func (s *InstagramService) withBaseURL(u string) *InstagramService {
 	clone := *s
 	clone.apiBaseURL = u
 	clone.graphBaseURL = u
+	clone.containerWaitInitial = 0
+	clone.containerWaitPoll = 0
 	return &clone
 }
 
@@ -42,6 +49,11 @@ type igTokenResponse struct {
 
 type igContainerResponse struct {
 	ID string `json:"id"`
+}
+
+type igContainerStatus struct {
+	StatusCode string `json:"status_code"`
+	Status     string `json:"status"`
 }
 
 type igAPIError struct {
@@ -276,6 +288,59 @@ func (s *InstagramService) CreateCarousel(ctx context.Context, childIDs []string
 		return "", fmt.Errorf("decode container response: %w", err)
 	}
 	return resp.ID, nil
+}
+
+// WaitForContainerReady polls the container status until it is FINISHED,
+// returning an error if the container reaches ERROR or EXPIRED state.
+// Callers should pass a context with a deadline to bound total wait time.
+func (s *InstagramService) WaitForContainerReady(ctx context.Context, containerID string) error {
+	token, err := s.secret(ctx, "instagram_access_token")
+	if err != nil {
+		return err
+	}
+
+	if s.containerWaitInitial > 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(s.containerWaitInitial):
+		}
+	}
+
+	params := url.Values{
+		"fields":       {"status_code,status"},
+		"access_token": {token},
+	}
+	rawURL := fmt.Sprintf("%s/%s?%s", s.graphBaseURL, containerID, params.Encode())
+
+	for {
+		body, err := s.get(ctx, rawURL)
+		if err != nil {
+			return fmt.Errorf("poll container %s: %w", containerID, err)
+		}
+		var cs igContainerStatus
+		if err := json.Unmarshal(body, &cs); err != nil {
+			return fmt.Errorf("decode container status: %w", err)
+		}
+		switch cs.StatusCode {
+		case "FINISHED":
+			return nil
+		case "ERROR", "EXPIRED":
+			msg := cs.Status
+			if msg == "" {
+				msg = cs.StatusCode
+			}
+			return fmt.Errorf("container %s: %s", cs.StatusCode, msg)
+		}
+		// IN_PROGRESS or unknown — wait then retry
+		if s.containerWaitPoll > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(s.containerWaitPoll):
+			}
+		}
+	}
 }
 
 // PublishContainer publishes a media container to Instagram.

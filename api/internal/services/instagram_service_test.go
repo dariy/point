@@ -372,3 +372,81 @@ func TestInstagram_PublishContainer_APIError(t *testing.T) {
 		t.Errorf("expected API error with code, got %v", err)
 	}
 }
+
+// ── WaitForContainerReady ─────────────────────────────────────────────────────
+
+func TestInstagram_WaitForContainerReady_FINISHED(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("fields") == "" {
+			http.Error(w, "missing fields param", http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "FINISHED"})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	if err := svc.WaitForContainerReady(context.Background(), "container-abc"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_MultiPollThenFinished(t *testing.T) {
+	calls := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls < 3 {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "IN_PROGRESS"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "FINISHED"})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	if err := svc.WaitForContainerReady(context.Background(), "container-abc"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 3 {
+		t.Errorf("expected 3 polls, got %d", calls)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_ERROR(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "ERROR", "status": "media upload failed"})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	err := svc.WaitForContainerReady(context.Background(), "container-abc")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "ERROR") {
+		t.Errorf("error should mention ERROR status, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "media upload failed") {
+		t.Errorf("error should include status text, got: %v", err)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_EXPIRED(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": "EXPIRED", "status": ""})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+
+	err := svc.WaitForContainerReady(context.Background(), "container-abc")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "EXPIRED") {
+		t.Errorf("error should mention EXPIRED, got: %v", err)
+	}
+}
+
+func TestInstagram_WaitForContainerReady_MissingSecret(t *testing.T) {
+	svc := NewInstagramService(mockSecrets(map[string]string{}))
+	err := svc.WaitForContainerReady(context.Background(), "container-abc")
+	if err == nil || !strings.Contains(err.Error(), "instagram_access_token") {
+		t.Errorf("expected missing secret error, got %v", err)
+	}
+}

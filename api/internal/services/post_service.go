@@ -758,6 +758,9 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	if len(images) == 1 {
 		imageURL := appURL + images[0].OriginalPath
 		creationID, err = s.instagramService.CreateImageContainer(ctx, imageURL, caption)
+		if err == nil {
+			err = s.instagramService.WaitForContainerReady(ctx, creationID)
+		}
 	} else {
 		if len(images) > 10 {
 			images = images[:10]
@@ -770,9 +773,16 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 				_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
 				return err
 			}
+			if err := s.instagramService.WaitForContainerReady(ctx, childID); err != nil {
+				_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
+				return err
+			}
 			childIDs = append(childIDs, childID)
 		}
 		creationID, err = s.instagramService.CreateCarousel(ctx, childIDs, caption)
+		if err == nil {
+			err = s.instagramService.WaitForContainerReady(ctx, creationID)
+		}
 	}
 
 	if err != nil {
