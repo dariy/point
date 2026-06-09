@@ -30,7 +30,7 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -76,7 +76,7 @@ func TestSystemHandler_StatsExtended(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -106,7 +106,7 @@ func TestSystemHandler_UpdateMapCoordsExtended(t *testing.T) {
 	cfg := &config.Config{StoragePath: tmpDir}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir)
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -130,7 +130,7 @@ func setupSystemHandler(t *testing.T) (*SystemHandler, func()) {
 	tmpDir := t.TempDir()
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	mediaSvc := services.NewMediaService(repo, &config.Config{
 		StoragePath:     tmpDir,
 		ThumbnailWidth:  400,
@@ -196,7 +196,7 @@ func TestScanMediaImport_WithFiles(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo)
+	postSvc := services.NewPostService(repo, nil, nil)
 	tmpDir := t.TempDir()
 	mediaSvc := services.NewMediaService(repo, &config.Config{
 		StoragePath:     tmpDir,

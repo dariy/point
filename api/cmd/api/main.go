@@ -61,6 +61,7 @@ type AppServices struct {
 	Scheduler *services.SchedulerService
 	Theme     *services.ThemeService
 	Timeline  *services.TimelineService
+	Instagram *services.InstagramService
 }
 
 func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
@@ -68,13 +69,14 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	authService := services.NewAuthService(repo)
 	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
-	postService := services.NewPostService(repo)
+	instagramService := services.NewInstagramService(settingsService)
+	postService := services.NewPostService(repo, settingsService, instagramService)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -88,6 +90,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Scheduler: schedulerService,
 		Theme:     themeService,
 		Timeline:  timelineService,
+		Instagram: instagramService,
 	}
 }
 
@@ -112,6 +115,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
+	instagramHandler := api.NewInstagramHandler(svcs.Instagram, svcs.Settings, &cfg)
 
 	// WebAuthn handler — nil service if AppURL is not configured (passkeys require HTTPS + known origin)
 	var webauthnSvc *services.WebAuthnService
@@ -257,6 +261,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/preview/:token", postHandler.GetPostByPreviewToken)
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/:id/instagram/publish", postHandler.PublishToInstagram, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")
@@ -302,6 +307,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+
+	// ── Instagram Routes ──────────────────────────────────────────────────────
+	igGroup := e.Group("/api/instagram", api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	igGroup.GET("/connect", instagramHandler.Connect)
+	igGroup.GET("/callback", instagramHandler.Callback)
+	igGroup.POST("/disconnect", instagramHandler.Disconnect)
+	igGroup.GET("/status", instagramHandler.Status)
 
 	// ── Themes Routes ──────────────────────────────────────────────────────────
 	themesGroup := e.Group("/api/themes")

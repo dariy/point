@@ -63,27 +63,32 @@ type Medium struct {
 }
 
 type Post struct {
-	ID               int64          `json:"id"`
-	Title            string         `json:"title"`
-	Slug             string         `json:"slug"`
-	Content          string         `json:"content"`
-	Excerpt          sql.NullString `json:"excerpt"`
-	Formatter        string         `json:"formatter"`
-	Status           string         `json:"status"`
-	IsFeatured       bool           `json:"is_featured"`
-	ViewCount        int64          `json:"view_count"`
-	PublishedAt      sql.NullTime   `json:"published_at"`
-	ScheduledAt      sql.NullTime   `json:"scheduled_at"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	AuthorID         int64          `json:"author_id"`
-	ThumbnailPath    sql.NullString `json:"thumbnail_path"`
-	MetaDescription  sql.NullString `json:"meta_description"`
-	PreviewToken     sql.NullString `json:"preview_token"`
-	PreviewExpiresAt sql.NullTime   `json:"preview_expires_at"`
-	DeletedAt        sql.NullTime   `json:"deleted_at"`
-	Css              string         `json:"css"`
-	ImmersiveMode    string         `json:"immersive_mode"`
+	ID                   int64          `json:"id"`
+	Title                string         `json:"title"`
+	Slug                 string         `json:"slug"`
+	Content              string         `json:"content"`
+	Excerpt              sql.NullString `json:"excerpt"`
+	Formatter            string         `json:"formatter"`
+	Status               string         `json:"status"`
+	IsFeatured           bool           `json:"is_featured"`
+	ViewCount            int64          `json:"view_count"`
+	PublishedAt          sql.NullTime   `json:"published_at"`
+	ScheduledAt          sql.NullTime   `json:"scheduled_at"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	AuthorID             int64          `json:"author_id"`
+	ThumbnailPath        sql.NullString `json:"thumbnail_path"`
+	MetaDescription      sql.NullString `json:"meta_description"`
+	PreviewToken         sql.NullString `json:"preview_token"`
+	PreviewExpiresAt     sql.NullTime   `json:"preview_expires_at"`
+	DeletedAt            sql.NullTime   `json:"deleted_at"`
+	Css                  string         `json:"css"`
+	ImmersiveMode        string         `json:"immersive_mode"`
+	InstagramShare       bool           `json:"instagram_share"`
+	InstagramStatus      string         `json:"instagram_status"`
+	InstagramMediaID     sql.NullString `json:"instagram_media_id"`
+	InstagramPublishedAt sql.NullTime   `json:"instagram_published_at"`
+	InstagramError       sql.NullString `json:"instagram_error"`
 }
 
 type PostTag struct {

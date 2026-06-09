@@ -33,7 +33,12 @@ CREATE TABLE IF NOT EXISTS posts (
     preview_expires_at DATETIME,
     deleted_at DATETIME,
     css TEXT NOT NULL DEFAULT '',
-    immersive_mode TEXT NOT NULL DEFAULT 'auto'
+    immersive_mode TEXT NOT NULL DEFAULT 'auto',
+    instagram_share BOOLEAN NOT NULL DEFAULT 0,
+    instagram_status TEXT NOT NULL DEFAULT 'none',
+    instagram_media_id TEXT,
+    instagram_published_at DATETIME,
+    instagram_error TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);

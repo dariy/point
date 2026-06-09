@@ -168,6 +168,7 @@ test('should preserve other fields when switching from visual to text mode', () 
   page.state.isNew = true;
   page.state.editorMode = 'text';
   page.state.post = null;
+  page._markdownEditorRef = { getValue: () => 'Content from textarea' };
 
   // Mock MarkdownEditor reference
   page._markdownEditorRef = {
@@ -179,6 +180,71 @@ test('should preserve other fields when switching from visual to text mode', () 
   assert.strictEqual(page.state.editorMode, 'visual');
   assert.strictEqual(page.state.post.title, 'Text Mode Title');
   assert.strictEqual(page.state.post.content, 'Content from textarea');
+  });
+
+  test('should hide Instagram section when igStatus is null', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test' };
+    page.state.igStatus = null;
+
+    const html = page.render();
+    assert.ok(!html.includes('ig-share-input'), 'Instagram section hidden when igStatus is null');
+  });
+
+  test('should hide Instagram section when enable_instagram is false', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test' };
+    page.state.igStatus = { enabled: false, connected: true, default_share: false };
+
+    const html = page.render();
+    assert.ok(!html.includes('ig-share-input'), 'Instagram section hidden when enable_instagram is false');
+  });
+
+  test('should show Instagram section when enabled, with correct share state', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test', instagram_share: true, instagram_status: 'published' };
+    page.state.igStatus = { enabled: true, connected: true, default_share: false };
+
+    const html = page.render();
+    assert.ok(html.includes('ig-share-input'), 'Instagram toggle visible when enabled');
+    assert.ok(html.includes('checked'), 'Toggle checked when instagram_share is true');
+    assert.ok(html.includes('ig-status-badge--published'), 'Status badge shows published');
+  });
+
+  test('should show failed status badge with error text', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test', instagram_share: false, instagram_status: 'failed', instagram_error: 'No image' };
+    page.state.igStatus = { enabled: true, connected: true, default_share: false };
+
+    const html = page.render();
+    assert.ok(html.includes('ig-status-badge--failed'), 'Failed badge present');
+    assert.ok(html.includes('No image'), 'Error text visible');
+  });
+
+  test('should use default_share for new posts when igStatus loaded', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: {} });
+    page.state.loading = false;
+    page.state.isNew = true;
+    page.state.post = null;
+    page.state.igStatus = { enabled: true, connected: true, default_share: true };
+
+    const html = page.render();
+    assert.ok(html.includes('ig-share-input'), 'Instagram toggle visible for new post when enabled');
+    assert.ok(html.includes('checked'), 'Toggle pre-checked via default_share');
+    assert.ok(!html.includes('ig-publish-now-btn'), 'Publish button absent for new posts');
   });
   });
 
