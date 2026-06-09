@@ -217,7 +217,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     const html = page.render();
     assert.ok(html.includes('ig-share-input'), 'Instagram toggle visible when enabled');
     assert.ok(html.includes('checked'), 'Toggle checked when instagram_share is true');
-    assert.ok(html.includes('ig-status-badge--published'), 'Status badge shows published');
+    assert.ok(html.includes('badge-success'), 'Status badge shows published');
   });
 
   test('should show failed status badge with error text', () => {
@@ -229,7 +229,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     page.state.igStatus = { enabled: true, connected: true, default_share: false };
 
     const html = page.render();
-    assert.ok(html.includes('ig-status-badge--failed'), 'Failed badge present');
+    assert.ok(html.includes('badge-danger'), 'Failed badge present');
     assert.ok(html.includes('No image'), 'Error text visible');
   });
 

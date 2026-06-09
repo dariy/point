@@ -339,8 +339,9 @@ export default class PostEditPage extends Component {
     const igSt = post.instagram_status || "none";
     const igError = post.instagram_error || "";
 
+    const igStatusBadgeClass = { published: "badge-success", failed: "badge-danger", publishing: "badge-primary" }[igSt] ?? "badge-draft";
     const statusBadge = igSt !== "none"
-      ? `<span class="ig-status-badge ig-status-badge--${escapeHtml(igSt)}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>`
+      ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>`
       : "";
 
     const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
@@ -358,9 +359,9 @@ export default class PostEditPage extends Component {
     return `
       <div class="form-group ig-post-section">
         <label class="form-label">Instagram</label>
-        <div class="ig-post-row">
-          <label class="setting-pill ig-share-toggle">
-            <input type="checkbox" id="ig-share-input" ${igShare ? "checked" : ""}>
+        <div class="ig-controls">
+          <label class="setting-pill">
+            <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
             <span class="setting-pill-label">Share to Instagram</span>
           </label>
           ${statusBadge}

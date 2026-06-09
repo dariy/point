@@ -811,7 +811,7 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 	excerpt := post.Excerpt.String
 	res = strings.ReplaceAll(res, "{excerpt}", excerpt)
 
-	link := fmt.Sprintf("%s/%s", appURL, post.Slug)
+	link := fmt.Sprintf("%s/posts/%s", appURL, post.Slug)
 	res = strings.ReplaceAll(res, "{link}", link)
 
 	tags, _ := s.repo.GetTagsForPost(ctx, post.ID)
