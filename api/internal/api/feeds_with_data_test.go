@@ -17,7 +17,7 @@ func TestFeedsHandler_Sitemap(t *testing.T) {
 	}()
 
 	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewFeedsHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)
@@ -55,7 +55,7 @@ func TestFeedsHandler_RSS(t *testing.T) {
 	}()
 
 	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	cacheService := services.NewCacheService(t.TempDir())
 	handler := NewFeedsHandler(repo, postSvc, tagSvc, settingsSvc, cacheService)

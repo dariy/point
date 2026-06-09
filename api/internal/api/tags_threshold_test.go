@@ -112,7 +112,7 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 	_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: t1.ID})
 	_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: t2.ID})
 
-	postHandler := NewPostHandler(services.NewPostService(repo, nil, nil), settingsSvc, nil, tagSvc)
+	postHandler := NewPostHandler(services.NewPostService(repo, nil, nil, ""), settingsSvc, nil, tagSvc)
 	req = httptest.NewRequest(http.MethodGet, "/posts/test-post", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
@@ -220,7 +220,7 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	handler := NewPostHandler(postSvc, settingsSvc, nil, tagSvc)
 	e := echo.New()
 
