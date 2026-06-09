@@ -59,8 +59,12 @@ type igContainerStatus struct {
 
 type igAPIError struct {
 	Error struct {
-		Message string `json:"message"`
-		Code    int    `json:"code"`
+		Message        string `json:"message"`
+		Code           int    `json:"code"`
+		ErrorSubcode   int    `json:"error_subcode"`
+		ErrorUserTitle string `json:"error_user_title"`
+		ErrorUserMsg   string `json:"error_user_msg"`
+		FbtraceID      string `json:"fbtrace_id"`
 	} `json:"error"`
 }
 
@@ -89,7 +93,11 @@ func (s *InstagramService) get(ctx context.Context, rawURL string) ([]byte, erro
 	if resp.StatusCode != http.StatusOK {
 		var apiErr igAPIError
 		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
-			return nil, fmt.Errorf("instagram API error %d: %s", apiErr.Error.Code, apiErr.Error.Message)
+			msg := apiErr.Error.Message
+			if apiErr.Error.ErrorUserMsg != "" {
+				msg = apiErr.Error.ErrorUserMsg
+			}
+			return nil, fmt.Errorf("instagram API error %d (subcode %d, fbtrace %s): %s", apiErr.Error.Code, apiErr.Error.ErrorSubcode, apiErr.Error.FbtraceID, msg)
 		}
 		return nil, fmt.Errorf("instagram API HTTP %d", resp.StatusCode)
 	}
@@ -114,7 +122,11 @@ func (s *InstagramService) post(ctx context.Context, rawURL string, params url.V
 	if resp.StatusCode != http.StatusOK {
 		var apiErr igAPIError
 		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
-			return nil, fmt.Errorf("instagram API error %d: %s", apiErr.Error.Code, apiErr.Error.Message)
+			msg := apiErr.Error.Message
+			if apiErr.Error.ErrorUserMsg != "" {
+				msg = apiErr.Error.ErrorUserMsg
+			}
+			return nil, fmt.Errorf("instagram API error %d (subcode %d, fbtrace %s): %s", apiErr.Error.Code, apiErr.Error.ErrorSubcode, apiErr.Error.FbtraceID, msg)
 		}
 		return nil, fmt.Errorf("instagram API HTTP %d", resp.StatusCode)
 	}

@@ -453,3 +453,54 @@ func TestInstagram_WaitForContainerReady_MissingSecret(t *testing.T) {
 		t.Errorf("expected missing secret error, got %v", err)
 	}
 }
+
+// ── Error Parsing ────────────────────────────────────────────────────────────
+
+func TestInstagram_APIErrorParsing_WithUserMsg(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"message":        "Original meta message",
+				"code":           100,
+				"error_subcode":  33,
+				"error_user_msg": "Friendly user message",
+				"fbtrace_id":     "ABC123XYZ",
+			},
+		})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
+
+	_, _, err := svc.GetConnectedAccount(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	expected := "get connected account: instagram API error 100 (subcode 33, fbtrace ABC123XYZ): Friendly user message"
+	if err.Error() != expected {
+		t.Errorf("error = %q, want %q", err.Error(), expected)
+	}
+}
+
+func TestInstagram_APIErrorParsing_WithoutUserMsg(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"message":       "Original meta message",
+				"code":          100,
+				"error_subcode": 33,
+				"fbtrace_id":    "ABC123XYZ",
+			},
+		})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
+
+	_, _, err := svc.GetConnectedAccount(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	expected := "get connected account: instagram API error 100 (subcode 33, fbtrace ABC123XYZ): Original meta message"
+	if err.Error() != expected {
+		t.Errorf("error = %q, want %q", err.Error(), expected)
+	}
+}
