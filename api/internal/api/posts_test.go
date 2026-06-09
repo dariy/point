@@ -1085,3 +1085,109 @@ func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 		t.Error("expected error")
 	}
 }
+
+// setupPostHandlerFull creates a PostHandler whose PostService has access to SettingsService,
+// which is required for CrossPostToInstagram code paths.
+func setupPostHandlerFull(t *testing.T) (*PostHandler, *testHandlers) {
+	t.Helper()
+	h := setupHandlers(t)
+	postSvc := services.NewPostService(h.repo, h.settingsSvc, nil)
+	ph := NewPostHandler(postSvc, h.settingsSvc, h.mediaSvc, h.tagSvc)
+	return ph, h
+}
+
+func TestPostHandler_PublishToInstagram_BadID(t *testing.T) {
+	ph, h := setupPostHandler(t)
+	defer h.close()
+	c, _ := echoCtx(http.MethodPost, "/", "")
+	c.SetParamNames("id")
+	c.SetParamValues("notanumber")
+	err := ph.PublishToInstagram(c)
+	if err == nil {
+		t.Error("expected error for bad id")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %v", err)
+	}
+}
+
+func TestPostHandler_PublishToInstagram_Success(t *testing.T) {
+	ph, h := setupPostHandlerFull(t)
+	defer h.close()
+	userID := insertUser(h.repo)
+	post, _, _ := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "IG Post", Slug: "ig-success", Status: "published", Formatter: "markdown", AuthorID: userID,
+	})
+	c, rec := echoCtx(http.MethodPost, "/", "")
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
+	if err := ph.PublishToInstagram(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["instagram_share"] != false {
+		t.Errorf("expected instagram_share false, got %v", resp["instagram_share"])
+	}
+}
+
+func TestPostHandler_PublishToInstagram_NotConnected(t *testing.T) {
+	ph, h := setupPostHandlerFull(t)
+	defer h.close()
+	userID := insertUser(h.repo)
+	// instagram_share=true but APP_URL not configured — CrossPostToInstagram fails before
+	// reaching the API client, updating instagram_status to "error" in the DB.
+	post, _, _ := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "IG Not Connected", Slug: "ig-not-connected", Status: "published",
+		Formatter: "markdown", AuthorID: userID, InstagramShare: true,
+	})
+	c, rec := echoCtx(http.MethodPost, "/", "")
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
+	if err := ph.PublishToInstagram(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["instagram_status"] != "error" {
+		t.Errorf("expected instagram_status 'error', got %v", resp["instagram_status"])
+	}
+}
+
+func TestPostHandler_PublishToInstagram_NoImage(t *testing.T) {
+	ph, h := setupPostHandlerFull(t)
+	defer h.close()
+	_ = h.settingsSvc.SetSetting(nil_ctx(), "app_url", "https://example.com", "url")
+	userID := insertUser(h.repo)
+	post, _, _ := h.postSvc.CreatePost(nil_ctx(), services.CreatePostParams{
+		Title: "IG No Image", Slug: "ig-no-image", Status: "published",
+		Formatter: "markdown", AuthorID: userID, InstagramShare: true,
+	})
+	c, rec := echoCtx(http.MethodPost, "/", "")
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
+	if err := ph.PublishToInstagram(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["instagram_status"] != "error" {
+		t.Errorf("expected instagram_status 'error', got %v", resp["instagram_status"])
+	}
+	if resp["instagram_error"] != "Post has no images" {
+		t.Errorf("expected instagram_error 'Post has no images', got %v", resp["instagram_error"])
+	}
+}
