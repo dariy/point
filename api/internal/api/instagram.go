@@ -60,7 +60,7 @@ func (h *InstagramHandler) Connect(c echo.Context) error {
 		"client_id":     {appID},
 		"redirect_uri":  {appURL + "/api/instagram/callback"},
 		"state":         {state},
-		"scope":         {"instagram_basic,instagram_content_publish"},
+		"scope":         {"instagram_business_basic,instagram_business_content_publish"},
 		"response_type": {"code"},
 	}
 	return c.Redirect(http.StatusFound, "https://www.facebook.com/dialog/oauth?"+params.Encode())
