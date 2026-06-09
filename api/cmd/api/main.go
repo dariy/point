@@ -70,7 +70,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
 	instagramService := services.NewInstagramService(settingsService)
-	postService := services.NewPostService(repo, settingsService, instagramService)
+	postService := services.NewPostService(repo, settingsService, instagramService, cfg.AppURL)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
