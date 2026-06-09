@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -85,6 +86,27 @@ func LoadConfig(path string) (config Config, err error) {
 
 	err = v.Unmarshal(&config)
 
+	// Smart path detection: if running from repo root, frontend and data dirs
+	// are local, but defaults assume we are in 'api' directory.
+	if config.FrontendDir == "../frontend" {
+		if _, err := os.Stat(filepath.Join(path, "../frontend")); os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(path, "frontend")); err == nil {
+				config.FrontendDir = "frontend"
+			}
+		}
+	}
+	if config.StoragePath == "./data" {
+		if _, err := os.Stat(filepath.Join(path, "./data")); os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(path, "../data")); err == nil {
+				config.StoragePath = "../data"
+				// Also update default database URL if it was used
+				if config.DatabaseURL == "sqlite:./data/point.db" {
+					config.DatabaseURL = "sqlite:../data/point.db"
+				}
+			}
+		}
+	}
+
 	// If THEMES_PATH was not set (or set to empty), derive it from FRONTEND_DIR
 	if config.ThemesPath == "" {
 		config.ThemesPath = filepath.Join(config.FrontendDir, "themes")
@@ -106,3 +128,4 @@ func LoadConfig(path string) (config Config, err error) {
 
 	return
 }
+

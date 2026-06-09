@@ -14,14 +14,6 @@ const CACHE_NAME = `point-${CACHE_VERSION}`;
 const SHELL_URLS = [
   "/",
   "/assets/js/app.js",
-  "/assets/js/store.js",
-  "/assets/js/router.js",
-  "/assets/js/api/auth.js",
-  "/assets/js/api/client.js",
-  "/assets/js/api/settings.js",
-  "/assets/js/utils/helpers.js",
-  "/assets/js/components/Component.js",
-  "/assets/js/components/shared/Toast.js",
   "/assets/css/main.css",
   "/assets/css/light.css",
   "/assets/images/favicon.svg",
@@ -201,9 +193,9 @@ self.addEventListener("fetch", (event) => {
     return;
 
   // 5b. theme.css changes at runtime when user activates a theme; always fetch from network.
-  if (url.pathname === "/assets/css/theme.css") {
+  if (url.pathname === "/assets/css/common/theme.css") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/assets/css/theme.css")),
+      fetch(request).catch(() => caches.match("/assets/css/common/theme.css")),
     );
     return;
   }

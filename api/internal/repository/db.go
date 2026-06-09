@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -156,7 +156,7 @@ func NewRepository(dbURL string) (Repository, error) {
 	}
 
 	if count < 4 {
-		log.Println("Initializing new database with schema...")
+		slog.Info("Initializing new database with schema...")
 		tx, err := db.Begin()
 		if err != nil {
 			return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -177,7 +177,7 @@ func NewRepository(dbURL string) (Repository, error) {
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("failed to commit schema transaction: %w", err)
 		}
-		log.Println("Database schema initialized successfully.")
+		slog.Info("Database schema initialized successfully.")
 	} else {
 		// Run migrations for existing databases.
 		// SQLite returns an error if the column already exists — that's safe to ignore.
@@ -189,6 +189,23 @@ func NewRepository(dbURL string) (Repository, error) {
 		if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN immersive_mode TEXT NOT NULL DEFAULT 'auto'`); err != nil {
 			if !isDuplicateColumnError(err) {
 				return nil, fmt.Errorf("migration failed (add posts.immersive_mode): %w", err)
+			}
+		}
+		// Instagram cross-posting columns (point-xq28).
+		for _, m := range []struct {
+			name string
+			stmt string
+		}{
+			{"instagram_share", `ALTER TABLE posts ADD COLUMN instagram_share BOOLEAN NOT NULL DEFAULT 0`},
+			{"instagram_status", `ALTER TABLE posts ADD COLUMN instagram_status TEXT NOT NULL DEFAULT 'none'`},
+			{"instagram_media_id", `ALTER TABLE posts ADD COLUMN instagram_media_id TEXT`},
+			{"instagram_published_at", `ALTER TABLE posts ADD COLUMN instagram_published_at DATETIME`},
+			{"instagram_error", `ALTER TABLE posts ADD COLUMN instagram_error TEXT`},
+		} {
+			if _, err := db.Exec(m.stmt); err != nil {
+				if !isDuplicateColumnError(err) {
+					return nil, fmt.Errorf("migration failed (add posts.%s): %w", m.name, err)
+				}
 			}
 		}
 	}

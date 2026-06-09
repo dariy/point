@@ -84,6 +84,7 @@ type Querier interface {
 	UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilenameParams) (Medium, error)
 	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
+	UpdatePostInstagramStatus(ctx context.Context, arg UpdatePostInstagramStatusParams) error
 	UpdateSessionActivity(ctx context.Context, id int64) error
 	UpdateSetting(ctx context.Context, arg UpdateSettingParams) (BlogSetting, error)
 	UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error)

@@ -21,7 +21,9 @@ import {
   updatePost,
   deletePost,
   generatePreviewLink,
+  publishPostToInstagram,
 } from "../../api/posts.js";
+import { getInstagramStatus } from "../../api/instagram.js";
 import {
   uploadMedia,
   analyzeMedia,
@@ -119,12 +121,14 @@ export default class PostEditPage extends Component {
       saving: false,
       deleting: false,
       generatingPreview: false,
+      publishingToInstagram: false,
       analyzingField: null, // 'title' | 'tags' | 'excerpt' | null
       post: null,
       error: null,
       isNew: !id,
       postId: id,
       editorMode: "visual",
+      igStatus: null,
       maximizedField: null, // 'content' | 'css' | 'excerpt' | 'title' | 'tags'
     };
     this._tags = [];
@@ -149,11 +153,13 @@ export default class PostEditPage extends Component {
       saving,
       deleting,
       generatingPreview,
+      publishingToInstagram,
       analyzingField,
+      igStatus,
     } = this.state;
     const analyzing = this._analyzing;
     const anyActionInProgress =
-      saving || analyzing || deleting || generatingPreview || !!analyzingField;
+      saving || analyzing || deleting || generatingPreview || publishingToInstagram || !!analyzingField;
 
     if (loading) {
       return `
@@ -214,7 +220,8 @@ export default class PostEditPage extends Component {
     const contentArea =
       this.state.editorMode === "visual"
         ? `<div id="visual-editor-mount"></div>`
-        : `<div id="content-editor-mount"></div>`;
+        : `<label class="form-label" for="content-editor">Content</label>
+           <div id="content-editor-mount"></div>`;
 
     return `
       <div class="light-layout">
@@ -292,6 +299,7 @@ export default class PostEditPage extends Component {
               </div>
 
               <div class="form-group excerpt-row">
+                <label class="form-label" for="excerpt-editor">Excerpt</label>
                 <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}"
                           rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
                 ${aiBtn("excerpt")}
@@ -317,11 +325,49 @@ export default class PostEditPage extends Component {
                     <label class="form-label" for="css-editor">Custom CSS</label>
                     <div id="css-editor-mount"></div>
                   </div>
+                  ${igStatus?.enabled ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
                 </div>
               </details>
             </div>
           </main>
         </div>
+      </div>`;
+  }
+
+  _renderInstagramSection(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
+    const igShare = isNew ? (igStatus.default_share ?? false) : (post.instagram_share ?? false);
+    const igSt = post.instagram_status || "none";
+    const igError = post.instagram_error || "";
+
+    const statusBadge = igSt !== "none"
+      ? `<span class="ig-status-badge ig-status-badge--${escapeHtml(igSt)}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>`
+      : "";
+
+    const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
+    const publishNowBtn = canPublishNow
+      ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button"
+               ${anyActionInProgress ? "disabled" : ""}>
+           ${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}
+         </button>`
+      : "";
+
+    const connectionNote = igStatus.connected
+      ? `<span class="ig-connection-note">Connected as @${escapeHtml(igStatus.username)}</span>`
+      : `<span class="ig-connection-note ig-connection-note--warn">Not connected — <a href="/light/settings#instagram">connect in Settings</a></span>`;
+
+    return `
+      <div class="form-group ig-post-section">
+        <label class="form-label">Instagram</label>
+        <div class="ig-post-row">
+          <label class="setting-pill ig-share-toggle">
+            <input type="checkbox" id="ig-share-input" ${igShare ? "checked" : ""}>
+            <span class="setting-pill-label">Share to Instagram</span>
+          </label>
+          ${statusBadge}
+          ${publishNowBtn}
+        </div>
+        ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
+        ${connectionNote}
       </div>`;
   }
 
@@ -372,6 +418,7 @@ export default class PostEditPage extends Component {
     this._tags = toTagNames(this.state.post?.tags);
 
     this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
+      id: "css-editor",
       value: this.state.post?.css || "",
       isMaximized: this.state.maximizedField === "css",
       onChange: () => this._debouncedAutosave(),
@@ -382,6 +429,7 @@ export default class PostEditPage extends Component {
         MarkdownEditor,
         "#content-editor-mount",
         {
+          id: "content-editor",
           value: this.state.post?.content || "",
           isMaximized: this.state.maximizedField === "content",
           onChange: () => this._debouncedAutosave(),
@@ -534,6 +582,14 @@ export default class PostEditPage extends Component {
     if (this.state.editorMode === "visual") {
       this._mountVisualEditor();
     }
+
+    // Instagram section
+    this.$("#ig-share-input")?.addEventListener("change", (e) => {
+      this._autoSaveField({ instagram_share: e.target.checked });
+    });
+    this.$("#ig-publish-now-btn")?.addEventListener("click", () =>
+      this._publishToInstagram(),
+    );
 
     // Window-level drag-and-drop media upload
     // Remove stale listeners from any previous render before re-attaching.
@@ -698,6 +754,11 @@ export default class PostEditPage extends Component {
     super.mount();
     if (this.state.postId) {
       this._loadPost(this.state.postId);
+    } else {
+      // New post — load igStatus so the toggle can show with the default_share value.
+      getInstagramStatus().catch(() => null).then((igStatus) => {
+        if (!this._unmounted) this.setState({ igStatus });
+      });
     }
     if (this.props.query?.share === "pending") {
       this._processShareQueue();
@@ -778,7 +839,10 @@ export default class PostEditPage extends Component {
 
   async _loadPost(id) {
     try {
-      const post = await getPost(id);
+      const [post, igStatus] = await Promise.all([
+        getPost(id),
+        getInstagramStatus().catch(() => null),
+      ]);
       // Normalize status to lowercase to guard against unexpected API casing.
       if (post.status) post.status = post.status.toLowerCase();
       this._tags = toTagNames(post.tags);
@@ -801,6 +865,7 @@ export default class PostEditPage extends Component {
         post,
         error: null,
         editorMode: "visual",
+        igStatus,
       });
     } catch (err) {
       console.error("[PostEditPage] load error:", err);
@@ -832,6 +897,7 @@ export default class PostEditPage extends Component {
         : "",
       css: this._cssEditorRef ? this._cssEditorRef.getValue() : (this.state.post?.css || ""),
       immersive_mode: this.$("#immersive-mode-select")?.value || "auto",
+      instagram_share: this.$("#ig-share-input")?.checked ?? (this.state.isNew ? (this.state.igStatus?.default_share ?? false) : (this.state.post?.instagram_share ?? false)),
     };
   }
 
@@ -1150,6 +1216,27 @@ export default class PostEditPage extends Component {
         message: `Upload failed: ${err.message || file.name}`,
         type: "error",
       });
+    }
+  }
+
+  async _publishToInstagram() {
+    if (this.state.publishingToInstagram || this.state.isNew) return;
+    this.setState({ publishingToInstagram: true });
+    try {
+      const result = await publishPostToInstagram(this.state.postId);
+      const post = result;
+      this.setState({ publishingToInstagram: false, post });
+      const st = post.instagram_status;
+      if (st === "published") {
+        store.set("toast", { message: "Published to Instagram.", type: "success" });
+      } else if (st === "failed") {
+        store.set("toast", { message: post.instagram_error || "Instagram publish failed.", type: "error" });
+      } else {
+        store.set("toast", { message: "Instagram publish triggered.", type: "info" });
+      }
+    } catch (err) {
+      this.setState({ publishingToInstagram: false });
+      store.set("toast", { message: err.message || "Instagram publish failed.", type: "error" });
     }
   }
 

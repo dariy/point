@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -45,12 +45,12 @@ func runSetupCLI(repo repository.Repository, svcs *AppServices) {
 	}
 
 	if blogTitle == "" || authorName == "" || password == "" {
-		fmt.Printf("[ERROR] missing required setup arguments. Title: %q, User: %q, Password: [set: %v]\n", blogTitle, authorName, password != "")
+		slog.Error("missing required setup arguments", "title", blogTitle, "user", authorName, "password_set", password != "")
 		fmt.Println("Usage: point setup --title=\"Blog Title\" --user=\"Author Name\" --email=\"email@example.com\" --password=\"SHA256_HASH\"")
 		os.Exit(1)
 	}
 
-	log.Printf("Starting CLI setup for blog %q with user %q", blogTitle, authorName)
+	slog.Info("Starting CLI setup", "blog", blogTitle, "user", authorName)
 	ctx := context.Background()
 
 	// Check if already setup
@@ -62,7 +62,8 @@ func runSetupCLI(repo repository.Repository, svcs *AppServices) {
 
 	hash, err := services.HashPassword(password)
 	if err != nil {
-		log.Fatalf("failed to hash password: %v", err)
+		slog.Error("failed to hash password", "error", err)
+		os.Exit(1)
 	}
 
 	_, err = repo.CreateUser(ctx, models.CreateUserParams{
@@ -72,7 +73,8 @@ func runSetupCLI(repo repository.Repository, svcs *AppServices) {
 		DisplayName:  authorName,
 	})
 	if err != nil {
-		log.Fatalf("failed to create user: %v", err)
+		slog.Error("failed to create user", "error", err)
+		os.Exit(1)
 	}
 
 	seedSettings := []struct {
@@ -94,7 +96,8 @@ func runSetupCLI(repo repository.Repository, svcs *AppServices) {
 
 	for _, s := range seedSettings {
 		if err := svcs.Settings.SetSetting(ctx, s.key, s.value, s.vType); err != nil {
-			log.Fatalf("failed to seed setting %s: %v", s.key, err)
+			slog.Error("failed to seed setting", "key", s.key, "error", err)
+			os.Exit(1)
 		}
 	}
 

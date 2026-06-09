@@ -179,9 +179,9 @@ WHERE
 
 -- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
 ) VALUES (
-    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), sqlc.arg('scheduled_at'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, sqlc.arg('css'), sqlc.arg('immersive_mode')
+    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), sqlc.arg('scheduled_at'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, sqlc.arg('css'), sqlc.arg('immersive_mode'), sqlc.arg('instagram_share')
 )
 RETURNING *;
 
@@ -196,6 +196,7 @@ SET title = sqlc.arg('title'), slug = sqlc.arg('slug'), content = sqlc.arg('cont
     END),
     css = sqlc.arg('css'),
     immersive_mode = sqlc.arg('immersive_mode'),
+    instagram_share = sqlc.arg('instagram_share'),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg('id') AND author_id = sqlc.arg('author_id')
 RETURNING *;
@@ -235,6 +236,14 @@ SET status = 'published',
 WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
 AND deleted_at IS NULL
 RETURNING *;
+
+-- name: UpdatePostInstagramStatus :exec
+UPDATE posts
+SET instagram_status = ?,
+    instagram_media_id = ?,
+    instagram_published_at = ?,
+    instagram_error = ?
+WHERE id = ?;
 
 -- name: SoftDeletePost :exec
 UPDATE posts

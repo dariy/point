@@ -574,3 +574,47 @@ func TestAuthHandler_ResetPassword_InvalidToken(t *testing.T) {
 		t.Errorf("expected 400 for invalid token, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestAuthHandler_ForgotPassword_AppURLNotConfigured(t *testing.T) {
+	// SMTP is configured but AppURL is empty — should return 503 with APP_URL message.
+	h := newAuthHandlerForTest(t, &config.Config{SMTPHost: "smtp.example.com", AppURL: ""})
+	e := echo.New()
+	body := `{"email":"test@example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := h.ForgotPassword(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 when AppURL not configured, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAuthHandler_Me_WithAPIKey(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	authService := services.NewAuthService(repo)
+	handler := NewAuthHandler(authService, nil, repo)
+	e := echo.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetAPIKeyByHashRow{
+		UserID:      42,
+		Username:    "apiuser",
+		DisplayName: "API User",
+	})
+	if err := handler.Me(c); err != nil {
+		t.Fatalf("Me with API key: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["username"] != "apiuser" {
+		t.Errorf("expected username 'apiuser', got %v", resp["username"])
+	}
+}

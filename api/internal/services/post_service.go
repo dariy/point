@@ -29,16 +29,16 @@ import (
 )
 
 type PostService struct {
-	repo       repository.Repository
-	md         goldmark.Markdown
-	policy     *bluemonday.Policy
-	viewBuffer map[int64]int
-	viewMu     sync.Mutex
+	repo             repository.Repository
+	settingsService  *SettingsService
+	instagramService *InstagramService
+	md               goldmark.Markdown
+	policy           *bluemonday.Policy
+	viewBuffer       map[int64]int
+	viewMu           sync.Mutex
 }
 
-func NewPostService(repo repository.Repository) *PostService {
-	// Build a parser without SetextHeadingParser (priority 100) so that --- and ===
-	// are never treated as heading underlines. --- always acts as a card separator.
+func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService) *PostService {
 	var blockParsers []util.PrioritizedValue
 	for _, p := range parser.DefaultBlockParsers() {
 		if p.Priority != 100 {
@@ -129,10 +129,12 @@ func NewPostService(repo repository.Repository) *PostService {
 	).Globally()
 
 	return &PostService{
-		repo:       repo,
-		md:         md,
-		policy:     policy,
-		viewBuffer: make(map[int64]int),
+		repo:             repo,
+		settingsService:  settingsService,
+		instagramService: instagramService,
+		md:               md,
+		policy:           policy,
+		viewBuffer:       make(map[int64]int),
 	}
 }
 
@@ -353,6 +355,7 @@ type CreatePostParams struct {
 	Content         string
 	CSS             string
 	ImmersiveMode   string
+	InstagramShare  bool
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -378,6 +381,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		Content:         normalizeContent(p.Content),
 		Css:             sanitizedCSS,
 		ImmersiveMode:   normalizeImmersiveMode(p.ImmersiveMode),
+		InstagramShare:  p.InstagramShare,
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
@@ -464,6 +468,7 @@ type UpdatePostParams struct {
 	Content         string
 	CSS             string
 	ImmersiveMode   string
+	InstagramShare  bool
 	Excerpt         string
 	Slug            string
 	Formatter       string
@@ -488,6 +493,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		Content:         normalizeContent(p.Content),
 		Css:             sanitizedCSS,
 		ImmersiveMode:   normalizeImmersiveMode(p.ImmersiveMode),
+		InstagramShare:  p.InstagramShare,
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
@@ -557,6 +563,34 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 	return tag, nil
 }
 
+func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status string) (models.Post, error) {
+	// Verify the post exists.
+	post, err := s.repo.GetPost(ctx, id)
+	if err != nil {
+		return models.Post{}, err
+	}
+
+	params := models.UpdatePostParams{
+		ID:              post.ID,
+		AuthorID:        post.AuthorID,
+		Title:           post.Title,
+		Slug:            post.Slug,
+		Content:         post.Content,
+		Css:             post.Css,
+		ImmersiveMode:   post.ImmersiveMode,
+		Excerpt:         post.Excerpt,
+		Formatter:       post.Formatter,
+		Status:          strings.ToLower(status),
+		IsFeatured:      post.IsFeatured,
+		ThumbnailPath:   post.ThumbnailPath,
+		MetaDescription: post.MetaDescription,
+		ScheduledAt:     post.ScheduledAt,
+	}
+
+	// published_at logic handled in repository.UpdatePost based on status
+	return s.repo.UpdatePost(ctx, params)
+}
+
 func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) error {
 	return s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID})
 }
@@ -589,7 +623,21 @@ func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32)
 }
 
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {
-	return s.repo.PublishPost(ctx, id)
+	post, err := s.repo.PublishPost(ctx, id)
+	if err != nil {
+		return post, err
+	}
+	if s.settingsService != nil && post.InstagramShare {
+		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
+		if enabledStr == "true" || enabledStr == "1" {
+			go func() {
+				ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				_ = s.CrossPostToInstagram(ctx2, id)
+			}()
+		}
+	}
+	return post, nil
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
@@ -644,8 +692,141 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
 		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
+		if s.settingsService != nil {
+			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
+			if enabledStr == "true" || enabledStr == "1" {
+				for _, p := range published {
+					if p.InstagramShare {
+						id := p.ID
+						go func() {
+							ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+							defer cancel()
+							_ = s.CrossPostToInstagram(ctx2, id)
+						}()
+					}
+				}
+			}
+		}
 	}
 	return published, nil
+}
+
+// CrossPostToInstagram publishes a post's images to Instagram if enabled.
+// It resolves absolute image URLs using APP_URL and builds a caption from a template.
+func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) error {
+	post, err := s.repo.GetPost(ctx, postID)
+	if err != nil {
+		return err
+	}
+
+	if !post.InstagramShare {
+		return nil
+	}
+
+	// 1. Validate APP_URL
+	appURL, _ := s.settingsService.GetSetting(ctx, "app_url", "")
+	if appURL == "" || strings.Contains(appURL, "localhost") {
+		_ = s.updateInstagramStatus(ctx, post.ID, "error", "", "APP_URL not configured or not public")
+		return fmt.Errorf("instagram: APP_URL not public or empty")
+	}
+	appURL = strings.TrimSuffix(appURL, "/")
+
+	// 2. Get images
+	media, err := s.repo.GetMediaByPostID(ctx, sql.NullInt64{Int64: post.ID, Valid: true})
+	if err != nil {
+		return err
+	}
+
+	var images []models.Medium
+	for _, m := range media {
+		if imageExtRe.MatchString(m.OriginalPath) {
+			images = append(images, m)
+		}
+	}
+
+	if len(images) == 0 {
+		_ = s.updateInstagramStatus(ctx, post.ID, "error", "", "Post has no images")
+		return fmt.Errorf("instagram: post has no images")
+	}
+
+	// 3. Build caption
+	template, _ := s.settingsService.GetSetting(ctx, "instagram_caption_template", "{title}\n\n{excerpt}\n\n{tags}\n\n{link}")
+	caption := s.expandCaptionTemplate(ctx, template, post, appURL)
+
+	// 4. Create and Publish Containers
+	var creationID string
+	if len(images) == 1 {
+		imageURL := appURL + images[0].OriginalPath
+		creationID, err = s.instagramService.CreateImageContainer(ctx, imageURL, caption)
+	} else {
+		if len(images) > 10 {
+			images = images[:10]
+		}
+		var childIDs []string
+		for _, img := range images {
+			imageURL := appURL + img.OriginalPath
+			childID, err := s.instagramService.CreateCarouselChild(ctx, imageURL)
+			if err != nil {
+				_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
+				return err
+			}
+			childIDs = append(childIDs, childID)
+		}
+		creationID, err = s.instagramService.CreateCarousel(ctx, childIDs, caption)
+	}
+
+	if err != nil {
+		_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
+		return err
+	}
+
+	mediaID, err := s.instagramService.PublishContainer(ctx, creationID)
+	if err != nil {
+		_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
+		return err
+	}
+
+	return s.updateInstagramStatus(ctx, post.ID, "published", mediaID, "")
+}
+
+func (s *PostService) expandCaptionTemplate(ctx context.Context, template string, post models.Post, appURL string) string {
+	res := template
+	res = strings.ReplaceAll(res, "{title}", post.Title)
+
+	excerpt := post.Excerpt.String
+	if excerpt == "" {
+		excerpt = ""
+	}
+	res = strings.ReplaceAll(res, "{excerpt}", excerpt)
+
+	link := fmt.Sprintf("%s/%s", appURL, post.Slug)
+	res = strings.ReplaceAll(res, "{link}", link)
+
+	tags, _ := s.repo.GetTagsForPost(ctx, post.ID)
+	var tagStrings []string
+	for _, t := range tags {
+		if !strings.HasPrefix(t.Slug, "_") {
+			tagStrings = append(tagStrings, "#"+t.Name)
+		}
+	}
+	res = strings.ReplaceAll(res, "{tags}", strings.Join(tagStrings, " "))
+
+	return res
+}
+
+func (s *PostService) updateInstagramStatus(ctx context.Context, postID int64, status, mediaID, errMsg string) error {
+	var publishedAt sql.NullTime
+	if status == "published" {
+		publishedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	}
+
+	return s.repo.UpdatePostInstagramStatus(ctx, models.UpdatePostInstagramStatusParams{
+		ID:                   postID,
+		InstagramStatus:      status,
+		InstagramMediaID:     sql.NullString{String: mediaID, Valid: mediaID != ""},
+		InstagramPublishedAt: publishedAt,
+		InstagramError:       sql.NullString{String: errMsg, Valid: errMsg != ""},
+	})
 }
 
 func toNullTime(t *time.Time) sql.NullTime {

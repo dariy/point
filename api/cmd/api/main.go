@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -60,6 +61,7 @@ type AppServices struct {
 	Scheduler *services.SchedulerService
 	Theme     *services.ThemeService
 	Timeline  *services.TimelineService
+	Instagram *services.InstagramService
 }
 
 func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
@@ -67,13 +69,14 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	authService := services.NewAuthService(repo)
 	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
-	postService := services.NewPostService(repo)
+	instagramService := services.NewInstagramService(settingsService)
+	postService := services.NewPostService(repo, settingsService, instagramService)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService)
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService)
 
 	return &AppServices{
 		Settings:  settingsService,
@@ -87,6 +90,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Scheduler: schedulerService,
 		Theme:     themeService,
 		Timeline:  timelineService,
+		Instagram: instagramService,
 	}
 }
 
@@ -111,6 +115,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
+	instagramHandler := api.NewInstagramHandler(svcs.Instagram, svcs.Settings, &cfg)
 
 	// WebAuthn handler — nil service if AppURL is not configured (passkeys require HTTPS + known origin)
 	var webauthnSvc *services.WebAuthnService
@@ -121,14 +126,42 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			var waErr error
 			webauthnSvc, waErr = services.NewWebAuthnService(repo, rpID, cfg.AppName, origin)
 			if waErr != nil {
-				log.Printf("warning: WebAuthn service init failed: %v", waErr)
+				slog.Warn("WebAuthn service init failed", "error", waErr)
 			}
 		}
 	}
 	webAuthnHandler := api.NewWebAuthnHandler(webauthnSvc, svcs.Auth, &cfg)
 
 	// Global middleware
-	e.Use(middleware.RequestLogger())
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogStatus:   true,
+		LogURI:      true,
+		LogMethod:   true,
+		LogLatency:  true,
+		LogError:    true,
+		LogRemoteIP: true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			if v.Error != nil {
+				slog.Error("request error",
+					"method", v.Method,
+					"uri", v.URI,
+					"status", v.Status,
+					"remote_ip", v.RemoteIP,
+					"latency", v.Latency,
+					"err", v.Error,
+				)
+			} else {
+				slog.Info("request",
+					"method", v.Method,
+					"uri", v.URI,
+					"status", v.Status,
+					"remote_ip", v.RemoteIP,
+					"latency", v.Latency,
+				)
+			}
+			return nil
+		},
+	}))
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{"*"},
@@ -218,6 +251,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	postsGroup.GET("/:slug/page", postHandler.GetPostPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.PUT("/:id", postHandler.UpdatePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.PATCH("/:id/status", postHandler.UpdatePostStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.PATCH("/:id/tags", postHandler.UpdatePostTags, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.DELETE("/:id", postHandler.DeletePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("/:id/restore", postHandler.RestorePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -227,6 +261,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	postsGroup.POST("/:id/withdraw", postHandler.WithdrawPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/preview/:token", postHandler.GetPostByPreviewToken)
 	postsGroup.POST("/:id/preview", postHandler.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/:id/instagram/publish", postHandler.PublishToInstagram, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Tag Routes ─────────────────────────────────────────────────────────────
 	tagsGroup := e.Group("/api/tags")
@@ -272,6 +307,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+
+	// ── Instagram Routes ──────────────────────────────────────────────────────
+	igGroup := e.Group("/api/instagram", api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	igGroup.GET("/connect", instagramHandler.Connect)
+	igGroup.GET("/callback", instagramHandler.Callback)
+	igGroup.POST("/disconnect", instagramHandler.Disconnect)
+	igGroup.GET("/status", instagramHandler.Status)
 
 	// ── Themes Routes ──────────────────────────────────────────────────────────
 	themesGroup := e.Group("/api/themes")
@@ -431,6 +473,16 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 }
 
 func main() {
+	// Initialize slog with TextHandler for logfmt output
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
+	// Redirect standard log to slog to handle legacy log.Printf calls
+	log.SetOutput(slog.NewLogLogger(logger.Handler(), slog.LevelInfo).Writer())
+	log.SetFlags(0)
+
 	// Check for CLI commands early.
 	isSetup := false
 	for _, arg := range os.Args {
@@ -443,20 +495,21 @@ func main() {
 	}
 
 	if isSetup {
-		log.Println("[INFO] CLI Setup command detected. Initializing...")
+		slog.Info("CLI Setup command detected. Initializing...")
 		cfg, err := config.LoadConfig(".")
 		if err != nil {
-			log.Fatalf("setup: failed to load config: %v", err)
+			slog.Error("setup: failed to load config", "error", err)
+			os.Exit(1)
 		}
-		log.Printf("[DEBUG] DATABASE_URL: %q", cfg.DatabaseURL)
-		log.Printf("[DEBUG] STORAGE_PATH: %q", cfg.StoragePath)
+		slog.Debug("config loaded", "DATABASE_URL", cfg.DatabaseURL, "STORAGE_PATH", cfg.StoragePath)
 
 		repo, err := repository.NewRepository(cfg.DatabaseURL)
 		if err != nil {
-			log.Fatalf("setup: failed to initialize repository: %v", err)
+			slog.Error("setup: failed to initialize repository", "error", err)
+			os.Exit(1)
 		}
 		svcs := initServices(&cfg, repo)
-		log.Println("[INFO] Running CLI setup...")
+		slog.Info("Running CLI setup...")
 		runSetupCLI(repo, svcs)
 		os.Exit(0)
 	}
@@ -471,7 +524,8 @@ func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig(".")
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 	if cfg.AppVersion == "" || cfg.AppVersion == "dev" {
 		cfg.AppVersion = Version
@@ -480,11 +534,12 @@ func main() {
 	// Initialize repository
 	repo, err := repository.NewRepository(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("failed to initialize repository: %v", err)
+		slog.Error("failed to initialize repository", "error", err)
+		os.Exit(1)
 	}
 	defer func() {
 		if err := repo.Close(); err != nil {
-			log.Printf("error closing repository: %v", err)
+			slog.Error("error closing repository", "error", err)
 		}
 	}()
 
@@ -499,7 +554,7 @@ func main() {
 	for _, dir := range []string{"originals", "thumbnails"} {
 		path := filepath.Join(cfg.StoragePath, "media", dir)
 		if err := os.MkdirAll(path, 0755); err != nil {
-			log.Printf("warning: could not create media dir %s: %v", path, err)
+			slog.Warn("could not create media dir", "path", path, "error", err)
 		}
 	}
 
@@ -680,64 +735,65 @@ func main() {
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
-			log.Printf("warning: migration %q: %v", m.name, err)
+			slog.Warn("migration failed", "name", m.name, "error", err)
 		}
 	}
 
 	// Phase A: seed system tags and migrate old boolean flag data into tag_relationships.
 	if err := repo.MigrateFlagsToSystemTags(ctx); err != nil {
-		log.Printf("warning: system_tags_phase_a: %v", err)
+		slog.Warn("system_tags_phase_a failed", "error", err)
 	}
 	// Phase B: rebuild tags table to drop the now-migrated boolean columns.
 	if err := repo.RebuildTagsTableDropBooleans(ctx); err != nil {
-		log.Printf("warning: system_tags_phase_b: %v", err)
+		slog.Warn("system_tags_phase_b failed", "error", err)
 	}
 
 	// Ensure all required system tags exist.
 	if err := repo.EnsureSystemTags(ctx); err != nil {
-		log.Printf("warning: ensure_system_tags: %v", err)
+		slog.Warn("ensure_system_tags failed", "error", err)
 	}
 
 	// Rename all system tags so that name == slug (e.g. "_root", "_pending").
 	// This was the first pass — kept so the migration_history entry is preserved.
 	if err := repo.ApplyMigration(ctx, "rename_system_tags_to_slug",
 		`UPDATE tags SET name = slug WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
-		log.Printf("warning: migration %q: %v", "rename_system_tags_to_slug", err)
+		slog.Warn("migration failed", "name", "rename_system_tags_to_slug", "error", err)
 	}
 
 	// Strip the leading '_' from system tag display names so the UI shows
 	// "root", "pending", "hidden", etc. instead of "_root", "_pending".
 	if err := repo.ApplyMigration(ctx, "rename_system_tags_names_no_underscore",
 		`UPDATE tags SET name = LTRIM(slug, '_') WHERE slug LIKE '\_%%' ESCAPE '\'`); err != nil {
-		log.Printf("warning: migration %q: %v", "rename_system_tags_names_no_underscore", err)
+		slog.Warn("migration failed", "name", "rename_system_tags_names_no_underscore", "error", err)
 	}
 
 	// Drop the UNIQUE constraint from tags.name so that a user tag (e.g. slug="root")
 	// can share its name with the system tag (slug="_root"). Only slug stays unique.
 	if err := repo.DropTagNameUnique(ctx); err != nil {
-		log.Printf("warning: drop_tags_name_unique: %v", err)
+		slog.Warn("drop_tags_name_unique failed", "error", err)
 	}
 
 	// Ensure a secret key is available for session signing.
 	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
-		log.Fatalf("failed to ensure secret key: %v", err)
+		slog.Error("failed to ensure secret key", "error", err)
+		os.Exit(1)
 	}
 
 	// Sync env-var secrets into blog_secrets so they're available at runtime.
 	if cfg.GeminiAPIKey != "" {
 		if err := svcs.Settings.SetSecret(ctx, "gemini_api_key", cfg.GeminiAPIKey); err != nil {
-			log.Printf("warning: failed to sync gemini_api_key to secrets: %v", err)
+			slog.Warn("failed to sync gemini_api_key to secrets", "error", err)
 		}
 	}
 	if cfg.PhotoLibraryPath != "" {
 		if err := svcs.Settings.SetSecret(ctx, "photo_library_path", cfg.PhotoLibraryPath); err != nil {
-			log.Printf("warning: failed to sync photo_library_path to secrets: %v", err)
+			slog.Warn("failed to sync photo_library_path to secrets", "error", err)
 		}
 	}
 
 	// Synchronize active theme with public theme.css for the frontend
 	if err := svcs.Theme.SyncActiveTheme(ctx); err != nil {
-		log.Printf("warning: failed to sync active theme: %v", err)
+		slog.Warn("failed to sync active theme", "error", err)
 	}
 
 	e := setupEcho(cfg, repo, svcs)
@@ -747,10 +803,11 @@ func main() {
 
 	// Start server
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	log.Printf("Point API starting on %s", address)
+	slog.Info("Point API starting", "address", address)
 	go func() {
 		if err := e.Start(address); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("failed to start server: %v", err)
+			slog.Error("failed to start server", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -758,13 +815,13 @@ func main() {
 	<-ctx.Done()
 	stop()
 
-	log.Println("shutting down...")
+	slog.Info("shutting down...")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {
-		log.Printf("shutdown error: %v", err)
+		slog.Error("shutdown error", "error", err)
 	}
-	log.Println("graceful shutdown complete")
+	slog.Info("graceful shutdown complete")
 }
 
 // parseCreateAPIKeyName scans args for --create-api-key=<name> or

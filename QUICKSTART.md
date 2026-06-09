@@ -117,6 +117,42 @@ Send the key in the `Authorization` header of your requests:
 curl -H "Authorization: Bearer point_pat_..." http://localhost:8000/api/posts
 ```
 
+## Instagram Cross-Posting (Optional)
+
+Point can automatically publish your post photos to an Instagram Business or Creator
+account when a post is published. You bring your own Meta app credentials — no shared
+Point infrastructure is involved.
+
+### Prerequisites
+
+- An **Instagram Business or Creator account** (personal accounts cannot use the
+  Content Publishing API)
+- A **Meta Developer app** — create one at [developers.facebook.com](https://developers.facebook.com)
+- `APP_URL` set in your `.env` to your blog's public HTTPS URL — Meta's servers must
+  be able to reach your image URLs, so `localhost` will not work
+
+### Quick setup
+
+1. **Create a Meta app** — type **Business**, then add the **Instagram Graph API** product.
+2. **Add permissions**: `instagram_basic` and `instagram_content_publish`.
+   In Development mode these work without Meta app review for accounts added as
+   testers/developers.
+3. **Set the redirect URI** in your app's Facebook Login for Business settings:
+   ```
+   https://yourblog.example.com/api/instagram/callback
+   ```
+4. **Copy credentials** from App Settings → Basic into Point: go to
+   **Settings → Instagram**, enter App ID and App Secret, and save.
+5. **Connect**: toggle **Enable Instagram** on, then click **Connect Instagram**.
+   You'll be redirected to Facebook OAuth and back to Settings on success.
+
+Once connected, each post editor shows a **Share to Instagram** toggle and a
+**Publish to Instagram now** button. The token (~60 days) refreshes automatically
+when it's within 7 days of expiry.
+
+For full details, including carousel publishing and caption templates, see
+[docs/features/instagram-integration.md](docs/features/instagram-integration.md).
+
 ## Troubleshooting
 
 1. **Port already in use:** Change `DEPLOY_PORT` in your `.env` file to a free port, then run `docker compose up -d`.

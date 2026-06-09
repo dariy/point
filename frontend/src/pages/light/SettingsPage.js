@@ -8,6 +8,7 @@ import { Component } from "../../components/Component.js";
 import { LightSidebar } from "../../components/light/LightSidebar.js";
 import { getAllSettings, updateSettings } from "../../api/settings.js";
 import { listPosts } from "../../api/posts.js";
+import { getInstagramStatus, disconnectInstagram } from "../../api/instagram.js";
 import { logout } from "../../api/auth.js";
 import { store } from "../../store.js";
 import {
@@ -66,6 +67,16 @@ const SETTING_GROUPS = [
       "gemini_prompt_excerpt",
     ],
   },
+  {
+    title: "Instagram",
+    keys: [
+      "instagram_app_id",
+      "instagram_app_secret",
+      "enable_instagram",
+      "instagram_default_share",
+      "instagram_caption_template",
+    ],
+  },
 ];
 
 const NUMERIC_KEYS = new Set([
@@ -105,6 +116,12 @@ const SETTING_HELP = {
   // AI
   gemini_api_key: "Your Google Gemini API key for AI-assisted title, tag, and excerpt generation on image uploads.",
   gemini_prompt_title: "Customize the prompt sent to Gemini to generate post metadata from uploaded images.",
+  // Instagram
+  instagram_app_id: "Your Meta App ID from developers.facebook.com. Required for OAuth connection.",
+  instagram_app_secret: "Your Meta App Secret. Keep this private.",
+  enable_instagram: "Master switch — enable Instagram cross-posting across the whole blog.",
+  instagram_default_share: "Pre-check 'Share to Instagram' for each new post by default.",
+  instagram_caption_template: "Caption template for Instagram posts. Use {title}, {excerpt}, {tags}, {link}.",
 };
 
 export default class SettingsPage extends Component {
@@ -116,6 +133,8 @@ export default class SettingsPage extends Component {
       posts: [],
       saving: false,
       error: null,
+      igStatus: null,
+      igDisconnecting: false,
     };
   }
 
@@ -154,6 +173,10 @@ export default class SettingsPage extends Component {
   }
 
   _renderGroup(group, settings, posts) {
+    if (group.title === "Instagram") {
+      return this._renderInstagramGroup(group, settings);
+    }
+
     const inputs = [];
     const toggles = [];
 
@@ -332,6 +355,96 @@ export default class SettingsPage extends Component {
       </div>`;
   }
 
+  _renderInstagramGroup(group, settings) {
+    const { igStatus, igDisconnecting } = this.state;
+
+    const appIdIsSet = settings["instagram_app_id_is_set"] === "true" || settings["instagram_app_id_is_set"] === true;
+    const appSecretIsSet = settings["instagram_app_secret_is_set"] === "true" || settings["instagram_app_secret_is_set"] === true;
+    const enableInstagram = settings["enable_instagram"] === "true" || settings["enable_instagram"] === true;
+    const defaultShare = settings["instagram_default_share"] === "true" || settings["instagram_default_share"] === true;
+    const captionTemplate = escapeHtml(settings["instagram_caption_template"] ?? "{title}\n\n{excerpt}\n\n{tags}\n\n{link}");
+
+    const expiryText = igStatus?.token_expires_at
+      ? new Date(igStatus.token_expires_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+      : null;
+
+    const connectionHtml = igStatus
+      ? igStatus.connected
+        ? `<div class="ig-connection ig-connected">
+            <span class="ig-status-dot ig-status-dot--connected"></span>
+            <span>Connected as <strong>@${escapeHtml(igStatus.username)}</strong>${expiryText ? `<span class="ig-token-expiry"> · Token expires ${escapeHtml(expiryText)}</span>` : ""}</span>
+            <button id="ig-disconnect-btn" class="btn btn-danger btn-sm" type="button" ${igDisconnecting ? "disabled" : ""}>
+              ${igDisconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          </div>`
+        : `<div class="ig-connection ig-disconnected">
+            <span class="ig-status-dot ig-status-dot--disconnected"></span>
+            <span>Not connected</span>
+            <a href="/api/instagram/connect" class="btn btn-primary btn-sm" id="ig-connect-btn">Connect Instagram</a>
+          </div>`
+      : `<div class="ig-connection"><span class="settings-help-icon">…</span></div>`;
+
+    const helpTip = (key) => {
+      const help = SETTING_HELP[key];
+      return help
+        ? `<span class="settings-help-tip"><span class="settings-help-icon" tabindex="0" aria-label="Help">?</span><span class="settings-help-tooltip">${escapeHtml(help)}</span></span>`
+        : "";
+    };
+
+    return `
+      <div class="card">
+        <div class="card-header">
+          <h2>Instagram</h2>
+        </div>
+        <div class="card-body">
+          <div class="settings-field">
+            <div class="settings-field-label-row">
+              <label class="settings-field-label" for="instagram_app_id">App ID</label>
+              ${helpTip("instagram_app_id")}
+            </div>
+            <input type="password" name="instagram_app_id" id="instagram_app_id" class="form-input"
+                   placeholder="${appIdIsSet ? "******** (Configured)" : "Enter Meta App ID"}" value="">
+          </div>
+          <div class="settings-field">
+            <div class="settings-field-label-row">
+              <label class="settings-field-label" for="instagram_app_secret">App Secret</label>
+              ${helpTip("instagram_app_secret")}
+            </div>
+            <input type="password" name="instagram_app_secret" id="instagram_app_secret" class="form-input"
+                   placeholder="${appSecretIsSet ? "******** (Configured)" : "Enter Meta App Secret"}" value="">
+          </div>
+          <div class="settings-field">
+            <div class="settings-field-label-row">
+              <label class="settings-field-label">Connection</label>
+            </div>
+            ${connectionHtml}
+          </div>
+          <div class="settings-field">
+            <div class="settings-field-label-row">
+              <label class="settings-field-label" for="instagram_caption_template">Caption Template</label>
+              ${helpTip("instagram_caption_template")}
+            </div>
+            <textarea name="instagram_caption_template" id="instagram_caption_template"
+                      class="form-input" rows="4">${captionTemplate}</textarea>
+          </div>
+          <div class="setting-pill-group setting-pill-group-divided">
+            <div class="setting-pill-item">
+              <label class="setting-pill">
+                <input type="checkbox" name="enable_instagram" class="setting-pill-input" ${enableInstagram ? "checked" : ""}>
+                <span class="setting-pill-label">Enable Instagram</span>
+              </label>${helpTip("enable_instagram")}
+            </div>
+            <div class="setting-pill-item">
+              <label class="setting-pill">
+                <input type="checkbox" name="instagram_default_share" class="setting-pill-input" ${defaultShare ? "checked" : ""}>
+                <span class="setting-pill-label">Share by default</span>
+              </label>${helpTip("instagram_default_share")}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   beforeRender() {
     this._cleanupHeaderCompact?.();
     this._cleanupHeaderCompact = null;
@@ -358,6 +471,10 @@ export default class SettingsPage extends Component {
 
     this._wirePostSelectPreview("about_post_id");
     this._wirePostSelectPreview("home_page_post_id");
+
+    this.$("#ig-disconnect-btn")?.addEventListener("click", () =>
+      this._handleIgDisconnect(),
+    );
   }
 
   _wirePostSelectPreview(name) {
@@ -399,14 +516,16 @@ export default class SettingsPage extends Component {
   async _load() {
     this.setState({ loading: true, error: null });
     try {
-      const [settings, postsResult] = await Promise.all([
+      const [settings, postsResult, igStatus] = await Promise.all([
         getAllSettings(),
         listPosts({ per_page: 500 }),
+        getInstagramStatus().catch(() => null),
       ]);
       this.setState({
         loading: false,
         settings: normalizeSettings(settings),
         posts: postsResult.posts || [],
+        igStatus,
       });
     } catch (err) {
       console.error("[SettingsPage] load error:", err);
@@ -415,6 +534,20 @@ export default class SettingsPage extends Component {
         type: "error",
       });
       this.setState({ loading: false });
+    }
+  }
+
+  async _handleIgDisconnect() {
+    if (this.state.igDisconnecting) return;
+    this.setState({ igDisconnecting: true });
+    try {
+      await disconnectInstagram();
+      const igStatus = await getInstagramStatus().catch(() => null);
+      this.setState({ igDisconnecting: false, igStatus });
+      store.set("toast", { message: "Instagram disconnected.", type: "success" });
+    } catch (err) {
+      this.setState({ igDisconnecting: false });
+      store.set("toast", { message: err.message || "Disconnect failed.", type: "error" });
     }
   }
 
@@ -446,7 +579,7 @@ export default class SettingsPage extends Component {
         const type = this._getSettingType(k);
         if (type === "boolean") return; // saved on checkbox change
         const val = formData.get(k);
-        if (k === "gemini_api_key") {
+        if (k === "gemini_api_key" || k === "instagram_app_id" || k === "instagram_app_secret") {
           if (val) data[k] = val;
           return;
         }
@@ -489,7 +622,7 @@ export default class SettingsPage extends Component {
     )
       return "number";
     if (key === "map_mode" || key === "timeline_mode") return "string";
-    if (key.includes("enable") || key.includes("show") || key.includes("use"))
+    if (key.includes("enable") || key.includes("show") || key.includes("use") || key === "instagram_default_share")
       return "boolean";
     return "string";
   }

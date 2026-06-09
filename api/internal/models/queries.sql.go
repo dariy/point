@@ -65,7 +65,7 @@ SET status = 'published',
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
 AND deleted_at IS NULL
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error
 `
 
 func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error) {
@@ -99,6 +99,11 @@ func (q *Queries) BulkPublishScheduledPosts(ctx context.Context) ([]Post, error)
 			&i.DeletedAt,
 			&i.Css,
 			&i.ImmersiveMode,
+			&i.InstagramShare,
+			&i.InstagramStatus,
+			&i.InstagramMediaID,
+			&i.InstagramPublishedAt,
+			&i.InstagramError,
 		); err != nil {
 			return nil, err
 		}
@@ -356,11 +361,11 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode
+    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
 ) VALUES (
-    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), ?11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?12, ?13
+    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, (CASE WHEN ?6 = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), ?11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?12, ?13, ?14
 )
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error
 `
 
 type CreatePostParams struct {
@@ -377,6 +382,7 @@ type CreatePostParams struct {
 	ScheduledAt     sql.NullTime   `json:"scheduled_at"`
 	Css             string         `json:"css"`
 	ImmersiveMode   string         `json:"immersive_mode"`
+	InstagramShare  bool           `json:"instagram_share"`
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
@@ -394,6 +400,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		arg.ScheduledAt,
 		arg.Css,
 		arg.ImmersiveMode,
+		arg.InstagramShare,
 	)
 	var i Post
 	err := row.Scan(
@@ -418,6 +425,11 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.DeletedAt,
 		&i.Css,
 		&i.ImmersiveMode,
+		&i.InstagramShare,
+		&i.InstagramStatus,
+		&i.InstagramMediaID,
+		&i.InstagramPublishedAt,
+		&i.InstagramError,
 	)
 	return i, err
 }
@@ -812,7 +824,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 
 const getPost = `-- name: GetPost :one
 
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 WHERE p.id = ? AND p.deleted_at IS NULL LIMIT 1
 `
@@ -843,6 +855,11 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.DeletedAt,
 		&i.Css,
 		&i.ImmersiveMode,
+		&i.InstagramShare,
+		&i.InstagramStatus,
+		&i.InstagramMediaID,
+		&i.InstagramPublishedAt,
+		&i.InstagramError,
 	)
 	return i, err
 }
@@ -870,7 +887,7 @@ func (q *Queries) GetPostAnalytics(ctx context.Context) (GetPostAnalyticsRow, er
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1
 `
@@ -900,12 +917,17 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.DeletedAt,
 		&i.Css,
 		&i.ImmersiveMode,
+		&i.InstagramShare,
+		&i.InstagramStatus,
+		&i.InstagramMediaID,
+		&i.InstagramPublishedAt,
+		&i.InstagramError,
 	)
 	return i, err
 }
 
 const getPostsByTag = `-- name: GetPostsByTag :many
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
@@ -971,6 +993,11 @@ func (q *Queries) GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([
 			&i.DeletedAt,
 			&i.Css,
 			&i.ImmersiveMode,
+			&i.InstagramShare,
+			&i.InstagramStatus,
+			&i.InstagramMediaID,
+			&i.InstagramPublishedAt,
+			&i.InstagramError,
 		); err != nil {
 			return nil, err
 		}
@@ -1442,7 +1469,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -1517,6 +1544,11 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 			&i.DeletedAt,
 			&i.Css,
 			&i.ImmersiveMode,
+			&i.InstagramShare,
+			&i.InstagramStatus,
+			&i.InstagramMediaID,
+			&i.InstagramPublishedAt,
+			&i.InstagramError,
 		); err != nil {
 			return nil, err
 		}
@@ -1532,7 +1564,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 }
 
 const listPostsByViews = `-- name: ListPostsByViews :many
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -1607,6 +1639,11 @@ func (q *Queries) ListPostsByViews(ctx context.Context, arg ListPostsByViewsPara
 			&i.DeletedAt,
 			&i.Css,
 			&i.ImmersiveMode,
+			&i.InstagramShare,
+			&i.InstagramStatus,
+			&i.InstagramMediaID,
+			&i.InstagramPublishedAt,
+			&i.InstagramError,
 		); err != nil {
 			return nil, err
 		}
@@ -1692,7 +1729,7 @@ func (q *Queries) ListTags(ctx context.Context, includeEmptyFilter interface{}) 
 }
 
 const listTrashedPosts = `-- name: ListTrashedPosts :many
-SELECT id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode FROM posts
+SELECT id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error FROM posts
 WHERE deleted_at IS NOT NULL
 ORDER BY deleted_at DESC
 LIMIT ? OFFSET ?
@@ -1734,6 +1771,11 @@ func (q *Queries) ListTrashedPosts(ctx context.Context, arg ListTrashedPostsPara
 			&i.DeletedAt,
 			&i.Css,
 			&i.ImmersiveMode,
+			&i.InstagramShare,
+			&i.InstagramStatus,
+			&i.InstagramMediaID,
+			&i.InstagramPublishedAt,
+			&i.InstagramError,
 		); err != nil {
 			return nil, err
 		}
@@ -1752,7 +1794,7 @@ const publishPost = `-- name: PublishPost :one
 UPDATE posts
 SET status = 'published', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error
 `
 
 func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
@@ -1780,6 +1822,11 @@ func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.DeletedAt,
 		&i.Css,
 		&i.ImmersiveMode,
+		&i.InstagramShare,
+		&i.InstagramStatus,
+		&i.InstagramMediaID,
+		&i.InstagramPublishedAt,
+		&i.InstagramError,
 	)
 	return i, err
 }
@@ -2045,9 +2092,10 @@ SET title = ?1, slug = ?2, content = ?3, excerpt = ?4, formatter = ?5, status = 
     END),
     css = ?11,
     immersive_mode = ?12,
+    instagram_share = ?13,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = ?13 AND author_id = ?14
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode
+WHERE id = ?14 AND author_id = ?15
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error
 `
 
 type UpdatePostParams struct {
@@ -2063,6 +2111,7 @@ type UpdatePostParams struct {
 	ScheduledAt     sql.NullTime   `json:"scheduled_at"`
 	Css             string         `json:"css"`
 	ImmersiveMode   string         `json:"immersive_mode"`
+	InstagramShare  bool           `json:"instagram_share"`
 	ID              int64          `json:"id"`
 	AuthorID        int64          `json:"author_id"`
 }
@@ -2081,6 +2130,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		arg.ScheduledAt,
 		arg.Css,
 		arg.ImmersiveMode,
+		arg.InstagramShare,
 		arg.ID,
 		arg.AuthorID,
 	)
@@ -2107,8 +2157,41 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.DeletedAt,
 		&i.Css,
 		&i.ImmersiveMode,
+		&i.InstagramShare,
+		&i.InstagramStatus,
+		&i.InstagramMediaID,
+		&i.InstagramPublishedAt,
+		&i.InstagramError,
 	)
 	return i, err
+}
+
+const updatePostInstagramStatus = `-- name: UpdatePostInstagramStatus :exec
+UPDATE posts
+SET instagram_status = ?,
+    instagram_media_id = ?,
+    instagram_published_at = ?,
+    instagram_error = ?
+WHERE id = ?
+`
+
+type UpdatePostInstagramStatusParams struct {
+	InstagramStatus      string         `json:"instagram_status"`
+	InstagramMediaID     sql.NullString `json:"instagram_media_id"`
+	InstagramPublishedAt sql.NullTime   `json:"instagram_published_at"`
+	InstagramError       sql.NullString `json:"instagram_error"`
+	ID                   int64          `json:"id"`
+}
+
+func (q *Queries) UpdatePostInstagramStatus(ctx context.Context, arg UpdatePostInstagramStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updatePostInstagramStatus,
+		arg.InstagramStatus,
+		arg.InstagramMediaID,
+		arg.InstagramPublishedAt,
+		arg.InstagramError,
+		arg.ID,
+	)
+	return err
 }
 
 const updateSessionActivity = `-- name: UpdateSessionActivity :exec
@@ -2251,7 +2334,7 @@ const withdrawPost = `-- name: WithdrawPost :one
 UPDATE posts
 SET status = 'draft', updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode
+RETURNING id, title, slug, content, excerpt, formatter, status, is_featured, view_count, published_at, scheduled_at, created_at, updated_at, author_id, thumbnail_path, meta_description, preview_token, preview_expires_at, deleted_at, css, immersive_mode, instagram_share, instagram_status, instagram_media_id, instagram_published_at, instagram_error
 `
 
 func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
@@ -2279,6 +2362,11 @@ func (q *Queries) WithdrawPost(ctx context.Context, id int64) (Post, error) {
 		&i.DeletedAt,
 		&i.Css,
 		&i.ImmersiveMode,
+		&i.InstagramShare,
+		&i.InstagramStatus,
+		&i.InstagramMediaID,
+		&i.InstagramPublishedAt,
+		&i.InstagramError,
 	)
 	return i, err
 }

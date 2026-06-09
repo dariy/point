@@ -111,6 +111,65 @@ func TestThemesPathDerivation(t *testing.T) {
 	}
 }
 
+func TestSmartPathDetection(t *testing.T) {
+	viper.Reset()
+	// Create a temp dir to act as our "working directory"
+	wd, err := os.MkdirTemp("", "config-test-wd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(wd) }()
+
+	// Change working directory to our temp wd
+	oldWd, _ := os.Getwd()
+	_ = os.Chdir(wd)
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Case 1: Run from root (frontend exists)
+	_ = os.Mkdir("frontend", 0755)
+	_ = os.Mkdir("data", 0755)
+
+	config, err := LoadConfig(".")
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if config.FrontendDir != "frontend" {
+		t.Errorf("expected FrontendDir 'frontend', got %s", config.FrontendDir)
+	}
+	if config.StoragePath != "./data" {
+		t.Errorf("expected StoragePath './data', got %s", config.StoragePath)
+	}
+	if config.DatabaseURL != "./data/point.db" {
+		t.Errorf("expected DatabaseURL './data/point.db', got %s", config.DatabaseURL)
+	}
+
+	// Case 2: Run from 'api' (frontend does not exist here, but ../frontend does)
+	_ = os.RemoveAll("frontend")
+	_ = os.RemoveAll("data")
+	_ = os.Mkdir("api", 0755)
+	_ = os.Mkdir("frontend", 0755)
+	_ = os.Mkdir("data", 0755)
+	_ = os.Chdir("api")
+	// Now wd is <temp>/api. ../frontend and ../data exist.
+
+	viper.Reset()
+	config, err = LoadConfig(".")
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if config.FrontendDir != "../frontend" {
+		t.Errorf("expected FrontendDir '../frontend', got %s", config.FrontendDir)
+	}
+	if config.StoragePath != "../data" {
+		t.Errorf("expected StoragePath '../data', got %s", config.StoragePath)
+	}
+	if config.DatabaseURL != "../data/point.db" {
+		t.Errorf("expected DatabaseURL '../data/point.db', got %s", config.DatabaseURL)
+	}
+}
+
 func TestUserThemesPathDerivation(t *testing.T) {
 	viper.Reset()
 	tmpDir, err := os.MkdirTemp("", "config-test-user-themes")

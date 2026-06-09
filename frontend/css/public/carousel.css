@@ -33,15 +33,15 @@
 .immersive-nav-panel {
     position: absolute;
     top: 0;
-    width: 33.33%;
+    width: 66.66%;
     height: 100%;
     z-index: 20;
     cursor: pointer;
     user-select: none;
 }
 
-.immersive-nav-prev { left: 0; }
-.immersive-nav-next { right: 0; }
+.immersive-nav-prev { left: -33.33%; }
+.immersive-nav-next { right: -33.33%; }
 
 .immersive-nav-gradient {
     position: absolute;
@@ -52,11 +52,11 @@
 }
 
 .immersive-nav-prev .immersive-nav-gradient {
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.5), transparent);
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.5) 50%, transparent);
 }
 
 .immersive-nav-next .immersive-nav-gradient {
-    background: linear-gradient(to left, rgba(0, 0, 0, 0.5), transparent);
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.5) 50%, transparent);
 }
 
 .carousel-indicators {

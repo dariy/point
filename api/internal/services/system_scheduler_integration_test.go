@@ -93,11 +93,11 @@ func TestSchedulerService_New(t *testing.T) {
 	settingsSvc := NewSettingsService(repo)
 	tagSvc := NewTagService(repo)
 	authSvc := NewAuthService(repo)
-	postSvc := NewPostService(repo)
+	postSvc := NewPostService(repo, nil, nil)
 	mediaSvc := NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := NewSystemService(repo, dir)
 
-	sched := NewSchedulerService(authSvc, postSvc, systemSvc, mediaSvc, settingsSvc)
+	sched := NewSchedulerService(authSvc, postSvc, systemSvc, mediaSvc, settingsSvc, nil)
 	if sched == nil {
 		t.Error("expected non-nil SchedulerService")
 	}

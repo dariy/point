@@ -254,6 +254,35 @@
     grid-column: 1 / -1;
 }
 
+/* Instagram connection status */
+.ig-connection {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    font-size: 0.95em;
+}
+
+.ig-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ig-status-dot--connected {
+    background-color: var(--color-success, #22c55e);
+}
+
+.ig-status-dot--disconnected {
+    background-color: var(--text-secondary);
+}
+
+.ig-token-expiry {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
 /* Gemini prompt template */
 .prompt-template {
     display: flex;

@@ -86,8 +86,8 @@ type mockRepository struct {
 	MockUpdateUserLogin           func(ctx context.Context, id int64) error
 	MockUpdateUserPassword        func(ctx context.Context, arg models.UpdateUserPasswordParams) error
 	MockUpsertSecret              func(ctx context.Context, arg models.UpsertSecretParams) error
+	MockUpdatePostInstagramStatus func(ctx context.Context, arg models.UpdatePostInstagramStatusParams) error
 	MockWithdrawPost              func(ctx context.Context, id int64) (models.Post, error)
-
 	// Repository methods
 	MockClose                               func() error
 	MockDB                                  func() *sql.DB
@@ -685,6 +685,13 @@ func (m *mockRepository) UpsertSecret(ctx context.Context, arg models.UpsertSecr
 		return m.MockUpsertSecret(ctx, arg)
 	}
 	return fmt.Errorf("UpsertSecret not implemented")
+}
+
+func (m *mockRepository) UpdatePostInstagramStatus(ctx context.Context, arg models.UpdatePostInstagramStatusParams) error {
+	if m.MockUpdatePostInstagramStatus != nil {
+		return m.MockUpdatePostInstagramStatus(ctx, arg)
+	}
+	return nil
 }
 
 func (m *mockRepository) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {

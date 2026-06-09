@@ -6,21 +6,25 @@ import (
 	"time"
 )
 
+const igTokenRefreshWindow = 7 * 24 * time.Hour
+
 type SchedulerService struct {
-	authService     *AuthService
-	postService     *PostService
-	systemService   *SystemService
-	mediaService    *MediaService
-	settingsService *SettingsService
+	authService      *AuthService
+	postService      *PostService
+	systemService    *SystemService
+	mediaService     *MediaService
+	settingsService  *SettingsService
+	instagramService *InstagramService
 }
 
-func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService, settingsService *SettingsService) *SchedulerService {
+func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService, settingsService *SettingsService, instagramService *InstagramService) *SchedulerService {
 	return &SchedulerService{
-		authService:     authService,
-		postService:     postService,
-		systemService:   systemService,
-		mediaService:    mediaService,
-		settingsService: settingsService,
+		authService:      authService,
+		postService:      postService,
+		systemService:    systemService,
+		mediaService:     mediaService,
+		settingsService:  settingsService,
+		instagramService: instagramService,
 	}
 }
 
@@ -53,6 +57,9 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		}
 		return nil
 	})
+
+	// Daily task: Instagram token refresh (at 4 AM)
+	go s.runDaily(ctx, "instagram token refresh", 4, s.refreshInstagramTokenIfNeeded)
 
 	// Daily task: Backups (at 3 AM)
 	go s.runDaily(ctx, "daily backup", 3, func(ctx context.Context) error {
@@ -105,6 +112,33 @@ func (s *SchedulerService) runPeriodic(ctx context.Context, name string, interva
 			}
 		}
 	}
+}
+
+func (s *SchedulerService) refreshInstagramTokenIfNeeded(ctx context.Context) error {
+	expiresAtStr, err := s.settingsService.GetSecret(ctx, "instagram_token_expires_at")
+	if err != nil || expiresAtStr == "" {
+		return nil // not connected
+	}
+	expiresAt, err := time.Parse(time.RFC3339, expiresAtStr)
+	if err != nil {
+		return fmt.Errorf("instagram token refresh: parse expiry: %w", err)
+	}
+	if time.Until(expiresAt) > igTokenRefreshWindow {
+		return nil // not close enough to expiry
+	}
+	newToken, expiresIn, err := s.instagramService.RefreshLongLivedToken(ctx)
+	if err != nil {
+		return fmt.Errorf("instagram token refresh: %w", err)
+	}
+	newExpiresAt := time.Now().Add(time.Duration(expiresIn) * time.Second).UTC().Format(time.RFC3339)
+	if err := s.settingsService.SetSecret(ctx, "instagram_access_token", newToken); err != nil {
+		return fmt.Errorf("instagram token refresh: save token: %w", err)
+	}
+	if err := s.settingsService.SetSecret(ctx, "instagram_token_expires_at", newExpiresAt); err != nil {
+		return fmt.Errorf("instagram token refresh: save expiry: %w", err)
+	}
+	fmt.Printf("Scheduler: Instagram token refreshed, expires at %s\n", newExpiresAt)
+	return nil
 }
 
 func (s *SchedulerService) runDaily(ctx context.Context, name string, hour int, task func(context.Context) error) {
