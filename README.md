@@ -22,6 +22,7 @@ For manual steps, environment variables, and update instructions see [QUICKSTART
 
 - **Media-centric**: automatic thumbnail generation, image resizing, video support, EXIF extraction
 - **AI analysis**: Google Gemini integration for automatic title, tags, and excerpt suggestions
+- **Instagram cross-posting**: publish photos to Instagram Business/Creator accounts automatically on publish or on demand (BYO Meta app credentials)
 - **Timeline navigation**: interactive timeline with tag-based filtering and year/location drill-down
 - **Tag hierarchy**: many-to many relationship.
 - **Geo-tags**: each tag can be bound to world coordinates.
@@ -43,6 +44,7 @@ The app is configured via environment variables (or a `.env` file in the working
 |---|---|---|
 | `SECRET_KEY` | *(auto-generated)* | Session signing key — generated and persisted automatically |
 | `PORT` | `8000` | API listen port |
+| `APP_URL` | *(empty)* | Public URL of your blog (e.g. `https://blog.example.com`) — required for Instagram cross-posting and OAuth callbacks |
 | `DATABASE_URL` | `sqlite:./data/point.db` | SQLite path |
 | `STORAGE_PATH` | `./data` | Media file root |
 | `GEMINI_API_KEY` | *(empty)* | Google Gemini key for AI media analysis |

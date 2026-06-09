@@ -56,7 +56,7 @@ Follows the existing service/handler split (`api/internal/services`, `api/intern
 
 `blog_secrets` (encrypted-at-rest store, never returned to the client):
 - `instagram_app_id`, `instagram_app_secret`
-- `instagram_access_token`, `instagram_user_id`, `instagram_token_expires_at`
+- `instagram_access_token`, `instagram_user_id`, `instagram_username`, `instagram_token_expires_at`
 
 `blog_settings` (admin-visible config):
 - `enable_instagram` (master on/off)
@@ -84,9 +84,9 @@ already used for `css`/`immersive_mode` in `repository/db.go`):
 ### Endpoints (admin-only, `AuthMiddleware`)
 
 - `GET  /api/instagram/connect`   → redirect to Meta OAuth (state CSRF token)
-- `GET  /api/instagram/callback`  → exchange code, store long-lived token + user id
+- `GET  /api/instagram/callback`  → exchange code, store long-lived token + user id; redirects to `/light/settings#instagram`
 - `POST /api/instagram/disconnect`→ clear stored secrets
-- `GET  /api/instagram/status`    → `{connected, username, token_expires_at, enabled}`
+- `GET  /api/instagram/status`    → `{connected, username, token_expires_at, enabled, default_share}`
 - `POST /api/posts/:id/instagram/publish` → manual cross-post for one post
 
 ### Auto cross-post hook
@@ -111,11 +111,13 @@ within ~7 days of `instagram_token_expires_at`.
 
 - **SettingsPage**: new "Instagram" section — App ID/Secret inputs (secret-style,
   shows `*_is_set`), Connect/Disconnect button driven by `/api/instagram/status`,
-  master enable toggle, default-share toggle, caption-template field. Mirrors the
-  existing Gemini section.
-- **PostEditPage**: "Share to Instagram" toggle (defaults to
-  `instagram_default_share`), an IG status badge (`published`/`pending`/`failed`
-  with error tooltip), and a "Publish to Instagram now" button.
+  connection status showing `@username` and token expiry date, master enable toggle,
+  default-share toggle, caption-template field. Mirrors the existing Gemini section.
+- **PostEditPage**: "Share to Instagram" toggle (defaults to `instagram_default_share`
+  for new posts, saved `instagram_share` for existing posts), an IG status badge
+  (`published`/`pending`/`failed` with error tooltip), and a "Publish to Instagram now"
+  button (only shown for existing published posts when connected and not yet published).
+  The entire Instagram section is hidden when `enable_instagram` is false.
 
 ## Failure & edge cases
 
@@ -125,6 +127,59 @@ within ~7 days of `instagram_token_expires_at`.
 - >10 images → publish first 10 as carousel, warn.
 - Rate limit (25/24h) → record failure, surface message, allow manual retry later.
 
-## Work breakdown
+## Meta app setup
 
-See beads epic **point-xq28** for the task list and dependency graph.
+To use Instagram cross-posting you need a Meta (Facebook) Developer app with
+your own credentials. Point never uses shared infrastructure — your tokens stay
+in your own database.
+
+### 1. Create a Meta app
+
+1. Go to [developers.facebook.com](https://developers.facebook.com) → **My Apps → Create App**.
+2. Choose **"Business"** type.
+3. Under **Add products**, add **Instagram Graph API**.
+
+### 2. Add the required permissions
+
+In your app's Instagram Graph API product settings, request:
+
+| Permission | Purpose |
+|---|---|
+| `instagram_basic` | Read the connected account (username, user ID) |
+| `instagram_content_publish` | Create and publish media containers |
+
+For a personal/self-hosted install these permissions are available in
+**Development mode** (no app review required) as long as you test with accounts
+that are added as app testers or developers.
+
+### 3. Set the OAuth redirect URI
+
+In your app's **Facebook Login for Business** settings, add the exact URI:
+
+```
+https://yourblog.example.com/api/instagram/callback
+```
+
+`APP_URL` in your `.env` must match this value exactly (no trailing slash).
+
+### 4. Obtain App ID and App Secret
+
+From **App Settings → Basic** copy:
+- **App ID** → `instagram_app_id` in Point Settings
+- **App Secret** → `instagram_app_secret` in Point Settings
+
+### 5. Instagram account requirements
+
+The account you connect must be an **Instagram Business or Creator account**
+linked to a Facebook Page. Personal accounts cannot use the Content Publishing API.
+
+### 6. Connect in Point
+
+1. In Point admin, go to **Settings → Instagram**.
+2. Enter App ID and App Secret, then save.
+3. Toggle **Enable Instagram** on.
+4. Click **Connect Instagram** — you will be redirected to Facebook OAuth and
+   back to Settings when complete.
+5. The connection status will show `Connected as @yourusername` with the token
+   expiry date. The token (~60 days) is refreshed automatically every day when
+   it is within 7 days of expiry.
