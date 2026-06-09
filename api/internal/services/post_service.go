@@ -631,7 +631,7 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
 			go func() {
-				ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 				defer cancel()
 				_ = s.CrossPostToInstagram(ctx2, id)
 			}()
@@ -699,7 +699,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 					if p.InstagramShare {
 						id := p.ID
 						go func() {
-							ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+							ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 							defer cancel()
 							_ = s.CrossPostToInstagram(ctx2, id)
 						}()
@@ -804,9 +804,6 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 	res = strings.ReplaceAll(res, "{title}", post.Title)
 
 	excerpt := post.Excerpt.String
-	if excerpt == "" {
-		excerpt = ""
-	}
 	res = strings.ReplaceAll(res, "{excerpt}", excerpt)
 
 	link := fmt.Sprintf("%s/%s", appURL, post.Slug)
@@ -823,6 +820,7 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 
 	return res
 }
+
 
 func (s *PostService) updateInstagramStatus(ctx context.Context, postID int64, status, mediaID, errMsg string) error {
 	var publishedAt sql.NullTime
