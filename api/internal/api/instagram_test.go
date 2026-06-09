@@ -17,12 +17,12 @@ import (
 
 // mockInstagramConnector is a test double for instagramConnector.
 type mockInstagramConnector struct {
-	exchangeFn    func(code, redirectURI string) (string, string, int64, error)
-	getAccountFn  func() (string, string, string, error)
+	exchangeFn   func(shortLivedToken string) (string, int64, error)
+	getAccountFn func() (string, string, string, error)
 }
 
-func (m *mockInstagramConnector) ExchangeCodeForLongLivedToken(_ context.Context, code, redirectURI string) (string, string, int64, error) {
-	return m.exchangeFn(code, redirectURI)
+func (m *mockInstagramConnector) ExchangeShortLivedForLongLived(_ context.Context, token string) (string, int64, error) {
+	return m.exchangeFn(token)
 }
 
 func (m *mockInstagramConnector) GetConnectedAccount(_ context.Context) (string, string, string, error) {
@@ -128,7 +128,7 @@ func TestInstagramHandler_Callback_MissingParams(t *testing.T) {
 	mock := &mockInstagramConnector{}
 	h, _ := newTestInstagramHandler(t, mock, "https://example.com")
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?code=abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?access_token=abc", nil)
 	rec := httptest.NewRecorder()
 	err := h.Callback(e.NewContext(req, rec))
 	if err == nil {
@@ -145,7 +145,7 @@ func TestInstagramHandler_Callback_BadState(t *testing.T) {
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
 	_ = settingsSvc.SetSecret(context.Background(), "instagram_oauth_state", "correctstate")
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?code=abc&state=wrongstate", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?access_token=abc&state=wrongstate", nil)
 	rec := httptest.NewRecorder()
 	err := h.Callback(e.NewContext(req, rec))
 	if err == nil {
@@ -159,14 +159,14 @@ func TestInstagramHandler_Callback_BadState(t *testing.T) {
 
 func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(_, _ string) (string, string, int64, error) {
-			return "", "", 0, fmt.Errorf("invalid code")
+		exchangeFn: func(_ string) (string, int64, error) {
+			return "", 0, fmt.Errorf("invalid token")
 		},
 	}
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
 	_ = settingsSvc.SetSecret(context.Background(), "instagram_oauth_state", "validstate")
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?code=bad&state=validstate", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?access_token=bad&state=validstate", nil)
 	rec := httptest.NewRecorder()
 	err := h.Callback(e.NewContext(req, rec))
 	if err == nil {
@@ -180,8 +180,8 @@ func TestInstagramHandler_Callback_TokenExchangeFailure(t *testing.T) {
 
 func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(_, _ string) (string, string, int64, error) {
-			return "longtoken", "1234567890", 5184000, nil
+		exchangeFn: func(_ string) (string, int64, error) {
+			return "longtoken", 5184000, nil
 		},
 		getAccountFn: func() (string, string, string, error) {
 			return "", "", "", fmt.Errorf("API error")
@@ -190,7 +190,7 @@ func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
 	_ = settingsSvc.SetSecret(context.Background(), "instagram_oauth_state", "validstate")
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?code=good&state=validstate", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?access_token=good&state=validstate", nil)
 	rec := httptest.NewRecorder()
 	err := h.Callback(e.NewContext(req, rec))
 	if err == nil {
@@ -208,11 +208,11 @@ func TestInstagramHandler_Callback_GetAccountFailure(t *testing.T) {
 
 func TestInstagramHandler_Callback_Success(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(code, _ string) (string, string, int64, error) {
-			if code != "authcode" {
-				return "", "", 0, fmt.Errorf("unexpected code")
+		exchangeFn: func(token string) (string, int64, error) {
+			if token != "shorttoken" {
+				return "", 0, fmt.Errorf("unexpected token: %s", token)
 			}
-			return "long-lived-token", "1234567890", 5184000, nil
+			return "long-lived-token", 5184000, nil
 		},
 		getAccountFn: func() (string, string, string, error) {
 			return "testuser", "1234567890", "BUSINESS", nil
@@ -221,7 +221,7 @@ func TestInstagramHandler_Callback_Success(t *testing.T) {
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
 	_ = settingsSvc.SetSecret(context.Background(), "instagram_oauth_state", "goodstate")
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?code=authcode&state=goodstate", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?access_token=shorttoken&state=goodstate", nil)
 	rec := httptest.NewRecorder()
 	if err := h.Callback(e.NewContext(req, rec)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -257,8 +257,8 @@ func TestInstagramHandler_Callback_Success(t *testing.T) {
 
 func TestInstagramHandler_Callback_PersonalAccount(t *testing.T) {
 	mock := &mockInstagramConnector{
-		exchangeFn: func(_, _ string) (string, string, int64, error) {
-			return "longtoken", "1234567890", 5184000, nil
+		exchangeFn: func(_ string) (string, int64, error) {
+			return "longtoken", 5184000, nil
 		},
 		getAccountFn: func() (string, string, string, error) {
 			return "personaluser", "1234567890", "PERSONAL", nil
@@ -267,7 +267,7 @@ func TestInstagramHandler_Callback_PersonalAccount(t *testing.T) {
 	h, settingsSvc := newTestInstagramHandler(t, mock, "https://example.com")
 	_ = settingsSvc.SetSecret(context.Background(), "instagram_oauth_state", "validstate")
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?code=good&state=validstate", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/instagram/callback?access_token=good&state=validstate", nil)
 	rec := httptest.NewRecorder()
 	if err := h.Callback(e.NewContext(req, rec)); err != nil {
 		t.Fatalf("unexpected error: %v", err)

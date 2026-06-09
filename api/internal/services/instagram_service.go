@@ -164,11 +164,12 @@ func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, co
 	}
 
 	longParams := url.Values{
-		"grant_type":    {"ig_exchange_token"},
-		"client_secret": {appSecret},
-		"access_token":  {shortToken.AccessToken},
+		"grant_type":        {"fb_exchange_token"},
+		"client_id":         {appID},
+		"client_secret":     {appSecret},
+		"fb_exchange_token": {shortToken.AccessToken},
 	}
-	body2, err := s.get(ctx, s.graphBaseURL+"/access_token?"+longParams.Encode())
+	body2, err := s.get(ctx, s.graphBaseURL+"/oauth/access_token?"+longParams.Encode())
 	if err != nil {
 		return "", "", 0, fmt.Errorf("exchange long-lived token: %w", err)
 	}
@@ -177,6 +178,35 @@ func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, co
 		return "", "", 0, fmt.Errorf("decode long-lived token: %w", err)
 	}
 	return longToken.AccessToken, shortToken.UserID.String(), longToken.ExpiresIn, nil
+}
+
+// ExchangeShortLivedForLongLived exchanges a short-lived user access token (received
+// directly via response_type=token OAuth flow) for a long-lived token.
+func (s *InstagramService) ExchangeShortLivedForLongLived(ctx context.Context, shortLivedToken string) (string, int64, error) {
+	appID, err := s.secret(ctx, "instagram_app_id")
+	if err != nil {
+		return "", 0, err
+	}
+	appSecret, err := s.secret(ctx, "instagram_app_secret")
+	if err != nil {
+		return "", 0, err
+	}
+
+	params := url.Values{
+		"grant_type":        {"fb_exchange_token"},
+		"client_id":         {appID},
+		"client_secret":     {appSecret},
+		"fb_exchange_token": {shortLivedToken},
+	}
+	body, err := s.get(ctx, s.graphBaseURL+"/oauth/access_token?"+params.Encode())
+	if err != nil {
+		return "", 0, fmt.Errorf("exchange long-lived token: %w", err)
+	}
+	var resp igTokenResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", 0, fmt.Errorf("decode long-lived token: %w", err)
+	}
+	return resp.AccessToken, resp.ExpiresIn, nil
 }
 
 // RefreshLongLivedToken refreshes the stored long-lived token before expiry.

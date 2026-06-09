@@ -17,7 +17,7 @@ import (
 
 // instagramConnector is the subset of InstagramService used by this handler.
 type instagramConnector interface {
-	ExchangeCodeForLongLivedToken(ctx context.Context, code, redirectURI string) (string, string, int64, error)
+	ExchangeShortLivedForLongLived(ctx context.Context, shortLivedToken string) (string, int64, error)
 	GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error)
 }
 
@@ -58,10 +58,11 @@ func (h *InstagramHandler) Connect(c echo.Context) error {
 
 	params := url.Values{
 		"client_id":     {appID},
+		"display":       {"page"},
 		"redirect_uri":  {appURL + "/api/instagram/callback"},
 		"state":         {state},
 		"scope":         {"instagram_basic,instagram_content_publish,pages_read_engagement,business_management,pages_show_list"},
-		"response_type": {"code"},
+		"response_type": {"token"},
 	}
 	return c.Redirect(http.StatusFound, "https://www.facebook.com/dialog/oauth?"+params.Encode())
 }
@@ -75,10 +76,10 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "OAuth denied: "+errMsg)
 	}
 
-	code := c.QueryParam("code")
+	accessToken := c.QueryParam("access_token")
 	state := c.QueryParam("state")
-	if code == "" || state == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing code or state parameter")
+	if accessToken == "" || state == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing access_token or state parameter")
 	}
 
 	storedState, _ := h.settings.GetSecret(ctx, "instagram_oauth_state")
@@ -88,9 +89,8 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 	_ = h.settings.DeleteSecret(ctx, "instagram_oauth_state")
 
 	appURL := strings.TrimRight(strings.TrimSpace(h.cfg.AppURL), "/")
-	redirectURI := appURL + "/api/instagram/callback"
 
-	token, userID, expiresIn, err := h.instagram.ExchangeCodeForLongLivedToken(ctx, code, redirectURI)
+	token, expiresIn, err := h.instagram.ExchangeShortLivedForLongLived(ctx, accessToken)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "token exchange failed: "+err.Error())
 	}
@@ -99,7 +99,7 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 	_ = h.settings.SetSecret(ctx, "instagram_access_token", token)
 	_ = h.settings.SetSecret(ctx, "instagram_token_expires_at", expiresAt)
 
-	username, _, accountType, err := h.instagram.GetConnectedAccount(ctx)
+	username, igUserID, accountType, err := h.instagram.GetConnectedAccount(ctx)
 	if err != nil {
 		_ = h.settings.DeleteSecret(ctx, "instagram_access_token")
 		_ = h.settings.DeleteSecret(ctx, "instagram_token_expires_at")
@@ -112,7 +112,7 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 		return c.Redirect(http.StatusFound, appURL+"/light/settings?error=instagram_personal#instagram")
 	}
 
-	_ = h.settings.SetSecret(ctx, "instagram_user_id", userID)
+	_ = h.settings.SetSecret(ctx, "instagram_user_id", igUserID)
 	_ = h.settings.SetSecret(ctx, "instagram_username", username)
 
 	return c.Redirect(http.StatusFound, appURL+"/light/settings#instagram")

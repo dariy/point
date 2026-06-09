@@ -43,24 +43,26 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 		callCount++
 		switch r.URL.Path {
 		case "/oauth/access_token":
-			// short-lived exchange (POST, authorization_code grant)
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "parse error", http.StatusBadRequest)
-				return
+			if r.Method == http.MethodPost {
+				// step 1: code → short-lived token
+				if err := r.ParseForm(); err != nil {
+					http.Error(w, "parse error", http.StatusBadRequest)
+					return
+				}
+				if r.FormValue("code") != "mycode" || r.FormValue("redirect_uri") != "https://example.com/callback" {
+					http.Error(w, "bad params", http.StatusBadRequest)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token", "user_id": 987654321})
+			} else {
+				// step 2: short-lived → long-lived (GET, fb_exchange_token grant)
+				q := r.URL.Query()
+				if q.Get("grant_type") != "fb_exchange_token" || q.Get("fb_exchange_token") != "short-token" || q.Get("client_id") != "app123" {
+					http.Error(w, "bad params", http.StatusBadRequest)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "long-token", "expires_in": 5183944})
 			}
-			if r.FormValue("code") != "mycode" || r.FormValue("redirect_uri") != "https://example.com/callback" {
-				http.Error(w, "bad params", http.StatusBadRequest)
-				return
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token", "user_id": 987654321})
-		case "/access_token":
-			// long-lived exchange (GET, ig_exchange_token grant)
-			q := r.URL.Query()
-			if q.Get("grant_type") != "ig_exchange_token" || q.Get("access_token") != "short-token" {
-				http.Error(w, "bad params", http.StatusBadRequest)
-				return
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "long-token", "expires_in": 5183944})
 		default:
 			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusBadRequest)
 		}
@@ -112,6 +114,50 @@ func TestInstagram_ExchangeCodeForLongLivedToken_APIError(t *testing.T) {
 	_, _, _, err := svc.ExchangeCodeForLongLivedToken(context.Background(), "bad-code", "https://example.com/cb")
 	if err == nil || !strings.Contains(err.Error(), "190") {
 		t.Errorf("expected API error, got %v", err)
+	}
+}
+
+// ── ExchangeShortLivedForLongLived ────────────────────────────────────────────
+
+func TestInstagram_ExchangeShortLivedForLongLived_Success(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth/access_token" || r.Method != http.MethodGet {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		q := r.URL.Query()
+		if q.Get("grant_type") != "fb_exchange_token" ||
+			q.Get("fb_exchange_token") != "short-tok" ||
+			q.Get("client_id") != "app123" ||
+			q.Get("client_secret") != "secret456" {
+			http.Error(w, "bad params", http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "long-tok", "expires_in": 5183944})
+	})
+
+	svc := newTestInstagram(t, map[string]string{
+		"instagram_app_id":     "app123",
+		"instagram_app_secret": "secret456",
+	}, handler)
+
+	token, expires, err := svc.ExchangeShortLivedForLongLived(context.Background(), "short-tok")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if token != "long-tok" {
+		t.Errorf("token = %q, want %q", token, "long-tok")
+	}
+	if expires != 5183944 {
+		t.Errorf("expires_in = %d, want 5183944", expires)
+	}
+}
+
+func TestInstagram_ExchangeShortLivedForLongLived_MissingSecret(t *testing.T) {
+	svc := NewInstagramService(mockSecrets(map[string]string{}))
+	_, _, err := svc.ExchangeShortLivedForLongLived(context.Background(), "tok")
+	if err == nil || !strings.Contains(err.Error(), "instagram_app_id") {
+		t.Errorf("expected missing secret error, got %v", err)
 	}
 }
 
