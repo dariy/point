@@ -259,8 +259,15 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    flex-wrap: wrap;
     font-size: 0.95em;
+}
+
+.ig-connection-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs, 6px);
+    flex: 1;
+    min-width: 0;
 }
 
 .ig-status-dot {

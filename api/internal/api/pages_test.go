@@ -20,7 +20,7 @@ func TestPagesHandler_GetHomePage(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postService := services.NewPostService(repo, nil, nil)
+	postService := services.NewPostService(repo, nil, nil, "")
 	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
 	mediaService := services.NewMediaService(repo, nil, settingsService, tagService)
@@ -50,7 +50,7 @@ func TestPagesHandler_TagPage(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	_, _ = tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "News", Slug: "news"})
 
-	postService := services.NewPostService(repo, nil, nil)
+	postService := services.NewPostService(repo, nil, nil, "")
 	settingsService := services.NewSettingsService(repo)
 	mediaService := services.NewMediaService(repo, nil, settingsService, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
@@ -78,7 +78,7 @@ func TestPagesHandler_TagsPage(t *testing.T) {
 	}()
 
 	tagSvc := services.NewTagService(repo)
-	postService := services.NewPostService(repo, nil, nil)
+	postService := services.NewPostService(repo, nil, nil, "")
 	settingsService := services.NewSettingsService(repo)
 	mediaService := services.NewMediaService(repo, nil, settingsService, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
@@ -104,7 +104,7 @@ func TestPagesHandler_GetMapPage(t *testing.T) {
 	}()
 
 	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
@@ -139,7 +139,7 @@ func TestPagesHandler_GetMapPageWithData(t *testing.T) {
 	}()
 
 	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	ctx := context.Background()
 
@@ -188,7 +188,7 @@ func TestPagesHandler_TagsPageAdmin(t *testing.T) {
 	// Add a location to parent tag so location branch is covered
 	_ = tagSvc.SetTagLocations(ctx, parent.ID, []services.TagLocationInput{{Latitude: 48.8, Longitude: 2.3}})
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
@@ -215,7 +215,7 @@ func TestPagesHandler_TagPageNotFound(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
@@ -249,7 +249,7 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 		INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
 		SELECT h.id, ? FROM tags h WHERE h.slug = '_hidden'`, hidden.ID)
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
@@ -277,7 +277,7 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	tagSvc := services.NewTagService(repo)
 	_, _ = tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "AuthTag", Slug: "auth-tag"})
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheService := services.NewCacheService(t.TempDir())
@@ -305,7 +305,7 @@ func TestPagesHandler_GetTagPage(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
@@ -360,7 +360,7 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
 	cacheSvc := services.NewCacheService(t.TempDir())
 	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)
@@ -461,7 +461,7 @@ func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
@@ -514,7 +514,7 @@ func TestPagesHandler_HomePageCustom_ViewCountVisibility(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
@@ -565,7 +565,7 @@ func TestPagesHandler_ViewCountVisibility(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
@@ -703,7 +703,7 @@ func newPagesHandlerForTest(t *testing.T) *PagesHandler {
 	cfg := &config.Config{}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	cacheSvc := services.NewCacheService(t.TempDir())
 	return NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)
@@ -732,7 +732,7 @@ func TestPagesHandler_GetNavMenu_CustomMode(t *testing.T) {
 	cfg := &config.Config{}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	cacheSvc := services.NewCacheService(t.TempDir())
 	h := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)

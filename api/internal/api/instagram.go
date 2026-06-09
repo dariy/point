@@ -17,8 +17,8 @@ import (
 
 // instagramConnector is the subset of InstagramService used by this handler.
 type instagramConnector interface {
-	ExchangeCodeForLongLivedToken(ctx context.Context, code, redirectURI string) (string, int64, error)
-	GetConnectedAccount(ctx context.Context) (username, igUserID string, err error)
+	ExchangeCodeForLongLivedToken(ctx context.Context, code, redirectURI string) (string, string, int64, error)
+	GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error)
 }
 
 type InstagramHandler struct {
@@ -58,9 +58,10 @@ func (h *InstagramHandler) Connect(c echo.Context) error {
 
 	params := url.Values{
 		"client_id":     {appID},
+		"display":       {"page"},
 		"redirect_uri":  {appURL + "/api/instagram/callback"},
 		"state":         {state},
-		"scope":         {"instagram_business_basic,instagram_business_content_publish"},
+		"scope":         {"instagram_basic,instagram_content_publish,pages_read_engagement,business_management,pages_show_list"},
 		"response_type": {"code"},
 	}
 	return c.Redirect(http.StatusFound, "https://www.facebook.com/dialog/oauth?"+params.Encode())
@@ -90,7 +91,7 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 	appURL := strings.TrimRight(strings.TrimSpace(h.cfg.AppURL), "/")
 	redirectURI := appURL + "/api/instagram/callback"
 
-	token, expiresIn, err := h.instagram.ExchangeCodeForLongLivedToken(ctx, code, redirectURI)
+	token, _, expiresIn, err := h.instagram.ExchangeCodeForLongLivedToken(ctx, code, redirectURI)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "token exchange failed: "+err.Error())
 	}
@@ -99,12 +100,19 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 	_ = h.settings.SetSecret(ctx, "instagram_access_token", token)
 	_ = h.settings.SetSecret(ctx, "instagram_token_expires_at", expiresAt)
 
-	username, igUserID, err := h.instagram.GetConnectedAccount(ctx)
+	username, igUserID, accountType, err := h.instagram.GetConnectedAccount(ctx)
 	if err != nil {
 		_ = h.settings.DeleteSecret(ctx, "instagram_access_token")
 		_ = h.settings.DeleteSecret(ctx, "instagram_token_expires_at")
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fetch Instagram account: "+err.Error())
 	}
+
+	if accountType == "PERSONAL" {
+		_ = h.settings.DeleteSecret(ctx, "instagram_access_token")
+		_ = h.settings.DeleteSecret(ctx, "instagram_token_expires_at")
+		return c.Redirect(http.StatusFound, appURL+"/light/settings?error=instagram_personal#instagram")
+	}
+
 	_ = h.settings.SetSecret(ctx, "instagram_user_id", igUserID)
 	_ = h.settings.SetSecret(ctx, "instagram_username", username)
 

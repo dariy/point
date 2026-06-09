@@ -733,7 +733,7 @@ func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	postSvc := services.NewPostService(repo, nil, nil)
+	postSvc := services.NewPostService(repo, nil, nil, "")
 	handler := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	e := echo.New()
 	ctx := context.Background()

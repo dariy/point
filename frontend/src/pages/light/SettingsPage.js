@@ -371,15 +371,19 @@ export default class SettingsPage extends Component {
     const connectionHtml = igStatus
       ? igStatus.connected
         ? `<div class="ig-connection ig-connected">
-            <span class="ig-status-dot ig-status-dot--connected"></span>
-            <span>Connected as <strong>@${escapeHtml(igStatus.username)}</strong>${expiryText ? `<span class="ig-token-expiry"> · Token expires ${escapeHtml(expiryText)}</span>` : ""}</span>
+            <span class="ig-connection-info">
+              <span class="ig-status-dot ig-status-dot--connected"></span>
+              <span>Connected as <strong>@${escapeHtml(igStatus.username)}</strong>${expiryText ? `<span class="ig-token-expiry"> · Token expires ${escapeHtml(expiryText)}</span>` : ""}</span>
+            </span>
             <button id="ig-disconnect-btn" class="btn btn-danger btn-sm" type="button" ${igDisconnecting ? "disabled" : ""}>
               ${igDisconnecting ? "Disconnecting…" : "Disconnect"}
             </button>
           </div>`
         : `<div class="ig-connection ig-disconnected">
-            <span class="ig-status-dot ig-status-dot--disconnected"></span>
-            <span>Not connected</span>
+            <span class="ig-connection-info">
+              <span class="ig-status-dot ig-status-dot--disconnected"></span>
+              <span>Not connected</span>
+            </span>
             <a href="/api/instagram/connect" class="btn btn-primary btn-sm" id="ig-connect-btn">Connect Instagram</a>
           </div>`
       : `<div class="ig-connection"><span class="settings-help-icon">…</span></div>`;
@@ -504,6 +508,20 @@ export default class SettingsPage extends Component {
 
   mount() {
     super.mount();
+
+    // Check for Instagram connection errors from redirect
+    const query = new URLSearchParams(location.search);
+    if (query.get("error") === "instagram_personal") {
+      store.set("toast", {
+        message: "Only Instagram Business or Creator accounts can be connected.",
+        type: "error",
+      });
+      // Clean up the URL
+      const url = new URL(location);
+      url.searchParams.delete("error");
+      history.replaceState({}, "", url);
+    }
+
     // Delegated listener on the container so it survives re-renders.
     this.container.addEventListener("change", (e) => {
       if (e.target.classList.contains("setting-pill-input")) {

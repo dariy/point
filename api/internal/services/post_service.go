@@ -32,13 +32,14 @@ type PostService struct {
 	repo             repository.Repository
 	settingsService  *SettingsService
 	instagramService *InstagramService
+	appURL           string
 	md               goldmark.Markdown
 	policy           *bluemonday.Policy
 	viewBuffer       map[int64]int
 	viewMu           sync.Mutex
 }
 
-func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService) *PostService {
+func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService, appURL string) *PostService {
 	var blockParsers []util.PrioritizedValue
 	for _, p := range parser.DefaultBlockParsers() {
 		if p.Priority != 100 {
@@ -132,6 +133,7 @@ func NewPostService(repo repository.Repository, settingsService *SettingsService
 		repo:             repo,
 		settingsService:  settingsService,
 		instagramService: instagramService,
+		appURL:           strings.TrimSuffix(strings.TrimSpace(appURL), "/"),
 		md:               md,
 		policy:           policy,
 		viewBuffer:       make(map[int64]int),
@@ -631,7 +633,7 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
 			go func() {
-				ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 				defer cancel()
 				_ = s.CrossPostToInstagram(ctx2, id)
 			}()
@@ -699,7 +701,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 					if p.InstagramShare {
 						id := p.ID
 						go func() {
-							ctx2, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+							ctx2, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 							defer cancel()
 							_ = s.CrossPostToInstagram(ctx2, id)
 						}()
@@ -724,15 +726,15 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 	}
 
 	// 1. Validate APP_URL
-	appURL, _ := s.settingsService.GetSetting(ctx, "app_url", "")
+	appURL := s.appURL
 	if appURL == "" || strings.Contains(appURL, "localhost") {
 		_ = s.updateInstagramStatus(ctx, post.ID, "error", "", "APP_URL not configured or not public")
 		return fmt.Errorf("instagram: APP_URL not public or empty")
 	}
-	appURL = strings.TrimSuffix(appURL, "/")
 
-	// 2. Get images
-	media, err := s.repo.GetMediaByPostID(ctx, sql.NullInt64{Int64: post.ID, Valid: true})
+	// 2. Get images referenced in post content (by path, not post_id FK).
+	paths := ExtractMediaPaths(post.Content, "")
+	media, err := s.repo.GetMediaByPaths(ctx, paths)
 	if err != nil {
 		return err
 	}
@@ -749,30 +751,43 @@ func (s *PostService) CrossPostToInstagram(ctx context.Context, postID int64) er
 		return fmt.Errorf("instagram: post has no images")
 	}
 
-	// 3. Build caption
+	// mediaURL converts a DB original_path ("originals/YYYY/MM/file") to a public URL.
+	mediaURL := func(orig string) string {
+		return appURL + strings.TrimPrefix(orig, "originals")
+	}
+
+	// 3. Build caption from template.
 	template, _ := s.settingsService.GetSetting(ctx, "instagram_caption_template", "{title}\n\n{excerpt}\n\n{tags}\n\n{link}")
 	caption := s.expandCaptionTemplate(ctx, template, post, appURL)
 
-	// 4. Create and Publish Containers
+	// 4. Create and publish containers.
 	var creationID string
 	if len(images) == 1 {
-		imageURL := appURL + images[0].OriginalPath
-		creationID, err = s.instagramService.CreateImageContainer(ctx, imageURL, caption)
+		creationID, err = s.instagramService.CreateImageContainer(ctx, mediaURL(images[0].OriginalPath), caption)
+		if err == nil {
+			err = s.instagramService.WaitForContainerReady(ctx, creationID)
+		}
 	} else {
 		if len(images) > 10 {
 			images = images[:10]
 		}
 		var childIDs []string
 		for _, img := range images {
-			imageURL := appURL + img.OriginalPath
-			childID, err := s.instagramService.CreateCarouselChild(ctx, imageURL)
+			childID, err := s.instagramService.CreateCarouselChild(ctx, mediaURL(img.OriginalPath))
 			if err != nil {
+				_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
+				return err
+			}
+			if err := s.instagramService.WaitForContainerReady(ctx, childID); err != nil {
 				_ = s.updateInstagramStatus(ctx, post.ID, "error", "", err.Error())
 				return err
 			}
 			childIDs = append(childIDs, childID)
 		}
 		creationID, err = s.instagramService.CreateCarousel(ctx, childIDs, caption)
+		if err == nil {
+			err = s.instagramService.WaitForContainerReady(ctx, creationID)
+		}
 	}
 
 	if err != nil {
@@ -794,12 +809,9 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 	res = strings.ReplaceAll(res, "{title}", post.Title)
 
 	excerpt := post.Excerpt.String
-	if excerpt == "" {
-		excerpt = ""
-	}
 	res = strings.ReplaceAll(res, "{excerpt}", excerpt)
 
-	link := fmt.Sprintf("%s/%s", appURL, post.Slug)
+	link := fmt.Sprintf("%s/posts/%s", appURL, post.Slug)
 	res = strings.ReplaceAll(res, "{link}", link)
 
 	tags, _ := s.repo.GetTagsForPost(ctx, post.ID)
