@@ -13,21 +13,24 @@ import (
 
 type InstagramService struct {
 	settingsService *SettingsService
-	graphBaseURL    string
+	apiBaseURL      string // api.instagram.com — OAuth token exchange
+	graphBaseURL    string // graph.instagram.com — Graph API calls
 	httpClient      *http.Client
 }
 
 func NewInstagramService(settingsService *SettingsService) *InstagramService {
 	return &InstagramService{
 		settingsService: settingsService,
-		graphBaseURL:    "https://graph.facebook.com",
+		apiBaseURL:      "https://api.instagram.com",
+		graphBaseURL:    "https://graph.instagram.com",
 		httpClient:      &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-// withBaseURL returns a shallow copy with the base URL overridden (tests only).
+// withBaseURL returns a shallow copy with both base URLs overridden (tests only).
 func (s *InstagramService) withBaseURL(u string) *InstagramService {
 	clone := *s
+	clone.apiBaseURL = u
 	clone.graphBaseURL = u
 	return &clone
 }
@@ -121,10 +124,11 @@ func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, co
 	shortParams := url.Values{
 		"client_id":     {appID},
 		"client_secret": {appSecret},
+		"grant_type":    {"authorization_code"},
 		"redirect_uri":  {redirectURI},
 		"code":          {code},
 	}
-	body, err := s.get(ctx, s.graphBaseURL+"/oauth/access_token?"+shortParams.Encode())
+	body, err := s.post(ctx, s.apiBaseURL+"/oauth/access_token", shortParams)
 	if err != nil {
 		return "", 0, fmt.Errorf("exchange code: %w", err)
 	}
@@ -134,12 +138,11 @@ func (s *InstagramService) ExchangeCodeForLongLivedToken(ctx context.Context, co
 	}
 
 	longParams := url.Values{
-		"grant_type":        {"fb_exchange_token"},
-		"client_id":         {appID},
-		"client_secret":     {appSecret},
-		"fb_exchange_token": {shortToken.AccessToken},
+		"grant_type":   {"ig_exchange_token"},
+		"client_secret": {appSecret},
+		"access_token": {shortToken.AccessToken},
 	}
-	body2, err := s.get(ctx, s.graphBaseURL+"/oauth/access_token?"+longParams.Encode())
+	body2, err := s.get(ctx, s.graphBaseURL+"/access_token?"+longParams.Encode())
 	if err != nil {
 		return "", 0, fmt.Errorf("exchange long-lived token: %w", err)
 	}

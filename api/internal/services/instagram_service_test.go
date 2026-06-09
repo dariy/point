@@ -41,26 +41,28 @@ func TestInstagram_ExchangeCodeForLongLivedToken_Success(t *testing.T) {
 	callCount := 0
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
-		if r.URL.Path != "/oauth/access_token" {
-			http.Error(w, "unexpected path", http.StatusBadRequest)
-			return
-		}
-		q := r.URL.Query()
-		switch callCount {
-		case 1:
-			// short-lived exchange
-			if q.Get("code") != "mycode" || q.Get("redirect_uri") != "https://example.com/callback" {
+		switch r.URL.Path {
+		case "/oauth/access_token":
+			// short-lived exchange (POST, authorization_code grant)
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "parse error", http.StatusBadRequest)
+				return
+			}
+			if r.FormValue("code") != "mycode" || r.FormValue("redirect_uri") != "https://example.com/callback" {
 				http.Error(w, "bad params", http.StatusBadRequest)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "short-token"})
-		case 2:
-			// long-lived exchange
-			if q.Get("grant_type") != "fb_exchange_token" || q.Get("fb_exchange_token") != "short-token" {
+		case "/access_token":
+			// long-lived exchange (GET, ig_exchange_token grant)
+			q := r.URL.Query()
+			if q.Get("grant_type") != "ig_exchange_token" || q.Get("access_token") != "short-token" {
 				http.Error(w, "bad params", http.StatusBadRequest)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "long-token", "expires_in": 5183944})
+		default:
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusBadRequest)
 		}
 	})
 
