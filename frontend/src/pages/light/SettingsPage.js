@@ -364,11 +364,15 @@ export default class SettingsPage extends Component {
     const defaultShare = settings["instagram_default_share"] === "true" || settings["instagram_default_share"] === true;
     const captionTemplate = escapeHtml(settings["instagram_caption_template"] ?? "{title}\n\n{excerpt}\n\n{tags}\n\n{link}");
 
+    const expiryText = igStatus?.token_expires_at
+      ? new Date(igStatus.token_expires_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+      : null;
+
     const connectionHtml = igStatus
       ? igStatus.connected
         ? `<div class="ig-connection ig-connected">
             <span class="ig-status-dot ig-status-dot--connected"></span>
-            <span>Connected as <strong>@${escapeHtml(igStatus.username)}</strong></span>
+            <span>Connected as <strong>@${escapeHtml(igStatus.username)}</strong>${expiryText ? `<span class="ig-token-expiry"> · Token expires ${escapeHtml(expiryText)}</span>` : ""}</span>
             <button id="ig-disconnect-btn" class="btn btn-danger btn-sm" type="button" ${igDisconnecting ? "disabled" : ""}>
               ${igDisconnecting ? "Disconnecting…" : "Disconnect"}
             </button>
