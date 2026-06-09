@@ -232,28 +232,44 @@ func (s *InstagramService) RefreshLongLivedToken(ctx context.Context) (string, i
 }
 
 // GetConnectedAccount returns the username, IG user ID, and account_type for the stored token.
+// Business Login returns a Facebook User token; the Instagram account is retrieved via
+// the connected Facebook Page using the /me/accounts endpoint.
 func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error) {
 	token, err := s.secret(ctx, "instagram_access_token")
 	if err != nil {
 		return "", "", "", err
 	}
 	params := url.Values{
-		"fields":       {"user_id,username,account_type"},
+		"fields":       {"instagram_business_account{id,username,account_type}"},
 		"access_token": {token},
 	}
-	body, err := s.get(ctx, s.graphBaseURL+"/me?"+params.Encode())
+	body, err := s.get(ctx, s.graphBaseURL+"/me/accounts?"+params.Encode())
 	if err != nil {
 		return "", "", "", fmt.Errorf("get connected account: %w", err)
 	}
 	var result struct {
-		UserID      json.Number `json:"user_id"`
-		Username    string      `json:"username"`
-		AccountType string      `json:"account_type"`
+		Data []struct {
+			InstagramBusinessAccount *struct {
+				ID          json.Number `json:"id"`
+				Username    string      `json:"username"`
+				AccountType string      `json:"account_type"`
+			} `json:"instagram_business_account"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", "", "", fmt.Errorf("decode account response: %w", err)
 	}
-	return result.Username, result.UserID.String(), result.AccountType, nil
+	for _, page := range result.Data {
+		if page.InstagramBusinessAccount != nil {
+			acc := page.InstagramBusinessAccount
+			at := acc.AccountType
+			if at == "" {
+				at = "BUSINESS"
+			}
+			return acc.Username, acc.ID.String(), at, nil
+		}
+	}
+	return "", "", "", fmt.Errorf("get connected account: no Instagram Business Account linked to your Facebook Pages")
 }
 
 // CreateImageContainer creates a single-image media container on Instagram.

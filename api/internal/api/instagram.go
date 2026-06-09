@@ -17,7 +17,7 @@ import (
 
 // instagramConnector is the subset of InstagramService used by this handler.
 type instagramConnector interface {
-	ExchangeShortLivedForLongLived(ctx context.Context, shortLivedToken string) (string, int64, error)
+	ExchangeCodeForLongLivedToken(ctx context.Context, code, redirectURI string) (string, string, int64, error)
 	GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error)
 }
 
@@ -62,7 +62,7 @@ func (h *InstagramHandler) Connect(c echo.Context) error {
 		"redirect_uri":  {appURL + "/api/instagram/callback"},
 		"state":         {state},
 		"scope":         {"instagram_basic,instagram_content_publish,pages_read_engagement,business_management,pages_show_list"},
-		"response_type": {"token"},
+		"response_type": {"code"},
 	}
 	return c.Redirect(http.StatusFound, "https://www.facebook.com/dialog/oauth?"+params.Encode())
 }
@@ -76,10 +76,10 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "OAuth denied: "+errMsg)
 	}
 
-	accessToken := c.QueryParam("access_token")
+	code := c.QueryParam("code")
 	state := c.QueryParam("state")
-	if accessToken == "" || state == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing access_token or state parameter")
+	if code == "" || state == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing code or state parameter")
 	}
 
 	storedState, _ := h.settings.GetSecret(ctx, "instagram_oauth_state")
@@ -89,8 +89,9 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 	_ = h.settings.DeleteSecret(ctx, "instagram_oauth_state")
 
 	appURL := strings.TrimRight(strings.TrimSpace(h.cfg.AppURL), "/")
+	redirectURI := appURL + "/api/instagram/callback"
 
-	token, expiresIn, err := h.instagram.ExchangeShortLivedForLongLived(ctx, accessToken)
+	token, _, expiresIn, err := h.instagram.ExchangeCodeForLongLivedToken(ctx, code, redirectURI)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "token exchange failed: "+err.Error())
 	}

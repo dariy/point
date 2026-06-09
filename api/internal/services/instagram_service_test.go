@@ -217,11 +217,22 @@ func TestInstagram_RefreshLongLivedToken_APIError(t *testing.T) {
 
 func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/me" {
-			http.Error(w, "unexpected path", http.StatusBadRequest)
+		if r.URL.Path != "/me/accounts" {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusBadRequest)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"user_id": "999", "username": "testuser", "account_type": "BUSINESS"})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{
+					"id": "page123",
+					"instagram_business_account": map[string]any{
+						"id":           "999",
+						"username":     "testuser",
+						"account_type": "BUSINESS",
+					},
+				},
+			},
+		})
 	})
 
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
@@ -238,6 +249,20 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 	}
 	if accountType != "BUSINESS" {
 		t.Errorf("accountType = %q, want %q", accountType, "BUSINESS")
+	}
+}
+
+func TestInstagram_GetConnectedAccount_NoIGAccount(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Page exists but has no instagram_business_account linked
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"id": "page123"}},
+		})
+	})
+	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
+	_, _, _, err := svc.GetConnectedAccount(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no Instagram Business Account") {
+		t.Errorf("expected no-account error, got %v", err)
 	}
 }
 
