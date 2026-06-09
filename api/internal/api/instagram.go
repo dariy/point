@@ -18,7 +18,7 @@ import (
 // instagramConnector is the subset of InstagramService used by this handler.
 type instagramConnector interface {
 	ExchangeCodeForLongLivedToken(ctx context.Context, code, redirectURI string) (string, string, int64, error)
-	GetConnectedAccount(ctx context.Context) (username, igUserID string, err error)
+	GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error)
 }
 
 type InstagramHandler struct {
@@ -99,12 +99,19 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 	_ = h.settings.SetSecret(ctx, "instagram_access_token", token)
 	_ = h.settings.SetSecret(ctx, "instagram_token_expires_at", expiresAt)
 
-	username, _, err := h.instagram.GetConnectedAccount(ctx)
+	username, _, accountType, err := h.instagram.GetConnectedAccount(ctx)
 	if err != nil {
 		_ = h.settings.DeleteSecret(ctx, "instagram_access_token")
 		_ = h.settings.DeleteSecret(ctx, "instagram_token_expires_at")
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fetch Instagram account: "+err.Error())
 	}
+	
+	if accountType == "PERSONAL" {
+		_ = h.settings.DeleteSecret(ctx, "instagram_access_token")
+		_ = h.settings.DeleteSecret(ctx, "instagram_token_expires_at")
+		return c.Redirect(http.StatusFound, appURL+"/light/settings?error=instagram_personal#instagram")
+	}
+
 	_ = h.settings.SetSecret(ctx, "instagram_user_id", userID)
 	_ = h.settings.SetSecret(ctx, "instagram_username", username)
 

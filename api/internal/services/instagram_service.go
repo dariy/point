@@ -201,11 +201,11 @@ func (s *InstagramService) RefreshLongLivedToken(ctx context.Context) (string, i
 	return resp.AccessToken, resp.ExpiresIn, nil
 }
 
-// GetConnectedAccount returns the username and IG user ID for the stored token.
-func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, igUserID string, err error) {
+// GetConnectedAccount returns the username, IG user ID, and account_type for the stored token.
+func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error) {
 	token, err := s.secret(ctx, "instagram_access_token")
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	params := url.Values{
 		"fields":       {"user_id,username,account_type"},
@@ -213,16 +213,17 @@ func (s *InstagramService) GetConnectedAccount(ctx context.Context) (username, i
 	}
 	body, err := s.get(ctx, s.graphBaseURL+"/me?"+params.Encode())
 	if err != nil {
-		return "", "", fmt.Errorf("get connected account: %w", err)
+		return "", "", "", fmt.Errorf("get connected account: %w", err)
 	}
 	var result struct {
-		UserID   json.Number `json:"user_id"`
-		Username string      `json:"username"`
+		UserID      json.Number `json:"user_id"`
+		Username    string      `json:"username"`
+		AccountType string      `json:"account_type"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", "", fmt.Errorf("decode account response: %w", err)
+		return "", "", "", fmt.Errorf("decode account response: %w", err)
 	}
-	return result.Username, result.UserID.String(), nil
+	return result.Username, result.UserID.String(), result.AccountType, nil
 }
 
 // CreateImageContainer creates a single-image media container on Instagram.

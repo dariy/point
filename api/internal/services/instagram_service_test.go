@@ -175,12 +175,12 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 			http.Error(w, "unexpected path", http.StatusBadRequest)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"user_id": "999", "username": "testuser"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"user_id": "999", "username": "testuser", "account_type": "BUSINESS"})
 	})
 
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "tok"}, handler)
 
-	username, igUserID, err := svc.GetConnectedAccount(context.Background())
+	username, igUserID, accountType, err := svc.GetConnectedAccount(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -189,6 +189,9 @@ func TestInstagram_GetConnectedAccount_Success(t *testing.T) {
 	}
 	if igUserID != "999" {
 		t.Errorf("igUserID = %q, want %q", igUserID, "999")
+	}
+	if accountType != "BUSINESS" {
+		t.Errorf("accountType = %q, want %q", accountType, "BUSINESS")
 	}
 }
 
@@ -201,7 +204,7 @@ func TestInstagram_GetConnectedAccount_APIError(t *testing.T) {
 	})
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
 
-	_, _, err := svc.GetConnectedAccount(context.Background())
+	_, _, _, err := svc.GetConnectedAccount(context.Background())
 	if err == nil {
 		t.Error("expected error")
 	}
@@ -471,7 +474,7 @@ func TestInstagram_APIErrorParsing_WithUserMsg(t *testing.T) {
 	})
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
 
-	_, _, err := svc.GetConnectedAccount(context.Background())
+	_, _, _, err := svc.GetConnectedAccount(context.Background())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -495,7 +498,7 @@ func TestInstagram_APIErrorParsing_WithoutUserMsg(t *testing.T) {
 	})
 	svc := newTestInstagram(t, map[string]string{"instagram_access_token": "bad"}, handler)
 
-	_, _, err := svc.GetConnectedAccount(context.Background())
+	_, _, _, err := svc.GetConnectedAccount(context.Background())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
