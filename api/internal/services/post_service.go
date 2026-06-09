@@ -821,7 +821,6 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 	return res
 }
 
-
 func (s *PostService) updateInstagramStatus(ctx context.Context, postID int64, status, mediaID, errMsg string) error {
 	var publishedAt sql.NullTime
 	if status == "published" {

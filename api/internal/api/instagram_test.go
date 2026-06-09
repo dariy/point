@@ -88,8 +88,8 @@ func TestInstagramHandler_Connect_RedirectsToMeta(t *testing.T) {
 		t.Fatalf("expected 302, got %d", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	if !strings.Contains(loc, "www.facebook.com/v25.0/dialog/oauth") {
-		t.Errorf("redirect should point to Facebook OAuth, got: %s", loc)
+	if !strings.Contains(loc, "www.facebook.com/dialog/oauth") {
+		t.Errorf("redirect should point to Meta OAuth, got: %s", loc)
 	}
 	if !strings.Contains(loc, "client_id=APP123") {
 		t.Errorf("redirect should include client_id, got: %s", loc)
