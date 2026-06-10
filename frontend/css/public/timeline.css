@@ -9,7 +9,7 @@
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
     overflow: hidden;
-    touch-action: none;
+    touch-action: pan-y;
 }
 
 .timeline-track-wrapper {

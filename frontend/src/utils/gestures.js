@@ -182,7 +182,7 @@ export class GestureController {
         }
         this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_H;
       } else {
-        this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_V;
+        this._state = STATE.SWIPING_V;
       }
     }
     if (this._state === STATE.SWIPING_H || this._state === STATE.SWIPING_V) {

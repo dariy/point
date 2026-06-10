@@ -134,25 +134,13 @@ export class Timeline extends Component {
     const trackWrapper = this.$(".timeline-track-wrapper");
     if (!trackWrapper) return;
 
-    // Stop touch events from bubbling to parent gesture controllers (page swipe navigation).
-    trackWrapper.addEventListener("touchstart", (e) => e.stopPropagation(), {
-      passive: true,
-    });
-    trackWrapper.addEventListener("touchmove", (e) => e.stopPropagation(), {
-      passive: true,
-    });
-
     let touchDragged = false;
 
     this._gestureController = new GestureController(trackWrapper, {
       onPanMove: (dx, dy) => {
         touchDragged = true;
         this._isDragging = true;
-        if (Math.abs(dy) > Math.abs(dx)) {
-          this._applyVerticalZoom(dy);
-        } else {
-          this._onPan(dx);
-        }
+        this._onPan(dx);
       },
       onPinchMove: (scale, cx) => this._onZoom(scale, cx),
       onTap: (x, y) => this._onTap(x, y),
@@ -163,11 +151,7 @@ export class Timeline extends Component {
         this._swipeDxBase = dx;
         const dyDelta = dy - (this._swipeDyBase || 0);
         this._swipeDyBase = dy;
-        if (Math.abs(dy) > Math.abs(dx)) {
-          this._applyVerticalZoom(dyDelta);
-        } else {
-          this._onPan(dxDelta);
-        }
+        this._onPan(dxDelta);
       },
       onSwipeCancel: () => {
         this._swipeDxBase = 0;
@@ -251,11 +235,7 @@ export class Timeline extends Component {
       }
       lastX = e.clientX;
       lastY = e.clientY;
-      if (Math.abs(dy) > Math.abs(dx)) {
-        this._applyVerticalZoom(dy);
-      } else {
-        this._onPan(dx);
-      }
+      this._onPan(dx);
     };
 
     this._onMouseUp = () => {
@@ -740,15 +720,6 @@ export class Timeline extends Component {
       to = item.is_decade ? from + 9 : from;
     }
     this.props.onRangeChange({ from, to, source: "center" });
-  }
-
-  _applyVerticalZoom(dy) {
-    if (Math.abs(dy) < 0.5) return;
-    // down (dy > 0) = zoom in, up (dy < 0) = zoom out
-    const scaleDelta = Math.exp(dy * 0.015);
-    const track = this.$(".timeline-track");
-    const cx = track ? track.clientWidth / 2 : 0;
-    this._onZoom(scaleDelta, cx);
   }
 
   _computeMaxZoom() {
