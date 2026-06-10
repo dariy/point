@@ -40,6 +40,11 @@ describe('PostEditPage', () => {
         dispatchEvent: () => {}
     };
 
+    global.localStorage = {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {}
+    };
     const mod = await import('../src/pages/light/PostEditPage.js');
     PostEditPage = mod.default;
   });
