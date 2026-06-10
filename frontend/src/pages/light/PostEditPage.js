@@ -128,6 +128,7 @@ export default class PostEditPage extends Component {
       editorMode: "visual",
       igStatus: null,
       maximizedField: null, // 'content' | 'css' | 'excerpt' | 'title' | 'tags'
+      detailsOpen: false,
     };
     this._tags = [];
     this._nodes = []; // canonical node list for visual mode
@@ -239,42 +240,11 @@ export default class PostEditPage extends Component {
     return `
             <div class="editor-main">
               <div class="title-row">
-                <input type="checkbox" id="featured-check" style="display:none"
-                       ${featured ? "checked" : ""}>
-                <button id="featured-toggle" type="button"
-                        class="featured-btn${featured ? " is-featured" : ""}"
-                        title="${featured ? "Unmark as featured" : "Mark as featured"}"
-                        ${anyActionInProgress ? "disabled" : ""}>
-                  ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
-                </button>
-                <select id="status-select" class="status-select badge-${escapeHtml(status)}"
-                        ${anyActionInProgress ? "disabled" : ""}>
-                  ${statusOpts}
-                </select>
                 <div class="title-input-wrapper">
                   <input type="text" id="title-input" class="form-input editor-title"
                          placeholder="Post title" value="${title}" required>
                   ${aiBtn("title")}
                 </div>
-              </div>
-
-              <div class="schedule-row" id="schedule-row"
-                   style="display:${status === "scheduled" ? "flex" : "none"}">
-                <div class="schedule-input-wrapper">
-                  <input type="datetime-local" id="schedule-input"
-                         class="form-input schedule-at-input"
-                         value="${toDatetimeLocal(p.scheduled_at || "")}"
-                         ${anyActionInProgress ? "disabled" : ""}>
-                  <span class="schedule-input-hint"
-                        id="schedule-hint"
-                        style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
-                </div>
-              </div>
-
-              <div class="slug-row">
-                <span class="slug-prefix">/posts/</span>
-                <input type="text" id="slug-input" class="form-input editor-slug"
-                       placeholder="post-slug" value="${slug}" spellcheck="false">
               </div>
 
               <div class="tags-row">
@@ -284,21 +254,65 @@ export default class PostEditPage extends Component {
                 </div>
               </div>
 
-              <div class="form-group excerpt-row">
-                <label class="form-label" for="excerpt-editor">Excerpt</label>
-                <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}"
-                          rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
-                ${aiBtn("excerpt")}
-              </div>
-
               <div class="form-group">
                 ${modeToggle}
                 ${contentArea}
               </div>
 
-              <details class="form-group advanced-options-details">
-                <summary class="advanced-options-summary">Advanced options</summary>
-                <div class="advanced-options-body">
+              <details class="form-group editor-details-disclosure" id="editor-details" ${this.state.detailsOpen ? 'open' : ''}>
+                <summary class="editor-details-summary">Post Details</summary>
+                <div class="editor-details-body">
+                  <div class="details-split-row">
+                    <div class="form-group">
+                      <label class="form-label" for="status-select">Status</label>
+                      <select id="status-select" class="status-select badge-${escapeHtml(status)}"
+                              ${anyActionInProgress ? "disabled" : ""}>
+                        ${statusOpts}
+                      </select>
+                    </div>
+                    <div class="form-group featured-toggle-group">
+                      <label class="form-label">Featured</label>
+                      <button id="featured-toggle" type="button"
+                              class="featured-btn${featured ? " is-featured" : ""}"
+                              title="${featured ? "Unmark as featured" : "Mark as featured"}"
+                              ${anyActionInProgress ? "disabled" : ""}>
+                        ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
+                      </button>
+                      <input type="checkbox" id="featured-check" style="display:none"
+                             ${featured ? "checked" : ""}>
+                    </div>
+                  </div>
+
+                  <div class="schedule-row" id="schedule-row"
+                       style="display:${status === "scheduled" ? "flex" : "none"}">
+                    <div class="schedule-input-wrapper">
+                      <label class="form-label" for="schedule-input">Schedule</label>
+                      <input type="datetime-local" id="schedule-input"
+                             class="form-input schedule-at-input"
+                             value="${toDatetimeLocal(p.scheduled_at || "")}"
+                             ${anyActionInProgress ? "disabled" : ""}>
+                      <span class="schedule-input-hint"
+                            id="schedule-hint"
+                            style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
+                    </div>
+                  </div>
+
+                  <div class="slug-row">
+                    <label class="form-label" for="slug-input">Slug</label>
+                    <div class="slug-input-wrapper">
+                      <span class="slug-prefix">/posts/</span>
+                      <input type="text" id="slug-input" class="form-input editor-slug"
+                             placeholder="post-slug" value="${slug}" spellcheck="false">
+                    </div>
+                  </div>
+
+                  <div class="form-group excerpt-row">
+                    <label class="form-label" for="excerpt-editor">Excerpt</label>
+                    <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}"
+                              rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+                    ${aiBtn("excerpt")}
+                  </div>
+
                   <div class="form-group">
                     <label class="form-label" for="immersive-mode-select">Immersive mode</label>
                     <select id="immersive-mode-select" class="form-input immersive-mode-select">
@@ -307,10 +321,12 @@ export default class PostEditPage extends Component {
                       <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
                     </select>
                   </div>
+
                   <div class="form-group">
                     <label class="form-label" for="css-editor">Custom CSS</label>
                     <div id="css-editor-mount"></div>
                   </div>
+
                   ${igStatus?.enabled ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
                 </div>
               </details>
@@ -363,6 +379,11 @@ export default class PostEditPage extends Component {
     });
 
     if (this.state.loading || this.state.error) return;
+
+    // Persist details disclosure state
+    this.container.querySelector("#editor-details")?.addEventListener("toggle", (e) => {
+      this.state.detailsOpen = e.target.open;
+    });
 
     // Media picker dialog (created once, reused across open/close cycles)
     if (!this._mediaPicker) {
@@ -517,6 +538,10 @@ export default class PostEditPage extends Component {
 
     // If navigated from the posts list with ?openSchedule=1, show and focus the date picker
     if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
+      if (this.container.querySelector("#editor-details")) {
+          this.container.querySelector("#editor-details").open = true;
+          this.state.detailsOpen = true;
+      }
       scheduleRow.style.display = "flex";
       statusSelect.value = "scheduled";
       statusSelect.className = "status-select badge-scheduled";
