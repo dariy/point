@@ -95,8 +95,8 @@ export class Timeline extends Component {
             <div class="timeline-center-indicator"></div>
             <div class="timeline-pills-mount"></div>
           </div>
-          <!--button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button-->
-          <!--button class="timeline-nav-btn next" aria-label="Scroll right">›</button-->
+          <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
+          <button class="timeline-nav-btn next" aria-label="Scroll right">›</button>
         </div>
       </div>
     `;

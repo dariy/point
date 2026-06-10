@@ -212,9 +212,22 @@
         opacity var(--transition-fast);
 }
 
-.timeline-nav-btn.visible {
+/* Desktop: fade in on container hover when visible */
+.timeline-container:hover .timeline-nav-btn.visible {
     opacity: 1;
     pointer-events: auto;
+}
+
+/* Mobile: always visible when overflowing, smaller size */
+@media (max-width: 48em), (pointer: coarse) {
+    .timeline-nav-btn {
+        width: 28px;
+        height: 28px;
+    }
+    .timeline-nav-btn.visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 .timeline-nav-btn:hover {
