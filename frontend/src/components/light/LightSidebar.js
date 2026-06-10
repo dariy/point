@@ -145,8 +145,6 @@ export class LightSidebar extends Component {
       const next = current === 'dark' ? 'light' : 'dark';
       store.set('theme', next);
     });
-
-    this._setupMobileToggle();
   }
 
   beforeUnmount() {
@@ -154,53 +152,5 @@ export class LightSidebar extends Component {
     if (overlay) {
       overlay.classList.remove('active');
     }
-  }
-
-  _setupMobileToggle() {
-    // Find the sibling .light-header within the same .light-layout.
-    const layout = this.container.closest('.light-layout') || this.container.parentElement;
-    const header = layout?.querySelector('.light-header');
-    if (!header) return;
-
-    // Inject hamburger button only once.
-    if (!header.querySelector('.sidebar-toggle-btn')) {
-      const hamBtn = document.createElement('button');
-      hamBtn.className = 'sidebar-toggle-btn';
-      hamBtn.type = 'button';
-      hamBtn.setAttribute('aria-label', 'Toggle navigation');
-      hamBtn.innerHTML = HAMBURGER_SVG;
-      header.insertBefore(hamBtn, header.firstChild);
-    }
-
-    // Create overlay if not yet present.
-    let overlay = document.querySelector('.sidebar-overlay');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.className = 'sidebar-overlay';
-      document.body.appendChild(overlay);
-    }
-
-    const sidebar = this.$('.light-sidebar');
-    const toggleOpen = () => {
-      const isOpen = sidebar.classList.contains('open');
-      sidebar.classList.toggle('open', !isOpen);
-      overlay.classList.toggle('active', !isOpen);
-    };
-    const close = () => {
-      sidebar.classList.remove('open');
-      overlay.classList.remove('active');
-    };
-
-    // Re-bind each time (component may re-render after navigation).
-    const hamBtn = header.querySelector('.sidebar-toggle-btn');
-    if (hamBtn) hamBtn.onclick = toggleOpen;
-    overlay.onclick = close;
-
-    // Close on any navigation link within the sidebar.
-    this.$$('a').forEach(a => {
-      if (!a.hasAttribute('data-external') && a.target !== '_blank') {
-        a.addEventListener('click', close);
-      }
-    });
   }
 }

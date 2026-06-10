@@ -5,6 +5,7 @@
  */
 
 import { LightSidebar } from './LightSidebar.js';
+import { AdminBottomBar } from './AdminBottomBar.js';
 import { store } from '../../store.js';
 import { syncQueue } from '../../utils/sync.js';
 import { setupHeaderCompact } from '../../utils/headerCompact.js';
@@ -35,6 +36,7 @@ export function adminLayoutTemplate({ title = 'Admin', actions = '', banner = ''
         ${banner}
         <main class="light-content">${content}</main>
       </div>
+      <div id="bottom-bar-mount"></div>
     </div>`;
 }
 
@@ -45,18 +47,26 @@ export function adminLayoutTemplate({ title = 'Admin', actions = '', banner = ''
 export function setupAdminLayout(component, { currentPath, publicUrl }) {
   component._cleanupHeaderCompact = setupHeaderCompact(component.$('.light-header'));
   
+  const onLogout = async () => {
+    try {
+      const { logout } = await import('../../api/auth.js');
+      await logout();
+    } catch { /* ignore */ }
+    store.set('user', null);
+    navigate('/', { replace: true });
+  };
+
   component.mountChild(LightSidebar, '#sidebar-mount', {
     currentPath,
     publicUrl,
     user: store.get('user') || {},
-    onLogout: async () => {
-      try {
-        const { logout } = await import('../../api/auth.js');
-        await logout();
-      } catch { /* ignore */ }
-      store.set('user', null);
-      navigate('/', { replace: true });
-    },
+    onLogout,
+  });
+
+  component.mountChild(AdminBottomBar, '#bottom-bar-mount', {
+    currentPath,
+    publicUrl,
+    onLogout,
   });
 
   component.$('#sync-pill-btn')?.addEventListener('click', () => onSyncPillClick());
