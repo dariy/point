@@ -11,65 +11,22 @@
     }
 }
 
-/* Sidebar overlay (hidden by default; shown on mobile when sidebar is open) */
-.sidebar-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 149; /* below sidebar (150) */
-    background: var(--color-black-alpha-40);
-}
-
-.sidebar-overlay.active {
-    display: block;
-}
-
-/* Hamburger button — hidden on desktop, visible on mobile */
-.sidebar-toggle-btn {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: var(--sidebar-toggle-btn-width);
-    height: var(--sidebar-toggle-btn-height);
-    padding: 0;
-    background: none;
-    border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--border-radius);
-    color: var(--text-primary);
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
-.sidebar-toggle-btn:hover {
-    background: var(--surface-hover);
-}
-
 @media (max-width: 48em) {
     :root {
         --sidebar-width: 0;
     }
 
-    .sidebar-toggle-btn {
-        display: flex;
-    }
-
     .light-sidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        z-index: 150;
-        transform: translateX(-100%);
-        width: var(--light-sidebar-width);
-        transition: transform var(--transition-normal);
-    }
-
-    .light-sidebar.open {
-        transform: translateX(0);
+        display: none;
     }
 
     .light-main {
         margin-left: 0;
+        padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0));
+    }
+
+    .admin-bottom-bar {
+        display: flex;
     }
 
     .light-content {

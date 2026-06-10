@@ -162,6 +162,12 @@
     cursor: pointer;
 }
 
+@media (pointer: coarse) {
+    .post-card-edit-btn {
+        opacity: 0.5;
+    }
+}
+
 .post-card:hover .post-card-edit-btn {
     opacity: 1;
 }
