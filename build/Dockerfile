@@ -37,6 +37,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY frontend/ ./frontend/
 RUN npx --yes esbuild@0.28.0 frontend/src/app.js \
     --bundle --minify --format=esm \
+    "--external:/assets/vendor/*" \
     --outfile=frontend/js/app.js
 
 # Bundle CSS modules into main.css (public) and light.css (admin)

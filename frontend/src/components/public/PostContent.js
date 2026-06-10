@@ -29,6 +29,34 @@ import {
 } from "../../utils/gestures.js";
 import { getPostPageLocation } from "../../api/posts.js";
 
+const _prismLoading = new Map();
+const _LANG_DEPS = {
+  javascript: ["clike"],
+  typescript: ["clike", "javascript"],
+  go: ["clike"],
+  c: ["clike"],
+  cpp: ["clike", "c"],
+  java: ["clike"],
+  ruby: ["clike"],
+};
+
+async function _ensurePrismCore() {
+  if (window.Prism) return;
+  await import("/assets/vendor/prismjs/prism-core.js");
+}
+
+async function _loadPrismLang(lang) {
+  if (_prismLoading.has(lang)) return _prismLoading.get(lang);
+  const p = (async () => {
+    for (const dep of _LANG_DEPS[lang] ?? []) await _loadPrismLang(dep);
+    if (!window.Prism?.languages[lang]) {
+      await import(`/assets/vendor/prismjs/prism-${lang}.js`);
+    }
+  })();
+  _prismLoading.set(lang, p);
+  return p;
+}
+
 const MIN_SHOW_MS = 2000; // UI must be visible ≥ 2 s before click-to-hide works
 let _overlayHidden = false; // persists across post navigations
 
@@ -1072,6 +1100,8 @@ export class PostContent extends Component {
       return doc.documentElement;
     };
 
+    const toHighlight = [];
+
     body.querySelectorAll("pre").forEach((pre) => {
       const code = pre.querySelector("code");
       if (!code) return;
@@ -1094,7 +1124,19 @@ export class PostContent extends Component {
       });
 
       pre.appendChild(btn);
+
+      const m = code.className.match(/\blanguage-(\w+)/);
+      if (m) toHighlight.push({ code, lang: m[1] });
     });
+
+    if (toHighlight.length === 0) return;
+
+    (async () => {
+      await _ensurePrismCore();
+      const langs = [...new Set(toHighlight.map((x) => x.lang))];
+      await Promise.all(langs.map(_loadPrismLang));
+      toHighlight.forEach(({ code }) => window.Prism.highlightElement(code));
+    })();
   }
 
   _renderNav(prev, next) {

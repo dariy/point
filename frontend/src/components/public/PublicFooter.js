@@ -113,7 +113,7 @@ export class PublicFooter extends Component {
         <div class="footer-container">
           <div class="footer-content">
             <p class="footer-copyright">
-              <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>` : ""}
+              <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://point.darii.net" target="_blank" rel="noopener noreferrer">Point</a>` : ""}
             </p>
             ${centerSlot}
           </div>
