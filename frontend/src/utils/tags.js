@@ -275,7 +275,7 @@ export function renderTagStrip(postTags, tagIndex) {
   const visibleTags = (postTags || []).filter((t) => {
     if (!tagIndex) return true;           // navTags not loaded — show all
     const entry = tagIndex.get(t.slug);
-    return !entry || entry.isLeaf;        // not in tree → treat as leaf
+    return entry && entry.isLeaf;         // must be in tree AND be a leaf
   });
   const tagsHtml = visibleTags.map((t) => renderTagLink(t)).join('');
   if (!tagsHtml) return '';
