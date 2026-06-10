@@ -60,6 +60,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/common/theme-toggle.css \
     "$CSS_DIR"/common/utilities.css \
     "$CSS_DIR"/common/login-overlay.css \
+    "$CSS_DIR"/common/prism.css \
     "$CSS_DIR"/public/layout.css \
     "$CSS_DIR"/public/header.css \
     "$CSS_DIR"/public/header-tags.css \
