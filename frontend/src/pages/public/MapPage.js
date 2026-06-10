@@ -100,7 +100,10 @@ export default class MapPage extends Component {
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
           <main class="site-main site-main--map">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <div class="map-fetch-error" role="alert">
+              <p class="map-fetch-error__message">${escapeHtml(error)}</p>
+              <button class="btn btn-primary btn-sm map-fetch-error__retry" id="map-retry-btn" type="button">Try again</button>
+            </div>
           </main>
           <div id="footer-mount"></div>
         </div>`;
@@ -156,6 +159,13 @@ export default class MapPage extends Component {
         mode: "filter",
         initialRange,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
+    }
+
+    const retryBtn = this.$("#map-retry-btn");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => {
+        this.setState({ loading: true, error: null });
       });
     }
 
