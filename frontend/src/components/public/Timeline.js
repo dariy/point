@@ -188,13 +188,43 @@ export class Timeline extends Component {
       },
     });
 
+    let wheelHintTimeout = null;
+
     trackWrapper.addEventListener(
       "wheel",
       (e) => {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? 1.1 : 1 / 1.1;
-        const rect = trackWrapper.getBoundingClientRect();
-        this._onZoom(delta, e.clientX - rect.left);
+        if (e.ctrlKey || e.metaKey) {
+          // Ctrl/Cmd + wheel = zoom
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? 1.1 : 1 / 1.1;
+          const rect = trackWrapper.getBoundingClientRect();
+          this._onZoom(delta, e.clientX - rect.left);
+          return;
+        }
+
+        if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+          // Shift + wheel or horizontal trackpad scroll = pan
+          e.preventDefault();
+          const panAmount = e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX;
+          this._onPan(-panAmount);
+          return;
+        }
+
+        // Plain vertical wheel passes through to scroll the page. Show hint.
+        if (Math.abs(e.deltaY) > 5) {
+          if (!this._zoomHint) {
+            this._zoomHint = document.createElement("div");
+            this._zoomHint.className = "timeline-zoom-hint";
+            this._zoomHint.textContent = "Use ⌘/Ctrl + scroll to zoom";
+            this.container.appendChild(this._zoomHint);
+          }
+          this._zoomHint.classList.add("visible");
+          
+          clearTimeout(wheelHintTimeout);
+          wheelHintTimeout = setTimeout(() => {
+            this._zoomHint.classList.remove("visible");
+          }, 1500);
+        }
       },
       { passive: false },
     );
