@@ -18,6 +18,12 @@
     cursor: grab;
 }
 
+@media (pointer: coarse) {
+    .timeline-track-wrapper {
+        height: 64px;
+    }
+}
+
 .timeline-track-wrapper::before,
 .timeline-track-wrapper::after {
     content: "";
@@ -107,6 +113,7 @@
 }
 
 .timeline-pill-btn {
+    position: relative;
     appearance: none;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
@@ -129,6 +136,18 @@
     align-items: center;
 }
 
+.timeline-pill-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+    width: 100%;
+    height: 100%;
+}
+
 .timeline-pill-btn:hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
@@ -147,6 +166,7 @@
 /* ── Clusters ─────────────────────────────────────────────────────────────── */
 
 .timeline-cluster-btn {
+    position: relative;
     appearance: none;
     background: var(--surface-card);
     border: var(--border-width) dashed var(--border-primary);
@@ -167,6 +187,18 @@
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.timeline-cluster-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+    width: 100%;
+    height: 100%;
 }
 
 .timeline-cluster-btn:hover {
