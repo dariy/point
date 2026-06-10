@@ -160,9 +160,8 @@ export function hideFlyout() { _hideFlyout(); }
 /**
  * Attach ancestor-flyout behaviour to all .tag-link elements in containerEl.
  *
- * First click on a tag with ancestors → show flyout listing ancestors.
- * Second click on the same tag       → navigate to the tag page.
- * Tags with no ancestors             → navigate normally on first click.
+ * One click = navigate everywhere. The flyout (if any) is shown on hover
+ * only. The flyout is hidden immediately on click.
  *
  * @param {HTMLElement} containerEl  Element containing .tag-link anchors.
  * @param {Map|null}    tagIndex     From buildTagIndex(). null = no hierarchy, links navigate directly.
@@ -202,26 +201,12 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
     }
 
     link.addEventListener('click', (e) => {
+      // One click = navigate everywhere.
+      // We still stop propagation so that clicking a tag on a card doesn't
+      // trigger the card's own click handler (e.g. opening the post).
       e.stopPropagation();
-      if (!ancestors.length) return; // no ancestors — navigate normally
-
       clearTimeout(_openTimer);
-      e.preventDefault();
-      // We don't stop propagation here so that parent components (like PostCard)
-      // can also react to the click (e.g. to reveal an image card overlay).
-
-      const flyoutOpenForThisLink =
-        _activeLink === link && _flyoutEl && !_flyoutEl.classList.contains('hidden');
-      const recentlyOpened = Date.now() - _flyoutShowTime < 300;
-      
-      if (flyoutOpenForThisLink && !recentlyOpened) {
-        _hideFlyout();
-        navigateFn(`/tags/${slug}`);
-      } else {
-        _hideFlyout();
-        _activeLink = link;
-        _showFlyout(link, ancestors, excludeEl);
-      }
+      _hideFlyout();
     });
   });
 

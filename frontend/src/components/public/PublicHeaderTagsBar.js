@@ -95,24 +95,15 @@ export class PublicHeaderTagsBar extends Component {
         }
       });
 
-      // Tapping/clicking the pill text:
-      //   closed → open the dropdown (preventDefault stops browser navigation)
-      //   open   → navigate to the tag page via SPA router
-      // Always calling e.preventDefault() and driving navigation explicitly
-      // avoids all iOS/Android touch-event race conditions.
+      // Tapping/clicking the pill text: always navigate immediately.
+      // To open the dropdown on touch, use the chevron toggle button.
       const headerLink = group.querySelector('.tag-group-header > .tag-link');
       if (headerLink) {
-        headerLink.addEventListener('click', (e) => {
-          e.preventDefault();
-          const recentlyOpened = Date.now() - (this._lastOpenTime || 0) < 300;
-          if (group.classList.contains('is-open') && !recentlyOpened) {
-            navigate(headerLink.getAttribute('href'));
-          } else {
-            clearTimeout(group._openTimer);
-            this._closeAllExcept(group);
-            group._openedByClick = true;
-            this._open(group);
-          }
+        headerLink.addEventListener('click', () => {
+          // One click = navigate everywhere.
+          // No preventDefault — let it navigate via natural <a> behavior
+          // (which the SPA router intercepts).
+          this._closeAll();
         });
       }
 
