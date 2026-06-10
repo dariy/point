@@ -9,16 +9,14 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, updateTag, deleteTag, recalculateCounts, reorderTag, geocodeTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
-import { logout } from '../../api/auth.js';
 import { getNavMenu } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
 import { EDIT_SVG, X_SVG, REFRESH_SVG, LOCK_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG } from '../../utils/icons.js';
-import { setupHeaderCompact } from '../../utils/headerCompact.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 
 export default class TagsManagerPage extends Component {
@@ -43,6 +41,28 @@ export default class TagsManagerPage extends Component {
   }
 
   render() {
+    const { view } = this.state;
+
+    const actions = `
+      <div class="tm-view-toggle">
+        <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${TREE_SVG}<span class="btn-label"> Tree</span></button>
+        <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG}<span class="btn-label"> List</span></button>
+      </div>
+      ${view === 'tree' ? `
+      <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">\u21c5<span class="btn-label"> Expand all</span></button>
+      <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">\u2012<span class="btn-label"> Collapse all</span></button>` : ''}
+      <button id="add-root-tag-btn" class="btn btn-primary" title="New Tag">${PLUS_SVG}<span class="btn-label"> New Tag</span></button>
+      <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${REFRESH_SVG}</button>
+    `;
+
+    return adminLayoutTemplate({
+      title: 'Tags',
+      actions,
+      content: this._renderContent()
+    });
+  }
+
+  _renderContent() {
     const { loading, error, tags, view } = this.state;
 
     let content;
@@ -57,32 +77,11 @@ export default class TagsManagerPage extends Component {
     }
 
     return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <h1>Tags</h1>
-            <div class="header-actions">
-              <div class="tm-view-toggle">
-                <button id="view-tree-btn" class="btn btn-sm${view === 'tree' ? ' btn-primary' : ' btn-secondary'}" title="Tree view">${TREE_SVG}<span class="btn-label"> Tree</span></button>
-                <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG}<span class="btn-label"> List</span></button>
-              </div>
-              ${view === 'tree' ? `
-              <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">\u21c5<span class="btn-label"> Expand all</span></button>
-              <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">\u2012<span class="btn-label"> Collapse all</span></button>` : ''}
-              <button id="add-root-tag-btn" class="btn btn-primary" title="New Tag">${PLUS_SVG}<span class="btn-label"> New Tag</span></button>
-              <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${REFRESH_SVG}</button>
-            </div>
-          </header>
-          <main class="light-content">
             <div class="card">
               <div class="card-body">
                 ${content}
               </div>
-            </div>
-          </main>
-        </div>
-      </div>`;
+            </div>`;
   }
 
   // === List view ===
@@ -175,7 +174,7 @@ export default class TagsManagerPage extends Component {
   _applyListFilter() {
     const q = (this._listSearch || '').trim().toLowerCase();
     const filterIds = this._listFilterParents.map(p => p.id);
-    this.$$('.tm-tag-row').forEach(row => {
+    this.container.querySelectorAll('.tm-tag-row').forEach(row => {
       const textMatch = !q ||
         row.dataset.name.includes(q) ||
         row.dataset.slug.includes(q) ||
@@ -187,7 +186,7 @@ export default class TagsManagerPage extends Component {
   }
 
   _updateFilterChips() {
-    const chips = this.$('#tm-filter-chips');
+    const chips = this.container.querySelector('#tm-filter-chips');
     if (!chips) return;
     chips.innerHTML = this._listFilterParents.map(p =>
       `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">\u00d7</span></button>`
@@ -204,13 +203,13 @@ export default class TagsManagerPage extends Component {
   }
 
   _syncClearBtn() {
-    const btn = this.$('.tm-clear-filters');
+    const btn = this.container.querySelector('.tm-clear-filters');
     const hasFilters = (this._listSearch || '') || this._listFilterParents.length > 0;
     if (btn) {
       btn.classList.toggle('hidden', !hasFilters);
     } else if (hasFilters) {
       // Re-render list to show the clear button
-      const listWrap = this.$('.tm-list-filter-bar');
+      const listWrap = this.container.querySelector('.tm-list-filter-bar');
       if (listWrap) {
         const searchRow = listWrap.querySelector('.tm-list-search-row');
         if (searchRow && !searchRow.querySelector('.tm-clear-filters')) {
@@ -228,11 +227,11 @@ export default class TagsManagerPage extends Component {
   _clearListFilters() {
     this._listSearch = '';
     this._listFilterParents = [];
-    const searchInput = this.$('.tm-list-search');
+    const searchInput = this.container.querySelector('.tm-list-search');
     if (searchInput) searchInput.value = '';
     this._updateFilterChips();
     this._applyListFilter();
-    const btn = this.$('.tm-clear-filters');
+    const btn = this.container.querySelector('.tm-clear-filters');
     if (btn) btn.classList.add('hidden');
   }
 
@@ -280,7 +279,7 @@ export default class TagsManagerPage extends Component {
     const sortFn = (a, b) => {
       if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
       if (a.sort_order != null) return -1;
-      if (b.sort_order != null) return 1;
+      if (a.sort_order != null) return 1;
       return a.name.localeCompare(b.name);
     };
 
@@ -360,40 +359,27 @@ export default class TagsManagerPage extends Component {
 
   mount() { super.mount(); this._load(); }
 
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
-  }
-
-  beforeUnmount() {
-    this._cleanupHeaderCompact?.();
-    this._closeModal();
-  }
-
   afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    setupTextareaMaximizer(this.container);
     const tagSlug = this.props?.params?.slug;
-
-    this.mountChild(LightSidebar, '#sidebar-mount', {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: '/light/tags',
       publicUrl: tagSlug ? `/tags/${tagSlug}` : '/',
-      user: store.get('user') || {},
-      onLogout: this._handleLogout.bind(this),
     });
+
+    setupTextareaMaximizer(this.container);
 
     if (this.state.loading || this.state.error) return;
 
-    this.$('#view-tree-btn')?.addEventListener('click', () => this.setState({ view: 'tree' }));
-    this.$('#view-list-btn')?.addEventListener('click', () => this.setState({ view: 'list' }));
-    this.$('#add-root-tag-btn')?.addEventListener('click', () => this._openModal());
-    this.$('#recalc-counts-btn')?.addEventListener('click', () => this._handleRecalc());
+    this.container.querySelector('#view-tree-btn')?.addEventListener('click', () => this.setState({ view: 'tree' }));
+    this.container.querySelector('#view-list-btn')?.addEventListener('click', () => this.setState({ view: 'list' }));
+    this.container.querySelector('#add-root-tag-btn')?.addEventListener('click', () => this._openModal());
+    this.container.querySelector('#recalc-counts-btn')?.addEventListener('click', () => this._handleRecalc());
 
     if (this.state.view === 'tree') {
-      this.$('#expand-all-btn')?.addEventListener('click', () => this._expandAll());
-      this.$('#collapse-all-btn')?.addEventListener('click', () => this._collapseAll());
+      this.container.querySelector('#expand-all-btn')?.addEventListener('click', () => this._expandAll());
+      this.container.querySelector('#collapse-all-btn')?.addEventListener('click', () => this._collapseAll());
 
-      this.$$('.tm-toggle').forEach(btn => {
+      this.container.querySelectorAll('.tm-toggle').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.id, 10);
           const expanded = new Set(this.state.expanded);
@@ -401,21 +387,21 @@ export default class TagsManagerPage extends Component {
           this.setState({ expanded });
         });
       });
-      this.$$('.add-child-btn').forEach(btn => {
+      this.container.querySelectorAll('.add-child-btn').forEach(btn => {
         btn.addEventListener('click', () => this._openModal(null, parseInt(btn.dataset.id, 10)));
       });
 
       this._bindDragAndDrop();
     }
 
-    this.$$('.edit-tag-btn').forEach(btn => {
+    this.container.querySelectorAll('.edit-tag-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         this._openModal(this.state.tags.find(t => t.id === id));
       });
     });
 
-    this.$$('.delete-tag-btn').forEach(btn => {
+    this.container.querySelectorAll('.delete-tag-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = parseInt(btn.dataset.id, 10);
         const tag = this.state.tags.find(t => t.id === id);
@@ -426,12 +412,12 @@ export default class TagsManagerPage extends Component {
     });
 
     if (this.state.view === 'list') {
-      this.$$('.tm-sortable-header').forEach(th => {
+      this.container.querySelectorAll('.tm-sortable-header').forEach(th => {
         th.addEventListener('click', () => this._handleSort(th.dataset.field));
       });
 
       // Search input
-      const searchInput = this.$('.tm-list-search');
+      const searchInput = this.container.querySelector('.tm-list-search');
       if (searchInput) {
         searchInput.focus();
         const len = searchInput.value.length;
@@ -444,7 +430,7 @@ export default class TagsManagerPage extends Component {
       }
 
       // Parent filter buttons (click a parent badge to add it as a filter chip)
-      this.$$('.tm-parent-filter-btn').forEach(btn => {
+      this.container.querySelectorAll('.tm-parent-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.parentId, 10);
           const name = btn.dataset.parentName;
@@ -458,13 +444,18 @@ export default class TagsManagerPage extends Component {
       });
 
       // Clear button
-      this.$('.tm-clear-filters')?.addEventListener('click', () => this._clearListFilters());
+      this.container.querySelector('.tm-clear-filters')?.addEventListener('click', () => this._clearListFilters());
 
       // Wire existing chips (rendered from state on initial load)
       this._updateFilterChips();
       // Re-apply filter immediately (restores after sort/view-switch)
       this._applyListFilter();
     }
+  }
+
+  beforeUnmount() {
+    this._cleanupAdminLayout?.();
+    this._closeModal();
   }
 
   _expandAll() {
@@ -495,10 +486,10 @@ export default class TagsManagerPage extends Component {
   // ── Drag and Drop ────────────────────────────────────────────────────────────
 
   _bindDragAndDrop() {
-    const rows = this.$$('.tm-row[draggable="true"]');
+    const rows = this.container.querySelectorAll('.tm-row[draggable="true"]');
 
     const clearIndicators = () => {
-      this.$$('.tm-row').forEach(r => r.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on'));
+      this.container.querySelectorAll('.tm-row').forEach(r => r.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on'));
     };
 
     // Return 'before' | 'on' | 'after' based on cursor position within row.
@@ -768,6 +759,7 @@ export default class TagsManagerPage extends Component {
           coordInput.value = '';
         } else if (isEdit) {
           // Geocode by tag name via Nominatim.
+          const { geocodeTag } = await import('../../api/tags.js');
           const result = await geocodeTag(f.id);
           latInput.value = result.latitude;
           lngInput.value = result.longitude;
@@ -1148,11 +1140,5 @@ export default class TagsManagerPage extends Component {
       const fresh = await getNavMenu();
       store.set('navTags', fresh.menu || []);
     } catch { /* ignore */ }
-  }
-
-  async _handleLogout() {
-    try { await logout(); } catch { /* ignore */ }
-    store.set('user', null);
-    navigate('/', { replace: true });
   }
 }

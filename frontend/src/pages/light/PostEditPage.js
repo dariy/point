@@ -10,7 +10,7 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { LightSidebar } from "../../components/light/LightSidebar.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.js";
 import { CssEditor } from "../../components/light/CssEditor.js";
@@ -33,12 +33,10 @@ import {
 } from "../../api/media.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
-import { logout } from "../../api/auth.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHECK_SVG, X_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
-import { setupHeaderCompact } from "../../utils/headerCompact.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 
 const AUTOSAVE_MS = 30_000;
@@ -145,6 +143,46 @@ export default class PostEditPage extends Component {
   }
 
   render() {
+    const { isNew, post, loading } = this.state;
+    if (loading) return adminLayoutTemplate({ title: isNew ? "New Post" : "Edit Post", content: `<div class="loading-spinner" aria-label="Loading…"></div>` });
+
+    const analyzing = this._analyzing;
+    const { saving, deleting, generatingPreview, publishingToInstagram, analyzingField } = this.state;
+    const anyActionInProgress =
+      saving || analyzing || deleting || generatingPreview || publishingToInstagram || !!analyzingField;
+
+    const saveLabel = saving ? "Saving…" : "Save";
+    const analyzeLabel = analyzing ? "Analyzing…" : "Analyze";
+
+    const actions = `
+      ${
+        !isNew
+          ? `
+        <button id="delete-btn" class="btn btn-danger" type="button"
+                title="Delete post" ${anyActionInProgress ? "disabled" : ""}>${TRASH_SVG}<span class="btn-label">Delete</span></button>
+        <button id="preview-link-btn" class="btn btn-secondary" type="button"
+                title="Generate a shareable preview link (7 days)"
+                ${anyActionInProgress ? "disabled" : ""}>${LINK_SVG}<span class="btn-label">${generatingPreview ? "Copying…" : "Preview link"}</span></button>
+      `
+          : ""
+      }
+      <button id="analyze-btn" class="btn btn-secondary" type="button"
+              title="${escapeHtml(analyzeLabel)}"
+              ${anyActionInProgress ? "disabled" : ""}>${SPARKLE_SVG}<span class="btn-label">${escapeHtml(analyzeLabel)}</span></button>
+      <button id="save-btn" class="btn btn-primary" type="button"
+              title="${escapeHtml(saveLabel)}"
+              ${anyActionInProgress ? "disabled" : ""}>${CHECK_SVG}<span class="btn-label">${escapeHtml(saveLabel)}</span></button>
+      <a href="/light/posts" class="btn btn-secondary" title="Cancel">${X_SVG}<span class="btn-label">Cancel</span></a>
+    `;
+
+    return adminLayoutTemplate({
+      title: isNew ? "New Post" : "Edit Post",
+      actions,
+      content: this._renderContent()
+    });
+  }
+
+  _renderContent() {
     const {
       loading,
       error,
@@ -161,31 +199,8 @@ export default class PostEditPage extends Component {
     const anyActionInProgress =
       saving || analyzing || deleting || generatingPreview || publishingToInstagram || !!analyzingField;
 
-    if (loading) {
-      return `
-        <div class="light-layout">
-          <div id="sidebar-mount"></div>
-          <div class="light-main">
-            <header class="light-header"><h1>${isNew ? "New Post" : "Edit Post"}</h1></header>
-            <main class="light-content">
-              <div class="loading-spinner" aria-label="Loading…"></div>
-            </main>
-          </div>
-        </div>`;
-    }
-
-    if (error) {
-      return `
-        <div class="light-layout">
-          <div id="sidebar-mount"></div>
-          <div class="light-main">
-            <header class="light-header"><h1>Error</h1></header>
-            <main class="light-content">
-              <p class="error-state">${escapeHtml(error)}</p>
-            </main>
-          </div>
-        </div>`;
-    }
+    if (loading) return `<div class="loading-spinner" aria-label="Loading…"></div>`;
+    if (error) return `<p class="error-state">${escapeHtml(error)}</p>`;
 
     const p = post || {};
     const title = escapeHtml(p.title || "");
@@ -201,8 +216,6 @@ export default class PostEditPage extends Component {
       )
       .join("");
 
-    const saveLabel = saving ? "Saving…" : "Save";
-    const analyzeLabel = analyzing ? "Analyzing…" : "Analyze";
     const aiBtnDisabled = anyActionInProgress;
     const aiBtn = (field) =>
       `<button class="field-ai-btn" data-field="${field}" type="button"
@@ -224,33 +237,6 @@ export default class PostEditPage extends Component {
            <div id="content-editor-mount"></div>`;
 
     return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <h1>${isNew ? "New Post" : "Edit Post"}</h1>
-            <div class="header-actions">
-              ${
-                !isNew
-                  ? `
-                <button id="delete-btn" class="btn btn-danger" type="button"
-                        title="Delete post" ${anyActionInProgress ? "disabled" : ""}>${TRASH_SVG}<span class="btn-label">Delete</span></button>
-                <button id="preview-link-btn" class="btn btn-secondary" type="button"
-                        title="Generate a shareable preview link (7 days)"
-                        ${anyActionInProgress ? "disabled" : ""}>${LINK_SVG}<span class="btn-label">${generatingPreview ? "Copying…" : "Preview link"}</span></button>
-              `
-                  : ""
-              }
-              <button id="analyze-btn" class="btn btn-secondary" type="button"
-                      title="${escapeHtml(analyzeLabel)}"
-                      ${anyActionInProgress ? "disabled" : ""}>${SPARKLE_SVG}<span class="btn-label">${escapeHtml(analyzeLabel)}</span></button>
-              <button id="save-btn" class="btn btn-primary" type="button"
-                      title="${escapeHtml(saveLabel)}"
-                      ${anyActionInProgress ? "disabled" : ""}>${CHECK_SVG}<span class="btn-label">${escapeHtml(saveLabel)}</span></button>
-              <a href="/light/posts" class="btn btn-secondary" title="Cancel">${X_SVG}<span class="btn-label">Cancel</span></a>
-            </div>
-          </header>
-          <main class="light-content editor-full-width">
             <div class="editor-main">
               <div class="title-row">
                 <input type="checkbox" id="featured-check" style="display:none"
@@ -328,10 +314,7 @@ export default class PostEditPage extends Component {
                   ${igStatus?.enabled ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
                 </div>
               </details>
-            </div>
-          </main>
-        </div>
-      </div>`;
+            </div>`;
   }
 
   _renderInstagramSection(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
@@ -373,15 +356,10 @@ export default class PostEditPage extends Component {
   }
 
   afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    setupTextareaMaximizer(this.container);
     const postSlug = this.state.post?.slug;
-
-    this.mountChild(LightSidebar, "#sidebar-mount", {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: "/light/posts",
       publicUrl: postSlug ? `/posts/${postSlug}` : "/",
-      user: store.get("user") || {},
-      onLogout: this._handleLogout.bind(this),
     });
 
     if (this.state.loading || this.state.error) return;
@@ -394,10 +372,10 @@ export default class PostEditPage extends Component {
       this._mediaPicker.mount();
     }
 
-    this.$("#mode-text-btn")?.addEventListener("click", () =>
+    this.container.querySelector("#mode-text-btn")?.addEventListener("click", () =>
       this._switchMode("text"),
     );
-    this.$("#mode-visual-btn")?.addEventListener("click", () =>
+    this.container.querySelector("#mode-visual-btn")?.addEventListener("click", () =>
       this._switchMode("visual"),
     );
 
@@ -439,8 +417,7 @@ export default class PostEditPage extends Component {
     }
 
     // Save button
-    const saveBtn = this.$("#save-btn");
-    saveBtn?.addEventListener("click", () => this._save());
+    this.$("#save-btn")?.addEventListener("click", () => this._save());
 
     // Handle save triggered from maximized textareas
     this.container.addEventListener("textarea:save", () => this._save());
@@ -460,9 +437,6 @@ export default class PostEditPage extends Component {
         else if (target.closest("#content-editor-mount")) field = "content";
       }
 
-      // Update state without full re-render if possible? 
-      // Actually, we NEED to re-render if we want child components to know they should be maximized.
-      // But if we just update the variable, it might be enough if we are already maximized.
       this.state.maximizedField = field;
     });
 
@@ -477,10 +451,9 @@ export default class PostEditPage extends Component {
     this._onKeyDown = onKeyDown;
 
     // Delete button
-    const deleteBtn = this.$("#delete-btn");
-    deleteBtn?.addEventListener("click", () => {
+    this.$("#delete-btn")?.addEventListener("click", () => {
       const title =
-        this.$("#title-input")?.value || this.state.post?.title || "this post";
+        this.container.querySelector("#title-input")?.value || this.state.post?.title || "this post";
       this._showConfirm(
         "Move to Trash",
         `Move "${title}" to Trash? You can restore it from the Posts list.`,
@@ -493,14 +466,12 @@ export default class PostEditPage extends Component {
     });
 
     // Preview link button — generates a 7-day shareable URL and copies it to the clipboard
-    const previewLinkBtn = this.$("#preview-link-btn");
-    previewLinkBtn?.addEventListener("click", () =>
+    this.$("#preview-link-btn")?.addEventListener("click", () =>
       this._generatePreviewLink(),
     );
 
     // Analyze button — uses first image path from content, or opens picker
-    const analyzeBtn = this.$("#analyze-btn");
-    analyzeBtn?.addEventListener("click", () => {
+    this.$("#analyze-btn")?.addEventListener("click", () => {
       const path = this._extractImagePath();
       if (path) {
         this._handleAnalyze({ path });
@@ -510,8 +481,8 @@ export default class PostEditPage extends Component {
     });
 
     // Featured star toggle
-    const featuredToggle = this.$("#featured-toggle");
-    const featuredCheck = this.$("#featured-check");
+    const featuredToggle = this.container.querySelector("#featured-toggle");
+    const featuredCheck = this.container.querySelector("#featured-check");
     featuredToggle?.addEventListener("click", () => {
       const newVal = !featuredCheck.checked;
       featuredCheck.checked = newVal;
@@ -527,9 +498,9 @@ export default class PostEditPage extends Component {
     });
 
     // Status pill — auto-save on change; show/hide schedule row
-    const statusSelect = this.$("#status-select");
-    const scheduleRow = this.$("#schedule-row");
-    const scheduleInput = this.$("#schedule-input");
+    const statusSelect = this.container.querySelector("#status-select");
+    const scheduleRow = this.container.querySelector("#schedule-row");
+    const scheduleInput = this.container.querySelector("#schedule-input");
 
     statusSelect?.addEventListener("change", () => {
       const newStatus = statusSelect.value;
@@ -557,7 +528,7 @@ export default class PostEditPage extends Component {
     }
 
     // Schedule picker — auto-save when date/time is set
-    const scheduleHint = this.$("#schedule-hint");
+    const scheduleHint = this.container.querySelector("#schedule-hint");
 
     scheduleInput?.addEventListener("focus", () => {
       if (scheduleHint) scheduleHint.style.display = "none";
@@ -574,8 +545,8 @@ export default class PostEditPage extends Component {
     });
 
     // Auto-save on title/slug change (content editors use their own onChange)
-    const titleInput = this.$("#title-input");
-    const slugInput = this.$("#slug-input");
+    const titleInput = this.container.querySelector("#title-input");
+    const slugInput = this.container.querySelector("#slug-input");
     [titleInput, slugInput].forEach((el) => {
       el?.addEventListener("input", () => this._debouncedAutosave());
     });
@@ -585,10 +556,10 @@ export default class PostEditPage extends Component {
     }
 
     // Instagram section
-    this.$("#ig-share-input")?.addEventListener("change", (e) => {
+    this.container.querySelector("#ig-share-input")?.addEventListener("change", (e) => {
       this._autoSaveField({ instagram_share: e.target.checked });
     });
-    this.$("#ig-publish-now-btn")?.addEventListener("click", () =>
+    this.container.querySelector("#ig-publish-now-btn")?.addEventListener("click", () =>
       this._publishToInstagram(),
     );
 
@@ -625,13 +596,8 @@ export default class PostEditPage extends Component {
     document.addEventListener("drop", this._onDrop);
   }
 
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
-  }
-
   beforeUnmount() {
-    this._cleanupHeaderCompact?.();
+    this._cleanupAdminLayout?.();
     this._unmounted = true; // Prevent pending debounced autosave from firing after navigation
     clearTimeout(this._autosaveTimer);
     document.removeEventListener("dragenter", this._onDragEnter);
@@ -656,7 +622,7 @@ export default class PostEditPage extends Component {
       ];
       if (this._visualEditorRef) {
         this._visualEditorRef.setProps({ nodes: this._nodes });
-      } else if (this.$("#visual-editor-mount")) {
+      } else if (this.container.querySelector("#visual-editor-mount")) {
         this._mountVisualEditor();
       }
       return;
@@ -711,6 +677,7 @@ export default class PostEditPage extends Component {
     const lastSlash = oldPath.lastIndexOf("/");
     const folder = oldPath.slice(1, lastSlash); // strip leading /: "2026/02"
     try {
+      const { listMedia, renameMedia } = await import('../../api/media.js');
       const result = await listMedia({ folder, per_page: 200 });
       const item = (result.media || []).find((m) => m.path === oldPath);
       if (!item) throw new Error(`Media not found: ${oldPath}`);
@@ -787,7 +754,7 @@ export default class PostEditPage extends Component {
 
     // Pre-fill title from share data if the editor title is still empty.
     if (current.title) {
-      const titleEl = this.$("#title-input");
+      const titleEl = this.container.querySelector("#title-input");
       if (titleEl && !titleEl.value.trim()) titleEl.value = current.title;
     }
 
@@ -853,6 +820,7 @@ export default class PostEditPage extends Component {
       // Build mediaByPath map for VisualEditor EXIF panels
       this._mediaByPath = {};
       try {
+        const { listMedia } = await import('../../api/media.js');
         const result = await listMedia({ post_id: post.id, per_page: 200 });
         for (const m of result.media || []) {
           if (m.path) this._mediaByPath[m.path] = m;
@@ -877,9 +845,9 @@ export default class PostEditPage extends Component {
 
   _collectFormData() {
     return {
-      title: (this.$("#title-input")?.value || "").trim(),
-      slug: (this.$("#slug-input")?.value || "").trim() || null,
-      excerpt: (this.$("#excerpt-editor")?.value || "").trim() || null,
+      title: (this.container.querySelector("#title-input")?.value || "").trim(),
+      slug: (this.container.querySelector("#slug-input")?.value || "").trim() || null,
+      excerpt: (this.container.querySelector("#excerpt-editor")?.value || "").trim() || null,
       content:
         this.state.editorMode === "visual"
           ? (this._visualEditorRef?.serializeNodes() ??
@@ -887,18 +855,18 @@ export default class PostEditPage extends Component {
           : this._markdownEditorRef?.getValue() ?? "",
       // Prefer DOM value; fall back to known state to prevent accidental reset to 'draft'.
       status:
-        this.$("#status-select")?.value || this.state.post?.status || "draft",
-      formatter: this.$("#formatter-select")?.value || "markdown",
-      is_featured: this.$("#featured-check")?.checked || false,
-      thumbnail_path: (this.$("#thumbnail-input")?.value || "").trim() || null,
-      meta_description: (this.$("#meta-input")?.value || "").trim() || null,
+        this.container.querySelector("#status-select")?.value || this.state.post?.status || "draft",
+      formatter: this.container.querySelector("#formatter-select")?.value || "markdown",
+      is_featured: this.container.querySelector("#featured-check")?.checked || false,
+      thumbnail_path: (this.container.querySelector("#thumbnail-input")?.value || "").trim() || null,
+      meta_description: (this.container.querySelector("#meta-input")?.value || "").trim() || null,
       tags: this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
-      scheduled_at: this.$("#schedule-input")?.value
-        ? new Date(this.$("#schedule-input").value).toISOString()
+      scheduled_at: this.container.querySelector("#schedule-input")?.value
+        ? new Date(this.container.querySelector("#schedule-input").value).toISOString()
         : "",
       css: this._cssEditorRef ? this._cssEditorRef.getValue() : (this.state.post?.css || ""),
-      immersive_mode: this.$("#immersive-mode-select")?.value || "auto",
-      instagram_share: this.$("#ig-share-input")?.checked ?? (this.state.isNew ? (this.state.igStatus?.default_share ?? false) : (this.state.post?.instagram_share ?? false)),
+      immersive_mode: this.container.querySelector("#immersive-mode-select")?.value || "auto",
+      instagram_share: this.container.querySelector("#ig-share-input")?.checked ?? (this.state.isNew ? (this.state.igStatus?.default_share ?? false) : (this.state.post?.instagram_share ?? false)),
     };
   }
 
@@ -1040,7 +1008,7 @@ export default class PostEditPage extends Component {
     if (!item) return;
     const snap = this._collectFormData();
     // Disable all field AI buttons directly — avoid setState re-render which discards unsaved input.
-    this.$$(`.field-ai-btn`).forEach((b) => {
+    this.container.querySelectorAll(`.field-ai-btn`).forEach((b) => {
       b.disabled = true;
     });
 
@@ -1062,6 +1030,7 @@ export default class PostEditPage extends Component {
     };
 
     try {
+      const { analyzeMedia, analyzeMediaByPath } = await import('../../api/media.js');
       const result = item.id
         ? await analyzeMedia(item.id)
         : await analyzeMediaByPath(item.path);
@@ -1111,12 +1080,13 @@ export default class PostEditPage extends Component {
 
     // Disable the analyze button directly without calling setState (which would re-render and discard input).
     this._analyzing = true;
-    const analyzeBtn = this.$("#analyze-btn");
+    const analyzeBtn = this.container.querySelector("#analyze-btn");
     if (analyzeBtn) {
       analyzeBtn.disabled = true;
       analyzeBtn.textContent = "Analyzing…";
     }
     try {
+      const { analyzeMedia, analyzeMediaByPath } = await import('../../api/media.js');
       const result = item.id
         ? await analyzeMedia(item.id)
         : await analyzeMediaByPath(item.path);
@@ -1291,15 +1261,5 @@ export default class PostEditPage extends Component {
       sel.removeAllRanges();
       sel.addRange(range);
     }
-  }
-
-  async _handleLogout() {
-    try {
-      await logout();
-    } catch {
-      /* ignore */
-    }
-    store.set("user", null);
-    navigate("/", { replace: true });
   }
 }

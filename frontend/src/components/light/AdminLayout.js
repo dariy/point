@@ -1,133 +1,115 @@
 /**
- * AdminLayout — shared layout for all /light pages.
+ * AdminLayout — shared layout helpers for all /light pages.
  *
- * Wraps a page component with the admin sidebar and header.
- *
- * Props:
- *   title        {string}    Page title
- *   currentPath  {string}    For sidebar active state
- *   actions      {string}    Optional HTML for header actions
- *   user         {object}    Current user
- *   onLogout     {Function}  Logout handler
+ * Provides a template function for render() and a setup function for afterRender().
  */
 
-import { Component } from '../Component.js';
 import { LightSidebar } from './LightSidebar.js';
 import { store } from '../../store.js';
 import { syncQueue } from '../../utils/sync.js';
 import { setupHeaderCompact } from '../../utils/headerCompact.js';
+import { navigate } from '../../utils/helpers.js';
 
-export class AdminLayout extends Component {
-  render() {
-    const { title = 'Admin', actions = '' } = this.props;
+/**
+ * Shared HTML template for admin pages.
+ * To be used inside component.render().
+ */
+export function adminLayoutTemplate({ title = 'Admin', actions = '', banner = '', content = '' }) {
+  const offline = store.get('offline_status') || {};
+  const syncPill = renderSyncPill(offline);
 
-    const offline = store.get('offline_status') || {};
-    const syncPill = this._renderSyncPill(offline);
+  return `
+    <div class="light-layout">
+      <div id="sidebar-mount"></div>
+      <div class="light-main">
+        <header class="light-header">
+          <div class="header-title-row">
+            <h1>${title}</h1>
+            ${syncPill}
+          </div>
+          <div class="header-actions">
+            ${actions}
+          </div>
+        </header>
+        ${banner}
+        <main class="light-content">${content}</main>
+      </div>
+    </div>`;
+}
 
-    return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <div class="header-title-row">
-              <h1>${title}</h1>
-              ${syncPill}
-            </div>
-            <div class="header-actions">
-              ${actions}
-              <button class="theme-toggle" id="admin-theme-toggle" aria-label="Toggle theme" type="button">
-                <span class="icon-sun" aria-hidden="true">☀</span>
-                <span class="icon-moon" aria-hidden="true">☾</span>
-              </button>
-            </div>
-          </header>
-          <main class="light-content" id="layout-content-mount"></main>
-        </div>
-      </div>`;
+/**
+ * Shared behavior for admin pages.
+ * To be used inside component.afterRender().
+ */
+export function setupAdminLayout(component, { currentPath, publicUrl }) {
+  component._cleanupHeaderCompact = setupHeaderCompact(component.$('.light-header'));
+  
+  component.mountChild(LightSidebar, '#sidebar-mount', {
+    currentPath,
+    publicUrl,
+    user: store.get('user') || {},
+    onLogout: async () => {
+      try {
+        const { logout } = await import('../../api/auth.js');
+        await logout();
+      } catch { /* ignore */ }
+      store.set('user', null);
+      navigate('/', { replace: true });
+    },
+  });
+
+  component.$('#sync-pill-btn')?.addEventListener('click', () => onSyncPillClick());
+
+  const unsub = store.subscribe('offline_status', () => updateSyncPill(component));
+  return () => {
+    unsub();
+    component._cleanupHeaderCompact?.();
+  };
+}
+
+function renderSyncPill(offline) {
+  if (!offline.has_ops && !offline.syncing) return '';
+
+  let text = '';
+  let cls = 'sync-pill';
+
+  if (offline.syncing) {
+    text = '⟳ Syncing…';
+    cls += ' syncing';
+  } else if (offline.failed) {
+    text = `⚠ ${offline.failed} failed`;
+    cls += ' failed';
+  } else if (offline.pending) {
+    text = `● ${offline.pending} pending`;
+    cls += ' pending';
+  } else {
+    text = '✓ Synced';
+    cls += ' synced';
   }
 
-  _renderSyncPill(offline) {
-    if (!offline.has_ops && !offline.syncing) return '';
+  return `<button class="${cls}" id="sync-pill-btn" type="button">${text}</button>`;
+}
 
-    let text = '';
-    let cls = 'sync-pill';
-
-    if (offline.syncing) {
-      text = '⟳ Syncing…';
-      cls += ' syncing';
-    } else if (offline.failed) {
-      text = `⚠ ${offline.failed} failed`;
-      cls += ' failed';
-    } else if (offline.pending) {
-      text = `● ${offline.pending} pending`;
-      cls += ' pending';
-    } else {
-      text = '✓ Synced';
-      cls += ' synced';
-    }
-
-    return `<button class="${cls}" id="sync-pill-btn">${text}</button>`;
+function onSyncPillClick() {
+  const offline = store.get('offline_status') || {};
+  if (offline.failed) {
+    navigate('/light/system');
+  } else if (!offline.syncing && offline.pending) {
+    syncQueue();
   }
+}
 
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
-  }
+function updateSyncPill(component) {
+  const offline = store.get('offline_status') || {};
+  const newPill = renderSyncPill(offline);
+  const titleRow = component.$('.header-title-row');
+  if (!titleRow) return;
 
-  beforeUnmount() {
-    this._cleanupHeaderCompact?.();
-  }
+  const existing = component.$('.sync-pill');
+  if (existing) existing.remove();
 
-  afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    this.mountChild(LightSidebar, '#sidebar-mount', {
-      currentPath: this.props.currentPath,
-      user: this.props.user,
-      onLogout: this.props.onLogout,
-    });
-
-    const btn = this.$('#admin-theme-toggle');
-    if (btn) {
-      btn.addEventListener('click', () => {
-        const current = store.get('theme') || 'auto';
-        const next = current === 'dark' ? 'light' : 'dark';
-        store.set('theme', next);
-      });
-    }
-
-    this.$('#sync-pill-btn')?.addEventListener('click', () => this._onSyncPillClick());
-
-    this.subscribeStore(store, 'offline_status', () => this._updateSyncPill());
-  }
-
-  _onSyncPillClick() {
-    const offline = store.get('offline_status') || {};
-    if (offline.failed) {
-      import('../../utils/helpers.js').then(m => m.navigate('/light/system'));
-    } else if (!offline.syncing && offline.pending) {
-      syncQueue();
-    }
-  }
-
-  _updateSyncPill() {
-    const offline = store.get('offline_status') || {};
-    const newPill = this._renderSyncPill(offline);
-    const titleRow = this.$('.header-title-row');
-    if (!titleRow) return;
-
-    const existing = this.$('.sync-pill');
-    if (existing) existing.remove();
-
-    if (newPill) {
-      titleRow.insertAdjacentHTML('beforeend', newPill);
-      this.$('#sync-pill-btn')?.addEventListener('click', () => this._onSyncPillClick());
-    }
-  }
-
-  /**
-   * Returns the mount point for the actual page content.
-   */
-  getContentMount() {
-    return this.$('#layout-content-mount');
+  if (newPill) {
+    titleRow.insertAdjacentHTML('beforeend', newPill);
+    component.$('#sync-pill-btn')?.addEventListener('click', () => onSyncPillClick());
   }
 }

@@ -5,7 +5,7 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { LightSidebar } from "../../components/light/LightSidebar.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
@@ -18,7 +18,6 @@ import {
   updatePost,
   setPostStatus,
 } from "../../api/posts.js";
-import { logout } from "../../api/auth.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
@@ -32,7 +31,6 @@ import {
   SELECT_SVG,
   PLUS_SVG,
 } from "../../utils/icons.js";
-import { setupHeaderCompact } from "../../utils/headerCompact.js";
 
 const STATUS_LABELS = {
   published: "Published",
@@ -60,6 +58,22 @@ export default class PostsListPage extends Component {
   }
 
   render() {
+    const { selectMode, statusFilter } = this.state;
+    const isTrash = statusFilter === "trash";
+
+    const actions = `
+      ${!isTrash ? `<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select posts"}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>` : ""}
+      <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
+    `;
+
+    return adminLayoutTemplate({
+      title: "Posts",
+      actions,
+      content: this._renderContent()
+    });
+  }
+
+  _renderContent() {
     const {
       loading,
       posts,
@@ -220,17 +234,6 @@ export default class PostsListPage extends Component {
               .join("");
 
     return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main posts-list-main">
-          <header class="light-header">
-            <h1>Posts</h1>
-            <div class="header-actions">
-              ${!isTrash ? `<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select posts"}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>` : ""}
-              <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
-            </div>
-          </header>
-          <main class="light-content">
             <div class="filters">
               <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || "draft")} filter-select">
                 ${statusOptions}
@@ -272,19 +275,16 @@ export default class PostsListPage extends Component {
                 <tbody id="posts-tbody">${rows}</tbody>
               </table>
             </div>
-            <div id="pagination-mount"></div>
-          </main>
-        </div>
-      </div>`;
+            <div id="pagination-mount"></div>`;
   }
 
   afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    this.mountChild(LightSidebar, "#sidebar-mount", {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: "/light/posts",
-      user: store.get("user") || {},
-      onLogout: this._handleLogout.bind(this),
     });
+
+    const { statusFilter } = this.state;
+    const isTrash = statusFilter === "trash";
 
     if (!this.state.loading && this.state.pagination.pages > 1) {
       this.mountChild(Pagination, "#pagination-mount", {
@@ -296,7 +296,7 @@ export default class PostsListPage extends Component {
     }
 
     // Restore focus to search input after a re-render triggered by _load
-    const searchInput = this.$("#search-input");
+    const searchInput = this.container.querySelector("#search-input");
     if (searchInput) {
       if (this._restoreSearchFocus) {
         this._restoreSearchFocus = false;
@@ -317,17 +317,15 @@ export default class PostsListPage extends Component {
     }
 
     // Status filter
-    const statusFilter = this.$("#status-filter");
-    if (statusFilter) {
-      statusFilter.addEventListener("change", (e) => {
+    const statusFilterEl = this.container.querySelector("#status-filter");
+    if (statusFilterEl) {
+      statusFilterEl.addEventListener("change", (e) => {
         const val = e.target.value;
-        statusFilter.className = `status-select badge-${val || "draft"} filter-select`;
+        statusFilterEl.className = `status-select badge-${val || "draft"} filter-select`;
         this.setState({ statusFilter: val, page: 1 });
         this._load({ page: 1, status: val });
       });
     }
-
-    const isTrash = this.state.statusFilter === "trash";
 
     // Mount a TagsInput in every tags cell (skip for trash view)
     if (!isTrash && !this.state.loading && !this.state.error) {
@@ -338,7 +336,7 @@ export default class PostsListPage extends Component {
 
     // Status change buttons (skip for trash view)
     if (!isTrash) {
-      this.$$(".status-change-btn").forEach((select) => {
+      this.container.querySelectorAll(".status-change-btn").forEach((select) => {
         select.addEventListener("change", async (e) => {
           const id = parseInt(select.dataset.id, 10);
           const newStatus = e.target.value;
@@ -348,7 +346,7 @@ export default class PostsListPage extends Component {
     }
 
     // Delete buttons (move to trash)
-    this.$$(".delete-btn").forEach((btn) => {
+    this.container.querySelectorAll(".delete-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -365,7 +363,7 @@ export default class PostsListPage extends Component {
     });
 
     // Restore buttons (trash view)
-    this.$$(".restore-btn").forEach((btn) => {
+    this.container.querySelectorAll(".restore-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -374,7 +372,7 @@ export default class PostsListPage extends Component {
     });
 
     // Permanently delete buttons (trash view)
-    this.$$(".perm-delete-btn").forEach((btn) => {
+    this.container.querySelectorAll(".perm-delete-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -391,29 +389,26 @@ export default class PostsListPage extends Component {
     });
 
     // Select mode (skip for trash view)
-    const selectModeBtn = this.$("#select-mode-btn");
-    if (selectModeBtn) {
-      selectModeBtn.addEventListener("click", () => {
+    this.$("#select-mode-btn")?.addEventListener("click", () => {
         this.setState({
           selectMode: !this.state.selectMode,
           selectedIds: new Set(),
         });
-      });
-    }
+    });
 
     if (this.state.selectMode && !isTrash) {
-      this.$("#select-all-cb").addEventListener(
+      this.container.querySelector("#select-all-cb")?.addEventListener(
         "change",
         this._handleSelectAll.bind(this),
       );
-      this.$$(".select-row-cb").forEach((cb) => {
+      this.container.querySelectorAll(".select-row-cb").forEach((cb) => {
         cb.addEventListener("change", this._handleSelectRow.bind(this));
       });
-      this.$("#bulk-apply-btn").addEventListener(
+      this.container.querySelector("#bulk-apply-btn")?.addEventListener(
         "click",
         this._handleBulkApply.bind(this),
       );
-      this.$("#bulk-delete-btn").addEventListener(
+      this.container.querySelector("#bulk-delete-btn")?.addEventListener(
         "click",
         this._handleBulkDelete.bind(this),
       );
@@ -424,7 +419,7 @@ export default class PostsListPage extends Component {
   _handleSelectAll(e) {
     const isChecked = e.target.checked;
     const { posts, selectedIds } = this.state;
-    this.$$(".select-row-cb").forEach((cb) => {
+    this.container.querySelectorAll(".select-row-cb").forEach((cb) => {
       cb.checked = isChecked;
     });
     if (isChecked) {
@@ -447,10 +442,10 @@ export default class PostsListPage extends Component {
 
   _updateBulkToolbar() {
     const n = this.state.selectedIds.size;
-    const bulkCount = this.$("#bulk-count");
-    const applyBtn = this.$("#bulk-apply-btn");
-    const deleteBtn = this.$("#bulk-delete-btn");
-    const selectAllCb = this.$("#select-all-cb");
+    const bulkCount = this.container.querySelector("#bulk-count");
+    const applyBtn = this.container.querySelector("#bulk-apply-btn");
+    const deleteBtn = this.container.querySelector("#bulk-delete-btn");
+    const selectAllCb = this.container.querySelector("#select-all-cb");
 
     if (bulkCount) bulkCount.textContent = `${n} selected`;
     if (applyBtn) applyBtn.disabled = n === 0;
@@ -472,7 +467,7 @@ export default class PostsListPage extends Component {
   }
 
   async _handleBulkApply() {
-    const status = this.$("#bulk-status-select").value;
+    const status = this.container.querySelector("#bulk-status-select").value;
     const ids = Array.from(this.state.selectedIds);
     let successCount = 0;
     let failCount = 0;
@@ -553,21 +548,16 @@ export default class PostsListPage extends Component {
     window.addEventListener("resize", this._onResize);
   }
 
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
-  }
-
   beforeUnmount() {
-    this._cleanupHeaderCompact?.();
+    this._cleanupAdminLayout?.();
     if (this._onResize) window.removeEventListener("resize", this._onResize);
   }
 
   /** Measure how many table rows fit in the available container height. */
   _calcPerPage() {
-    const container = this.$(".table-container");
-    const thead = this.$("thead");
-    const probeRow = this.$("tbody tr");
+    const container = this.container.querySelector(".table-container");
+    const thead = this.container.querySelector("thead");
+    const probeRow = this.container.querySelector("tbody tr");
     if (!container || !thead || !probeRow) return 20;
     const bodyHeight = container.clientHeight - thead.offsetHeight;
     // Each post item now takes two <tr> rows.
@@ -593,12 +583,12 @@ export default class PostsListPage extends Component {
 
   async _load(overrides = {}) {
     // Check focus before any DOM mutation so we can restore it after re-render
-    const searchEl = this.$("#search-input");
+    const searchEl = this.container.querySelector("#search-input");
     const searchHadFocus = searchEl && document.activeElement === searchEl;
 
     // Show loading indicator in-place — no full re-render, no focus loss.
     // The string is fully static (no user data), so innerHTML is safe here.
-    const tbody = this.$("#posts-tbody");
+    const tbody = this.container.querySelector("#posts-tbody");
     const colspan = this.state.selectMode ? 6 : 5;
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
@@ -644,7 +634,7 @@ export default class PostsListPage extends Component {
 
   /** Mount a TagsInput directly in the tags cell for a post row. Saves on change. */
   _mountTagEditor(post) {
-    const mount = this.$(`#tags-cell-${post.id}`);
+    const mount = this.container.querySelector(`#tags-cell-${post.id}`);
     if (!mount) return;
 
     const initialTags = (post.tags || []).map((t) =>
@@ -759,15 +749,5 @@ export default class PostsListPage extends Component {
     } finally {
       select.classList.remove("badge-loading");
     }
-  }
-
-  async _handleLogout() {
-    try {
-      await logout();
-    } catch {
-      /* ignore */
-    }
-    store.set("user", null);
-    navigate("/", { replace: true });
   }
 }

@@ -5,15 +5,13 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getStats, getVersion } from '../../api/system.js';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
-import { logout } from '../../api/auth.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
 import { formatFileSize } from '../../utils/formatters.js';
-import { REFRESH_SVG, WARNING_SVG, PLUS_SVG } from '../../utils/icons.js';
-import { setupHeaderCompact } from '../../utils/headerCompact.js';
+import { PLUS_SVG } from '../../utils/icons.js';
 
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {
@@ -22,22 +20,7 @@ export default class DashboardPage extends Component {
   }
 
   render() {
-    const { loading, stats, analyticsStats, topPosts, error, versionBanner } = this.state;
-
-    const content = loading
-      ? `<div class="loading-spinner" aria-label="Loading…"></div>`
-      : error
-        ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
-        : this._renderStats(stats, analyticsStats, topPosts);
-
-    const offline = store.get('offline_status') || {};
-    let syncPill = '';
-    if (offline.has_ops || offline.syncing) {
-      const text = offline.syncing ? `${REFRESH_SVG} Syncing…` : offline.failed ? `${WARNING_SVG} ${offline.failed} failed` : `● ${offline.pending} pending`;
-      const cls = `sync-pill ${offline.syncing ? 'syncing' : offline.failed ? 'failed' : 'pending'}`;
-      syncPill = `<button class="${cls}" id="dashboard-sync-pill">${text}</button>`;
-    }
-
+    const { versionBanner } = this.state;
     const banner = versionBanner
       ? `<div class="version-update-banner" role="status">
            Point ${escapeHtml(versionBanner)} is available. Update with: <code>./update.sh</code>
@@ -45,23 +28,20 @@ export default class DashboardPage extends Component {
          </div>`
       : '';
 
-    return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <div class="header-title-row">
-              <h1>Dashboard</h1>
-              ${syncPill}
-            </div>
-            <div class="header-actions">
-              <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
-            </div>
-          </header>
-          ${banner}
-          <main class="light-content">${content}</main>
-        </div>
-      </div>`;
+    return adminLayoutTemplate({
+      title: 'Dashboard',
+      banner,
+      actions: `<a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>`,
+      content: this._renderContent()
+    });
+  }
+
+  _renderContent() {
+    const { loading, stats, analyticsStats, topPosts, error } = this.state;
+
+    if (loading) return `<div class="loading-spinner" aria-label="Loading…"></div>`;
+    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+    return this._renderStats(stats, analyticsStats, topPosts);
   }
 
   _renderStats(s, analytics, topPosts) {
@@ -151,17 +131,8 @@ export default class DashboardPage extends Component {
   }
 
   afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    this.mountChild(LightSidebar, '#sidebar-mount', {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: '/light',
-      user: store.get('user') || {},
-      onLogout: this._handleLogout.bind(this),
-    });
-
-    this.$('#dashboard-sync-pill')?.addEventListener('click', () => {
-      const offline = store.get('offline_status') || {};
-      if (offline.failed) navigate('/light/system');
-      else if (offline.pending) import('../../utils/sync.js').then(m => m.syncQueue());
     });
 
     this.$('#dashboard-version-dismiss')?.addEventListener('click', () => {
@@ -173,13 +144,8 @@ export default class DashboardPage extends Component {
     });
   }
 
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
-  }
-
   beforeUnmount() {
-    this._cleanupHeaderCompact?.();
+    this._cleanupAdminLayout?.();
   }
 
   mount() {
@@ -219,11 +185,5 @@ export default class DashboardPage extends Component {
     } catch {
       // Version check failure is non-critical; silently ignore.
     }
-  }
-
-  async _handleLogout() {
-    try { await logout(); } catch { /* ignore */ }
-    store.set('user', null);
-    navigate('/', { replace: true });
   }
 }
