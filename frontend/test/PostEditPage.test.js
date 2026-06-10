@@ -68,10 +68,11 @@ describe('PostEditPage', () => {
     page.state.loading = false;
     page.state.isNew = false;
     page.state.deleting = true;
+    page.state.post = { status: 'published' };
     
     const html = page.render();
     assert.ok(html.includes('id="delete-btn"') && html.includes('disabled'), 'Delete button should be disabled');
-    assert.ok(html.includes('id="save-btn"') && html.includes('disabled'), 'Save button should be disabled');
+    assert.ok(html.includes('id="update-btn"') && html.includes('disabled'), 'Update button should be disabled');
     assert.ok(html.includes('id="analyze-btn"') && html.includes('disabled'), 'Analyze button should be disabled');
   });
 test('should preserve other fields when switching from visual to text mode', () => {

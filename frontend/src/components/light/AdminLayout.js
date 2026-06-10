@@ -16,7 +16,8 @@ import { navigate } from '../../utils/helpers.js';
  */
 export function adminLayoutTemplate({ title = 'Admin', actions = '', banner = '', content = '' }) {
   const offline = store.get('offline_status') || {};
-  const syncPill = renderSyncPill(offline);
+  const autosave = store.get('autosave_status') || {};
+  const syncPill = renderSyncPill(offline, autosave);
 
   return `
     <div class="light-layout">
@@ -60,20 +61,27 @@ export function setupAdminLayout(component, { currentPath, publicUrl }) {
 
   component.$('#sync-pill-btn')?.addEventListener('click', () => onSyncPillClick());
 
-  const unsub = store.subscribe('offline_status', () => updateSyncPill(component));
+  const unsubOffline = store.subscribe('offline_status', () => updateSyncPill(component));
+  const unsubAutosave = store.subscribe('autosave_status', () => updateSyncPill(component));
+  
   return () => {
-    unsub();
+    unsubOffline();
+    unsubAutosave();
     component._cleanupHeaderCompact?.();
   };
 }
 
-function renderSyncPill(offline) {
-  if (!offline.has_ops && !offline.syncing) return '';
-
+function renderSyncPill(offline, autosave = {}) {
   let text = '';
   let cls = 'sync-pill';
 
-  if (offline.syncing) {
+  if (autosave.status === 'saving') {
+    text = 'Saving…';
+    cls += ' syncing';
+  } else if (autosave.status === 'failed') {
+    text = '⚠ Save failed';
+    cls += ' failed';
+  } else if (offline.syncing) {
     text = '⟳ Syncing…';
     cls += ' syncing';
   } else if (offline.failed) {
@@ -82,9 +90,15 @@ function renderSyncPill(offline) {
   } else if (offline.pending) {
     text = `● ${offline.pending} pending`;
     cls += ' pending';
-  } else {
+  } else if (autosave.lastSaved) {
+    const age = Math.round((Date.now() - autosave.lastSaved) / 1000);
+    text = age < 5 ? '✓ Saved' : `✓ Saved ${age}s ago`;
+    cls += ' synced';
+  } else if (offline.has_ops) {
     text = '✓ Synced';
     cls += ' synced';
+  } else {
+    return '';
   }
 
   return `<button class="${cls}" id="sync-pill-btn" type="button">${text}</button>`;
@@ -92,7 +106,11 @@ function renderSyncPill(offline) {
 
 function onSyncPillClick() {
   const offline = store.get('offline_status') || {};
-  if (offline.failed) {
+  const autosave = store.get('autosave_status') || {};
+  
+  if (autosave.status === 'failed') {
+    window.Point.emit('autosave:retry');
+  } else if (offline.failed) {
     navigate('/light/system');
   } else if (!offline.syncing && offline.pending) {
     syncQueue();
@@ -101,7 +119,8 @@ function onSyncPillClick() {
 
 function updateSyncPill(component) {
   const offline = store.get('offline_status') || {};
-  const newPill = renderSyncPill(offline);
+  const autosave = store.get('autosave_status') || {};
+  const newPill = renderSyncPill(offline, autosave);
   const titleRow = component.$('.header-title-row');
   if (!titleRow) return;
 
