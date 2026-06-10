@@ -121,6 +121,12 @@
     transform-origin: center;
 }
 
+@media (pointer: coarse) {
+    .header-tags-bar .tag-group-header .toggle-children {
+        color: var(--color-primary);
+    }
+}
+
 .header-tags-bar .tag-group:hover > .tag-group-header .toggle-children,
 .header-tags-bar .tag-group.is-open > .tag-group-header .toggle-children {
     color: var(--color-primary);

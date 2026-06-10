@@ -143,6 +143,12 @@
     transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast), scale var(--transition-fast);
 }
 
+@media (pointer: coarse) {
+    .code-copy-btn {
+        opacity: 0.5;
+    }
+}
+
 .post-content pre:hover .code-copy-btn,
 .code-copy-btn:focus-visible {
     opacity: 1;
