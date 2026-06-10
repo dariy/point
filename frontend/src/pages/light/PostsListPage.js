@@ -73,6 +73,99 @@ export default class PostsListPage extends Component {
     });
   }
 
+  _renderCardRow(p) {
+    const { selectMode, selectedIds, statusFilter } = this.state;
+    const isTrash = statusFilter === "trash";
+    const isChecked = selectedIds.has(p.id);
+
+    const mediaUrl = p.media_url || "";
+    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
+    const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
+    const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
+
+    let thumbInner = "";
+    if (isImage && p.media_url) {
+      thumbInner = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy">`;
+    } else if (isVideo) {
+      thumbInner = PLAY_SVG;
+    } else if (isAudio) {
+      thumbInner = MUSIC_SVG;
+    }
+
+    if (isTrash) {
+      const deletedAt = p.deleted_at?.value
+        ? formatDateShort(p.deleted_at.value)
+        : p.deleted_at
+          ? formatDateShort(p.deleted_at)
+          : "";
+      return `
+        <div class="post-card post-card--trash" data-post-id="${escapeHtml(String(p.id))}">
+          <div class="post-card-thumb post-card-thumb--muted"></div>
+          <div class="post-card-body">
+            <div class="post-card-title muted">${escapeHtml(p.title)}</div>
+            <div class="post-card-meta">
+              <span class="trash-status-label">Was: ${escapeHtml(STATUS_LABELS[p.status] || p.status)}</span>
+              ${deletedAt ? `· ${escapeHtml(deletedAt)}` : ""}
+            </div>
+            <div class="post-card-actions">
+              <button class="btn btn-sm restore-btn"
+                      data-id="${escapeHtml(String(p.id))}"
+                      data-title="${escapeHtml(p.title)}"
+                      title="Restore">${RESTORE_SVG} Restore</button>
+              <button class="btn btn-sm btn-danger perm-delete-btn"
+                      data-id="${escapeHtml(String(p.id))}"
+                      data-title="${escapeHtml(p.title)}"
+                      title="Delete permanently">${X_SVG} Delete</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    const cardStatusOptions = ["draft", "published", "scheduled", "hidden", "page"]
+      .map((s) => `<option value="${s}"${p.status === s ? " selected" : ""}>${escapeHtml(STATUS_LABELS[s] || s)}</option>`)
+      .join("");
+
+    const tags = (p.tags || []).map((t) => (typeof t === "string" ? t : t.name));
+    const chipsHtml = tags
+      .map((name) => `<span class="tag">${escapeHtml(name)}</span>`)
+      .join("");
+
+    return `
+      <div class="post-card" data-post-id="${escapeHtml(String(p.id))}">
+        <div class="post-card-check-wrap">
+          <input type="checkbox" class="select-row-cb post-card-check" data-id="${escapeHtml(String(p.id))}" ${isChecked ? "checked" : ""}>
+        </div>
+        <div class="post-card-thumb">${thumbInner}</div>
+        <div class="post-card-body">
+          <div class="post-card-top">
+            <span class="post-card-title">${escapeHtml(p.title)}</span>
+            <select class="status-select badge-${escapeHtml(p.status)} status-change-btn" name="status" data-id="${escapeHtml(String(p.id))}">${cardStatusOptions}</select>
+          </div>
+          ${chipsHtml ? `<div class="post-card-chips">${chipsHtml}</div>` : ""}
+          <div class="post-card-meta">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</div>
+        </div>
+      </div>`;
+  }
+
+  _renderCardList() {
+    const { loading, posts, error, statusFilter, selectMode } = this.state;
+    const isTrash = statusFilter === "trash";
+
+    let inner;
+    if (loading) {
+      inner = `<p class="post-card-placeholder">Loading…</p>`;
+    } else if (error) {
+      inner = `<p class="post-card-placeholder error-state">${escapeHtml(error)}</p>`;
+    } else if (!posts.length) {
+      inner = `<p class="post-card-placeholder">${isTrash ? "Trash is empty." : "No posts found."}</p>`;
+    } else {
+      inner = posts.map((p) => this._renderCardRow(p)).join("");
+    }
+
+    const selectClass = selectMode && !isTrash ? " select-mode" : "";
+    return `<div class="posts-card-list${selectClass}" id="posts-card-list">${inner}</div>`;
+  }
+
   _renderContent() {
     const {
       loading,
@@ -275,6 +368,7 @@ export default class PostsListPage extends Component {
                 <tbody id="posts-tbody">${rows}</tbody>
               </table>
             </div>
+            ${this._renderCardList()}
             <div id="pagination-mount"></div>`;
   }
 
@@ -414,6 +508,44 @@ export default class PostsListPage extends Component {
       );
       this._updateBulkToolbar();
     }
+
+    // Card view: tap to edit or toggle selection; long-press to enter select mode
+    this.container.querySelectorAll(".post-card").forEach((card) => {
+      const postId = parseInt(card.dataset.postId, 10);
+
+      if (!isTrash) {
+        let longPressTimer = null;
+        card.addEventListener("pointerdown", (e) => {
+          if (e.target.closest("select, button, a, input")) return;
+          longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            if (!this.state.selectMode) {
+              this.setState({ selectMode: true, selectedIds: new Set([postId]) });
+            }
+          }, 500);
+        });
+        const cancelTimer = () => {
+          if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        };
+        card.addEventListener("pointerup", cancelTimer);
+        card.addEventListener("pointermove", cancelTimer);
+        card.addEventListener("pointercancel", cancelTimer);
+      }
+
+      card.addEventListener("click", (e) => {
+        if (e.target.closest("select, button, a, input")) return;
+        if (isTrash) return;
+        if (this.state.selectMode) {
+          const cb = card.querySelector(".select-row-cb");
+          if (cb) {
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          return;
+        }
+        navigate(`/light/posts/${postId}/edit`);
+      });
+    });
   }
 
   _handleSelectAll(e) {
@@ -587,11 +719,15 @@ export default class PostsListPage extends Component {
     const searchHadFocus = searchEl && document.activeElement === searchEl;
 
     // Show loading indicator in-place — no full re-render, no focus loss.
-    // The string is fully static (no user data), so innerHTML is safe here.
+    // The strings are fully static (no user data), so innerHTML is safe here.
     const tbody = this.container.querySelector("#posts-tbody");
     const colspan = this.state.selectMode ? 6 : 5;
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
+    }
+    const cardList = this.container.querySelector("#posts-card-list");
+    if (cardList) {
+      cardList.innerHTML = `<p class="post-card-placeholder">Loading…</p>`; // static, safe
     }
     this.state.loading = true;
     this.state.error = null;

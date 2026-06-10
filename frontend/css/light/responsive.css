@@ -33,6 +33,15 @@
         padding: var(--spacing-md);
     }
 
+    /* Posts list: swap table for cards */
+    .table-container:has(#posts-tbody) {
+        display: none;
+    }
+
+    .posts-card-list {
+        display: block;
+    }
+
     .stats-grid {
         grid-template-columns: 1fr 1fr;
     }
