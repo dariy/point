@@ -167,3 +167,39 @@
         flex-direction: column;
     }
 }
+
+/* ===========================
+   Touch / Coarse Pointer
+   ≥44px targets; always-visible overlays (no hover available)
+   =========================== */
+@media (pointer: coarse) {
+    :root {
+        /* Icon action buttons: table rows, media overlays, tree rows */
+        --btn-width: var(--size-2-75);
+        --btn-height: var(--size-2-75);
+        /* copy-path inline button */
+        --copy-path-btn-width: var(--size-2-75);
+        --copy-path-btn-height: var(--size-2-75);
+        /* EXIF row delete button */
+        --exif-delete-btn-width: var(--size-2-75);
+        --exif-delete-btn-height: var(--size-2-75);
+        /* Tag manager flag toggles */
+        --tm-flag-toggle-width: var(--size-2-75);
+        --tm-flag-toggle-height: var(--size-2-75);
+    }
+
+    /* Media item action buttons: always render at low opacity instead of hover-only */
+    .media-item-actions {
+        opacity: 0.7;
+    }
+
+    /* Copy-path button: always visible */
+    .media-item-info .copy-path-btn {
+        opacity: 0.7;
+    }
+
+    /* EXIF delete button: always render at low opacity instead of hover-only */
+    .exif-delete-btn {
+        opacity: 0.7;
+    }
+}
