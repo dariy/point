@@ -2,33 +2,21 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"point-api/internal/models"
 )
 
-// UpsertTagLocation inserts or updates a coordinate record for a tag.
-// Uses UPDATE-then-INSERT to avoid dependency on a named UNIQUE constraint.
+// UpsertTagLocation sets coordinates on the tag row directly.
 func (r *sqliteRepository) UpsertTagLocation(ctx context.Context, tagID int64, lat, lon float64) error {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE tag_locations SET latitude = ?, longitude = ? WHERE tag_id = ?`,
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE tags SET latitude = ?, longitude = ? WHERE id = ?`,
 		lat, lon, tagID)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		_, err = r.db.ExecContext(ctx,
-			`INSERT INTO tag_locations (tag_id, latitude, longitude) VALUES (?, ?, ?)`,
-			tagID, lat, lon)
-	}
 	return err
 }
 
-// GetTagLocationsByTagIDs fetches all tag_locations rows for the given tag IDs.
-// Returns a map of tagID → TagLocation (one per tag due to UNIQUE constraint).
+// GetTagLocationsByTagIDs returns a map of tagID → TagLocation for the given IDs,
+// reading latitude/longitude from the tags table directly.
 func (r *sqliteRepository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error) {
 	result := make(map[int64]models.TagLocation)
 	if len(tagIDs) == 0 {
@@ -36,16 +24,14 @@ func (r *sqliteRepository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs [
 	}
 
 	args := make([]interface{}, len(tagIDs))
-	placeholders := ""
+	placeholders := make([]string, len(tagIDs))
 	for i, id := range tagIDs {
 		args[i] = id
-		if i > 0 {
-			placeholders += ","
-		}
-		placeholders += "?"
+		placeholders[i] = "?"
 	}
 
-	q := `SELECT id, tag_id, latitude, longitude FROM tag_locations WHERE tag_id IN (` + placeholders + `)`
+	q := `SELECT id, latitude, longitude FROM tags WHERE id IN (` +
+		strings.Join(placeholders, ",") + `) AND latitude IS NOT NULL AND longitude IS NOT NULL`
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -55,17 +41,24 @@ func (r *sqliteRepository) GetTagLocationsByTagIDs(ctx context.Context, tagIDs [
 	}()
 
 	for rows.Next() {
-		var loc models.TagLocation
-		if err := rows.Scan(&loc.ID, &loc.TagID, &loc.Latitude, &loc.Longitude); err != nil {
+		var tagID int64
+		var lat, lon float64
+		if err := rows.Scan(&tagID, &lat, &lon); err != nil {
 			return nil, err
 		}
-		result[loc.TagID] = loc
+		result[tagID] = models.TagLocation{
+			ID:        tagID,
+			TagID:     tagID,
+			Latitude:  lat,
+			Longitude: lon,
+		}
 	}
 	return result, rows.Err()
 }
 
-// DeleteTagLocation removes the coordinate record for a tag (if any).
+// DeleteTagLocation clears coordinates from the tag row.
 func (r *sqliteRepository) DeleteTagLocation(ctx context.Context, tagID int64) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM tag_locations WHERE tag_id = ?`, tagID)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE tags SET latitude = NULL, longitude = NULL WHERE id = ?`, tagID)
 	return err
 }

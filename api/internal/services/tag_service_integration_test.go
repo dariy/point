@@ -386,22 +386,20 @@ func TestTagService_GetTagsByPostIDs(t *testing.T) {
 }
 
 func TestBuildEffectivelyHiddenIDs(t *testing.T) {
-	// System tag _hidden (ID=100) is parent; descendants should all be hidden.
+	// Tag 1 is hidden; descendants should all be hidden.
 	tags := []models.Tag{
-		{ID: 100, Slug: "_hidden"},
-		{ID: 1, Slug: "tag1"},
+		{ID: 1, Slug: "tag1", Hidden: true},
 		{ID: 2, Slug: "tag2"},
 		{ID: 3, Slug: "tag3"},
 	}
 	rels := []repository.TagRelationship{
-		{ParentID: 100, ChildID: 1}, // direct child of _hidden
 		{ParentID: 1, ChildID: 2},
 		{ParentID: 2, ChildID: 3},
 	}
 
 	hidden := buildEffectivelyHiddenIDs(tags, rels)
 	if !hidden[1] {
-		t.Error("tag 1 should be hidden (direct child of _hidden)")
+		t.Error("tag 1 should be hidden (Hidden=true)")
 	}
 	if !hidden[2] {
 		t.Error("tag 2 should be hidden (descendant)")
@@ -410,39 +408,36 @@ func TestBuildEffectivelyHiddenIDs(t *testing.T) {
 		t.Error("tag 3 should be hidden (grandparent propagation)")
 	}
 
-	// Tag not connected to _hidden should not be hidden.
+	// Tag not connected to a hidden tag should not be hidden.
 	tags2 := []models.Tag{
-		{ID: 100, Slug: "_hidden"},
 		{ID: 10, Slug: "tag10"},
 		{ID: 11, Slug: "tag11"},
 	}
 	rels2 := []repository.TagRelationship{{ParentID: 10, ChildID: 11}}
 	hidden2 := buildEffectivelyHiddenIDs(tags2, rels2)
 	if hidden2[10] {
-		t.Error("tag 10 should NOT be hidden (not under _hidden)")
+		t.Error("tag 10 should NOT be hidden")
 	}
 	if hidden2[11] {
-		t.Error("tag 11 should NOT be hidden (parent not under _hidden)")
+		t.Error("tag 11 should NOT be hidden")
 	}
 }
 
 func TestBuildEffectivelyHiddenPostsTagIDs(t *testing.T) {
-	// System tag _hide_posts (ID=100) is parent; descendants should all hide posts.
+	// Tag 1 hides posts; descendants should all hide posts.
 	tags := []models.Tag{
-		{ID: 100, Slug: "_hide_posts"},
-		{ID: 1, Slug: "tag1"},
+		{ID: 1, Slug: "tag1", HidesPosts: true},
 		{ID: 2, Slug: "tag2"},
 		{ID: 3, Slug: "tag3"},
 	}
 	rels := []repository.TagRelationship{
-		{ParentID: 100, ChildID: 1},
 		{ParentID: 1, ChildID: 2},
 		{ParentID: 2, ChildID: 3},
 	}
 
 	hiddenPosts := buildEffectivelyHiddenPostsTagIDs(tags, rels)
 	if !hiddenPosts[1] {
-		t.Error("tag 1 should hide posts (direct child of _hide_posts)")
+		t.Error("tag 1 should hide posts (HidesPosts=true)")
 	}
 	if !hiddenPosts[2] {
 		t.Error("tag 2 should hide posts (inherited from tag 1)")
@@ -478,12 +473,12 @@ func TestTagService_EffectivelyHidden(t *testing.T) {
 		t.Errorf("expected empty map, got %v", hidden)
 	}
 
-	// Set up _hidden system tag and make a tag its child.
-	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, post_count) VALUES ('Hidden','_hidden',0)`)
+	// Set up a tag with hidden=true and make another tag its child.
+	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, hidden, post_count) VALUES ('Hidden','hiddentag',1,0)`)
 	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, post_count) VALUES ('Secret','secret',0)`)
 	_, _ = repo.DB().Exec(`
 		INSERT INTO tag_relationships (parent_id, child_id)
-		SELECT h.id, s.id FROM tags h, tags s WHERE h.slug='_hidden' AND s.slug='secret'`)
+		SELECT h.id, s.id FROM tags h, tags s WHERE h.slug='hiddentag' AND s.slug='secret'`)
 
 	var secretID int64
 	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug='secret'`).Scan(&secretID)
@@ -768,8 +763,7 @@ func TestTagService_WithRelatedIDs(t *testing.T) {
 		t.Errorf("expected empty map, got %d entries", len(ids))
 	}
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10,'_with_related','_with_related'),(20,'User','user')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10,20)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, show_related) VALUES (20,'User','user', 1)`)
 
 	ids, err = svc.WithRelatedIDs(ctx)
 	if err != nil {
@@ -793,8 +787,7 @@ func TestTagService_InBreadcrumbsIDs(t *testing.T) {
 		t.Errorf("expected empty map, got %d entries", len(ids))
 	}
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10,'_is_in_breadcrumbs','_is_in_breadcrumbs'),(30,'User','user2')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10,30)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, in_breadcrumbs) VALUES (30,'User','user2', 1)`)
 
 	ids, err = svc.InBreadcrumbsIDs(ctx)
 	if err != nil {
@@ -890,17 +883,17 @@ func TestTagService_PageTagIDs(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	// No _page tag — should return empty map, not error
+	// No hidden tags — should return empty map, not error
 	ids, err := svc.PageTagIDs(ctx)
 	if err != nil {
-		t.Fatalf("PageTagIDs (no _page) failed: %v", err)
+		t.Fatalf("PageTagIDs (no hidden tags) failed: %v", err)
 	}
 	if len(ids) != 0 {
 		t.Errorf("expected empty map, got %d entries", len(ids))
 	}
 
-	// Create _page tag and a child tag
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (200,'page','_page')`)
+	// Create a hidden tag and a child tag
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug,hidden) VALUES (200,'HiddenParent','hidden-parent',1)`)
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (201,'About','about')`)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id,child_id) VALUES (200,201)`)
 
@@ -909,6 +902,6 @@ func TestTagService_PageTagIDs(t *testing.T) {
 		t.Fatalf("PageTagIDs failed: %v", err)
 	}
 	if !ids2[201] {
-		t.Errorf("expected tag 201 to be a page tag ID")
+		t.Errorf("expected tag 201 to be a page tag ID (inherited from hidden parent)")
 	}
 }

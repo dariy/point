@@ -63,6 +63,7 @@ type Repository interface {
 	MigrateFlagsToSystemTags(ctx context.Context) error
 	RebuildTagsTableDropBooleans(ctx context.Context) error
 	EnsureSystemTags(ctx context.Context) error
+	MigrateTagFlagsFromSystemTags(ctx context.Context) error
 
 	// Posts
 	ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
@@ -105,7 +106,7 @@ type Repository interface {
 	ListInTimelineDescendants(ctx context.Context) ([]InTimelineTag, error)
 	ListInTimelineDescendantsForTag(ctx context.Context, contextTagSlug string) ([]InTimelineTag, error)
 	GetLocationTagsCoOccurringWith(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]LocationTagCoOccurrence, error)
-	GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]PostTagInfo, error)
+	GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64) (map[int64][]PostTagInfo, error)
 }
 
 type sqliteRepository struct {

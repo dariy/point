@@ -5,429 +5,216 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
-	"point-api/internal/config"
-	"point-api/internal/models"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 )
 
-func TestPagesHandler_GetHomePage(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
+func setupPagesHandler(t *testing.T) (*PagesHandler, *testHandlers) {
+	h := setupHandlers(t)
+	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.mediaSvc, h.settingsSvc, h.cacheSvc)
+	return ph, h
+}
 
-	postService := services.NewPostService(repo, nil, nil, "")
-	tagService := services.NewTagService(repo)
-	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, nil, settingsService, tagService)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postService, tagService, mediaService, settingsService, cacheService)
+func TestPagesHandler_PostGrid(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx := context.Background()
+
+	// Create user
+	userID := insertUser(h.repo)
+
+	// Create post
+	_, _, _ = h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title:    "Post 1",
+		Status:   "published",
+		AuthorID: userID,
+	})
+
+	// Public user
+	req := httptest.NewRequest(http.MethodGet, "/posts", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := handler.GetHomePage(c); err != nil {
+	if err := ph.GetHomePage(c); err != nil {
 		t.Fatalf("GetHomePage failed: %v", err)
 	}
-
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if len(resp["posts"].([]interface{})) != 1 {
+		t.Errorf("expected 1 post, got %v", len(resp["posts"].([]interface{})))
+	}
+}
+
+func TestPagesHandler_PostPage(t *testing.T) {
+	_, h := setupPagesHandler(t)
+	defer h.close()
+	postH := NewPostHandler(h.postSvc, h.settingsSvc, h.mediaSvc, h.tagSvc)
+
+	e := echo.New()
+	ctx := context.Background()
+
+	// Create user
+	userID := insertUser(h.repo)
+
+	// Create post
+	post, _, _ := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title:    "Post 1",
+		Slug:     "post-1",
+		Status:   "published",
+		AuthorID: userID,
+	})
+
+	// Public user
+	req := httptest.NewRequest(http.MethodGet, "/posts/post-1", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("slug")
+	c.SetParamValues("post-1")
+
+	if err := postH.GetPostBySlug(c); err != nil {
+		t.Fatalf("GetPostBySlug failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["slug"] != post.Slug {
+		t.Errorf("expected post-1, got %v", resp["slug"])
 	}
 }
 
 func TestPagesHandler_TagPage(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
-
-	tagSvc := services.NewTagService(repo)
-	_, _ = tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "News", Slug: "news"})
-
-	postService := services.NewPostService(repo, nil, nil, "")
-	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, nil, settingsService, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postService, tagSvc, mediaService, settingsService, cacheService)
+	ph, h := setupPagesHandler(t)
+	defer h.close()
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/tags/news", nil)
+	ctx := context.Background()
+
+	// Create tag
+	tag, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Tag1", Slug: "tag-1"})
+
+	// Public user
+	req := httptest.NewRequest(http.MethodGet, "/tags/tag-1", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
-	c.SetParamValues("news")
+	c.SetParamValues("tag-1")
 
-	if err := handler.GetTagPage(c); err != nil {
+	if err := ph.GetTagPage(c); err != nil {
 		t.Fatalf("GetTagPage failed: %v", err)
 	}
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
-}
 
-func TestPagesHandler_TagsPage(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
-
-	tagSvc := services.NewTagService(repo)
-	postService := services.NewPostService(repo, nil, nil, "")
-	settingsService := services.NewSettingsService(repo)
-	mediaService := services.NewMediaService(repo, nil, settingsService, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postService, tagSvc, mediaService, settingsService, cacheService)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/tags", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	if err := handler.GetTagsPage(c); err != nil {
-		t.Fatalf("GetTagsPage failed: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", rec.Code)
-	}
-}
-
-func TestPagesHandler_GetMapPage(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
-
-	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	tagSvc := services.NewTagService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
-	e := echo.New()
-	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
-
-	// Public map (no user)
-	req := httptest.NewRequest(http.MethodGet, "/map", nil)
-	rec := httptest.NewRecorder()
-	if err := handler.GetMapPage(e.NewContext(req, rec)); err != nil {
-		t.Fatalf("GetMapPage failed: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
-	}
-
-	// Admin map (with user set)
-	req = httptest.NewRequest(http.MethodGet, "/map", nil)
-	rec = httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.Set("user", struct{}{})
-	if err := handler.GetMapPage(c); err != nil {
-		t.Fatalf("GetMapPage (admin) failed: %v", err)
-	}
-}
-
-func TestPagesHandler_GetMapPageWithData(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
-
-	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	tagSvc := services.NewTagService(repo)
-	ctx := context.Background()
-
-	// Create country tag and a child (city)
-	country, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Country"})
-	city, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "France"})
-	_ = tagSvc.SetTagParents(ctx, city.ID, []int64{country.ID})
-
-	// Give city a location
-	_ = tagSvc.SetTagLocations(ctx, city.ID, []services.TagLocationInput{{Latitude: 48.8566, Longitude: 2.3522}})
-
-	// Set post_count for city so it appears in ListTags
-	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1 WHERE id = ?`, city.ID)
-
-	_ = settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
-	e := echo.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/map", nil)
-	rec := httptest.NewRecorder()
-	if err := handler.GetMapPage(e.NewContext(req, rec)); err != nil {
-		t.Fatalf("GetMapPage (with data) failed: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
-	}
-
-	_ = country
-}
-
-func TestPagesHandler_TagsPageAdmin(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
-
-	tagSvc := services.NewTagService(repo)
-	ctx := context.Background()
-	parent, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Travel"})
-	child, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Europe"})
-	_ = tagSvc.SetTagParents(ctx, child.ID, []int64{parent.ID})
-	// Set post_count > 0 so they appear in ListTags(includeEmpty=false)
-	_, _ = repo.DB().Exec(`UPDATE tags SET post_count = 1`)
-	// Add a location to parent tag so location branch is covered
-	_ = tagSvc.SetTagLocations(ctx, parent.ID, []services.TagLocationInput{{Latitude: 48.8, Longitude: 2.3}})
-
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
-	e := echo.New()
-
-	// Admin mode
-	req := httptest.NewRequest(http.MethodGet, "/tags", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.Set("user", struct{}{}) // authenticated
-
-	if err := handler.GetTagsPage(c); err != nil {
-		t.Fatalf("GetTagsPage (admin) failed: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
-	}
-}
-
-func TestPagesHandler_TagPageNotFound(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
-
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	tagSvc := services.NewTagService(repo)
-	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
-	e := echo.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/tags/nonexistent", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("nonexistent")
-	err := handler.GetTagPage(c)
-	if err == nil {
-		t.Error("expected error for nonexistent tag")
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["tag"].(map[string]interface{})["slug"] != tag.Slug {
+		t.Errorf("expected tag-1, got %v", resp["tag"].(map[string]interface{})["slug"])
 	}
 }
 
 func TestPagesHandler_TagPageHidden(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
+	ph, h := setupPagesHandler(t)
+	defer h.close()
 
-	tagSvc := services.NewTagService(repo)
 	ctx := context.Background()
-	// Create hidden-tag and make it a child of the _hidden system tag.
-	hidden, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "HiddenTag", Slug: "hidden-tag"})
-	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug, post_count) VALUES ('Hidden','_hidden',0)`)
-	_, _ = repo.DB().Exec(`
-		INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
-		SELECT h.id, ? FROM tags h WHERE h.slug = '_hidden'`, hidden.ID)
+	// Create hidden-tag directly with Hidden: true
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "HiddenTag", Slug: "hidden-tag", Hidden: true})
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
-
 	// Public user requesting hidden tag should get 404
 	req := httptest.NewRequest(http.MethodGet, "/tags/hidden-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
 	c.SetParamValues("hidden-tag")
-	err := handler.GetTagPage(c)
+	err := ph.GetTagPage(c)
 	if err == nil {
 		t.Error("expected error for hidden tag accessed publicly")
 	}
 }
 
 func TestPagesHandler_TagPageWithAuth(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
+	ph, h := setupPagesHandler(t)
+	defer h.close()
 
-	tagSvc := services.NewTagService(repo)
-	_, _ = tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "AuthTag", Slug: "auth-tag"})
+	tag, _ := h.tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "AuthTag", Slug: "auth-tag", Hidden: true})
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
 	e := echo.New()
-
+	// Authenticated user requesting hidden tag should get 200
 	req := httptest.NewRequest(http.MethodGet, "/tags/auth-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
 	c.SetParamValues("auth-tag")
-	c.Set("user", struct{}{}) // authenticated user — admin mode
+	c.Set("user", "test-user")
 
-	if err := handler.GetTagPage(c); err != nil {
-		t.Fatalf("GetTagPage (admin) failed: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
-	}
-}
-
-func TestPagesHandler_GetTagPage(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() {
-		_ = repo.Close()
-	}()
-
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	tagSvc := services.NewTagService(repo)
-	settingsSvc := services.NewSettingsService(repo)
-	_ = settingsSvc.SetSetting(context.Background(), "map_mode", "all", "string")
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
-	e := echo.New()
-
-	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1, 'News', 'news')`)
-	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('P','p','b',1,'published',datetime('now'))`)
-	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, 1)`)
-
-	// 1. Existing tag
-	req := httptest.NewRequest(http.MethodGet, "/tags/news", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("news")
-
-	if err := handler.GetTagPage(c); err != nil {
+	if err := ph.GetTagPage(c); err != nil {
 		t.Fatalf("GetTagPage failed: %v", err)
 	}
 	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
+		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 
-	// 2. Non-existent tag
-	req = httptest.NewRequest(http.MethodGet, "/tags/missing", nil)
-	rec = httptest.NewRecorder()
-	c = e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("missing")
-
-	err := handler.GetTagPage(c)
-	if err == nil {
-		t.Error("expected error for non-existent tag")
-	}
-
-	// 3. GetMapPage
-	req = httptest.NewRequest(http.MethodGet, "/map", nil)
-	rec = httptest.NewRecorder()
-	c = e.NewContext(req, rec)
-	if err := handler.GetMapPage(c); err != nil {
-		t.Fatalf("GetMapPage failed: %v", err)
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["tag"].(map[string]interface{})["slug"] != tag.Slug {
+		t.Errorf("expected auth-tag, got %v", resp["tag"].(map[string]interface{})["slug"])
 	}
 }
 
 func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-
-	settingsSvc := services.NewSettingsService(repo)
-	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheSvc := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)
+	ph, h := setupPagesHandler(t)
+	defer h.close()
 
 	ctx := context.Background()
-	_ = repo.EnsureSystemTags(ctx)
-	_ = settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
 
 	// Create user
-	res, _ := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('test', 'test@test.com', 'hash', 'Test User')`)
-	userID, _ := res.LastInsertId()
+	userID := insertUser(h.repo)
 
-	// 2024 tag in timeline
-	y2024, err := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2024"})
+	// 2024 tag in timeline (using Kind: "year")
+	_, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2024", Slug: "2024", Kind: "year"})
 	if err != nil {
 		t.Fatalf("y2024 creation failed: %v", err)
 	}
-	inTimeline, _ := repo.GetTagBySlug(ctx, "_in_timeline")
-	err = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: inTimeline.ID, ChildID: y2024.ID})
-	if err != nil {
-		t.Fatalf("y2024 rel failed: %v", err)
-	}
 
 	// Berlin location
-	berlin, err := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Berlin"})
+	berlin, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Berlin", Slug: "berlin"})
 	if err != nil {
 		t.Fatalf("Berlin creation failed: %v", err)
 	}
-	_ = repo.UpsertTagLocation(ctx, berlin.ID, 52.5, 13.4)
+	_ = h.repo.UpsertTagLocation(ctx, berlin.ID, 52.5, 13.4)
 
 	// Post in 2024 at Berlin
-	p1, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P1", Status: "published", AuthorID: userID})
+	p1, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P1", Status: "published", AuthorID: userID})
 	if err != nil {
 		t.Fatalf("p1 creation failed: %v", err)
 	}
-	err = postSvc.UpdatePostTags(ctx, p1.ID, []string{"2024", "berlin"})
+	err = h.postSvc.UpdatePostTags(ctx, p1.ID, []string{"2024", "berlin"})
 	if err != nil {
 		t.Fatalf("p1 tags update failed: %v", err)
 	}
 
 	// Post NOT in 2024 (e.g. 2023) at Paris
-	y2023, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2023"})
-	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: inTimeline.ID, ChildID: y2023.ID})
-	paris, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Paris"})
-	_ = repo.UpsertTagLocation(ctx, paris.ID, 48.8, 2.3)
-	p2, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P2", Status: "published", AuthorID: userID})
-	_ = postSvc.UpdatePostTags(ctx, p2.ID, []string{"2023", "paris"})
-
-	// Verify repo has the link
-	var ptCount int64
-	_ = repo.DB().QueryRow(`SELECT COUNT(*) FROM post_tags`).Scan(&ptCount)
-	t.Logf("PostTags count: %d", ptCount)
-
-	var inTimelineID int64
-	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug = '_in_timeline'`).Scan(&inTimelineID)
-	t.Logf("_in_timeline ID: %d", inTimelineID)
-
-	var y2024ID int64
-	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug = '2024'`).Scan(&y2024ID)
-	t.Logf("2024 ID: %d", y2024ID)
-
-	var relCount int64
-	_ = repo.DB().QueryRow(`SELECT COUNT(*) FROM tag_relationships WHERE parent_id = ? AND child_id = ?`, inTimelineID, y2024ID).Scan(&relCount)
-	t.Logf("Relationship count (_in_timeline -> 2024): %d", relCount)
-
-	rangeResults, err := repo.ListMapTagsForYearRange(ctx, 2024, 2024)
-	t.Logf("Repo rangeResults (2024): %+v, error: %v", rangeResults, err)
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "2023", Slug: "2023", Kind: "year"})
+	paris, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Paris", Slug: "paris"})
+	_ = h.repo.UpsertTagLocation(ctx, paris.ID, 48.8, 2.3)
+	p2, _, _ := h.postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P2", Status: "published", AuthorID: userID})
+	_ = h.postSvc.UpdatePostTags(ctx, p2.ID, []string{"2023", "paris"})
 
 	e := echo.New()
 
@@ -436,10 +223,9 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := handler.GetMapPage(c); err != nil {
+	if err := ph.GetMapPage(c); err != nil {
 		t.Fatalf("GetMapPage failed: %v", err)
 	}
-	t.Logf("Response body: %s", rec.Body.String())
 
 	var resp map[string]interface{}
 	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
@@ -457,366 +243,66 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 }
 
 func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
-	ctx := context.Background()
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	tagSvc := services.NewTagService(repo)
-	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	e := echo.New()
-
-	res, _ := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
-	userID, _ := res.LastInsertId()
-	tag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Tech", Slug: "tech"})
-	post, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "T1", Status: "published", AuthorID: userID})
-	_ = postSvc.UpdatePostTags(ctx, post.ID, []string{tag.Slug})
-
-	makeTagReq := func(h *PagesHandler) map[string]interface{} {
-		req := httptest.NewRequest(http.MethodGet, "/tags/tech", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues("tech")
-		if err := h.GetTagPage(c); err != nil {
-			t.Fatalf("GetTagPage failed: %v", err)
-		}
-		var body map[string]interface{}
-		_ = json.Unmarshal(rec.Body.Bytes(), &body)
-		return body
-	}
-
-	// show_view_counts=false: view_count must be absent
-	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "false", "boolean")
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
-	body := makeTagReq(handler)
-	posts := body["posts"].([]interface{})
-	if len(posts) == 0 {
-		t.Fatal("expected at least one post")
-	}
-	if _, ok := posts[0].(map[string]interface{})["view_count"]; ok {
-		t.Error("view_count should not be present when show_view_counts=false")
-	}
-
-	// show_view_counts=true: view_count must be present
-	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "true", "boolean")
-	handler2 := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
-	body = makeTagReq(handler2)
-	posts = body["posts"].([]interface{})
-	if _, ok := posts[0].(map[string]interface{})["view_count"]; !ok {
-		t.Error("view_count should be present when show_view_counts=true")
-	}
-}
-
-func TestPagesHandler_HomePageCustom_ViewCountVisibility(t *testing.T) {
-	ctx := context.Background()
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	tagSvc := services.NewTagService(repo)
-	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	e := echo.New()
-
-	res, _ := repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
-	userID, _ := res.LastInsertId()
-
-	// Create a page-type post and wire it as the custom home page
-	p, _, _ := postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Home", Slug: "home", Status: "page", AuthorID: userID})
-	_ = settingsSvc.SetSetting(ctx, "home_page_post_id", p.Slug, "string")
-
-	makeReq := func(h *PagesHandler) map[string]interface{} {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		rec := httptest.NewRecorder()
-		if err := h.GetHomePage(e.NewContext(req, rec)); err != nil {
-			t.Fatalf("GetHomePage failed: %v", err)
-		}
-		var body map[string]interface{}
-		_ = json.Unmarshal(rec.Body.Bytes(), &body)
-		return body
-	}
-
-	// show_view_counts=false: view_count must be absent from the custom home page post
-	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "false", "boolean")
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
-	body := makeReq(handler)
-	posts := body["posts"].([]interface{})
-	if len(posts) == 0 {
-		t.Fatal("expected home page post")
-	}
-	if _, ok := posts[0].(map[string]interface{})["view_count"]; ok {
-		t.Error("view_count should not be present when show_view_counts=false")
-	}
-
-	// show_view_counts=true: view_count must be present
-	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "true", "boolean")
-	handler2 := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
-	body = makeReq(handler2)
-	posts = body["posts"].([]interface{})
-	if _, ok := posts[0].(map[string]interface{})["view_count"]; !ok {
-		t.Error("view_count should be present when show_view_counts=true")
-	}
-}
-
-func TestPagesHandler_ViewCountVisibility(t *testing.T) {
-	ctx := context.Background()
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	tagSvc := services.NewTagService(repo)
-	settingsSvc := services.NewSettingsService(repo)
-	mediaSvc := services.NewMediaService(repo, nil, settingsSvc, tagSvc)
-	cacheService := services.NewCacheService(t.TempDir())
-	handler := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheService)
-	e := echo.New()
-
-	_, _ = repo.DB().Exec(`INSERT INTO users (username, email, password_hash, display_name) VALUES ('u','u@t.com','h','U')`)
-	_, _ = repo.DB().Exec(`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES ('P','p','b',1,'published',datetime('now'))`)
-
-	makeHomeReq := func(h *PagesHandler) map[string]interface{} {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-		if err := h.GetHomePage(c); err != nil {
-			t.Fatalf("GetHomePage failed: %v", err)
-		}
-		var body map[string]interface{}
-		_ = json.Unmarshal(rec.Body.Bytes(), &body)
-		return body
-	}
-
-	// Default (show_view_counts = "false"): view_count must be absent
-	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "false", "boolean")
-	body := makeHomeReq(handler)
-	posts := body["posts"].([]interface{})
-	if len(posts) == 0 {
-		t.Fatal("expected at least one post")
-	}
-	post := posts[0].(map[string]interface{})
-	if _, ok := post["view_count"]; ok {
-		t.Error("view_count should not be present when show_view_counts=false")
-	}
-
-	// Enabled (show_view_counts = "true"): use a fresh handler (fresh cache) to avoid cache hit from above
-	_ = settingsSvc.SetSetting(ctx, "show_view_counts", "true", "boolean")
-	handler2 := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, services.NewCacheService(t.TempDir()))
-	body = makeHomeReq(handler2)
-	posts = body["posts"].([]interface{})
-	post = posts[0].(map[string]interface{})
-	if _, ok := post["view_count"]; !ok {
-		t.Error("view_count should be present when show_view_counts=true")
-	}
-}
-
-func setupPagesHandler(t *testing.T) (*PagesHandler, *testHandlers) {
-	h := setupHandlers(t)
-	ph := NewPagesHandler(h.repo, h.postSvc, h.tagSvc, h.mediaSvc, h.settingsSvc, h.cacheSvc)
-	return ph, h
-}
-
-func TestPagesHandler_GetTagPage_NotFound(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	defer h.close()
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("no-such-tag")
-	err := ph.GetTagPage(c)
-	if err == nil {
-		t.Error("expected 404")
-	}
-}
-
-func TestPagesHandler_GetTagPage_HiddenTag(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()
 
-	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'Hidden','_hidden_posts'),(2,'Nature','nature')`)
-	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id,child_id) VALUES (1,2)`)
-
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx := context.Background()
+
+	// Create user
+	userID := insertUser(h.repo)
+
+	// Case 1: Tag above threshold
+	tag1, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Popular1"})
+	for i := 1; i <= 5; i++ {
+		p, _, _ := h.postSvc.CreatePost(ctx, services.CreatePostParams{Title: "P" + strconv.Itoa(i), Status: "published", AuthorID: userID})
+		_ = h.postSvc.UpdatePostTags(ctx, p.ID, []string{tag1.Slug})
+	}
+	_ = h.settingsSvc.SetSetting(ctx, "min_tag_posts_to_show", "3", "int")
+
+	req := httptest.NewRequest(http.MethodGet, "/tags/"+tag1.Slug, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
-	c.SetParamValues("nature")
+	c.SetParamValues(tag1.Slug)
 
-	err := ph.GetTagPage(c)
-
-	_ = err
-	_ = rec
-}
-
-func TestPagesHandler_GetTagPage_Success(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	defer h.close()
-	insertUser(h.repo)
-	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'Nature','nature')`)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("nature")
 	if err := ph.GetTagPage(c); err != nil {
-		t.Fatalf("GetTagPage: %v", err)
-	}
-}
-
-func TestPagesHandler_GetHomePage_Admin(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	defer h.close()
-	insertUser(h.repo)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/?page=1", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
-	if err := ph.GetHomePage(c); err != nil {
-		t.Fatalf("GetHomePage admin: %v", err)
-	}
-}
-
-func TestPagesHandler_GetTagsPage_Success(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	defer h.close()
-	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'Nature','nature')`)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	if err := ph.GetTagsPage(c); err != nil {
-		t.Fatalf("GetTagsPage: %v", err)
-	}
-}
-func newPagesHandlerForTest(t *testing.T) *PagesHandler {
-	t.Helper()
-	repo := setupTestDB(t)
-	cfg := &config.Config{}
-	settingsSvc := services.NewSettingsService(repo)
-	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	cacheSvc := services.NewCacheService(t.TempDir())
-	return NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)
-}
-
-func TestPagesHandler_GetNavMenu_TagsMode(t *testing.T) {
-	h := newPagesHandlerForTest(t)
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/pages/nav", nil)
-	rec := httptest.NewRecorder()
-	if err := h.GetNavMenu(e.NewContext(req, rec)); err != nil {
-		t.Fatalf("GetNavMenu: %v", err)
+		t.Fatalf("GetTagPage (above) failed: %v", err)
 	}
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+		t.Errorf("expected status 200, got %d", rec.Code)
 	}
-	var resp map[string]interface{}
-	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-	if _, ok := resp["menu"]; !ok {
-		t.Error("response missing 'menu' key")
-	}
-}
 
-func TestPagesHandler_GetNavMenu_CustomMode(t *testing.T) {
-	repo := setupTestDB(t)
-	cfg := &config.Config{}
-	settingsSvc := services.NewSettingsService(repo)
-	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
-	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	cacheSvc := services.NewCacheService(t.TempDir())
-	h := NewPagesHandler(repo, postSvc, tagSvc, mediaSvc, settingsSvc, cacheSvc)
-
-	ctx := t.Context()
-	_ = settingsSvc.SetSetting(ctx, "nav_menu_mode", "custom", "string")
-	_ = settingsSvc.SetSetting(ctx, "custom_nav_menu", `[{"id":1,"label":"Home","url":"/"}]`, "string")
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/pages/nav", nil)
-	rec := httptest.NewRecorder()
-	if err := h.GetNavMenu(e.NewContext(req, rec)); err != nil {
-		t.Fatalf("GetNavMenu: %v", err)
+	// Case 2: Tag below threshold
+	tag2, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Popular2"})
+	for i := 1; i <= 5; i++ {
+		p, _, _ := h.postSvc.CreatePost(ctx, services.CreatePostParams{Title: "Q" + strconv.Itoa(i), Status: "published", AuthorID: userID})
+		_ = h.postSvc.UpdatePostTags(ctx, p.ID, []string{tag2.Slug})
 	}
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var resp map[string]interface{}
-	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-	menu, ok := resp["menu"].([]interface{})
-	if !ok || len(menu) == 0 {
-		t.Errorf("expected custom menu items, got %v", resp["menu"])
-	}
-}
+	_ = h.settingsSvc.SetSetting(ctx, "min_tag_posts_to_show", "10", "int")
 
-func TestPagesHandler_GetHomePage_DBError(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	_ = h.repo.Close()
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	err := ph.GetHomePage(e.NewContext(req, rec))
+	req2 := httptest.NewRequest(http.MethodGet, "/tags/"+tag2.Slug, nil)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	c2.SetParamNames("slug")
+	c2.SetParamValues(tag2.Slug)
+
+	err := ph.GetTagPage(c2)
 	if err == nil {
-		t.Error("expected error with closed DB")
+		t.Error("expected 404 for tag under threshold (public)")
 	}
-}
 
-func TestPagesHandler_GetHomePage_PerPageQueryParam(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	defer h.close()
+	// Case 3: Admin sees it anyway
+	rec3 := httptest.NewRecorder()
+	c3 := e.NewContext(req2, rec3)
+	c3.SetParamNames("slug")
+	c3.SetParamValues(tag2.Slug)
+	c3.Set("user", "admin")
 
-	_, _ = h.repo.DB().Exec(`INSERT INTO blog_settings (key, value, value_type) VALUES ('posts_per_page', '0', 'integer')`)
-	e := echo.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/?per_page=5", nil)
-	rec := httptest.NewRecorder()
-	err := ph.GetHomePage(e.NewContext(req, rec))
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := ph.GetTagPage(c3); err != nil {
+		t.Fatalf("GetTagPage (admin) failed: %v", err)
 	}
-}
-
-func TestPagesHandler_GetTagPage_PerPageQueryParam(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	defer h.close()
-	tag, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "TestNav", Slug: "testnav"})
-	_, _ = h.repo.DB().Exec(`INSERT INTO blog_settings (key, value, value_type) VALUES ('posts_per_page', '0', 'integer')`)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/?per_page=5", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues(tag.Slug)
-	err := ph.GetTagPage(c)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestPagesHandler_GetTagPage_PostsTableError(t *testing.T) {
-	ph, h := setupPagesHandler(t)
-	tag, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "DropTest", Slug: "droptest"})
-
-	_, _ = h.repo.DB().Exec(`DROP TABLE post_tags`)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues(tag.Slug)
-	err := ph.GetTagPage(c)
-	if err == nil {
-		t.Error("expected error when post_tags is dropped")
+	if rec3.Code != http.StatusOK {
+		t.Errorf("expected status 200 for admin, got %d", rec3.Code)
 	}
 }

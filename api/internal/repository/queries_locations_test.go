@@ -6,7 +6,7 @@ import (
 )
 
 func TestRepository_TagLocations(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() {
 		_ = repo.Close()
 	}()
@@ -39,7 +39,7 @@ func TestRepository_TagLocations(t *testing.T) {
 }
 
 func TestRepository_UpsertTagLocation_InsertAndUpdate(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 

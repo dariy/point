@@ -260,10 +260,16 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
+	minPosts := getMinTagPostsSetting(allSettings)
 	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
-	if publicOnly && effectivelyHidden[tag.ID] {
-		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	var excludeTagIDs map[int64]bool
+	if publicOnly {
+		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		if excludeTagIDs[tag.ID] {
+			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+		}
 	}
+
 	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	showViewCounts := allSettings["show_view_counts"] == "true"
@@ -271,8 +277,6 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
 	inBreadcrumbs, _ := h.tagService.InBreadcrumbsIDs(ctx)
-
-	minPosts := getMinTagPostsSetting(allSettings)
 
 	// Direct children for tag detail response (exclude effectively hidden ones)
 	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly, minPosts)
@@ -331,11 +335,6 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	tagPostTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, tagPostIDs)
 	tagAncestorsMap := fetchAncestorsMap(ctx, h.repo, tagPostTagsMap)
 	tagPostTagsMap = expandPostTagsWithAncestors(tagPostTagsMap, tagAncestorsMap, publicOnly)
-
-	var excludeTagIDs map[int64]bool
-	if publicOnly {
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
-	}
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
@@ -508,11 +507,10 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	}
 
 	// Find the base category tags used to determine type.
-	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities", "year", "years"})
+	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities"})
 
 	countryDescIDs := map[int64]bool{}
 	cityDescIDs := map[int64]bool{}
-	var yearTagID int64
 
 	for _, bt := range baseTags {
 		name := strings.ToLower(bt.Name)
@@ -525,9 +523,6 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 				cityDescIDs[d.ID] = true
 			}
 		}
-		if name == "year" || name == "years" {
-			yearTagID = bt.ID
-		}
 	}
 
 	allTags, _ := h.tagService.ListTags(ctx, true, publicOnly)
@@ -537,10 +532,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	}
 	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, tagIDs)
 
-	var yearMap map[int64][]repository.PostTagInfo
-	if yearTagID > 0 {
-		yearMap, _ = h.repo.GetYearTagsByLocationTagIDs(ctx, tagIDs, yearTagID)
-	}
+	yearMap, _ := h.repo.GetYearTagsByLocationTagIDs(ctx, tagIDs)
 
 	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minMapPosts)
 	hierarchicalCounts, _ := h.tagService.GetHierarchicalPostCounts(ctx, publicOnly)

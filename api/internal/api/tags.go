@@ -64,38 +64,6 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 		}
 	}
 
-	// For admin: non-system tags with no DB parents are virtually shown under _pending.
-	// This is a presentation-layer computation only — no DB relationships are written.
-	if !publicOnly {
-		var pendingTag *models.Tag
-		for i := range tags {
-			if tags[i].Slug == "_pending" {
-				pendingTag = &tags[i]
-				break
-			}
-		}
-		if pendingTag != nil {
-			pendingRef := map[string]interface{}{
-				"id":   pendingTag.ID,
-				"name": pendingTag.Name,
-				"slug": pendingTag.Slug,
-			}
-			for _, t := range tags {
-				if strings.HasPrefix(t.Slug, "_") {
-					continue // system tags have fixed parentage
-				}
-				if len(childParents[t.ID]) == 0 {
-					childParents[t.ID] = []map[string]interface{}{pendingRef}
-					parentChildren[pendingTag.ID] = append(parentChildren[pendingTag.ID], map[string]interface{}{
-						"id":   t.ID,
-						"name": t.Name,
-						"slug": t.Slug,
-					})
-				}
-			}
-		}
-	}
-
 	// Fetch locations for all tags.
 	tagIDs := make([]int64, len(tags))
 	for i, t := range tags {
@@ -141,8 +109,6 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 			"name":        t.Name,
 			"slug":        t.Slug,
 			"description": nullString(t.Description),
-			"custom_url":  nullString(t.CustomUrl),
-			"sort_order":  nullInt64(t.SortOrder),
 			"post_count":  effectiveCounts[t.ID],
 			"is_system":   strings.HasPrefix(t.Slug, "_"),
 			"parents":     parents,
@@ -278,14 +244,21 @@ type TagLocationInput struct {
 }
 
 type CreateTagRequest struct {
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	CustomURL   string             `json:"custom_url"`
-	SortOrder   *int32             `json:"sort_order"`
-	ParentIDs   []int64            `json:"parent_ids"`
-	ChildIDs    []int64            `json:"child_ids"`
-	Locations   []TagLocationInput `json:"locations"`
+	Name             string             `json:"name"`
+	Slug             string             `json:"slug"`
+	Description      string             `json:"description"`
+	Kind             string             `json:"kind"`
+	Hidden           bool               `json:"hidden"`
+	HidesPosts       bool               `json:"hides_posts"`
+	NavOrder         *int64             `json:"nav_order"`
+	InBreadcrumbs    bool               `json:"in_breadcrumbs"`
+	ShowRelated      bool               `json:"show_related"`
+	InAncestorFlyout bool               `json:"in_ancestor_flyout"`
+	Latitude         *float64           `json:"latitude"`
+	Longitude        *float64           `json:"longitude"`
+	ParentIDs        []int64            `json:"parent_ids"`
+	ChildIDs         []int64            `json:"child_ids"`
+	Locations        []TagLocationInput `json:"locations"`
 }
 
 func (h *TagHandler) CreateTag(c echo.Context) error {
@@ -295,19 +268,32 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 	}
 
 	tag, err := h.tagService.CreateTag(c.Request().Context(), services.CreateTagParams{
-		Name:        req.Name,
-		Slug:        req.Slug,
-		Description: req.Description,
-		CustomURL:   req.CustomURL,
-		SortOrder:   req.SortOrder,
-		ParentIDs:   req.ParentIDs,
+		Name:             req.Name,
+		Slug:             req.Slug,
+		Description:      req.Description,
+		Kind:             req.Kind,
+		Hidden:           req.Hidden,
+		HidesPosts:       req.HidesPosts,
+		NavOrder:         req.NavOrder,
+		InBreadcrumbs:    req.InBreadcrumbs,
+		ShowRelated:      req.ShowRelated,
+		InAncestorFlyout: req.InAncestorFlyout,
+		Latitude:         req.Latitude,
+		Longitude:        req.Longitude,
+		ParentIDs:        req.ParentIDs,
 	})
 	if err != nil {
 		return err
 	}
 
 	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
-	_ = h.tagService.SetTagLocations(c.Request().Context(), tag.ID, toServiceLocations(req.Locations))
+
+	// Forward compatibility: if locations array provided, use the first one
+	if len(req.Locations) > 0 {
+		_ = h.tagService.UpsertTagLocation(c.Request().Context(), tag.ID, req.Locations[0].Latitude, req.Locations[0].Longitude)
+		// Refresh tag after location update
+		tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
+	}
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, false, 0)
@@ -332,12 +318,19 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 	}
 
 	tag, err := h.tagService.UpdateTag(c.Request().Context(), services.UpdateTagParams{
-		ID:          id,
-		Name:        req.Name,
-		Slug:        req.Slug,
-		Description: req.Description,
-		CustomURL:   req.CustomURL,
-		SortOrder:   req.SortOrder,
+		ID:               id,
+		Name:             req.Name,
+		Slug:             req.Slug,
+		Description:      req.Description,
+		Kind:             req.Kind,
+		Hidden:           req.Hidden,
+		HidesPosts:       req.HidesPosts,
+		NavOrder:         req.NavOrder,
+		InBreadcrumbs:    req.InBreadcrumbs,
+		ShowRelated:      req.ShowRelated,
+		InAncestorFlyout: req.InAncestorFlyout,
+		Latitude:         req.Latitude,
+		Longitude:        req.Longitude,
 	})
 	if err != nil {
 		return err
@@ -346,7 +339,13 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 	// Always update parent, child, and location data (empty slice = remove all).
 	_ = h.tagService.SetTagParents(c.Request().Context(), tag.ID, req.ParentIDs)
 	_ = h.tagService.SetTagChildren(c.Request().Context(), tag.ID, req.ChildIDs)
-	_ = h.tagService.SetTagLocations(c.Request().Context(), tag.ID, toServiceLocations(req.Locations))
+
+	// Update location if provided
+	if len(req.Locations) > 0 {
+		_ = h.tagService.UpsertTagLocation(c.Request().Context(), tag.ID, req.Locations[0].Latitude, req.Locations[0].Longitude)
+		// Refresh tag
+		tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
+	}
 
 	parents, _ := h.tagService.GetTagParents(c.Request().Context(), tag.ID)
 	children, _ := h.tagService.GetTagChildren(c.Request().Context(), tag.ID, false, 0)

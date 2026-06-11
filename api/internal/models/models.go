@@ -109,26 +109,27 @@ type Session struct {
 }
 
 type Tag struct {
-	ID          int64          `json:"id"`
-	Name        string         `json:"name"`
-	Slug        string         `json:"slug"`
-	Description sql.NullString `json:"description"`
-	CustomUrl   sql.NullString `json:"custom_url"`
-	SortOrder   sql.NullInt64  `json:"sort_order"`
-	PostCount   int64          `json:"post_count"`
-	CreatedAt   time.Time      `json:"created_at"`
-}
-
-type TagLocation struct {
-	ID        int64   `json:"id"`
-	TagID     int64   `json:"tag_id"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	Slug             string          `json:"slug"`
+	Description      sql.NullString  `json:"description"`
+	Kind             string          `json:"kind"`
+	Hidden           bool            `json:"hidden"`
+	HidesPosts       bool            `json:"hides_posts"`
+	NavOrder         sql.NullInt64   `json:"nav_order"`
+	InBreadcrumbs    bool            `json:"in_breadcrumbs"`
+	ShowRelated      bool            `json:"show_related"`
+	InAncestorFlyout bool            `json:"in_ancestor_flyout"`
+	Latitude         sql.NullFloat64 `json:"latitude"`
+	Longitude        sql.NullFloat64 `json:"longitude"`
+	PostCount        int64           `json:"post_count"`
+	CreatedAt        time.Time       `json:"created_at"`
 }
 
 type TagRelationship struct {
-	ParentID int64 `json:"parent_id"`
-	ChildID  int64 `json:"child_id"`
+	ParentID  int64         `json:"parent_id"`
+	ChildID   int64         `json:"child_id"`
+	SortOrder sql.NullInt64 `json:"sort_order"`
 }
 
 type User struct {

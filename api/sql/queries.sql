@@ -281,23 +281,28 @@ SELECT * FROM tags
 WHERE slug = ? LIMIT 1;
 
 -- name: ListTags :many
-SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at FROM tags
 WHERE (CASE WHEN sqlc.arg('include_empty_filter') THEN 1=1 ELSE post_count > 0 END)
-ORDER BY sort_order ASC, name ASC;
+ORDER BY name ASC;
 
 -- name: CreateTag :one
 INSERT INTO tags (
-    name, slug, description, custom_url, sort_order, post_count, created_at
+    name, slug, description, kind, hidden, hides_posts, nav_order,
+    in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude,
+    post_count, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
 )
-RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at;
+RETURNING *;
 
 -- name: UpdateTag :one
 UPDATE tags
-SET name = ?, slug = ?, description = ?, custom_url = ?, sort_order = ?
+SET name = ?, slug = ?, description = ?,
+    kind = ?, hidden = ?, hides_posts = ?, nav_order = ?,
+    in_breadcrumbs = ?, show_related = ?, in_ancestor_flyout = ?,
+    latitude = ?, longitude = ?
 WHERE id = ?
-RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at;
+RETURNING *;
 
 -- name: DeleteTag :exec
 DELETE FROM tags

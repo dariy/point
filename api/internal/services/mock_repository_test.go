@@ -127,6 +127,7 @@ type mockRepository struct {
 	MockMigrateFlagsToSystemTags        func(ctx context.Context) error
 	MockRebuildTagsTableDropBooleans    func(ctx context.Context) error
 	MockEnsureSystemTags                func(ctx context.Context) error
+	MockMigrateTagFlagsFromSystemTags   func(ctx context.Context) error
 	MockListPostsInYearRange            func(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
 	MockCountPostsInYearRange           func(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
 	MockListPostsWithSearch             func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error)
@@ -161,7 +162,7 @@ type mockRepository struct {
 	MockListInTimelineDescendants       func(ctx context.Context) ([]repository.InTimelineTag, error)
 	MockListInTimelineDescendantsForTag func(ctx context.Context, contextTagSlug string) ([]repository.InTimelineTag, error)
 	MockGetLocationTagsCoOccurringWith  func(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]repository.LocationTagCoOccurrence, error)
-	MockGetYearTagsByLocationTagIDs     func(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]repository.PostTagInfo, error)
+	MockGetYearTagsByLocationTagIDs     func(ctx context.Context, locTagIDs []int64) (map[int64][]repository.PostTagInfo, error)
 }
 
 // Ensure mockRepository implements repository.Repository
@@ -933,6 +934,13 @@ func (m *mockRepository) EnsureSystemTags(ctx context.Context) error {
 	return fmt.Errorf("EnsureSystemTags not implemented")
 }
 
+func (m *mockRepository) MigrateTagFlagsFromSystemTags(ctx context.Context) error {
+	if m.MockMigrateTagFlagsFromSystemTags != nil {
+		return m.MockMigrateTagFlagsFromSystemTags(ctx)
+	}
+	return nil
+}
+
 func (m *mockRepository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
 	if m.MockListPostsInYearRange != nil {
 		return m.MockListPostsInYearRange(ctx, fromYear, toYear, arg)
@@ -1171,9 +1179,9 @@ func (m *mockRepository) GetLocationTagsCoOccurringWith(ctx context.Context, dat
 	return nil, fmt.Errorf("GetLocationTagsCoOccurringWith not implemented")
 }
 
-func (m *mockRepository) GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]repository.PostTagInfo, error) {
+func (m *mockRepository) GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64) (map[int64][]repository.PostTagInfo, error) {
 	if m.MockGetYearTagsByLocationTagIDs != nil {
-		return m.MockGetYearTagsByLocationTagIDs(ctx, locTagIDs, yearParentID)
+		return m.MockGetYearTagsByLocationTagIDs(ctx, locTagIDs)
 	}
 	return nil, fmt.Errorf("GetYearTagsByLocationTagIDs not implemented")
 }

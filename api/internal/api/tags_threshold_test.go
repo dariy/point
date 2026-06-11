@@ -229,13 +229,12 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 	// 0. Create user
 	user, _ := repo.CreateUser(ctx, models.CreateUserParams{Username: "admin", PasswordHash: "hash", DisplayName: "Admin"})
 
-	// 1. Create _page system tag and a child tag
-	pageTag, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "_page", Slug: "_page"})
-	childTag, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "Child Page", Slug: "child-page"})
-	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: pageTag.ID, ChildID: childTag.ID})
+	// 1. Create a hidden tag and a child tag
+	pageTag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Page", Slug: "pagetag", Hidden: true})
+	childTag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Child Page", Slug: "child-page", ParentIDs: []int64{pageTag.ID}})
 
 	// 2. Create a normal tag
-	normalTag, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "Normal", Slug: "normal"})
+	normalTag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Normal", Slug: "normal"})
 
 	// 3. Create a post with both tags
 	p, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "P", Slug: "p", Status: "published", AuthorID: user.ID})
@@ -274,7 +273,7 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 		if tag["slug"] == "child-page" {
 			foundChild = true
 		}
-		if tag["slug"] == "_page" {
+		if tag["slug"] == "pagetag" {
 			foundPage = true
 		}
 	}
@@ -283,13 +282,13 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 		t.Error("FAIL: 'normal' tag not found in post response")
 	}
 	if foundChild {
-		t.Error("FAIL: 'child-page' (descendant of _page) found in post response")
+		t.Error("FAIL: 'child-page' (descendant of hidden tag) found in post response")
 	} else {
 		t.Log("PASS: 'child-page' correctly excluded from post response")
 	}
 	if foundPage {
-		t.Log("NOTE: '_page' tag found in post response (it is NOT an excluded descendant by current logic)")
+		t.Log("NOTE: 'pagetag' found in post response (it is NOT an excluded descendant by current logic)")
 	} else {
-		t.Log("PASS: '_page' correctly excluded from post response")
+		t.Log("PASS: 'pagetag' correctly excluded from post response")
 	}
 }

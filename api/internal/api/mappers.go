@@ -120,32 +120,16 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 	}
 }
 
-func getPostType(status string, tags []repository.PostTagInfo) string {
+func getPostType(status string, _ []repository.PostTagInfo) string {
 	if strings.EqualFold(status, "page") {
 		return "page"
-	}
-	for _, t := range tags {
-		if t.Slug == "_type_page" {
-			return "page"
-		}
-		if t.Slug == "_type_audio" {
-			return "audio"
-		}
 	}
 	return "post"
 }
 
-func getPostTypeFromModels(status string, tags []models.Tag) string {
+func getPostTypeFromModels(status string, _ []models.Tag) string {
 	if strings.EqualFold(status, "page") {
 		return "page"
-	}
-	for _, t := range tags {
-		if t.Slug == "_type_page" {
-			return "page"
-		}
-		if t.Slug == "_type_audio" {
-			return "audio"
-		}
 	}
 	return "post"
 }
@@ -155,7 +139,7 @@ func tagToListItem(t models.Tag) map[string]interface{} {
 		"id":         t.ID,
 		"name":       t.Name,
 		"slug":       t.Slug,
-		"sort_order": nullInt64(t.SortOrder),
+		"nav_order":  nullInt64(t.NavOrder),
 		"post_count": t.PostCount,
 	}
 }
@@ -186,17 +170,24 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 	}
 
 	return map[string]interface{}{
-		"id":          t.ID,
-		"name":        t.Name,
-		"slug":        t.Slug,
-		"description": nullString(t.Description),
-		"custom_url":  nullString(t.CustomUrl),
-		"sort_order":  nullInt64(t.SortOrder),
-		"post_count":  t.PostCount,
-		"created_at":  t.CreatedAt,
-		"parents":     parentItems,
-		"children":    childItems,
-		"locations":   tagLocationsResponse(loc),
+		"id":                 t.ID,
+		"name":               t.Name,
+		"slug":               t.Slug,
+		"description":        nullString(t.Description),
+		"kind":               t.Kind,
+		"hidden":             t.Hidden,
+		"hides_posts":        t.HidesPosts,
+		"nav_order":          nullInt64(t.NavOrder),
+		"in_breadcrumbs":     t.InBreadcrumbs,
+		"show_related":       t.ShowRelated,
+		"in_ancestor_flyout": t.InAncestorFlyout,
+		"latitude":           nullFloat64(t.Latitude),
+		"longitude":          nullFloat64(t.Longitude),
+		"post_count":         t.PostCount,
+		"created_at":         t.CreatedAt,
+		"parents":            parentItems,
+		"children":           childItems,
+		"locations":          tagLocationsResponse(loc),
 	}
 }
 

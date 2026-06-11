@@ -77,7 +77,7 @@ func (r *sqliteRepository) GetCoOccurringTags(ctx context.Context, tagID int64, 
 		statusClause = "AND p.status = 'published'"
 	}
 	q := fmt.Sprintf(`
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
 JOIN post_tags pt ON t.id = pt.tag_id
 JOIN posts p ON pt.post_id = p.id
@@ -88,7 +88,6 @@ AND pt.post_id IN (
     WHERE pt2.tag_id = ? AND p2.deleted_at IS NULL %s
 )
 AND t.id != ?
-AND t.slug NOT LIKE '\_%%' ESCAPE '\'
 AND t.post_count > 0
 GROUP BY t.id
 ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
@@ -101,8 +100,10 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 	var tags []models.Tag
 	for rows.Next() {
 		var t models.Tag
-		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		tags = append(tags, t)
@@ -151,7 +152,7 @@ func (r *sqliteRepository) ClearTagChildren(ctx context.Context, parentID int64)
 	return err
 }
 
-// GetTagsWithoutLocation returns tags that have no row in tag_locations.
+// GetTagsWithoutLocation returns tags that have no coordinates set.
 // Only tags whose IDs are in the provided set are considered.
 func (r *sqliteRepository) GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error) {
 	if len(tagIDs) == 0 {
@@ -169,10 +170,9 @@ func (r *sqliteRepository) GetTagsWithoutLocation(ctx context.Context, tagIDs []
 	}
 
 	q := `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
-LEFT JOIN tag_locations tl ON tl.tag_id = t.id
-WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
+WHERE t.id IN (` + placeholders + `) AND t.latitude IS NULL`
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -186,8 +186,10 @@ WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
 	for rows.Next() {
 		var t models.Tag
 		if err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt,
+			&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -213,7 +215,7 @@ func (r *sqliteRepository) FindTagsByNames(ctx context.Context, names []string) 
 	}
 
 	q := `
-SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at
 FROM tags WHERE lower(name) IN (` + placeholders + `)`
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -228,8 +230,10 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 	for rows.Next() {
 		var t models.Tag
 		if err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt,
+			&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -289,33 +293,31 @@ ORDER BY t.name ASC`
 	return result, rows.Err()
 }
 
-// GetMigrations returns all rows from the migration_history table ordered by applied_at descending.
-// Returns an empty slice if the table does not exist yet.
-// GetChildrenOfTag returns direct children of parentID, ordered by sort_order ASC, name ASC.
+// GetChildrenOfTag returns direct children of parentID, ordered by edge sort_order ASC, name ASC.
 func (r *sqliteRepository) GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error) {
 	const q = `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
 JOIN tag_relationships tr ON tr.child_id = t.id
 WHERE tr.parent_id = ?
-ORDER BY t.sort_order ASC, t.name ASC`
+ORDER BY tr.sort_order ASC, t.name ASC`
 	return r.scanTags(ctx, q, parentID)
 }
 
-// GetRootTags returns tags that have no parents, ordered by sort_order ASC, name ASC.
+// GetRootTags returns tags that have no parents, ordered by name ASC.
 func (r *sqliteRepository) GetRootTags(ctx context.Context) ([]models.Tag, error) {
 	const q = `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
 LEFT JOIN tag_relationships tr ON tr.child_id = t.id
 WHERE tr.parent_id IS NULL
-ORDER BY t.sort_order ASC, t.name ASC`
+ORDER BY t.name ASC`
 	return r.scanTags(ctx, q)
 }
 
-// UpdateTagSortOrder updates only the sort_order field for a tag.
+// UpdateTagSortOrder updates sort_order on all edges where child_id = id.
 func (r *sqliteRepository) UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE tags SET sort_order = ? WHERE id = ?`, sortOrder, id)
+	_, err := r.db.ExecContext(ctx, `UPDATE tag_relationships SET sort_order = ? WHERE child_id = ?`, sortOrder, id)
 	return err
 }
 
@@ -332,8 +334,10 @@ func (r *sqliteRepository) scanTags(ctx context.Context, q string, args ...inter
 	for rows.Next() {
 		var t models.Tag
 		if err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt,
+			&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -377,6 +381,7 @@ func (r *sqliteRepository) DropTagNameUnique(ctx context.Context) error {
 
 	if strings.Contains(ddl, "name VARCHAR(100) NOT NULL UNIQUE") ||
 		strings.Contains(ddl, "name VARCHAR(100)  NOT NULL UNIQUE") {
+		// Pre-migration schema: rebuild with custom_url and sort_order intact.
 		stmts := []string{
 			"PRAGMA foreign_keys = OFF",
 			`CREATE TABLE IF NOT EXISTS tags_new (

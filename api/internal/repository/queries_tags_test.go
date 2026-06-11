@@ -6,7 +6,7 @@ import (
 )
 
 func TestRepository_Tags(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() {
 		_ = repo.Close()
 	}()
@@ -68,13 +68,13 @@ func TestRepository_TagRelationships(t *testing.T) {
 }
 
 func TestRepository_TagHierarchy(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() {
 		_ = repo.Close()
 	}()
 	ctx := context.Background()
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, sort_order) VALUES (1,'P','p',0),(2,'C','c',0)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'P','p'),(2,'C','c')`)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`)
 
 	children, err := repo.GetChildrenOfTag(ctx, 1)
@@ -97,7 +97,7 @@ func TestRepository_TagHierarchy(t *testing.T) {
 }
 
 func TestRepository_GetCoOccurringTags(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 

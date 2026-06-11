@@ -84,18 +84,14 @@ func TestTagService_HierarchyVisibility(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Seed system tags directly (CreateTag rejects _ prefix).
-	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug, post_count) VALUES ('Hidden','_hidden',0),('Hide Posts','_hide_posts',0)`)
-
 	// Set up deep hierarchy
-	root, _ := service.CreateTag(ctx, CreateTagParams{Name: "Root"})
+	root, _ := service.CreateTag(ctx, CreateTagParams{
+		Name:       "Root",
+		Hidden:     true,
+		HidesPosts: true,
+	})
 	child, _ := service.CreateTag(ctx, CreateTagParams{Name: "Child"})
 	grandchild, _ := service.CreateTag(ctx, CreateTagParams{Name: "Grandchild"})
-
-	// Make root a child of _hidden and _hide_posts.
-	_, _ = repo.DB().Exec(`
-		INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
-		SELECT t.id, ? FROM tags t WHERE t.slug IN ('_hidden','_hide_posts')`, root.ID)
 
 	_ = service.SetTagChildren(ctx, root.ID, []int64{child.ID})
 	_ = service.SetTagChildren(ctx, child.ID, []int64{grandchild.ID})
@@ -111,11 +107,11 @@ func TestTagService_HierarchyVisibility(t *testing.T) {
 		t.Error("expected all tags to hide posts via propagation")
 	}
 
-	// Tag not under _hidden should NOT be hidden.
+	// Tag not under hidden root should NOT be hidden.
 	other, _ := service.CreateTag(ctx, CreateTagParams{Name: "Other"})
 	hidden2, _ := service.EffectivelyHiddenIDs(ctx)
 	if hidden2[other.ID] {
-		t.Error("Other should NOT be hidden (not under _hidden)")
+		t.Error("Other should NOT be hidden (not under hidden root)")
 	}
 }
 
@@ -127,14 +123,12 @@ func TestTagService_NavTree(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Seed _root system tag (CreateTag rejects _ prefix).
-	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug, post_count) VALUES ('Root','_root',0)`)
-
-	// Tag under _root appears in nav even with 0 posts.
-	featured, _ := service.CreateTag(ctx, CreateTagParams{Name: "Featured"})
-	_, _ = repo.DB().Exec(`
-		INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
-		SELECT id, ? FROM tags WHERE slug = '_root'`, featured.ID)
+	// Tag with nav_order set appears in nav even with 0 posts.
+	navOrder := int64(1)
+	featured, _ := service.CreateTag(ctx, CreateTagParams{
+		Name:     "Featured",
+		NavOrder: &navOrder,
+	})
 
 	nodes, err := service.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
@@ -142,12 +136,23 @@ func TestTagService_NavTree(t *testing.T) {
 	}
 	_ = nodes // nav tree built without error
 
-	// Regular tag with no posts and not under _root should NOT appear.
+	found := false
+	for _, n := range nodes {
+		if n.ID == featured.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("featured tag with nav_order should appear in nav")
+	}
+
+	// Regular tag with no posts and no nav_order should NOT appear.
 	regular, _ := service.CreateTag(ctx, CreateTagParams{Name: "Regular"})
 	nodes, _ = service.GetHierarchicalNavTags(ctx, nil, true, 0)
 	for _, n := range nodes {
 		if n.ID == regular.ID {
-			t.Error("regular tag with 0 posts and not under _root should NOT appear in nav")
+			t.Error("regular tag with 0 posts and no nav_order should NOT appear in nav")
 		}
 	}
 }
@@ -199,22 +204,13 @@ func TestTagService_GetTagBySlugNotFound(t *testing.T) {
 	}
 }
 
-func TestTagService_UpdateTagSystemSlug(t *testing.T) {
+func TestTagService_UpdateTagForbiddenSlug(t *testing.T) {
 	svc, repo := setupTagService(t)
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	if _, err := svc.UpdateTag(ctx, UpdateTagParams{ID: 0, Name: "Bad", Slug: "_bad"}); err == nil {
+	if _, err := svc.UpdateTag(ctx, UpdateTagParams{ID: 1, Name: "Bad", Slug: "_bad"}); err == nil {
 		t.Error("expected error for slug starting with _")
-	}
-
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (99,'_sys','_sys')`)
-	tag, err := svc.UpdateTag(ctx, UpdateTagParams{ID: 99, Name: "NewName", Description: "desc"})
-	if err != nil {
-		t.Fatalf("UpdateTag system tag failed: %v", err)
-	}
-	if tag.Slug != "_sys" {
-		t.Errorf("expected slug '_sys', got %s", tag.Slug)
 	}
 }
 
@@ -233,10 +229,9 @@ func TestTagService_GetHierarchicalNavTagsWithHidden(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count) VALUES
-		(1,'_root','_root',0),(2,'_system','_system',0),(3,'_hidden','_hidden',0),
-		(4,'Visible','visible',3),(5,'Hidden','hidden-tag',3)`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (2,3),(1,4),(1,5),(3,5)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count, nav_order) VALUES
+		(4,'Visible','visible',3,10),(5,'Hidden','hidden-tag',3,20)`)
+	_, _ = repo.DB().Exec(`UPDATE tags SET hidden = 1 WHERE id = 5`)
 
 	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0)
 	if err != nil {
@@ -420,7 +415,7 @@ func TestTagService_UpdateMissingCoords_AllHaveCoords(t *testing.T) {
 	cityTag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "city", Slug: "city"})
 	childTag, _ := svc.CreateTag(ctx, CreateTagParams{Name: "Paris", Slug: "paris"})
 	_ = svc.SetTagParents(ctx, childTag.ID, []int64{cityTag.ID})
-	_, _ = repo.DB().Exec(`INSERT INTO tag_locations (tag_id, latitude, longitude) VALUES (?, 48.8566, 2.3522)`, childTag.ID)
+	_, _ = repo.DB().Exec(`UPDATE tags SET latitude = 48.8566, longitude = 2.3522 WHERE id = ?`, childTag.ID)
 
 	result, err := svc.UpdateMissingCoords(ctx)
 	if err != nil {
@@ -436,11 +431,11 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count, sort_order) VALUES
-		(1,'_root','_root',0,NULL),(2,'_with_related','_with_related',0,NULL),
-		(3,'_sys-child','_sys-child',0,NULL),(4,'Alpha','alpha',3,2),
-		(5,'Beta','beta',2,1),(6,'Gamma','gamma',0,NULL)`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,3),(1,4),(1,5),(1,6),(2,4),(4,5)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count, nav_order, show_related) VALUES
+		(4,'Alpha','alpha',3,2,0),
+		(5,'Beta','beta',2,1,0),
+		(6,'Gamma','gamma',0,NULL,1)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (4,5)`)
 
 	nodes, err := svc.GetHierarchicalNavTags(ctx, nil, false, 0)
 	if err != nil {
@@ -454,7 +449,7 @@ func TestTagService_GetHierarchicalNavTagsDeep(t *testing.T) {
 	}
 	_ = nodes
 
-	rootID := int64(1)
+	rootID := int64(4)
 	nodes, err = svc.GetHierarchicalNavTags(ctx, &rootID, false, 0)
 	if err != nil {
 		t.Fatalf("GetHierarchicalNavTags rootID: %v", err)
@@ -474,9 +469,8 @@ func TestTagService_EffectivelyHiddenWithData(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count) VALUES
-		(1,'_system','_system',0),(2,'_hidden','_hidden',0),(3,'Pub','pub',1)`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2),(2,3)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, post_count, hidden) VALUES (2,'HiddenParent','hidden-parent',0, 1),(3,'Pub','pub',1, 0)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (2,3)`)
 
 	ids, err := svc.EffectivelyHiddenPostsTagIDs(ctx)
 	if err != nil {
@@ -501,32 +495,32 @@ func TestTagService_CreateTagSystemSlug(t *testing.T) {
 	}
 }
 
-func TestTagService_CreateTagWithSortOrder(t *testing.T) {
+func TestTagService_CreateTagWithNavOrder(t *testing.T) {
 	svc, repo := setupTagService(t)
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	sortOrder := int32(5)
-	tag, err := svc.CreateTag(ctx, CreateTagParams{Name: "Ordered", Slug: "ordered", SortOrder: &sortOrder})
+	navOrder := int64(5)
+	tag, err := svc.CreateTag(ctx, CreateTagParams{Name: "Ordered", Slug: "ordered", NavOrder: &navOrder})
 	if err != nil {
-		t.Fatalf("CreateTag with SortOrder failed: %v", err)
+		t.Fatalf("CreateTag with NavOrder failed: %v", err)
 	}
-	if !tag.SortOrder.Valid || tag.SortOrder.Int64 != 5 {
-		t.Errorf("expected sort_order=5, got %+v", tag.SortOrder)
+	if !tag.NavOrder.Valid || tag.NavOrder.Int64 != 5 {
+		t.Errorf("expected nav_order=5, got %+v", tag.NavOrder)
 	}
 }
 
-func TestTagService_UpdateTag_WithSortOrder(t *testing.T) {
+func TestTagService_UpdateTag_WithNavOrder(t *testing.T) {
 	svc, repo := setupTagService(t)
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'Regular','regular')`)
-	sortOrder := int32(10)
+	navOrder := int64(10)
 	if _, err := svc.UpdateTag(ctx, UpdateTagParams{
-		ID: 1, Name: "Regular", Slug: "regular", SortOrder: &sortOrder,
+		ID: 1, Name: "Regular", Slug: "regular", NavOrder: &navOrder,
 	}); err != nil {
-		t.Errorf("UpdateTag with SortOrder: unexpected error: %v", err)
+		t.Errorf("UpdateTag with NavOrder: unexpected error: %v", err)
 	}
 }
 
@@ -644,7 +638,7 @@ func TestTagService_GeocodeTag_HttpErrors(t *testing.T) {
 		svc, repo := setupTagService(t)
 		defer func() { _ = repo.Close() }()
 		_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'City','city')`)
-		_, _ = repo.DB().Exec(`DROP TABLE tag_locations`)
+		_, _ = repo.DB().Exec(`DROP TABLE tags`)
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`[{"lat":"48.85","lon":"2.35"}]`)) //nolint:errcheck
 		}))

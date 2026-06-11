@@ -773,6 +773,12 @@ func main() {
 		slog.Warn("drop_tags_name_unique failed", "error", err)
 	}
 
+	// Migrate tag system: translate system-tag graph edges to typed columns, fold
+	// tag_locations into tags, drop old columns, delete system tags.
+	if err := repo.MigrateTagFlagsFromSystemTags(ctx); err != nil {
+		slog.Warn("tag_flags_from_system_tags failed", "error", err)
+	}
+
 	// Ensure a secret key is available for session signing.
 	if err := svcs.Settings.EnsureSecretKey(ctx, &cfg); err != nil {
 		slog.Error("failed to ensure secret key", "error", err)

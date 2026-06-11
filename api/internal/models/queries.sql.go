@@ -476,19 +476,28 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 
 const createTag = `-- name: CreateTag :one
 INSERT INTO tags (
-    name, slug, description, custom_url, sort_order, post_count, created_at
+    name, slug, description, kind, hidden, hides_posts, nav_order,
+    in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude,
+    post_count, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
 )
-RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at
+RETURNING id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at
 `
 
 type CreateTagParams struct {
-	Name        string         `json:"name"`
-	Slug        string         `json:"slug"`
-	Description sql.NullString `json:"description"`
-	CustomUrl   sql.NullString `json:"custom_url"`
-	SortOrder   sql.NullInt64  `json:"sort_order"`
+	Name             string          `json:"name"`
+	Slug             string          `json:"slug"`
+	Description      sql.NullString  `json:"description"`
+	Kind             string          `json:"kind"`
+	Hidden           bool            `json:"hidden"`
+	HidesPosts       bool            `json:"hides_posts"`
+	NavOrder         sql.NullInt64   `json:"nav_order"`
+	InBreadcrumbs    bool            `json:"in_breadcrumbs"`
+	ShowRelated      bool            `json:"show_related"`
+	InAncestorFlyout bool            `json:"in_ancestor_flyout"`
+	Latitude         sql.NullFloat64 `json:"latitude"`
+	Longitude        sql.NullFloat64 `json:"longitude"`
 }
 
 func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
@@ -496,8 +505,15 @@ func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, erro
 		arg.Name,
 		arg.Slug,
 		arg.Description,
-		arg.CustomUrl,
-		arg.SortOrder,
+		arg.Kind,
+		arg.Hidden,
+		arg.HidesPosts,
+		arg.NavOrder,
+		arg.InBreadcrumbs,
+		arg.ShowRelated,
+		arg.InAncestorFlyout,
+		arg.Latitude,
+		arg.Longitude,
 	)
 	var i Tag
 	err := row.Scan(
@@ -505,8 +521,15 @@ func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, erro
 		&i.Name,
 		&i.Slug,
 		&i.Description,
-		&i.CustomUrl,
-		&i.SortOrder,
+		&i.Kind,
+		&i.Hidden,
+		&i.HidesPosts,
+		&i.NavOrder,
+		&i.InBreadcrumbs,
+		&i.ShowRelated,
+		&i.InAncestorFlyout,
+		&i.Latitude,
+		&i.Longitude,
 		&i.PostCount,
 		&i.CreatedAt,
 	)
@@ -1097,7 +1120,7 @@ func (q *Queries) GetStorageUsage(ctx context.Context) (sql.NullFloat64, error) 
 
 const getTag = `-- name: GetTag :one
 
-SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at FROM tags
 WHERE id = ? LIMIT 1
 `
 
@@ -1110,8 +1133,15 @@ func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
 		&i.Name,
 		&i.Slug,
 		&i.Description,
-		&i.CustomUrl,
-		&i.SortOrder,
+		&i.Kind,
+		&i.Hidden,
+		&i.HidesPosts,
+		&i.NavOrder,
+		&i.InBreadcrumbs,
+		&i.ShowRelated,
+		&i.InAncestorFlyout,
+		&i.Latitude,
+		&i.Longitude,
 		&i.PostCount,
 		&i.CreatedAt,
 	)
@@ -1119,7 +1149,7 @@ func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
 }
 
 const getTagBySlug = `-- name: GetTagBySlug :one
-SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at FROM tags
 WHERE slug = ? LIMIT 1
 `
 
@@ -1131,8 +1161,15 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 		&i.Name,
 		&i.Slug,
 		&i.Description,
-		&i.CustomUrl,
-		&i.SortOrder,
+		&i.Kind,
+		&i.Hidden,
+		&i.HidesPosts,
+		&i.NavOrder,
+		&i.InBreadcrumbs,
+		&i.ShowRelated,
+		&i.InAncestorFlyout,
+		&i.Latitude,
+		&i.Longitude,
 		&i.PostCount,
 		&i.CreatedAt,
 	)
@@ -1140,7 +1177,7 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 }
 
 const getTagChildren = `-- name: GetTagChildren :many
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at FROM tags t
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at FROM tags t
 JOIN tag_relationships tr ON t.id = tr.child_id
 WHERE tr.parent_id = ?
 `
@@ -1159,8 +1196,15 @@ func (q *Queries) GetTagChildren(ctx context.Context, parentID int64) ([]Tag, er
 			&i.Name,
 			&i.Slug,
 			&i.Description,
-			&i.CustomUrl,
-			&i.SortOrder,
+			&i.Kind,
+			&i.Hidden,
+			&i.HidesPosts,
+			&i.NavOrder,
+			&i.InBreadcrumbs,
+			&i.ShowRelated,
+			&i.InAncestorFlyout,
+			&i.Latitude,
+			&i.Longitude,
 			&i.PostCount,
 			&i.CreatedAt,
 		); err != nil {
@@ -1179,7 +1223,7 @@ func (q *Queries) GetTagChildren(ctx context.Context, parentID int64) ([]Tag, er
 
 const getTagParents = `-- name: GetTagParents :many
 
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at FROM tags t
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at FROM tags t
 JOIN tag_relationships tr ON t.id = tr.parent_id
 WHERE tr.child_id = ?
 `
@@ -1199,8 +1243,15 @@ func (q *Queries) GetTagParents(ctx context.Context, childID int64) ([]Tag, erro
 			&i.Name,
 			&i.Slug,
 			&i.Description,
-			&i.CustomUrl,
-			&i.SortOrder,
+			&i.Kind,
+			&i.Hidden,
+			&i.HidesPosts,
+			&i.NavOrder,
+			&i.InBreadcrumbs,
+			&i.ShowRelated,
+			&i.InAncestorFlyout,
+			&i.Latitude,
+			&i.Longitude,
 			&i.PostCount,
 			&i.CreatedAt,
 		); err != nil {
@@ -1218,7 +1269,7 @@ func (q *Queries) GetTagParents(ctx context.Context, childID int64) ([]Tag, erro
 }
 
 const getTagsForPost = `-- name: GetTagsForPost :many
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at FROM tags t
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at FROM tags t
 JOIN post_tags pt ON t.id = pt.tag_id
 WHERE pt.post_id = ?
 ORDER BY t.name ASC
@@ -1238,8 +1289,15 @@ func (q *Queries) GetTagsForPost(ctx context.Context, postID int64) ([]Tag, erro
 			&i.Name,
 			&i.Slug,
 			&i.Description,
-			&i.CustomUrl,
-			&i.SortOrder,
+			&i.Kind,
+			&i.Hidden,
+			&i.HidesPosts,
+			&i.NavOrder,
+			&i.InBreadcrumbs,
+			&i.ShowRelated,
+			&i.InAncestorFlyout,
+			&i.Latitude,
+			&i.Longitude,
 			&i.PostCount,
 			&i.CreatedAt,
 		); err != nil {
@@ -1691,9 +1749,9 @@ func (q *Queries) ListSettings(ctx context.Context) ([]BlogSetting, error) {
 }
 
 const listTags = `-- name: ListTags :many
-SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at FROM tags
 WHERE (CASE WHEN ?1 THEN 1=1 ELSE post_count > 0 END)
-ORDER BY sort_order ASC, name ASC
+ORDER BY name ASC
 `
 
 func (q *Queries) ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error) {
@@ -1710,8 +1768,15 @@ func (q *Queries) ListTags(ctx context.Context, includeEmptyFilter interface{}) 
 			&i.Name,
 			&i.Slug,
 			&i.Description,
-			&i.CustomUrl,
-			&i.SortOrder,
+			&i.Kind,
+			&i.Hidden,
+			&i.HidesPosts,
+			&i.NavOrder,
+			&i.InBreadcrumbs,
+			&i.ShowRelated,
+			&i.InAncestorFlyout,
+			&i.Latitude,
+			&i.Longitude,
 			&i.PostCount,
 			&i.CreatedAt,
 		); err != nil {
@@ -2235,18 +2300,28 @@ func (q *Queries) UpdateSetting(ctx context.Context, arg UpdateSettingParams) (B
 
 const updateTag = `-- name: UpdateTag :one
 UPDATE tags
-SET name = ?, slug = ?, description = ?, custom_url = ?, sort_order = ?
+SET name = ?, slug = ?, description = ?,
+    kind = ?, hidden = ?, hides_posts = ?, nav_order = ?,
+    in_breadcrumbs = ?, show_related = ?, in_ancestor_flyout = ?,
+    latitude = ?, longitude = ?
 WHERE id = ?
-RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at
+RETURNING id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at
 `
 
 type UpdateTagParams struct {
-	Name        string         `json:"name"`
-	Slug        string         `json:"slug"`
-	Description sql.NullString `json:"description"`
-	CustomUrl   sql.NullString `json:"custom_url"`
-	SortOrder   sql.NullInt64  `json:"sort_order"`
-	ID          int64          `json:"id"`
+	Name             string          `json:"name"`
+	Slug             string          `json:"slug"`
+	Description      sql.NullString  `json:"description"`
+	Kind             string          `json:"kind"`
+	Hidden           bool            `json:"hidden"`
+	HidesPosts       bool            `json:"hides_posts"`
+	NavOrder         sql.NullInt64   `json:"nav_order"`
+	InBreadcrumbs    bool            `json:"in_breadcrumbs"`
+	ShowRelated      bool            `json:"show_related"`
+	InAncestorFlyout bool            `json:"in_ancestor_flyout"`
+	Latitude         sql.NullFloat64 `json:"latitude"`
+	Longitude        sql.NullFloat64 `json:"longitude"`
+	ID               int64           `json:"id"`
 }
 
 func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error) {
@@ -2254,8 +2329,15 @@ func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, erro
 		arg.Name,
 		arg.Slug,
 		arg.Description,
-		arg.CustomUrl,
-		arg.SortOrder,
+		arg.Kind,
+		arg.Hidden,
+		arg.HidesPosts,
+		arg.NavOrder,
+		arg.InBreadcrumbs,
+		arg.ShowRelated,
+		arg.InAncestorFlyout,
+		arg.Latitude,
+		arg.Longitude,
 		arg.ID,
 	)
 	var i Tag
@@ -2264,8 +2346,15 @@ func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, erro
 		&i.Name,
 		&i.Slug,
 		&i.Description,
-		&i.CustomUrl,
-		&i.SortOrder,
+		&i.Kind,
+		&i.Hidden,
+		&i.HidesPosts,
+		&i.NavOrder,
+		&i.InBreadcrumbs,
+		&i.ShowRelated,
+		&i.InAncestorFlyout,
+		&i.Latitude,
+		&i.Longitude,
 		&i.PostCount,
 		&i.CreatedAt,
 	)
