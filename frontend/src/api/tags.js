@@ -98,6 +98,18 @@ export function reorderTag(tagId, data) {
 }
 
 /**
+ * Move a tag to a position within a sibling group under a specific parent.
+ * Only renumbers the sort_order for that parent's edge group; other parents
+ * are untouched.
+ * @param {number} tagId
+ * @param {{ parent_id: number, after_id: number|null }} data  after_id=null → front
+ * @returns {Promise<object>}
+ */
+export function moveTag(tagId, data) {
+  return api.post(`/api/tags/${tagId}/move`, data);
+}
+
+/**
  * Geocode a tag by its name via Nominatim and store the result.
  * @param {number} id
  * @returns {Promise<{ latitude: number, longitude: number }>}

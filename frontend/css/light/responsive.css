@@ -145,8 +145,9 @@
         flex-shrink: 1;
     }
 
-    /* Hide flag buttons on portrait — keep only edit/add/delete actions */
-    .tm-flags-row {
+    /* Hide flag badges on portrait — accessible via editor modal */
+    .tm-flags-row,
+    .tm-badges-row {
         display: none;
     }
 
@@ -195,6 +196,11 @@
         /* Tag manager flag toggles */
         --tm-flag-toggle-width: var(--size-2-75);
         --tm-flag-toggle-height: var(--size-2-75);
+    }
+
+    /* Tree rows: restore ≥44px touch target (overrides the min-height:auto at 40em) */
+    .tm-row {
+        min-height: 2.75rem;
     }
 
     /* Media item action buttons: always render at low opacity instead of hover-only */

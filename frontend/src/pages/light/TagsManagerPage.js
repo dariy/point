@@ -10,7 +10,7 @@
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag } from '../../api/tags.js';
+import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { getNavMenu } from '../../api/pages.js';
 import { store } from '../../store.js';
@@ -360,6 +360,7 @@ export default class TagsManagerPage extends Component {
           </span>
           <div class="tm-actions">
             <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit">${EDIT_SVG}</button>
+            <button class="btn btn-sm move-tag-btn"    data-id="${node.id}" data-parent-id="${parentAttr}" title="Move to parent…">Move…</button>
             <button class="btn btn-sm add-child-btn"   data-id="${node.id}" title="Add child">+</button>
             <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${node.id}" title="Delete">${X_SVG}</button>
           </div>
@@ -418,6 +419,7 @@ export default class TagsManagerPage extends Component {
           </span>
           <div class="tm-actions">
             <button class="btn btn-sm edit-tag-btn" data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
+            <button class="btn btn-sm move-tag-btn" data-id="${tag.id}" data-parent-id="" title="Move to parent…">Move…</button>
             <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
           </div>
         </div>
@@ -472,6 +474,14 @@ export default class TagsManagerPage extends Component {
 
       this.container.querySelectorAll('.add-child-btn').forEach(btn => {
         btn.addEventListener('click', () => this._openModal(null, parseInt(btn.dataset.id, 10)));
+      });
+
+      this.container.querySelectorAll('.move-tag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = parseInt(btn.dataset.id, 10);
+          const parentId = btn.dataset.parentId !== '' ? parseInt(btn.dataset.parentId, 10) : null;
+          this._openMoveDialog(id, parentId);
+        });
       });
 
       // Open ancestor via inherited-hidden badge
@@ -573,7 +583,7 @@ export default class TagsManagerPage extends Component {
     }
   }
 
-  // ── Drag and Drop (reorder within same parent — full reorder is zagg.7) ──────
+  // ── Drag and Drop ─────────────────────────────────────────────────────────────
 
   _bindDragAndDrop() {
     const rows = this.container.querySelectorAll('.tm-row[draggable="true"]');
@@ -631,8 +641,10 @@ export default class TagsManagerPage extends Component {
         e.preventDefault();
         if (!this._dragState) return;
 
-        const dragId   = this._dragState.tagId;
-        const targetId = parseInt(row.dataset.id, 10);
+        const dragId      = this._dragState.tagId;
+        const dragParent  = this._dragState.parentId;
+        const targetId    = parseInt(row.dataset.id, 10);
+        const targetParent = row.dataset.parentId !== '' ? parseInt(row.dataset.parentId, 10) : null;
         if (dragId === targetId) { clearIndicators(); this._dragState = null; return; }
 
         const zone = row.classList.contains('tm-drop-before') ? 'before'
@@ -642,17 +654,205 @@ export default class TagsManagerPage extends Component {
         this._dragState = null;
 
         if (zone === 'on') {
-          // Reparent: make targetId the parent of dragId (zagg.7 will add confirm dialog)
+          // Drop onto: show confirm (Move under / Also file under)
+          this._openDropOnConfirm(dragId, targetId);
+        } else if (zone === 'before' || zone === 'after') {
+          // Reorder within same parent via per-edge sort_order
+          if (dragParent === null || dragParent !== targetParent) {
+            store.set('toast', { message: 'Drop ON a tag to reparent. Reordering only works within the same parent.', type: 'error' });
+            return;
+          }
+          const afterId = zone === 'after'
+            ? targetId
+            : this._getSiblingBefore(targetId, dragParent);
           try {
-            await setTagParents(dragId, [targetId]);
+            await moveTag(dragId, { parent_id: dragParent, after_id: afterId });
             this._load();
-            this._refreshNavTags();
           } catch (err) {
-            store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+            store.set('toast', { message: err.message || 'Reorder failed.', type: 'error' });
           }
         }
-        // Reordering (before/after) will be implemented in zagg.7 with MoveTag
       });
+    });
+  }
+
+  // Returns the ID of the sibling just before targetId in parentId's children list,
+  // or null if targetId is first (meaning move dragId to the front).
+  _getSiblingBefore(targetId, parentId) {
+    const siblings = this._getChildrenOf(parentId);
+    const idx = siblings.findIndex(t => t.id === targetId);
+    if (idx <= 0) return null;
+    return siblings[idx - 1].id;
+  }
+
+  // Returns children of parentId in sort_order (uses the parent's ordered children list).
+  _getChildrenOf(parentId) {
+    if (!parentId) return [];
+    const parent = this.state.tags.find(t => t.id === parentId);
+    if (!parent) return [];
+    const childIds = (parent.children || []).map(c => c.id);
+    return childIds.map(id => this.state.tags.find(t => t.id === id)).filter(Boolean);
+  }
+
+  // Confirm dialog shown when dragging one tag onto another.
+  _openDropOnConfirm(dragId, targetId) {
+    const drag   = this.state.tags.find(t => t.id === dragId);
+    const target = this.state.tags.find(t => t.id === targetId);
+    if (!drag || !target) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay['inner' + 'HTML'] = `
+      <div class="modal" role="dialog" aria-modal="true" style="max-width:28rem">
+        <div class="modal-header">
+          <h3>Move "${escapeHtml(drag.name)}" under "${escapeHtml(target.name)}"?</h3>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin:0">
+            Choose how to place <strong>${escapeHtml(drag.name)}</strong>:
+          </p>
+        </div>
+        <div class="modal-footer tm-drop-confirm-footer">
+          <button class="btn btn-primary" id="drop-move-btn">
+            Move under "${escapeHtml(target.name)}" — replaces other parents
+          </button>
+          <button class="btn btn-secondary" id="drop-also-btn">
+            Also file under "${escapeHtml(target.name)}" — keeps other parents
+          </button>
+          <button class="btn btn-secondary" id="drop-cancel-btn">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.querySelector('#drop-cancel-btn').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('#drop-move-btn').addEventListener('click', async () => {
+      close();
+      try {
+        await setTagParents(dragId, [targetId]);
+        this._load();
+        this._refreshNavTags();
+      } catch (err) {
+        store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+      }
+    });
+
+    overlay.querySelector('#drop-also-btn').addEventListener('click', async () => {
+      close();
+      try {
+        const currentParents = (drag.parents || []).map(p => p.id);
+        if (!currentParents.includes(targetId)) {
+          await setTagParents(dragId, [...currentParents, targetId]);
+        }
+        this._load();
+        this._refreshNavTags();
+      } catch (err) {
+        store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+      }
+    });
+  }
+
+  // Move… dialog: touch parity for drag — pick parent + position, then call MoveTag.
+  _openMoveDialog(tagId, contextParentId) {
+    const tag = this.state.tags.find(t => t.id === tagId);
+    if (!tag) return;
+
+    const available = this.state.tags
+      .filter(t => t.id !== tagId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const parentItems = available.map(t => `
+      <label class="tm-move-parent-item">
+        <input type="radio" name="tm-move-parent" value="${t.id}"${t.id === contextParentId ? ' checked' : ''}>
+        <span class="tm-move-parent-name">${escapeHtml(t.name)}</span>
+      </label>`).join('');
+
+    const initialSiblings = contextParentId
+      ? this._getChildrenOf(contextParentId).filter(t => t.id !== tagId)
+      : [];
+
+    const posOpts = [
+      `<option value="">At beginning</option>`,
+      ...initialSiblings.map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
+    ].join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay['inner' + 'HTML'] = `
+      <div class="modal tm-move-modal" role="dialog" aria-modal="true">
+        <button class="modal-close" aria-label="Close">×</button>
+        <div class="modal-header">
+          <h3>Move "${escapeHtml(tag.name)}"</h3>
+        </div>
+        <div class="modal-body">
+          <p class="tm-section-label">Under parent</p>
+          <input type="text" class="form-input tm-move-search" placeholder="Search tags…" autocomplete="off">
+          <div class="tm-move-parent-list">${parentItems}</div>
+          <p class="tm-section-label" style="margin-top:var(--spacing-md)">Position</p>
+          <select class="form-input tm-move-position-select">${posOpts}</select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="tm-move-cancel-btn">Cancel</button>
+          <button type="button" class="btn btn-primary" id="tm-move-confirm-btn">Move</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const updatePosition = (parentId) => {
+      const siblings = parentId
+        ? this._getChildrenOf(parentId).filter(t => t.id !== tagId)
+        : [];
+      overlay.querySelector('.tm-move-position-select').innerHTML = [
+        `<option value="">At beginning</option>`,
+        ...siblings.map(s => `<option value="${s.id}">After "${escapeHtml(s.name)}"</option>`),
+      ].join('');
+    };
+
+    const close = () => overlay.remove();
+
+    overlay.querySelector('.modal-close').addEventListener('click', close);
+    overlay.querySelector('#tm-move-cancel-btn').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('.tm-move-search').addEventListener('input', e => {
+      const q = e.target.value.trim().toLowerCase();
+      overlay.querySelectorAll('.tm-move-parent-item').forEach(item => {
+        const name = item.querySelector('.tm-move-parent-name')?.textContent.toLowerCase() || '';
+        item.classList.toggle('hidden', q !== '' && !name.includes(q));
+      });
+    });
+
+    overlay.querySelector('.tm-move-parent-list').addEventListener('change', e => {
+      if (e.target.name === 'tm-move-parent') {
+        updatePosition(parseInt(e.target.value, 10));
+      }
+    });
+
+    overlay.querySelector('#tm-move-confirm-btn').addEventListener('click', async () => {
+      const radio = overlay.querySelector('input[name="tm-move-parent"]:checked');
+      if (!radio) {
+        store.set('toast', { message: 'Select a parent first.', type: 'error' });
+        return;
+      }
+      const parentId = parseInt(radio.value, 10);
+      const afterRaw = overlay.querySelector('.tm-move-position-select').value;
+      const afterId  = afterRaw ? parseInt(afterRaw, 10) : null;
+
+      close();
+      try {
+        const currentParents = (tag.parents || []).map(p => p.id);
+        if (!currentParents.includes(parentId)) {
+          await setTagParents(tagId, [...currentParents, parentId]);
+        }
+        await moveTag(tagId, { parent_id: parentId, after_id: afterId });
+        this._load();
+        this._refreshNavTags();
+        store.set('toast', { message: 'Tag moved.', type: 'success' });
+      } catch (err) {
+        store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+      }
     });
   }
 

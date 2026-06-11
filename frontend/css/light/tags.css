@@ -1085,3 +1085,55 @@
     background: var(--color-primary);
     color: var(--color-white);
 }
+
+/* ===========================
+   Move… dialog (touch parity for drag)
+   =========================== */
+.tm-move-modal {
+    width: min(28rem, calc(100vw - 2rem));
+}
+
+.tm-move-parent-list {
+    max-height: 14rem;
+    overflow-y: auto;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-xs) 0;
+    margin-top: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+}
+
+.tm-move-parent-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.tm-move-parent-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.tm-move-parent-item input[type="radio"] {
+    flex-shrink: 0;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.tm-move-parent-name {
+    color: var(--text-primary);
+}
+
+/* Drop-onto confirm dialog — stacked action buttons */
+.tm-drop-confirm-footer {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.tm-drop-confirm-footer .btn {
+    width: 100%;
+    justify-content: center;
+}
