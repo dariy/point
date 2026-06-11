@@ -134,6 +134,15 @@ func getPostTypeFromModels(status string, _ []models.Tag) string {
 	return "post"
 }
 
+// tagToPostTagInfo converts a models.Tag to a lightweight PostTagInfo for ancestor expansion.
+func tagToPostTagInfo(t models.Tag) repository.PostTagInfo {
+	return repository.PostTagInfo{
+		ID:   t.ID,
+		Name: t.Name,
+		Slug: t.Slug,
+	}
+}
+
 func tagToListItem(t models.Tag) map[string]interface{} {
 	return map[string]interface{}{
 		"id":         t.ID,

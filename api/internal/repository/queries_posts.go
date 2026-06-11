@@ -98,27 +98,14 @@ WHERE
 	return count, err
 }
 
-// ListPostsInYearRange returns posts that carry an _in_timeline year tag whose
+// ListPostsInYearRange returns posts that carry a year tag (kind='year') whose
 // parsed year (CAST(slug AS INTEGER)) falls in [fromYear, toYear].
 func (r *sqliteRepository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
 	const q = `
-WITH RECURSIVE
-_it(id, slug) AS (
-    SELECT tr.child_id, c.slug
-    FROM tag_relationships tr
-    JOIN tags p ON p.id = tr.parent_id
-    JOIN tags c ON c.id = tr.child_id
-    WHERE p.slug = '_in_timeline'
-    UNION ALL
-    SELECT tr2.child_id, c2.slug
-    FROM tag_relationships tr2
-    JOIN tags c2 ON c2.id = tr2.child_id
-    JOIN _it d ON d.id = tr2.parent_id
-),
-_ytags AS (
-    SELECT DISTINCT id FROM _it
-    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
-    AND slug NOT LIKE '\_%%' ESCAPE '\'
+WITH _ytags AS (
+    SELECT id FROM tags
+    WHERE kind = 'year'
+    AND CAST(slug AS INTEGER) BETWEEN ? AND ?
 ),
 _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt
@@ -177,23 +164,10 @@ LIMIT ? OFFSET ?`
 // CountPostsInYearRange counts posts matching the year range and standard filters.
 func (r *sqliteRepository) CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error) {
 	const q = `
-WITH RECURSIVE
-_it(id, slug) AS (
-    SELECT tr.child_id, c.slug
-    FROM tag_relationships tr
-    JOIN tags p ON p.id = tr.parent_id
-    JOIN tags c ON c.id = tr.child_id
-    WHERE p.slug = '_in_timeline'
-    UNION ALL
-    SELECT tr2.child_id, c2.slug
-    FROM tag_relationships tr2
-    JOIN tags c2 ON c2.id = tr2.child_id
-    JOIN _it d ON d.id = tr2.parent_id
-),
-_ytags AS (
-    SELECT DISTINCT id FROM _it
-    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
-    AND slug NOT LIKE '\_%%' ESCAPE '\'
+WITH _ytags AS (
+    SELECT id FROM tags
+    WHERE kind = 'year'
+    AND CAST(slug AS INTEGER) BETWEEN ? AND ?
 ),
 _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt
@@ -685,7 +659,7 @@ AND (? OR NOT EXISTS (
 }
 
 // GetPostsByTagIDsInYearRange returns paginated posts that have at least one tag from the
-// given set AND fall within [fromYear, toYear] via _in_timeline year tags.
+// given set AND fall within [fromYear, toYear] via year tags.
 func (r *sqliteRepository) GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
 	if len(tagIDs) == 0 {
 		return []models.Post{}, nil
@@ -728,19 +702,10 @@ func (r *sqliteRepository) GetPostsByTagIDsInYearRange(ctx context.Context, tagI
 
 	bypassEHP := includeDrafts || includeHidden
 	q := `
-WITH RECURSIVE
-_it(id, slug) AS (
-    SELECT tr.child_id, c.slug FROM tag_relationships tr
-    JOIN tags p ON p.id = tr.parent_id JOIN tags c ON c.id = tr.child_id
-    WHERE p.slug = '_in_timeline'
-    UNION ALL
-    SELECT tr2.child_id, c2.slug FROM tag_relationships tr2
-    JOIN tags c2 ON c2.id = tr2.child_id JOIN _it d ON d.id = tr2.parent_id
-),
-_ytags AS (
-    SELECT DISTINCT id FROM _it
-    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
-    AND slug NOT LIKE '\_%%' ESCAPE '\'
+WITH _ytags AS (
+    SELECT id FROM tags
+    WHERE kind = 'year'
+    AND CAST(slug AS INTEGER) BETWEEN ? AND ?
 ),
 _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
@@ -831,19 +796,10 @@ func (r *sqliteRepository) CountPostsByTagIDsInYearRange(ctx context.Context, ta
 
 	bypassEHP := includeDrafts || includeHidden
 	q := `
-WITH RECURSIVE
-_it(id, slug) AS (
-    SELECT tr.child_id, c.slug FROM tag_relationships tr
-    JOIN tags p ON p.id = tr.parent_id JOIN tags c ON c.id = tr.child_id
-    WHERE p.slug = '_in_timeline'
-    UNION ALL
-    SELECT tr2.child_id, c2.slug FROM tag_relationships tr2
-    JOIN tags c2 ON c2.id = tr2.child_id JOIN _it d ON d.id = tr2.parent_id
-),
-_ytags AS (
-    SELECT DISTINCT id FROM _it
-    WHERE CAST(slug AS INTEGER) BETWEEN ? AND ?
-    AND slug NOT LIKE '\_%%' ESCAPE '\'
+WITH _ytags AS (
+    SELECT id FROM tags
+    WHERE kind = 'year'
+    AND CAST(slug AS INTEGER) BETWEEN ? AND ?
 ),
 _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)

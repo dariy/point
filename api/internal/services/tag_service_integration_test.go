@@ -4,11 +4,14 @@ package services
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestTagService_CRUD(t *testing.T) {
@@ -903,5 +906,61 @@ func TestTagService_PageTagIDs(t *testing.T) {
 	}
 	if !ids2[201] {
 		t.Errorf("expected tag 201 to be a page tag ID (inherited from hidden parent)")
+	}
+}
+
+func TestTagService_CycleRejection(t *testing.T) {
+	repo := setupTestDB(t)
+	defer repo.Close()
+	service := NewTagService(repo)
+	ctx := context.Background()
+
+	// Create tags: A, B, C
+	tagA, _ := service.CreateTag(ctx, CreateTagParams{Name: "A", Slug: "a"})
+	tagB, _ := service.CreateTag(ctx, CreateTagParams{Name: "B", Slug: "b"})
+	tagC, _ := service.CreateTag(ctx, CreateTagParams{Name: "C", Slug: "c"})
+
+	// Create hierarchy: A -> B -> C
+	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: tagA.ID, ChildID: tagB.ID})
+	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: tagB.ID, ChildID: tagC.ID})
+
+	// Try to add C -> A (should fail)
+	err := service.SetTagParents(ctx, tagA.ID, []int64{tagC.ID})
+	if err == nil {
+		t.Error("expected error when creating cycle C -> A -> B -> C, but got nil")
+	} else {
+		he, ok := err.(*echo.HTTPError)
+		if !ok || he.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %v", err)
+		} else {
+			t.Logf("Got expected error (Parents): %v", he.Message)
+		}
+	}
+
+	// Try to add A -> C as a child of C (should fail)
+	// A -> B -> C already exists. Adding A as a child of C means C -> A.
+	err = service.SetTagChildren(ctx, tagC.ID, []int64{tagA.ID})
+	if err == nil {
+		t.Error("expected error when creating cycle A -> C -> B -> A, but got nil")
+	} else {
+		he, ok := err.(*echo.HTTPError)
+		if !ok || he.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %v", err)
+		} else {
+			t.Logf("Got expected error (Children): %v", he.Message)
+		}
+	}
+
+	// Try direct AddTagRelationship
+	err = service.AddTagRelationship(ctx, tagC.ID, tagA.ID)
+	if err == nil {
+		t.Error("expected error when creating cycle C -> A -> B -> C via AddTagRelationship, but got nil")
+	} else {
+		he, ok := err.(*echo.HTTPError)
+		if !ok || he.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %v", err)
+		} else {
+			t.Logf("Got expected error (AddTagRelationship): %v", he.Message)
+		}
 	}
 }

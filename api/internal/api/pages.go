@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -89,8 +90,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 				postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, []int64{hpPost.ID})
 				hpPostType := getPostType(hpPost.Status, postTagsMap[hpPost.ID])
 				if hpPostType == "page" {
-					ancestorsMap := fetchAncestorsMap(ctx, h.repo, postTagsMap)
-					postTagsMap = expandPostTagsWithAncestors(postTagsMap, ancestorsMap, publicOnly)
+					postTagsMap = h.expandPostTagsWithAncestors(ctx, postTagsMap, publicOnly)
 
 					minPosts := getMinTagPostsSetting(allSettings)
 					var excludeTagIDs map[int64]bool
@@ -166,8 +166,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		postIDs[i] = p.ID
 	}
 	postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, postIDs)
-	ancestorsMap := fetchAncestorsMap(ctx, h.repo, postTagsMap)
-	postTagsMap = expandPostTagsWithAncestors(postTagsMap, ancestorsMap, publicOnly)
+	postTagsMap = h.expandPostTagsWithAncestors(ctx, postTagsMap, publicOnly)
 
 	minPosts := getMinTagPostsSetting(allSettings)
 	var excludeTagIDs map[int64]bool
@@ -333,8 +332,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		tagPostIDs[i] = p.ID
 	}
 	tagPostTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, tagPostIDs)
-	tagAncestorsMap := fetchAncestorsMap(ctx, h.repo, tagPostTagsMap)
-	tagPostTagsMap = expandPostTagsWithAncestors(tagPostTagsMap, tagAncestorsMap, publicOnly)
+	tagPostTagsMap = h.expandPostTagsWithAncestors(ctx, tagPostTagsMap, publicOnly)
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
@@ -409,54 +407,78 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
-	tags, err := h.tagService.ListTags(ctx, true, publicOnly)
+	g, err := h.tagService.GetTagSnapshot(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	// Fetch locations for all tags in one query.
-	allTagIDs := make([]int64, len(tags))
-	for i, t := range tags {
-		allTagIDs[i] = t.ID
-	}
-	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, allTagIDs)
-
-	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
-
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	minPosts := getMinTagPostsSetting(allSettings)
-	var excludeTagIDs map[int64]bool
-	var effectivelyHiddenMap map[int64]bool
-	if publicOnly {
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
-	} else {
-		effectivelyHiddenMap, _ = h.tagService.EffectivelyHiddenIDs(ctx)
-	}
 
-	// Filter hidden tags for public view
-	visible := make([]map[string]interface{}, 0, len(tags))
-	for _, t := range tags {
-		if !publicOnly || !excludeTagIDs[t.ID] {
-			parents, _ := h.tagService.GetTagParents(ctx, t.ID)
-			allChildren, _ := h.tagService.GetTagChildren(ctx, t.ID, publicOnly, minPosts)
-			children := make([]models.Tag, 0, len(allChildren))
-			for _, ch := range allChildren {
-				if !publicOnly || !excludeTagIDs[ch.ID] {
-					children = append(children, ch)
+	// Fetch locations for all tags in one query.
+	tagIDs := make([]int64, 0, len(g.ByID))
+	for id := range g.ByID {
+		tagIDs = append(tagIDs, id)
+	}
+	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, tagIDs)
+
+	excludeTagIDs := make(map[int64]bool)
+	if publicOnly {
+		for id := range g.EffectiveHidden {
+			excludeTagIDs[id] = true
+		}
+		if minPosts > 0 {
+			for id, count := range g.CountsPublic {
+				if count < minPosts {
+					excludeTagIDs[id] = true
 				}
 			}
-			var loc *models.TagLocation
-			if l, ok := locMap[t.ID]; ok {
-				loc = &l
-			}
-			tagResp := tagToFullResponse(t, parents, children, loc, excludeTagIDs)
-			if !publicOnly {
-				injectTagHiddenFields(tagResp, t, effectiveHiddenPostsTagIDs)
-				tagResp["is_hidden"] = effectivelyHiddenMap[t.ID]
-			}
-			visible = append(visible, tagResp)
 		}
 	}
+
+	visible := make([]map[string]interface{}, 0)
+	for id, t := range g.ByID {
+		if publicOnly && excludeTagIDs[id] {
+			continue
+		}
+
+		parents := make([]models.Tag, 0)
+		for _, pid := range g.Parents[id] {
+			parents = append(parents, g.ByID[pid])
+		}
+		children := make([]models.Tag, 0)
+		for _, cid := range g.Children[id] {
+			if publicOnly && excludeTagIDs[cid] {
+				continue
+			}
+			children = append(children, g.ByID[cid])
+		}
+
+		var loc *models.TagLocation
+		if l, ok := locMap[id]; ok {
+			loc = &l
+		}
+
+		tagResp := tagToFullResponse(t, parents, children, loc, excludeTagIDs)
+		tagResp["effective_hidden"] = g.EffectiveHidden[id]
+		tagResp["effective_hides_posts"] = g.EffectiveHidesPosts[id]
+		tagResp["post_count"] = g.CountsAdmin[id]
+
+		if publicOnly {
+			tagResp["post_count"] = g.CountsPublic[id]
+		} else {
+			tagResp["is_hidden"] = g.EffectiveHidden[id]
+			if via, ok := g.HiddenVia[id]; ok {
+				tagResp["hidden_via"] = via
+			}
+		}
+		visible = append(visible, tagResp)
+	}
+
+	// Stable sort by name
+	sort.Slice(visible, func(i, j int) bool {
+		return visible[i]["name"].(string) < visible[j]["name"].(string)
+	})
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"tags":  visible,
@@ -470,6 +492,11 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	ctx := c.Request().Context()
 	user := c.Get("user")
 	publicOnly := user == nil
+
+	g, err := h.tagService.GetTagSnapshot(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
 
 	mapSettings, _ := h.settingsService.GetAllSettings(ctx)
 
@@ -507,73 +534,87 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 	}
 
 	// Find the base category tags used to determine type.
-	baseTags, _ := h.repo.FindTagsByNames(ctx, []string{"country", "countries", "city", "cities"})
+	countryDescIDs := make(map[int64]bool)
+	cityDescIDs := make(map[int64]bool)
 
-	countryDescIDs := map[int64]bool{}
-	cityDescIDs := map[int64]bool{}
-
-	for _, bt := range baseTags {
-		name := strings.ToLower(bt.Name)
-		descs, _ := h.repo.GetTagDescendants(ctx, bt.ID)
-		for _, d := range descs {
-			switch name {
-			case "country", "countries":
-				countryDescIDs[d.ID] = true
-			case "city", "cities":
-				cityDescIDs[d.ID] = true
+	for id, t := range g.ByID {
+		name := strings.ToLower(t.Name)
+		if name == "country" || name == "countries" {
+			// BFS descendants
+			queue := []int64{id}
+			for len(queue) > 0 {
+				cur := queue[0]
+				queue = queue[1:]
+				for _, cid := range g.Children[cur] {
+					if !countryDescIDs[cid] {
+						countryDescIDs[cid] = true
+						queue = append(queue, cid)
+					}
+				}
+			}
+		} else if name == "city" || name == "cities" {
+			// BFS descendants
+			queue := []int64{id}
+			for len(queue) > 0 {
+				cur := queue[0]
+				queue = queue[1:]
+				for _, cid := range g.Children[cur] {
+					if !cityDescIDs[cid] {
+						cityDescIDs[cid] = true
+						queue = append(queue, cid)
+					}
+				}
 			}
 		}
 	}
 
-	allTags, _ := h.tagService.ListTags(ctx, true, publicOnly)
-	tagIDs := make([]int64, len(allTags))
-	for i, t := range allTags {
-		tagIDs[i] = t.ID
+	tagIDs := make([]int64, 0, len(g.ByID))
+	for id := range g.ByID {
+		tagIDs = append(tagIDs, id)
 	}
 	locMap, _ := h.tagService.GetTagLocationsByTagIDs(ctx, tagIDs)
-
 	yearMap, _ := h.repo.GetYearTagsByLocationTagIDs(ctx, tagIDs)
 
-	excludeTagIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minMapPosts)
-	hierarchicalCounts, _ := h.tagService.GetHierarchicalPostCounts(ctx, publicOnly)
-	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
-
 	mapTags := []map[string]interface{}{}
-	for _, t := range allTags {
-		if publicOnly && excludeTagIDs[t.ID] {
+	for id, t := range g.ByID {
+		if publicOnly && g.EffectiveHidden[id] {
 			continue
 		}
-		loc, ok := locMap[t.ID]
+		if publicOnly && minMapPosts > 0 && g.CountsPublic[id] < minMapPosts {
+			continue
+		}
+
+		loc, ok := locMap[id]
 		if !ok {
 			continue
 		}
 
 		// When a year range filter is active, skip tags outside the filtered set.
 		if yearRangeFilter != nil {
-			if _, inRange := yearRangeFilter[t.ID]; !inRange {
+			if _, inRange := yearRangeFilter[id]; !inRange {
 				continue
 			}
 		}
 
 		tagType := "other"
-		if cityDescIDs[t.ID] {
+		if cityDescIDs[id] {
 			tagType = "city"
-		} else if countryDescIDs[t.ID] {
+		} else if countryDescIDs[id] {
 			tagType = "country"
 		}
 
-		years := yearMap[t.ID]
+		years := yearMap[id]
 		if years == nil {
 			years = []repository.PostTagInfo{}
 		}
 
 		var postCount int64
 		if yearRangeFilter != nil {
-			postCount = yearRangeFilter[t.ID]
+			postCount = yearRangeFilter[id]
 		} else {
-			postCount = hierarchicalCounts[t.ID]
-			if postCount == 0 {
-				postCount = int64(t.PostCount)
+			postCount = g.CountsAdmin[id]
+			if publicOnly {
+				postCount = g.CountsPublic[id]
 			}
 		}
 
@@ -587,7 +628,10 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 			"years":      years,
 		}
 		if !publicOnly {
-			entry["is_hidden"] = effectivelyHiddenMap[t.ID]
+			entry["is_hidden"] = g.EffectiveHidden[id]
+			if via, ok := g.HiddenVia[id]; ok {
+				entry["hidden_via"] = via
+			}
 		}
 		mapTags = append(mapTags, entry)
 	}
@@ -597,11 +641,16 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 // expandPostTagsWithAncestors takes a postID→tags map and adds ancestor tags for each direct tag,
 // filtering out is_hidden ancestors when publicOnly is true. Deduplication is per-post.
-func expandPostTagsWithAncestors(
+func (h *PagesHandler) expandPostTagsWithAncestors(
+	ctx context.Context,
 	postTagsMap map[int64][]repository.PostTagInfo,
-	ancestorsMap map[int64][]repository.PostTagInfo,
 	publicOnly bool,
 ) map[int64][]repository.PostTagInfo {
+	g, err := h.tagService.GetTagSnapshot(ctx)
+	if err != nil {
+		return postTagsMap
+	}
+
 	result := make(map[int64][]repository.PostTagInfo, len(postTagsMap))
 	for postID, tags := range postTagsMap {
 		seen := make(map[int64]bool, len(tags)*3)
@@ -611,54 +660,38 @@ func expandPostTagsWithAncestors(
 				continue
 			}
 			seen[t.ID] = true
-			if publicOnly && strings.HasPrefix(t.Slug, "_") {
+			if publicOnly && g.EffectiveHidden[t.ID] {
 				continue
 			}
 			expanded = append(expanded, t)
-			for _, anc := range ancestorsMap[t.ID] {
-				if seen[anc.ID] {
-					continue
+
+			// BFS from this tag in-memory
+			queue := []int64{t.ID}
+			for len(queue) > 0 {
+				cur := queue[0]
+				queue = queue[1:]
+
+				for _, pid := range g.Parents[cur] {
+					if seen[pid] {
+						continue
+					}
+					seen[pid] = true
+					if publicOnly && g.EffectiveHidden[pid] {
+						continue
+					}
+					p := g.ByID[pid]
+					expanded = append(expanded, repository.PostTagInfo{
+						ID:   p.ID,
+						Name: p.Name,
+						Slug: p.Slug,
+					})
+					queue = append(queue, pid)
 				}
-				seen[anc.ID] = true
-				if publicOnly && strings.HasPrefix(anc.Slug, "_") {
-					continue
-				}
-				expanded = append(expanded, anc)
 			}
 		}
 		result[postID] = expanded
 	}
 	return result
-}
-
-// tagToPostTagInfo converts a models.Tag to a lightweight PostTagInfo for ancestor expansion.
-func tagToPostTagInfo(t models.Tag) repository.PostTagInfo {
-	return repository.PostTagInfo{
-		ID:   t.ID,
-		Name: t.Name,
-		Slug: t.Slug,
-	}
-}
-
-// fetchAncestorsMap fetches ancestor tags for each unique tag ID in the postTagsMap.
-// Results are cached per tag ID to avoid redundant queries.
-func fetchAncestorsMap(ctx context.Context, repo repository.Repository, postTagsMap map[int64][]repository.PostTagInfo) map[int64][]repository.PostTagInfo {
-	uniqueTagIDs := make(map[int64]bool)
-	for _, tags := range postTagsMap {
-		for _, t := range tags {
-			uniqueTagIDs[t.ID] = true
-		}
-	}
-	ancestorsMap := make(map[int64][]repository.PostTagInfo, len(uniqueTagIDs))
-	for tagID := range uniqueTagIDs {
-		ancestors, _ := repo.GetTagAncestors(ctx, tagID)
-		infos := make([]repository.PostTagInfo, len(ancestors))
-		for i, a := range ancestors {
-			infos[i] = tagToPostTagInfo(a)
-		}
-		ancestorsMap[tagID] = infos
-	}
-	return ancestorsMap
 }
 
 // getMinTagPostsSetting reads the min_tag_posts_to_show setting; returns 0 (no filter) when unset.

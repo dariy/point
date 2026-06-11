@@ -31,6 +31,7 @@ type PostService struct {
 	repo             repository.Repository
 	settingsService  *SettingsService
 	instagramService *InstagramService
+	tagService       *TagService
 	appURL           string
 	md               goldmark.Markdown
 	policy           *bluemonday.Policy
@@ -38,7 +39,7 @@ type PostService struct {
 	viewMu           sync.Mutex
 }
 
-func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService, appURL string) *PostService {
+func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService, tagService *TagService, appURL string) *PostService {
 	var blockParsers []util.PrioritizedValue
 	for _, p := range parser.DefaultBlockParsers() {
 		if p.Priority != 100 {
@@ -129,6 +130,7 @@ func NewPostService(repo repository.Repository, settingsService *SettingsService
 		repo:             repo,
 		settingsService:  settingsService,
 		instagramService: instagramService,
+		tagService:       tagService,
 		appURL:           strings.TrimSuffix(strings.TrimSpace(appURL), "/"),
 		md:               md,
 		policy:           policy,
@@ -416,6 +418,9 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 
 	// Update tag counts
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
 
 	return post, strippedProps, nil
 }
@@ -517,6 +522,9 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 	}
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
 
 	return post, strippedProps, nil
 }
@@ -537,6 +545,9 @@ func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames
 	}
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
 	return nil
 }
 
@@ -586,19 +597,45 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 	}
 
 	// published_at logic handled in repository.UpdatePost based on status
-	return s.repo.UpdatePost(ctx, params)
+	post, err = s.repo.UpdatePost(ctx, params)
+	if err == nil {
+		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
+	return post, err
 }
 
 func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) error {
-	return s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID})
+	if err := s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID}); err != nil {
+		return err
+	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
+	return nil
 }
 
 func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error {
-	return s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID})
+	if err := s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID}); err != nil {
+		return err
+	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
+	return nil
 }
 
 func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID int64) error {
-	return s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID})
+	if err := s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID}); err != nil {
+		return err
+	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
+	return nil
 }
 
 func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32) ([]models.Post, int64, error) {
@@ -625,6 +662,8 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 	if err != nil {
 		return post, err
 	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil { s.tagService.Invalidate() }
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
@@ -639,7 +678,12 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
-	return s.repo.WithdrawPost(ctx, id)
+	post, err := s.repo.WithdrawPost(ctx, id)
+	if err == nil {
+		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
+	return post, err
 }
 
 // GeneratePreviewLink creates a preview token for a post valid for 7 days.
@@ -689,6 +733,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	}
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		if s.tagService != nil { s.tagService.Invalidate() }
 		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
