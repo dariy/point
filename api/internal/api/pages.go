@@ -89,7 +89,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			hpPost, err := h.postService.GetPostBySlug(ctx, hpIDStr)
 			if err == nil && (hpPost.Status == "published" || hpPost.Status == "page" || !publicOnly) {
 				postTagsMap, _ := h.repo.GetTagsByPostIDs(ctx, []int64{hpPost.ID})
-				hpPostType := getPostType(hpPost.Status, postTagsMap[hpPost.ID])
+				hpPostType := hpPost.Type
 				if hpPostType == "page" {
 					postTagsMap = h.expandPostTagsWithAncestors(ctx, postTagsMap, publicOnly)
 

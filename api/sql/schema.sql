@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS posts (
     excerpt TEXT,
     formatter TEXT NOT NULL DEFAULT 'markdown',
     status TEXT NOT NULL DEFAULT 'draft',
+    type TEXT NOT NULL DEFAULT 'post',
     is_featured BOOLEAN NOT NULL DEFAULT 0,
     view_count INTEGER NOT NULL DEFAULT 0,
     published_at DATETIME,

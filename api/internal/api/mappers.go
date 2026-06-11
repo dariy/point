@@ -101,7 +101,7 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"id":               p.ID,
 		"title":            p.Title,
 		"slug":             p.Slug,
-		"type":             getPostType(p.Status, tags),
+		"type":             p.Type,
 		"content":          p.Content,
 		"css":              p.Css,
 		"immersive_mode":   p.ImmersiveMode,
@@ -118,20 +118,6 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"meta_description": nullString(p.MetaDescription),
 		"tags":             tagObjs,
 	}
-}
-
-func getPostType(status string, _ []repository.PostTagInfo) string {
-	if strings.EqualFold(status, "page") {
-		return "page"
-	}
-	return "post"
-}
-
-func getPostTypeFromModels(status string, _ []models.Tag) string {
-	if strings.EqualFold(status, "page") {
-		return "page"
-	}
-	return "post"
 }
 
 // tagToPostTagInfo converts a models.Tag to a lightweight PostTagInfo for ancestor expansion.

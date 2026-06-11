@@ -107,6 +107,7 @@ SELECT p.*
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -133,6 +134,7 @@ SELECT p.*
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -158,6 +160,7 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -179,15 +182,15 @@ WHERE
 
 -- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
+    title, slug, content, excerpt, formatter, status, type, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
 ) VALUES (
-    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), sqlc.arg('scheduled_at'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, sqlc.arg('css'), sqlc.arg('immersive_mode'), sqlc.arg('instagram_share')
+    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('type'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), sqlc.arg('scheduled_at'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, sqlc.arg('css'), sqlc.arg('immersive_mode'), sqlc.arg('instagram_share')
 )
 RETURNING *;
 
 -- name: UpdatePost :one
 UPDATE posts
-SET title = sqlc.arg('title'), slug = sqlc.arg('slug'), content = sqlc.arg('content'), excerpt = sqlc.arg('excerpt'), formatter = sqlc.arg('formatter'), status = sqlc.arg('status'), is_featured = sqlc.arg('is_featured'), thumbnail_path = sqlc.arg('thumbnail_path'), meta_description = sqlc.arg('meta_description'),
+SET title = sqlc.arg('title'), slug = sqlc.arg('slug'), content = sqlc.arg('content'), excerpt = sqlc.arg('excerpt'), formatter = sqlc.arg('formatter'), status = sqlc.arg('status'), type = sqlc.arg('type'), is_featured = sqlc.arg('is_featured'), thumbnail_path = sqlc.arg('thumbnail_path'), meta_description = sqlc.arg('meta_description'),
     scheduled_at = sqlc.arg('scheduled_at'),
     published_at = (CASE
         WHEN sqlc.arg('status') = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)

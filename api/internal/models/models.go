@@ -70,6 +70,7 @@ type Post struct {
 	Excerpt              sql.NullString `json:"excerpt"`
 	Formatter            string         `json:"formatter"`
 	Status               string         `json:"status"`
+	Type                 string         `json:"type"`
 	IsFeatured           bool           `json:"is_featured"`
 	ViewCount            int64          `json:"view_count"`
 	PublishedAt          sql.NullTime   `json:"published_at"`

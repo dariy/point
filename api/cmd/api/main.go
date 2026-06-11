@@ -718,6 +718,22 @@ func main() {
 			`CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at)`,
 		},
 		{
+			"add_posts_type_column",
+			`ALTER TABLE posts ADD COLUMN type TEXT NOT NULL DEFAULT 'post'`,
+		},
+		{
+			"migrate_post_type_audio_from_tags",
+			`UPDATE posts SET type = 'audio' WHERE id IN (SELECT post_id FROM post_tags WHERE tag_id IN (SELECT id FROM tags WHERE slug = '_type_audio'))`,
+		},
+		{
+			"migrate_post_type_page_from_tags",
+			`UPDATE posts SET type = 'page' WHERE id IN (SELECT post_id FROM post_tags WHERE tag_id IN (SELECT id FROM tags WHERE slug = '_type_page'))`,
+		},
+		{
+			"migrate_post_type_from_status_page",
+			`UPDATE posts SET type = 'page', status = 'published' WHERE status = 'page'`,
+		},
+		{
 			"create_webauthn_credentials_table",
 			`CREATE TABLE IF NOT EXISTS webauthn_credentials (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,

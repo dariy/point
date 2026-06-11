@@ -60,7 +60,7 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		"id":               post.ID,
 		"title":            post.Title,
 		"slug":             post.Slug,
-		"type":             getPostTypeFromModels(post.Status, tags),
+		"type":             post.Type,
 		"content":          post.Content,
 		"content_html":     htmlContent,
 		"css":              post.Css,
@@ -435,6 +435,7 @@ type CreatePostRequest struct {
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
 	Status          string   `json:"status"`
+	Type            string   `json:"type"`
 	IsFeatured      bool     `json:"is_featured"`
 	ThumbnailPath   string   `json:"thumbnail_path"`
 	MetaDescription string   `json:"meta_description"`
@@ -464,6 +465,10 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 	if req.Status == "" {
 		req.Status = "draft"
 	}
+	if req.Type == "" && req.Status == "page" {
+		req.Type = "page"
+		req.Status = "published"
+	}
 	if req.Formatter == "" {
 		req.Formatter = "markdown"
 	}
@@ -490,6 +495,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
 		Status:          req.Status,
+		Type:            req.Type,
 		IsFeatured:      req.IsFeatured,
 		AuthorID:        authorID,
 		ThumbnailPath:   req.ThumbnailPath,
@@ -530,6 +536,7 @@ type UpdatePostRequest struct {
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
 	Status          string   `json:"status"`
+	Type            string   `json:"type"`
 	IsFeatured      bool     `json:"is_featured"`
 	ThumbnailPath   string   `json:"thumbnail_path"`
 	MetaDescription string   `json:"meta_description"`
@@ -580,6 +587,13 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	if req.Status == "" {
 		req.Status = old.Status
 	}
+	if req.Type == "" && req.Status == "page" {
+		req.Type = "page"
+		req.Status = "published"
+	}
+	if req.Type == "" {
+		req.Type = old.Type
+	}
 
 	if scheduledAt != nil && time.Now().Before(*scheduledAt) {
 		req.Status = "scheduled"
@@ -600,6 +614,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
 		Status:          req.Status,
+		Type:            req.Type,
 		IsFeatured:      req.IsFeatured,
 		ThumbnailPath:   req.ThumbnailPath,
 		MetaDescription: req.MetaDescription,
@@ -873,6 +888,7 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 		Slug:      "",
 		Formatter: "markdown",
 		Status:    "draft",
+		Type:      "audio",
 		AuthorID:  authorID,
 		Tags:      tags,
 	})

@@ -360,6 +360,7 @@ type CreatePostParams struct {
 	Slug            string
 	Formatter       string
 	Status          string
+	Type            string
 	IsFeatured      bool
 	AuthorID        int64
 	ThumbnailPath   string
@@ -375,6 +376,10 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 
 	sanitizedCSS, strippedProps := SanitizePostCSS(p.CSS)
 
+	if p.Type == "" {
+		p.Type = "post"
+	}
+
 	post, err := s.repo.CreatePost(ctx, models.CreatePostParams{
 		Title:           p.Title,
 		Slug:            p.Slug,
@@ -385,6 +390,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
+		Type:            p.Type,
 		IsFeatured:      p.IsFeatured,
 		AuthorID:        p.AuthorID,
 		ThumbnailPath:   sql.NullString{String: p.ThumbnailPath, Valid: p.ThumbnailPath != ""},
@@ -476,6 +482,7 @@ type UpdatePostParams struct {
 	Slug            string
 	Formatter       string
 	Status          string
+	Type            string
 	IsFeatured      bool
 	ThumbnailPath   string
 	MetaDescription string
@@ -490,6 +497,10 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 
 	sanitizedCSS, strippedProps := SanitizePostCSS(p.CSS)
 
+	if p.Type == "" {
+		p.Type = "post"
+	}
+
 	post, err := s.repo.UpdatePost(ctx, models.UpdatePostParams{
 		Title:           p.Title,
 		Slug:            p.Slug,
@@ -500,6 +511,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
+		Type:            p.Type,
 		IsFeatured:      p.IsFeatured,
 		ThumbnailPath:   sql.NullString{String: p.ThumbnailPath, Valid: p.ThumbnailPath != ""},
 		MetaDescription: sql.NullString{String: p.MetaDescription, Valid: p.MetaDescription != ""},
