@@ -1,22 +1,21 @@
 /**
  * TagsManagerPage — hierarchical tag management.
  *
- * Two views: "tree" (multi-parent DAG, expand/collapse) and "list" (tabular).
- * Tag editor: full modal with all fields, flag checkboxes, and tag-badge
- * toggles for selecting parents and children (many-to-many).
- * Tree view supports drag-and-drop reordering of siblings via sort_order.
+ * Tree view: nav roots (by nav_order) → filed roots → Unfiled(N) group.
+ * List view: tabular with search and parent filters.
+ * Editor modal: Identity / Visibility / Display / Kind / Structure / Coordinates.
  * All user-supplied strings are escaped with escapeHtml() before interpolation.
  */
 
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listTags, createTag, updateTag, deleteTag, recalculateCounts, reorderTag, geocodeTag } from '../../api/tags.js';
+import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { getNavMenu } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
-import { EDIT_SVG, X_SVG, REFRESH_SVG, LOCK_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG } from '../../utils/icons.js';
+import { EDIT_SVG, X_SVG, REFRESH_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG } from '../../utils/icons.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
 
 export default class TagsManagerPage extends Component {
@@ -26,18 +25,21 @@ export default class TagsManagerPage extends Component {
       loading: true,
       tags: [],
       error: null,
-      view: 'tree',        // 'tree' | 'list'
-      expanded: new Set(), // IDs of expanded nodes in tree view
+      view: 'tree',
+      expanded: new Set(),
+      unfiledExpanded: false,
       sortField: 'sort_order',
-      sortOrder: 'asc',    // 'asc' | 'desc'
+      sortOrder: 'asc',
     };
     this._modal = null;
     this._modalKeyHandler = null;
     this._didPushUrl = false;
-    this._dragState = null; // { tagId, parentId }
-    // List-view filter state (persists across tree↔list switches)
+    this._dragState = null;
     this._listSearch = '';
-    this._listFilterParents = []; // [{id, name}]
+    this._listFilterParents = [];
+    // Track initial structure for change detection in modal
+    this._initialParentIds = [];
+    this._initialChildIds = [];
   }
 
   render() {
@@ -49,8 +51,8 @@ export default class TagsManagerPage extends Component {
         <button id="view-list-btn" class="btn btn-sm${view === 'list' ? ' btn-primary' : ' btn-secondary'}" title="List view">${LIST_SVG}<span class="btn-label"> List</span></button>
       </div>
       ${view === 'tree' ? `
-      <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">\u21c5<span class="btn-label"> Expand all</span></button>
-      <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">\u2012<span class="btn-label"> Collapse all</span></button>` : ''}
+      <button id="expand-all-btn" class="btn btn-sm btn-secondary" title="Expand all">⇅<span class="btn-label"> Expand all</span></button>
+      <button id="collapse-all-btn" class="btn btn-sm btn-secondary" title="Collapse all">‒<span class="btn-label"> Collapse all</span></button>` : ''}
       <button id="add-root-tag-btn" class="btn btn-primary" title="New Tag">${PLUS_SVG}<span class="btn-label"> New Tag</span></button>
       <button id="recalc-counts-btn" class="btn btn-secondary" title="Recalculate post counts">${REFRESH_SVG}</button>
     `;
@@ -67,11 +69,11 @@ export default class TagsManagerPage extends Component {
 
     let content;
     if (loading) {
-      content = `<div class="loading-spinner" aria-label="Loading tags\u2026"></div>`;
+      content = `<div class="loading-spinner" aria-label="Loading tags…"></div>`;
     } else if (error) {
       content = `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
     } else if (view === 'tree') {
-      content = `<div class="tags-tree-container">${this._renderTree(this._buildTree(tags))}</div>`;
+      content = `<div class="tags-tree-container">${this._renderForest(this._buildTree(tags))}</div>`;
     } else {
       content = this._renderList(tags);
     }
@@ -101,7 +103,7 @@ export default class TagsManagerPage extends Component {
         case 'locations':   valA = (a.locations?.length > 0) ? 1 : 0; valB = (b.locations?.length > 0) ? 1 : 0; break;
         case 'parents':     valA = a.parents?.length || 0;    valB = b.parents?.length || 0;    break;
         default:
-          valA = a.sort_order ?? Infinity; valB = b.sort_order ?? Infinity;
+          valA = a.nav_order ?? Infinity; valB = b.nav_order ?? Infinity;
           if (valA === valB) { valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); }
       }
       if (valA < valB) return -1 * dir;
@@ -117,12 +119,10 @@ export default class TagsManagerPage extends Component {
         .join('');
 
       const hasLocation = tag.locations?.length > 0;
-      const isSystem = !!tag.is_system;
-      const systemBadge = isSystem ? ` <span class="tm-system-badge" title="System tag">${LOCK_SVG}</span>` : '';
 
       return `
         <tr class="tm-tag-row" data-name="${escapeHtml(tag.name.toLowerCase())}" data-slug="${escapeHtml(tag.slug.toLowerCase())}" data-parent-ids="${parentIds}" data-parent-names="${escapeHtml(parentNamesLower)}">
-          <td><span class="tm-tag-name">${escapeHtml(tag.name)}${systemBadge}</span></td>
+          <td><span class="tm-tag-name">${escapeHtml(tag.name)}</span></td>
           <td><code class="tm-slug">${escapeHtml(tag.slug)}</code></td>
           <td class="text-center"><a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a></td>
           <td class="text-center">
@@ -133,10 +133,10 @@ export default class TagsManagerPage extends Component {
               <span class="tm-flag-static tm-flag-location" title="No coordinates">${MAP_SVG}</span>
             `}
           </td>
-          <td><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">\u2014</span>'}</div></td>
+          <td><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">—</span>'}</div></td>
           <td class="tm-actions">
-            <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit"${isSystem ? ' disabled' : ''}>${EDIT_SVG}</button>
-            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete"${isSystem ? ' disabled' : ''}>${X_SVG}</button>
+            <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
+            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
           </td>
         </tr>`;
     }).join('');
@@ -149,7 +149,7 @@ export default class TagsManagerPage extends Component {
     return `
       <div class="tm-list-filter-bar">
         <div class="tm-list-search-row">
-          <input type="text" class="form-input tm-list-search" placeholder="Search name, slug, parents\u2026" value="${escapeHtml(this._listSearch || '')}">
+          <input type="text" class="form-input tm-list-search" placeholder="Search name, slug, parents…" value="${escapeHtml(this._listSearch || '')}">
           ${hasFilters ? '<button type="button" class="btn btn-sm btn-secondary tm-clear-filters">Clear</button>' : ''}
         </div>
         ${chips ? `<div class="tm-filter-chips" id="tm-filter-chips">${chips}</div>` : '<div class="tm-filter-chips" id="tm-filter-chips"></div>'}
@@ -161,7 +161,7 @@ export default class TagsManagerPage extends Component {
               ${this._renderSortHeader('name', 'Name')}
               ${this._renderSortHeader('slug', 'Slug')}
               ${this._renderSortHeader('post_count', 'Posts', 'text-center')}
-              ${this._renderSortHeader('locations', '\ud83d\udccd', 'text-center', 'Coordinates')}
+              ${this._renderSortHeader('locations', '📍', 'text-center', 'Coordinates')}
               ${this._renderSortHeader('parents', 'Parents')}
               <th>Actions</th>
             </tr>
@@ -189,7 +189,7 @@ export default class TagsManagerPage extends Component {
     const chips = this.container.querySelector('#tm-filter-chips');
     if (!chips) return;
     chips.innerHTML = this._listFilterParents.map(p =>
-      `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">\u00d7</span></button>`
+      `<button type="button" class="tm-filter-chip" data-remove-id="${p.id}">${escapeHtml(p.name)} <span class="tm-chip-remove">×</span></button>`
     ).join('');
     chips.querySelectorAll('.tm-filter-chip').forEach(chip => {
       chip.addEventListener('click', () => {
@@ -208,7 +208,6 @@ export default class TagsManagerPage extends Component {
     if (btn) {
       btn.classList.toggle('hidden', !hasFilters);
     } else if (hasFilters) {
-      // Re-render list to show the clear button
       const listWrap = this.container.querySelector('.tm-list-filter-bar');
       if (listWrap) {
         const searchRow = listWrap.querySelector('.tm-list-search-row');
@@ -238,7 +237,7 @@ export default class TagsManagerPage extends Component {
   _renderSortHeader(field, label, className = '', title = '') {
     const { sortField, sortOrder } = this.state;
     const isActive = sortField === field;
-    const icon = isActive ? (sortOrder === 'asc' ? ' \u25b4' : ' \u25be') : '';
+    const icon = isActive ? (sortOrder === 'asc' ? ' ▴' : ' ▾') : '';
 
     return `
       <th class="tm-sortable-header ${className} ${isActive ? 'active' : ''}"
@@ -251,20 +250,14 @@ export default class TagsManagerPage extends Component {
       </th>`;
   }
 
-  // ── Tree view (multi-parent DAG) ─────────────────────────────────────────────
+  // ── Tree view ────────────────────────────────────────────────────────────────
 
   /**
-   * Build a forest from the flat tag list.
-   * Tags with multiple parents appear under each parent (multi-parent DAG).
-   * ancestorIds prevents infinite cycles.
+   * Build tree structure from flat tag list.
+   * Returns { navRoots, otherRoots, unfiled } for the forest renderer.
+   * Multi-parent tags appear under each parent (DAG).
    */
   _buildTree(tags) {
-    // Only _root and _pending are shown as top-level nodes.
-    // All other system tags (_system, _hidden, _hide_posts, etc.) are excluded.
-    // const VISIBLE_SYSTEM = new Set(['_root', '_pending']);
-    const HIDDEN_SYSTEM  = new Set(['_system', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors']);
-
-    // Build adjacency map across all tags so user-tag subtrees work correctly.
     const tagById = new Map(tags.map(t => [t.id, t]));
     const childrenOf = new Map();
     tags.forEach(t => {
@@ -277,16 +270,14 @@ export default class TagsManagerPage extends Component {
     });
 
     const sortFn = (a, b) => {
-      if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
-      if (a.sort_order != null) return -1;
-      if (a.sort_order != null) return 1;
+      const ao = a.sort_order ?? Infinity;
+      const bo = b.sort_order ?? Infinity;
+      if (ao !== bo) return ao - bo;
       return a.name.localeCompare(b.name);
     };
 
-    // Recursive builder — only include non-hidden-system tags as children.
     const makeNode = (tag, ancestorIds) => {
-      const kids = (childrenOf.get(tag.id) || [])
-        .filter(c => !HIDDEN_SYSTEM.has(c.slug) && !ancestorIds.has(c.id));
+      const kids = (childrenOf.get(tag.id) || []).filter(c => !ancestorIds.has(c.id));
       kids.sort(sortFn);
       return {
         ...tag,
@@ -294,11 +285,49 @@ export default class TagsManagerPage extends Component {
       };
     };
 
-    // Top level: _root first, _pending second (if they exist).
-    return ['_root', '_pending']
-      .map(slug => tags.find(t => t.slug === slug))
-      .filter(Boolean)
+    // Parentless tags are top-level
+    const parentless = tags.filter(t => (t.parents || []).length === 0);
+
+    // Nav roots: explicitly placed in navigation
+    const navRoots = parentless
+      .filter(t => t.nav_order != null)
+      .sort((a, b) => a.nav_order - b.nav_order)
       .map(t => makeNode(t, new Set([t.id])));
+
+    // Other filed roots: no nav_order but have children (intentional hierarchy roots)
+    const otherRoots = parentless
+      .filter(t => t.nav_order == null && (childrenOf.get(t.id) || []).length > 0)
+      .sort(sortFn)
+      .map(t => makeNode(t, new Set([t.id])));
+
+    // Unfiled: no parents, no children, not in nav
+    const unfiled = parentless
+      .filter(t => t.nav_order == null && (childrenOf.get(t.id) || []).length === 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { navRoots, otherRoots, unfiled };
+  }
+
+  _renderForest({ navRoots, otherRoots, unfiled }) {
+    const total = navRoots.length + otherRoots.length + unfiled.length;
+    if (!total) return '<p class="empty-state">No tags found.</p>';
+
+    let html = '<div class="tm-tree-root">';
+
+    if (navRoots.length) {
+      html += `<ul class="tm-tree level-0">${navRoots.map(n => this._renderNode(n, 0, null)).join('')}</ul>`;
+    }
+
+    if (otherRoots.length) {
+      html += `<ul class="tm-tree level-0">${otherRoots.map(n => this._renderNode(n, 0, null)).join('')}</ul>`;
+    }
+
+    if (unfiled.length) {
+      html += this._renderUnfiledGroup(unfiled);
+    }
+
+    html += '</div>';
+    return html;
   }
 
   _renderTree(nodes, level = 0, parentId = null) {
@@ -314,45 +343,94 @@ export default class TagsManagerPage extends Component {
       ? `<button class="tm-toggle" data-id="${node.id}">${isExpanded ? CHEVRON_SVG : CHEVRON_RIGHT_SVG}</button>`
       : `<span class="tm-toggle-spacer"></span>`;
 
-    const hasLocation = node.locations?.length > 0;
-    const locationFlag = hasLocation ? `
-      <a href="/map?tag=${encodeURIComponent(node.slug)}" class="btn btn-sm tm-flag-link active tm-flag-location" title="View on map">
-        ${MAP_SVG}<span class="btn-label"> Map</span>
-      </a>` : `
-      <span class="tm-flag-static tm-flag-location" title="No coordinates">${MAP_SVG}</span>`;
-
-    const isSystem = !!node.is_system;
-    const systemBadge = isSystem ? ` <span class="tm-system-badge" title="System tag">${LOCK_SVG}</span>` : '';
-
-    // Multi-parent indicator: show other parents (not the one rendering this node)
-    const otherParents = (node.parents || []).slice(1);
-    const multiParentHint = otherParents.length > 0
-      ? `<span class="tm-multi-parent" title="Also child of: ${otherParents.map(p => escapeHtml(p.name)).join(', ')}">\u2387</span>`
-      : '';
-
+    const badges = this._renderRowBadges(node);
     const parentAttr = parentId != null ? parentId : '';
 
     return `
-      <li class="tm-node${isSystem ? ' tm-system-node' : ''}" data-id="${node.id}">
+      <li class="tm-node" data-id="${node.id}">
         <div class="tm-row" draggable="true" data-id="${node.id}" data-parent-id="${parentAttr}">
-          <span class="tm-drag-handle" title="Drag to reorder">\u22ee\u22ee</span>
+          <span class="tm-drag-handle" title="Drag to reorder">⋮⋮</span>
           ${toggle}
           <div class="tm-node-body">
-            <span class="tm-tag-name">${escapeHtml(node.name)}${systemBadge}</span>
+            <span class="tm-tag-name">${escapeHtml(node.name)}</span>
+            ${badges ? `<span class="tm-badges-row">${badges}</span>` : ''}
           </div>
-          <div class="tm-flags-row">${locationFlag}</div>
           <span class="tm-row-meta">
             <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(node.slug)}" title="View posts tagged ${escapeHtml(node.slug)}">${node.post_count || 0}</a>
-            ${multiParentHint}
           </span>
           <div class="tm-actions">
-            <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit"${isSystem ? ' disabled' : ''}>${EDIT_SVG}</button>
+            <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit">${EDIT_SVG}</button>
             <button class="btn btn-sm add-child-btn"   data-id="${node.id}" title="Add child">+</button>
-            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${node.id}" title="Delete"${isSystem ? ' disabled' : ''}>${X_SVG}</button>
+            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${node.id}" title="Delete">${X_SVG}</button>
           </div>
         </div>
         ${isExpanded && hasChildren ? this._renderTree(node.childrenNodes, level + 1, node.id) : ''}
       </li>`;
+  }
+
+  _renderRowBadges(node) {
+    const parts = [];
+
+    if (node.nav_order != null) {
+      parts.push(`<span class="tm-badge tm-badge-nav" title="In public navigation (position ${node.nav_order})">⌂ nav</span>`);
+    }
+
+    if (node.hidden) {
+      parts.push(`<span class="tm-badge tm-badge-hidden" title="Hidden from public">🚫 hidden</span>`);
+    } else if (node.effective_hidden) {
+      const via = node.hidden_via
+        ? ` <button type="button" class="tm-badge-via-btn" data-open-tag-id="${node.hidden_via}" title="Open ancestor tag">inh.</button>`
+        : ' inh.';
+      parts.push(`<span class="tm-badge tm-badge-inherited" title="Hidden via ancestor">🚫${via}</span>`);
+    }
+
+    if (node.kind === 'year') {
+      parts.push(`<span class="tm-badge tm-badge-year" title="Year tag">📅 year</span>`);
+    }
+
+    if (node.locations?.length > 0) {
+      parts.push(`<a href="/map?tag=${encodeURIComponent(node.slug)}" class="tm-badge tm-badge-coords" title="View on map">📍</a>`);
+    }
+
+    const allParents = node.parents || [];
+    if (allParents.length > 1) {
+      const extras = allParents.slice(1).map(p => escapeHtml(p.name)).join(', ');
+      parts.push(`<span class="tm-badge tm-badge-multi" title="Also under: ${extras}">⎇ ${allParents.length} parents</span>`);
+    }
+
+    return parts.join('');
+  }
+
+  _renderUnfiledGroup(unfiledTags) {
+    const { unfiledExpanded } = this.state;
+    const n = unfiledTags.length;
+    const rows = unfiledTags.map(tag => `
+      <li class="tm-node tm-unfiled-node" data-id="${tag.id}">
+        <div class="tm-row" data-id="${tag.id}" data-parent-id="">
+          <span class="tm-toggle-spacer"></span>
+          <span class="tm-toggle-spacer"></span>
+          <div class="tm-node-body">
+            <span class="tm-tag-name">${escapeHtml(tag.name)}</span>
+            <code class="tm-slug-inline">${escapeHtml(tag.slug)}</code>
+          </div>
+          <span class="tm-row-meta">
+            <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(tag.slug)}" title="View posts tagged ${escapeHtml(tag.slug)}">${tag.post_count || 0}</a>
+          </span>
+          <div class="tm-actions">
+            <button class="btn btn-sm edit-tag-btn" data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
+            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
+          </div>
+        </div>
+      </li>`).join('');
+
+    return `
+      <div class="tm-unfiled-group">
+        <button type="button" class="tm-unfiled-toggle" id="unfiled-toggle-btn">
+          ${unfiledExpanded ? CHEVRON_SVG : CHEVRON_RIGHT_SVG}
+          <span class="tm-unfiled-label">Unfiled <span class="tm-unfiled-count">(${n})</span></span>
+        </button>
+        ${unfiledExpanded ? `<ul class="tm-tree level-0 tm-unfiled-list">${rows}</ul>` : ''}
+      </div>`;
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -387,8 +465,23 @@ export default class TagsManagerPage extends Component {
           this.setState({ expanded });
         });
       });
+
+      this.container.querySelector('#unfiled-toggle-btn')?.addEventListener('click', () => {
+        this.setState({ unfiledExpanded: !this.state.unfiledExpanded });
+      });
+
       this.container.querySelectorAll('.add-child-btn').forEach(btn => {
         btn.addEventListener('click', () => this._openModal(null, parseInt(btn.dataset.id, 10)));
+      });
+
+      // Open ancestor via inherited-hidden badge
+      this.container.querySelectorAll('.tm-badge-via-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const tagId = parseInt(btn.dataset.openTagId, 10);
+          const tag = this.state.tags.find(t => t.id === tagId);
+          if (tag) this._openModal(tag);
+        });
       });
 
       this._bindDragAndDrop();
@@ -416,7 +509,6 @@ export default class TagsManagerPage extends Component {
         th.addEventListener('click', () => this._handleSort(th.dataset.field));
       });
 
-      // Search input
       const searchInput = this.container.querySelector('.tm-list-search');
       if (searchInput) {
         searchInput.focus();
@@ -429,7 +521,6 @@ export default class TagsManagerPage extends Component {
         });
       }
 
-      // Parent filter buttons (click a parent badge to add it as a filter chip)
       this.container.querySelectorAll('.tm-parent-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.parentId, 10);
@@ -443,12 +534,9 @@ export default class TagsManagerPage extends Component {
         });
       });
 
-      // Clear button
       this.container.querySelector('.tm-clear-filters')?.addEventListener('click', () => this._clearListFilters());
 
-      // Wire existing chips (rendered from state on initial load)
       this._updateFilterChips();
-      // Re-apply filter immediately (restores after sort/view-switch)
       this._applyListFilter();
     }
   }
@@ -466,7 +554,9 @@ export default class TagsManagerPage extends Component {
         collect(n.childrenNodes);
       }
     });
-    collect(this._buildTree(this.state.tags));
+    const { navRoots, otherRoots } = this._buildTree(this.state.tags);
+    collect(navRoots);
+    collect(otherRoots);
     this.setState({ expanded });
   }
 
@@ -483,7 +573,7 @@ export default class TagsManagerPage extends Component {
     }
   }
 
-  // ── Drag and Drop ────────────────────────────────────────────────────────────
+  // ── Drag and Drop (reorder within same parent — full reorder is zagg.7) ──────
 
   _bindDragAndDrop() {
     const rows = this.container.querySelectorAll('.tm-row[draggable="true"]');
@@ -492,7 +582,6 @@ export default class TagsManagerPage extends Component {
       this.container.querySelectorAll('.tm-row').forEach(r => r.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on'));
     };
 
-    // Return 'before' | 'on' | 'after' based on cursor position within row.
     const dropZone = (e, rect) => {
       const rel = (e.clientY - rect.top) / rect.height;
       if (rel < 0.25) return 'before';
@@ -533,7 +622,6 @@ export default class TagsManagerPage extends Component {
       });
 
       row.addEventListener('dragleave', e => {
-        // Only clear if leaving the row entirely (not entering a child element).
         if (!row.contains(e.relatedTarget)) {
           row.classList.remove('tm-drop-before', 'tm-drop-after', 'tm-drop-on');
         }
@@ -553,32 +641,17 @@ export default class TagsManagerPage extends Component {
         clearIndicators();
         this._dragState = null;
 
-        const targetParentId = row.dataset.parentId !== '' ? parseInt(row.dataset.parentId, 10) : null;
-
-        try {
-          if (zone === 'on') {
-            // Reparent: make targetId the sole parent of dragId.
-            const dragTag = this.state.tags.find(t => t.id === dragId);
-            if (!dragTag) return;
-            await updateTag(dragId, {
-              name:       dragTag.name,
-              slug:       dragTag.slug,
-              parent_ids: [targetId],
-              child_ids:  (dragTag.children || []).map(c => c.id),
-            });
-          } else {
-            // Reorder within target's parent context; also reparents if cross-hierarchy.
-            await reorderTag(dragId, {
-              target_id: targetId,
-              position:  zone,
-              parent_id: targetParentId,
-            });
+        if (zone === 'on') {
+          // Reparent: make targetId the parent of dragId (zagg.7 will add confirm dialog)
+          try {
+            await setTagParents(dragId, [targetId]);
+            this._load();
+            this._refreshNavTags();
+          } catch (err) {
+            store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
           }
-          this._load();
-          this._refreshNavTags();
-        } catch (err) {
-          store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
         }
+        // Reordering (before/after) will be implemented in zagg.7 with MoveTag
       });
     });
   }
@@ -588,105 +661,142 @@ export default class TagsManagerPage extends Component {
   _openModal(tag = null, parentId = null, { fromUrl = false } = {}) {
     this._closeModal();
 
-    const isEdit      = !!tag;
-    const f           = tag || {};
-    const isSystem    = isEdit && !!f.is_system;
-    const existingLoc = f.locations?.[0] ?? null;
-    const selfId      = isEdit ? f.id : null;
-    const selParents  = isEdit ? (f.parents  || []).map(p => p.id) : (parentId ? [parentId] : []);
+    const isEdit = !!tag;
+    const f = tag || {};
+    const selfId = isEdit ? f.id : null;
+    const selParents = isEdit ? (f.parents || []).map(p => p.id) : (parentId ? [parentId] : []);
     const selChildren = isEdit ? (f.children || []).map(c => c.id) : [];
-    const tagById     = new Map(this.state.tags.map(t => [t.id, t]));
-    const visibleParentCount = selParents.filter(id => {
-      const t = tagById.get(id);
-      return !t || !t.is_system || t.slug === '_root';
-    }).length;
+
+    // Track initial structure to detect changes on save
+    this._initialParentIds = [...selParents];
+    this._initialChildIds  = [...selChildren];
+
+    const existingLat = f.latitude ?? (f.locations?.[0]?.latitude ?? null);
+    const existingLng = f.longitude ?? (f.locations?.[0]?.longitude ?? null);
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay active';
 
-    // All user content is wrapped in escapeHtml(). HTML structure is static.
+    const inNav     = f.nav_order != null;
+    const navOrder  = f.nav_order ?? '';
+    const kind      = f.kind || 'topic';
+
     const html = [
       '<div class="modal tag-editor-modal" role="dialog" aria-modal="true">',
-      '  <button class="modal-close" aria-label="Close">\u00d7</button>',
+      '  <button class="modal-close" aria-label="Close">×</button>',
       '  <div class="modal-header">',
       `    <h3>${isEdit ? 'Edit: ' + escapeHtml(f.name) : 'New Tag'}${isEdit ? ` <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(f.slug || '')}" title="View posts tagged ${escapeHtml(f.slug || '')}">${f.post_count || 0}</a>` : ''}</h3>`,
       '  </div>',
       '  <form id="tag-editor-form">',
       '    <div class="modal-body">',
 
-      // Name (title-style, like post editor)
+      // — Identity —
       '      <div class="title-row">',
-      `        <input type="text" name="name" class="form-input editor-title" placeholder="Tag name" value="${escapeHtml(f.name || '')}"${isSystem ? ' readonly' : ' required'}>`,
+      `        <input type="text" name="name" class="form-input editor-title" placeholder="Tag name" value="${escapeHtml(f.name || '')}" required>`,
       '      </div>',
-
-      // Slug (slug-row with /tags/ prefix, like post editor)
       '      <div class="slug-row">',
       '        <span class="slug-prefix">/tags/</span>',
-      `        <input type="text" name="slug" id="modal-slug" class="form-input editor-slug" placeholder="tag-slug" value="${escapeHtml(f.slug || '')}" spellcheck="false"${isSystem ? ' readonly' : ''}>`,
+      `        <input type="text" name="slug" id="modal-slug" class="form-input editor-slug" placeholder="tag-slug" value="${escapeHtml(f.slug || '')}" spellcheck="false">`,
       '      </div>',
-
-      // Description (excerpt-style, like post editor)
       '      <div class="form-group">',
-      `        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description\u2026">${escapeHtml(f.description || '')}</textarea>`,
+      `        <textarea name="description" class="form-input editor-excerpt" rows="2" placeholder="Tag description…">${escapeHtml(f.description || '')}</textarea>`,
       '      </div>',
 
-      // Features section — hidden for system tags
-      ...(isSystem ? [] : [this._renderFeaturesSection(selParents)]),
-
-      // Parents (collapsible) — hidden for system tags (parents are fixed)
-      ...(isSystem ? [] : [
-        '      <div class="tm-collapsible-section">',
-        '        <button type="button" class="tm-section-toggle" data-target="parents-body">',
-        `          <span class="tm-section-arrow">\u25b6</span> Parents`,
-        `          <span class="tm-section-count">${visibleParentCount > 0 ? visibleParentCount : ''}</span>`,
-        '        </button>',
-        '        <div class="tm-section-body hidden" id="parents-body">',
-        '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags\u2026" autocomplete="off">',
-        '          <div class="tag-toggles-container">',
-        this._renderTagToggles('parent_ids', this.state.tags, selfId, selParents),
-        '          </div>',
-        '        </div>',
-        '      </div>',
-      ]),
-
-      // Children (collapsible) — only user tags are selectable as children
+      // — Visibility —
       '      <div class="tm-collapsible-section">',
-      '        <button type="button" class="tm-section-toggle" data-target="children-body">',
-      `          <span class="tm-section-arrow">\u25b6</span> Children`,
-      `          <span class="tm-section-count">${selChildren.length > 0 ? selChildren.length : ''}</span>`,
+      '        <button type="button" class="tm-section-toggle" data-target="visibility-body">',
+      '          <span class="tm-section-arrow">▶</span> Visibility',
+      `          <span class="tm-section-count">${(f.hidden || f.effective_hidden) ? '🚫' : ''}</span>`,
       '        </button>',
-      '        <div class="tm-section-body hidden" id="children-body">',
-      '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags\u2026" autocomplete="off">',
+      '        <div class="tm-section-body hidden" id="visibility-body">',
+      this._renderVisibilitySection(f),
+      '        </div>',
+      '      </div>',
+
+      // — Display —
+      '      <div class="tm-collapsible-section">',
+      '        <button type="button" class="tm-section-toggle" data-target="display-body">',
+      '          <span class="tm-section-arrow">▶</span> Display',
+      `          <span class="tm-section-count">${inNav ? '⌂' : ''}</span>`,
+      '        </button>',
+      '        <div class="tm-section-body hidden" id="display-body">',
+      `          <label class="tm-flag-row">`,
+      `            <input type="checkbox" name="in_nav" id="in-nav-check"${inNav ? ' checked' : ''}>`,
+      `            In public navigation`,
+      `          </label>`,
+      `          <div class="tm-nav-order-row${inNav ? '' : ' hidden'}" id="nav-order-row">`,
+      `            <span class="slug-prefix">Position</span>`,
+      `            <input type="number" name="nav_order" class="form-input editor-slug" min="0" step="1" value="${escapeHtml(String(navOrder))}" placeholder="1, 2, 3…">`,
+      `          </div>`,
+      `          <label class="tm-flag-row">`,
+      `            <input type="checkbox" name="in_breadcrumbs"${f.in_breadcrumbs ? ' checked' : ''}>`,
+      `            In breadcrumbs`,
+      `          </label>`,
+      `          <label class="tm-flag-row">`,
+      `            <input type="checkbox" name="show_related"${f.show_related ? ' checked' : ''}>`,
+      `            Show related tags`,
+      `          </label>`,
+      `          <label class="tm-flag-row">`,
+      `            <input type="checkbox" name="in_ancestor_flyout"${(isEdit ? f.in_ancestor_flyout : true) ? ' checked' : ''}>`,
+      `            Show in ancestor flyout`,
+      `          </label>`,
+      '        </div>',
+      '      </div>',
+
+      // — Kind —
+      '      <div class="tm-collapsible-section">',
+      '        <button type="button" class="tm-section-toggle" data-target="kind-body">',
+      '          <span class="tm-section-arrow">▶</span> Kind',
+      `          <span class="tm-section-count">${kind !== 'topic' ? kind : ''}</span>`,
+      '        </button>',
+      '        <div class="tm-section-body hidden" id="kind-body">',
+      `          <label class="tm-flag-row"><input type="radio" name="kind" value="topic"${kind === 'topic' ? ' checked' : ''}> Topic</label>`,
+      `          <label class="tm-flag-row"><input type="radio" name="kind" value="year"${kind === 'year' ? ' checked' : ''}> Year <span class="form-hint">(slug must be a 4-digit year)</span></label>`,
+      '        </div>',
+      '      </div>',
+
+      // — Structure —
+      '      <div class="tm-collapsible-section">',
+      '        <button type="button" class="tm-section-toggle" data-target="structure-body">',
+      `          <span class="tm-section-arrow">▶</span> Structure`,
+      `          <span class="tm-section-count">${selParents.length > 0 ? selParents.length + ' parents' : ''}</span>`,
+      '        </button>',
+      '        <div class="tm-section-body hidden" id="structure-body">',
+      '          <p class="tm-section-label">Parents</p>',
+      '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags…" autocomplete="off">',
       '          <div class="tag-toggles-container">',
-      this._renderTagToggles('child_ids', this.state.tags.filter(t => !t.is_system), selfId, selChildren),
+      this._renderTagToggles('parent_ids', this.state.tags, selfId, selParents),
+      '          </div>',
+      '          <p class="tm-section-label">Children</p>',
+      '          <input type="text" class="form-input tm-toggle-search" placeholder="Search tags…" autocomplete="off">',
+      '          <div class="tag-toggles-container">',
+      this._renderTagToggles('child_ids', this.state.tags, selfId, selChildren),
       '          </div>',
       '        </div>',
       '      </div>',
 
-      // Map coordinates (collapsible) — hidden for system tags
-      ...(isSystem ? [] : [
-        '      <div class="tm-collapsible-section">',
-        '        <button type="button" class="tm-section-toggle" data-target="coords-body">',
-        '          <span class="tm-section-arrow">\u25b6</span> Map Coordinates',
-        `          <span class="tm-section-count">${existingLoc ? '\ud83d\udccd' : ''}</span>`,
-        '        </button>',
-        '        <div class="tm-section-body hidden" id="coords-body">',
-        '          <div class="input-with-btn">',
-        `            <input type="text" id="coordinates-input" class="form-input" placeholder="Paste a Maps link, \u201c45.507\u00b0 N, 73.554\u00b0 W\u201d, or leave blank to geocode by name">`,
-        `            <button type="button" id="gmaps-parse-btn" class="btn btn-secondary">${isEdit ? 'Parse / Geocode' : 'Parse'}</button>`,
-        '          </div>',
-        '          <div class="slug-row">',
-        '            <span class="slug-prefix">Lat</span>',
-        `            <input type="number" name="latitude" id="coord-lat" class="form-input editor-slug" step="any" value="${existingLoc ? existingLoc.latitude : ''}" placeholder="e.g. 48.8566">`,
-        '          </div>',
-        '          <div class="slug-row">',
-        '            <span class="slug-prefix">Lng</span>',
-        `            <input type="number" name="longitude" id="coord-lng" class="form-input editor-slug" step="any" value="${existingLoc ? existingLoc.longitude : ''}" placeholder="e.g. 2.3522">`,
-        '          </div>',
-        '          <p class="form-hint">Leave blank to remove coordinates. Used to place this tag on the map page.</p>',
-        '        </div>',
-        '      </div>',
-      ]),
+      // — Coordinates —
+      '      <div class="tm-collapsible-section">',
+      '        <button type="button" class="tm-section-toggle" data-target="coords-body">',
+      `          <span class="tm-section-arrow">▶</span> Coordinates`,
+      `          <span class="tm-section-count">${existingLat != null ? '📍' : ''}</span>`,
+      '        </button>',
+      '        <div class="tm-section-body hidden" id="coords-body">',
+      '          <div class="input-with-btn">',
+      `            <input type="text" id="coordinates-input" class="form-input" placeholder="Paste a Maps link, “45.507° N, 73.554° W”, or leave blank to geocode by name">`,
+      `            <button type="button" id="gmaps-parse-btn" class="btn btn-secondary">${isEdit ? 'Parse / Geocode' : 'Parse'}</button>`,
+      '          </div>',
+      '          <div class="slug-row">',
+      '            <span class="slug-prefix">Lat</span>',
+      `            <input type="number" name="latitude" id="coord-lat" class="form-input editor-slug" step="any" value="${existingLat != null ? existingLat : ''}" placeholder="e.g. 48.8566">`,
+      '          </div>',
+      '          <div class="slug-row">',
+      '            <span class="slug-prefix">Lng</span>',
+      `            <input type="number" name="longitude" id="coord-lng" class="form-input editor-slug" step="any" value="${existingLng != null ? existingLng : ''}" placeholder="e.g. 2.3522">`,
+      '          </div>',
+      '          <p class="form-hint">Leave blank to remove coordinates.</p>',
+      '        </div>',
+      '      </div>',
 
       '    </div>',
       '    <div class="modal-footer">',
@@ -702,7 +812,7 @@ export default class TagsManagerPage extends Component {
     this._modal = modal;
     this._initTagToggleTrees(modal);
 
-    // Reflect the open tag in the browser URL.
+    // Reflect the open tag in the browser URL
     const urlSlug = isEdit ? f.slug : 'new';
     const targetPath = `/light/tags/${urlSlug}`;
     if (!fromUrl && location.pathname !== targetPath) {
@@ -710,17 +820,23 @@ export default class TagsManagerPage extends Component {
       this._didPushUrl = true;
     }
 
-    // Auto-generate slug from name (disabled for system tags — both fields are readonly).
+    // Auto-slug from name
     const nameInput = modal.querySelector('[name="name"]');
     const slugInput = modal.querySelector('#modal-slug');
-    if (!isSystem) {
-      if (isEdit) slugInput.dataset.manual = '1';
-      nameInput.addEventListener('input', () => {
-        if (!slugInput.dataset.manual) slugInput.value = this._slugify(nameInput.value);
-      });
-      slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
-    }
+    if (isEdit) slugInput.dataset.manual = '1';
+    nameInput.addEventListener('input', () => {
+      if (!slugInput.dataset.manual) slugInput.value = this._slugify(nameInput.value);
+    });
+    slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
 
+    // Toggle nav order field visibility
+    const inNavCheck = modal.querySelector('#in-nav-check');
+    const navOrderRow = modal.querySelector('#nav-order-row');
+    inNavCheck?.addEventListener('change', () => {
+      navOrderRow.classList.toggle('hidden', !inNavCheck.checked);
+    });
+
+    // Collapsible sections
     modal.querySelectorAll('.tm-section-toggle').forEach(btn => {
       btn.addEventListener('click', () => {
         const targetId = btn.dataset.target;
@@ -728,38 +844,32 @@ export default class TagsManagerPage extends Component {
         const arrow = btn.querySelector('.tm-section-arrow');
         const isOpen = !body.classList.contains('hidden');
         body.classList.toggle('hidden', isOpen);
-        arrow.textContent = isOpen ? '\u25b6' : '\u25bc';
+        arrow.textContent = isOpen ? '▶' : '▼';
       });
     });
 
-    // Parse / Geocode button (not rendered for system tags).
+    // Parse / Geocode
     modal.querySelector('#gmaps-parse-btn')?.addEventListener('click', async () => {
       const coordInput = modal.querySelector('#coordinates-input');
       const latInput   = modal.querySelector('#coord-lat');
       const lngInput   = modal.querySelector('#coord-lng');
       const parseBtn   = modal.querySelector('#gmaps-parse-btn');
-
       const raw = coordInput.value.trim();
-
       const setLocked = locked => {
         coordInput.disabled = locked;
         latInput.disabled   = locked;
         lngInput.disabled   = locked;
         parseBtn.disabled   = locked;
-        parseBtn.textContent = locked ? '\u2026' : (isEdit ? 'Parse / Geocode' : 'Parse');
+        parseBtn.textContent = locked ? '…' : (isEdit ? 'Parse / Geocode' : 'Parse');
       };
-
       setLocked(true);
       try {
         if (raw) {
-          // Parse coordinates from URL or string.
           const coords = await parseMapsCoords(raw);
           latInput.value = coords.lat;
           lngInput.value = coords.lng;
           coordInput.value = '';
         } else if (isEdit) {
-          // Geocode by tag name via Nominatim.
-          const { geocodeTag } = await import('../../api/tags.js');
           const result = await geocodeTag(f.id);
           latInput.value = result.latitude;
           lngInput.value = result.longitude;
@@ -779,14 +889,10 @@ export default class TagsManagerPage extends Component {
       e.preventDefault();
       await this._handleSave(e.target, isEdit ? f.id : null);
     });
-
     modal.addEventListener('textarea:save', async () => {
       const form = modal.querySelector('#tag-editor-form');
-      if (form) {
-        await this._handleSave(form, isEdit ? f.id : null, { closeAfter: false });
-      }
+      if (form) await this._handleSave(form, isEdit ? f.id : null, { closeAfter: false });
     });
-
     modal.addEventListener('keydown', async (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -804,60 +910,35 @@ export default class TagsManagerPage extends Component {
     setupTextareaMaximizer(modal);
   }
 
+  _renderVisibilitySection(f) {
+    const isEffectivelyHidden = f.effective_hidden && !f.hidden;
+    const hiddenViaAncestor = isEffectivelyHidden && f.hidden_via
+      ? `<span class="tm-inherited-chip">inherited — <button type="button" class="tm-badge-via-btn" data-open-tag-id="${f.hidden_via}">change at ancestor</button></span>`
+      : (isEffectivelyHidden ? `<span class="tm-inherited-chip">inherited from ancestor</span>` : '');
 
-  /**
-   * Render the four flag system tags (_hidden, _hide_posts, _is_in_breadcrumbs, _with_related)
-   * as an inline pill strip, positioned below Description in the modal.
-   * The checkboxes use name="parent_ids" so they're included in the save payload.
-   */
-  _renderFeaturesSection(selectedIds) {
-    const FLAGS = [
-      { slug: '_no_ancestors',      label: 'Hide from ancestor flyout', help: 'Check to exclude this tag from the ancestor chain shown in post card flyouts.' },
-      { slug: '_hidden',            label: 'Hidden',                    help: 'Hide this tag from public views (tag cloud, tag pages).' },
-      { slug: '_hide_posts',        label: 'Hide posts',                help: 'Hide all posts tagged with this from public views.' },
-      { slug: '_is_in_breadcrumbs', label: 'Include in breadcrumbs',    help: 'Show this tag in the breadcrumb navigation path.' },
-      { slug: '_with_related',      label: 'Show related tags',         help: 'Display related tags as children in the post sidebar.' },
-    ];
-    const selectedSet = new Set(selectedIds);
-    const rows = FLAGS
-      .map(f => {
-        const tag = this.state.tags.find(t => t.slug === f.slug);
-        if (!tag) return '';
-        return `<div class="tm-feature-row">
-        <label class="tm-checkbox-label">
-          <input type="checkbox" name="parent_ids" value="${tag.id}"${selectedSet.has(tag.id) ? ' checked' : ''}>
-          ${escapeHtml(f.label)}
-          <span class="tm-help-icon" title="${escapeHtml(f.help)}">?</span>
-        </label>
-      </div>`;
-      })
-      .filter(Boolean)
-      .join('');
-    if (!rows) return '';
-    return `<div class="tm-features-section">
-      <p class="tm-features-heading">Features</p>
-      ${rows}
-    </div>`;
+    return [
+      `<label class="tm-flag-row">`,
+      `  <input type="checkbox" name="hidden"${f.hidden ? ' checked' : ''}>`,
+      `  Hidden (from public tag cloud and tag pages)`,
+      `</label>`,
+      hiddenViaAncestor,
+      `<label class="tm-flag-row">`,
+      `  <input type="checkbox" name="hides_posts"${f.hides_posts ? ' checked' : ''}>`,
+      `  Hide posts (all posts with this tag are hidden from public)`,
+      `</label>`,
+    ].join('\n');
   }
 
-  /** Render tag-badge toggle checkboxes for parent/children selection (tree only).
-   *
-   * Excluded: _system, _pending, and the four flag tags (shown inline above).
-   */
+  /** Render tag-badge toggle checkboxes for parent/children selection. */
   _renderTagToggles(inputName, allTags, selfId, selectedIds) {
-    const EXCLUDE = new Set(['_system', '_pending', '_hidden', '_hide_posts', '_is_in_breadcrumbs', '_with_related', '_no_ancestors']);
-
-    const available = allTags.filter(t => t.id !== selfId && !EXCLUDE.has(t.slug));
+    const available = allTags.filter(t => t.id !== selfId);
     if (!available.length) return '<span class="tag-toggles-empty">No other tags available.</span>';
 
     const selectedSet = new Set(selectedIds);
-
-    // ── Tree section (_root + user tags) ─────────────────────────────────────
-    const treeItems = available; // _root + user tags
-    const treeById  = new Map(treeItems.map(t => [t.id, t]));
+    const treeById = new Map(available.map(t => [t.id, t]));
 
     const childrenOf = new Map();
-    treeItems.forEach(t => {
+    available.forEach(t => {
       (t.parents || []).forEach(p => {
         if (treeById.has(p.id)) {
           if (!childrenOf.has(p.id)) childrenOf.set(p.id, []);
@@ -866,13 +947,13 @@ export default class TagsManagerPage extends Component {
       });
     });
 
-    // Roots = no parent in the tree set. _root sorts first.
-    const roots = treeItems
+    const roots = available
       .filter(t => !(t.parents || []).some(p => treeById.has(p.id)))
       .sort((a, b) => {
-        if (a.slug === '_root') return -1;
-        if (b.slug === '_root') return 1;
-        return (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || a.name.localeCompare(b.name);
+        const ao = a.nav_order ?? Infinity;
+        const bo = b.nav_order ?? Infinity;
+        if (ao !== bo) return ao - bo;
+        return a.name.localeCompare(b.name);
       });
 
     const hasCheckedDesc = new Set();
@@ -892,17 +973,22 @@ export default class TagsManagerPage extends Component {
       if (rendered.has(t.id)) return '';
       rendered.add(t.id);
       const kids = (childrenOf.get(t.id) || [])
-        .sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || a.name.localeCompare(b.name));
+        .sort((a, b) => {
+          const ao = a.sort_order ?? Infinity;
+          const bo = b.sort_order ?? Infinity;
+          if (ao !== bo) return ao - bo;
+          return a.name.localeCompare(b.name);
+        });
       const hasKids = kids.length > 0;
       const expanded = hasCheckedDesc.has(t.id);
       const nodeId = `tt-${inputName}-${t.id}`;
       const toggleBtn = hasKids
-        ? `<button type="button" class="tag-toggle-btn" data-tt-toggle="${nodeId}" aria-expanded="${expanded}">${expanded ? '\u25bc' : '\u25b6'}</button>`
+        ? `<button type="button" class="tag-toggle-btn" data-tt-toggle="${nodeId}" aria-expanded="${expanded}">${expanded ? '▼' : '▶'}</button>`
         : `<span class="tag-toggle-btn-spacer"></span>`;
       const childList = hasKids
         ? `<ul class="tag-toggle-tree level-${level + 1}${expanded ? '' : ' hidden'}" id="${nodeId}">${kids.map(k => renderNode(k, level + 1)).join('')}</ul>`
         : '';
-      return `<li class="tag-toggle-node${t.is_system ? ' tm-system-node' : ''}">
+      return `<li class="tag-toggle-node">
         <div class="tag-toggle-row">
           ${toggleBtn}
           <label class="tag-toggle">
@@ -920,13 +1006,7 @@ export default class TagsManagerPage extends Component {
       : '<span class="tag-toggles-empty">No other tags available.</span>';
   }
 
-  /**
-   * Wire expand/collapse buttons and indeterminate checkbox state for the
-   * tag-toggle trees rendered inside a modal.  Must be called after the modal
-   * HTML has been inserted into the DOM.
-   */
   _initTagToggleTrees(modal) {
-    // Recompute indeterminate state for every node in a tree, bottom-up.
     const updateIndeterminate = (tree) => {
       const nodes = Array.from(tree.querySelectorAll('.tag-toggle-node')).reverse();
       nodes.forEach(node => {
@@ -939,7 +1019,6 @@ export default class TagsManagerPage extends Component {
       });
     };
 
-    // Wire expand/collapse buttons.
     modal.querySelectorAll('[data-tt-toggle]').forEach(btn => {
       btn.addEventListener('click', () => {
         const list = modal.querySelector(`#${btn.dataset.ttToggle}`);
@@ -947,15 +1026,12 @@ export default class TagsManagerPage extends Component {
         const open = !list.classList.contains('hidden');
         list.classList.toggle('hidden', open);
         btn.setAttribute('aria-expanded', String(!open));
-        btn.textContent = open ? '\u25b6' : '\u25bc';
+        btn.textContent = open ? '▶' : '▼';
       });
     });
 
-    // Set initial indeterminate state.
     modal.querySelectorAll('.tag-toggle-tree.level-0').forEach(tree => updateIndeterminate(tree));
 
-    // Keep indeterminate live: attach directly to each checkbox to avoid
-    // relying on change-event bubbling through ul/li ancestors.
     modal.querySelectorAll('.tag-toggle-tree input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', () => {
         const tree = cb.closest('.tag-toggle-tree.level-0');
@@ -963,9 +1039,8 @@ export default class TagsManagerPage extends Component {
       });
     });
 
-    // Wire search inputs — each filters only its own tag-toggles-container.
     modal.querySelectorAll('.tm-toggle-search').forEach(input => {
-      const container = input.nextElementSibling; // .tag-toggles-container
+      const container = input.nextElementSibling;
       if (!container) return;
       input.addEventListener('input', () => {
         const q = input.value.trim().toLowerCase();
@@ -978,7 +1053,6 @@ export default class TagsManagerPage extends Component {
         }
         allNodes.forEach(n => n.classList.add('hidden'));
         allLists.forEach(l => l.classList.add('hidden'));
-        // Show matching nodes and all their ancestors.
         allNodes.forEach(n => {
           const label = n.querySelector(':scope > .tag-toggle-row .tag-toggle span');
           if (label && label.textContent.toLowerCase().includes(q)) {
@@ -995,27 +1069,12 @@ export default class TagsManagerPage extends Component {
     });
   }
 
-  _renderFlagCheckbox(name, icon, label, description, checked) {
-    return [
-      '<label class="flag-item">',
-      `  <input type="checkbox" name="${name}"${checked ? ' checked' : ''}>`,
-      '  <span class="flag-item-body">',
-      `    <span class="flag-item-icon">${icon}</span>`,
-      '    <span class="flag-item-text">',
-      `      <strong>${label}</strong><small>${description}</small>`,
-      '    </span>',
-      '  </span>',
-      '</label>',
-    ].join('\n');
-  }
-
   _closeModal() {
     if (this._modal) { this._modal.remove(); this._modal = null; }
     if (this._modalKeyHandler) {
       document.removeEventListener('keydown', this._modalKeyHandler);
       this._modalKeyHandler = null;
     }
-    // Restore URL to the tags list — only if we're still on a tag-detail URL.
     if (location.pathname.startsWith('/light/tags/')) {
       history.replaceState(null, '', '/light/tags');
     }
@@ -1035,16 +1094,12 @@ export default class TagsManagerPage extends Component {
     this.setState({ loading: true, error: null });
     try {
       const data = await listTags({ include_empty: true });
-      const tags = data.tags || [];
-      const rootTag = tags.find(t => t.slug === '_root');
-      const expanded = this.state.expanded.size === 0 && rootTag
-        ? new Set([rootTag.id])
-        : this.state.expanded;
-      this.setState({ loading: false, tags, expanded });
+      this.setState({ loading: false, tags: data.tags || [] });
 
       // Auto-open editor when navigated directly to /light/tags/:slug
       const slug = this.props?.params?.slug;
       if (slug) {
+        const tags = data.tags || [];
         const tag = slug === 'new' ? null : tags.find(t => t.slug === slug);
         if (slug === 'new' || tag) {
           this._openModal(tag, null, { fromUrl: true });
@@ -1060,37 +1115,64 @@ export default class TagsManagerPage extends Component {
   async _handleSave(form, tagId, { closeAfter = true } = {}) {
     const fd = new FormData(form);
 
-    const payload = {
-      name:              (fd.get('name') || '').trim(),
-      slug:              (fd.get('slug') || '').trim(),
-      description:       (fd.get('description') || '').trim(),
-      custom_url:        '',
-      sort_order:        null,
-      parent_ids:  fd.getAll('parent_ids').map(v => parseInt(v, 10)),
-      child_ids:   fd.getAll('child_ids').map(v => parseInt(v, 10)),
-      locations:   (() => {
-        const lat = parseFloat(fd.get('latitude') || '');
-        const lon = parseFloat(fd.get('longitude') || '');
-        return (!isNaN(lat) && !isNaN(lon)) ? [{ latitude: lat, longitude: lon }] : [];
-      })(),
-    };
+    const name        = (fd.get('name') || '').trim();
+    const slug        = (fd.get('slug') || '').trim();
+    const description = (fd.get('description') || '').trim();
+    const kind        = fd.get('kind') || 'topic';
+    const hidden      = fd.has('hidden');
+    const hides_posts = fd.has('hides_posts');
+    const in_breadcrumbs    = fd.has('in_breadcrumbs');
+    const show_related      = fd.has('show_related');
+    const in_ancestor_flyout = fd.has('in_ancestor_flyout');
+    const inNav       = fd.has('in_nav');
+    const navOrderRaw = fd.get('nav_order');
+    const nav_order   = inNav && navOrderRaw !== '' ? parseInt(navOrderRaw, 10) : null;
+
+    const lat = parseFloat(fd.get('latitude') || '');
+    const lon = parseFloat(fd.get('longitude') || '');
+    const latitude  = !isNaN(lat) ? lat : null;
+    const longitude = !isNaN(lon) ? lon : null;
+
+    const newParentIds = fd.getAll('parent_ids').map(v => parseInt(v, 10));
+    const newChildIds  = fd.getAll('child_ids').map(v => parseInt(v, 10));
 
     const submitBtn = form.querySelector('[type="submit"]');
     const origText  = submitBtn.textContent;
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Saving\u2026';
+    submitBtn.textContent = 'Saving…';
 
     try {
       if (tagId) {
-        await updateTag(tagId, payload);
+        // PATCH for all non-structural fields
+        await patchTag(tagId, {
+          name, slug, description, kind,
+          hidden, hides_posts, nav_order,
+          in_breadcrumbs, show_related, in_ancestor_flyout,
+          latitude, longitude,
+        });
+
+        // Structure calls only when changed
+        if (!_arraysEqual(newParentIds, this._initialParentIds)) {
+          await setTagParents(tagId, newParentIds);
+        }
+        if (!_arraysEqual(newChildIds, this._initialChildIds)) {
+          await setTagChildren(tagId, newChildIds);
+        }
+
         store.set('toast', { message: 'Tag updated.', type: 'success' });
       } else {
-        await createTag(payload);
+        await createTag({
+          name, slug, description, kind,
+          hidden, hides_posts, nav_order,
+          in_breadcrumbs, show_related, in_ancestor_flyout,
+          latitude, longitude,
+          parent_ids: newParentIds,
+          child_ids:  newChildIds,
+        });
         store.set('toast', { message: 'Tag created.', type: 'success' });
       }
-      if (closeAfter) {
-        this._closeModal();
-      }
+
+      if (closeAfter) this._closeModal();
       this._load();
       this._refreshNavTags();
     } catch (err) {
@@ -1141,4 +1223,11 @@ export default class TagsManagerPage extends Component {
       store.set('navTags', fresh.menu || []);
     } catch { /* ignore */ }
   }
+}
+
+function _arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort((x, y) => x - y);
+  const sb = [...b].sort((x, y) => x - y);
+  return sa.every((v, i) => v === sb[i]);
 }

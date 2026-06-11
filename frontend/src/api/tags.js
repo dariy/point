@@ -50,6 +50,36 @@ export function updateTag(id, data) {
 }
 
 /**
+ * Patch a tag — only the provided fields are updated (merge semantics).
+ * @param {number} id
+ * @param {object} fields  Partial tag fields to update
+ * @returns {Promise<object>}
+ */
+export function patchTag(id, fields) {
+  return api.patch(`/api/tags/${id}`, fields);
+}
+
+/**
+ * Replace all parent relationships for a tag.
+ * @param {number} id
+ * @param {number[]} ids  Parent IDs (empty array = unfiled)
+ * @returns {Promise<object>}
+ */
+export function setTagParents(id, ids) {
+  return api.put(`/api/tags/${id}/parents`, { ids });
+}
+
+/**
+ * Replace all child relationships for a tag.
+ * @param {number} id
+ * @param {number[]} ids  Child IDs
+ * @returns {Promise<object>}
+ */
+export function setTagChildren(id, ids) {
+  return api.put(`/api/tags/${id}/children`, { ids });
+}
+
+/**
  * @param {number} id
  * @returns {Promise<null>}
  */
