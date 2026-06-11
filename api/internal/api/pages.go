@@ -80,6 +80,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	}
 
 	showViewCounts := allSettings["show_view_counts"] == "true"
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
 
 	// Custom Home Page logic: if home_page_post_id is set, return that specific post.
 	// We only apply this on the first page of the index if no other filters are active.
@@ -94,10 +95,13 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 					minPosts := getMinTagPostsSetting(allSettings)
 					var excludeTagIDs map[int64]bool
-					if publicOnly {
-						excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+					var effectiveHiddenPosts map[int64]bool
+					if snap != nil {
+						if publicOnly {
+							excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+						}
+						effectiveHiddenPosts = snap.EffectiveHidesPosts
 					}
-					effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 					resp := postToResponse(hpPost, postTagsMap[hpPost.ID], excludeTagIDs)
 					resp["type"] = "page" // Force type to page as we verified it above
@@ -170,10 +174,13 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 
 	minPosts := getMinTagPostsSetting(allSettings)
 	var excludeTagIDs map[int64]bool
-	if publicOnly {
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	var effectiveHiddenPosts map[int64]bool
+	if snap != nil {
+		if publicOnly {
+			excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+		}
+		effectiveHiddenPosts = snap.EffectiveHidesPosts
 	}
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	postResponses := make([]map[string]interface{}, 0, len(posts))
 	for _, p := range posts {
@@ -254,34 +261,41 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		}
 	}
 
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
 	tag, err := h.tagService.GetTagBySlug(ctx, slug)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
 	}
 
 	minPosts := getMinTagPostsSetting(allSettings)
-	effectivelyHidden, _ := h.tagService.EffectivelyHiddenIDs(ctx)
+	var effectivelyHidden map[int64]bool
 	var excludeTagIDs map[int64]bool
-	if publicOnly {
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
-		if excludeTagIDs[tag.ID] {
-			return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	var effectiveHiddenPostsTagIDs map[int64]bool
+	var withRelatedIDs map[int64]bool
+	var inBreadcrumbs map[int64]bool
+	if snap != nil {
+		effectivelyHidden = snap.EffectiveHidden
+		effectiveHiddenPostsTagIDs = snap.EffectiveHidesPosts
+		withRelatedIDs = snap.WithRelatedIDs()
+		inBreadcrumbs = snap.InBreadcrumbsIDs()
+		if publicOnly {
+			excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+			if excludeTagIDs[tag.ID] {
+				return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+			}
 		}
 	}
-
-	effectiveHiddenPostsTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
 
 	showViewCounts := allSettings["show_view_counts"] == "true"
 
 	// Breadcrumb ancestors
 	ancestors, _ := h.repo.GetTagAncestors(ctx, tag.ID)
-	inBreadcrumbs, _ := h.tagService.InBreadcrumbsIDs(ctx)
 
 	// Direct children for tag detail response (exclude effectively hidden ones)
 	allChildren, _ := h.tagService.GetTagChildren(ctx, tag.ID, publicOnly, minPosts)
 	children := make([]models.Tag, 0, len(allChildren))
 	for _, ch := range allChildren {
-		if !publicOnly || !effectivelyHidden[ch.ID] {
+		if !publicOnly || (effectivelyHidden != nil && !effectivelyHidden[ch.ID]) {
 			children = append(children, ch)
 		}
 	}
@@ -289,7 +303,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	// Hierarchical children for sub-nav.
 	// If the tag (or any of its parents) has _with_related, replace the normal
 	// sub-nav with co-occurring tags from posts, marked as related.
-	withRelatedIDs, _ := h.tagService.WithRelatedIDs(ctx)
+
 	var childItems []services.NavTagNode
 	if useCoOccurrence := withRelatedIDs[tag.ID] || func() bool {
 		parents, _ := h.tagService.GetTagParents(ctx, tag.ID)
@@ -354,14 +368,13 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		pages = 1
 	}
 
-	effectivelyHiddenMap, _ := h.tagService.EffectivelyHiddenIDs(ctx)
 	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
 	for _, a := range ancestors {
 		if !excludeTagIDs[a.ID] && inBreadcrumbs[a.ID] {
 			crumb := tagToListItem(a)
 			if !publicOnly {
 				crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
-				crumb["is_hidden"] = effectivelyHiddenMap[a.ID]
+				crumb["is_hidden"] = effectivelyHidden[a.ID]
 			}
 			breadcrumbs = append(breadcrumbs, crumb)
 		}
@@ -376,7 +389,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	tagResp := tagToFullResponse(tag, parents, children, tagLoc, excludeTagIDs)
 	if !publicOnly {
 		injectTagHiddenFields(tagResp, tag, effectiveHiddenPostsTagIDs)
-		tagResp["is_hidden"] = effectivelyHiddenMap[tag.ID]
+		tagResp["is_hidden"] = effectivelyHidden[tag.ID]
 	}
 	resp := map[string]interface{}{
 		"tag":          tagResp,

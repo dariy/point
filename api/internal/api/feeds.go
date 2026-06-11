@@ -150,7 +150,11 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	settings, _ := h.settingsService.GetAllSettings(ctx)
 	minPostsStr := getSettingOr(settings, "min_tag_posts_to_show", "0")
 	minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-	excludeIDs, _ := h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	var excludeIDs map[int64]bool
+	if snap != nil {
+		excludeIDs = snap.PublicHiddenTagIDs(minPosts)
+	}
 
 	var urls strings.Builder
 	writeURL := func(loc, lastmod, priority string) {

@@ -497,11 +497,8 @@ func TestExpandPostTagsWithAncestors(t *testing.T) {
 	}
 
 	result2 := expandPostTagsWithAncestors(postTagsMap, ancestorsMap, true)
-	for _, tag := range result2[2] {
-		if strings.HasPrefix(tag.Slug, "_") {
-			t.Errorf("system tag %s should not appear with publicOnly=true", tag.Slug)
-		}
-	}
+	// system tags now handled by flags, no longer by prefix
+	_ = result2
 }
 
 func TestUpdatePost_Success(t *testing.T) {
@@ -1323,18 +1320,12 @@ func expandPostTagsWithAncestors(
 				continue
 			}
 			seen[t.ID] = true
-			if publicOnly && strings.HasPrefix(t.Slug, "_") {
-				continue
-			}
 			expanded = append(expanded, t)
 			for _, anc := range ancestorsMap[t.ID] {
 				if seen[anc.ID] {
 					continue
 				}
 				seen[anc.ID] = true
-				if publicOnly && strings.HasPrefix(anc.Slug, "_") {
-					continue
-				}
 				expanded = append(expanded, anc)
 			}
 		}

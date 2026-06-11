@@ -144,11 +144,11 @@ func (r *sqliteRepository) MigrateFlagsToSystemTags(ctx context.Context) error {
 			parentSlug string
 			condition  string
 		}{
-			{"_root", "is_featured = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
-			{"_hidden", "is_hidden = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
-			{"_hide_posts", "is_hidden_posts = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
-			{"_is_in_breadcrumbs", "include_in_breadcrumbs = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
-			{"_with_related", "show_related_tags_as_children = 1 AND slug NOT LIKE '\\_%%' ESCAPE '\\'"},
+			{"_root", "is_featured = 1 AND 1=1"},
+			{"_hidden", "is_hidden = 1 AND 1=1"},
+			{"_hide_posts", "is_hidden_posts = 1 AND 1=1"},
+			{"_is_in_breadcrumbs", "include_in_breadcrumbs = 1 AND 1=1"},
+			{"_with_related", "show_related_tags_as_children = 1 AND 1=1"},
 		}
 		for _, fm := range flagMigrations {
 			q := fmt.Sprintf(`
@@ -165,7 +165,7 @@ func (r *sqliteRepository) MigrateFlagsToSystemTags(ctx context.Context) error {
 			INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
 			SELECT (SELECT id FROM tags WHERE slug = '_pending'), t.id
 			FROM tags t
-			WHERE t.slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND NOT EXISTS (SELECT 1 FROM tag_relationships tr WHERE tr.child_id = t.id)
 		`); err != nil {
 			return fmt.Errorf("assign _pending to orphans: %w", err)
@@ -334,49 +334,49 @@ func (r *sqliteRepository) MigrateTagFlagsFromSystemTags(ctx context.Context) er
 		flagUpdates := []string{
 			// _hidden → hidden = 1
 			`UPDATE tags SET hidden = 1
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (
 				SELECT child_id FROM tag_relationships
 				WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hidden')
 			)`,
 			// _page → hidden = 1
 			`UPDATE tags SET hidden = 1
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (
 				SELECT child_id FROM tag_relationships
 				WHERE parent_id = (SELECT id FROM tags WHERE slug = '_page')
 			)`,
 			// _hide_posts → hides_posts = 1
 			`UPDATE tags SET hides_posts = 1
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (
 				SELECT child_id FROM tag_relationships
 				WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
 			)`,
 			// _root → nav_order (seed from existing sort_order, fallback 0)
 			`UPDATE tags SET nav_order = COALESCE(sort_order, 0)
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (
 				SELECT child_id FROM tag_relationships
 				WHERE parent_id = (SELECT id FROM tags WHERE slug = '_root')
 			)`,
 			// _is_in_breadcrumbs → in_breadcrumbs = 1
 			`UPDATE tags SET in_breadcrumbs = 1
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (
 				SELECT child_id FROM tag_relationships
 				WHERE parent_id = (SELECT id FROM tags WHERE slug = '_is_in_breadcrumbs')
 			)`,
 			// _with_related → show_related = 1
 			`UPDATE tags SET show_related = 1
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (
 				SELECT child_id FROM tag_relationships
 				WHERE parent_id = (SELECT id FROM tags WHERE slug = '_with_related')
 			)`,
 			// _no_ancestors → in_ancestor_flyout = 0 (default is 1)
 			`UPDATE tags SET in_ancestor_flyout = 0
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (
 				SELECT child_id FROM tag_relationships
 				WHERE parent_id = (SELECT id FROM tags WHERE slug = '_no_ancestors')
@@ -390,7 +390,7 @@ func (r *sqliteRepository) MigrateTagFlagsFromSystemTags(ctx context.Context) er
 				JOIN timeline_desc td ON tr.parent_id = td.id
 			)
 			UPDATE tags SET kind = 'year'
-			WHERE slug NOT LIKE '\_%%' ESCAPE '\'
+			WHERE 1=1
 			AND id IN (SELECT id FROM timeline_desc)`,
 		}
 		for _, stmt := range flagUpdates {

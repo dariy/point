@@ -1096,10 +1096,11 @@ func (s *MediaService) UpdateMediaVisibilityForPaths(ctx context.Context, paths 
 	if len(paths) == 0 {
 		return nil
 	}
-	hiddenTagIDs, err := s.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, err := s.tagService.GetTagSnapshot(ctx)
 	if err != nil {
 		return err
 	}
+	hiddenTagIDs := snap.EffectiveHidesPosts
 	posts, err := s.repo.GetAllPublishedPostContents(ctx)
 	if err != nil {
 		return err
@@ -1152,10 +1153,11 @@ func (s *MediaService) UpdateMediaVisibilityForPaths(ctx context.Context, paths 
 // RecalculateAllMediaVisibility rebuilds is_public for every media record from
 // scratch by scanning all published visible posts. Returns count of changed records.
 func (s *MediaService) RecalculateAllMediaVisibility(ctx context.Context) (int, error) {
-	hiddenTagIDs, err := s.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, err := s.tagService.GetTagSnapshot(ctx)
 	if err != nil {
 		return 0, err
 	}
+	hiddenTagIDs := snap.EffectiveHidesPosts
 	posts, err := s.repo.GetAllPublishedPostContents(ctx)
 	if err != nil {
 		return 0, err

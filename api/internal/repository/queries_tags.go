@@ -20,13 +20,11 @@ func (r *sqliteRepository) GetTagAncestors(ctx context.Context, tagID int64) ([]
 		if err != nil || len(parents) == 0 {
 			break
 		}
-		// Prefer eligible parents: not a system tag (slug starts with "_").
-		// If multiple parents exist, skip ineligible ones so the breadcrumb
-		// path only travels through tags that should be visible.
+		// Prefer eligible parents.
 		var chosen *models.Tag
 		for i := range parents {
 			p := &parents[i]
-			if !visited[p.ID] && !strings.HasPrefix(p.Slug, "_") {
+			if !visited[p.ID] {
 				chosen = p
 				break
 			}

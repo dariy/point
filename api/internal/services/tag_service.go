@@ -173,6 +173,67 @@ func (s *TagService) getGraph(ctx context.Context) (*TagGraph, error) {
 	return g, nil
 }
 
+func (g *TagGraph) PublicHiddenTagIDs(minPosts int64) map[int64]bool {
+	result := make(map[int64]bool, len(g.EffectiveHidden))
+	for k, v := range g.EffectiveHidden {
+		result[k] = v
+	}
+
+	if minPosts > 0 {
+		for id, count := range g.CountsPublic {
+			if !result[id] && count < minPosts {
+				result[id] = true
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *TagGraph) WithRelatedIDs() map[int64]bool {
+	result := make(map[int64]bool)
+	for id, t := range g.ByID {
+		if t.ShowRelated {
+			result[id] = true
+		}
+	}
+	return result
+}
+
+func (g *TagGraph) InBreadcrumbsIDs() map[int64]bool {
+	result := make(map[int64]bool)
+	for id, t := range g.ByID {
+		if t.InBreadcrumbs {
+			result[id] = true
+		}
+	}
+	return result
+}
+
+func (g *TagGraph) PageTagIDs() map[int64]bool {
+	return g.PublicHiddenTagIDs(0)
+}
+
+func (g *TagGraph) GetDescendantIDs(tagID int64) []int64 {
+	result := make([]int64, 0)
+	visited := map[int64]bool{tagID: true}
+	queue := []int64{tagID}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		for _, childID := range g.Children[cur] {
+			if !visited[childID] {
+				visited[childID] = true
+				result = append(result, childID)
+				queue = append(queue, childID)
+			}
+		}
+	}
+	return result
+}
+
 func (g *TagGraph) buildNavTree(minPosts int64) []NavTagNode {
 	tagLess := func(a, b models.Tag) bool {
 		if a.NavOrder.Valid && b.NavOrder.Valid {
@@ -370,9 +431,6 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 		p.Slug = utils.Slugify(p.Name)
 	}
 
-	if strings.HasPrefix(p.Slug, "_") {
-		return models.Tag{}, echo.NewHTTPError(http.StatusBadRequest, "tag slug cannot start with '_'")
-	}
 
 	if p.Kind == "" {
 		p.Kind = "tag"
@@ -409,12 +467,9 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 }
 
 func (s *TagService) DeleteTag(ctx context.Context, id int64) error {
-	tag, err := s.repo.GetTag(ctx, id)
+	_, err := s.GetTagByID(ctx, id)
 	if err != nil {
 		return err
-	}
-	if strings.HasPrefix(tag.Slug, "_") {
-		return echo.NewHTTPError(http.StatusForbidden, "system tags cannot be deleted")
 	}
 	if err := s.repo.DeleteTag(ctx, id); err != nil {
 		return err
@@ -612,15 +667,6 @@ func (s *TagService) detectCycle(ctx context.Context, startID, targetID int64) (
 
 // SetTagParents replaces all parent relationships for a tag.
 func (s *TagService) SetTagParents(ctx context.Context, tagID int64, parentIDs []int64) error {
-	// System tags have fixed parents and cannot be re-parented.
-	tag, err := s.repo.GetTag(ctx, tagID)
-	if err != nil {
-		return err
-	}
-	if strings.HasPrefix(tag.Slug, "_") {
-		return echo.NewHTTPError(http.StatusForbidden, "cannot re-parent system tags")
-	}
-
 	if err := s.repo.ClearTagParents(ctx, tagID); err != nil {
 		return err
 	}
@@ -635,17 +681,6 @@ func (s *TagService) SetTagParents(ctx context.Context, tagID int64, parentIDs [
 
 // SetTagChildren replaces all child relationships for a tag.
 func (s *TagService) SetTagChildren(ctx context.Context, tagID int64, childIDs []int64) error {
-	// Reject if any child is a system tag (system tags cannot be children of user tags).
-	for _, childID := range childIDs {
-		child, err := s.repo.GetTag(ctx, childID)
-		if err != nil {
-			return err
-		}
-		if strings.HasPrefix(child.Slug, "_") {
-			return echo.NewHTTPError(http.StatusForbidden, "system tags cannot be children of user tags")
-		}
-	}
-
 	if err := s.repo.ClearTagChildren(ctx, tagID); err != nil {
 		return err
 	}
@@ -683,9 +718,6 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 		p.Slug = utils.Slugify(p.Name)
 	}
 
-	if strings.HasPrefix(p.Slug, "_") {
-		return models.Tag{}, echo.NewHTTPError(http.StatusBadRequest, "tag slug cannot start with '_'")
-	}
 
 	tag, err := s.repo.UpdateTag(ctx, models.UpdateTagParams{
 		ID:               p.ID,
@@ -732,17 +764,18 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 
 	var candidates []models.Tag
 	if publicOnly {
-		excludeIDs, _ := s.PublicHiddenTagIDs(ctx, minPosts)
+		g, err := s.getGraph(ctx)
+		if err != nil {
+			return nil, err
+		}
 		for _, t := range tags {
-			if !strings.HasPrefix(t.Slug, "_") && !excludeIDs[t.ID] {
+			if !g.EffectiveHidden[t.ID] {
 				candidates = append(candidates, t)
 			}
 		}
 	} else {
 		for _, t := range tags {
-			if !strings.HasPrefix(t.Slug, "_") {
-				candidates = append(candidates, t)
-			}
+			candidates = append(candidates, t)
 		}
 	}
 
@@ -751,13 +784,19 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 	}
 
 	// Fetch hierarchical counts (includes descendant posts).
-	effectiveCounts, _ := s.GetHierarchicalPostCounts(ctx, publicOnly)
+	g, _ := s.getGraph(ctx)
+	effectiveCounts := g.CountsAdmin
+	if publicOnly {
+		effectiveCounts = g.CountsPublic
+	}
 
 	var filtered []models.Tag
-	// Even for non-public, we might want to filter tags with 0 posts.
-	// But candidates already excludes system tags.
+	threshold := minPosts
+	if threshold == 0 {
+		threshold = 1
+	}
 	for _, t := range candidates {
-		if effectiveCounts[t.ID] > 0 {
+		if effectiveCounts[t.ID] >= threshold {
 			filtered = append(filtered, t)
 		}
 	}
@@ -1147,82 +1186,6 @@ func (s *TagService) GetPostsByTag(ctx context.Context, tagID int64, page, perPa
 // GetTagSnapshot returns the current TagGraph snapshot.
 func (s *TagService) GetTagSnapshot(ctx context.Context) (*TagGraph, error) {
 	return s.getGraph(ctx)
-}
-
-// EffectivelyHiddenPostsTagIDs returns the set of tag IDs that effectively hide their posts.
-func (s *TagService) EffectivelyHiddenPostsTagIDs(ctx context.Context) (map[int64]bool, error) {
-	g, err := s.getGraph(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return g.EffectiveHidesPosts, nil
-}
-
-// WithRelatedIDs returns the set of tag IDs that have show_related=true.
-func (s *TagService) WithRelatedIDs(ctx context.Context) (map[int64]bool, error) {
-	g, err := s.getGraph(ctx)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[int64]bool)
-	for id, t := range g.ByID {
-		if t.ShowRelated {
-			result[id] = true
-		}
-	}
-	return result, nil
-}
-
-// InBreadcrumbsIDs returns the set of tag IDs that have in_breadcrumbs=true.
-func (s *TagService) InBreadcrumbsIDs(ctx context.Context) (map[int64]bool, error) {
-	g, err := s.getGraph(ctx)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[int64]bool)
-	for id, t := range g.ByID {
-		if t.InBreadcrumbs {
-			result[id] = true
-		}
-	}
-	return result, nil
-}
-
-// PageTagIDs returns the set of tag IDs that should be excluded from post grids.
-func (s *TagService) PageTagIDs(ctx context.Context) (map[int64]bool, error) {
-	return s.PublicHiddenTagIDs(ctx, 0)
-}
-
-// PublicHiddenTagIDs returns the set of tag IDs that should be hidden from public view.
-func (s *TagService) PublicHiddenTagIDs(ctx context.Context, minPosts int64) (map[int64]bool, error) {
-	g, err := s.getGraph(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[int64]bool, len(g.EffectiveHidden))
-	for k, v := range g.EffectiveHidden {
-		result[k] = v
-	}
-
-	if minPosts > 0 {
-		for id, count := range g.CountsPublic {
-			if !result[id] && count < minPosts {
-				result[id] = true
-			}
-		}
-	}
-
-	return result, nil
-}
-
-// EffectivelyHiddenIDs returns the set of tag IDs that should not be shown publicly.
-func (s *TagService) EffectivelyHiddenIDs(ctx context.Context) (map[int64]bool, error) {
-	g, err := s.getGraph(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return g.EffectiveHidden, nil
 }
 
 // GetHierarchicalNavTags builds a recursive tag tree for the public navigation bar.

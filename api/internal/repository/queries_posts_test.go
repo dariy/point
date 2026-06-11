@@ -348,9 +348,8 @@ func TestRepository_PostsInYearRange(t *testing.T) {
 
 	_, pid := insertUserAndPost(t, repo, "year-post", "published")
 
-	// Setup _in_timeline -> 2024 -> year-post
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10, 'Timeline', '_in_timeline'), (11, '2024', '2024')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10, 11)`)
+	// Setup 2024 -> year-post
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, kind) VALUES (11, '2024', '2024', 'year')`)
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, 11)`, pid)
 
 	arg := models.ListPostsParams{Limit: 10}

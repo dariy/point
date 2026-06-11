@@ -160,17 +160,8 @@ func TestServiceDBErrors(t *testing.T) {
 	if _, err := svc.GetTagCloud(ctx, 10, false, 0); err == nil {
 		t.Error("GetTagCloud: expected error")
 	}
-	if _, err := svc.EffectivelyHiddenIDs(ctx); err == nil {
-		t.Error("EffectivelyHiddenIDs: expected error")
-	}
-	if _, err := svc.EffectivelyHiddenPostsTagIDs(ctx); err == nil {
-		t.Error("EffectivelyHiddenPostsTagIDs: expected error")
-	}
-	if _, err := svc.InBreadcrumbsIDs(ctx); err == nil {
-		t.Error("InBreadcrumbsIDs: expected error")
-	}
-	if _, err := svc.WithRelatedIDs(ctx); err == nil {
-		t.Error("WithRelatedIDs: expected error")
+	if _, err := svc.GetTagSnapshot(ctx); err == nil {
+		t.Error("GetTagSnapshot: expected error")
 	}
 	if _, err := svc.GetHierarchicalNavTags(ctx, nil, true, 0); err == nil {
 		t.Error("GetHierarchicalNavTags: expected error")

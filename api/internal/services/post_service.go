@@ -858,9 +858,7 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 	tags, _ := s.repo.GetTagsForPost(ctx, post.ID)
 	var tagStrings []string
 	for _, t := range tags {
-		if !strings.HasPrefix(t.Slug, "_") {
-			tagStrings = append(tagStrings, "#"+t.Name)
-		}
+		tagStrings = append(tagStrings, "#"+t.Name)
 	}
 	res = strings.ReplaceAll(res, "{tags}", strings.Join(tagStrings, " "))
 

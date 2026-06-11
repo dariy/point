@@ -101,17 +101,21 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 
 	isAdmin := c.Get("user") != nil
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
+	if !isAdmin && snap != nil {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	postMedia := h.fetchPostMedia(ctx, post)
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	var effectiveHiddenPosts map[int64]bool
+	if snap != nil {
+		effectiveHiddenPosts = snap.EffectiveHidesPosts
+	}
 	injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	injectPostInstagramFields(resp, post)
 	return resp, nil
@@ -185,16 +189,18 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	postTagsMap, _ := h.postService.GetTagsByPostIDs(c.Request().Context(), postIDs)
 
 	isAdmin := c.Get("user") != nil
+	snap, _ := h.tagService.GetTagSnapshot(c.Request().Context())
 	var effectiveHiddenPosts map[int64]bool
-	if isAdmin {
-		effectiveHiddenPosts, _ = h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
-	}
-
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
-		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
-		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(c.Request().Context(), minPosts)
+
+	if snap != nil {
+		if isAdmin {
+			effectiveHiddenPosts = snap.EffectiveHidesPosts
+		} else {
+			minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+			minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+			excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+		}
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
@@ -231,14 +237,18 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	ctx := c.Request().Context()
 	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	var effectiveHiddenPosts map[int64]bool
+	if snap != nil {
+		effectiveHiddenPosts = snap.EffectiveHidesPosts
+	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
 		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
-			if effectiveHiddenPosts[t.ID] {
+			if effectiveHiddenPosts != nil && effectiveHiddenPosts[t.ID] {
 				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 			}
 		}
@@ -249,10 +259,10 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	}
 
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
+	if !isAdmin && snap != nil {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
@@ -287,7 +297,11 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 	}
 
 	// Compute effective hidden-posts tag set
-	hiddenTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	var hiddenTagIDs map[int64]bool
+	if snap != nil {
+		hiddenTagIDs = snap.EffectiveHidesPosts
+	}
 
 	// Fetch all published post stubs (lightweight: id, slug, published_at)
 	stubs, err := h.postService.ListPublishedPostStubs(ctx)
@@ -307,14 +321,13 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 	found := false
 
 	var filterTagIDs map[int64]bool
-	if tagFilter != "" {
-		t, err := h.tagService.GetTagBySlug(ctx, tagFilter)
-		if err == nil {
+	if tagFilter != "" && snap != nil {
+		if t, ok := snap.BySlug[strings.ToLower(tagFilter)]; ok {
 			filterTagIDs = make(map[int64]bool)
 			filterTagIDs[t.ID] = true
-			desc, _ := h.tagService.GetTagDescendants(ctx, t.ID)
-			for _, d := range desc {
-				filterTagIDs[d.ID] = true
+			descIDs := snap.GetDescendantIDs(t.ID)
+			for _, dID := range descIDs {
+				filterTagIDs[dID] = true
 			}
 		}
 	}
@@ -376,24 +389,28 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	ctx := c.Request().Context()
 	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	var effectiveHiddenPosts map[int64]bool
+	if snap != nil {
+		effectiveHiddenPosts = snap.EffectiveHidesPosts
+	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
 		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
-			if effectiveHiddenPosts[t.ID] {
+			if effectiveHiddenPosts != nil && effectiveHiddenPosts[t.ID] {
 				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 			}
 		}
 	}
 
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
+	if !isAdmin && snap != nil {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 

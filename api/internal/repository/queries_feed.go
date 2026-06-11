@@ -120,7 +120,7 @@ func (r *sqliteRepository) GetPublicTagsForSitemap(ctx context.Context) ([]struc
 }, error) {
 	const q = `
 SELECT id, slug FROM tags
-WHERE post_count > 0 AND slug NOT LIKE '\_%%' ESCAPE '\' AND id NOT IN (SELECT tr.child_id FROM tag_relationships tr JOIN tags t ON t.id = tr.parent_id WHERE t.slug = '_hidden')
+WHERE post_count > 0 AND hidden = 0
 ORDER BY name ASC`
 
 	rows, err := r.db.QueryContext(ctx, q)
