@@ -232,6 +232,7 @@ class Router {
       try {
         const res = await fetch("/api/setup/status", {
           credentials: "include",
+          cache: "no-store",
         });
         if (!res.ok) throw new Error("unavailable");
         const data = await res.json();

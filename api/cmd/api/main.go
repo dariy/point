@@ -99,6 +99,12 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	e := echo.New()
 	e.HideBanner = true
+
+	// Redirect HTTP to HTTPS if AppURL is configured as HTTPS.
+	if strings.HasPrefix(cfg.AppURL, "https://") {
+		e.Pre(middleware.HTTPSRedirect())
+	}
+
 	e.HTTPErrorHandler = api.CustomHTTPErrorHandler
 
 	// Handlers
