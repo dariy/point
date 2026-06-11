@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"math"
 	"net/http"
 	"strconv"
@@ -469,6 +470,214 @@ func (h *TagHandler) RecalculateCounts(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "Tag counts recalculated successfully"})
+}
+
+// PatchTag applies a partial update to a tag's scalar fields.
+// Only fields present in the JSON body are changed; absent fields are untouched.
+func (h *TagHandler) PatchTag(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	current, ok := g.ByID[id]
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.NewDecoder(c.Request().Body).Decode(&fields); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	// Seed from current values.
+	p := services.UpdateTagParams{
+		ID:               current.ID,
+		Name:             current.Name,
+		Slug:             current.Slug,
+		Kind:             current.Kind,
+		Hidden:           current.Hidden,
+		HidesPosts:       current.HidesPosts,
+		InBreadcrumbs:    current.InBreadcrumbs,
+		ShowRelated:      current.ShowRelated,
+		InAncestorFlyout: current.InAncestorFlyout,
+	}
+	if current.Description.Valid {
+		p.Description = current.Description.String
+	}
+	if current.NavOrder.Valid {
+		v := current.NavOrder.Int64
+		p.NavOrder = &v
+	}
+	if current.Latitude.Valid {
+		v := current.Latitude.Float64
+		p.Latitude = &v
+	}
+	if current.Longitude.Valid {
+		v := current.Longitude.Float64
+		p.Longitude = &v
+	}
+
+	// Override only present fields.
+	if raw, ok := fields["name"]; ok {
+		_ = json.Unmarshal(raw, &p.Name)
+	}
+	if raw, ok := fields["slug"]; ok {
+		_ = json.Unmarshal(raw, &p.Slug)
+	}
+	if raw, ok := fields["description"]; ok {
+		if string(raw) == "null" {
+			p.Description = ""
+		} else {
+			_ = json.Unmarshal(raw, &p.Description)
+		}
+	}
+	if raw, ok := fields["kind"]; ok {
+		_ = json.Unmarshal(raw, &p.Kind)
+	}
+	if raw, ok := fields["hidden"]; ok {
+		_ = json.Unmarshal(raw, &p.Hidden)
+	}
+	if raw, ok := fields["hides_posts"]; ok {
+		_ = json.Unmarshal(raw, &p.HidesPosts)
+	}
+	if raw, ok := fields["nav_order"]; ok {
+		if string(raw) == "null" {
+			p.NavOrder = nil
+		} else {
+			var v int64
+			if _ = json.Unmarshal(raw, &v); true {
+				p.NavOrder = &v
+			}
+		}
+	}
+	if raw, ok := fields["in_breadcrumbs"]; ok {
+		_ = json.Unmarshal(raw, &p.InBreadcrumbs)
+	}
+	if raw, ok := fields["show_related"]; ok {
+		_ = json.Unmarshal(raw, &p.ShowRelated)
+	}
+	if raw, ok := fields["in_ancestor_flyout"]; ok {
+		_ = json.Unmarshal(raw, &p.InAncestorFlyout)
+	}
+	if raw, ok := fields["latitude"]; ok {
+		if string(raw) == "null" {
+			p.Latitude = nil
+		} else {
+			var v float64
+			if _ = json.Unmarshal(raw, &v); true {
+				p.Latitude = &v
+			}
+		}
+	}
+	if raw, ok := fields["longitude"]; ok {
+		if string(raw) == "null" {
+			p.Longitude = nil
+		} else {
+			var v float64
+			if _ = json.Unmarshal(raw, &v); true {
+				p.Longitude = &v
+			}
+		}
+	}
+
+	tag, err := h.tagService.UpdateTag(c.Request().Context(), p)
+	if err != nil {
+		return err
+	}
+
+	g, _ = h.tagService.GetTagSnapshot(c.Request().Context())
+	tag, _ = h.tagService.GetTagByID(c.Request().Context(), tag.ID)
+	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+}
+
+// SetTagParents replaces all parent relationships for a tag.
+// Accepts {"ids": [1, 2, 3]}. An empty array removes all parents (tag becomes unfiled).
+func (h *TagHandler) SetTagParents(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if err := h.tagService.SetTagParents(c.Request().Context(), id, req.IDs); err != nil {
+		return err
+	}
+
+	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
+	tag, err := h.tagService.GetTagByID(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	}
+	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+}
+
+// SetTagChildren replaces all child relationships for a tag.
+// Accepts {"ids": [1, 2, 3]}. An empty array removes all children.
+func (h *TagHandler) SetTagChildren(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if err := h.tagService.SetTagChildren(c.Request().Context(), id, req.IDs); err != nil {
+		return err
+	}
+
+	g, _ := h.tagService.GetTagSnapshot(c.Request().Context())
+	tag, err := h.tagService.GetTagByID(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Tag not found")
+	}
+	return h.renderTagResponseWithStatus(c, g, tag, http.StatusOK)
+}
+
+// MoveTagRequest is the body for POST /api/tags/:id/move.
+type MoveTagRequest struct {
+	ParentID int64  `json:"parent_id"`
+	AfterID  *int64 `json:"after_id"` // nil = move to front of the sibling group
+}
+
+// MoveTag repositions a tag within its sibling group under a specific parent.
+// Only that sibling group's sort_order values are renumbered; all other parents
+// are untouched.
+func (h *TagHandler) MoveTag(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	var req MoveTagRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if err := h.tagService.MoveTag(c.Request().Context(), services.MoveTagParams{
+		ID:       id,
+		ParentID: req.ParentID,
+		AfterID:  req.AfterID,
+	}); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *TagHandler) GetPostsByTag(c echo.Context) error {

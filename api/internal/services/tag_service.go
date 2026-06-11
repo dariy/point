@@ -958,6 +958,83 @@ func (s *TagService) ReorderTag(ctx context.Context, p ReorderTagParams) error {
 	return nil
 }
 
+// MoveTagParams describes a move request within a specific parent's sibling group.
+type MoveTagParams struct {
+	ID       int64
+	ParentID int64
+	AfterID  *int64 // nil = move to front
+}
+
+// MoveTag repositions a tag within its sibling group under a specific parent.
+// Only the sort_order values for edges under ParentID are renumbered; other
+// parents are untouched.
+func (s *TagService) MoveTag(ctx context.Context, p MoveTagParams) error {
+	g, err := s.getGraph(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Verify tag exists.
+	if _, ok := g.ByID[p.ID]; !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "tag not found")
+	}
+
+	// Verify tag is a child of the given parent.
+	isChild := false
+	for _, childID := range g.Children[p.ParentID] {
+		if childID == p.ID {
+			isChild = true
+			break
+		}
+	}
+	if !isChild {
+		return echo.NewHTTPError(http.StatusUnprocessableEntity, "tag is not a child of the given parent")
+	}
+
+	// Get all siblings under this parent ordered by sort_order (from DB, authoritative).
+	siblings, err := s.repo.GetChildrenOfTag(ctx, p.ParentID)
+	if err != nil {
+		return err
+	}
+
+	// Remove the moving tag from the sibling list.
+	filtered := siblings[:0]
+	for _, t := range siblings {
+		if t.ID != p.ID {
+			filtered = append(filtered, t)
+		}
+	}
+
+	// Find insert position.
+	insertAt := len(filtered)
+	if p.AfterID == nil {
+		insertAt = 0
+	} else {
+		for i, t := range filtered {
+			if t.ID == *p.AfterID {
+				insertAt = i + 1
+				break
+			}
+		}
+	}
+
+	// Insert the moving tag at the new position.
+	result := make([]models.Tag, 0, len(siblings))
+	result = append(result, filtered[:insertAt]...)
+	result = append(result, g.ByID[p.ID])
+	result = append(result, filtered[insertAt:]...)
+
+	// Renumber with per-edge sort_order = 10, 20, 30, ...
+	for i, t := range result {
+		if err := s.repo.UpdateEdgeSortOrder(ctx, p.ParentID, t.ID, int32((i+1)*10)); err != nil {
+			return err
+		}
+	}
+
+	s.Invalidate()
+	return nil
+}
+
 // GeocodeTag looks up coordinates for a tag by name via Nominatim and stores them.
 func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64, error) {
 	tag, err := s.repo.GetTag(ctx, id)

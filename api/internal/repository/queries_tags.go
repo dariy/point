@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -109,15 +110,17 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 	return tags, rows.Err()
 }
 
-// TagRelationship represents a parent-child tag relationship pair.
+// TagRelationship represents a parent-child tag relationship pair with an optional sort order.
 type TagRelationship struct {
-	ParentID int64 `json:"parent_id"`
-	ChildID  int64 `json:"child_id"`
+	ParentID  int64         `json:"parent_id"`
+	ChildID   int64         `json:"child_id"`
+	SortOrder sql.NullInt64 `json:"sort_order"`
 }
 
-// GetAllTagRelationships returns all (parent_id, child_id) pairs from tag_relationships.
+// GetAllTagRelationships returns all (parent_id, child_id, sort_order) pairs from tag_relationships,
+// ordered by parent_id and sort_order.
 func (r *sqliteRepository) GetAllTagRelationships(ctx context.Context) ([]TagRelationship, error) {
-	const q = `SELECT parent_id, child_id FROM tag_relationships`
+	const q = `SELECT parent_id, child_id, sort_order FROM tag_relationships ORDER BY parent_id, sort_order ASC, child_id ASC`
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -128,7 +131,7 @@ func (r *sqliteRepository) GetAllTagRelationships(ctx context.Context) ([]TagRel
 	var pairs []TagRelationship
 	for rows.Next() {
 		var p TagRelationship
-		if err := rows.Scan(&p.ParentID, &p.ChildID); err != nil {
+		if err := rows.Scan(&p.ParentID, &p.ChildID, &p.SortOrder); err != nil {
 			return nil, err
 		}
 		pairs = append(pairs, p)
@@ -316,6 +319,12 @@ ORDER BY t.name ASC`
 // UpdateTagSortOrder updates sort_order on all edges where child_id = id.
 func (r *sqliteRepository) UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE tag_relationships SET sort_order = ? WHERE child_id = ?`, sortOrder, id)
+	return err
+}
+
+// UpdateEdgeSortOrder updates sort_order on the specific edge (parentID, childID).
+func (r *sqliteRepository) UpdateEdgeSortOrder(ctx context.Context, parentID, childID int64, sortOrder int32) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE tag_relationships SET sort_order = ? WHERE parent_id = ? AND child_id = ?`, sortOrder, parentID, childID)
 	return err
 }
 

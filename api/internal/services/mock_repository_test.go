@@ -1144,6 +1144,10 @@ func (m *mockRepository) UpdateTagSortOrder(ctx context.Context, id int64, sortO
 	return fmt.Errorf("UpdateTagSortOrder not implemented")
 }
 
+func (m *mockRepository) UpdateEdgeSortOrder(ctx context.Context, parentID, childID int64, sortOrder int32) error {
+	return nil
+}
+
 func (m *mockRepository) DropTagNameUnique(ctx context.Context) error {
 	if m.MockDropTagNameUnique != nil {
 		return m.MockDropTagNameUnique(ctx)

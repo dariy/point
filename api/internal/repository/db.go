@@ -99,6 +99,7 @@ type Repository interface {
 	GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error)
 	GetRootTags(ctx context.Context) ([]models.Tag, error)
 	UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error
+	UpdateEdgeSortOrder(ctx context.Context, parentID, childID int64, sortOrder int32) error
 	DropTagNameUnique(ctx context.Context) error
 
 	// Timeline
