@@ -21,7 +21,7 @@ AND p.id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            SELECT id FROM tags WHERE hides_posts = 1
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -69,7 +69,7 @@ AND id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            SELECT id FROM tags WHERE hides_posts = 1
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )

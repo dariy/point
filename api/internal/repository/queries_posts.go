@@ -28,7 +28,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+                SELECT id FROM tags WHERE hides_posts = 1
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -82,7 +82,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+                SELECT id FROM tags WHERE hides_posts = 1
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -112,7 +112,7 @@ _yposts AS (
     WHERE pt.tag_id IN (SELECT id FROM _ytags)
 ),
 _hide(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
 )
@@ -174,7 +174,7 @@ _yposts AS (
     WHERE pt.tag_id IN (SELECT id FROM _ytags)
 ),
 _hide(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
 )
@@ -204,7 +204,7 @@ WHERE p.id IN (SELECT post_id FROM _yposts)
 func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -226,7 +226,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+                SELECT id FROM tags WHERE hides_posts = 1
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -280,7 +280,7 @@ LIMIT ? OFFSET ?`
 func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -299,7 +299,7 @@ WHERE
         SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
-                SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+                SELECT id FROM tags WHERE hides_posts = 1
                 UNION
                 SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
             )
@@ -476,7 +476,7 @@ AND id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            SELECT id FROM tags WHERE hides_posts = 1
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -523,7 +523,7 @@ func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64,
 	if includeDrafts {
 		statusClause = "1=1"
 	} else if includeHidden {
-		// Authenticated users see published + hidden, _hide_posts exclusion not applied.
+		// Authenticated users see published + hidden, hides_posts exclusion not applied.
 		statusClause = "LOWER(p.status) IN ('published', 'hidden')"
 	} else {
 		if publishedOnly {
@@ -535,7 +535,7 @@ func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64,
 			SELECT pt.post_id FROM post_tags pt
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
-					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					SELECT id FROM tags WHERE hides_posts = 1
 					UNION
 					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
 				)
@@ -547,7 +547,7 @@ func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64,
 	bypassEHP := includeDrafts || includeHidden
 	q := `
 WITH RECURSIVE ehp(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -626,7 +626,7 @@ func (r *sqliteRepository) CountPostsByTagIDs(ctx context.Context, tagIDs []int6
 			SELECT pt.post_id FROM post_tags pt
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
-					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					SELECT id FROM tags WHERE hides_posts = 1
 					UNION
 					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
 				)
@@ -638,7 +638,7 @@ func (r *sqliteRepository) CountPostsByTagIDs(ctx context.Context, tagIDs []int6
 	bypassEHP := includeDrafts || includeHidden
 	q := `
 WITH RECURSIVE ehp(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -691,7 +691,7 @@ func (r *sqliteRepository) GetPostsByTagIDsInYearRange(ctx context.Context, tagI
 			SELECT pt.post_id FROM post_tags pt
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
-					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					SELECT id FROM tags WHERE hides_posts = 1
 					UNION
 					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
 				)
@@ -711,7 +711,7 @@ _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
 ),
 ehp(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -785,7 +785,7 @@ func (r *sqliteRepository) CountPostsByTagIDsInYearRange(ctx context.Context, ta
 			SELECT pt.post_id FROM post_tags pt
 			WHERE pt.tag_id IN (
 				WITH RECURSIVE h(id) AS (
-					SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+					SELECT id FROM tags WHERE hides_posts = 1
 					UNION
 					SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
 				)
@@ -805,7 +805,7 @@ _yposts AS (
     SELECT DISTINCT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _ytags)
 ),
 ehp(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
@@ -908,7 +908,7 @@ func (r *sqliteRepository) GetHierarchicalPostCounts(ctx context.Context, publis
 	// infinite recursion if tag_relationships contains a cycle.
 	const q = `
 WITH RECURSIVE ehp(id) AS (
-    SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+    SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 ),
@@ -932,7 +932,7 @@ AND (CASE WHEN ? THEN p.id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            SELECT id FROM tags WHERE hides_posts = 1
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )

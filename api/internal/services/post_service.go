@@ -425,7 +425,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 	// Update tag counts
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	if s.tagService != nil {
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.tagService.Invalidate()
 	}
 
 	return post, strippedProps, nil
@@ -535,7 +535,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	if s.tagService != nil {
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.tagService.Invalidate()
 	}
 
 	return post, strippedProps, nil
@@ -558,12 +558,12 @@ func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	if s.tagService != nil {
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.tagService.Invalidate()
 	}
 	return nil
 }
 
-// getOrCreateTag looks up a tag by slug, creating it if absent and auto-assigning _pending.
+// getOrCreateTag looks up a tag by slug, creating it (parentless, i.e. Unfiled) if absent.
 func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.Tag, error) {
 	slug := utils.Slugify(name)
 	tag, err := s.repo.GetTagBySlug(ctx, slug)
@@ -571,17 +571,7 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 		return tag, nil
 	}
 	tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{Name: name, Slug: slug})
-	if err != nil {
-		return tag, err
-	}
-	// Auto-assign to _pending so new tags appear in the admin tree.
-	if pending, perr := s.repo.GetTagBySlug(ctx, "_pending"); perr == nil {
-		_ = s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
-			ParentID: pending.ID,
-			ChildID:  tag.ID,
-		})
-	}
-	return tag, nil
+	return tag, err
 }
 
 func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status string) (models.Post, error) {
@@ -623,7 +613,7 @@ func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) er
 	}
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	if s.tagService != nil {
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.tagService.Invalidate()
 	}
 	return nil
 }
@@ -634,7 +624,7 @@ func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error
 	}
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	if s.tagService != nil {
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.tagService.Invalidate()
 	}
 	return nil
 }
@@ -645,7 +635,7 @@ func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID in
 	}
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
 	if s.tagService != nil {
-		if s.tagService != nil { s.tagService.Invalidate() }
+		s.tagService.Invalidate()
 	}
 	return nil
 }

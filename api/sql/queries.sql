@@ -103,6 +103,11 @@ FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1;
 
 -- name: ListPosts :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.*
 FROM posts p
 WHERE
@@ -121,15 +126,18 @@ WHERE
         WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: ListPostsByViews :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.*
 FROM posts p
 WHERE
@@ -148,15 +156,18 @@ WHERE
         WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END)
 ORDER BY p.view_count DESC, p.published_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPosts :one
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -174,9 +185,7 @@ WHERE
         WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END);
 
@@ -330,6 +339,11 @@ DELETE FROM post_tags
 WHERE post_id = ?;
 
 -- name: GetPostsByTag :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.*
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
@@ -341,9 +355,7 @@ AND (CASE
         p.status = 'published'
         AND NOT EXISTS (
             SELECT 1 FROM post_tags pt2
-            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM h)
         )
     ELSE p.status IN ('published', 'hidden')
 END)
@@ -351,6 +363,11 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPostsByTag :one
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
@@ -361,9 +378,7 @@ AND (CASE
         p.status = 'published'
         AND NOT EXISTS (
             SELECT 1 FROM post_tags pt2
-            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM h)
         )
     ELSE p.status IN ('published', 'hidden')
 END);

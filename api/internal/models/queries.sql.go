@@ -162,6 +162,11 @@ func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, 
 }
 
 const countPosts = `-- name: CountPosts :one
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -179,9 +184,7 @@ WHERE
         WHEN ?5 THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END)
 `
@@ -208,6 +211,11 @@ func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, 
 }
 
 const countPostsByTag = `-- name: CountPostsByTag :one
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = ?1
@@ -218,9 +226,7 @@ AND (CASE
         p.status = 'published'
         AND NOT EXISTS (
             SELECT 1 FROM post_tags pt2
-            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM h)
         )
     ELSE p.status IN ('published', 'hidden')
 END)
@@ -957,6 +963,11 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 }
 
 const getPostsByTag = `-- name: GetPostsByTag :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
@@ -968,9 +979,7 @@ AND (CASE
         p.status = 'published'
         AND NOT EXISTS (
             SELECT 1 FROM post_tags pt2
-            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM h)
         )
     ELSE p.status IN ('published', 'hidden')
 END)
@@ -1535,6 +1544,11 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 }
 
 const listPosts = `-- name: ListPosts :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 WHERE
@@ -1553,9 +1567,7 @@ WHERE
         WHEN ?5 THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END)
 ORDER BY p.published_at DESC, p.created_at DESC
@@ -1632,6 +1644,11 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 }
 
 const listPostsByViews = `-- name: ListPostsByViews :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, p.view_count, p.published_at, p.scheduled_at, p.created_at, p.updated_at, p.author_id, p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.deleted_at, p.css, p.immersive_mode, p.instagram_share, p.instagram_status, p.instagram_media_id, p.instagram_published_at, p.instagram_error
 FROM posts p
 WHERE
@@ -1650,9 +1667,7 @@ WHERE
         WHEN ?5 THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END)
 ORDER BY p.view_count DESC, p.published_at DESC
