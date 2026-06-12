@@ -17,6 +17,7 @@ import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { FilterChipsRow } from "../../components/public/FilterChipsRow.js";
 
 const LEAFLET_JS = "/assets/vendor/leaflet/leaflet.js";
 const LEAFLET_CSS = "/assets/vendor/leaflet/leaflet.css";
@@ -119,6 +120,7 @@ export default class MapPage extends Component {
       <div class="site-wrapper site-wrapper--map">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>
+        <div id="filter-chips-mount"></div>
         <main class="site-main site-main--map">
           <div class="map-container"><div id="map"></div></div>
         </main>
@@ -148,6 +150,12 @@ export default class MapPage extends Component {
         mode: "filter",
         initialRange,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
+    }
+
+    if (!vc.isDefault() && this.state.tags) {
+      this.mountChild(FilterChipsRow, "#filter-chips-mount", {
+        total: this.state.tags.length || 0,
       });
     }
 

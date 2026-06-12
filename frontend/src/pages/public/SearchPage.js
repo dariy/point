@@ -15,6 +15,7 @@ import { listPosts } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { ViewContext } from '../../utils/viewContext.js';
+import { FilterChipsRow } from '../../components/public/FilterChipsRow.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
@@ -56,6 +57,7 @@ export default class SearchPage extends Component {
     return `
       <div class="site-wrapper search-page">
         <div id="header-mount"></div>
+        <div id="filter-chips-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount">
@@ -94,6 +96,13 @@ export default class SearchPage extends Component {
       breadcrumb,
     });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
+
+    const vc = ViewContext.current();
+    if (!vc.isDefault() && this.state.data) {
+      this.mountChild(FilterChipsRow, '#filter-chips-mount', {
+        total: this.state.data.total || 0,
+      });
+    }
 
     if (this.state.loading || !this.state.data) return;
 

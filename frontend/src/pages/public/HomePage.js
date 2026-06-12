@@ -19,6 +19,7 @@ import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
+import { FilterChipsRow } from '../../components/public/FilterChipsRow.js';
 import { ViewContext } from '../../utils/viewContext.js';
 
 export default class HomePage extends Component {
@@ -67,6 +68,7 @@ export default class HomePage extends Component {
         <div id="header-mount"></div>
         ${isStaticHomePage ? '' : '<div id="tag-cloud-mount"></div>'}
         ${isStaticHomePage ? '' : '<div id="timeline-mount"></div>'}
+        <div id="filter-chips-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
@@ -140,6 +142,13 @@ export default class HomePage extends Component {
         mode: 'filter',
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
+    }
+
+    const vc = ViewContext.current();
+    if (!vc.isDefault() && this.state.data) {
+      this.mountChild(FilterChipsRow, '#filter-chips-mount', {
+        total: this.state.data.pagination?.total || this.state.data.total || 0,
       });
     }
 

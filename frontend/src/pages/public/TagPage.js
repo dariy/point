@@ -36,6 +36,7 @@ import {
   rubberBand,
 } from "../../utils/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { FilterChipsRow } from "../../components/public/FilterChipsRow.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -102,6 +103,7 @@ export default class TagPage extends Component {
       <div class="site-wrapper tags-page">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>
+        <div id="filter-chips-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
@@ -137,6 +139,13 @@ export default class TagPage extends Component {
         mode: "filter",
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
+    }
+
+    const vc = ViewContext.current();
+    if (!vc.isDefault() && this.state.data && !this._isPostView()) {
+      this.mountChild(FilterChipsRow, "#filter-chips-mount", {
+        total: this.state.data.pagination?.total || this.state.data.total || 0,
       });
     }
 
