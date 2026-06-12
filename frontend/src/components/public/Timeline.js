@@ -92,6 +92,7 @@ export class Timeline extends Component {
         <div class="timeline-track-wrapper">
           <div class="timeline-track">
             <div class="timeline-axis">
+              <div id="histogram-mount" class="timeline-histogram"></div>
               <div class="timeline-axis-ticks"></div>
             </div>
             <div class="timeline-center-indicator"></div>
@@ -888,6 +889,7 @@ export class Timeline extends Component {
     this._updateTicks(trackWidth, getX);
     this._updateNavButtons(trackWidth, getX);
     this._updateRangeChip();
+    this._updateHistogram(trackWidth, getX);
   }
 
   _patchPillsMount(mount, visible, clusters, getX, centeredKey) {
@@ -1091,5 +1093,42 @@ export class Timeline extends Component {
       this._initCollapsed();
       this._emitRange();
     });
+  }
+
+  _updateHistogram(trackWidth, getX) {
+    const mount = this.$("#histogram-mount");
+    if (!mount) return;
+
+    const { pills } = this.state;
+    if (!pills.length) return;
+
+    const maxCount = Math.max(...pills.map(p => p.post_count), 1);
+    
+    // Find active range from centered item
+    const item = this._findCenteredItem();
+    let activeFrom = -Infinity, activeTo = Infinity;
+    if (item) {
+      if (item.type === "cluster") {
+        activeFrom = item.minYear;
+        activeTo = item.maxYear;
+      } else {
+        activeFrom = item.year;
+        activeTo = item.is_decade ? item.year + 9 : item.year;
+      }
+    }
+
+    let html = "";
+    pills.forEach(p => {
+      const x = getX(p.year);
+      if (x < -20 || x > trackWidth + 20) return;
+
+      const height = Math.max(2, Math.round((p.post_count / maxCount) * 24));
+      const isActive = p.year >= activeFrom && p.year <= activeTo;
+      const cls = isActive ? "is-active" : "";
+      
+      html += `<div class="timeline-hist-bar ${cls}" style="left: ${x}px; height: ${height}px"></div>`;
+    });
+
+    mount.innerHTML = html;
   }
 }

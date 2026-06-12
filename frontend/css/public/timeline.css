@@ -474,3 +474,28 @@
 .timeline-track-wrapper:hover .timeline-nav-btn {
     opacity: 1;
 }
+
+/* ── Density Histogram (point-0b98.6) ────────────────────────────────────── */
+
+.timeline-histogram {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 32px;
+    pointer-events: none;
+}
+
+.timeline-hist-bar {
+    position: absolute;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-subtle);
+    transform: translateX(-50%);
+    transition: background-color 0.2s, height 0.3s ease-out;
+}
+
+.timeline-hist-bar.is-active {
+    background: var(--color-primary);
+    opacity: 0.3;
+}
