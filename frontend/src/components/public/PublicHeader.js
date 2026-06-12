@@ -13,6 +13,8 @@ import { Component } from '../Component.js';
 import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
+import { listPosts } from '../../api/posts.js';
+import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 
@@ -111,6 +113,7 @@ export class PublicHeader extends Component {
 
     return `
       <div class="site-header-group">
+        <div id="search-typeahead-mount" class="search-typeahead-mount"></div>
         <div class="site-header-inner">
 
           <div class="site-header">
@@ -229,11 +232,28 @@ export class PublicHeader extends Component {
       const submitSearch = () => {
         const q = input.value.trim();
         if (q) {
+          this._saveRecentSearch(q);
           ViewContext.update({ query: q });
           input.value = '';
         }
+        this._hideTypeahead();
         closeSearch();
       };
+
+      let debounceTimer = null;
+      input.addEventListener('input', () => {
+        const q = input.value.trim();
+        clearTimeout(debounceTimer);
+        if (q.length >= 2) {
+          debounceTimer = setTimeout(() => this._showTypeahead(q, input), 300);
+        } else {
+          this._hideTypeahead();
+        }
+      });
+
+      input.addEventListener('focus', () => {
+        if (!input.value.trim()) this._showRecentSearches(input);
+      });
 
       toggleBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -319,6 +339,99 @@ export class PublicHeader extends Component {
     this._ro = new ResizeObserver(() => this._updateFold());
     this._ro.observe(this._group);
     this._updateFold();
+  }
+
+  _saveRecentSearch(q) {
+    const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+    const next = [q, ...recent.filter(s => s !== q)].slice(0, 5);
+    localStorage.setItem('recentSearches', JSON.stringify(next));
+  }
+
+  async _showTypeahead(q, input) {
+    this._typeaheadActive = true;
+    const vc = ViewContext.current();
+    const params = { q, limit: 3, status: 'published' };
+    if (vc.tag) params.tag = vc.tag;
+
+    try {
+      const [postsData, tagsData] = await Promise.all([
+        listPosts(params),
+        listTags({ q, limit: 5, include_empty: false })
+      ]);
+
+      if (!this._typeaheadActive) return;
+      this._renderTypeaheadResults(q, postsData.posts || [], tagsData.tags || [], input);
+    } catch (err) {
+      console.error('Typeahead failed:', err);
+    }
+  }
+
+  _showRecentSearches(input) {
+    const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+    if (!recent.length) return;
+    this._renderTypeaheadResults('', [], [], input, recent);
+  }
+
+  _renderTypeaheadResults(q, posts, tags, input, recent = []) {
+    const mount = document.getElementById('search-typeahead-mount');
+    if (!mount) return;
+
+    const inputRect = input.getBoundingClientRect();
+    mount.style.top = `${inputRect.bottom + 4}px`;
+    mount.style.left = `${inputRect.left}px`;
+    mount.style.width = `${inputRect.width}px`;
+    mount.classList.add('is-open');
+
+    let html = '';
+    if (recent.length) {
+      html += `<div class="typeahead-section"><div class="typeahead-label">Recent</div>`;
+      recent.forEach(s => {
+        html += `<a href="#" class="typeahead-item recent-item" data-q="${escapeHtml(s)}">${escapeHtml(s)}</a>`;
+      });
+      html += `</div>`;
+    } else {
+      if (tags.length) {
+        html += `<div class="typeahead-section"><div class="typeahead-label">Tags</div>`;
+        tags.forEach(t => {
+          html += `<a href="/tags/${t.slug}" class="typeahead-item tag-item">
+            <span class="name">${escapeHtml(t.name)}</span>
+            <span class="count">${t.post_count}</span>
+          </a>`;
+        });
+        html += `</div>`;
+      }
+      if (posts.length) {
+        html += `<div class="typeahead-section"><div class="typeahead-label">Posts</div>`;
+        posts.forEach(p => {
+          html += `<a href="/posts/${p.slug}" class="typeahead-item post-item">${escapeHtml(p.title)}</a>`;
+        });
+        html += `</div>`;
+      }
+      html += `<a href="#" class="typeahead-item search-all" data-q="${escapeHtml(q)}">Search everything for &ldquo;${escapeHtml(q)}&rdquo;</a>`;
+    }
+
+    mount.innerHTML = html;
+
+    mount.querySelectorAll('.typeahead-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        const searchQ = item.dataset.q;
+        if (searchQ) {
+          this._saveRecentSearch(searchQ);
+          ViewContext.update({ query: searchQ });
+          input.value = '';
+        } else {
+          navigate(item.getAttribute('href'));
+        }
+        this._hideTypeahead();
+      });
+    });
+  }
+
+  _hideTypeahead() {
+    this._typeaheadActive = false;
+    const mount = document.getElementById('search-typeahead-mount');
+    mount?.classList.remove('is-open');
   }
 
   _closeBurger() {
