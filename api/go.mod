@@ -22,7 +22,7 @@ require (
 	google.golang.org/api v0.283.0
 	google.golang.org/genai v1.59.0
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.51.0
+	modernc.org/sqlite v1.52.0
 )
 
 require (
