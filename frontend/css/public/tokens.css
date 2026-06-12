@@ -4,7 +4,7 @@
 :root,
 [data-theme="light"] {
     /* Layout */
-    --content-max-width: var(--size-75);
+    --content-max-width: clamp(75rem, 90vw, 112rem);
     --content-narrow: var(--size-50);
     --header-height: var(--size-4-5);
 
