@@ -166,3 +166,48 @@
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 }
+
+/* Explore Block (point-x52z.17) */
+.explore-block {
+    max-width: var(--content-max-width);
+    margin: 0 auto var(--spacing-xl);
+    padding: 0 var(--spacing-md);
+}
+
+.explore-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-md);
+}
+
+.explore-title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+}
+
+.all-tags-link {
+    font-size: var(--font-size-sm);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+.all-tags-link:hover {
+    text-decoration: underline;
+}
+
+.explore-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.explore-tags .tag-link {
+    background: var(--surface-hover);
+    border-radius: 999px;
+    padding: 4px 12px;
+    height: auto;
+}

@@ -12,7 +12,7 @@ import { PublicHeader } from '../../components/public/PublicHeader.js';
 import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
-import { TagCloud } from '../../components/public/TagCloud.js';
+import { ExploreBlock } from '../../components/public/ExploreBlock.js';
 import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
@@ -132,7 +132,7 @@ export default class HomePage extends Component {
     }
 
     if (!isStaticHomePage && !!settings.show_tag_cloud && tagCloud.length) {
-      this.mountChild(TagCloud, '#tag-cloud-mount', { tags: tagCloud });
+      this.mountChild(ExploreBlock, '#tag-cloud-mount', { tags: tagCloud });
     }
 
     const canShowTimeline = !isStaticHomePage && (settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden'));
