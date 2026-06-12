@@ -13,7 +13,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, safeUrl, navigate } from "../../utils/helpers.js";
+import { escapeHtml, safeUrl, navigate, sharePost, formatDate } from "../../utils/helpers.js";
 import { COPY_SVG, CHECK_SVG, SHARE_SVG } from "../../utils/icons.js";
 import {
   buildTagIndex,
@@ -193,11 +193,11 @@ export class PostContent extends Component {
         this._subscribed = true;
       }
 
-      const footer = this.$(".post-footer");
-      if (footer) {
+      const tagsContainer = this.$(".post-footer") || this.$(".post-tags-vertical");
+      if (tagsContainer) {
         const navTags = store.get("navTags") || [];
         const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-        this._cleanupStrip = setupTagStrip(footer, tagIndex, (url) => {
+        this._cleanupStrip = setupTagStrip(tagsContainer, tagIndex, (url) => {
           const slug = url.replace('/tags/', '');
           ViewContext.update({ tag: slug, postSlug: null, query: null });
         });
@@ -964,17 +964,25 @@ export class PostContent extends Component {
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     const postCss = post.css ? `<style id="post-css">${post.css}</style>` : "";
 
+    const date = post.published_at || post.created_at;
+    const metaHtml = `
+      <div class="post-meta-rail">
+        <time datetime="${escapeHtml(date || "")}" class="post-date">
+          ${escapeHtml(formatDate(date))}
+        </time>
+        ${tags ? `<div class="post-tags-vertical">${tags}</div>` : ""}
+      </div>
+    `;
+
     return `
       <article class="post-single${isHidden ? " is-hidden" : ""}" itemscope itemtype="https://schema.org/BlogPosting">
-        ${postCss}<div class="post-content" itemprop="articleBody">${post.content_html || ""}</div>
-
-        ${
-          tags
-            ? `<footer class="post-footer">
-               ${tags}
-             </footer>`
-            : ""
-        }
+        ${postCss}
+        <div class="post-layout-grid">
+          ${metaHtml}
+          <div class="post-main">
+            <div class="post-content" itemprop="articleBody">${post.content_html || ""}</div>
+          </div>
+        </div>
 
         ${this._renderNav(prevPost, nextPost)}
       </article>
