@@ -6,13 +6,11 @@
 
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
-import { getAllSettings, updateSettings } from "../../api/settings.js";
 import { listPosts } from "../../api/posts.js";
-import { getInstagramStatus, disconnectInstagram } from "../../api/instagram.js";
+import { getInstagramStatus } from "../../api/instagram.js";
 import { store } from "../../store.js";
 import {
   escapeHtml,
-  normalizeSettings,
 } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
 

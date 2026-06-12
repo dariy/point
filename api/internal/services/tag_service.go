@@ -774,9 +774,7 @@ func (s *TagService) GetTagCloud(ctx context.Context, limit int, publicOnly bool
 			}
 		}
 	} else {
-		for _, t := range tags {
-			candidates = append(candidates, t)
-		}
+		candidates = append(candidates, tags...)
 	}
 
 	if len(candidates) == 0 {

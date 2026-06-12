@@ -295,7 +295,7 @@ func TestTagService_GetTagCloud_Branches(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1, 'Sys', '_sys')`)
 	svc.Invalidate()
 	// system tags now just regular tags
-	items, err = svc.GetTagCloud(ctx, 10, false, 0)
+	_, err = svc.GetTagCloud(ctx, 10, false, 0)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

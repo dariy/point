@@ -74,7 +74,7 @@ export default class PostsListPage extends Component {
   }
 
   _renderCardRow(p) {
-    const { selectMode, selectedIds, statusFilter } = this.state;
+    const { selectedIds, statusFilter } = this.state;
     const isTrash = statusFilter === "trash";
     const isChecked = selectedIds.has(p.id);
 

@@ -850,7 +850,7 @@ func TestTagService_PageTagIDs(t *testing.T) {
 
 func TestTagService_CycleRejection(t *testing.T) {
 	repo := setupTestDB(t)
-	defer repo.Close()
+	defer func() { _ = repo.Close() }()
 	service := NewTagService(repo)
 	ctx := context.Background()
 

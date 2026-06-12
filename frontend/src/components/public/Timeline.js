@@ -137,7 +137,7 @@ export class Timeline extends Component {
     let touchDragged = false;
 
     this._gestureController = new GestureController(trackWrapper, {
-      onPanMove: (dx, dy) => {
+      onPanMove: (dx, _dy) => {
         touchDragged = true;
         this._isDragging = true;
         this._onPan(dx);
@@ -149,7 +149,6 @@ export class Timeline extends Component {
         this._isDragging = true;
         const dxDelta = dx - (this._swipeDxBase || 0);
         this._swipeDxBase = dx;
-        const dyDelta = dy - (this._swipeDyBase || 0);
         this._swipeDyBase = dy;
         this._onPan(dxDelta);
       },
@@ -235,7 +234,6 @@ export class Timeline extends Component {
     let dragStartX = 0;
     let dragStartY = 0;
     let lastX = 0;
-    let lastY = 0;
 
     trackWrapper.addEventListener(
       "mousedown",
@@ -247,7 +245,6 @@ export class Timeline extends Component {
         dragStartX = e.clientX;
         dragStartY = e.clientY;
         lastX = e.clientX;
-        lastY = e.clientY;
         trackWrapper.classList.add("grabbing");
       },
       true,
@@ -256,7 +253,6 @@ export class Timeline extends Component {
     this._onMouseMove = (e) => {
       if (!isDragging) return;
       const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
       if (
         Math.abs(e.clientX - dragStartX) > 4 ||
         Math.abs(e.clientY - dragStartY) > 4
@@ -264,7 +260,6 @@ export class Timeline extends Component {
         hasDragged = true;
       }
       lastX = e.clientX;
-      lastY = e.clientY;
       this._onPan(dx);
     };
 

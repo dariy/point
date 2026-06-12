@@ -17,8 +17,6 @@ import {
   THEMES_SVG, MENU_SVG, CHART_SVG, PLUS_SVG, CHEVRON_SVG,
 } from '../../utils/icons.js';
 
-const HAMBURGER_SVG = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="2" y1="5" x2="18" y2="5"/><line x1="2" y1="10" x2="18" y2="10"/><line x1="2" y1="15" x2="18" y2="15"/></svg>`;
-
 const WRITE_ITEMS = [
   { href: '/light',          label: 'Home',      icon: DASHBOARD_SVG },
   { href: '/light/posts',    label: 'Posts',     icon: POSTS_SVG     },

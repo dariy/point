@@ -16,25 +16,19 @@ import {
   getPost,
   createPost,
   updatePost,
-  deletePost,
   generatePreviewLink,
   publishPostToInstagram,
 } from "../../api/posts.js";
 import { getInstagramStatus } from "../../api/instagram.js";
 import {
   uploadMedia,
-  analyzeMedia,
-  analyzeMediaByPath,
-  listMedia,
-  renameMedia,
 } from "../../api/media.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHECK_SVG, X_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
-import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;
@@ -472,10 +466,11 @@ export default class PostEditPage extends Component {
       case "analyze": this._analyzeNow(); break;
       case "preview-link": this._generatePreviewLink(); break;
       case "view-on-site": window.open(this.props.publicUrl, "_blank"); break;
-      case "delete": 
+      case "delete": {
         const title = this.container.querySelector("#title-input")?.value || this.state.post?.title || "this post";
         this._showConfirm("Move to Trash", `Move "${title}" to Trash?`, "Move to Trash", "danger", () => this._deletePost(this.state.postId));
         break;
+      }
     }
   }
 
@@ -692,7 +687,7 @@ export default class PostEditPage extends Component {
         await updatePost(post.id, { content: content.trim() });
       } catch (err) { store.set("toast", { message: `Failed to save offline share: ${err.message}`, type: "error" }); }
     }
-    try { await clearShareEntries(); } catch {}
+    try { await clearShareEntries(); } catch (e) { /* ignore */ }
     if (backlog.length > 0) store.set("toast", { message: `${backlog.length} offline shares saved as draft.`, type: "success" });
   }
 
@@ -707,7 +702,7 @@ export default class PostEditPage extends Component {
         const { listMedia } = await import('../../api/media.js');
         const result = await listMedia({ post_id: post.id, per_page: 200 });
         for (const m of result.media || []) if (m.path) this._mediaByPath[m.path] = m;
-      } catch {}
+      } catch (e) { /* ignore */ }
       this.setState({ loading: false, post, error: null, editorMode: "visual", igStatus });
     } catch (err) { store.set("toast", { message: "Could not load post.", type: "error" }); navigate("/light/posts", { replace: true }); }
   }

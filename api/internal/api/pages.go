@@ -552,7 +552,8 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	for id, t := range g.ByID {
 		name := strings.ToLower(t.Name)
-		if name == "country" || name == "countries" {
+		switch name {
+		case "country", "countries":
 			// BFS descendants
 			queue := []int64{id}
 			for len(queue) > 0 {
@@ -565,7 +566,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 					}
 				}
 			}
-		} else if name == "city" || name == "cities" {
+		case "city", "cities":
 			// BFS descendants
 			queue := []int64{id}
 			for len(queue) > 0 {

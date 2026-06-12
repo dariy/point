@@ -25,10 +25,6 @@ func NewTagHandler(tagService *services.TagService, settingsService *services.Se
 	}
 }
 
-func tagResponse(tag models.Tag, parents, children []models.Tag, loc *models.TagLocation, excludeIDs map[int64]bool) map[string]interface{} {
-	return tagToFullResponse(tag, parents, children, loc, excludeIDs)
-}
-
 func (h *TagHandler) ListTags(c echo.Context) error {
 	includeEmpty := c.QueryParam("include_empty") != "false"
 	publicOnly := c.Get("user") == nil
@@ -418,14 +414,6 @@ func (h *TagHandler) DeleteTag(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusNoContent)
-}
-
-func toServiceLocations(in []TagLocationInput) []services.TagLocationInput {
-	out := make([]services.TagLocationInput, len(in))
-	for i, l := range in {
-		out[i] = services.TagLocationInput{Latitude: l.Latitude, Longitude: l.Longitude}
-	}
-	return out
 }
 
 type ReorderTagRequest struct {

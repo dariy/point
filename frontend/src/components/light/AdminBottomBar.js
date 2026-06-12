@@ -4,7 +4,7 @@ import {
   TAGS_SVG, CHART_SVG, MENU_SVG as NAV_MENU_SVG, THEMES_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
   SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG, LOGOUT_SVG, X_SVG
 } from '../../utils/icons.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
 import { store } from '../../store.js';
 
 export class AdminBottomBar extends Component {
@@ -81,7 +81,6 @@ export class AdminBottomBar extends Component {
 
   afterRender() {
     const overlay = this.$('#more-sheet-overlay');
-    const sheet = this.$('#more-sheet');
     const moreBtn = this.$('#bottom-bar-more');
     const closeBtn = this.$('#more-sheet-close');
 

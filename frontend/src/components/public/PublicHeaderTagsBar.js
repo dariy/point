@@ -8,7 +8,7 @@
  */
 
 import { Component } from '../Component.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
 import { CHEVRON_SVG } from '../../utils/icons.js';
 import { renderTagLink, setupScrollableStrip, createHotZone } from '../../utils/tags.js';
 
