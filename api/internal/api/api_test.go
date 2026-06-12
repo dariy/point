@@ -839,7 +839,7 @@ func TestGetPostBySlug_HiddenPostsTag(t *testing.T) {
 	c.SetParamValues("hidden-slug-post")
 	err := ph.GetPostBySlug(c)
 	if err == nil {
-		t.Error("expected 404 for post with _hide_posts tag (public user)")
+		t.Error("expected 404 for post with hides_posts tag (public user)")
 	}
 }
 
@@ -860,7 +860,7 @@ func TestGetPostByID_HiddenPostsTag(t *testing.T) {
 	c.SetParamValues(strconv.FormatInt(postID, 10))
 	err := ph.GetPostByID(c)
 	if err == nil {
-		t.Error("expected 404 for post with _hide_posts tag (public user)")
+		t.Error("expected 404 for post with hides_posts tag (public user)")
 	}
 }
 

@@ -301,7 +301,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	}
 
 	// Hierarchical children for sub-nav.
-	// If the tag (or any of its parents) has _with_related, replace the normal
+	// If the tag (or any of its parents) has ShowRelated=true, replace the normal
 	// sub-nav with co-occurring tags from posts, marked as related.
 
 	var childItems []services.NavTagNode
