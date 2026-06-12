@@ -12,16 +12,16 @@ import { getTagsPage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { buildTagIndex, renderTagLink, setupTagFlyout } from '../../utils/tags.js';
-import { LOCK_SVG } from '../../utils/icons.js';
+import { LOCK_SVG, CHEVRON_SVG, SEARCH_SVG } from '../../utils/icons.js';
 
 export default class TagsPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, tags: [], total: 0, error: null };
+    this.state = { loading: true, tags: [], total: 0, error: null, filter: '' };
   }
 
   render() {
-    const { loading, tags, total, error } = this.state;
+    const { loading, tags, total, error, filter } = this.state;
 
     if (loading) {
       return `
@@ -39,14 +39,14 @@ export default class TagsPage extends Component {
         <div class="site-wrapper">
           <div id="header-mount"></div>
           <main class="site-main">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <div class="main-container">
+               <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            </div>
           </main>
           <div id="footer-mount"></div>
         </div>`;
     }
 
-    // Render only top-level tags (those whose parents are not in the current list);
-    // children are rendered recursively.
     const tagIds = new Set(tags.map((t) => t.id));
     const rootTags = tags.filter((t) => !t.parents?.some((p) => tagIds.has(p.id)));
     const tree = rootTags.map((t) => this._renderTag(t, tags, 0)).join('');
@@ -59,6 +59,11 @@ export default class TagsPage extends Component {
             <header class="tag-header">
               <h1 class="tag-name">All Tags</h1>
               <p class="tag-count">${escapeHtml(String(total))} tags</p>
+              
+              <div class="tag-filter-box">
+                ${SEARCH_SVG}
+                <input type="search" id="tag-filter-input" placeholder="Filter tags..." value="${escapeHtml(filter)}" aria-label="Filter tags list">
+              </div>
             </header>
             <ul class="tags-tree" role="tree">${tree}</ul>
           </div>
@@ -79,6 +84,52 @@ export default class TagsPage extends Component {
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
       this._cleanupFlyout = setupTagFlyout(tree, tagIndex, navigate);
     }
+
+    // Filter logic
+    const filterInput = this.$('#tag-filter-input');
+    if (filterInput) {
+      filterInput.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase().trim();
+        this.state.filter = val;
+        this._filterTree(val);
+      });
+      if (this.state.filter) filterInput.focus();
+    }
+
+    // Collapse logic
+    this.container.querySelectorAll('.toggle-branch').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const item = btn.closest('.tags-tree-item');
+        const isExpanded = item.getAttribute('aria-expanded') === 'true';
+        item.setAttribute('aria-expanded', String(!isExpanded));
+      });
+    });
+  }
+
+  _filterTree(query) {
+    const items = this.container.querySelectorAll('.tags-tree-item');
+    items.forEach(item => {
+      const name = item.querySelector('.tag-link .name')?.textContent?.toLowerCase() || '';
+      const slug = item.querySelector('.tag-link')?.getAttribute('href')?.toLowerCase() || '';
+      const match = !query || name.includes(query) || slug.includes(query);
+      
+      // If it matches, show it and all its parents
+      if (match && query) {
+        item.classList.add('is-match');
+        item.classList.remove('is-hidden');
+        let parent = item.parentElement.closest('.tags-tree-item');
+        while (parent) {
+          parent.classList.remove('is-hidden');
+          parent.setAttribute('aria-expanded', 'true');
+          parent = parent.parentElement.closest('.tags-tree-item');
+        }
+      } else {
+        item.classList.remove('is-match');
+        if (query) item.classList.add('is-hidden');
+        else item.classList.remove('is-hidden');
+      }
+    });
   }
 
   beforeUnmount() {
@@ -91,28 +142,34 @@ export default class TagsPage extends Component {
     this._load();
   }
 
-  /**
-   * Recursively render a tag and its children.
-   * @param {object} tag
-   * @param {object[]} allTags  Full tag list for resolving children by ID
-   * @param {number}   depth
-   */
   _renderTag(tag, allTags, depth) {
-    const children = (tag.children || [])
+    const childTags = (tag.children || [])
       .map((child) => allTags.find((t) => t.id === child.id))
-      .filter(Boolean)
+      .filter(Boolean);
+
+    const childrenHtml = childTags
       .map((child) => this._renderTag(child, allTags, depth + 1))
       .join('');
 
     const count = tag.post_count ? ` <span class="tag-count">(${escapeHtml(String(tag.post_count))})</span>` : '';
     const lockPrefix = tag.is_hidden ? LOCK_SVG : '';
-    const link = renderTagLink(tag, { extra: `tags-tree-link${tag.is_hidden ? ' is-hidden' : ''}`, suffix: count, prefix: lockPrefix });
+    
+    // Wrap name in a span so filter logic can find it easily
+    const linkPrefix = childTags.length ? `<button class="toggle-branch" aria-label="Toggle branch">${CHEVRON_SVG}</button>${lockPrefix}` : lockPrefix;
+    const link = renderTagLink(tag, { 
+      extra: `tags-tree-link${tag.is_hidden ? ' is-hidden' : ''}`, 
+      suffix: count, 
+      prefix: `<span class="name">${escapeHtml(tag.name)}</span>` 
+    });
+
+    // Replace default renderTagLink name with ours
+    const finalLink = link.replace(escapeHtml(tag.name), linkPrefix + `<span class="name">${escapeHtml(tag.name)}</span>`);
 
     return `
-      <li class="tags-tree-item" role="treeitem" aria-expanded="${children ? 'true' : 'false'}">
-        ${link}
+      <li class="tags-tree-item" role="treeitem" aria-expanded="true">
+        <div class="tags-tree-row">${finalLink}</div>
         ${tag.description ? `<p class="tags-tree-desc">${escapeHtml(tag.description)}</p>` : ''}
-        ${children ? `<ul class="tags-tree-children" role="group">${children}</ul>` : ''}
+        ${childrenHtml ? `<ul class="tags-tree-children" role="group">${childrenHtml}</ul>` : ''}
       </li>`;
   }
 

@@ -227,3 +227,78 @@
     margin: 0 var(--space-8) var(--space-8);
   }
 }
+
+/* Tag Filter Box (point-x52z.18) */
+.tag-filter-box {
+    position: relative;
+    max-width: 400px;
+    margin: var(--spacing-lg) auto 0;
+    display: flex;
+    align-items: center;
+}
+
+.tag-filter-box svg {
+    position: absolute;
+    left: var(--spacing-md);
+    width: var(--svg-width-alt3);
+    height: var(--svg-height-alt3);
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+#tag-filter-input {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) calc(var(--spacing-md) * 2.5);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    font-size: var(--font-size-md);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#tag-filter-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+/* Tree Collapse & Filter States */
+.tags-tree-item.is-hidden {
+    display: none;
+}
+
+.tags-tree-item[aria-expanded="false"] > .tags-tree-children {
+    display: none;
+}
+
+.toggle-branch {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0 var(--spacing-xs);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, color 0.2s;
+}
+
+.toggle-branch:hover {
+    color: var(--text-primary);
+}
+
+.tags-tree-item[aria-expanded="false"] > .tags-tree-row .toggle-branch svg {
+    transform: rotate(-90deg);
+}
+
+.tags-tree-item.is-match > .tags-tree-row .tag-link {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.tags-tree-row {
+    display: flex;
+    align-items: center;
+}
