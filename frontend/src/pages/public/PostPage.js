@@ -23,9 +23,8 @@ export default class PostPage extends Component {
     this._contentChild = null;
     this._loadVersion = 0;
   }
-beforeUnmount() {
-  if (this._keyListener) document.removeEventListener('keydown', this._keyListener);
-}
+  beforeUnmount() {
+    if (this._keyListener) document.removeEventListener('keydown', this._keyListener);
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
     document.getElementById('json-ld-blogposting')?.remove();

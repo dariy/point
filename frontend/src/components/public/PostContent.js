@@ -12,7 +12,8 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, navigate, sharePost, formatDate } from "../../utils/helpers.js";
+import { escapeHtml, navigate, sharePost } from "../../utils/helpers.js";
+import { formatDate } from "../../utils/formatters.js";
 import { COPY_SVG, CHECK_SVG } from "../../utils/icons.js";
 import {
   buildTagIndex,
