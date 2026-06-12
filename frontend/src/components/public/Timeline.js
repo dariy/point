@@ -91,6 +91,7 @@ export class Timeline extends Component {
         <div id="range-chip-mount" class="timeline-range-chip-mount"></div>
         <div class="timeline-track-wrapper">
           <div class="timeline-track">
+            <div class="timeline-tooltip" id="timeline-tooltip"></div>
             <div class="timeline-axis">
               <div id="histogram-mount" class="timeline-histogram"></div>
               <div class="timeline-axis-ticks"></div>
@@ -136,8 +137,50 @@ export class Timeline extends Component {
   _wireGestures() {
     const trackWrapper = this.$(".timeline-track-wrapper");
     if (!trackWrapper) return;
+    const tooltip = this.$("#timeline-tooltip");
 
     let touchDragged = false;
+
+    trackWrapper.addEventListener("mousemove", (e) => {
+      if (this._isDragging || !tooltip) {
+        tooltip?.classList.remove("visible");
+        return;
+      }
+
+      const rect = trackWrapper.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      
+      const pill = e.target.closest(".timeline-pill-group");
+      const cluster = e.target.closest(".timeline-cluster");
+
+      if (pill || cluster) {
+        let text = "";
+        if (pill) {
+          const p = this.state.pills.find(item => item.slug === pill.dataset.slug);
+          if (p) text = `${p.year} &middot; ${p.post_count} post${p.post_count !== 1 ? 's' : ''}`;
+        } else {
+          const c = cluster.dataset;
+          text = `${c.min} \u2013 ${c.max}`;
+        }
+        tooltip.innerHTML = text;
+        tooltip.classList.add("visible");
+      } else if (e.target.closest(".timeline-axis") || e.target.closest(".timeline-track")) {
+        const year = this._getYearAtX(x);
+        tooltip.textContent = String(Math.round(year));
+        tooltip.classList.add("visible");
+      } else {
+        tooltip.classList.remove("visible");
+      }
+
+      if (tooltip.classList.contains("visible")) {
+        tooltip.style.left = `${e.clientX}px`;
+        tooltip.style.top = `${rect.top}px`;
+      }
+    });
+
+    trackWrapper.addEventListener("mouseleave", () => {
+      tooltip?.classList.remove("visible");
+    });
 
     this._gestureController = new GestureController(trackWrapper, {
       onPanMove: (dx, _dy) => {
@@ -332,6 +375,15 @@ export class Timeline extends Component {
         }
       }
     });
+  }
+
+  _getYearAtX(x) {
+    const { extent, zoom, panX } = this.state;
+    const track = this.$(".timeline-track");
+    if (!track) return extent.min;
+    const usableWidth = track.clientWidth - 2 * EDGE_PAD;
+    const progress = (x - EDGE_PAD - panX) / (usableWidth * zoom);
+    return extent.min + progress * (extent.max - extent.min);
   }
 
   _ensureVisible(el) {
