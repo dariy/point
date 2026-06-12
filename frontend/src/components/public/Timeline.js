@@ -96,7 +96,7 @@ export class Timeline extends Component {
               <div id="histogram-mount" class="timeline-histogram"></div>
               <div class="timeline-axis-ticks"></div>
             </div>
-            <div class="timeline-center-indicator"></div>
+            ${this.props.mode === "filter" ? '<div class="timeline-center-indicator"></div>' : ""}
             <div class="timeline-pills-mount"></div>
           </div>
           <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
