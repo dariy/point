@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	regexpNonAlphanumeric = regexp.MustCompile("[^a-z0-9-]")
+	regexpNonAlphanumeric = regexp.MustCompile("[^a-z0-9-_]")
 	regexpHyphens         = regexp.MustCompile("-+")
-	regexpSpaces          = regexp.MustCompile(`[\s_]+`)
+	regexpSpaces          = regexp.MustCompile(`\s+`)
 )
 
 func Slugify(text string) string {
@@ -24,10 +24,10 @@ func Slugify(text string) string {
 	// Convert to lowercase
 	text = strings.ToLower(text)
 
-	// Replace spaces and underscores with hyphens
+	// Replace spaces with hyphens
 	text = regexpSpaces.ReplaceAllString(text, "-")
 
-	// Remove non-alphanumeric characters except hyphens
+	// Remove non-alphanumeric characters except hyphens and underscores
 	text = regexpNonAlphanumeric.ReplaceAllString(text, "")
 
 	// Remove multiple consecutive hyphens

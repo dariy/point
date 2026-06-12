@@ -157,7 +157,6 @@ type mockRepository struct {
 	MockGetChildrenOfTag                func(ctx context.Context, parentID int64) ([]models.Tag, error)
 	MockGetRootTags                     func(ctx context.Context) ([]models.Tag, error)
 	MockUpdateTagSortOrder              func(ctx context.Context, id int64, sortOrder int32) error
-	MockDropTagNameUnique               func(ctx context.Context) error
 	MockListMapTagsForYearRange         func(ctx context.Context, fromYear, toYear int) ([]repository.MapYearRangeTag, error)
 	MockListInTimelineDescendants       func(ctx context.Context) ([]repository.InTimelineTag, error)
 	MockListInTimelineDescendantsForTag func(ctx context.Context, contextTagSlug string) ([]repository.InTimelineTag, error)
@@ -1146,13 +1145,6 @@ func (m *mockRepository) UpdateTagSortOrder(ctx context.Context, id int64, sortO
 
 func (m *mockRepository) UpdateEdgeSortOrder(ctx context.Context, parentID, childID int64, sortOrder int32) error {
 	return nil
-}
-
-func (m *mockRepository) DropTagNameUnique(ctx context.Context) error {
-	if m.MockDropTagNameUnique != nil {
-		return m.MockDropTagNameUnique(ctx)
-	}
-	return fmt.Errorf("DropTagNameUnique not implemented")
 }
 
 func (m *mockRepository) ListMapTagsForYearRange(ctx context.Context, fromYear, toYear int) ([]repository.MapYearRangeTag, error) {

@@ -793,12 +793,6 @@ func main() {
 		slog.Warn("migration failed", "name", "rename_system_tags_names_no_underscore", "error", err)
 	}
 
-	// Drop the UNIQUE constraint from tags.name so that a user tag (e.g. slug="root")
-	// can share its name with the system tag (slug="_root"). Only slug stays unique.
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		slog.Warn("drop_tags_name_unique failed", "error", err)
-	}
-
 	// Migrate tag system: translate system-tag graph edges to typed columns, fold
 	// tag_locations into tags, drop old columns, delete system tags.
 	if err := repo.MigrateTagFlagsFromSystemTags(ctx); err != nil {

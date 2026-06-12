@@ -114,37 +114,3 @@ func TestRepository_GetCoOccurringTags(t *testing.T) {
 	}
 }
 
-func TestRepository_DropTagNameUnique(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-	ctx := context.Background()
-
-	// Initially, NewRepository might have already run it if schema was detected.
-	// We want to force it to run or at least test it.
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		t.Fatalf("DropTagNameUnique failed: %v", err)
-	}
-
-	// Idempotent
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		t.Fatalf("DropTagNameUnique idempotent failed: %v", err)
-	}
-
-	// Test the actual rebuild by simulating old state
-	_, _ = repo.DB().Exec(`DROP TABLE IF EXISTS tags`)
-	_, _ = repo.DB().Exec(`CREATE TABLE tags (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name VARCHAR(100) NOT NULL UNIQUE,
-		slug VARCHAR(100) NOT NULL UNIQUE,
-		description TEXT,
-		custom_url VARCHAR(200),
-		sort_order INTEGER,
-		post_count INTEGER NOT NULL DEFAULT 0,
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-	)`)
-	_, _ = repo.DB().Exec(`DELETE FROM migration_history WHERE name = 'drop_tags_name_unique'`)
-
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		t.Fatalf("DropTagNameUnique rebuild failed: %v", err)
-	}
-}

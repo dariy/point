@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"point-api/internal/models"
 )
@@ -351,75 +350,4 @@ func (r *sqliteRepository) scanTags(ctx context.Context, q string, args ...inter
 		items = append(items, t)
 	}
 	return items, rows.Err()
-}
-
-// DropTagNameUnique rebuilds the tags table to remove the UNIQUE constraint
-// from the name column, keeping only slug as unique.
-// This allows a user tag (e.g. slug="root") to share a display name with a
-// system tag (e.g. slug="_root", name="root").
-// It is idempotent: recorded as "drop_tags_name_unique" in migration_history.
-func (r *sqliteRepository) DropTagNameUnique(ctx context.Context) error {
-	if _, err := r.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS migration_history (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name VARCHAR(255) NOT NULL UNIQUE,
-			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`); err != nil {
-		return fmt.Errorf("create migration_history: %w", err)
-	}
-
-	var count int64
-	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM migration_history WHERE name = 'drop_tags_name_unique'`,
-	).Scan(&count); err != nil {
-		return fmt.Errorf("check migration_history: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	// Confirm the UNIQUE constraint still exists before rebuilding.
-	// SQLite encodes constraint info in the CREATE TABLE statement stored in sqlite_master.
-	var ddl string
-	_ = r.db.QueryRowContext(ctx,
-		`SELECT sql FROM sqlite_master WHERE type='table' AND name='tags'`,
-	).Scan(&ddl)
-
-	if strings.Contains(ddl, "name VARCHAR(100) NOT NULL UNIQUE") ||
-		strings.Contains(ddl, "name VARCHAR(100)  NOT NULL UNIQUE") {
-		// Pre-migration schema: rebuild with custom_url and sort_order intact.
-		stmts := []string{
-			"PRAGMA foreign_keys = OFF",
-			`CREATE TABLE IF NOT EXISTS tags_new (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				name VARCHAR(100) NOT NULL,
-				slug VARCHAR(100) NOT NULL UNIQUE,
-				description TEXT,
-				custom_url VARCHAR(200),
-				sort_order INTEGER,
-				post_count INTEGER NOT NULL DEFAULT 0,
-				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-			)`,
-			`INSERT INTO tags_new (id, name, slug, description, custom_url, sort_order, post_count, created_at)
-			SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags`,
-			`DROP TABLE tags`,
-			`ALTER TABLE tags_new RENAME TO tags`,
-			`CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)`,
-			`CREATE INDEX IF NOT EXISTS idx_tags_slug ON tags(slug)`,
-			"PRAGMA foreign_keys = ON",
-		}
-		for _, stmt := range stmts {
-			if _, err := r.db.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("drop_tags_name_unique rebuild: %w", err)
-			}
-		}
-	}
-
-	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name, applied_at) VALUES ('drop_tags_name_unique', CURRENT_TIMESTAMP)`,
-	); err != nil {
-		return fmt.Errorf("record drop_tags_name_unique: %w", err)
-	}
-	return nil
 }

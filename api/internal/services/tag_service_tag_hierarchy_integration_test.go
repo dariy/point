@@ -271,6 +271,15 @@ func TestTagService_CreateTagErrors(t *testing.T) {
 	if tag.Slug == "" {
 		t.Error("expected auto-generated slug")
 	}
+
+	// underscore slugs preserved
+	tagU, err := svc.CreateTag(ctx, CreateTagParams{Name: "_Underscore"})
+	if err != nil {
+		t.Fatalf("CreateTag (_Underscore) failed: %v", err)
+	}
+	if tagU.Slug != "_underscore" {
+		t.Errorf("expected slug _underscore, got %q", tagU.Slug)
+	}
 }
 
 func TestTagService_GetTagCloud_Branches(t *testing.T) {
