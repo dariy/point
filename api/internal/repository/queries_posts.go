@@ -201,7 +201,7 @@ WHERE p.id IN (SELECT post_id FROM _yposts)
 	return count, err
 }
 
-func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
+func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
@@ -234,6 +234,21 @@ WHERE
         )
     ) END)
     AND (
+        CASE WHEN ? = '' THEN 1=1 ELSE
+            p.id IN (
+                SELECT pt.post_id FROM post_tags pt
+                WHERE pt.tag_id IN (
+                    WITH RECURSIVE tree(id) AS (
+                        SELECT id FROM tags WHERE slug = LOWER(?)
+                        UNION
+                        SELECT tr.child_id FROM tag_relationships tr JOIN tree ON tr.parent_id = tree.id
+                    )
+                    SELECT id FROM tree
+                )
+            )
+        END
+    )
+    AND (
         LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
         OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
         OR LOWER(p.content) LIKE '%' || LOWER(?) || '%'
@@ -250,6 +265,7 @@ LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
 		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
+		tag, tag,
 		search, search, search, search, search,
 		limit, offset)
 	if err != nil {
@@ -277,7 +293,7 @@ LIMIT ? OFFSET ?`
 
 // CountPostsWithSearch counts posts matched by the extended search (title, slug,
 // content, tag name, tag slug).
-func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
+func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
@@ -307,6 +323,21 @@ WHERE
         )
     ) END)
     AND (
+        CASE WHEN ? = '' THEN 1=1 ELSE
+            p.id IN (
+                SELECT pt.post_id FROM post_tags pt
+                WHERE pt.tag_id IN (
+                    WITH RECURSIVE tree(id) AS (
+                        SELECT id FROM tags WHERE slug = LOWER(?)
+                        UNION
+                        SELECT tr.child_id FROM tag_relationships tr JOIN tree ON tr.parent_id = tree.id
+                    )
+                    SELECT id FROM tree
+                )
+            )
+        END
+    )
+    AND (
         LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
         OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
         OR LOWER(p.content) LIKE '%' || LOWER(?) || '%'
@@ -322,6 +353,7 @@ WHERE
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
 		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
+		tag, tag,
 		search, search, search, search, search,
 	).Scan(&count)
 	return count, err

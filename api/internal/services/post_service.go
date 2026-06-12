@@ -248,16 +248,17 @@ func (s *PostService) RenderContent(content string) (string, error) {
 }
 
 type ListPostsParams struct {
-	Page          int32
-	PerPage       int32
-	Status        string
-	FeaturedOnly  bool
-	IncludeDrafts bool
-	IncludeHidden bool
-	Search        string
-	YearFrom      int
-	YearTo        int
-	SortBy        string
+        Page          int32
+        PerPage       int32
+        Status        string
+        FeaturedOnly  bool
+        IncludeDrafts bool
+        IncludeHidden bool
+        Search        string
+        Tag           string
+        YearFrom      int
+        YearTo        int
+        SortBy        string
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
@@ -291,11 +292,11 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		}
 		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
 	} else if p.Search != "" {
-		posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, int64(p.PerPage), int64(offset))
-		if err != nil {
-			return nil, 0, err
-		}
-		total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search)
+	        posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, int64(p.PerPage), int64(offset))
+	        if err != nil {
+	                return nil, 0, err
+	        }
+	        total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag)
 	} else {
 		if p.SortBy == "views" {
 			posts, err = s.repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{

@@ -1364,3 +1364,8 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 }
 
 
+
+// SearchTags returns tags matching the query string.
+func (s *TagService) SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error) {
+	return s.repo.SearchTags(ctx, query, limit)
+}

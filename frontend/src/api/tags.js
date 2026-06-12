@@ -7,7 +7,7 @@
 import { api } from './client.js';
 
 /**
- * @param {{ include_empty?: boolean, important_only?: boolean }} [params]
+ * @param {{ include_empty?: boolean, important_only?: boolean, q?: string }} [params]
  * @returns {Promise<{ tags: object[], total: number }>}
  */
 export function listTags(params = {}) {

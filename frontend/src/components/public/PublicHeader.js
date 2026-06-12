@@ -99,6 +99,9 @@ export class PublicHeader extends Component {
       return '';
     })();
 
+    const vc = ViewContext.current();
+    const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
+
     return `
       <div class="site-header-group">
         <div class="site-header-inner">
@@ -124,7 +127,7 @@ export class PublicHeader extends Component {
             <!-- Normal nav items (hidden when fold-nav active) -->
             <div class="site-nav-items">
               <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
-                <input type="search" name="q" placeholder="Search..." aria-label="Search posts" tabindex="-1">
+                <input type="search" name="q" placeholder="${searchPlaceholder}" aria-label="Search posts" tabindex="-1">
                 <button type="button" aria-label="Toggle search" class="header-action-btn search-toggle-btn">
                   ${SEARCH_SVG}
                 </button>
@@ -144,7 +147,7 @@ export class PublicHeader extends Component {
               <div class="burger-dropdown">
                 <form class="burger-search-form" action="/search" method="get" role="search">
                   ${SEARCH_SVG}
-                  <input type="search" name="q" placeholder="Search..." autocomplete="off">
+                  <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
                 </form>
                 <div class="burger-actions">
                   ${mapButtonHtml}

@@ -130,8 +130,8 @@ type mockRepository struct {
 	MockMigrateTagFlagsFromSystemTags   func(ctx context.Context) error
 	MockListPostsInYearRange            func(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
 	MockCountPostsInYearRange           func(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
-	MockListPostsWithSearch             func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error)
-	MockCountPostsWithSearch            func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error)
+	MockListPostsWithSearch             func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error)
+	MockCountPostsWithSearch            func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error)
 	MockGetPostByPreviewToken           func(ctx context.Context, token string) (models.Post, error)
 	MockGetPostNavigation               func(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error)
 	MockReplacePostContentPath          func(ctx context.Context, oldPath, newPath string) (int64, error)
@@ -145,6 +145,7 @@ type mockRepository struct {
 	MockGetHierarchicalPostCounts       func(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
 	MockGetSystemStats                  func(ctx context.Context) (repository.SystemStats, error)
 	MockBackupDB                        func(ctx context.Context, destPath string) error
+	MockSearchTags                      func(ctx context.Context, query string, limit int) ([]models.Tag, error)
 	MockGetTagAncestors                 func(ctx context.Context, tagID int64) ([]models.Tag, error)
 	MockGetTagDescendants               func(ctx context.Context, tagID int64) ([]models.Tag, error)
 	MockGetCoOccurringTags              func(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error)
@@ -954,16 +955,16 @@ func (m *mockRepository) CountPostsInYearRange(ctx context.Context, fromYear, to
 	return 0, fmt.Errorf("CountPostsInYearRange not implemented")
 }
 
-func (m *mockRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error) {
+func (m *mockRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error) {
 	if m.MockListPostsWithSearch != nil {
-		return m.MockListPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, limit, offset)
+		return m.MockListPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, tag, limit, offset)
 	}
 	return nil, fmt.Errorf("ListPostsWithSearch not implemented")
 }
 
-func (m *mockRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error) {
+func (m *mockRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error) {
 	if m.MockCountPostsWithSearch != nil {
-		return m.MockCountPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search)
+		return m.MockCountPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, tag)
 	}
 	return 0, fmt.Errorf("CountPostsWithSearch not implemented")
 }
@@ -1057,6 +1058,13 @@ func (m *mockRepository) BackupDB(ctx context.Context, destPath string) error {
 		return m.MockBackupDB(ctx, destPath)
 	}
 	return fmt.Errorf("BackupDB not implemented")
+}
+
+func (m *mockRepository) SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error) {
+	if m.MockSearchTags != nil {
+		return m.MockSearchTags(ctx, query, limit)
+	}
+	return nil, fmt.Errorf("SearchTags not implemented")
 }
 
 func (m *mockRepository) GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error) {

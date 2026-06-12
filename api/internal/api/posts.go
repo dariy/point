@@ -170,13 +170,14 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
-		Page:          page,
-		PerPage:       int32(perPage),
-		Status:        status,
-		FeaturedOnly:  featured,
-		IncludeDrafts: includeDrafts,
-		Search:        search,
-		SortBy:        c.QueryParam("sort"),
+	        Page:          page,
+	        PerPage:       int32(perPage),
+	        Status:        status,
+	        FeaturedOnly:  featured,
+	        IncludeDrafts: includeDrafts,
+	        Search:        search,
+	        Tag:           c.QueryParam("tag"),
+	        SortBy:        c.QueryParam("sort"),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -215,17 +216,28 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
 	if pages == 0 {
-		pages = 1
+	        pages = 1
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"posts":    postResponses,
-		"total":    total,
-		"page":     page,
-		"per_page": perPage,
-		"pages":    pages,
-	})
-}
+	response := map[string]interface{}{
+	        "posts":    postResponses,
+	        "total":    total,
+	        "page":     page,
+	        "per_page": perPage,
+	        "pages":    pages,
+	}
+
+	if tagParam := c.QueryParam("tag"); tagParam != "" && snap != nil {
+	        if t, ok := snap.BySlug[strings.ToLower(tagParam)]; ok {
+	                response["tag"] = map[string]interface{}{
+	                        "name": t.Name,
+	                        "slug": t.Slug,
+	                }
+	        }
+	}
+
+	return c.JSON(http.StatusOK, response)
+	}
 
 func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	slug := c.Param("slug")

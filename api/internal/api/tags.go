@@ -28,6 +28,7 @@ func NewTagHandler(tagService *services.TagService, settingsService *services.Se
 func (h *TagHandler) ListTags(c echo.Context) error {
 	includeEmpty := c.QueryParam("include_empty") != "false"
 	publicOnly := c.Get("user") == nil
+	searchQuery := strings.ToLower(strings.TrimSpace(c.QueryParam("q")))
 
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
@@ -53,6 +54,12 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 
 	tagItems := make([]map[string]interface{}, 0)
 	for id, t := range g.ByID {
+		if searchQuery != "" {
+			if !strings.Contains(strings.ToLower(t.Name), searchQuery) && !strings.Contains(strings.ToLower(t.Slug), searchQuery) {
+				continue
+			}
+		}
+
 		if publicOnly {
 			if g.EffectiveHidden[id] {
 				continue
