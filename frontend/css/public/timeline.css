@@ -560,3 +560,39 @@
     background: var(--color-primary-light);
     color: var(--color-primary);
 }
+
+/* ── Mobile Bottom Sheet (point-0b98.10) ──────────────────────────────────── */
+
+@media (max-width: 640px) {
+    .timeline-popover {
+        position: fixed !important;
+        top: auto !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+        transform: translateY(0);
+        animation: sheetSlideUp 0.3s ease-out;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .timeline-popover.hidden {
+        transform: translateY(100%);
+    }
+    
+    .timeline-popover-list li {
+        padding: var(--spacing-md) var(--spacing-lg);
+        font-size: var(--font-size-md);
+    }
+    
+    /* Scrim */
+    .timeline-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 1000;
+        animation: fadeIn 0.2s ease-out;
+    }
+}

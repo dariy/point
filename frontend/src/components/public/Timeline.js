@@ -518,13 +518,30 @@ export class Timeline extends Component {
   async _openPopover(el, pill) {
     this._closePopover();
 
+    const isMobile = window.innerWidth < 640;
+    if (isMobile) {
+      this._scrim = document.createElement("div");
+      this._scrim.className = "timeline-scrim";
+      this._scrim.addEventListener("click", () => this._closePopover());
+      document.body.appendChild(this._scrim);
+    }
+
     const popoverEl = document.createElement("div");
     popoverEl.className = "timeline-popover loading";
+    if (isMobile) popoverEl.classList.add("bottom-sheet");
     popoverEl.innerHTML = '<div class="timeline-popover-spinner"></div>';
     document.body.appendChild(popoverEl);
     this.state.popover = popoverEl;
 
     this._anchorPopover(el, popoverEl);
+
+    if (isMobile) {
+      this._popoverGesture = new GestureController(popoverEl, {
+        onSwipeCommit: (dir) => {
+          if (dir === "down") this._closePopover();
+        }
+      });
+    }
 
     try {
       const locations = await getTimelineLocations({
@@ -642,6 +659,12 @@ export class Timeline extends Component {
       this.state.popover.remove();
       this.state.popover = null;
     }
+    if (this._scrim) {
+      this._scrim.remove();
+      this._scrim = null;
+    }
+    this._popoverGesture?.destroy();
+    this._popoverGesture = null;
     if (this._popoverCloseHandler) {
       document.removeEventListener("click", this._popoverCloseHandler);
       this._popoverCloseHandler = null;
@@ -653,6 +676,7 @@ export class Timeline extends Component {
   }
 
   _anchorPopover(pillEl, popoverEl) {
+    if (window.innerWidth < 640) return;
     const rect = pillEl.getBoundingClientRect();
     const popoverRect = popoverEl.getBoundingClientRect();
 
