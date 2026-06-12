@@ -109,14 +109,40 @@ export class PublicFooter extends Component {
       centerSlot = `<div id="pagination-mount"></div>`;
     }
 
+    const mapButton = (() => {
+      const visibility = settings.map_mode || 'off';
+      if (visibility === 'all' || (store.get('user') && visibility === 'hidden')) {
+        return `<a href="/map">Map</a>`;
+      }
+      return '';
+    })();
+
+    const rssButton = settings.enable_rss !== false ? `<a href="/feed" target="_blank">RSS</a>` : '';
+
+    const rightLinks = [
+      `<a href="/tags">All tags</a>`,
+      mapButton,
+      `<a href="${aboutHref}">About</a>`,
+      rssButton
+    ].filter(Boolean).join(' &middot; ');
+
     return `
       <footer class="site-footer">
         <div class="footer-container">
           <div class="footer-content">
-            <p class="footer-copyright">
-              <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://point.darii.net" target="_blank" rel="noopener noreferrer">Point</a>` : ""}
-            </p>
-            ${centerSlot}
+            <div class="footer-left">
+              <p class="footer-copyright">
+                <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://point.darii.net" target="_blank" rel="noopener noreferrer">Point</a>` : ""}
+              </p>
+            </div>
+            <div class="footer-center">
+              ${centerSlot}
+            </div>
+            <div class="footer-right">
+              <nav class="footer-nav" aria-label="Footer navigation">
+                ${rightLinks}
+              </nav>
+            </div>
           </div>
         </div>
       </footer>`;

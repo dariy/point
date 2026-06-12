@@ -131,14 +131,15 @@ export class PublicHeader extends Component {
 
           <nav class="site-nav" aria-label="Main navigation">
 
+            <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
+              <input type="search" name="q" placeholder="${searchPlaceholder}" aria-label="Search posts" tabindex="-1">
+              <button type="button" aria-label="Toggle search" class="header-action-btn search-toggle-btn">
+                ${SEARCH_SVG}
+              </button>
+            </form>
+
             <!-- Normal nav items (hidden when fold-nav active) -->
             <div class="site-nav-items">
-              <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
-                <input type="search" name="q" placeholder="${searchPlaceholder}" aria-label="Search posts" tabindex="-1">
-                <button type="button" aria-label="Toggle search" class="header-action-btn search-toggle-btn">
-                  ${SEARCH_SVG}
-                </button>
-              </form>
               ${mapButtonHtml}
               ${shareButtonHtml}
               <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
@@ -157,16 +158,24 @@ export class PublicHeader extends Component {
                   ${SEARCH_SVG}
                   <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
                 </form>
+
+                <div class="burger-tags-slot" id="burger-tags-slot"></div>
+
+                <div class="burger-sitemap">
+                  <a href="/tags" class="burger-link">All tags</a>
+                  <a href="/map" class="burger-link">Map</a>
+                  <a href="/light" class="burger-link">About</a>
+                  ${user ? `<a href="/light" class="burger-link">Admin</a>` : ''}
+                </div>
+
                 <div class="burger-actions">
-                  ${mapButtonHtml}
-                  ${shareButtonHtml}
                   <button class="theme-toggle" id="burger-theme-toggle" type="button" aria-label="Toggle theme">
                     <span class="icon-sun">${SUN_SVG}</span>
                     <span class="icon-moon">${MOON_SVG}</span>
                   </button>
+                  ${shareButtonHtml}
                   ${editButtonBurger}
                 </div>
-                <div class="burger-tags-slot" id="burger-tags-slot"></div>
               </div>
             </div>
 
@@ -270,6 +279,11 @@ export class PublicHeader extends Component {
         const isOpen = navBurger.classList.contains('is-open');
         navBurger.classList.toggle('is-open', !isOpen);
         burgerBtn.setAttribute('aria-expanded', String(!isOpen));
+        
+        if (!isOpen) {
+          const input = navBurger.querySelector('input[type="search"]');
+          if (input) setTimeout(() => input.focus(), 100);
+        }
       });
 
       document.addEventListener('click', (e) => {
