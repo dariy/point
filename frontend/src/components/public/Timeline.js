@@ -2,6 +2,7 @@ import { Component } from "../Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
 import { GestureController } from "../../utils/gestures.js";
 import { renderTagLink } from "../../utils/tags.js";
+import { escapeHtml } from "../../utils/helpers.js";
 
 const EDGE_PAD = 48;
 
@@ -87,6 +88,7 @@ export class Timeline extends Component {
 
     return `
       <div class="timeline-container" role="region" aria-label="Date timeline">
+        <div id="range-chip-mount" class="timeline-range-chip-mount"></div>
         <div class="timeline-track-wrapper">
           <div class="timeline-track">
             <div class="timeline-axis">
@@ -885,6 +887,7 @@ export class Timeline extends Component {
 
     this._updateTicks(trackWidth, getX);
     this._updateNavButtons(trackWidth, getX);
+    this._updateRangeChip();
   }
 
   _patchPillsMount(mount, visible, clusters, getX, centeredKey) {
@@ -1043,5 +1046,50 @@ export class Timeline extends Component {
 
     prevBtn.classList.toggle("visible", minX < EDGE_PAD - 5);
     nextBtn.classList.toggle("visible", maxX > trackWidth - EDGE_PAD + 5);
+  }
+
+  _updateRangeChip() {
+    if (this.props.mode !== "filter") return;
+    const mount = this.$("#range-chip-mount");
+    if (!mount) return;
+
+    const item = this._findCenteredItem();
+    if (!item) {
+      mount.innerHTML = "";
+      return;
+    }
+
+    let from, to;
+    if (item.type === "cluster") {
+      from = item.minYear;
+      to = item.maxYear;
+    } else {
+      from = item.year;
+      to = item.is_decade ? from + 9 : from;
+    }
+
+    const yearStr = from === to ? String(from) : `${from} \u2013 ${to}`;
+    
+    // Calculate post count in range
+    const count = this.state.pills
+      .filter(p => p.year >= from && p.year <= to)
+      .reduce((sum, p) => sum + p.post_count, 0);
+
+    const isFullExtent = from === this.state.extent.min && to === this.state.extent.max;
+    const removeBtn = !isFullExtent ? `<button class="timeline-range-chip-remove" title="Reset range" aria-label="Reset range">&times;</button>` : "";
+
+    mount.innerHTML = `
+      <div class="timeline-range-chip">
+        <span class="label">${escapeHtml(yearStr)} &middot; ${count} post${count !== 1 ? 's' : ''}</span>
+        ${removeBtn}
+      </div>
+    `;
+
+    mount.querySelector(".timeline-range-chip-remove")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._initCollapsed();
+      this._emitRange();
+    });
   }
 }
