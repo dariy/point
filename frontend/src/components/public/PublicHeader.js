@@ -15,7 +15,7 @@ import { store } from '../../store.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 
 export class PublicHeader extends Component {
@@ -27,6 +27,8 @@ export class PublicHeader extends Component {
       breadcrumb = [],
       editUrl = null,
       showShare = false,
+      immersive = false,
+      onToggleImmersive = null,
     } = this.props;
 
     const user = store.get('user');
@@ -36,6 +38,14 @@ export class PublicHeader extends Component {
     const shareButtonHtml = showShare
       ? `<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
            ${SHARE_SVG}
+         </button>`
+      : '';
+
+    const immersiveToggleHtml = onToggleImmersive
+      ? `<button type="button" class="header-action-btn immersive-toggle-btn" 
+                 title="${immersive ? 'Article view' : 'Immersive mode'}" 
+                 aria-label="${immersive ? 'Article view' : 'Immersive mode'}">
+           ${immersive ? ARTICLE_SVG : EXPAND_SVG}
          </button>`
       : '';
 
@@ -144,6 +154,7 @@ export class PublicHeader extends Component {
             <!-- Normal nav items (hidden when fold-nav active) -->
             <div class="site-nav-items">
               ${mapButtonHtml}
+              ${immersiveToggleHtml}
               ${shareButtonHtml}
               <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
                 <span class="icon-sun">${SUN_SVG}</span>
@@ -176,6 +187,7 @@ export class PublicHeader extends Component {
                     <span class="icon-sun">${SUN_SVG}</span>
                     <span class="icon-moon">${MOON_SVG}</span>
                   </button>
+                  ${immersiveToggleHtml}
                   ${shareButtonHtml}
                   ${editButtonBurger}
                 </div>
@@ -194,6 +206,13 @@ export class PublicHeader extends Component {
     if (navTags.length) {
       this.mountChild(PublicHeaderTagsBar, '#header-tags-mount', { navTags, currentTagSlug });
     }
+
+    this.container.querySelectorAll('.immersive-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        onToggleImmersive?.();
+      });
+    });
 
     this.container.querySelectorAll('.share-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {

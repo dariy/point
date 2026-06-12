@@ -23,8 +23,9 @@ export default class PostPage extends Component {
     this._contentChild = null;
     this._loadVersion = 0;
   }
-
-  beforeUnmount() {
+beforeUnmount() {
+  if (this._keyListener) document.removeEventListener('keydown', this._keyListener);
+}
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
     document.getElementById('json-ld-blogposting')?.remove();
@@ -95,6 +96,11 @@ export default class PostPage extends Component {
       currentPath: '',
       editUrl: post ? `/light/posts/${post.id}/edit` : null,
       showShare: !!post,
+      immersive,
+      onToggleImmersive: () => {
+        const next = !immersive;
+        this.setState({ forceImmersive: next });
+      },
     });
 
     // Immersive footer shows post tags + post-to-post navigation; normal footer shows pagination slot
@@ -119,6 +125,15 @@ export default class PostPage extends Component {
         this.setState({ forceImmersive: true, startIndex: idx });
       },
     });
+
+    if (!this._keyListener) {
+      this._keyListener = (e) => {
+        if (e.key === 'Escape' && this.state.forceImmersive) {
+          this.setState({ forceImmersive: false });
+        }
+      };
+      document.addEventListener('keydown', this._keyListener);
+    }
   }
 
   /**
@@ -189,6 +204,11 @@ export default class PostPage extends Component {
       currentPath: '',
       editUrl: `/light/posts/${post.id}/edit`,
       showShare: !!post,
+      immersive,
+      onToggleImmersive: () => {
+        const next = !immersive;
+        this.setState({ forceImmersive: next });
+      },
     });
 
     this._footerChild?.setProps({ settings, immersiveTags, immersiveNav, exifMedia });
