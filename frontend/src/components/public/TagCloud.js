@@ -10,6 +10,7 @@ import { Component } from "../Component.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { store } from "../../store.js";
 import { buildTagIndex, setupTagFlyout } from "../../utils/tags.js";
+import { ViewContext } from "../../utils/viewContext.js";
 
 export class TagCloud extends Component {
   render() {
@@ -41,7 +42,10 @@ export class TagCloud extends Component {
     if (!cloud) return;
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-    this._cleanupFlyout = setupTagFlyout(cloud, tagIndex, navigate);
+    this._cleanupFlyout = setupTagFlyout(cloud, tagIndex, (url) => {
+      const slug = url.replace('/tags/', '');
+      ViewContext.update({ tag: slug, postSlug: null, query: null });
+    });
   }
 
   beforeUnmount() {

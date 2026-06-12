@@ -24,6 +24,7 @@ import {
   EXIF_MODEL_SVG,
 } from "../../utils/icons.js";
 import { store } from "../../store.js";
+import { ViewContext } from "../../utils/viewContext.js";
 
 // Fields shown publicly, in display order.
 // icon: SVG string; fmt: optional value formatter.
@@ -126,7 +127,10 @@ export class PublicFooter extends Component {
     if (!tagsEl) return;
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-    this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndex, navigate);
+    this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndex, (url) => {
+      const slug = url.replace('/tags/', '');
+      ViewContext.update({ tag: slug, postSlug: null, query: null });
+    });
 
     const pill = tagsEl.querySelector(".exif-pill");
     if (pill) this._setupExifPill(pill);

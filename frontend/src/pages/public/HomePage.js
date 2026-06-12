@@ -19,11 +19,18 @@ import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
+import { ViewContext } from '../../utils/viewContext.js';
 
 export default class HomePage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, data: null, error: null, forceImmersive: false, startIndex: 0 };
+  }
+
+  onRouteUpdate(params, query) {
+    this.props.params = params;
+    this.props.query = query;
+    this._load();
   }
 
   render() {
@@ -128,10 +135,10 @@ export default class HomePage extends Component {
 
     const canShowTimeline = !isStaticHomePage && (settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden'));
     if (canShowTimeline) {
-      const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
+      const vc = ViewContext.current();
       this.mountChild(Timeline, '#timeline-mount', {
         mode: 'filter',
-        initialRange: timelineRange || undefined,
+        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
       });
     }
@@ -141,12 +148,7 @@ export default class HomePage extends Component {
         page: pagination.page,
         pages: pagination.pages,
         total: pagination.total,
-        onPage: (p) => {
-          const params = new URLSearchParams({ page: p });
-          const t = new URLSearchParams(location.search).get('timeline');
-          if (t) params.set('timeline', t);
-          navigate(`/?${params.toString()}`);
-        },
+        onPage: (p) => ViewContext.update({ page: p }),
       });
     }
 
@@ -219,16 +221,10 @@ export default class HomePage extends Component {
           }
         },
         onSwipeCommit: (dir) => {
-          const t = new URLSearchParams(location.search).get('timeline');
-          const buildUrl = (p) => {
-            const params = new URLSearchParams({ page: p });
-            if (t) params.set('timeline', t);
-            return `/?${params.toString()}`;
-          };
           if (dir === 'left' && pagination.page < pagination.pages) {
-            navigate(buildUrl(pagination.page + 1));
+            ViewContext.update({ page: pagination.page + 1 });
           } else if (dir === 'right' && pagination.page > 1) {
-            navigate(buildUrl(pagination.page - 1));
+            ViewContext.update({ page: pagination.page - 1 });
           } else {
             // Reset visuals if not committed
             if (gridMount) {
@@ -249,63 +245,18 @@ export default class HomePage extends Component {
       });
       this._trackpad = new TrackpadDetector(this.$('.site-main'), {
         onHorizontal: (dir) => {
-          const t = new URLSearchParams(location.search).get('timeline');
-          const buildUrl = (p) => {
-            const params = new URLSearchParams({ page: p });
-            if (t) params.set('timeline', t);
-            return `/?${params.toString()}`;
-          };
           if (dir === 'left' && pagination.page < pagination.pages) {
-            navigate(buildUrl(pagination.page + 1));
+            ViewContext.update({ page: pagination.page + 1 });
           } else if (dir === 'right' && pagination.page > 1) {
-            navigate(buildUrl(pagination.page - 1));
+            ViewContext.update({ page: pagination.page - 1 });
           }
         }
       });
     }
-  }  async _onTimelineRangeChange({ from, to }) {
-    if (!this.state.data) return;
-
-    // If the incoming range matches what's already in the URL, this is the
-    // Timeline re-confirming its initial state on mount — not a user action.
-    // The data was already fetched with the correct params by _load(), so skip.
-    const timelineParam = from === to ? `${from}` : `${from}-${to}`;
-    const currentTimeline = new URLSearchParams(location.search).get('timeline');
-    if (currentTimeline === timelineParam) return;
-
-    const settings = store.get('settings') || {};
-    const showViewCount = !!settings.show_view_counts;
-    const useThumbnails = settings.use_thumbnails !== false;
-    const url = new URL(location.href);
-    url.searchParams.set('timeline', timelineParam);
-    url.searchParams.delete('page');
-    history.replaceState(null, '', url.pathname + url.search);
-
-    try {
-      const data = await getHomePage({ page: 1, year_from: from, year_to: to });
-      this.state.data = data;
-      const { posts = [], pagination = {} } = data;
-      this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
-      this.mountChild(Pagination, '#pagination-mount', {
-        page: 1,
-        pages: pagination.pages || 1,
-        total: pagination.total || 0,
-        onPage: (p) => {
-          const params = new URLSearchParams({ page: p, timeline: timelineParam });
-          navigate(`/?${params.toString()}`);
-        },
-      });
-    } catch (err) {
-      console.error('Failed to filter posts by year:', err);
-    }
-  }
-
-  _parseTimelineParam(param) {
-    if (!param) return null;
-    const parts = param.split('-').map(Number);
-    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return { from: parts[0], to: parts[1] };
-    if (parts.length === 1 && parts[0] > 0) return { from: parts[0], to: parts[0] };
-    return null;
+  }  _onTimelineRangeChange({ from, to }) {
+    const vc = ViewContext.current();
+    if (vc.years && vc.years[0] === from && vc.years[1] === to) return;
+    ViewContext.update({ years: [from, to] });
   }
 
   beforeUnmount() {
@@ -319,13 +270,15 @@ export default class HomePage extends Component {
   }
 
   async _load() {
-    const page = parseInt(this.props.query?.page || '1', 10);
-    const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
-    const params = { page };
-    if (timelineRange) {
-      params.year_from = timelineRange.from;
-      params.year_to = timelineRange.to;
+    const vc = ViewContext.current();
+    const params = { page: vc.page };
+    if (vc.years) {
+      params.year_from = vc.years[0];
+      params.year_to = vc.years[1];
     }
+    if (vc.query) params.q = vc.query;
+    if (vc.tag) params.tag = vc.tag;
+
     try {
       const data = await getHomePage(params);
       // Merge settings from page response into store.

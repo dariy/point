@@ -20,6 +20,7 @@ import {
   renderTagStrip,
   setupTagStrip,
 } from "../../utils/tags.js";
+import { ViewContext } from "../../utils/viewContext.js";
 
 export class PostCard extends Component {
   render() {
@@ -99,7 +100,7 @@ export class PostCard extends Component {
   }
 
   afterRender() {
-    const { post, tagSlug, tagPage } = this.props;
+    const { post, tagSlug } = this.props;
     if (!post) return;
     const card = this.$(".post-card");
     if (!card) return;
@@ -113,10 +114,9 @@ export class PostCard extends Component {
 
     const go = () => {
       if (tagSlug) {
-        const page = tagPage > 1 ? `&page=${tagPage}` : "";
-        navigate(`/tags/${tagSlug}?slug=${post.slug}${page}`);
+        ViewContext.update({ postSlug: post.slug });
       } else {
-        navigate(`/posts/${post.slug}`);
+        ViewContext.update({ postSlug: post.slug, tag: null, query: null });
       }
     };
 
@@ -184,7 +184,10 @@ export class PostCard extends Component {
     // Unified tag strip scrolling and flyout setup
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-    this._cleanupStrip = setupTagStrip(card, tagIndex, navigate, card);
+    this._cleanupStrip = setupTagStrip(card, tagIndex, (url) => {
+      const slug = url.replace('/tags/', '');
+      ViewContext.update({ tag: slug, postSlug: null, query: null });
+    }, card);
   }
 
   beforeUnmount() {

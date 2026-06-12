@@ -35,6 +35,7 @@ import {
   TrackpadDetector,
   rubberBand,
 } from "../../utils/gestures.js";
+import { ViewContext } from "../../utils/viewContext.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -47,6 +48,12 @@ export default class TagPage extends Component {
       forceImmersive: false,
       startIndex: 0,
     };
+  }
+
+  onRouteUpdate(params, query) {
+    this.props.params = params;
+    this.props.query = query;
+    this._load();
   }
 
   _isPostView() {
@@ -125,12 +132,10 @@ export default class TagPage extends Component {
       !this.state.loading &&
       !this.state.error
     ) {
-      const timelineRange = this._parseTimelineParam(
-        this.props.query?.timeline,
-      );
+      const vc = ViewContext.current();
       this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
-        initialRange: timelineRange || undefined,
+        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
       });
     }
@@ -246,12 +251,7 @@ export default class TagPage extends Component {
           page: pagination.page,
           pages: pagination.pages,
           total: pagination.total,
-          onPage: (p) => {
-            const params = new URLSearchParams({ page: p });
-            const t = new URLSearchParams(location.search).get("timeline");
-            if (t) params.set("timeline", t);
-            navigate(`/tags/${slug}?${params.toString()}`);
-          },
+          onPage: (p) => ViewContext.update({ page: p }),
         });
       }
 
@@ -336,16 +336,10 @@ export default class TagPage extends Component {
             }
           },
           onSwipeCommit: (dir) => {
-            const t = new URLSearchParams(location.search).get("timeline");
-            const buildUrl = (p) => {
-              const params = new URLSearchParams({ page: p });
-              if (t) params.set("timeline", t);
-              return `/tags/${slug}?${params.toString()}`;
-            };
             if (dir === "left" && pagination.page < pagination.pages) {
-              navigate(buildUrl(pagination.page + 1));
+              ViewContext.update({ page: pagination.page + 1 });
             } else if (dir === "right" && pagination.page > 1) {
-              navigate(buildUrl(pagination.page - 1));
+              ViewContext.update({ page: pagination.page - 1 });
             } else {
               // Reset visuals if not committed
               if (gridMount) {
@@ -368,16 +362,10 @@ export default class TagPage extends Component {
         });
         this._trackpad = new TrackpadDetector(this.$(".site-main"), {
           onHorizontal: (dir) => {
-            const t = new URLSearchParams(location.search).get("timeline");
-            const buildUrl = (p) => {
-              const params = new URLSearchParams({ page: p });
-              if (t) params.set("timeline", t);
-              return `/tags/${slug}?${params.toString()}`;
-            };
             if (dir === "left" && pagination.page < pagination.pages) {
-              navigate(buildUrl(pagination.page + 1));
+              ViewContext.update({ page: pagination.page + 1 });
             } else if (dir === "right" && pagination.page > 1) {
-              navigate(buildUrl(pagination.page - 1));
+              ViewContext.update({ page: pagination.page - 1 });
             }
           },
         });
@@ -396,83 +384,32 @@ export default class TagPage extends Component {
   }
 
   async _onTimelineRangeChange({ from, to }) {
-    if (!this.state.data) return;
-    const settings = store.get("settings") || {};
-    const slug = this.props.params?.slug || "";
-
-    const timelineParam = from === to ? `${from}` : `${from}-${to}`;
-    const currentTimeline = new URLSearchParams(location.search).get("timeline");
-    if (currentTimeline === timelineParam) return;
-
-    const url = new URL(location.href);
-    url.searchParams.set("timeline", timelineParam);
-    url.searchParams.delete("page");
-    history.replaceState(null, "", url.pathname + url.search);
-
-    try {
-      const data = await getTagPage(slug, {
-        page: 1,
-        year_from: from,
-        year_to: to,
-      });
-      this.state.data = data;
-      const { posts = [], pagination = {} } = data;
-      this.mountChild(PostGrid, "#grid-mount", {
-        posts,
-        showViewCount: !!settings.show_view_counts,
-        useThumbnails: settings.use_thumbnails !== false,
-        tagSlug: slug,
-        emptyMessage: "No posts in this tag yet.",
-      });
-      this.mountChild(Pagination, "#pagination-mount", {
-        page: 1,
-        pages: pagination.pages || 1,
-        total: pagination.total || 0,
-        onPage: (p) => {
-          const params = new URLSearchParams({
-            page: p,
-            timeline: timelineParam,
-          });
-          navigate(`/tags/${slug}?${params.toString()}`);
-        },
-      });
-    } catch (err) {
-      console.error("Failed to filter posts by year:", err);
-    }
-  }
-
-  _parseTimelineParam(param) {
-    if (!param) return null;
-    const parts = param.split("-").map(Number);
-    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0)
-      return { from: parts[0], to: parts[1] };
-    if (parts.length === 1 && parts[0] > 0)
-      return { from: parts[0], to: parts[0] };
-    return null;
+    const vc = ViewContext.current();
+    if (vc.years && vc.years[0] === from && vc.years[1] === to) return;
+    ViewContext.update({ years: [from, to] });
   }
 
   async _load() {
+    const vc = ViewContext.current();
     const { slug } = this.props.params || {};
-    const postSlug = this.props.query?.slug;
-    const page = parseInt(this.props.query?.page || "1", 10);
-    const timelineRange = this._parseTimelineParam(this.props.query?.timeline);
 
     if (!slug) {
       this.setState({ loading: false, error: "Invalid tag URL." });
       return;
     }
 
-    const apiParams = { page };
-    if (timelineRange) {
-      apiParams.year_from = timelineRange.from;
-      apiParams.year_to = timelineRange.to;
+    const apiParams = { page: vc.page };
+    if (vc.years) {
+      apiParams.year_from = vc.years[0];
+      apiParams.year_to = vc.years[1];
     }
+    if (vc.query) apiParams.q = vc.query;
 
     try {
       const data = await getTagPage(slug, apiParams);
 
-      if (postSlug) {
-        const post = await getPostBySlug(postSlug);
+      if (vc.postSlug) {
+        const post = await getPostBySlug(vc.postSlug);
         document.title = `${post.title} — ${data.tag?.name || slug}`;
         setCanonical(`${window.location.origin}/posts/${post.slug}`);
 
@@ -498,10 +435,9 @@ export default class TagPage extends Component {
         });
       } else {
         document.title = `${data.tag?.name || slug} — Posts`;
-        const pageNum = parseInt(this.props.query?.page || "1", 10);
         const canonicalUrl =
-          pageNum > 1
-            ? `${window.location.origin}/tags/${slug}?page=${pageNum}`
+          vc.page > 1
+            ? `${window.location.origin}/tags/${slug}?page=${vc.page}`
             : `${window.location.origin}/tags/${slug}`;
         setCanonical(canonicalUrl);
         this.setState({ loading: false, data, post: null, error: null });

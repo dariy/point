@@ -14,6 +14,7 @@ import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG } from '../../utils/icons.js';
+import { ViewContext } from '../../utils/viewContext.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -196,7 +197,7 @@ export class PublicHeader extends Component {
       const submitSearch = () => {
         const q = input.value.trim();
         if (q) {
-          navigate(`/search?q=${encodeURIComponent(q)}`);
+          ViewContext.update({ query: q });
           input.value = '';
         }
         closeSearch();
@@ -232,7 +233,7 @@ export class PublicHeader extends Component {
       burgerSearchForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const q = burgerSearchForm.querySelector('input[type="search"]').value.trim();
-        if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+        if (q) ViewContext.update({ query: q });
         this._closeBurger();
       });
     }

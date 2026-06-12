@@ -14,11 +14,18 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { ViewContext } from '../../utils/viewContext.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
     this.state = { loading: true, data: null, error: null };
+  }
+
+  onRouteUpdate(params, query) {
+    this.props.params = params;
+    this.props.query = query;
+    this._load();
   }
 
   render() {
@@ -104,7 +111,7 @@ export default class SearchPage extends Component {
         page,
         pages,
         total,
-        onPage: (p) => navigate(`/search?q=${encodeURIComponent(this.props.query.q || '')}&page=${p}`),
+        onPage: (p) => ViewContext.update({ page: p }),
       });
     }
   }
@@ -115,18 +122,20 @@ export default class SearchPage extends Component {
   }
 
   async _load() {
-    const q = this.props.query?.q || '';
-    const page = parseInt(this.props.query?.page || '1', 10);
+    const vc = ViewContext.current();
     
-    document.title = q ? `Search: ${q} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
+    document.title = vc.query ? `Search: ${vc.query} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
 
-    if (!q.trim()) {
+    if (!vc.query?.trim()) {
       this.setState({ loading: false, data: { posts: [], total: 0, page: 1, pages: 1 }, error: null });
       return;
     }
 
     try {
-      const data = await listPosts({ q, page, status: 'published' });
+      const params = { q: vc.query, page: vc.page, status: 'published' };
+      if (vc.tag) params.tag = vc.tag;
+
+      const data = await listPosts(params);
       this.setState({ loading: false, data, error: null });
     } catch (err) {
       this.setState({ loading: false, data: null, error: err.message || 'Failed to search.' });

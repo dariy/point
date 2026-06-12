@@ -28,6 +28,7 @@ import {
   rubberBand,
 } from "../../utils/gestures.js";
 import { getPostPageLocation } from "../../api/posts.js";
+import { ViewContext } from "../../utils/viewContext.js";
 
 const _prismLoading = new Map();
 const _LANG_DEPS = {
@@ -195,7 +196,10 @@ export class PostContent extends Component {
       if (footer) {
         const navTags = store.get("navTags") || [];
         const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-        this._cleanupStrip = setupTagStrip(footer, tagIndex, navigate);
+        this._cleanupStrip = setupTagStrip(footer, tagIndex, (url) => {
+          const slug = url.replace('/tags/', '');
+          ViewContext.update({ tag: slug, postSlug: null, query: null });
+        });
       }
     }
   }
@@ -435,9 +439,7 @@ export class PostContent extends Component {
         target.classList.add("immersive-fade-out");
       }
       setTimeout(() => {
-        navigate(
-          tagSlug ? `/tags/${tagSlug}?slug=${p.slug}` : `/posts/${p.slug}`,
-        );
+        ViewContext.update({ postSlug: p.slug });
       }, 400);
     };
 
@@ -662,16 +664,9 @@ export class PostContent extends Component {
       try {
         const params = tagSlug ? { tag: tagSlug } : {};
         const data = await getPostPageLocation(post.slug, params);
-        const url = tagSlug
-          ? data.page > 1
-            ? `/tags/${tagSlug}?page=${data.page}`
-            : `/tags/${tagSlug}`
-          : data.page > 1
-            ? `/?page=${data.page}`
-            : "/";
-        navigate(url);
+        ViewContext.update({ page: data.page, postSlug: null });
       } catch {
-        navigate(tagSlug ? `/tags/${tagSlug}` : "/");
+        ViewContext.update({ postSlug: null });
       }
     };
 
@@ -922,14 +917,14 @@ export class PostContent extends Component {
     // Just commit on a clean horizontal swipe.
     this._gesture = new GestureController(this.container, {
       onSwipeCommit: (dir) => {
-        if (dir === "left" && backPost) navigate("/posts/" + backPost.slug);
-        else if (dir === "right" && fwdPost) navigate("/posts/" + fwdPost.slug);
+        if (dir === "left" && backPost) ViewContext.update({ postSlug: backPost.slug });
+        else if (dir === "right" && fwdPost) ViewContext.update({ postSlug: fwdPost.slug });
       },
     });
     this._trackpad = new TrackpadDetector(this.container, {
       onHorizontal: (dir) => {
-        if (dir === "left" && backPost) navigate("/posts/" + backPost.slug);
-        else if (dir === "right" && fwdPost) navigate("/posts/" + fwdPost.slug);
+        if (dir === "left" && backPost) ViewContext.update({ postSlug: backPost.slug });
+        else if (dir === "right" && fwdPost) ViewContext.update({ postSlug: fwdPost.slug });
       },
     });
   }
