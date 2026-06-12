@@ -12,8 +12,8 @@
 import { Component } from '../Component.js';
 import { PublicHeaderTagsBar } from './PublicHeaderTagsBar.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
-import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG } from '../../utils/icons.js';
+import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
+import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 
 export class PublicHeader extends Component {
@@ -24,11 +24,18 @@ export class PublicHeader extends Component {
       navTags = [],
       breadcrumb = [],
       editUrl = null,
+      showShare = false,
     } = this.props;
 
     const user = store.get('user');
     const title    = escapeHtml(settings.blog_title || 'Photo Blog');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
+
+    const shareButtonHtml = showShare
+      ? `<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
+           ${SHARE_SVG}
+         </button>`
+      : '';
 
     // Build breadcrumb nav rendered inside .site-branding
     let crumbHtml = '';
@@ -133,6 +140,7 @@ export class PublicHeader extends Component {
                 </button>
               </form>
               ${mapButtonHtml}
+              ${shareButtonHtml}
               <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
                 <span class="icon-sun">${SUN_SVG}</span>
                 <span class="icon-moon">${MOON_SVG}</span>
@@ -151,6 +159,7 @@ export class PublicHeader extends Component {
                 </form>
                 <div class="burger-actions">
                   ${mapButtonHtml}
+                  ${shareButtonHtml}
                   <button class="theme-toggle" id="burger-theme-toggle" type="button" aria-label="Toggle theme">
                     <span class="icon-sun">${SUN_SVG}</span>
                     <span class="icon-moon">${MOON_SVG}</span>
@@ -173,6 +182,17 @@ export class PublicHeader extends Component {
     if (navTags.length) {
       this.mountChild(PublicHeaderTagsBar, '#header-tags-mount', { navTags, currentTagSlug });
     }
+
+    this.container.querySelectorAll('.share-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const settings = store.get('settings') || {};
+        sharePost({
+          title: settings.blog_title || document.title,
+          url: window.location.href
+        });
+      });
+    });
 
     this._group = this.$('.site-header-group');
     this._inner = this.$('.site-header-inner');

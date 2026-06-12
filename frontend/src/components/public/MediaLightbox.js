@@ -9,6 +9,9 @@
  * No Component base class — it manages its own DOM element directly.
  */
 
+import { SHARE_SVG } from '../../utils/icons.js';
+import { sharePost } from '../../utils/helpers.js';
+
 export class MediaLightbox {
   constructor() {
     this._images = [];
@@ -71,7 +74,12 @@ export class MediaLightbox {
     next.setAttribute('aria-label', 'Next image');
     next.textContent = '›';
 
-    content.append(img, caption, close, prev, next);
+    const share = document.createElement('button');
+    share.className = 'lightbox-share';
+    share.setAttribute('aria-label', 'Share');
+    share.innerHTML = SHARE_SVG;
+
+    content.append(img, caption, close, prev, next, share);
     overlay.appendChild(content);
     document.body.appendChild(overlay);
 
@@ -80,6 +88,7 @@ export class MediaLightbox {
     this._captionEl = caption;
     this._prevBtn = prev;
     this._nextBtn = next;
+    this._shareBtn = share;
 
     // Event wiring
     close.addEventListener('click', () => this._hide());
@@ -88,6 +97,12 @@ export class MediaLightbox {
     });
     prev.addEventListener('click', () => this._step(-1));
     next.addEventListener('click', () => this._step(1));
+    share.addEventListener('click', () => {
+      sharePost({
+        title: document.title,
+        url: window.location.href
+      });
+    });
     document.addEventListener('keydown', (e) => {
       if (!this._el?.classList.contains('active')) return;
       if (e.key === 'Escape') this._hide();

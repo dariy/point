@@ -14,7 +14,7 @@
 
 import { Component } from "../Component.js";
 import { escapeHtml, safeUrl, navigate } from "../../utils/helpers.js";
-import { COPY_SVG, CHECK_SVG } from "../../utils/icons.js";
+import { COPY_SVG, CHECK_SVG, SHARE_SVG } from "../../utils/icons.js";
 import {
   buildTagIndex,
   renderTagStrip,
@@ -29,6 +29,7 @@ import {
 } from "../../utils/gestures.js";
 import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { sharePost } from "../../utils/helpers.js";
 
 const _prismLoading = new Map();
 const _LANG_DEPS = {
@@ -275,6 +276,9 @@ export class PostContent extends Component {
     return `
       <div class="immersive-wrapper">
         ${postCss}<div class="immersive-visuals">${visuals}</div>
+        <button class="header-action-btn share-btn carousel-share-btn" type="button" aria-label="Share">
+          ${SHARE_SVG}
+        </button>
         ${postNavArrows}
         ${excerptHtml}
       </div>`;
@@ -317,6 +321,9 @@ export class PostContent extends Component {
     return `
       <div class="carousel-container" id="immersive-carousel">
         ${slides}
+        <button class="header-action-btn share-btn carousel-share-btn" type="button" aria-label="Share">
+          ${SHARE_SVG}
+        </button>
         <div class="immersive-nav-panel immersive-nav-prev" aria-label="Previous"><div class="immersive-nav-gradient"></div></div>
         <div class="immersive-nav-panel immersive-nav-next" aria-label="Next"><div class="immersive-nav-gradient"></div></div>
         <div class="carousel-indicators">${dots}</div>
@@ -543,6 +550,18 @@ export class PostContent extends Component {
           navClickOrLink(e, () => goToPost(fwdPost));
         });
       }
+    }
+
+    const shareBtn = this.$(".carousel-share-btn");
+    if (shareBtn) {
+      this._on(shareBtn, "click", (e) => {
+        e.stopPropagation();
+        const settings = store.get("settings") || {};
+        sharePost({
+          title: settings.blog_title || document.title,
+          url: window.location.href,
+        });
+      });
     }
 
     // Fade in on mount

@@ -530,3 +530,32 @@ video.immersive-bg-image {
     border-radius: var(--border-radius);
     margin: var(--spacing-md) 0;
 }
+
+/* carousel share button */
+.carousel-share-btn {
+  position: absolute;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+  z-index: 60;
+  background: var(--color-black-alpha-40);
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
+}
+.carousel-share-btn:hover {
+  background: var(--color-black-alpha-60);
+}
+.ui-hidden .carousel-share-btn {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-20px);
+}
+@media (min-width: 768px) {
+  .carousel-share-btn {
+    top: var(--spacing-xl);
+    right: var(--spacing-xl);
+  }
+}

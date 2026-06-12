@@ -329,25 +329,43 @@ func (r *sqliteRepository) UpdateEdgeSortOrder(ctx context.Context, parentID, ch
 
 // scanTags is a helper that executes a query and scans the result rows into []models.Tag.
 func (r *sqliteRepository) scanTags(ctx context.Context, q string, args ...interface{}) ([]models.Tag, error) {
-	rows, err := r.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
+        rows, err := r.db.QueryContext(ctx, q, args...)
+        if err != nil {
+                return nil, err
+        }
+        defer func() {
+                _ = rows.Close()
+        }()
+        var items []models.Tag
+        for rows.Next() {
+                var t models.Tag
+                if err := rows.Scan(
+                        &t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+                        &t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+                        &t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+                        &t.PostCount, &t.CreatedAt,
+                ); err != nil {
+                        return nil, err
+                }
+                items = append(items, t)
+        }
+        return items, rows.Err()
+}
+
+// SearchTags returns tags whose name matches the query.
+func (r *sqliteRepository) SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error) {
+	if query == "" {
+		return nil, nil
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	var items []models.Tag
-	for rows.Next() {
-		var t models.Tag
-		if err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
-			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
-			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
-			&t.PostCount, &t.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, t)
-	}
-	return items, rows.Err()
+	const q = `
+SELECT id, name, slug, description, kind, hidden, hides_posts,
+       nav_order, in_breadcrumbs, show_related, in_ancestor_flyout,
+       latitude, longitude, post_count, created_at
+FROM tags
+WHERE LOWER(name) LIKE '%' || LOWER(?) || '%'
+   OR LOWER(slug) LIKE '%' || LOWER(?) || '%'
+ORDER BY post_count DESC, name ASC
+LIMIT ?`
+
+	return r.scanTags(ctx, q, query, query, limit)
 }

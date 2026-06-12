@@ -150,3 +150,28 @@ export function normalizeSettings(raw) {
   }
   return result;
 }
+/**
+ * Share a post using the native share API or fallback to clipboard.
+ *
+ * @param {{ title: string, url: string }} data
+ */
+export async function sharePost(data) {
+  if (navigator.share) {
+    try {
+      await navigator.share(data);
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.error('Share failed:', err);
+    }
+  }
+
+  // Fallback: copy to clipboard
+  try {
+    await navigator.clipboard.writeText(data.url);
+    const { store } = await import('../store.js');
+    store.set('toast', { message: 'Link copied to clipboard', type: 'success' });
+  } catch (err) {
+    console.error('Clipboard failed:', err);
+  }
+}

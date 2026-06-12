@@ -94,6 +94,7 @@ export default class PostPage extends Component {
       breadcrumb,
       currentPath: '',
       editUrl: post ? `/light/posts/${post.id}/edit` : null,
+      showShare: !!post,
     });
 
     // Immersive footer shows post tags + post-to-post navigation; normal footer shows pagination slot
@@ -187,6 +188,7 @@ export default class PostPage extends Component {
       breadcrumb,
       currentPath: '',
       editUrl: `/light/posts/${post.id}/edit`,
+      showShare: !!post,
     });
 
     this._footerChild?.setProps({ settings, immersiveTags, immersiveNav, exifMedia });

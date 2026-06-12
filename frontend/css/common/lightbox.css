@@ -78,3 +78,28 @@
     top: 50%;
     transform: translateY(-50%);
 }
+
+.lightbox-share {
+    position: absolute;
+    bottom: var(--spacing-md);
+    right: var(--spacing-md);
+    background: var(--color-black-alpha-50);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-fast);
+}
+
+.lightbox-share:hover {
+    background: var(--color-black-alpha-70);
+}
+
+.lightbox-share svg {
+    width: var(--svg-width-alt1);
+    height: var(--svg-height-alt1);
+}
