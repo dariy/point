@@ -115,9 +115,32 @@ export class Timeline extends Component {
     this._resizeObserver.observe(this.container);
 
     this._wireGestures();
+    this._showGestureHint();
 
     // Initial layout
     this._layout();
+  }
+
+  _showGestureHint() {
+    if (localStorage.getItem("timelineHintShown")) return;
+    
+    const hint = document.createElement("div");
+    hint.className = "timeline-gesture-hint";
+    hint.textContent = "Drag to explore · pinch or Ctrl+scroll to zoom";
+    this.container.appendChild(hint);
+    
+    const hide = () => {
+      hint.classList.add("fade-out");
+      setTimeout(() => hint.remove(), 500);
+      localStorage.setItem("timelineHintShown", "true");
+      this.container.removeEventListener("mousedown", hide);
+      this.container.removeEventListener("touchstart", hide);
+    };
+    
+    this.container.addEventListener("mousedown", hide, { once: true });
+    this.container.addEventListener("touchstart", hide, { once: true });
+    
+    setTimeout(hide, 5000); // Auto-hide after 5s
   }
 
   beforeUnmount() {
@@ -991,11 +1014,8 @@ export class Timeline extends Component {
     const btn = document.createElement("button");
     if (info.type === "cluster") {
       const c = info.data;
-      const label =
-        c.minYear === c.maxYear
-          ? String(c.minYear)
-          : `${c.minYear}–${c.maxYear}`;
-      wrap.className = "timeline-cluster";
+      const label = c.label || (c.minYear === c.maxYear ? String(c.minYear) : `${c.minYear}–${c.maxYear}`);
+      wrap.className = "timeline-cluster" + (c.isAllYears ? " all-years" : "");
       wrap.dataset.min = c.minYear;
       wrap.dataset.max = c.maxYear;
       btn.className = "timeline-cluster-btn";
@@ -1017,6 +1037,20 @@ export class Timeline extends Component {
   }
 
   _collide(pills, getX) {
+    if (this.state.zoom < 0.01) {
+      const totalPosts = pills.reduce((sum, p) => sum + p.post_count, 0);
+      return {
+        visible: [],
+        clusters: [{
+          pills,
+          minYear: this.state.extent.min,
+          maxYear: this.state.extent.max,
+          label: `All years &middot; ${totalPosts} posts`,
+          isAllYears: true
+        }]
+      };
+    }
+
     const minGap = 8;
     const sorted = [...pills].sort((a, b) => a.year - b.year);
     const result = { visible: [], clusters: [] };
