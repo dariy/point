@@ -175,3 +175,42 @@ export async function sharePost(data) {
     console.error('Clipboard failed:', err);
   }
 }
+
+/**
+ * Setup a long-press listener on an element.
+ *
+ * @param {HTMLElement} el
+ * @param {function(Event)} callback
+ * @param {number} [duration=400]
+ * @returns {function()} cleanup
+ */
+export function setupLongPress(el, callback, duration = 400) {
+  let timer = null;
+
+  const start = (e) => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      callback(e);
+    }, duration);
+  };
+
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchend', cancel, { passive: true });
+  el.addEventListener('touchmove', cancel, { passive: true });
+  el.addEventListener('contextmenu', (e) => {
+    if (e.pointerType === 'touch') e.preventDefault();
+  });
+
+  return () => {
+    cancel();
+    el.removeEventListener('touchstart', start);
+    el.removeEventListener('touchend', cancel);
+    el.removeEventListener('touchmove', cancel);
+  };
+}
