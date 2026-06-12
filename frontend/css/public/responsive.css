@@ -67,3 +67,30 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Phone Landscape Tier (point-x52z.10) */
+@media (max-width: 48em) and (orientation: landscape) {
+    .site-header .site-branding {
+        display: none;
+    }
+    .site-header-inner {
+        height: var(--header-height-compact, 3.5rem);
+    }
+    .posts-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .post-side-nav {
+        display: none;
+    }
+}
+
+/* Coarse pointer styles */
+@media (pointer: coarse) {
+    .header-action-btn, .theme-toggle, .share-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .tag-link {
+        padding: 8px 12px; /* larger tap target */
+    }
+}
