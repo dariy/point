@@ -7,7 +7,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, navigate } from "../../utils/helpers.js";
+import { escapeHtml } from "../../utils/helpers.js";
 import {
   renderTagLink,
   buildTagIndex,

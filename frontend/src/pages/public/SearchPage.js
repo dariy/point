@@ -14,7 +14,7 @@ import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { FilterChipsRow } from '../../components/public/FilterChipsRow.js';
 

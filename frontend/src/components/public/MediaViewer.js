@@ -117,7 +117,7 @@ export class MediaViewer extends Component {
     const slides = Array.from(visuals.querySelectorAll('.carousel-slide'));
     const dots = Array.from(this.container.querySelectorAll('.carousel-dot'));
 
-    const { items = [], navPrev, navNext, onStep, onClose } = this.props;
+    const { items = [], onStep, onClose } = this.props;
 
     const goTo = (i) => {
       const n = slides.length;
@@ -264,7 +264,7 @@ export class MediaViewer extends Component {
     const visuals = this.$('.immersive-visuals');
     visuals.classList.add('immersive-fade-out');
     setTimeout(() => {
-        const { ViewContext } = import('../../utils/viewContext.js').then(m => {
+        import('../../utils/viewContext.js').then(m => {
             m.ViewContext.update({ postSlug: target.slug });
         });
     }, 400);

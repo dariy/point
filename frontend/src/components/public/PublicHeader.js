@@ -201,7 +201,7 @@ export class PublicHeader extends Component {
   }
 
   afterRender() {
-    const { navTags = [], currentTagSlug = '' } = this.props;
+    const { navTags = [], currentTagSlug = '', onToggleImmersive } = this.props;
 
     if (navTags.length) {
       this.mountChild(PublicHeaderTagsBar, '#header-tags-mount', { navTags, currentTagSlug });

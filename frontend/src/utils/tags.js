@@ -8,7 +8,6 @@
 
 import { escapeHtml, setupLongPress } from './helpers.js';
 import { CHEVRON_SVG } from './icons.js';
-import { store } from '../store.js';
 
 // ── Hot-zone tracker ─────────────────────────────────────────────────────────
 

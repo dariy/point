@@ -11,7 +11,6 @@ import { Component } from '../Component.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
 import { CHEVRON_SVG } from '../../utils/icons.js';
 import { renderTagLink, setupScrollableStrip, setupTagFlyout, buildTagIndex } from '../../utils/tags.js';
-import { store } from '../../store.js';
 
 export class PublicHeaderTagsBar extends Component {
   render() {

@@ -11,7 +11,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, safeUrl, navigate } from "../../utils/helpers.js";
+import { escapeHtml, safeUrl } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { store } from "../../store.js";

@@ -17,7 +17,7 @@ import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate, normalizeSettings } from '../../utils/helpers.js';
+import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
 import { FilterChipsRow } from '../../components/public/FilterChipsRow.js';
 import { ViewContext } from '../../utils/viewContext.js';

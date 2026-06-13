@@ -26,7 +26,6 @@ import { getPostBySlug } from "../../api/posts.js";
 import { store } from "../../store.js";
 import {
   escapeHtml,
-  navigate,
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
