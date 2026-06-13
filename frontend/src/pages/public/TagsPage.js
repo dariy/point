@@ -153,21 +153,24 @@ export default class TagsPage extends Component {
 
     const count = tag.post_count ? ` <span class="tag-count">(${escapeHtml(String(tag.post_count))})</span>` : '';
     const lockPrefix = tag.is_hidden ? LOCK_SVG : '';
-    
-    // Wrap name in a span so filter logic can find it easily
-    const linkPrefix = childTags.length ? `<button class="toggle-branch" aria-label="Toggle branch">${CHEVRON_SVG}</button>${lockPrefix}` : lockPrefix;
-    const link = renderTagLink(tag, { 
-      extra: `tags-tree-link${tag.is_hidden ? ' is-hidden' : ''}`, 
-      suffix: count, 
-      prefix: `<span class="name">${escapeHtml(tag.name)}</span>` 
-    });
 
-    // Replace default renderTagLink name with ours
-    const finalLink = link.replace(escapeHtml(tag.name), linkPrefix + `<span class="name">${escapeHtml(tag.name)}</span>`);
+    // Collapse toggle is a sibling of the tag link inside .tags-tree-row
+    // (not nested inside the <a>) so that the chevron-rotation and row-flex
+    // CSS in tag-archive.css applies and the button stays valid HTML.
+    const toggle = childTags.length
+      ? `<button class="toggle-branch" aria-label="Toggle branch">${CHEVRON_SVG}</button>`
+      : '';
+
+    // Wrap the name in a .name span so the filter logic can match on it.
+    const link = renderTagLink(tag, {
+      extra: `tags-tree-link${tag.is_hidden ? ' is-hidden' : ''}`,
+      prefix: `${lockPrefix}<span class="name">`,
+      suffix: `</span>${count}`,
+    });
 
     return `
       <li class="tags-tree-item" role="treeitem" aria-expanded="true">
-        <div class="tags-tree-row">${finalLink}</div>
+        <div class="tags-tree-row">${toggle}${link}</div>
         ${tag.description ? `<p class="tags-tree-desc">${escapeHtml(tag.description)}</p>` : ''}
         ${childrenHtml ? `<ul class="tags-tree-children" role="group">${childrenHtml}</ul>` : ''}
       </li>`;

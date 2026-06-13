@@ -204,11 +204,14 @@ export default class MapPage extends Component {
     return [{ name: "map", href: "/map" }, { name: label }];
   }
 
-  async _onTimelineRangeChange({ from, to }) {
+  async _onTimelineRangeChange({ from, to, isFullExtent }) {
+    const years = isFullExtent ? null : [from, to];
     const vc = ViewContext.current();
-    if (vc.years && vc.years[0] === from && vc.years[1] === to) return;
-    
-    ViewContext.update({ years: [from, to] }, { replace: true });
+    const same = years
+      ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]
+      : !vc.years;
+    if (same) return;
+    ViewContext.update({ years }, { replace: true });
   }
 
   _updateStats() {

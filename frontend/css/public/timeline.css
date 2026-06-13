@@ -5,6 +5,10 @@
 .timeline-container {
     position: relative;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding-left: var(--spacing-md);
     background: var(--surface-card);
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
@@ -14,6 +18,8 @@
 
 .timeline-track-wrapper {
     position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
     height: 56px;
     cursor: grab;
 }
@@ -418,10 +424,9 @@
 /* ── Range Readout Chip (point-0b98.5) ────────────────────────────────────── */
 
 .timeline-range-chip-mount {
-    position: absolute;
-    top: 4px;
-    left: 50%;
-    transform: translateX(-50%);
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
     z-index: 10;
     pointer-events: none;
 }
@@ -443,7 +448,7 @@
 
 .timeline-range-chip.hidden {
     opacity: 0;
-    transform: translateX(-50%) translateY(-10px);
+    transform: translateY(-4px);
 }
 
 .timeline-range-chip-remove {

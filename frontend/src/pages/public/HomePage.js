@@ -262,10 +262,14 @@ export default class HomePage extends Component {
         }
       });
     }
-  }  _onTimelineRangeChange({ from, to }) {
+  }  _onTimelineRangeChange({ from, to, isFullExtent }) {
+    const years = isFullExtent ? null : [from, to];
     const vc = ViewContext.current();
-    if (vc.years && vc.years[0] === from && vc.years[1] === to) return;
-    ViewContext.update({ years: [from, to] });
+    const same = years
+      ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]
+      : !vc.years;
+    if (same) return;
+    ViewContext.update({ years });
   }
 
   beforeUnmount() {

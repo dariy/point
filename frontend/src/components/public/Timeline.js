@@ -57,6 +57,9 @@ export class Timeline extends Component {
         const { from, to } = initialRange;
         if (from === payload.extent.min && to === payload.extent.max) {
           this._initCollapsed();
+          // The persisted range covers everything; emit so the consumer drops
+          // the redundant filter (clears the URL + filter chips).
+          if (this.props.mode === "filter") this._emitRange();
         } else {
           this._centerOnYear((from + to) / 2);
           if (this.props.mode === "filter") this._emitRange();
@@ -846,7 +849,11 @@ export class Timeline extends Component {
       from = item.year;
       to = item.is_decade ? from + 9 : from;
     }
-    this.props.onRangeChange({ from, to, source: "center" });
+    // A range spanning the whole extent isn't filtering anything — signal it so
+    // consumers clear the year filter instead of pinning a redundant full-range.
+    const isFullExtent =
+      from === this.state.extent.min && to === this.state.extent.max;
+    this.props.onRangeChange({ from, to, source: "center", isFullExtent });
   }
 
   _computeMaxZoom() {
@@ -1069,7 +1076,7 @@ export class Timeline extends Component {
           pills,
           minYear: this.state.extent.min,
           maxYear: this.state.extent.max,
-          label: `All years &middot; ${totalPosts} posts`,
+          label: `All years · ${totalPosts} posts`,
           isAllYears: true
         }]
       };
@@ -1180,20 +1187,24 @@ export class Timeline extends Component {
       to = item.is_decade ? from + 9 : from;
     }
 
+    // At full extent the timeline isn't filtering anything and the "All years"
+    // pill already shows the count \u2014 a chip here just duplicates it.
+    if (from === this.state.extent.min && to === this.state.extent.max) {
+      mount.innerHTML = "";
+      return;
+    }
+
     const yearStr = from === to ? String(from) : `${from} \u2013 ${to}`;
-    
+
     // Calculate post count in range
     const count = this.state.pills
       .filter(p => p.year >= from && p.year <= to)
       .reduce((sum, p) => sum + p.post_count, 0);
 
-    const isFullExtent = from === this.state.extent.min && to === this.state.extent.max;
-    const removeBtn = !isFullExtent ? `<button class="timeline-range-chip-remove" title="Reset range" aria-label="Reset range">&times;</button>` : "";
-
     mount.innerHTML = `
       <div class="timeline-range-chip">
         <span class="label">${escapeHtml(yearStr)} &middot; ${count} post${count !== 1 ? 's' : ''}</span>
-        ${removeBtn}
+        <button class="timeline-range-chip-remove" title="Reset range" aria-label="Reset range">&times;</button>
       </div>
     `;
 

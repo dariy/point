@@ -125,11 +125,6 @@
     color: var(--color-primary);
 }
 
-.footer-nav {
-    display: flex;
-    gap: var(--spacing-lg);
-}
-
 .footer-link {
     font-size: var(--font-size-sm);
     color: var(--footer-text);

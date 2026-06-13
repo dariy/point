@@ -109,20 +109,13 @@ export class PublicFooter extends Component {
       centerSlot = `<div id="pagination-mount"></div>`;
     }
 
-    const mapButton = (() => {
-      const visibility = settings.map_mode || 'off';
-      if (visibility === 'all' || (store.get('user') && visibility === 'hidden')) {
-        return `<a href="/map">Map</a>`;
-      }
-      return '';
-    })();
-
+    // About (author link in .footer-copyright) and Map (header map button)
+    // already have canonical entry points elsewhere, so the footer nav only
+    // carries the links that aren't reachable from the chrome: tags + RSS.
     const rssButton = settings.enable_rss !== false ? `<a href="/feed" target="_blank">RSS</a>` : '';
 
     const rightLinks = [
       `<a href="/tags">All tags</a>`,
-      mapButton,
-      `<a href="${aboutHref}">About</a>`,
       rssButton
     ].filter(Boolean).join(' &middot; ');
 
