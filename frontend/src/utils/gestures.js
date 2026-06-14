@@ -41,6 +41,7 @@ export class GestureController {
    * @param {Function} [opts.onPinchEnd]     ()
    * @param {Function} [opts.onTap]          (x, y)
    * @param {Function} [opts.onDoubleTap]    (x, y)
+   * @param {Function} [opts.onTwoFingerTap] (x, y)
    * @param {number}   [opts.swipeThresholdPx=50]
    * @param {number}   [opts.commitThresholdPx=12]  movement before state commits
    * @param {number}   [opts.edgeIgnorePx=30]
@@ -68,6 +69,11 @@ export class GestureController {
     this._pinchStartDist = 0;
     this._pinchCx = 0;
     this._pinchCy = 0;
+
+    // Two-finger tap tracking
+    this._twoFingerStartX = 0;
+    this._twoFingerStartY = 0;
+    this._twoFingerStartTime = 0;
 
     // Double-tap tracking
     this._lastTapTime = 0;
@@ -132,6 +138,9 @@ export class GestureController {
       const c = this._center(e.touches);
       this._pinchCx = c.x;
       this._pinchCy = c.y;
+      this._twoFingerStartX = c.x;
+      this._twoFingerStartY = c.y;
+      this._twoFingerStartTime = Date.now();
       this._state = STATE.MULTI_TOUCH;
     }
   }
@@ -204,6 +213,16 @@ export class GestureController {
     this._state = STATE.IDLE;
 
     if (state === STATE.PINCHING || state === STATE.MULTI_TOUCH) {
+      if (state === STATE.MULTI_TOUCH) {
+        const now = Date.now();
+        if (now - this._twoFingerStartTime < this._opts.doubleTapMs) {
+          this._emit(
+            "onTwoFingerTap",
+            this._twoFingerStartX,
+            this._twoFingerStartY,
+          );
+        }
+      }
       this._emit("onPinchEnd");
       return;
     }

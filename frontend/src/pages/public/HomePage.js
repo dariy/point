@@ -149,6 +149,7 @@ export default class HomePage extends Component {
     if (!vc.isDefault() && this.state.data) {
       this.mountChild(FilterChipsRow, '#filter-chips-mount', {
         total: this.state.data.pagination?.total || this.state.data.total || 0,
+        timelineVisible: canShowTimeline,
       });
     }
 

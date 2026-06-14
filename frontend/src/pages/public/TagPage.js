@@ -145,6 +145,7 @@ export default class TagPage extends Component {
     if (!vc.isDefault() && this.state.data && !this._isPostView()) {
       this.mountChild(FilterChipsRow, "#filter-chips-mount", {
         total: this.state.data.pagination?.total || this.state.data.total || 0,
+        timelineVisible: canShowTimeline && !this._isPostView(),
       });
     }
 

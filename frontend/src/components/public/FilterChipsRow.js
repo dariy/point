@@ -22,7 +22,7 @@ export class FilterChipsRow extends Component {
       ariaLabels.push(vc.tag);
     }
 
-    if (vc.years) {
+    if (vc.years && !this.props.timelineVisible) {
       const yearStr = vc.years[0] === vc.years[1] ? String(vc.years[0]) : `${vc.years[0]} \u2013 ${vc.years[1]}`;
       chips.push(`
         <span class="filter-chip">

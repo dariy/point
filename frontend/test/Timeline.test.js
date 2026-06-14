@@ -10,23 +10,27 @@ describe('Timeline Component', () => {
     // Mock global dependencies
     global.document = {
       createElement: (tag) => {
-          if (tag === 'canvas') {
-              return { getContext: () => ({ measureText: () => ({ width: 50 }) }), font: '' };
-          }
-          return {
+          const el = {
             appendChild: () => {},
             remove: () => {},
-            classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+            classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
             addEventListener: () => {},
             removeEventListener: () => {},
-            querySelector: () => null,
-            querySelectorAll: () => [],
+            querySelector: (sel) => el._querySelector?.(sel) || null,
+            querySelectorAll: (sel) => el._querySelectorAll?.(sel) || [],
             dataset: {},
             style: {},
-            setAttribute: () => {},
+            setAttribute: (name, val) => { el[name] = val; },
+            getAttribute: (name) => el[name],
             getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 100 }),
-            children: []
+            children: [],
+            focus: () => { global.document.activeElement = el; }
           };
+          if (tag === 'canvas') {
+              el.getContext = () => ({ measureText: () => ({ width: 50 }) });
+              el.font = '';
+          }
+          return el;
       },
       head: { appendChild: () => {} },
       body: { appendChild: () => {}, classList: { remove: () => {} } },
@@ -38,20 +42,34 @@ describe('Timeline Component', () => {
     global.window = {
       addEventListener: () => {},
       removeEventListener: () => {},
-      matchMedia: () => ({ matches: false }),
+      matchMedia: (query) => ({ 
+        matches: global.prefersReducedMotion || false,
+        media: query 
+      }),
       scrollY: 0,
       innerWidth: 1024,
       performance: { now: () => Date.now() },
       requestAnimationFrame: (cb) => setTimeout(cb, 16),
       cancelAnimationFrame: (id) => clearTimeout(id)
     };
+    global.vibrateCalls = [];
+    Object.defineProperty(global, 'navigator', {
+      value: {
+        vibrate: (ms) => { global.vibrateCalls.push(ms); }
+      },
+      configurable: true,
+      writable: true
+    });
     global.ResizeObserver = class {
       observe() {}
       disconnect() {}
     };
-
-    // Mock API
-    // (Skipping direct assignment to read-only module export)
+    global.localStorage = {
+      getItem: () => null,
+      setItem: () => {}
+    };
+    global.requestAnimationFrame = (cb) => setTimeout(cb, 16);
+    global.cancelAnimationFrame = (id) => clearTimeout(id);
 
     const mod = await import('../src/components/public/Timeline.js');
     Timeline = mod.Timeline;
@@ -60,19 +78,31 @@ describe('Timeline Component', () => {
   beforeEach(() => {
     container = {
       querySelector: (selector) => {
-          if (selector === '.timeline-track') return { clientWidth: 1000 };
-          if (selector === '.timeline-track-wrapper') return { 
+          const base = {
+              clientWidth: 1000,
               addEventListener: () => {},
+              removeEventListener: () => {},
               getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 100 }),
-              classList: { add: () => {}, remove: () => {} }
-          };
-          return {
+              classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+              querySelector: () => null,
+              querySelectorAll: () => [],
               appendChild: () => {},
-              innerHTML: '',
-              children: []
+              children: [],
+              setAttribute: () => {},
+              dataset: {},
+              style: {}
           };
+          if (selector === '.timeline-track') return base;
+          if (selector === '.timeline-track-wrapper') return base;
+          if (selector === '.timeline-pills-mount') return base;
+          if (selector === '#histogram-mount') return base;
+          if (selector === '.timeline-axis-ticks') return base;
+          return base;
       },
-      querySelectorAll: () => []
+      querySelectorAll: () => [],
+      appendChild: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {}
     };
     props = {
         mode: 'filter',
@@ -140,5 +170,269 @@ describe('Timeline Component', () => {
             done(e);
         }
     }, 300);
+  });
+
+  test('should update aria-live announcer on settle', (t) => {
+    const announcer = { textContent: '' };
+    const originalQS = container.querySelector;
+    container.querySelector = (selector) => {
+        if (selector === '#timeline-live-announcer') return announcer;
+        return originalQS(selector);
+    };
+
+    const timeline = new Timeline(container, props);
+    timeline.state.isLoading = false;
+    timeline.state.pills = [
+        { year: 2021, name: '2021', slug: '2021', post_count: 5 }
+    ];
+    timeline.state.extent = { min: 2021, max: 2021 };
+    timeline._getX = () => 500;
+    timeline._lastCollision = { visible: timeline.state.pills, clusters: [] };
+
+    timeline._settled = true;
+    timeline._announceRange();
+
+    assert.strictEqual(announcer.textContent, 'Showing 2021, 5 posts');
+  });
+
+  test('should update aria-live announcer for clusters', (t) => {
+    const announcer = { textContent: '' };
+    const originalQS = container.querySelector;
+    container.querySelector = (selector) => {
+        if (selector === '#timeline-live-announcer') return announcer;
+        return originalQS(selector);
+    };
+
+    const timeline = new Timeline(container, props);
+    timeline.state.isLoading = false;
+    timeline.state.pills = [
+        { year: 2021, name: '2021', slug: '2021', post_count: 5 },
+        { year: 2022, name: '2022', slug: '2022', post_count: 3 }
+    ];
+    timeline.state.extent = { min: 2020, max: 2025 };
+    timeline._getX = (y) => 500;
+    timeline._lastCollision = { 
+        visible: [], 
+        clusters: [{
+            type: 'cluster',
+            minYear: 2021,
+            maxYear: 2022,
+            pills: timeline.state.pills
+        }] 
+    };
+
+    timeline._settled = true;
+    timeline._announceRange();
+
+    assert.strictEqual(announcer.textContent, 'Showing 2021 to 2022, 8 posts');
+  });
+
+  test('should update aria-live announcer for all years', (t) => {
+    const announcer = { textContent: '' };
+    const originalQS = container.querySelector;
+    container.querySelector = (selector) => {
+        if (selector === '#timeline-live-announcer') return announcer;
+        return originalQS(selector);
+    };
+
+    const timeline = new Timeline(container, props);
+    timeline.state.isLoading = false;
+    timeline.state.pills = [
+        { year: 2021, name: '2021', slug: '2021', post_count: 5 },
+        { year: 2022, name: '2022', slug: '2022', post_count: 3 }
+    ];
+    timeline.state.extent = { min: 2021, max: 2022 };
+    timeline._getX = () => 500;
+    timeline._lastCollision = { 
+        visible: [], 
+        clusters: [{
+            type: 'cluster',
+            minYear: 2021,
+            maxYear: 2022,
+            pills: timeline.state.pills,
+            isAllYears: true
+        }] 
+    };
+
+    timeline._settled = true;
+    timeline._announceRange();
+
+    assert.strictEqual(announcer.textContent, 'Showing all years, 8 posts');
+  });
+
+  describe('Accessibility & Keyboard', () => {
+    test('Escape key resets zoom when no popover is open', (t) => {
+      const timeline = new Timeline(container, props);
+      timeline.state.isLoading = false;
+      timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
+      timeline.state.extent = { min: 2021, max: 2021 };
+      timeline.state.zoom = 5;
+      
+      let keydownHandler;
+      const originalQS = container.querySelector;
+      container.querySelector = (sel) => {
+          const el = originalQS(sel);
+          if (sel === '.timeline-track-wrapper') {
+              el.addEventListener = (name, cb) => { if (name === 'keydown') keydownHandler = cb; };
+          }
+          return el;
+      };
+
+      timeline.afterRender();
+      
+      assert.ok(keydownHandler, 'keydownHandler should be assigned');
+      keydownHandler({ key: 'Escape', preventDefault: () => {} });
+      
+      assert.strictEqual(timeline.state.zoom, 0.0001, 'Zoom should be reset to collapsed state');
+    });
+
+    test('Home and End keys jump to extents', (t) => {
+      const timeline = new Timeline(container, props);
+      timeline.state.isLoading = false;
+      timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
+      timeline.state.extent = { min: 2000, max: 2020 };
+      timeline.state.zoom = 1;
+      timeline.state.panX = 0;
+      
+      let keydownHandler;
+      const originalQS = container.querySelector;
+      container.querySelector = (sel) => {
+          const el = originalQS(sel);
+          if (sel === '.timeline-track-wrapper') {
+              el.addEventListener = (name, cb) => { if (name === 'keydown') keydownHandler = cb; };
+          }
+          return el;
+      };
+
+      timeline.afterRender();
+      
+      assert.ok(keydownHandler, 'keydownHandler should be assigned');
+      keydownHandler({ key: 'Home', preventDefault: () => {} });
+      keydownHandler({ key: 'End', preventDefault: () => {} });
+    });
+
+    test('Arrow keys announce focus', (t) => {
+      const announcer = { textContent: '' };
+      const timeline = new Timeline(container, props);
+      timeline.state.isLoading = false;
+      timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
+      
+      let keydownHandler;
+      const originalQS = container.querySelector;
+      container.querySelector = (sel) => {
+          if (sel === '#timeline-live-announcer') return announcer;
+          const el = originalQS(sel);
+          if (sel === '.timeline-track-wrapper') {
+              el.addEventListener = (name, cb) => { if (name === 'keydown') keydownHandler = cb; };
+          }
+          return el;
+      };
+
+      const btn1 = { 
+          focus: () => { global.document.activeElement = btn1; },
+          getBoundingClientRect: () => ({ left: 100, top: 0, width: 50, height: 20 }),
+          addEventListener: () => {},
+          removeEventListener: () => {}
+      };
+      const btn2 = { 
+          focus: () => { global.document.activeElement = btn2; },
+          getAttribute: (name) => name === 'aria-label' ? '2021, 5 posts' : null,
+          getBoundingClientRect: () => ({ left: 500, top: 0, width: 50, height: 20 }),
+          addEventListener: () => {},
+          removeEventListener: () => {}
+      };
+      timeline.$$ = () => [btn1, btn2];
+      global.document.activeElement = btn1;
+
+      timeline.afterRender();
+      
+      assert.ok(keydownHandler, 'keydownHandler should be assigned');
+      keydownHandler({ key: 'ArrowRight', preventDefault: () => {} });
+      
+      assert.strictEqual(global.document.activeElement, btn2);
+      assert.strictEqual(announcer.textContent, '2021, 5 posts');
+    });
+
+    test('Popover has role dialog and focus management', async (t) => {
+      const timeline = new Timeline(container, props);
+      timeline.state.isLoading = false;
+      timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
+
+      const pillEl = { 
+          getBoundingClientRect: () => ({ top: 100, left: 100, width: 50, height: 20 }),
+          querySelector: () => ({ focus: () => { pillEl.focused = true; } })
+      };
+      
+      const originalCreateElement = global.document.createElement;
+      let popover;
+      global.document.createElement = (tag) => {
+          const el = originalCreateElement(tag);
+          if (tag === 'div') {
+              const originalSetAttribute = el.setAttribute;
+              el.setAttribute = (name, val) => {
+                  if (name === 'role' && val === 'dialog') popover = el;
+                  originalSetAttribute.call(el, name, val);
+              };
+          }
+          return el;
+      };
+
+      await timeline._openPopover(pillEl, timeline.state.pills[0]);
+      
+      assert.ok(popover, 'Popover should be created with role dialog');
+      assert.strictEqual(popover.getAttribute('role'), 'dialog');
+      
+      timeline._closePopover();
+      assert.strictEqual(timeline.state.popover, null);
+      assert.ok(pillEl.focused, 'Focus should return to trigger element');
+      
+      global.document.createElement = originalCreateElement;
+    });
+  });
+
+  describe('Haptic Feedback', () => {
+    beforeEach(() => {
+      global.vibrateCalls = [];
+      global.prefersReducedMotion = false;
+    });
+
+    test('vibrates on snap when centered item changes', () => {
+      const timeline = new Timeline(container, props);
+      timeline.state.isLoading = false;
+      timeline.state.pills = [{ year: 2020, post_count: 5 }];
+      timeline.state.extent = { min: 2000, max: 2040 };
+      
+      // Mock _findCenteredItem to return a pill
+      timeline._findCenteredItem = () => ({ type: 'pill', year: 2020 });
+      timeline._centerOnYear = () => {};
+
+      // First snap (from null to 2020) - should NOT vibrate
+      timeline._snapToCenterPill();
+      assert.strictEqual(global.vibrateCalls.length, 0, 'Should not vibrate on first snap');
+      assert.strictEqual(timeline._lastCenteredYear, 2020);
+
+      // Second snap to different year
+      timeline._findCenteredItem = () => ({ type: 'pill', year: 2021 });
+      timeline._snapToCenterPill();
+      assert.strictEqual(global.vibrateCalls.length, 1, 'Should vibrate on year change');
+      assert.strictEqual(global.vibrateCalls[0], 10);
+      assert.strictEqual(timeline._lastCenteredYear, 2021);
+
+      // Third snap to SAME year
+      timeline._snapToCenterPill();
+      assert.strictEqual(global.vibrateCalls.length, 1, 'Should not vibrate if year is same');
+    });
+
+    test('respects prefers-reduced-motion', () => {
+      global.prefersReducedMotion = true;
+      const timeline = new Timeline(container, props);
+      timeline.state.isLoading = false;
+      timeline._lastCenteredYear = 2020;
+      timeline._centerOnYear = () => {};
+      timeline._findCenteredItem = () => ({ type: 'pill', year: 2021 });
+
+      timeline._snapToCenterPill();
+      assert.strictEqual(global.vibrateCalls.length, 0, 'Should not vibrate when reduced motion is on');
+    });
   });
 });

@@ -156,6 +156,7 @@ export default class MapPage extends Component {
     if (!vc.isDefault() && this.state.tags) {
       this.mountChild(FilterChipsRow, "#filter-chips-mount", {
         total: this.state.tags.length || 0,
+        timelineVisible: canShowTimeline,
       });
     }
 
