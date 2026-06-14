@@ -107,7 +107,7 @@ export default class PostEditPage extends Component {
       editorMode: "visual",
       igStatus: null,
       maximizedField: null,
-      detailsOpen: false,
+      detailsOpen: this._readDetailsPref(),
       menuOpen: false,
       hasPendingEdits: false,
     };
@@ -157,9 +157,15 @@ export default class PostEditPage extends Component {
       </div>
     `;
 
+    const detailsToggle = `
+      <button id="details-toggle" class="btn btn-secondary" type="button"
+              aria-controls="details-panel" aria-expanded="${this.state.detailsOpen ? 'true' : 'false'}">
+        <span class="btn-label">Details</span>
+      </button>`;
+
     return adminLayoutTemplate({
       title: `<a href="/light/posts" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
-      actions,
+      actions: detailsToggle + actions,
       content: this._renderContent()
     });
   }
@@ -195,86 +201,141 @@ export default class PostEditPage extends Component {
         ? `<div id="visual-editor-mount"></div>`
         : `<label class="form-label" for="content-editor">Content</label><div id="content-editor-mount"></div>`;
 
+    const featuredSummary = featured ? " · ★" : "";
+    const statusSummary = escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + featuredSummary;
+    const slugSummary = slug || "auto";
+    const excerptSummary = excerpt.trim() ? escapeHtml(this._truncate(excerpt.trim())) : "auto";
+    const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
+    const cssSummary = (p.css || "").trim() ? "custom" : "none";
+
     return `
-            <div class="editor-main">
-              <div class="title-row">
-                <div class="title-input-wrapper">
-                  <input type="text" id="title-input" class="form-input editor-title" placeholder="Post title" value="${title}" required>
-                  ${aiBtn("title")}
+            <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}">
+              <div class="editor-main">
+                <div class="title-row">
+                  <div class="title-input-wrapper">
+                    <input type="text" id="title-input" class="form-input editor-title" placeholder="Post title" value="${title}" required>
+                    ${aiBtn("title")}
+                  </div>
+                </div>
+
+                <div class="tags-row">
+                  <div class="tags-input-wrapper">
+                    <div id="tags-input-mount" class="tags-row-input"></div>
+                    ${aiBtn("tags")}
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  ${modeToggle}
+                  ${contentArea}
                 </div>
               </div>
 
-              <div class="tags-row">
-                <div class="tags-input-wrapper">
-                  <div id="tags-input-mount" class="tags-row-input"></div>
-                  ${aiBtn("tags")}
+              <div class="details-backdrop" id="details-backdrop"></div>
+
+              <aside class="editor-details-panel" id="details-panel" aria-label="Post details" aria-hidden="${this.state.detailsOpen ? "false" : "true"}">
+                <div class="details-panel-header">
+                  <span class="details-panel-title">Details</span>
+                  <button id="details-close-btn" class="details-panel-close" type="button" aria-label="Close details">&times;</button>
                 </div>
-              </div>
+                <div class="details-panel-body">
+                  <details class="details-group" data-group="status">
+                    <summary class="details-group-summary-row">
+                      <span class="details-group-title">Status &amp; visibility</span>
+                      <span class="details-group-summary" id="summary-status">${statusSummary}</span>
+                    </summary>
+                    <div class="details-group-body">
+                      <div class="details-split-row">
+                        <div class="form-group">
+                          <label class="form-label" for="status-select">Status</label>
+                          <select id="status-select" class="status-select badge-${escapeHtml(status)}" ${anyActionInProgress ? "disabled" : ""}>
+                            ${statusOpts}
+                          </select>
+                        </div>
+                        <div class="form-group featured-toggle-group">
+                          <label class="form-label">Featured</label>
+                          <button id="featured-toggle" type="button" class="featured-btn${featured ? " is-featured" : ""}" title="${featured ? "Unmark as featured" : "Mark as featured"}" ${anyActionInProgress ? "disabled" : ""}>
+                            ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
+                          </button>
+                          <input type="checkbox" id="featured-check" style="display:none" ${featured ? "checked" : ""}>
+                        </div>
+                      </div>
 
-              <div class="form-group">
-                ${modeToggle}
-                ${contentArea}
-              </div>
-
-              <details class="form-group editor-details-disclosure" id="editor-details" ${this.state.detailsOpen ? 'open' : ''}>
-                <summary class="editor-details-summary">Post Details</summary>
-                <div class="editor-details-body">
-                  <div class="details-split-row">
-                    <div class="form-group">
-                      <label class="form-label" for="status-select">Status</label>
-                      <select id="status-select" class="status-select badge-${escapeHtml(status)}" ${anyActionInProgress ? "disabled" : ""}>
-                        ${statusOpts}
-                      </select>
+                      <div class="schedule-row" id="schedule-row" style="display:${status === "scheduled" ? "flex" : "none"}">
+                        <div class="schedule-input-wrapper">
+                          <label class="form-label" for="schedule-input">Schedule</label>
+                          <input type="datetime-local" id="schedule-input" class="form-input schedule-at-input" value="${toDatetimeLocal(p.scheduled_at || "")}" ${anyActionInProgress ? "disabled" : ""}>
+                          <span class="schedule-input-hint" id="schedule-hint" style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
+                        </div>
+                      </div>
                     </div>
-                    <div class="form-group featured-toggle-group">
-                      <label class="form-label">Featured</label>
-                      <button id="featured-toggle" type="button" class="featured-btn${featured ? " is-featured" : ""}" title="${featured ? "Unmark as featured" : "Mark as featured"}" ${anyActionInProgress ? "disabled" : ""}>
-                        ${featured ? STAR_SVG : STAR_OUTLINE_SVG}
-                      </button>
-                      <input type="checkbox" id="featured-check" style="display:none" ${featured ? "checked" : ""}>
+                  </details>
+
+                  <details class="details-group" data-group="slug">
+                    <summary class="details-group-summary-row">
+                      <span class="details-group-title">Slug</span>
+                      <span class="details-group-summary" id="summary-slug">${escapeHtml(slugSummary)}</span>
+                    </summary>
+                    <div class="details-group-body">
+                      <div class="slug-row">
+                        <div class="slug-input-wrapper">
+                          <span class="slug-prefix">/posts/</span>
+                          <input type="text" id="slug-input" class="form-input editor-slug" placeholder="post-slug" value="${slug}" spellcheck="false">
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  </details>
 
-                  <div class="schedule-row" id="schedule-row" style="display:${status === "scheduled" ? "flex" : "none"}">
-                    <div class="schedule-input-wrapper">
-                      <label class="form-label" for="schedule-input">Schedule</label>
-                      <input type="datetime-local" id="schedule-input" class="form-input schedule-at-input" value="${toDatetimeLocal(p.scheduled_at || "")}" ${anyActionInProgress ? "disabled" : ""}>
-                      <span class="schedule-input-hint" id="schedule-hint" style="${p.scheduled_at ? "display:none" : ""}">Publish at…</span>
+                  <details class="details-group" data-group="excerpt">
+                    <summary class="details-group-summary-row">
+                      <span class="details-group-title">Excerpt</span>
+                      <span class="details-group-summary" id="summary-excerpt">${excerptSummary}</span>
+                    </summary>
+                    <div class="details-group-body">
+                      <div class="form-group excerpt-row">
+                        <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+                        ${aiBtn("excerpt")}
+                      </div>
                     </div>
-                  </div>
+                  </details>
 
-                  <div class="slug-row">
-                    <label class="form-label" for="slug-input">Slug</label>
-                    <div class="slug-input-wrapper">
-                      <span class="slug-prefix">/posts/</span>
-                      <input type="text" id="slug-input" class="form-input editor-slug" placeholder="post-slug" value="${slug}" spellcheck="false">
+                  <details class="details-group" data-group="immersive">
+                    <summary class="details-group-summary-row">
+                      <span class="details-group-title">Immersive mode</span>
+                      <span class="details-group-summary" id="summary-immersive">${immersiveSummary}</span>
+                    </summary>
+                    <div class="details-group-body">
+                      <div class="form-group">
+                        <select id="immersive-mode-select" class="form-input immersive-mode-select">
+                          <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
+                          <option value="immersive"${p.immersive_mode === "immersive" ? " selected" : ""}>Immersive</option>
+                          <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
+                        </select>
+                      </div>
                     </div>
-                  </div>
+                  </details>
 
-                  <div class="form-group excerpt-row">
-                    <label class="form-label" for="excerpt-editor">Excerpt</label>
-                    <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
-                    ${aiBtn("excerpt")}
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label" for="immersive-mode-select">Immersive mode</label>
-                    <select id="immersive-mode-select" class="form-input immersive-mode-select">
-                      <option value="auto"${(p.immersive_mode || "auto") === "auto" ? " selected" : ""}>Auto (detect from content)</option>
-                      <option value="immersive"${p.immersive_mode === "immersive" ? " selected" : ""}>Immersive</option>
-                      <option value="non-immersive"${p.immersive_mode === "non-immersive" ? " selected" : ""}>Non-immersive</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label" for="css-editor">Custom CSS</label>
-                    <div id="css-editor-mount"></div>
-                  </div>
+                  <details class="details-group" data-group="css">
+                    <summary class="details-group-summary-row">
+                      <span class="details-group-title">Custom CSS</span>
+                      <span class="details-group-summary" id="summary-css">${cssSummary}</span>
+                    </summary>
+                    <div class="details-group-body">
+                      <div class="form-group">
+                        <div id="css-editor-mount"></div>
+                      </div>
+                    </div>
+                  </details>
 
                   ${igStatus?.enabled ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
                 </div>
-              </details>
+              </aside>
             </div>`;
+  }
+
+  /** Trim a value to a one-line summary length. */
+  _truncate(str, max = 24) {
+    return str.length > max ? str.slice(0, max).trimEnd() + "…" : str;
   }
 
   _renderInstagramSection(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
@@ -283,21 +344,81 @@ export default class PostEditPage extends Component {
     const igError = post.instagram_error || "";
     const igStatusBadgeClass = { published: "badge-success", failed: "badge-danger", publishing: "badge-primary" }[igSt] ?? "badge-draft";
     const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
+    const igSummary = igShare ? "on" : "off";
 
     return `
-      <div class="form-group ig-post-section">
-        <label class="form-label">Instagram</label>
-        <div class="ig-controls">
-          <label class="setting-pill">
-            <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
-            <span class="setting-pill-label">Share to Instagram</span>
-          </label>
-          ${igSt !== "none" ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>` : ""}
-          ${canPublishNow ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
+      <details class="details-group" data-group="instagram">
+        <summary class="details-group-summary-row">
+          <span class="details-group-title">Instagram</span>
+          <span class="details-group-summary" id="summary-instagram">${igSummary}</span>
+        </summary>
+        <div class="details-group-body">
+          <div class="form-group ig-post-section">
+            <div class="ig-controls">
+              <label class="setting-pill">
+                <input type="checkbox" id="ig-share-input" class="setting-pill-input" ${igShare ? "checked" : ""}>
+                <span class="setting-pill-label">Share to Instagram</span>
+              </label>
+              ${igSt !== "none" ? `<span class="badge ${igStatusBadgeClass}" title="${escapeHtml(igError)}">${escapeHtml(igSt)}</span>` : ""}
+              ${canPublishNow ? `<button id="ig-publish-now-btn" class="btn btn-secondary btn-sm" type="button" ${anyActionInProgress ? "disabled" : ""}>${publishingToInstagram ? "Publishing…" : "Publish to Instagram now"}</button>` : ""}
+            </div>
+            ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
+            <span class="ig-connection-note">${igStatus.connected ? `Connected as @${escapeHtml(igStatus.username)}` : `Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
+          </div>
         </div>
-        ${igError ? `<p class="ig-error-msg">${escapeHtml(igError)}</p>` : ""}
-        <span class="ig-connection-note">${igStatus.connected ? `Connected as @${escapeHtml(igStatus.username)}` : `Not connected — <a href="/light/settings#instagram">connect in Settings</a>`}</span>
-      </div>`;
+      </details>`;
+  }
+
+  /** Initial Details open state: persisted on wide viewports, always closed (sheet) on narrow. */
+  _readDetailsPref() {
+    const wide = typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(min-width: 64em)").matches : true;
+    if (!wide) return false;
+    let pref = null;
+    try { pref = localStorage.getItem("point:editor:details-open"); } catch { /* ignore */ }
+    return pref !== "0";
+  }
+
+  /** Toggle (or force) the Details rail/sheet without a full re-render. */
+  _toggleDetails(force) {
+    const open = typeof force === "boolean" ? force : !this.state.detailsOpen;
+    this.state.detailsOpen = open;
+    this.container.querySelector(".editor-layout")?.classList.toggle("is-details-open", open);
+    this.container.querySelector("#details-toggle")?.setAttribute("aria-expanded", String(open));
+    this.container.querySelector("#details-panel")?.setAttribute("aria-hidden", String(!open));
+    try { localStorage.setItem("point:editor:details-open", open ? "1" : "0"); } catch { /* ignore */ }
+  }
+
+  /** Refresh the one-line summary shown on each collapsed Details group. */
+  _updateDetailsSummaries() {
+    const q = (sel) => this.container.querySelector(sel);
+    const set = (id, text) => { const el = this.container.querySelector(`#${id}`); if (el) el.textContent = text; };
+
+    const status = q("#status-select")?.value || "draft";
+    const featured = q("#featured-check")?.checked;
+    const scheduledAt = q("#schedule-input")?.value;
+    let statusSummary = status.charAt(0).toUpperCase() + status.slice(1);
+    if (status === "scheduled" && scheduledAt) {
+      const d = new Date(scheduledAt);
+      if (!isNaN(d)) statusSummary += ` · ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    }
+    if (featured) statusSummary += " · ★";
+    set("summary-status", statusSummary);
+
+    set("summary-slug", q("#slug-input")?.value.trim() || "auto");
+
+    const excerpt = (q("#excerpt-editor")?.value || "").trim();
+    set("summary-excerpt", excerpt ? this._truncate(excerpt) : "auto");
+
+    const immersive = q("#immersive-mode-select")?.value || "auto";
+    set("summary-immersive", { immersive: "Immersive", "non-immersive": "Non-immersive" }[immersive] || "Auto");
+
+    const css = this._cssEditorRef?.getValue?.() ?? "";
+    set("summary-css", css.trim() ? "custom" : "none");
+
+    if (this.container.querySelector("#ig-share-input")) {
+      set("summary-instagram", q("#ig-share-input")?.checked ? "on" : "off");
+    }
   }
 
   afterRender() {
@@ -309,9 +430,10 @@ export default class PostEditPage extends Component {
 
     if (this.state.loading || this.state.error) return;
 
-    this.container.querySelector("#editor-details")?.addEventListener("toggle", (e) => {
-      this.state.detailsOpen = e.target.open;
-    });
+    // Details rail / bottom sheet toggle
+    this.container.querySelector("#details-toggle")?.addEventListener("click", () => this._toggleDetails());
+    this.container.querySelector("#details-close-btn")?.addEventListener("click", () => this._toggleDetails(false));
+    this.container.querySelector("#details-backdrop")?.addEventListener("click", () => this._toggleDetails(false));
 
     // Header Actions
     this.container.querySelector("#header-menu-toggle")?.addEventListener("click", (e) => {
@@ -420,10 +542,8 @@ export default class PostEditPage extends Component {
     });
 
     if (this.props.query?.openSchedule && scheduleRow && scheduleInput) {
-      if (this.container.querySelector("#editor-details")) {
-          this.container.querySelector("#editor-details").open = true;
-          this.state.detailsOpen = true;
-      }
+      this._toggleDetails(true);
+      this.container.querySelector('.details-group[data-group="status"]')?.setAttribute("open", "");
       scheduleRow.style.display = "flex";
       statusSelect.value = "scheduled";
       statusSelect.className = "status-select badge-scheduled";
@@ -439,28 +559,31 @@ export default class PostEditPage extends Component {
       this._onInput();
     });
 
-    [this.container.querySelector("#title-input"), this.container.querySelector("#slug-input")].forEach(el => {
+    [this.container.querySelector("#title-input"), this.container.querySelector("#slug-input"), this.container.querySelector("#excerpt-editor")].forEach(el => {
       el?.addEventListener("input", () => this._onInput());
     });
+    this.container.querySelector("#immersive-mode-select")?.addEventListener("change", () => this._onInput());
 
     if (this.state.editorMode === "visual") this._mountVisualEditor();
 
     this.container.querySelector("#ig-share-input")?.addEventListener("change", () => this._onInput());
     this.container.querySelector("#ig-publish-now-btn")?.addEventListener("click", () => this._publishToInstagram());
 
+    this._updateDetailsSummaries();
     this._setupWindowDragAndDrop();
   }
 
   _handleMenuAction(action) {
     switch (action) {
       case "publish-now": this._save({ status: "published" }); break;
-      case "schedule": 
-        this.setState({ detailsOpen: true });
-        setTimeout(() => {
-          const sel = this.container.querySelector("#status-select");
-          if (sel) { sel.value = "scheduled"; sel.dispatchEvent(new Event('change')); }
-        }, 10);
+      case "schedule": {
+        this._toggleDetails(true);
+        this.container.querySelector('.details-group[data-group="status"]')?.setAttribute("open", "");
+        const sel = this.container.querySelector("#status-select");
+        if (sel) { sel.value = "scheduled"; sel.dispatchEvent(new Event("change")); }
+        setTimeout(() => this.container.querySelector("#schedule-input")?.focus(), 10);
         break;
+      }
       case "mark-hidden": this._save({ status: "hidden" }); break;
       case "unpublish": this._save({ status: "draft" }); break;
       case "analyze": this._analyzeNow(); break;
@@ -481,7 +604,10 @@ export default class PostEditPage extends Component {
   }
 
   _onInput() {
-    this.setState({ hasPendingEdits: true }, { render: false });
+    // Mutate state directly — a full re-render here would wipe input values and
+    // focus on every keystroke. (Component.setState always re-renders.)
+    this.state.hasPendingEdits = true;
+    this._updateDetailsSummaries();
     store.set('autosave_status', { status: 'idle' });
     
     clearTimeout(this._idleTimer);

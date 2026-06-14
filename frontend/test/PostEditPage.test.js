@@ -239,6 +239,53 @@ test('should preserve other fields when switching from visual to text mode', () 
     assert.ok(html.includes('No image'), 'Error text visible');
   });
 
+  test('should render the Details toggle button and rail/sheet panel', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test', slug: 'test' };
+
+    const html = page.render();
+    assert.ok(html.includes('id="details-toggle"'), 'Details header toggle present');
+    assert.ok(html.includes('aria-controls="details-panel"'), 'Toggle controls the panel');
+    assert.ok(html.includes('id="details-panel"'), 'Details panel present');
+    assert.ok(html.includes('id="details-backdrop"'), 'Sheet backdrop present');
+  });
+
+  test('should render collapsible groups with summaries in spec order', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test', slug: 'my-trip' };
+    page.state.igStatus = { enabled: true, connected: true, default_share: false };
+
+    const html = page.render();
+    const order = ['data-group="status"', 'data-group="slug"', 'data-group="excerpt"', 'data-group="immersive"', 'data-group="css"', 'data-group="instagram"'];
+    let last = -1;
+    for (const marker of order) {
+      const idx = html.indexOf(marker);
+      assert.ok(idx > last, `${marker} should appear after the previous group`);
+      last = idx;
+    }
+    assert.ok(html.includes('id="summary-slug"') && html.includes('my-trip'), 'Slug summary reflects the slug');
+    assert.ok(html.includes('id="summary-excerpt"'), 'Excerpt summary present');
+  });
+
+  test('aria-hidden on the panel reflects persisted detailsOpen state', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test' };
+
+    page.state.detailsOpen = true;
+    assert.ok(page.render().includes('aria-hidden="false"'), 'panel visible when open');
+    page.state.detailsOpen = false;
+    assert.ok(page.render().includes('aria-hidden="true"'), 'panel hidden when closed');
+  });
+
   test('should use default_share for new posts when igStatus loaded', () => {
     const container = { querySelector: () => null, querySelectorAll: () => [] };
     const page = new PostEditPage(container, { params: {} });

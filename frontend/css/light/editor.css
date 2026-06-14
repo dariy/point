@@ -716,6 +716,211 @@ textarea.is-maximized,
     pointer-events: none;
 }
 
+/* ===========================
+   Details rail (≥64em) / bottom sheet (<64em)
+   =========================== */
+.editor-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-lg);
+    width: 100%;
+}
+
+.editor-layout .editor-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.editor-details-panel {
+    flex-shrink: 0;
+    width: 20rem;
+    display: none;
+    flex-direction: column;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+    position: sticky;
+    top: var(--spacing-md);
+    max-height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.editor-layout.is-details-open .editor-details-panel {
+    display: flex;
+}
+
+.details-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: var(--border-width) solid var(--border-primary);
+    position: sticky;
+    top: 0;
+    background: var(--surface-card);
+    z-index: 1;
+}
+
+.details-panel-title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.details-panel-close {
+    display: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--font-size-xl);
+    line-height: 1;
+    padding: 0 var(--spacing-xs);
+}
+
+.details-panel-close:hover {
+    color: var(--text-primary);
+}
+
+.details-panel-body {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Collapsible group inside the Details panel */
+.details-group {
+    border-bottom: var(--border-width) solid var(--border-primary);
+}
+
+.details-group:last-child {
+    border-bottom: none;
+}
+
+.details-group > summary.details-group-summary-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.details-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.details-group > summary::after {
+    content: "";
+    flex-shrink: 0;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: var(--border-width-thick, 2px) solid var(--text-muted);
+    border-bottom: var(--border-width-thick, 2px) solid var(--text-muted);
+    transform: rotate(-45deg);
+    transition: transform var(--transition-fast);
+}
+
+.details-group[open] > summary::after {
+    transform: rotate(45deg);
+}
+
+.details-group-title {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+}
+
+.details-group-summary {
+    flex: 1;
+    text-align: right;
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.details-group[open] > summary .details-group-summary {
+    display: none;
+}
+
+.details-group-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: 0 var(--spacing-md) var(--spacing-md);
+}
+
+/* Status + featured share one row inside the Status group */
+.details-split-row {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-end;
+}
+
+.details-split-row .featured-toggle-group {
+    flex-shrink: 0;
+}
+
+/* Backdrop for the bottom-sheet form (narrow viewports only) */
+.details-backdrop {
+    display: none;
+}
+
+@media (max-width: 64em) {
+    .editor-layout {
+        display: block;
+    }
+
+    .editor-details-panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: auto;
+        width: auto;
+        display: flex;
+        max-height: 85vh;
+        border: none;
+        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+        box-shadow: var(--shadow-lg);
+        transform: translateY(100%);
+        transition: transform 0.25s ease;
+        z-index: 1001;
+        padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+
+    .editor-layout.is-details-open .editor-details-panel {
+        transform: translateY(0);
+    }
+
+    .details-panel-close {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .details-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: var(--color-black-alpha-50, rgba(0, 0, 0, 0.5));
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+        z-index: 1000;
+    }
+
+    .editor-layout.is-details-open .details-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
 /* Instagram section in post editor */
 .ig-controls {
     display: flex;
