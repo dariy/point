@@ -168,6 +168,88 @@ function _hideFlyout() {
 
 export function hideFlyout() { _hideFlyout(); }
 
+/**
+ * Show a lightweight tag dropdown anchored to a crumb element.
+ * For a breadcrumb "site" crumb: items = root navTags (flat list).
+ * For a breadcrumb tag crumb:    items = that tag's children from tagIndex.
+ *
+ * Reuses the existing flyout singleton but renders only the relevant subset.
+ *
+ * @param {HTMLElement} anchorEl   The crumb element to anchor the flyout to
+ * @param {object[]}    items      Array of {name, slug, post_count} items
+ * @param {Function}    navigateFn navigate(url) function
+ * @param {HTMLElement} [excludeEl] Clicks inside this element won't dismiss flyout
+ */
+export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null) {
+  const flyout = _getFlyoutEl();
+  while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
+
+  if (!items || !items.length) return;
+
+  const section = document.createElement('div');
+  section.className = 'flyout-section flyout-children';
+
+  items.forEach((t) => {
+    const a = document.createElement('a');
+    a.href = `/tags/${t.slug}`;
+    a.className = 'flyout-item child-link';
+    a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span> <span class="count">${t.count ?? t.post_count ?? ''}</span>`;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      _hideFlyout();
+      navigateFn(a.pathname + a.search + a.hash);
+    });
+    section.appendChild(a);
+  });
+
+  flyout.appendChild(section);
+
+  flyout.style.visibility = 'hidden';
+  flyout.classList.remove('hidden');
+
+  const isMobile = window.innerWidth < 640;
+  if (isMobile) {
+    flyout.classList.add('bottom-sheet');
+    flyout.style.top = '';
+    flyout.style.left = '';
+  } else {
+    flyout.classList.remove('bottom-sheet');
+    const flyH = flyout.offsetHeight;
+    const flyW = flyout.offsetWidth;
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const gap = 8;
+
+    let top = anchorRect.bottom + gap;
+    if (top + flyH > window.innerHeight - 8) top = anchorRect.top - flyH - gap;
+
+    let left = anchorRect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
+
+    flyout.style.top = `${top}px`;
+    flyout.style.left = `${left}px`;
+  }
+
+  flyout.style.visibility = '';
+  anchorEl.classList.add('is-flyout-open');
+  _flyoutShowTime = Date.now();
+  _activeLink = anchorEl;
+  _activeCard = null;
+
+  if (!isMobile) {
+    _hotZone?.stop();
+    _hotZone = createHotZone(() => [anchorEl, _flyoutEl], () => _hideFlyout());
+  }
+
+  if (_flyoutDismiss) document.removeEventListener('click', _flyoutDismiss);
+  _flyoutDismiss = (e) => {
+    if (!_flyoutEl || _flyoutEl.classList.contains('hidden')) return;
+    if (_flyoutEl.contains(e.target)) return;
+    if (excludeEl && excludeEl.contains(e.target)) return;
+    _hideFlyout();
+  };
+  document.addEventListener('click', _flyoutDismiss);
+}
+
 export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null) {
   if (!tagIndex) return () => {};
 

@@ -17,7 +17,6 @@ import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { LOCK_SVG } from "../../utils/icons.js";
 import { ViewContext } from "../../utils/viewContext.js";
-import { FilterChipsRow } from "../../components/public/FilterChipsRow.js";
 
 const LEAFLET_JS = "/assets/vendor/leaflet/leaflet.js";
 const LEAFLET_CSS = "/assets/vendor/leaflet/leaflet.css";
@@ -117,27 +116,13 @@ export default class MapPage extends Component {
     this.state.tags = tags;
     this._redrawMarkers();
     this._updateStats();
-    this._headerChild?.setProps({ breadcrumb: this._buildBreadcrumb() });
-    this._refreshChips();
+    this._headerChild?.setProps({
+      breadcrumb: this._buildBreadcrumb(),
+      total: tags.length,
+    });
     this._timeline?.setScope(
       vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
     );
-  }
-
-  _refreshChips() {
-    if (this._chipsChild) {
-      this._chipsChild.unmount();
-      const i = this._children.indexOf(this._chipsChild);
-      if (i !== -1) this._children.splice(i, 1);
-      this._chipsChild = null;
-    }
-    const vc = ViewContext.current();
-    if (!vc.isDefault() && this.state.tags) {
-      this._chipsChild = this.mountChild(FilterChipsRow, "#filter-chips-mount", {
-        total: this.state.tags.length || 0,
-        timelineVisible: this._canShowTimeline,
-      });
-    }
   }
 
   render() {
@@ -174,7 +159,6 @@ export default class MapPage extends Component {
       <div class="site-wrapper site-wrapper--map">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>
-        <div id="filter-chips-mount"></div>
         <main class="site-main site-main--map">
           <div class="map-container"><div id="map"></div></div>
         </main>
@@ -189,30 +173,24 @@ export default class MapPage extends Component {
     const initialRange = vc.years ? { from: vc.years[0], to: vc.years[1] } : null;
 
     const settings = store.get("settings") || {};
-    this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
-      settings,
-      currentPath: "/map",
-      breadcrumb: this._buildBreadcrumb(),
-    });
-    this.mountChild(PublicFooter, "#footer-mount", { settings });
-
     const canShowTimeline =
       settings.timeline_mode === "all" ||
       (store.get("user") && settings.timeline_mode === "hidden");
     this._canShowTimeline = canShowTimeline;
+    this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
+      settings,
+      currentPath: "/map",
+      breadcrumb: this._buildBreadcrumb(),
+      total: this.state.tags?.length || 0,
+      timelineVisible: true,
+    });
+    this.mountChild(PublicFooter, "#footer-mount", { settings });
+
     if (canShowTimeline) {
       this._timeline = this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
         initialRange,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
-      });
-    }
-
-    this._chipsChild = null;
-    if (!vc.isDefault() && this.state.tags) {
-      this._chipsChild = this.mountChild(FilterChipsRow, "#filter-chips-mount", {
-        total: this.state.tags.length || 0,
-        timelineVisible: canShowTimeline,
       });
     }
 

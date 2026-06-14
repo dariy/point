@@ -35,7 +35,6 @@ import {
   rubberBand,
 } from "../../utils/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
-import { FilterChipsRow } from "../../components/public/FilterChipsRow.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -161,7 +160,6 @@ export default class TagPage extends Component {
       <div class="site-wrapper tags-page">
         <div id="header-mount"></div>
         <div id="timeline-mount"></div>
-        <div id="filter-chips-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
@@ -251,6 +249,8 @@ export default class TagPage extends Component {
         breadcrumb: headerBreadcrumb,
         currentPath: "",
         editUrl: post ? `/light/posts/${post.id}/edit` : null,
+        total: this.state.data?.pagination?.total || this.state.data?.total || 0,
+        timelineVisible: this._canShowTimeline,
       });
 
       this.mountChild(PublicFooter, "#footer-mount", {
@@ -289,6 +289,8 @@ export default class TagPage extends Component {
         breadcrumb,
         currentPath: "",
         editUrl: tag ? `/light/tags/${tag.slug}` : null,
+        total: this.state.data?.pagination?.total || this.state.data?.total || 0,
+        timelineVisible: this._canShowTimeline,
       });
       this.mountChild(PublicFooter, "#footer-mount", { settings });
 
@@ -309,16 +311,6 @@ export default class TagPage extends Component {
     const { posts = [], pagination = {} } = this.state.data || {};
 
     this._postChildren = [];
-
-    const vc = ViewContext.current();
-    if (!vc.isDefault()) {
-      this._postChildren.push(
-        this.mountChild(FilterChipsRow, "#filter-chips-mount", {
-          total: this.state.data.pagination?.total || this.state.data.total || 0,
-          timelineVisible: this._canShowTimeline,
-        }),
-      );
-    }
 
     // A paginated swipe leaves an inline transform on the grid mount; clear it so
     // the refreshed grid isn't left offset.

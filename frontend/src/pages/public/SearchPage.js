@@ -16,7 +16,6 @@ import { listTags } from '../../api/tags.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { FilterChipsRow } from '../../components/public/FilterChipsRow.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
@@ -58,7 +57,6 @@ export default class SearchPage extends Component {
     return `
       <div class="site-wrapper search-page">
         <div id="header-mount"></div>
-        <div id="filter-chips-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="tag-results-mount"></div>
@@ -96,15 +94,10 @@ export default class SearchPage extends Component {
       navTags: rootMenu,
       currentPath: '/search',
       breadcrumb,
+      total: this.state.data?.total || 0,
+      timelineVisible: false,
     });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
-
-    const vc = ViewContext.current();
-    if (!vc.isDefault() && this.state.data) {
-      this.mountChild(FilterChipsRow, '#filter-chips-mount', {
-        total: this.state.data.total || 0,
-      });
-    }
 
     if (this.state.tags.length > 0) {
       this._renderTagResults();
