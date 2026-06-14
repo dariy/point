@@ -29,9 +29,63 @@ export default class HomePage extends Component {
   }
 
   onRouteUpdate(params, query) {
+    const prevVc = this._loadedVc;
     this.props.params = params;
     this.props.query = query;
-    this._load();
+    const nextVc = ViewContext.current();
+    // A timeline-scope or pagination change only affects the post list — refresh
+    // it in place instead of re-rendering (and remounting) the whole page, which
+    // would tear down and rebuild the timeline (the visible "blink").
+    if (this._canPartialUpdate(prevVc, nextVc)) {
+      this._refreshPostContent();
+    } else {
+      this._load();
+    }
+  }
+
+  _isStaticHome() {
+    const settings = store.get('settings') || {};
+    const data = this.state.data;
+    return !!(data && settings.home_page_post_id && data.pagination?.total === 1 && data.posts?.length === 1);
+  }
+
+  // Eligible when only the year scope and/or page differ: the post grid, filter
+  // chips and pagination change, but the page chrome (header, tag cloud, timeline)
+  // does not. A tag/query change alters that chrome, so fall back to a full render.
+  _canPartialUpdate(prev, next) {
+    if (!prev || !this.state.data || this.state.error) return false;
+    if (this._isStaticHome()) return false;
+    return prev.tag === next.tag && prev.query === next.query && prev.postSlug === next.postSlug;
+  }
+
+  async _refreshPostContent() {
+    const vc = ViewContext.current();
+    let data;
+    try {
+      data = await getHomePage(this._buildParams(vc));
+    } catch (err) {
+      this.setState({ loading: false, data: null, error: err.message || 'Failed to load posts.' });
+      return;
+    }
+    if (this._unmounted) return;
+    if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
+    this.state.data = data;
+    this.state.error = null;
+    this._loadedVc = vc;
+    this._clearPostContent();
+    this._mountPostContent();
+    this._timeline?.setScope(vc.years ? { from: vc.years[0], to: vc.years[1] } : null);
+  }
+
+  _buildParams(vc) {
+    const params = { page: vc.page };
+    if (vc.years) {
+      params.year_from = vc.years[0];
+      params.year_to = vc.years[1];
+    }
+    if (vc.query) params.q = vc.query;
+    if (vc.tag) params.tag = vc.tag;
+    return params;
   }
 
   render() {
@@ -110,14 +164,10 @@ export default class HomePage extends Component {
 
     if (this.state.loading || !this.state.data) return;
 
-    const { posts = [], pagination = {}, tag_cloud: tagCloud = [] } = this.state.data;
-    const showViewCount = !!settings.show_view_counts;
-    const useThumbnails = settings.use_thumbnails !== false;
-
     if (isStaticHomePage) {
       this.mountChild(PostContent, '#grid-mount', {
-        post: posts[0],
-        showViewCount,
+        post: data.posts[0],
+        showViewCount: !!settings.show_view_counts,
         showImmersiveExcerpt: settings.show_immersive_excerpt !== 'false',
         forceImmersive: immersive,
         startIndex: startIndex,
@@ -127,46 +177,95 @@ export default class HomePage extends Component {
           this.setState({ forceImmersive: true, startIndex: idx });
         },
       });
-    } else {
-      this.mountChild(PostGrid, '#grid-mount', { posts, showViewCount, useThumbnails });
+      return;
     }
 
-    if (!isStaticHomePage && !!settings.show_tag_cloud && tagCloud.length) {
+    const tagCloud = this.state.data.tag_cloud || [];
+    if (!!settings.show_tag_cloud && tagCloud.length) {
       this.mountChild(ExploreBlock, '#tag-cloud-mount', { tags: tagCloud });
     }
 
-    const canShowTimeline = !isStaticHomePage && (settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden'));
-    if (canShowTimeline) {
+    this._canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    if (this._canShowTimeline) {
       const vc = ViewContext.current();
-      this.mountChild(Timeline, '#timeline-mount', {
+      this._timeline = this.mountChild(Timeline, '#timeline-mount', {
         mode: 'filter',
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
       });
     }
 
+    this._mountPostContent();
+  }
+
+  // Mounts the filter-dependent content (post grid, filter chips, pagination,
+  // swipe gestures). Kept separate from the page chrome so a timeline-scope or
+  // page change can refresh just this in place — see _refreshPostContent.
+  _mountPostContent() {
+    const settings = store.get('settings') || {};
+    const { posts = [], pagination = {} } = this.state.data;
+
+    this._postChildren = [];
+
+    // A paginated swipe leaves an inline transform on the grid mount; clear it so
+    // the refreshed grid isn't left offset.
+    const gridMount = this.$('#grid-mount');
+    if (gridMount) {
+      gridMount.style.transform = '';
+      gridMount.style.opacity = '';
+      gridMount.style.transition = '';
+    }
+
+    this._postChildren.push(
+      this.mountChild(PostGrid, '#grid-mount', {
+        posts,
+        showViewCount: !!settings.show_view_counts,
+        useThumbnails: settings.use_thumbnails !== false,
+      }),
+    );
+
     const vc = ViewContext.current();
-    if (!vc.isDefault() && this.state.data) {
-      this.mountChild(FilterChipsRow, '#filter-chips-mount', {
-        total: this.state.data.pagination?.total || this.state.data.total || 0,
-        timelineVisible: canShowTimeline,
-      });
+    if (!vc.isDefault()) {
+      this._postChildren.push(
+        this.mountChild(FilterChipsRow, '#filter-chips-mount', {
+          total: this.state.data.pagination?.total || this.state.data.total || 0,
+          timelineVisible: this._canShowTimeline,
+        }),
+      );
     }
 
     if (pagination.pages > 1) {
-      this.mountChild(Pagination, '#pagination-mount', {
-        page: pagination.page,
-        pages: pagination.pages,
-        total: pagination.total,
-        onPage: (p) => ViewContext.update({ page: p }),
-      });
+      this._postChildren.push(
+        this.mountChild(Pagination, '#pagination-mount', {
+          page: pagination.page,
+          pages: pagination.pages,
+          total: pagination.total,
+          onPage: (p) => ViewContext.update({ page: p }),
+        }),
+      );
     }
 
+    this._setupGestures(pagination);
+  }
+
+  _clearPostContent() {
+    for (const c of this._postChildren || []) {
+      c.unmount();
+      const i = this._children.indexOf(c);
+      if (i !== -1) this._children.splice(i, 1);
+    }
+    this._postChildren = [];
+    this._gesture?.destroy();
+    this._trackpad?.destroy();
+  }
+
+  _setupGestures(pagination) {
     // Always set up gestures so horizontal swipes are captured and rubber-banded
     // even on single-page lists (prevents browser history back/forward).
     {
       const gridMount = this.$('#grid-mount');
-      let previewEl = null;      this._gesture = new GestureController(this.$('.site-main'), {
+      let previewEl = null;
+      this._gesture = new GestureController(this.$('.site-main'), {
         onSwipeMove: (dx, dy) => {
           if (Math.abs(dx) > Math.abs(dy)) {
             const blocked = (dx < 0 && pagination.page >= pagination.pages)
@@ -285,16 +384,10 @@ export default class HomePage extends Component {
 
   async _load() {
     const vc = ViewContext.current();
-    const params = { page: vc.page };
-    if (vc.years) {
-      params.year_from = vc.years[0];
-      params.year_to = vc.years[1];
-    }
-    if (vc.query) params.q = vc.query;
-    if (vc.tag) params.tag = vc.tag;
+    this._loadedVc = vc;
 
     try {
-      const data = await getHomePage(params);
+      const data = await getHomePage(this._buildParams(vc));
       // Merge settings from page response into store.
       if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
 

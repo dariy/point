@@ -263,13 +263,22 @@ class Router {
     }
 
     // Same-route optimisation: reuse the existing page instance when navigating
-    // between pages that share the same route pattern (e.g. post → post).
+    // between pages that share the same route pattern (e.g. post → post), or
+    // distinct patterns that resolve to the same page via an explicit shared
+    // `key` (e.g. /map and /map/:year). Reuse calls onRouteUpdate so the page
+    // can refresh in place instead of remounting.
+    const sameRoute =
+      this._currentRoute === matchedRoute ||
+      (this._currentRoute &&
+        matchedRoute.key &&
+        this._currentRoute.key === matchedRoute.key);
     if (
       this._currentPage &&
-      this._currentRoute === matchedRoute &&
+      sameRoute &&
       typeof this._currentPage.onRouteUpdate === "function"
     ) {
       store.set("route", { pathname, params, query });
+      this._currentRoute = matchedRoute;
       this._currentPage.onRouteUpdate(params, query);
       return;
     }

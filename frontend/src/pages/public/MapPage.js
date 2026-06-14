@@ -83,7 +83,61 @@ export default class MapPage extends Component {
   onRouteUpdate(params, query) {
     this.props.params = params;
     this.props.query = query;
-    this._loadData();
+    // A timeline-scope change only re-filters the markers. Update them on the
+    // existing map instead of re-rendering the page, which would tear down and
+    // rebuild both the Leaflet map and the timeline (the visible "blink").
+    if (this._map && !this.state.error) {
+      this._refreshMap();
+    } else {
+      this._loadData();
+    }
+  }
+
+  async _refreshMap() {
+    const vc = ViewContext.current();
+    const params = {};
+    if (vc.years) {
+      params.year_from = vc.years[0];
+      params.year_to = vc.years[1];
+    }
+    let tags;
+    try {
+      ({ tags } = await getMapPage(params));
+    } catch (err) {
+      this.setState({
+        loading: false,
+        tags: [],
+        error: err.message || "Failed to load map data.",
+      });
+      return;
+    }
+    if (this._unmounted) return;
+    // Keep the unfiltered total so "Showing X of Y" stays meaningful under a filter.
+    if (!vc.years) this._allTagsCount = tags.length;
+    this.state.tags = tags;
+    this._redrawMarkers();
+    this._updateStats();
+    this._headerChild?.setProps({ breadcrumb: this._buildBreadcrumb() });
+    this._refreshChips();
+    this._timeline?.setScope(
+      vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
+    );
+  }
+
+  _refreshChips() {
+    if (this._chipsChild) {
+      this._chipsChild.unmount();
+      const i = this._children.indexOf(this._chipsChild);
+      if (i !== -1) this._children.splice(i, 1);
+      this._chipsChild = null;
+    }
+    const vc = ViewContext.current();
+    if (!vc.isDefault() && this.state.tags) {
+      this._chipsChild = this.mountChild(FilterChipsRow, "#filter-chips-mount", {
+        total: this.state.tags.length || 0,
+        timelineVisible: this._canShowTimeline,
+      });
+    }
   }
 
   render() {
@@ -145,16 +199,18 @@ export default class MapPage extends Component {
     const canShowTimeline =
       settings.timeline_mode === "all" ||
       (store.get("user") && settings.timeline_mode === "hidden");
+    this._canShowTimeline = canShowTimeline;
     if (canShowTimeline) {
-      this.mountChild(Timeline, "#timeline-mount", {
+      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
         initialRange,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
       });
     }
 
+    this._chipsChild = null;
     if (!vc.isDefault() && this.state.tags) {
-      this.mountChild(FilterChipsRow, "#filter-chips-mount", {
+      this._chipsChild = this.mountChild(FilterChipsRow, "#filter-chips-mount", {
         total: this.state.tags.length || 0,
         timelineVisible: canShowTimeline,
       });
@@ -183,7 +239,8 @@ export default class MapPage extends Component {
         params.year_to = vc.years[1];
       }
       const { tags } = await getMapPage(params);
-      this._allTagsCount = tags.length;
+      // Keep the unfiltered total so "Showing X of Y" stays meaningful under a filter.
+      if (!vc.years) this._allTagsCount = tags.length;
       this.setState({ loading: false, tags });
     } catch (err) {
       this.setState({
@@ -282,6 +339,7 @@ export default class MapPage extends Component {
     if (!this._map || !this._markerLayer) return;
     const L = window.L;
     this._markerLayer.clearLayers();
+    this._tagMarkers.clear();
 
     const { tags } = this.state;
 

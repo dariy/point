@@ -442,25 +442,6 @@
     gap: var(--spacing-sm);
 }
 
-.timeline-pill-clear {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    margin-right: calc(-1 * var(--spacing-xs));
-    color: var(--text-muted);
-    font-size: 18px;
-    cursor: pointer;
-    transition: background-color 0.2s, color 0.2s;
-}
-
-.timeline-pill-clear:hover {
-    background: var(--border-subtle);
-    color: var(--text-color);
-}
-
 /* ── Density Histogram (point-0b98.6) ────────────────────────────────────── */
 
 .timeline-histogram {
@@ -476,16 +457,20 @@
 .timeline-hist-bar {
     position: absolute;
     bottom: 0;
-    width: 3px;
-    background: var(--border-subtle);
+    width: 9px;
+    /* --border-subtle is undefined in some themes, which renders the bar
+       transparent. Fall back to a defined neutral so every cluster's density
+       bars stay visible — not just the active (primary-tinted) one. */
+    background: var(--text-muted, #94a3b8);
+    opacity: 0.55;
     border-radius: 1px 1px 0 0;
     transform: translateX(-50%);
-    transition: background-color 0.2s, height 0.3s ease-out;
+    transition: background-color 0.2s, opacity 0.2s, height 0.3s ease-out;
 }
 
 .timeline-hist-bar.is-active {
-    background: var(--color-primary);
-    opacity: 0.3;
+    background: var(--color-primary, #2563eb);
+    opacity: 0.45;
 }
 
 /* ── Hover Tooltips (point-0b98.8) ────────────────────────────────────────── */

@@ -51,13 +51,72 @@ export default class TagPage extends Component {
   }
 
   onRouteUpdate(params, query) {
+    const prevVc = this._loadedVc;
     this.props.params = params;
     this.props.query = query;
-    this._load();
+    const nextVc = ViewContext.current();
+    // A timeline-scope or pagination change within the same tag only affects the
+    // post list — refresh it in place rather than remounting the whole page (and
+    // the timeline, the visible "blink").
+    if (this._canPartialUpdate(prevVc, nextVc)) {
+      this._refreshPostContent();
+    } else {
+      this._load();
+    }
   }
 
   _isPostView() {
     return !!this.props.query?.slug;
+  }
+
+  _canPartialUpdate(prev, next) {
+    if (!prev || !this.state.data || this.state.error) return false;
+    // Switching into/out of the immersive post view changes the whole layout.
+    if (prev.postSlug || next.postSlug) return false;
+    return prev.tag === next.tag && prev.query === next.query;
+  }
+
+  async _refreshPostContent() {
+    const vc = ViewContext.current();
+    const { slug } = this.props.params || {};
+    if (!slug) {
+      this._load();
+      return;
+    }
+    let data;
+    try {
+      data = await getTagPage(slug, this._buildParams(vc));
+    } catch (err) {
+      const msg =
+        err.status === 404 ? "Not found." : err.message || "Failed to load.";
+      this.setState({ loading: false, data: null, post: null, error: msg });
+      return;
+    }
+    if (this._unmounted) return;
+    this.state.data = data;
+    this.state.error = null;
+    this._loadedVc = vc;
+    document.title = `${data.tag?.name || slug} — Posts`;
+    setCanonical(
+      vc.page > 1
+        ? `${window.location.origin}/tags/${slug}?page=${vc.page}`
+        : `${window.location.origin}/tags/${slug}`,
+    );
+    this._clearPostContent();
+    this._mountPostContent();
+    this._timeline?.setScope(
+      vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
+    );
+  }
+
+  _buildParams(vc) {
+    const params = { page: vc.page };
+    if (vc.years) {
+      params.year_from = vc.years[0];
+      params.year_to = vc.years[1];
+    }
+    if (vc.query) params.q = vc.query;
+    return params;
   }
 
   render() {
@@ -127,6 +186,7 @@ export default class TagPage extends Component {
     const canShowTimeline =
       settings.timeline_mode === "all" ||
       (store.get("user") && settings.timeline_mode === "hidden");
+    this._canShowTimeline = canShowTimeline;
     if (
       canShowTimeline &&
       !this._isPostView() &&
@@ -134,18 +194,10 @@ export default class TagPage extends Component {
       !this.state.error
     ) {
       const vc = ViewContext.current();
-      this.mountChild(Timeline, "#timeline-mount", {
+      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
-      });
-    }
-
-    const vc = ViewContext.current();
-    if (!vc.isDefault() && this.state.data && !this._isPostView()) {
-      this.mountChild(FilterChipsRow, "#filter-chips-mount", {
-        total: this.state.data.pagination?.total || this.state.data.total || 0,
-        timelineVisible: canShowTimeline && !this._isPostView(),
       });
     }
 
@@ -230,8 +282,6 @@ export default class TagPage extends Component {
       });
     } else {
       // ── Grid view ───────────────────────────────────────────────────────────
-      const page = parseInt(this.props.query?.page || "1", 10);
-
       this.mountChild(PublicHeader, "#header-mount", {
         settings,
         navTags: this._isPostView() ? [] : navTags,
@@ -244,8 +294,42 @@ export default class TagPage extends Component {
 
       if (this.state.loading || !data) return;
 
-      const { posts = [], pagination = {} } = data;
+      this._mountPostContent();
+    }
+  }
 
+  // Mounts the filter-dependent grid-view content (filter chips, post grid,
+  // pagination, swipe gestures). Tracked separately from page chrome so a
+  // timeline-scope or page change can refresh just this in place — see
+  // _refreshPostContent — without remounting the timeline.
+  _mountPostContent() {
+    const settings = store.get("settings") || {};
+    const slug = this.props.params?.slug || "";
+    const page = parseInt(this.props.query?.page || "1", 10);
+    const { posts = [], pagination = {} } = this.state.data || {};
+
+    this._postChildren = [];
+
+    const vc = ViewContext.current();
+    if (!vc.isDefault()) {
+      this._postChildren.push(
+        this.mountChild(FilterChipsRow, "#filter-chips-mount", {
+          total: this.state.data.pagination?.total || this.state.data.total || 0,
+          timelineVisible: this._canShowTimeline,
+        }),
+      );
+    }
+
+    // A paginated swipe leaves an inline transform on the grid mount; clear it so
+    // the refreshed grid isn't left offset.
+    const gridMountEl = this.$("#grid-mount");
+    if (gridMountEl) {
+      gridMountEl.style.transform = "";
+      gridMountEl.style.opacity = "";
+      gridMountEl.style.transition = "";
+    }
+
+    this._postChildren.push(
       this.mountChild(PostGrid, "#grid-mount", {
         posts,
         showViewCount: !!settings.show_view_counts,
@@ -253,41 +337,59 @@ export default class TagPage extends Component {
         tagSlug: slug,
         tagPage: page,
         emptyMessage: "No posts in this tag yet.",
-      });
+      }),
+    );
 
-      if (pagination.pages > 1) {
+    if (pagination.pages > 1) {
+      this._postChildren.push(
         this.mountChild(Pagination, "#pagination-mount", {
           page: pagination.page,
           pages: pagination.pages,
           total: pagination.total,
           onPage: (p) => ViewContext.update({ page: p }),
-        });
-      }
+        }),
+      );
+    }
 
-      // Always set up gestures so horizontal swipes are captured and rubber-banded
-      // even on single-page lists (prevents browser history back/forward).
-      {
-        const gridMount = this.$("#grid-mount");
-        let previewEl = null;
-        this._gesture = new GestureController(this.$(".site-main"), {
-          onSwipeMove: (dx, dy) => {
-            if (Math.abs(dx) > Math.abs(dy)) {
-              const blocked =
-                (dx < 0 && pagination.page >= pagination.pages) ||
-                (dx > 0 && pagination.page <= 1);
-              const tx = blocked ? rubberBand(dx) : dx;
-              gridMount.style.transform = `translateX(${tx}px)`;
-              gridMount.style.transition = "none";
-              gridMount.style.opacity = blocked
-                ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
-                : Math.max(0.2, 1 - Math.abs(tx) / (window.innerWidth || 500));
+    this._setupGestures(pagination, slug);
+  }
 
-              if (blocked) return;
+  _clearPostContent() {
+    for (const c of this._postChildren || []) {
+      c.unmount();
+      const i = this._children.indexOf(c);
+      if (i !== -1) this._children.splice(i, 1);
+    }
+    this._postChildren = [];
+    this._gesture?.destroy();
+    this._trackpad?.destroy();
+  }
 
-              if (!previewEl) {
-                previewEl = document.createElement("div");
-                previewEl.className = "grid-preview-placeholder";
-                previewEl.innerHTML = `
+  _setupGestures(pagination, slug) {
+    // Always set up gestures so horizontal swipes are captured and rubber-banded
+    // even on single-page lists (prevents browser history back/forward).
+    {
+      const gridMount = this.$("#grid-mount");
+      let previewEl = null;
+      this._gesture = new GestureController(this.$(".site-main"), {
+        onSwipeMove: (dx, dy) => {
+          if (Math.abs(dx) > Math.abs(dy)) {
+            const blocked =
+              (dx < 0 && pagination.page >= pagination.pages) ||
+              (dx > 0 && pagination.page <= 1);
+            const tx = blocked ? rubberBand(dx) : dx;
+            gridMount.style.transform = `translateX(${tx}px)`;
+            gridMount.style.transition = "none";
+            gridMount.style.opacity = blocked
+              ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
+              : Math.max(0.2, 1 - Math.abs(tx) / (window.innerWidth || 500));
+
+            if (blocked) return;
+
+            if (!previewEl) {
+              previewEl = document.createElement("div");
+              previewEl.className = "grid-preview-placeholder";
+              previewEl.innerHTML = `
                   <div class="posts-grid placeholder-grid" style="opacity: 0.5;">
                     <div class="post-card-slot"></div>
                     <div class="post-card-slot"></div>
@@ -295,39 +397,62 @@ export default class TagPage extends Component {
                     <div class="post-card-slot"></div>
                   </div>
                 `;
-                gridMount.parentElement.appendChild(previewEl);
+              gridMount.parentElement.appendChild(previewEl);
 
-                const targetPage =
-                  dx < 0 ? pagination.page + 1 : pagination.page - 1;
-                getTagPage(slug, { page: targetPage })
-                  .then((data) => {
-                    if (previewEl && data.posts) {
-                      const html = data.posts
-                        .map((p, i) => {
-                          const img = p.media?.find(
-                            (m) => m.type === "image",
-                          )?.url;
-                          const bg = img
-                            ? `url(${img}) center/cover`
-                            : "var(--surface-card)";
-                          const cls =
-                            i === data.posts.findIndex((x) => x.is_featured)
-                              ? " featured-post"
-                              : "";
-                          return `<div class="post-card-slot${cls}"><div class="post-card" style="background: ${bg}; opacity: 0.8;"></div></div>`;
-                        })
-                        .join("");
-                      previewEl.innerHTML = `<div class="posts-grid">${html}</div>`;
-                    }
-                  })
-                  .catch(() => {});
-              }
-
-              const offset = dx < 0 ? "100%" : "-100%";
-              previewEl.style.transform = `translateX(calc(${offset} + ${dx}px))`;
+              const targetPage =
+                dx < 0 ? pagination.page + 1 : pagination.page - 1;
+              getTagPage(slug, { page: targetPage })
+                .then((data) => {
+                  if (previewEl && data.posts) {
+                    const html = data.posts
+                      .map((p, i) => {
+                        const img = p.media?.find(
+                          (m) => m.type === "image",
+                        )?.url;
+                        const bg = img
+                          ? `url(${img}) center/cover`
+                          : "var(--surface-card)";
+                        const cls =
+                          i === data.posts.findIndex((x) => x.is_featured)
+                            ? " featured-post"
+                            : "";
+                        return `<div class="post-card-slot${cls}"><div class="post-card" style="background: ${bg}; opacity: 0.8;"></div></div>`;
+                      })
+                      .join("");
+                    previewEl.innerHTML = `<div class="posts-grid">${html}</div>`;
+                  }
+                })
+                .catch(() => {});
             }
-          },
-          onSwipeCancel: () => {
+
+            const offset = dx < 0 ? "100%" : "-100%";
+            previewEl.style.transform = `translateX(calc(${offset} + ${dx}px))`;
+          }
+        },
+        onSwipeCancel: () => {
+          if (gridMount) {
+            gridMount.style.transition =
+              "transform 0.3s ease, opacity 0.3s ease";
+            gridMount.style.transform = "";
+            gridMount.style.opacity = "1";
+          }
+          if (previewEl) {
+            previewEl.style.transition =
+              "transform 0.3s ease, opacity 0.3s ease";
+            previewEl.style.opacity = "0";
+            setTimeout(() => {
+              previewEl?.remove();
+              previewEl = null;
+            }, 300);
+          }
+        },
+        onSwipeCommit: (dir) => {
+          if (dir === "left" && pagination.page < pagination.pages) {
+            ViewContext.update({ page: pagination.page + 1 });
+          } else if (dir === "right" && pagination.page > 1) {
+            ViewContext.update({ page: pagination.page - 1 });
+          } else {
+            // Reset visuals if not committed
             if (gridMount) {
               gridMount.style.transition =
                 "transform 0.3s ease, opacity 0.3s ease";
@@ -343,44 +468,21 @@ export default class TagPage extends Component {
                 previewEl = null;
               }, 300);
             }
-          },
-          onSwipeCommit: (dir) => {
-            if (dir === "left" && pagination.page < pagination.pages) {
-              ViewContext.update({ page: pagination.page + 1 });
-            } else if (dir === "right" && pagination.page > 1) {
-              ViewContext.update({ page: pagination.page - 1 });
-            } else {
-              // Reset visuals if not committed
-              if (gridMount) {
-                gridMount.style.transition =
-                  "transform 0.3s ease, opacity 0.3s ease";
-                gridMount.style.transform = "";
-                gridMount.style.opacity = "1";
-              }
-              if (previewEl) {
-                previewEl.style.transition =
-                  "transform 0.3s ease, opacity 0.3s ease";
-                previewEl.style.opacity = "0";
-                setTimeout(() => {
-                  previewEl?.remove();
-                  previewEl = null;
-                }, 300);
-              }
-            }
-          },
-        });
-        this._trackpad = new TrackpadDetector(this.$(".site-main"), {
-          onHorizontal: (dir) => {
-            if (dir === "left" && pagination.page < pagination.pages) {
-              ViewContext.update({ page: pagination.page + 1 });
-            } else if (dir === "right" && pagination.page > 1) {
-              ViewContext.update({ page: pagination.page - 1 });
-            }
-          },
-        });
-      }
+          }
+        },
+      });
+      this._trackpad = new TrackpadDetector(this.$(".site-main"), {
+        onHorizontal: (dir) => {
+          if (dir === "left" && pagination.page < pagination.pages) {
+            ViewContext.update({ page: pagination.page + 1 });
+          } else if (dir === "right" && pagination.page > 1) {
+            ViewContext.update({ page: pagination.page - 1 });
+          }
+        },
+      });
     }
   }
+
   beforeUnmount() {
     this._gesture?.destroy();
     this._trackpad?.destroy();
@@ -404,6 +506,7 @@ export default class TagPage extends Component {
 
   async _load() {
     const vc = ViewContext.current();
+    this._loadedVc = vc;
     const { slug } = this.props.params || {};
 
     if (!slug) {
@@ -411,15 +514,8 @@ export default class TagPage extends Component {
       return;
     }
 
-    const apiParams = { page: vc.page };
-    if (vc.years) {
-      apiParams.year_from = vc.years[0];
-      apiParams.year_to = vc.years[1];
-    }
-    if (vc.query) apiParams.q = vc.query;
-
     try {
-      const data = await getTagPage(slug, apiParams);
+      const data = await getTagPage(slug, this._buildParams(vc));
 
       if (vc.postSlug) {
         const post = await getPostBySlug(vc.postSlug);
