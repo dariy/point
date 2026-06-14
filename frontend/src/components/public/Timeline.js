@@ -1478,11 +1478,26 @@ export class Timeline extends Component {
     if (!pills.length) return;
 
     const maxCount = Math.max(...pills.map(p => p.post_count), 1);
-    
+
+    // In the collapsed state zoom is ~0, so getX maps every year onto the center
+    // pixel and the bars stack into one invisible column. The proposal (A3) wants
+    // the histogram spread across the full extent at rest, so project bars over the
+    // full track width independently of the live zoom/pan here.
+    const { extent, zoom } = this.state;
+    const collapsed = zoom < 0.01;
+    const span = extent.max - extent.min || 1;
+    const usableWidth = trackWidth - 2 * EDGE_PAD;
+    const histX = (year) =>
+      collapsed
+        ? EDGE_PAD + ((year - extent.min) / span) * usableWidth
+        : getX(year);
+
     // Find active range from centered item
-    const item = this._findCenteredItem();
+    // "All years" is the no-filter resting state — keep every bar subtle rather
+    // than tinting the whole histogram as if a range were selected.
+    const item = collapsed ? null : this._findCenteredItem();
     let activeFrom = -Infinity, activeTo = Infinity;
-    if (item) {
+    if (item && !item.isAllYears) {
       if (item.type === "cluster") {
         activeFrom = item.minYear;
         activeTo = item.maxYear;
@@ -1494,7 +1509,7 @@ export class Timeline extends Component {
 
     let html = "";
     pills.forEach(p => {
-      const x = getX(p.year);
+      const x = histX(p.year);
       if (x < -20 || x > trackWidth + 20) return;
 
       const height = Math.max(2, Math.round((p.post_count / maxCount) * 24));

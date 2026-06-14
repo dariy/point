@@ -521,4 +521,67 @@ describe('Timeline Component', () => {
       assert.strictEqual(anchor, 100, 'anchor should be clientX minus the track left offset');
     });
   });
+
+  describe('Density histogram', () => {
+    // Capture the html written into the histogram mount and pull out each bar's
+    // `left:` pixel position so we can assert the bars actually spread out.
+    function renderHistogram(timeline) {
+      const mount = { innerHTML: '' };
+      const originalQS = timeline.container.querySelector;
+      timeline.container.querySelector = (sel) =>
+        sel === '#histogram-mount' ? mount : originalQS.call(timeline.container, sel);
+
+      const trackWidth = 1000;
+      const { extent, zoom, panX } = timeline.state;
+      const EDGE_PAD = 48;
+      const getX = (year) => {
+        if (extent.max === extent.min) return trackWidth / 2;
+        const progress = (year - extent.min) / (extent.max - extent.min);
+        return EDGE_PAD + progress * (trackWidth - 2 * EDGE_PAD) * zoom + panX;
+      };
+      timeline._updateHistogram(trackWidth, getX);
+      timeline.container.querySelector = originalQS;
+
+      return [...mount.innerHTML.matchAll(/left:\s*([\d.]+)px/g)].map((m) =>
+        parseFloat(m[1]),
+      );
+    }
+
+    function fourYearTimeline() {
+      const timeline = new Timeline(container, props);
+      timeline.state.isLoading = false;
+      timeline.state.pills = [
+        { year: 2018, name: '2018', slug: '2018', post_count: 3 },
+        { year: 2019, name: '2019', slug: '2019', post_count: 8 },
+        { year: 2020, name: '2020', slug: '2020', post_count: 5 },
+        { year: 2021, name: '2021', slug: '2021', post_count: 2 },
+      ];
+      timeline.state.extent = { min: 2018, max: 2021 };
+      timeline.state.panX = 0;
+      return timeline;
+    }
+
+    test('spreads bars across the full extent in the collapsed state', () => {
+      const timeline = fourYearTimeline();
+      // Collapsed: zoom ~0, so the shared getX maps every year onto the center pixel.
+      timeline.state.zoom = 0.0001;
+
+      const positions = renderHistogram(timeline);
+      assert.strictEqual(positions.length, 4, 'all four years should render a bar');
+      const unique = new Set(positions);
+      assert.strictEqual(unique.size, 4, 'collapsed bars must not stack onto one pixel');
+      // Spread monotonically left→right across the track, not piled at center (~500).
+      assert.deepStrictEqual([...positions], [...positions].sort((a, b) => a - b));
+      assert.ok(positions[positions.length - 1] - positions[0] > 400, 'bars should span the width');
+    });
+
+    test('uses the live projection when zoomed in', () => {
+      const timeline = fourYearTimeline();
+      timeline.state.zoom = 1; // not collapsed → bars follow getX
+
+      const positions = renderHistogram(timeline);
+      assert.strictEqual(positions.length, 4);
+      assert.strictEqual(new Set(positions).size, 4, 'zoomed bars track their year positions');
+    });
+  });
 });
