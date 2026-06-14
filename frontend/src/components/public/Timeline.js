@@ -113,9 +113,9 @@ export class Timeline extends Component {
           <div class="timeline-track">
             <div class="timeline-tooltip" id="timeline-tooltip"></div>
             <div class="timeline-axis">
-              <div id="histogram-mount" class="timeline-histogram"></div>
               <div class="timeline-axis-ticks"></div>
             </div>
+            <div id="histogram-mount" class="timeline-histogram"></div>
             ${this.props.mode === "filter" ? '<div class="timeline-center-indicator"></div>' : ""}
             <div class="timeline-pills-mount"></div>
           </div>
@@ -1474,23 +1474,34 @@ export class Timeline extends Component {
     const mount = this.$("#histogram-mount");
     if (!mount) return;
 
+    const track = this.$(".timeline-track");
     const { pills } = this.state;
     if (!pills.length) return;
 
     const maxCount = Math.max(...pills.map(p => p.post_count), 1);
 
     // In the collapsed state zoom is ~0, so getX maps every year onto the center
-    // pixel and the bars stack into one invisible column. The proposal (A3) wants
-    // the histogram spread across the full extent at rest, so project bars over the
-    // full track width independently of the live zoom/pan here.
+    // pixel and the bars stack into one invisible column. At rest we instead draw a
+    // mini density chart confined to the width of the single centered "All years"
+    // pill — read the pill's live geometry so the histogram tracks its width exactly.
     const { extent, zoom } = this.state;
     const collapsed = zoom < 0.01;
     const span = extent.max - extent.min || 1;
-    const usableWidth = trackWidth - 2 * EDGE_PAD;
-    const histX = (year) =>
-      collapsed
-        ? EDGE_PAD + ((year - extent.min) / span) * usableWidth
-        : getX(year);
+    let histX = getX;
+    if (collapsed) {
+      const pillEl = this.$(".timeline-cluster.all-years") || this.$(".timeline-cluster");
+      const trackRect = track?.getBoundingClientRect();
+      const pillRect = pillEl?.getBoundingClientRect();
+      if (pillRect && trackRect && pillRect.width > 0) {
+        const left = pillRect.left - trackRect.left;
+        const w = pillRect.width;
+        histX = (year) => left + ((year - extent.min) / span) * w;
+      } else {
+        // Pill not laid out yet — fall back to the full extent across the track.
+        const usableWidth = trackWidth - 2 * EDGE_PAD;
+        histX = (year) => EDGE_PAD + ((year - extent.min) / span) * usableWidth;
+      }
+    }
 
     // Find active range from centered item
     // "All years" is the no-filter resting state — keep every bar subtle rather
@@ -1512,7 +1523,7 @@ export class Timeline extends Component {
       const x = histX(p.year);
       if (x < -20 || x > trackWidth + 20) return;
 
-      const height = Math.max(2, Math.round((p.post_count / maxCount) * 24));
+      const height = Math.max(2, Math.round((p.post_count / maxCount) * 14));
       const isActive = p.year >= activeFrom && p.year <= activeTo;
       const cls = isActive ? "is-active" : "";
       
