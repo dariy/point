@@ -106,6 +106,7 @@ export default class TagPage extends Component {
     this._timeline?.setScope(
       vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
     );
+    this._timeline?.setCount(this.state.data?.pagination?.total ?? this.state.data?.total ?? 0);
   }
 
   _buildParams(vc) {
@@ -174,10 +175,11 @@ export default class TagPage extends Component {
     this._trackpad?.destroy();
     const settings = store.get("settings") || {};
     const rootMenu = store.get("navTags") || [];
-    const navChildren = this.state.data?.nav_children || [];
     const isCustomMenu = settings.nav_menu_mode === "custom";
-    const navTags =
-      !isCustomMenu && navChildren.length ? navChildren : rootMenu;
+    // Use the full hierarchical menu tree from the page response so every crumb
+    // (site root, ancestors, current tag) can resolve its children for ▾ carets.
+    // Fall back to the store's navTags if the page hasn't loaded yet.
+    const navTags = isCustomMenu ? rootMenu : (this.state.data?.menu || rootMenu);
     const slug = this.props.params?.slug || "";
     const { data, post } = this.state;
 
@@ -192,10 +194,12 @@ export default class TagPage extends Component {
       !this.state.error
     ) {
       const vc = ViewContext.current();
+      const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
       this._timeline = this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+        total,
       });
     }
 

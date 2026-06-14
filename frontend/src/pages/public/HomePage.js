@@ -74,6 +74,7 @@ export default class HomePage extends Component {
     this._clearPostContent();
     this._mountPostContent();
     this._timeline?.setScope(vc.years ? { from: vc.years[0], to: vc.years[1] } : null);
+    this._timeline?.setCount(this.state.data?.pagination?.total ?? this.state.data?.total ?? 0);
   }
 
   _buildParams(vc) {
@@ -193,6 +194,7 @@ export default class HomePage extends Component {
         mode: 'filter',
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+        total,
       });
     }
 

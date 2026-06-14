@@ -20,12 +20,19 @@ func (r *sqliteRepository) GetTagAncestors(ctx context.Context, tagID int64) ([]
 		if err != nil || len(parents) == 0 {
 			break
 		}
-		// Prefer eligible parents.
+		// Prefer a parent that is in_breadcrumbs; fall back to the first
+		// unvisited parent so single-parent chains are unaffected.
 		var chosen *models.Tag
 		for i := range parents {
 			p := &parents[i]
-			if !visited[p.ID] {
-				chosen = p
+			if visited[p.ID] {
+				continue
+			}
+			if chosen == nil {
+				chosen = p // first unvisited = fallback
+			}
+			if p.InBreadcrumbs {
+				chosen = p // prefer the breadcrumb-flagged branch
 				break
 			}
 		}

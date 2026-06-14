@@ -131,40 +131,13 @@ describe('PublicHeader unified breadcrumb', () => {
     assert.ok(!markup.includes('breadcrumb-query'), 'Should not have breadcrumb-query when no query');
   });
 
-  // ── Count ─────────────────────────────────────────────────────────────────
-
-  test('count rendered when total > 0', () => {
-    const markup = renderWith(
-      { pathname: '/tags/travel', query: {} },
-      { total: 42, breadcrumb: [{ name: 'travel', slug: 'travel' }] },
-    );
-    assert.ok(markup.includes('breadcrumb-count'), 'Should have breadcrumb-count span');
-    assert.ok(markup.includes('42 posts'), 'Should render post count');
-  });
-
-  test('count uses singular when total is 1', () => {
-    const markup = renderWith(
-      { pathname: '/tags/travel', query: {} },
-      { total: 1, breadcrumb: [{ name: 'travel', slug: 'travel' }] },
-    );
-    assert.ok(markup.includes('1 post'), 'Should be singular');
-    assert.ok(!markup.includes('1 posts'), 'Should not be plural');
-  });
-
-  test('count not rendered when total is 0', () => {
-    const markup = renderWith(
-      { pathname: '/', query: {} },
-      { total: 0 },
-    );
-    assert.ok(!markup.includes('breadcrumb-count'), 'Should not render count when 0');
-  });
-
   // ── Root "site" crumb ─────────────────────────────────────────────────────
 
   test('root site crumb always present', () => {
     const markup = renderWith({ pathname: '/', query: {} });
     assert.ok(markup.includes('crumb-site'), 'Should always render site crumb');
     assert.ok(markup.includes('href="/"'), 'Site crumb should link to /');
+    assert.ok(markup.includes('Test Blog'), 'Site crumb should display blog title');
   });
 
   test('site crumb has dropdown caret when navTags provided', () => {

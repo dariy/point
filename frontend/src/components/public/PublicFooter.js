@@ -112,12 +112,14 @@ export class PublicFooter extends Component {
     // About (author link in .footer-copyright) and Map (header map button)
     // already have canonical entry points elsewhere, so the footer nav only
     // carries the links that aren't reachable from the chrome: tags + RSS.
-    const rssButton = settings.enable_rss !== false ? `<a href="/feed" target="_blank">RSS</a>` : '';
+    const rssButton =
+      settings.enable_rss !== false
+        ? `<a href="/feed" target="_blank">RSS</a>`
+        : "";
 
-    const rightLinks = [
-      `<a href="/tags">All tags</a>`,
-      rssButton
-    ].filter(Boolean).join(' &middot; ');
+    const rightLinks = [`<a href="/tags">All tags</a>`, rssButton]
+      .filter(Boolean)
+      .join(" &middot; ");
 
     return `
       <footer class="site-footer">
@@ -125,7 +127,7 @@ export class PublicFooter extends Component {
           <div class="footer-content">
             <div class="footer-left">
               <p class="footer-copyright">
-                <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://point.darii.net" target="_blank" rel="noopener noreferrer">Point</a>` : ""}
+                <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>` : ""}
               </p>
             </div>
             <div class="footer-center">
@@ -147,7 +149,7 @@ export class PublicFooter extends Component {
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
     this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndex, (url) => {
-      const slug = url.replace('/tags/', '');
+      const slug = url.replace("/tags/", "");
       ViewContext.update({ tag: slug, postSlug: null, query: null });
     });
 

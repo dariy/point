@@ -96,6 +96,59 @@ func TestRepository_TagHierarchy(t *testing.T) {
 	}
 }
 
+// TestGetTagAncestors_PrefersBreadcrumbParent verifies that when a tag has
+// multiple parents, GetTagAncestors follows the branch whose parent has
+// in_breadcrumbs=1 rather than the first-inserted (lower-rowid) parent.
+//
+// Mirrors the real Kyiv case: Kyiv has two parents, city (in_breadcrumbs=0,
+// inserted first → lower rowid) and Ukraine (in_breadcrumbs=1, inserted
+// second → higher rowid). Without the fix the traversal follows city and
+// never reaches Ukraine.
+func TestGetTagAncestors_PrefersBreadcrumbParent(t *testing.T) {
+	repo := setupNewSchemaTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Tags: location(1), city(2, ib=0), country(3, ib=0), Ukraine(4, ib=1), Kyiv(5, ib=1)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, in_breadcrumbs) VALUES
+		(1,'location','location',0),
+		(2,'city','city',0),
+		(3,'country','country',0),
+		(4,'Ukraine','ukraine',1),
+		(5,'Kyiv','kyiv',1)`)
+
+	// Relationships: city→Kyiv inserted before Ukraine→Kyiv so city has the
+	// lower rowid and would be chosen first by the old (unfixed) code.
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`) // location → city
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,3)`) // location → country
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (2,5)`) // city → Kyiv   (lower rowid: wrong branch)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (4,5)`) // Ukraine → Kyiv (higher rowid: right branch)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (3,4)`) // country → Ukraine
+
+	ancestors, err := repo.GetTagAncestors(ctx, 5) // Kyiv
+	if err != nil {
+		t.Fatalf("GetTagAncestors: %v", err)
+	}
+
+	// Build a name-set for easy assertion.
+	names := make(map[string]bool, len(ancestors))
+	for _, a := range ancestors {
+		names[a.Name] = true
+	}
+
+	if !names["Ukraine"] {
+		t.Errorf("expected Ukraine in ancestors, got %v", ancestors)
+	}
+	if names["city"] {
+		t.Errorf("expected city NOT in ancestors (wrong branch), got %v", ancestors)
+	}
+	// country and location have in_breadcrumbs=0 but are still valid ancestors
+	// in the traversal chain (they'll be filtered by the handler, not here).
+	if !names["country"] {
+		t.Errorf("expected country in ancestors, got %v", ancestors)
+	}
+}
+
 func TestRepository_GetCoOccurringTags(t *testing.T) {
 	repo := setupNewSchemaTestDB(t)
 	defer func() { _ = repo.Close() }()

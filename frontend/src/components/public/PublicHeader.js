@@ -79,11 +79,6 @@ export class PublicHeader extends Component {
     // Query facet crumb
     const queryLabel = vc.query ? `“${vc.query}”` : null; // "query"
 
-    // Count
-    const countHtml = total > 0
-      ? `<span class="breadcrumb-count">${total} post${total !== 1 ? 's' : ''}</span>`
-      : '';
-
     // Aria-live announcement (mirrors FilterChipsRow behaviour)
     const ariaLabels = [];
     if (vc.tag) ariaLabels.push(vc.tag);
@@ -95,7 +90,7 @@ export class PublicHeader extends Component {
 
     // Popover items: "site" + tag crumbs + facets (for fold-current fallback)
     const allCrumbsForPopover = [
-      { name: 'site', href: '/' },
+      { name: settings.blog_title || 'Photo Blog', href: '/' },
       ...breadcrumb.map(c => ({
         name: c.name,
         href: c.href || (c.slug ? `/tags/${c.slug}` : '/'),
@@ -118,10 +113,11 @@ export class PublicHeader extends Component {
 
     // Root "site" crumb — always a link to /, has ▾ caret for root-tags dropdown
     const siteHasChildren = navTags.length > 0;
+    const siteHasFollowingCrumbs = hasTagCrumbs || yearLabel || queryLabel;
     const siteCrumbHtml = `<span class="crumb-pair" id="site-crumb-pair">
       <a href="/" class="breadcrumb-link crumb-site${siteHasChildren ? ' has-dropdown' : ''}" data-crumb="site"
-         aria-label="Home"${siteHasChildren ? ' aria-haspopup="true"' : ''}>site${siteHasChildren ? '<span class="crumb-caret" aria-hidden="true">&#9662;</span>' : ''}</a>
-      <span class="breadcrumb-separator" aria-hidden="true">/</span>
+         aria-label="${title}"${siteHasChildren ? ' aria-haspopup="true"' : ''}>${title}${siteHasChildren ? '<span class="crumb-caret" aria-hidden="true">&#9662;</span>' : ''}</a>
+      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true">/</span>' : ''}
     </span>`;
 
     // Tag ancestry crumbs from `breadcrumb` prop
@@ -196,7 +192,6 @@ export class PublicHeader extends Component {
       ${siteCrumbHtml}
       ${tagCrumbsHtml}
       ${facetCrumbsHtml}
-      ${countHtml}
       <div class="crumb-popover" id="crumb-popover">${popoverItemsHtml}</div>
     </nav>`;
 
@@ -247,7 +242,6 @@ export class PublicHeader extends Component {
               <a href="/" class="site-title-link">
                 <h1 class="site-title">
                   ${APP_LOGO_SVG}
-                  <span class="site-title-text">${title}</span>
                 </h1>
                 ${!breadcrumb.length && !vc.years && !vc.query && subtitle ? `<p class="site-subtitle">${subtitle}</p>` : ''}
               </a>
@@ -681,18 +675,11 @@ export class PublicHeader extends Component {
     if (!this._overflows(inner)) return;
 
     // Step 2: fold breadcrumb pairs left to right
-    // Drop count first (it's purely decorative), then facet pairs, then tag pairs
+    // Drop facet pairs first, then tag pairs
     const allPairs = [...group.querySelectorAll('.crumb-pair')];
     // Try folding facet pairs before tag pairs to preserve tag context
     const facetPairs = allPairs.filter(p => p.classList.contains('crumb-facet-pair'));
     const tagPairs = allPairs.filter(p => !p.classList.contains('crumb-facet-pair'));
-
-    // Drop count span first
-    const countSpan = group.querySelector('.breadcrumb-count');
-    if (countSpan) {
-      countSpan.classList.add('folded');
-      if (!this._overflows(inner)) return;
-    }
 
     // Then fold facet pairs
     for (const pair of facetPairs) {

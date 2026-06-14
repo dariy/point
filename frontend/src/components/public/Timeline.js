@@ -1039,6 +1039,15 @@ export class Timeline extends Component {
     }
   }
 
+  setCount(n) {
+    this.props.total = n;
+    const btn = this.$('.timeline-cluster.all-years .timeline-cluster-btn');
+    if (btn) {
+      const totalPosts = (n > 0) ? n : this.state.pills.reduce((sum, p) => sum + p.post_count, 0);
+      btn.innerHTML = `All years · ${totalPosts} post${totalPosts !== 1 ? 's' : ''}`;
+    }
+  }
+
   _announceRange() {
     if (this.props.mode !== "filter") return;
     const announcer = this.$("#timeline-live-announcer");
@@ -1390,7 +1399,7 @@ export class Timeline extends Component {
 
   _collide(pills, getX) {
     if (this.state.zoom < 0.01) {
-      const totalPosts = pills.reduce((sum, p) => sum + p.post_count, 0);
+      const totalPosts = (this.props.total > 0) ? this.props.total : pills.reduce((sum, p) => sum + p.post_count, 0);
       return {
         visible: [],
         clusters: [{
