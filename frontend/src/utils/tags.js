@@ -71,7 +71,7 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     a.addEventListener('click', (e) => {
       e.preventDefault();
       _hideFlyout();
-      navigateFn(a.href);
+      navigateFn(a.pathname + a.search + a.hash);
     });
     return a;
   };
