@@ -110,7 +110,10 @@ describe('Timeline Component', () => {
     };
   });
 
-  test('should emit range change while dragging if mode is filter', (t, done) => {
+  test('does NOT emit while a drag is in progress (commits on release)', (t, done) => {
+    // Emitting mid-drag navigates + re-renders the host page, remounting the
+    // timeline and killing the in-flight gesture. The range must commit only
+    // once the drag settles — never while _isDragging is true.
     const timeline = new Timeline(container, props);
     timeline.state.isLoading = false;
     timeline.state.pills = [
@@ -121,7 +124,6 @@ describe('Timeline Component', () => {
     timeline.state.extent = { min: 2020, max: 2022 };
     timeline.state.zoom = 1;
     timeline.state.panX = 0;
-    // Mock getX and lastCollision so emitRange works
     timeline._getX = (y) => 500;
     timeline._lastCollision = { visible: timeline.state.pills, clusters: [] };
 
@@ -129,11 +131,14 @@ describe('Timeline Component', () => {
     timeline.props.onRangeChange = () => { emitted = true; };
 
     timeline._isDragging = true;
+    // Even repeated calls during the drag must stay silent.
+    timeline._debounceEmitRange();
+    timeline._debounceEmitRange();
     timeline._debounceEmitRange();
 
     setTimeout(() => {
         try {
-            assert.strictEqual(emitted, true, 'Should emit even while dragging');
+            assert.strictEqual(emitted, false, 'Must not emit while dragging');
             done();
         } catch (e) {
             done(e);
@@ -141,7 +146,7 @@ describe('Timeline Component', () => {
     }, 300);
   });
 
-  test('should throttle live updates during drag', (t, done) => {
+  test('commits the range once after the drag settles', (t, done) => {
     const timeline = new Timeline(container, props);
     timeline.state.isLoading = false;
     timeline.state.pills = [
@@ -150,21 +155,19 @@ describe('Timeline Component', () => {
     timeline.state.extent = { min: 2021, max: 2021 };
     timeline._getX = () => 500;
     timeline._lastCollision = { visible: timeline.state.pills, clusters: [] };
+    // Snap resolves synchronously so we measure the commit, not the animation.
+    timeline._centerOnYear = (year, animate, onComplete) => { if (onComplete) onComplete(); };
 
     let emittedCount = 0;
     timeline.props.onRangeChange = () => { emittedCount++; };
 
-    timeline._isDragging = true;
-    
-    // Call multiple times rapidly
-    timeline._debounceEmitRange(); // 1st call (immediate live emit)
-    timeline._debounceEmitRange(); // 2nd call (throttled)
-    timeline._debounceEmitRange(); // 3rd call (throttled)
+    // Drag released: _isDragging is false, the debounced settle fires once.
+    timeline._isDragging = false;
+    timeline._debounceEmitRange();
 
     setTimeout(() => {
         try {
-            // Should have 1 from immediate live emit, and 1 from the final debounce timeout
-            assert.strictEqual(emittedCount, 2, 'Should throttle to 2 emissions (1 live + 1 final)');
+            assert.strictEqual(emittedCount, 1, 'Should emit exactly once on settle');
             done();
         } catch (e) {
             done(e);

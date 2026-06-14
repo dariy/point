@@ -24,7 +24,6 @@ export class Timeline extends Component {
       popover: null,
       isLoading: true,
     };
-    this._lastLiveEmit = 0;
     this._settled = true;
     this._lastCenteredYear = null;
   }
@@ -945,23 +944,16 @@ export class Timeline extends Component {
   _debounceEmitRange() {
     clearTimeout(this._emitTimer);
 
-    // Live refresh while dragging/zooming (throttled)
-    if (this._isDragging && this.props.mode === "filter") {
-      const now = Date.now();
-      if (now - this._lastLiveEmit > 100) {
-        this._emitRange();
-        this._lastLiveEmit = now;
-      }
-    }
+    // While a drag is physically in progress we only move the timeline visually
+    // and commit the range once on release (see _applyMomentum). Emitting mid-drag
+    // navigates + re-renders the host page, which remounts this component and kills
+    // the in-flight gesture — so the drag would die the moment it crossed a year.
+    if (this._isDragging) return;
 
+    // Zoom (wheel/pinch) has no explicit release event: settle 150ms after the
+    // last change. clearTimeout above means this only fires once movement pauses.
     this._emitTimer = setTimeout(() => {
-      if (this._isDragging) {
-        if (this.props.mode === "filter") {
-          this._emitRange();
-          this._lastLiveEmit = Date.now();
-        }
-        return;
-      }
+      if (this._isDragging) return;
       this._snapToCenterPill(() => {
         if (this.props.mode === "filter" && !this._isDragging) {
           this._emitRange();
