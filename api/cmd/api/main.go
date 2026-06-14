@@ -213,6 +213,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	// ── Feed routes (crawlers & feed readers) ──────────────────────────────────
 	e.GET("/feed.xml", feedsHandler.RSSFeed)
+	e.GET("/feed", feedsHandler.RSSFeed) // alias used by the public footer link
 	e.GET("/sitemap.xml", feedsHandler.Sitemap)
 	e.GET("/robots.txt", feedsHandler.RobotsTxt)
 
