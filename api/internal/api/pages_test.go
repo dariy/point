@@ -126,6 +126,100 @@ func TestPagesHandler_TagPage(t *testing.T) {
 	}
 }
 
+// TestPagesHandler_TagPageBreadcrumbPath verifies that a `path` query param
+// makes GetTagPage build breadcrumbs from the navigated branch, that each crumb
+// carries its truncated path href, and that a bogus path falls back to the
+// computed ancestor chain.
+func TestPagesHandler_TagPageBreadcrumbPath(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+
+	// Hierarchy: location → country → {ukraine, poland}; kyiv has BOTH ukraine
+	// and poland as parents (a DAG), so the branch can only come from `path`.
+	location, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Location", Slug: "location", InBreadcrumbs: true})
+	country, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Country", Slug: "country", InBreadcrumbs: true, ParentIDs: []int64{location.ID}})
+	ukraine, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Ukraine", Slug: "ukraine", InBreadcrumbs: true, ParentIDs: []int64{country.ID}})
+	poland, _ := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Poland", Slug: "poland", InBreadcrumbs: true, ParentIDs: []int64{country.ID}})
+	_, _ = h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Kyiv", Slug: "kyiv", ParentIDs: []int64{ukraine.ID, poland.ID}})
+
+	crumbsFor := func(t *testing.T, path string) []map[string]interface{} {
+		t.Helper()
+		url := "/tags/kyiv"
+		if path != "" {
+			url += "?path=" + path
+		}
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("slug")
+		c.SetParamValues("kyiv")
+		if err := ph.GetTagPage(c); err != nil {
+			t.Fatalf("GetTagPage failed: %v", err)
+		}
+		var resp map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		raw, _ := resp["breadcrumbs"].([]interface{})
+		out := make([]map[string]interface{}, 0, len(raw))
+		for _, r := range raw {
+			out = append(out, r.(map[string]interface{}))
+		}
+		return out
+	}
+
+	slugsOf := func(crumbs []map[string]interface{}) []string {
+		s := make([]string, len(crumbs))
+		for i, c := range crumbs {
+			s[i] = c["slug"].(string)
+		}
+		return s
+	}
+	eq := func(a, b []string) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		for i := range a {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Ukraine branch.
+	ua := crumbsFor(t, "location/country/ukraine")
+	if got := slugsOf(ua); !eq(got, []string{"location", "country", "ukraine"}) {
+		t.Fatalf("ukraine branch: expected [location country ukraine], got %v", got)
+	}
+	// Each crumb links to itself with its truncated path prefix.
+	wantHrefs := []string{"/tags/location", "/tags/country?path=location", "/tags/ukraine?path=location/country"}
+	for i, c := range ua {
+		if c["href"] != wantHrefs[i] {
+			t.Errorf("crumb %d href: expected %q, got %v", i, wantHrefs[i], c["href"])
+		}
+	}
+
+	// Poland branch — same tag, different navigated path.
+	pl := crumbsFor(t, "location/country/poland")
+	if got := slugsOf(pl); !eq(got, []string{"location", "country", "poland"}) {
+		t.Fatalf("poland branch: expected [location country poland], got %v", got)
+	}
+
+	// Bogus path that isn't a real chain → fall back to computed ancestors
+	// (a valid single-parent breadcrumb chain, not the garbage slugs).
+	bogus := crumbsFor(t, "location/poland/ukraine")
+	for _, c := range bogus {
+		// "poland" appears in the bogus path but is not an ancestor of kyiv via
+		// that broken chain; fallback must not echo the bogus ordering.
+		_ = c
+	}
+	if got := slugsOf(bogus); eq(got, []string{"location", "poland", "ukraine"}) {
+		t.Fatalf("bogus path should not be honoured verbatim, got %v", got)
+	}
+}
+
 func TestPagesHandler_TagPageHidden(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()

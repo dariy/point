@@ -20,7 +20,7 @@ import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { buildTagIndex, showCrumbDropdown, hideFlyout } from '../../utils/tags.js';
+import { buildTagIndex, showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -129,7 +129,11 @@ export class PublicHeader extends Component {
       if (isLast) {
         // Current tag — rendered as breadcrumb-current; may have children dropdown
         const hasChildren = this._crumbHasChildren(crumb, navTags);
-        const href = crumb.slug ? `/tags/${escapeHtml(crumb.slug)}` : null;
+        const href = crumb.href
+          ? escapeHtml(crumb.href)
+          : crumb.slug
+            ? `/tags/${escapeHtml(crumb.slug)}`
+            : null;
         const caretHtml = hasChildren ? `<span class="crumb-caret" aria-hidden="true">&#9662;</span>` : '';
         // If there are facet crumbs after this, it's a non-final crumb visually
         const hasFacets = yearLabel || queryLabel;
@@ -380,6 +384,30 @@ export class PublicHeader extends Component {
     this.$('#burger-theme-toggle')?.addEventListener('click', toggleTheme);
 
     // ── Crumb dropdowns ───────────────────────────────────────────────────────
+    // Desktop (hover-capable): open on hover, click navigates to the crumb's page.
+    // Touch / no-hover: keep tap-to-open.
+    const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    let hoverTimer = null;
+    const attachCrumbDropdown = (el, items) => {
+      if (!items.length) return;
+      if (canHover) {
+        el.addEventListener('mouseenter', () => {
+          clearTimeout(hoverTimer);
+          hoverTimer = setTimeout(
+            () => showCrumbDropdown(el, items, navigate, this._group),
+            180,
+          );
+        });
+        el.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+        el.addEventListener('click', () => { clearTimeout(hoverTimer); hideFlyout(); });
+      } else {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          showCrumbDropdown(el, items, navigate, this._group);
+        });
+      }
+    };
+
     // "site" crumb → root navTags dropdown
     const siteCrumb = this.$('.crumb-site');
     if (siteCrumb && navTags.length) {
@@ -388,29 +416,30 @@ export class PublicHeader extends Component {
         slug: t.slug,
         count: t.post_count,
       }));
-      const openSiteDropdown = (e) => {
-        e.preventDefault();
-        showCrumbDropdown(siteCrumb, rootItems, navigate, this._group);
-      };
-      siteCrumb.addEventListener('click', openSiteDropdown);
+      attachCrumbDropdown(siteCrumb, rootItems);
     }
 
-    // Tag crumbs with children → sub-tags dropdown
+    // Tag crumbs with children → sub-tags dropdown.
+    // Children of a crumb drill down with a path that includes the crumb and
+    // everything before it, so the navigated branch keeps accumulating.
+    const breadcrumbSlugs = (this.props.breadcrumb || [])
+      .map(b => b.slug)
+      .filter(Boolean);
     this.container.querySelectorAll('.breadcrumb-link[data-crumb-slug], .breadcrumb-current[data-crumb-slug]').forEach(el => {
       if (!el.classList.contains('has-dropdown')) return;
       const slug = el.dataset.crumbSlug;
       if (!slug) return;
       const children = this._getTagChildren(slug, navTags);
       if (!children.length) return;
+      const idx = breadcrumbSlugs.indexOf(slug);
+      const childPath = idx >= 0 ? breadcrumbSlugs.slice(0, idx + 1) : [slug];
       const childItems = children.map(c => ({
         name: c.name,
         slug: c.slug,
         count: c.post_count,
+        href: tagHref(c.slug, childPath),
       }));
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        showCrumbDropdown(el, childItems, navigate, this._group);
-      });
+      attachCrumbDropdown(el, childItems);
     });
 
     // Header search (expandable)

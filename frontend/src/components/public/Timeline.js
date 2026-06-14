@@ -226,10 +226,21 @@ export class Timeline extends Component {
         }
         tooltip.innerHTML = text;
         tooltip.classList.add("visible");
-      } else if (e.target.closest(".timeline-axis") || e.target.closest(".timeline-track")) {
-        const year = this._getYearAtX(x);
-        tooltip.textContent = String(Math.round(year));
-        tooltip.classList.add("visible");
+      } else if (
+        this.state.zoom >= 0.01 &&
+        (e.target.closest(".timeline-axis") || e.target.closest(".timeline-track"))
+      ) {
+        // Collapsed/clustered (zoom < 0.01) is a single "All years" cluster with
+        // no meaningful per-pixel year, so the scrubber tooltip is suppressed there.
+        const year = Math.round(this._getYearAtX(x));
+        // Only scrub within the real data range — don't show fabricated years
+        // before the first or after the last tag.
+        if (year >= this.state.extent.min && year <= this.state.extent.max) {
+          tooltip.textContent = String(year);
+          tooltip.classList.add("visible");
+        } else {
+          tooltip.classList.remove("visible");
+        }
       } else {
         tooltip.classList.remove("visible");
       }

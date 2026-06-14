@@ -236,6 +236,65 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// splitPathParam parses the `path` query value ("a/b/c") into a slice of
+// non-empty slugs, preserving order.
+func splitPathParam(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, "/")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// tagPathHref builds a tag URL whose `path` query carries the given ancestor
+// prefix (empty prefix → no query).
+func tagPathHref(slug string, prefix []string) string {
+	if len(prefix) == 0 {
+		return "/tags/" + slug
+	}
+	return "/tags/" + slug + "?path=" + strings.Join(prefix, "/")
+}
+
+// resolveBreadcrumbPath validates that pathSlugs form a real connected
+// parent→child chain in the tag graph whose last element is a parent of `tag`,
+// and returns the resolved tags in order. Returns ok=false (caller falls back
+// to the computed ancestor chain) when the path is empty, unknown, or broken.
+func resolveBreadcrumbPath(snap *services.TagGraph, pathSlugs []string, tag models.Tag) ([]models.Tag, bool) {
+	if snap == nil || len(pathSlugs) == 0 {
+		return nil, false
+	}
+	isChild := func(parentID, childID int64) bool {
+		for _, c := range snap.Children[parentID] {
+			if c == childID {
+				return true
+			}
+		}
+		return false
+	}
+	resolved := make([]models.Tag, 0, len(pathSlugs))
+	for i, s := range pathSlugs {
+		t, ok := snap.BySlug[s]
+		if !ok {
+			return nil, false
+		}
+		if i > 0 && !isChild(resolved[i-1].ID, t.ID) {
+			return nil, false
+		}
+		resolved = append(resolved, t)
+	}
+	// The last crumb must actually be a parent of the current tag.
+	if !isChild(resolved[len(resolved)-1].ID, tag.ID) {
+		return nil, false
+	}
+	return resolved, true
+}
+
 // GetTagPage returns all data needed to render a tag archive page.
 func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -253,8 +312,13 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 	yearTo, _ := strconv.Atoi(c.QueryParam("year_to"))
 	hasYearFilter := yearFrom > 0 && yearTo > 0 && yearFrom <= yearTo
 
+	// Explicit navigation path: the slug chain (root→…→immediate parent) the user
+	// drilled through to reach this tag. Tags form a DAG, so this is the only way
+	// to know which branch produced the breadcrumb the user expects to see.
+	pathSlugs := splitPathParam(c.QueryParam("path"))
+
 	// Try cache for public requests (TTL 15 minutes) — skip when year filter is active
-	cacheKey := fmt.Sprintf("tagpage_%s_p%d.json", slug, page)
+	cacheKey := fmt.Sprintf("tagpage_%s_path-%s_p%d.json", slug, strings.Join(pathSlugs, "/"), page)
 	if publicOnly && !hasYearFilter {
 		if data, err := h.cacheService.GetWithTTL(ctx, cacheKey, 15*time.Minute); err == nil {
 			return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
@@ -368,15 +432,38 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		pages = 1
 	}
 
-	breadcrumbs := make([]map[string]interface{}, 0, len(ancestors))
-	for _, a := range ancestors {
-		if !excludeTagIDs[a.ID] && inBreadcrumbs[a.ID] {
+	// Build breadcrumbs. When the request carries a valid `path` (a real
+	// root→…→parent chain in the tag graph that ends at a parent of this tag),
+	// honour it verbatim so the crumb trail matches the branch the user
+	// navigated. Otherwise fall back to the server-computed ancestor chain.
+	var breadcrumbs []map[string]interface{}
+	if pathTags, ok := resolveBreadcrumbPath(snap, pathSlugs, tag); ok {
+		breadcrumbs = make([]map[string]interface{}, 0, len(pathTags))
+		for i, a := range pathTags {
+			if excludeTagIDs[a.ID] {
+				continue
+			}
 			crumb := tagToListItem(a)
+			// Each crumb links to itself carrying its own truncated path, so
+			// clicking back up the trail preserves the navigated branch.
+			crumb["href"] = tagPathHref(a.Slug, pathSlugs[:i])
 			if !publicOnly {
 				crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
 				crumb["is_hidden"] = effectivelyHidden[a.ID]
 			}
 			breadcrumbs = append(breadcrumbs, crumb)
+		}
+	} else {
+		breadcrumbs = make([]map[string]interface{}, 0, len(ancestors))
+		for _, a := range ancestors {
+			if !excludeTagIDs[a.ID] && inBreadcrumbs[a.ID] {
+				crumb := tagToListItem(a)
+				if !publicOnly {
+					crumb["is_hidden_posts"] = effectiveHiddenPostsTagIDs[a.ID]
+					crumb["is_hidden"] = effectivelyHidden[a.ID]
+				}
+				breadcrumbs = append(breadcrumbs, crumb)
+			}
 		}
 	}
 

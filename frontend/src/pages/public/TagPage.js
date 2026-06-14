@@ -116,6 +116,9 @@ export default class TagPage extends Component {
       params.year_to = vc.years[1];
     }
     if (vc.query) params.q = vc.query;
+    // Carry the explicit navigation path so the server can build breadcrumbs
+    // matching the branch the user drilled through (tags form a DAG).
+    if (this.props.query?.path) params.path = this.props.query.path;
     return params;
   }
 
@@ -204,25 +207,43 @@ export default class TagPage extends Component {
     }
 
     // Build breadcrumb: ancestors are links, current tag is the non-linked tail.
+    // Preserve any server-provided `href` — when a navigation `path` is active
+    // each ancestor crumb carries its own truncated path so clicking up the
+    // trail keeps the navigated branch.
     const tag = data?.tag;
     const breadcrumbs = data?.breadcrumbs || [];
+    const pathSlugs = (this.props.query?.path || "")
+      .split("/")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // Self-link for the current tag carries the full navigated path.
+    const currentHref = tag
+      ? pathSlugs.length
+        ? `/tags/${tag.slug}?path=${pathSlugs.join("/")}`
+        : `/tags/${tag.slug}`
+      : null;
     const lastCrumbIsCurrentTag =
       breadcrumbs.length > 0 &&
       breadcrumbs[breadcrumbs.length - 1]?.slug === tag?.slug;
+    const mapCrumb = (bc) => ({
+      name: bc.name,
+      slug: bc.slug,
+      is_hidden: bc.is_hidden,
+      href: bc.href,
+    });
     const computedBreadcrumb = lastCrumbIsCurrentTag
-      ? breadcrumbs.map((bc) => ({
-          name: bc.name,
-          slug: bc.slug,
-          is_hidden: bc.is_hidden,
-        }))
+      ? breadcrumbs.map(mapCrumb)
       : [
-          ...breadcrumbs.map((bc) => ({
-            name: bc.name,
-            slug: bc.slug,
-            is_hidden: bc.is_hidden,
-          })),
+          ...breadcrumbs.map(mapCrumb),
           ...(tag
-            ? [{ name: tag.name, slug: tag.slug, is_hidden: tag.is_hidden }]
+            ? [
+                {
+                  name: tag.name,
+                  slug: tag.slug,
+                  is_hidden: tag.is_hidden,
+                  href: currentHref,
+                },
+              ]
             : []),
         ];
     const bcCacheKey = `bc:tag:${slug}`;

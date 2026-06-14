@@ -9,6 +9,20 @@
 import { escapeHtml, setupLongPress } from './helpers.js';
 import { CHEVRON_SVG } from './icons.js';
 
+/**
+ * Build a tag URL whose `path` query carries the ancestor slug chain the user
+ * drilled through to reach it. Empty chain → bare /tags/<slug>.
+ *
+ * @param {string} slug
+ * @param {string[]} [pathSlugs] ancestor slugs, root-first (current tag excluded)
+ */
+export function tagHref(slug, pathSlugs = []) {
+  const chain = (pathSlugs || []).filter(Boolean);
+  return chain.length
+    ? `/tags/${slug}?path=${chain.join('/')}`
+    : `/tags/${slug}`;
+}
+
 // ── Hot-zone tracker ─────────────────────────────────────────────────────────
 
 /**
@@ -58,14 +72,15 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   if (!entry) return;
 
   const ancestors = getTagAncestors(slug, index);
+  const ancestorSlugs = ancestors.map((t) => t.slug);
   const children = entry.children || [];
 
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
 
-  const createItem = (t, className) => {
+  const createItem = (t, className, href) => {
     const a = document.createElement('a');
-    a.href = `/tags/${t.slug}`;
+    a.href = href || `/tags/${t.slug}`;
     a.className = `flyout-item ${className}`;
     a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span> <span class="count">${t.count}</span>`;
     a.addEventListener('click', (e) => {
@@ -76,11 +91,15 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
     return a;
   };
 
-  // 1. Ancestors
+  // 1. Ancestors — each links to itself carrying its truncated path prefix.
   if (ancestors.length) {
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-ancestors';
-    ancestors.forEach((t) => section.appendChild(createItem(t, 'ancestor-link')));
+    ancestors.forEach((t, i) =>
+      section.appendChild(
+        createItem(t, 'ancestor-link', tagHref(t.slug, ancestorSlugs.slice(0, i))),
+      ),
+    );
     flyout.appendChild(section);
   }
 
@@ -90,11 +109,14 @@ function _showFlyout(anchorEl, slug, index, excludeEl, navigateFn) {
   currentSection.innerHTML = `<span class="name">${escapeHtml(entry.tag.name)}</span> <span class="count">${entry.tag.count}</span>`;
   flyout.appendChild(currentSection);
 
-  // 3. Children
+  // 3. Children — drilling down appends the current tag to the path chain.
   if (children.length) {
+    const childPath = [...ancestorSlugs, slug];
     const section = document.createElement('div');
     section.className = 'flyout-section flyout-children';
-    children.forEach((t) => section.appendChild(createItem(t, 'child-link')));
+    children.forEach((t) =>
+      section.appendChild(createItem(t, 'child-link', tagHref(t.slug, childPath))),
+    );
     flyout.appendChild(section);
   }
 
@@ -191,7 +213,7 @@ export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null)
 
   items.forEach((t) => {
     const a = document.createElement('a');
-    a.href = `/tags/${t.slug}`;
+    a.href = t.href || `/tags/${t.slug}`;
     a.className = 'flyout-item child-link';
     a.innerHTML = `<span class="name">${escapeHtml(t.name)}</span> <span class="count">${t.count ?? t.post_count ?? ''}</span>`;
     a.addEventListener('click', (e) => {
