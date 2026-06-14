@@ -5,6 +5,11 @@ import { renderTagLink } from "../../utils/tags.js";
 
 const EDGE_PAD = 48;
 
+// A range change navigates + remounts the Timeline, which would otherwise rebuild
+// from the persisted year range alone and reset zoom to the default. Stash the live
+// view here on emit so the next mount with the same range restores the exact zoom/pan.
+let restoreView = null;
+
 /**
  * Timeline component — horizontal date-tag navigation control.
  *
@@ -59,6 +64,19 @@ export class Timeline extends Component {
           this._initCollapsed();
           // The persisted range covers everything; emit so the consumer drops
           // the redundant filter (clears the URL + filter chips).
+          if (this.props.mode === "filter") this._emitRange();
+        } else if (
+          restoreView &&
+          restoreView.from === from &&
+          restoreView.to === to
+        ) {
+          // Same range we just emitted: restore the pinch zoom/pan verbatim so a
+          // grouping of several years stays grouped instead of snapping to single-year zoom.
+          this.state.zoom = restoreView.zoom;
+          this.state.panX = restoreView.panX;
+          this._settled = true;
+          this._layout();
+          this._gestureController?.setZoomed(this.state.zoom > 1);
           if (this.props.mode === "filter") this._emitRange();
         } else {
           this._centerOnYear((from + to) / 2);
@@ -215,8 +233,20 @@ export class Timeline extends Component {
         this._onPan(dx);
       },
       onPinchMove: (scale, cx) => {
+        // Suppress emit while pinching: a mid-gesture emit navigates + remounts the
+        // component, killing the in-flight pinch (see _debounceEmitRange). We settle
+        // once on release via onPinchEnd instead.
+        this._isPinching = true;
         const rect = trackWrapper.getBoundingClientRect();
         this._onZoom(scale, cx - rect.left);
+      },
+      onPinchEnd: () => {
+        if (!this._isPinching) return;
+        this._isPinching = false;
+        clearTimeout(this._emitTimer);
+        this._snapToCenterPill(() => {
+          if (this.props.mode === "filter") this._emitRange();
+        });
       },
       onTap: (x, y) => this._onTap(x, y),
       onDoubleTap: (x, _y) => {
@@ -504,13 +534,9 @@ export class Timeline extends Component {
     const maxYear = parseInt(el.dataset.max, 10);
 
     if (this.props.mode === "filter") {
-      this._centerOnYear((minYear + maxYear) / 2, true, () => {
-        this.props.onRangeChange?.({
-          from: minYear,
-          to: maxYear,
-          source: "center",
-        });
-      });
+      // Center on the cluster, then emit via _emitRange so the current zoom/pan is
+      // stashed in restoreView — otherwise the remount resets to single-year zoom.
+      this._centerOnYear((minYear + maxYear) / 2, true, () => this._emitRange());
       return;
     }
 
@@ -948,12 +974,13 @@ export class Timeline extends Component {
     // and commit the range once on release (see _applyMomentum). Emitting mid-drag
     // navigates + re-renders the host page, which remounts this component and kills
     // the in-flight gesture — so the drag would die the moment it crossed a year.
-    if (this._isDragging) return;
+    if (this._isDragging || this._isPinching) return;
 
-    // Zoom (wheel/pinch) has no explicit release event: settle 150ms after the
-    // last change. clearTimeout above means this only fires once movement pauses.
+    // Wheel zoom has no explicit release event: settle 150ms after the last change.
+    // clearTimeout above means this only fires once movement pauses. (Touch pinch
+    // settles via onPinchEnd instead — see _isPinching guard above.)
     this._emitTimer = setTimeout(() => {
-      if (this._isDragging) return;
+      if (this._isDragging || this._isPinching) return;
       this._snapToCenterPill(() => {
         if (this.props.mode === "filter" && !this._isDragging) {
           this._emitRange();
@@ -979,6 +1006,8 @@ export class Timeline extends Component {
     // consumers clear the year filter instead of pinning a redundant full-range.
     const isFullExtent =
       from === this.state.extent.min && to === this.state.extent.max;
+    // Capture the live view so the remount triggered by this change can restore it.
+    restoreView = { from, to, zoom: this.state.zoom, panX: this.state.panX };
     this.props.onRangeChange({ from, to, source: "center", isFullExtent });
   }
 
