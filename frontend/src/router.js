@@ -102,13 +102,15 @@ class Router {
     } else {
       history.pushState(null, "", path);
     }
-    this._render(path);
+    // Always render using the browser's resolved location to ensure absolute
+    // path matching in the router.
+    this._render(location.pathname + location.search + location.hash);
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
 
   _onPopState() {
-    this._render(location.pathname + location.search);
+    this._render(location.pathname + location.search + location.hash);
   }
 
   _onNavigate(event) {
@@ -127,6 +129,7 @@ class Router {
     if (event.defaultPrevented) return;
     const anchor = event.target.closest("a[href]");
     if (!anchor) return;
+
     const href = anchor.getAttribute("href");
     if (
       !href ||
@@ -140,8 +143,14 @@ class Router {
     ) {
       return;
     }
+
+    // Use the resolved pathname, search and hash from the anchor element
+    // instead of the raw href attribute. This ensures that relative links are
+    // correctly resolved against the current base URL before we attempt to match.
+    const path = anchor.pathname + anchor.search + anchor.hash;
+
     event.preventDefault();
-    this.navigate(href);
+    this.navigate(path);
   }
 
   /**
@@ -152,8 +161,12 @@ class Router {
    * @returns {Record<string,string>|null}
    */
   _match(pattern, pathname) {
-    const patParts = pattern.split("/");
-    const urlParts = pathname.split("/");
+    // Normalize: remove trailing slashes and multiple slashes
+    const cleanPattern = pattern.replace(/\/+$/, "") || "/";
+    const cleanPathname = pathname.replace(/\/+$/, "") || "/";
+
+    const patParts = cleanPattern.split("/");
+    const urlParts = cleanPathname.split("/");
     if (patParts.length !== urlParts.length) return null;
 
     const params = {};
