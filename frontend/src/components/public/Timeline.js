@@ -215,7 +215,10 @@ export class Timeline extends Component {
         this._isDragging = true;
         this._onPan(dx);
       },
-      onPinchMove: (scale, cx) => this._onZoom(scale, cx),
+      onPinchMove: (scale, cx) => {
+        const rect = trackWrapper.getBoundingClientRect();
+        this._onZoom(scale, cx - rect.left);
+      },
       onTap: (x, y) => this._onTap(x, y),
       onDoubleTap: (x, _y) => {
         const rect = trackWrapper.getBoundingClientRect();
@@ -226,6 +229,8 @@ export class Timeline extends Component {
         this._onZoom(0.5, x - rect.left);
       },
       onSwipeMove: (dx, dy) => {
+        // Vertical swipes scroll the page — leave the timeline untouched.
+        if (Math.abs(dy) > Math.abs(dx)) return;
         touchDragged = true;
         this._isDragging = true;
         const dxDelta = dx - (this._swipeDxBase || 0);
@@ -250,7 +255,9 @@ export class Timeline extends Component {
           this._applyMomentum();
         }
       },
-      onSwipeCommit: () => {
+      onSwipeCommit: (dir) => {
+        // Only horizontal commits pan the timeline; vertical = page scroll.
+        if (dir !== "left" && dir !== "right") return;
         this._swipeDxBase = 0;
         this._swipeDyBase = 0;
         this._ignoreNextClick = true;
@@ -1127,7 +1134,8 @@ export class Timeline extends Component {
 
     this.state.panX = Math.max(minPanX, Math.min(maxPanX, panX + dx));
     this._layout();
-    this._debounceEmitRange();
+    // Momentum settles with its own snap+emit; don't schedule a competing one.
+    if (!isMomentum) this._debounceEmitRange();
   }
 
   _applyMomentum() {

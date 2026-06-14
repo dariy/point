@@ -435,4 +435,87 @@ describe('Timeline Component', () => {
       assert.strictEqual(global.vibrateCalls.length, 0, 'Should not vibrate when reduced motion is on');
     });
   });
+
+  describe('Touch Gestures', () => {
+    // Builds a wired-up timeline whose track elements report `rectLeft` as their
+    // viewport offset, then exposes the live GestureController callbacks.
+    function makeTimeline(rectLeft = 0) {
+      const el = () => ({
+        clientWidth: 1000,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        getBoundingClientRect: () => ({ left: rectLeft, top: 0, width: 1000, height: 100 }),
+        classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        appendChild: () => {},
+        children: [],
+        setAttribute: () => {},
+        dataset: {},
+        style: {},
+      });
+      const customContainer = {
+        querySelector: () => el(),
+        querySelectorAll: () => [],
+        appendChild: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+      const timeline = new Timeline(customContainer, { mode: 'filter', onRangeChange: () => {} });
+      timeline.state.isLoading = false;
+      timeline.state.pills = [
+        { year: 2020, name: '2020', slug: '2020', post_count: 1 },
+        { year: 2021, name: '2021', slug: '2021', post_count: 1 },
+        { year: 2022, name: '2022', slug: '2022', post_count: 1 },
+      ];
+      timeline.state.extent = { min: 2020, max: 2022 };
+      timeline.state.zoom = 1;
+      timeline.state.panX = 0;
+      timeline.afterRender();
+      return timeline;
+    }
+
+    test('vertical swipe scrolls the page without panning or filtering', () => {
+      const timeline = makeTimeline();
+      let panned = false, momentum = false, emitted = false;
+      timeline._onPan = () => { panned = true; };
+      timeline._applyMomentum = () => { momentum = true; };
+      timeline.props.onRangeChange = () => { emitted = true; };
+
+      const opts = timeline._gestureController._opts;
+      opts.onSwipeMove(2, 80); // predominantly vertical
+      assert.strictEqual(panned, false, 'vertical swipe must not pan the timeline');
+
+      opts.onSwipeCommit('down');
+      assert.strictEqual(momentum, false, 'vertical commit must not start momentum');
+      assert.strictEqual(emitted, false, 'vertical swipe must not emit a range change');
+    });
+
+    test('horizontal swipe pans the timeline', () => {
+      const timeline = makeTimeline();
+      let panArg = null;
+      timeline._onPan = (dx) => { panArg = dx; };
+
+      timeline._gestureController._opts.onSwipeMove(80, 5);
+      assert.strictEqual(panArg, 80, 'horizontal swipe should pan by dx');
+    });
+
+    test('horizontal commit drives momentum', () => {
+      const timeline = makeTimeline();
+      let momentum = false;
+      timeline._applyMomentum = () => { momentum = true; };
+
+      timeline._gestureController._opts.onSwipeCommit('left');
+      assert.strictEqual(momentum, true, 'horizontal commit should start momentum');
+    });
+
+    test('pinch zoom anchors relative to the track, not the viewport', () => {
+      const timeline = makeTimeline(200); // track sits 200px from the viewport left
+      let anchor = null;
+      timeline._onZoom = (_scale, anchorX) => { anchor = anchorX; };
+
+      timeline._gestureController._opts.onPinchMove(1.2, 300); // pinch center at clientX 300
+      assert.strictEqual(anchor, 100, 'anchor should be clientX minus the track left offset');
+    });
+  });
 });
