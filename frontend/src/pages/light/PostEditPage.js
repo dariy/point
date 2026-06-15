@@ -28,7 +28,7 @@ import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 
 const AUTOSAVE_IDLE_MS = 5_000;
@@ -163,6 +163,7 @@ export default class PostEditPage extends Component {
     const detailsToggle = `
       <button id="details-toggle" class="btn btn-secondary" type="button"
               aria-controls="details-panel" aria-expanded="${this.state.detailsOpen ? 'true' : 'false'}">
+        ${SETTINGS_SVG}
         <span class="btn-label">Details</span>
       </button>`;
 
@@ -220,6 +221,7 @@ export default class PostEditPage extends Component {
                     ${aiBtn("title")}
                   </div>
                 </div>
+
 
                 <div class="tags-row">
                   <div class="tags-input-wrapper">

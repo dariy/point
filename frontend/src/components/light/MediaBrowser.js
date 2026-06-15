@@ -522,7 +522,7 @@ export class MediaBrowser extends Component {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const year = btn.dataset.year;
-        const expanded = this.state.expandedYears[year] !== false;
+        const expanded = this.state.expandedYears[year] === true;
         this.setState({ expandedYears: { ...this.state.expandedYears, [year]: !expanded } });
       });
     });

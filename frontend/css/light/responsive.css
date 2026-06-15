@@ -84,15 +84,6 @@
    Tags Manager — portrait phones
    =========================== */
 @media (max-width: 40em) {
-    /* Header: two rows — [hamburger + title] then [actions] */
-    .light-header {
-        height: auto;
-        min-height: var(--header-height);
-        flex-wrap: wrap;
-        padding-top: var(--spacing-sm);
-        padding-bottom: var(--spacing-sm);
-        row-gap: var(--light-header-row-gap);
-    }
 
     /* Actions drop to line 2, full width, wrapping allowed */
     .header-actions {
