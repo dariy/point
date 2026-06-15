@@ -45,7 +45,7 @@ COPY scripts/build-css.sh ./scripts/
 RUN sh ./scripts/build-css.sh
 
 # Runtime stage
-FROM docker.io/library/alpine:3.23
+FROM docker.io/library/alpine:3.24
 
 WORKDIR /app
 
