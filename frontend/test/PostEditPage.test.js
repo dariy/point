@@ -29,12 +29,14 @@ describe('PostEditPage', () => {
       activeElement: {},
       addEventListener: () => {},
       removeEventListener: () => {},
+      querySelector: () => null,
       querySelectorAll: () => []
     };
     global.window = {
         Point: { emit: () => {}, on: () => {} },
         location: { pathname: '' },
         history: { replaceState: () => {} },
+        matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
         addEventListener: () => {},
         removeEventListener: () => {},
         dispatchEvent: () => {}

@@ -109,7 +109,7 @@ export default class PostEditPage extends Component {
       igStatus: null,
       maximizedField: null,
       detailsOpen: this._readDetailsPref(),
-      showLivePreview: typeof window !== 'undefined' && window.innerWidth > 1400,
+      showLivePreview: this._readLivePreviewPref(),
       menuOpen: false,
       hasPendingEdits: false,
     };
@@ -117,8 +117,8 @@ export default class PostEditPage extends Component {
     this._nodes = [];
     this._unmounted = false;
     this._analyzing = false;
-    this._debouncedAutosave = debounce(this._autosave.bind(this), AUTOSAVE_BUSY_MS);
     this._idleTimer = null;
+    this._maxWaitTimer = null;
   }
 
   render() {
@@ -152,6 +152,7 @@ export default class PostEditPage extends Component {
           <hr>
           <button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${SPARKLE_SVG} Analyze media</button>
           <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${LINK_SVG} Preview link</button>
+          ${this._isWide() ? `<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
           ${!isNew ? `<button class="menu-item" type="button" data-action="view-on-site">${EXTERNAL_LINK_SVG} View on site</button>` : ''}
           <hr>
           <button class="menu-item text-danger" type="button" data-action="delete" id="delete-btn">${TRASH_SVG} Delete</button>
@@ -376,6 +377,31 @@ export default class PostEditPage extends Component {
       </details>`;
   }
 
+  /** True on ultrawide viewports where the live-preview pane is available (≥112em, per admin-ux C5). */
+  _isWide() {
+    return typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(min-width: 112em)").matches : false;
+  }
+
+  /** Initial live-preview state: on by default on ultrawide unless the user turned it off. */
+  _readLivePreviewPref() {
+    if (!this._isWide()) return false;
+    let pref = null;
+    try { pref = localStorage.getItem("point:editor:live-preview"); } catch { /* ignore */ }
+    return pref !== "0";
+  }
+
+  /** Toggle the live-preview pane without a full re-render; persists the choice. */
+  _toggleLivePreview() {
+    const on = !this.state.showLivePreview;
+    this.state.showLivePreview = on;
+    try { localStorage.setItem("point:editor:live-preview", on ? "1" : "0"); } catch { /* ignore */ }
+    this.container.querySelector(".editor-layout")?.classList.toggle("has-live-preview", on);
+    const btn = this.container.querySelector('[data-action="toggle-preview"]');
+    if (btn) btn.textContent = on ? "Hide preview" : "Show preview";
+    if (on) this._debouncedPreview?.();
+  }
+
   /** Initial Details open state: persisted on wide viewports, always closed (sheet) on narrow. */
   _readDetailsPref() {
     const wide = typeof window !== "undefined" && window.matchMedia
@@ -442,15 +468,25 @@ export default class PostEditPage extends Component {
     this.container.querySelector("#details-close-btn")?.addEventListener("click", () => this._toggleDetails(false));
     this.container.querySelector("#details-backdrop")?.addEventListener("click", () => this._toggleDetails(false));
 
-    // Header Actions
+    // Header overflow menu — toggle a class rather than setState. A full
+    // re-render here would rebuild the editor from state.post and discard any
+    // edits not yet flushed by autosave (title/slug/excerpt/tags/css), plus
+    // lose focus and scroll position.
+    const splitButton = this.container.querySelector(".header-split-button");
+    const setMenuOpen = (open) => {
+      this.state.menuOpen = open;
+      splitButton?.classList.toggle("is-menu-open", open);
+    };
     this.container.querySelector("#header-menu-toggle")?.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.setState({ menuOpen: !this.state.menuOpen });
+      setMenuOpen(!this.state.menuOpen);
     });
-    
-    document.addEventListener("click", () => {
-      if (this.state.menuOpen && !this._unmounted) this.setState({ menuOpen: false });
-    });
+
+    // Close the menu on any outside click. Stored + removed below so re-renders
+    // don't accumulate stale document listeners.
+    if (this._onDocClick) document.removeEventListener("click", this._onDocClick);
+    this._onDocClick = () => { if (this.state.menuOpen) setMenuOpen(false); };
+    document.addEventListener("click", this._onDocClick);
 
     this.container.querySelectorAll(".menu-item").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -511,6 +547,7 @@ export default class PostEditPage extends Component {
       this.state.maximizedField = field;
     });
 
+    if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
     const onKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); this._save(); }
     };
@@ -582,9 +619,20 @@ export default class PostEditPage extends Component {
       try {
         const { html } = await previewRender(data.content);
         const mount = this.$("#preview-content");
-        if (mount) mount.innerHTML = html;
+        if (mount) {
+          const titleHtml = data.title ? `<h1 class="post-title">${escapeHtml(data.title)}</h1>` : "";
+          mount.innerHTML = titleHtml + html;
+        }
       } catch (err) { /* ignore */ }
     }, 1000);
+
+    // Re-render the preview when the viewport grows into ultrawide range.
+    if (window.matchMedia) {
+      this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
+      this._previewMql = window.matchMedia("(min-width: 112em)");
+      this._onPreviewMqlChange = (e) => { if (e.matches && this.state.showLivePreview) this._debouncedPreview?.(); };
+      this._previewMql.addEventListener?.("change", this._onPreviewMqlChange);
+    }
 
     if (this.state.showLivePreview) this._debouncedPreview();
 
@@ -606,6 +654,7 @@ export default class PostEditPage extends Component {
       case "mark-hidden": this._save({ status: "hidden" }); break;
       case "unpublish": this._save({ status: "draft" }); break;
       case "analyze": this._analyzeNow(); break;
+      case "toggle-preview": this._toggleLivePreview(); break;
       case "preview-link": this._generatePreviewLink(); break;
       case "view-on-site": window.open(this.props.publicUrl, "_blank"); break;
       case "delete": {
@@ -629,18 +678,23 @@ export default class PostEditPage extends Component {
     this._updateDetailsSummaries();
     store.set('autosave_status', { status: 'idle' });
     
+    // Save ~5s after the user stops typing. The idle timer resets on every
+    // keystroke, so a separate max-wait timer (not reset on input) guarantees
+    // a save during long continuous typing.
     clearTimeout(this._idleTimer);
-    this._idleTimer = setTimeout(() => {
-      this._autosave();
-    }, AUTOSAVE_IDLE_MS);
+    this._idleTimer = setTimeout(() => this._autosave(), AUTOSAVE_IDLE_MS);
+    if (!this._maxWaitTimer) {
+      this._maxWaitTimer = setTimeout(() => this._autosave(), AUTOSAVE_BUSY_MS);
+    }
 
-    this._debouncedAutosave();
     this._debouncedPreview?.();
   }
 
   async _autosave() {
+    clearTimeout(this._idleTimer); this._idleTimer = null;
+    clearTimeout(this._maxWaitTimer); this._maxWaitTimer = null;
     if (this._unmounted || this.state.saving || this.state.deleting || !this.state.hasPendingEdits) return;
-    
+
     const data = this._collectFormData();
     if (!data.title) return;
 
@@ -709,6 +763,7 @@ export default class PostEditPage extends Component {
     this._unmounted = true;
     if (this._unsubscribeRetry && window.Point) window.Point.off('autosave:retry', this._unsubscribeRetry);
     clearTimeout(this._idleTimer);
+    clearTimeout(this._maxWaitTimer);
     clearInterval(this._chipInterval);
     document.removeEventListener("dragenter", this._onDragEnter);
     document.removeEventListener("dragleave", this._onDragLeave);
@@ -719,6 +774,8 @@ export default class PostEditPage extends Component {
     this._mediaPicker = null;
     this._visualEditorRef = null;
     if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
+    if (this._onDocClick) document.removeEventListener("click", this._onDocClick);
+    this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
   }
 
   _setupWindowDragAndDrop() {
@@ -860,10 +917,12 @@ export default class PostEditPage extends Component {
       excerpt: (this.container.querySelector("#excerpt-editor")?.value || "").trim() || null,
       content: this.state.editorMode === "visual" ? (this._visualEditorRef?.serializeNodes() ?? serializeNodes(this._nodes)) : this._markdownEditorRef?.getValue() ?? "",
       status: this.container.querySelector("#status-select")?.value || this.state.post?.status || "draft",
-      formatter: this.container.querySelector("#formatter-select")?.value || "markdown",
+      // These fields have no editor inputs; preserve existing values instead of
+      // sending null (the backend would clear them on every save).
+      formatter: this.state.post?.formatter || "markdown",
       is_featured: this.container.querySelector("#featured-check")?.checked || false,
-      thumbnail_path: (this.container.querySelector("#thumbnail-input")?.value || "").trim() || null,
-      meta_description: (this.container.querySelector("#meta-input")?.value || "").trim() || null,
+      thumbnail_path: this.state.post?.thumbnail_path ?? null,
+      meta_description: this.state.post?.meta_description ?? null,
       tags: this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
       scheduled_at: this.container.querySelector("#schedule-input")?.value ? new Date(this.container.querySelector("#schedule-input").value).toISOString() : "",
       css: this._cssEditorRef ? this._cssEditorRef.getValue() : (this.state.post?.css || ""),
