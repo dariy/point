@@ -11,6 +11,7 @@ cd "$PROJECT_ROOT"
 
 # Cleanup function to be called on EXIT
 cleanup() {
+    trap - EXIT INT TERM
     echo ""
     echo "==> Shutting down and cleaning up..."
     if [ -f frontend/index.html.bak ]; then
@@ -21,7 +22,7 @@ cleanup() {
         rm data.yml 2>/dev/null || true
     fi
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # Load .env if it exists
 if [ -f .env ]; then
