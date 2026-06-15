@@ -96,12 +96,16 @@ func TestTagService_HierarchyVisibility(t *testing.T) {
 	_ = service.SetTagChildren(ctx, root.ID, []int64{child.ID})
 	_ = service.SetTagChildren(ctx, child.ID, []int64{grandchild.ID})
 
-	// Check effectively hidden — all should be hidden via propagation.
+	// Hidden is NOT inherited: only the explicitly-hidden root is hidden.
+	// Descendants stay visible so useful children aren't buried under a hidden parent.
 	service.Invalidate()
 	snap, _ := service.GetTagSnapshot(ctx)
 	hidden := snap.EffectiveHidden
-	if !hidden[root.ID] || !hidden[child.ID] || !hidden[grandchild.ID] {
-		t.Errorf("expected all tags to be effectively hidden, got: root=%v, child=%v, grandchild=%v", hidden[root.ID], hidden[child.ID], hidden[grandchild.ID])
+	if !hidden[root.ID] {
+		t.Errorf("expected root to be effectively hidden, got %v", hidden[root.ID])
+	}
+	if hidden[child.ID] || hidden[grandchild.ID] {
+		t.Errorf("expected descendants NOT hidden (no inheritance), got: child=%v, grandchild=%v", hidden[child.ID], hidden[grandchild.ID])
 	}
 
 	hiddenPosts := snap.EffectiveHidesPosts

@@ -281,14 +281,12 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 	if !foundNormal {
 		t.Error("FAIL: 'normal' tag not found in post response")
 	}
-	if foundChild {
-		t.Error("FAIL: 'child-page' (descendant of hidden tag) found in post response")
-	} else {
-		t.Log("PASS: 'child-page' correctly excluded from post response")
+	// Hidden is not inherited — the descendant of a hidden tag stays visible.
+	if !foundChild {
+		t.Error("FAIL: 'child-page' (descendant of hidden tag) should be present (hidden is not inherited)")
 	}
+	// The explicitly-hidden tag itself is excluded from post responses.
 	if foundPage {
-		t.Log("NOTE: 'pagetag' found in post response (it is NOT an excluded descendant by current logic)")
-	} else {
-		t.Log("PASS: 'pagetag' correctly excluded from post response")
+		t.Error("FAIL: 'pagetag' (explicitly hidden) found in post response")
 	}
 }

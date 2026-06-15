@@ -304,6 +304,80 @@
     white-space: nowrap;
 }
 
+/* Row status badges (tree view) — nav / hidden / inherited / year / coords / multi-parent */
+.tm-badges-row {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-xs);
+    min-width: 0;
+}
+
+.tm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--tm-count-badge-padding-y) var(--tm-count-badge-padding-x);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    border: var(--border-width) solid transparent;
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.tm-badge-nav {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.tm-badge-hidden {
+    background: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+.tm-badge-inherited {
+    background: var(--color-warning-light);
+    color: var(--color-warning);
+}
+
+.tm-badge-year {
+    background: var(--color-purple-50);
+    color: var(--color-purple-500);
+}
+
+.tm-badge-coords {
+    background: var(--color-success-light);
+    color: var(--color-success);
+}
+
+.tm-badge-coords:hover {
+    filter: brightness(0.95);
+}
+
+.tm-badge-multi {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+}
+
+/* Inline "open ancestor" button rendered inside an inherited badge / modal chip */
+.tm-badge-via-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.tm-badge-via-btn:hover {
+    opacity: 0.8;
+}
+
 .tm-flags-inline {
     margin-left: var(--tm-flags-inline-margin-left);
 }

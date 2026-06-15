@@ -414,8 +414,9 @@ func TestTagService_EffectivelyHidden(t *testing.T) {
 		INSERT INTO tag_relationships (parent_id, child_id)
 		SELECT h.id, s.id FROM tags h, tags s WHERE h.slug='hiddentag' AND s.slug='secret'`)
 
-	var secretID int64
+	var secretID, hiddenID int64
 	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug='secret'`).Scan(&secretID)
+	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug='hiddentag'`).Scan(&hiddenID)
 
 	// Invalidate to force rebuild
 	svc.Invalidate()
@@ -423,8 +424,12 @@ func TestTagService_EffectivelyHidden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTagSnapshot (with data) failed: %v", err)
 	}
-	if !snap.EffectiveHidden[secretID] {
-		t.Errorf("expected secret tag (id=%d) to be hidden", secretID)
+	if !snap.EffectiveHidden[hiddenID] {
+		t.Errorf("expected hidden tag (id=%d) to be hidden", hiddenID)
+	}
+	// Hidden is not inherited — the child of a hidden parent stays visible.
+	if snap.EffectiveHidden[secretID] {
+		t.Errorf("expected secret tag (id=%d) NOT to be hidden (no inheritance)", secretID)
 	}
 }
 
@@ -843,8 +848,12 @@ func TestTagService_PageTagIDs(t *testing.T) {
 		t.Fatalf("GetTagSnapshot (with data) failed: %v", err)
 	}
 	ids2 := snap.PageTagIDs()
-	if !ids2[201] {
-		t.Errorf("expected tag 201 to be a page tag ID (inherited from hidden parent)")
+	if !ids2[200] {
+		t.Errorf("expected hidden tag 200 to be a page tag ID")
+	}
+	// Hidden is not inherited — the child of a hidden parent stays visible.
+	if ids2[201] {
+		t.Errorf("expected tag 201 NOT to be a page tag ID (hidden is not inherited)")
 	}
 }
 

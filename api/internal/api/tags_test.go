@@ -569,10 +569,19 @@ func TestTagHandler_GetTagByID_EffectivelyHidden(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues(strings.Trim(mustJSON(child.ID), "\""))
+	c.SetParamValues(strings.Trim(mustJSON(hiddenID), "\""))
 	err := th.GetTagByID(c)
 	if err == nil {
-		t.Error("expected 404 for effectively hidden tag (public)")
+		t.Error("expected 404 for hidden tag (public)")
+	}
+
+	// Hidden is not inherited — the child of a hidden tag is publicly reachable.
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec2)
+	c2.SetParamNames("id")
+	c2.SetParamValues(strings.Trim(mustJSON(child.ID), "\""))
+	if err := th.GetTagByID(c2); err != nil {
+		t.Errorf("expected child of hidden tag to be reachable (no inheritance), got error: %v", err)
 	}
 }
 
@@ -591,10 +600,19 @@ func TestTagHandler_GetTagBySlug_EffectivelyHidden(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
-	c.SetParamValues("secret2-hidden")
+	c.SetParamValues("hiddentag")
 	err := th.GetTagBySlug(c)
 	if err == nil {
 		t.Error("expected 404 for hidden tag by slug (public)")
+	}
+
+	// Hidden is not inherited — the child stays publicly reachable.
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec2)
+	c2.SetParamNames("slug")
+	c2.SetParamValues("secret2-hidden")
+	if err := th.GetTagBySlug(c2); err != nil {
+		t.Errorf("expected child of hidden tag to be reachable (no inheritance), got error: %v", err)
 	}
 }
 
