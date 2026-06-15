@@ -152,8 +152,6 @@
     --filter-select-background-size: var(--size-0-75);
     --filter-select-transform: var(--size-0-0625);
     --filter-search-min-width: var(--size-12);
-    --filter-search-height: var(--size-2);
-    --filter-search-border-radius: var(--size-1);
     --app-logo-width: var(--size-1);
     --homepage-link-width: var(--size-1-25);
     --homepage-link-height: var(--size-1-25);

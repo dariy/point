@@ -40,6 +40,7 @@ export default class TagsManagerPage extends Component {
     // Track initial structure for change detection in modal
     this._initialParentIds = [];
     this._initialChildIds = [];
+    this._swipeCleanup = null;
   }
 
   render() {
@@ -558,11 +559,15 @@ export default class TagsManagerPage extends Component {
       this._updateFilterChips();
       this._applyListFilter();
     }
+
+    this._bindSwipeToReveal();
   }
 
   beforeUnmount() {
     this._cleanupAdminLayout?.();
     this._closeModal();
+    this._swipeCleanup?.();
+    this._swipeCleanup = null;
   }
 
   _expandAll() {
@@ -590,6 +595,161 @@ export default class TagsManagerPage extends Component {
     } else {
       this.setState({ sortField: field, sortOrder: 'asc' });
     }
+  }
+
+  // ── Swipe-to-reveal actions (portrait mobile) ─────────────────────────────────
+
+  /**
+   * On narrow portrait viewports, hide .tm-actions off-screen and let users
+   * swipe a row left to reveal them.  Touch handling:
+   *  • touchstart records origin
+   *  • touchmove translates the row if the gesture is predominantly horizontal-left
+   *  • touchend snaps open (if past threshold) or snaps shut
+   *  • tapping anywhere else closes the currently-open row
+   */
+  _bindSwipeToReveal() {
+    if (!window.matchMedia) return;     // SSR / test env guard
+    const mql = window.matchMedia('(max-width: 40em)');
+    if (!mql.matches) return;           // desktop / tablet — nothing to do
+
+    const THRESHOLD_PX = 40;            // minimum drag to snap open
+    const DAMPING = 0.55;               // rubber-band resistance past full-open
+    let openRow = null;                 // currently revealed row (or null)
+    let actionsWidth = 0;               // measured width of the actions panel
+    let startX = 0, startY = 0;
+    let dragging = false;               // true once we've committed to horizontal
+    let decided = false;                // true once direction is locked
+    let dx = 0;
+    const abortControllers = [];        // for easy cleanup
+
+    const closeOpen = () => {
+      if (!openRow) return;
+      openRow.style.transform = '';
+      openRow.classList.remove('tm-row--revealed');
+      openRow = null;
+    };
+
+    const rows = this.container.querySelectorAll('.tm-row');
+
+    rows.forEach(row => {
+      const ac = new AbortController();
+      abortControllers.push(ac);
+      const sig = { signal: ac.signal };
+
+      row.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return;
+        // If tapping inside the already-open row's actions, let buttons handle it
+        if (row === openRow && e.target.closest('.tm-actions')) return;
+
+        const t = e.touches[0];
+        startX = t.clientX;
+        startY = t.clientY;
+        dragging = false;
+        decided = false;
+        dx = 0;
+
+        // Measure actions width (varies per row due to button count)
+        const actions = row.querySelector('.tm-actions');
+        actionsWidth = actions ? actions.offsetWidth : 0;
+
+        // Disable transition during drag for responsive feel
+        row.style.transition = 'none';
+      }, { ...sig, passive: true });
+
+      row.addEventListener('touchmove', e => {
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        const rawDx = t.clientX - startX;
+        const rawDy = t.clientY - startY;
+
+        if (!decided) {
+          const absDx = Math.abs(rawDx);
+          const absDy = Math.abs(rawDy);
+          if (Math.max(absDx, absDy) < 8) return; // not enough movement
+          decided = true;
+          dragging = absDx > absDy;                // horizontal wins?
+          if (!dragging) return;                    // vertical — bail, let scroll work
+
+          // Close any other open row when starting a new swipe
+          if (openRow && openRow !== row) closeOpen();
+        }
+
+        if (!dragging) return;
+        e.preventDefault();
+
+        // Clamp: allow leftward (negative) but resist rightward past 0
+        dx = rawDx;
+        const isAlreadyOpen = row === openRow;
+        const baseOffset = isAlreadyOpen ? -actionsWidth : 0;
+        let translate = baseOffset + dx;
+
+        // Rubber-band on both edges
+        if (translate > 0) {
+          translate = translate * (1 - DAMPING);
+        } else if (translate < -actionsWidth) {
+          const over = -actionsWidth - translate;
+          translate = -actionsWidth - over * (1 - DAMPING);
+        }
+
+        row.style.transform = `translateX(${translate}px)`;
+      }, { ...sig, passive: false });
+
+      row.addEventListener('touchend', () => {
+        row.style.transition = ''; // restore CSS transition for snap
+
+        if (!dragging) {
+          // A tap (not a drag) — close any open row if tapping outside it
+          if (openRow && openRow !== row) closeOpen();
+          return;
+        }
+
+        const isAlreadyOpen = row === openRow;
+
+        if (isAlreadyOpen) {
+          // Swiping on an already-open row: close if swiped right past threshold
+          if (dx > THRESHOLD_PX) {
+            closeOpen();
+          } else {
+            // Snap back to open position
+            row.style.transform = `translateX(${-actionsWidth}px)`;
+          }
+        } else {
+          // Swiping on a closed row: open if swiped left past threshold
+          if (dx < -THRESHOLD_PX && actionsWidth > 0) {
+            closeOpen();
+            row.style.transform = `translateX(${-actionsWidth}px)`;
+            row.classList.add('tm-row--revealed');
+            openRow = row;
+          } else {
+            row.style.transform = '';
+          }
+        }
+      }, { ...sig, passive: true });
+
+      row.addEventListener('touchcancel', () => {
+        row.style.transition = '';
+        if (row === openRow) {
+          row.style.transform = `translateX(${-actionsWidth}px)`;
+        } else {
+          row.style.transform = '';
+        }
+      }, { ...sig, passive: true });
+    });
+
+    // Tap-elsewhere-to-close: listen on container
+    const containerAc = new AbortController();
+    abortControllers.push(containerAc);
+    this.container.addEventListener('click', e => {
+      if (!openRow) return;
+      // If click is inside the open row, let it propagate normally
+      if (openRow.contains(e.target)) return;
+      closeOpen();
+    }, { signal: containerAc.signal });
+
+    this._swipeCleanup = () => {
+      abortControllers.forEach(ac => ac.abort());
+      closeOpen();
+    };
   }
 
   // ── Drag and Drop ─────────────────────────────────────────────────────────────

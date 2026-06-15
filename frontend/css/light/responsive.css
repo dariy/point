@@ -20,7 +20,8 @@
         display: none;
     }
 
-    .light-main {
+    .light-main,
+    .light-layout--collapsed .light-main {
         margin-left: 0;
         padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0));
     }
@@ -98,6 +99,8 @@
         flex-basis: 100%;
         flex-wrap: wrap;
         text-wrap-mode: wrap;
+        justify-content: flex-end;
+        order: 1;
     }
 
     /* Hide drag handles — touch drag is unavailable */
@@ -113,15 +116,48 @@
         padding: 0;
     }
 
-    .tm-row .tm-actions {
-        order: 5;
+    /* ── Swipe-to-reveal actions ── */
+    .tm-node,
+    .tm-unfiled-node {
+        overflow: hidden;
     }
 
-    /* Two-line tree rows:
-       Line 1 – expand toggle + tag name + count badge
-       Line 2 – flag buttons + action buttons              */
     .tm-row {
-        flex-wrap: wrap;
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform;
+    }
+
+    .tm-row .tm-actions {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        transform: translateX(100%);
+        display: flex;
+        align-items: center;
+        gap: var(--tm-actions-gap);
+        padding: 0 var(--spacing-sm);
+        background: var(--surface-card);
+        opacity: 1;
+        pointer-events: auto;
+        border-left: var(--border-width) solid var(--border-primary);
+    }
+
+    .tm-row.tm-row--revealed {
+        background-color: var(--surface-hover);
+    }
+
+    /* List-view table rows: same concept but on <tr> / <td> */
+    .tm-tags-table .tm-actions {
+        position: static;
+        transform: none;
+        border-left: none;
+        padding: 0;
+    }
+
+    /* Single-line tree rows: actions revealed by swiping left */
+    .tm-row {
+        flex-wrap: nowrap;
         align-items: center;
         gap: var(--spacing-xs) var(--spacing-sm);
         min-height: auto;
@@ -175,6 +211,14 @@
 
     .filters {
         flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filters .filter-select,
+    .filters .filter-search,
+    .filters .tag-filter-container {
+        width: 100%;
+        min-width: 0;
     }
 }
 

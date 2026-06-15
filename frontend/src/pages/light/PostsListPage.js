@@ -248,7 +248,7 @@ export default class PostsListPage extends Component {
                   <td class="title-col">
                     <span class="table-link muted">${escapeHtml(p.title)}</span>
                   </td>
-                  <td class="updated-col">${escapeHtml(deletedAt)}</td>
+                  <td class="updated-col" title="Deleted">${escapeHtml(deletedAt)}</td>
                   <td class="actions-col">
                     <div class="actions">
                       <button class="btn btn-sm restore-btn"
@@ -308,7 +308,7 @@ export default class PostsListPage extends Component {
                     ${escapeHtml(p.title)}
                   </a>
                 </td>
-                <td class="updated-col">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
+                <td class="updated-col" title="Last updated">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
                 <td class="actions-col">
                   <div class="actions">
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
@@ -347,6 +347,7 @@ export default class PostsListPage extends Component {
               selectMode && !isTrash
                 ? `
             <div class="bulk-toolbar" id="bulk-toolbar">
+              <label class="select-all-label"><input type="checkbox" id="select-all-cb"> Select all</label>
               <span id="bulk-count">0 selected</span>
               <select id="bulk-status-select">
                 <option value="draft">Draft</option>
@@ -361,15 +362,6 @@ export default class PostsListPage extends Component {
             }
             <div class="table-container">
               <table class="table">
-                <thead>
-                  <tr>
-                    ${selectMode && !isTrash ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ""}
-                    <th class="preview-col" colspan="2">Post</th>
-                    <th class="title-col"></th>
-                    <th class="updated-col">${isTrash ? "Deleted" : "Last updated"}</th>
-                    <th class="actions-col"></th>
-                  </tr>
-                </thead>
                 <tbody id="posts-tbody">${rows}</tbody>
               </table>
             </div>
@@ -759,10 +751,9 @@ export default class PostsListPage extends Component {
   /** Measure how many table rows fit in the available container height. */
   _calcPerPage() {
     const container = this.container.querySelector(".table-container");
-    const thead = this.container.querySelector("thead");
     const probeRow = this.container.querySelector("tbody tr");
-    if (!container || !thead || !probeRow) return 20;
-    const bodyHeight = container.clientHeight - thead.offsetHeight;
+    if (!container || !probeRow) return 20;
+    const bodyHeight = container.clientHeight;
     // Each post item now takes two <tr> rows.
     const rowHeight = (probeRow.offsetHeight || 44) * 2;
     return Math.max(5, Math.floor(bodyHeight / rowHeight));

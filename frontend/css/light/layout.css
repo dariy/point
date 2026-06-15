@@ -25,18 +25,35 @@ body {
     display: none;
 }
 
+/* Collapsed: only the width shrinks and labels hide. Icons keep their
+   expanded horizontal position (left-aligned at spacing-lg) so nothing jumps
+   sideways — just drop the right padding so the narrow column fits. */
 .light-sidebar.is-collapsed .sidebar-header,
 .light-sidebar.is-collapsed .nav-item a,
 .light-sidebar.is-collapsed .sidebar-footer {
-    justify-content: center;
-    padding-left: 0;
     padding-right: 0;
 }
 
-/* Collapsed: don't let branding stretch — keep the logo centered in the column. */
-.light-sidebar.is-collapsed .sidebar-header .site-branding {
+/* Collapsed: stack footer actions one per line like nav-items, left-aligned
+   on the same icon rail. DOM order is logout then theme-toggle; reverse so
+   theme-toggle is first and the exit/logout action is last. */
+.light-sidebar.is-collapsed .sidebar-footer-actions {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+}
+
+.light-sidebar.is-collapsed .user-info {
     flex: 0 0 auto;
-    justify-content: center;
+}
+
+/* Collapsed: reset the theme-toggle's fixed dimensions and border so it
+   sits flush-left on the same icon rail as the logout button. */
+.light-sidebar.is-collapsed .theme-toggle {
+    width: auto;
+    height: auto;
+    border: none;
+    justify-content: flex-start;
 }
 
 .light-layout--collapsed .light-main {
