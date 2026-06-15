@@ -424,6 +424,21 @@ WHERE parent_id = ? AND child_id = ?;
 DELETE FROM tag_relationships
 WHERE parent_id = ? OR child_id = ?;
 
+-- name: MergePostTags :exec
+UPDATE OR IGNORE post_tags SET tag_id = sqlc.arg('winner_id')
+WHERE tag_id = sqlc.arg('loser_id');
+
+-- name: DeletePostTagsByTag :exec
+DELETE FROM post_tags WHERE tag_id = sqlc.arg('tag_id');
+
+-- name: MergeTagParents :exec
+UPDATE OR IGNORE tag_relationships SET child_id = sqlc.arg('winner_id')
+WHERE child_id = sqlc.arg('loser_id');
+
+-- name: MergeTagChildren :exec
+UPDATE OR IGNORE tag_relationships SET parent_id = sqlc.arg('winner_id')
+WHERE parent_id = sqlc.arg('loser_id');
+
 -- MEDIA
 
 -- name: GetMedia :one
@@ -538,3 +553,8 @@ SELECT
     (SELECT id FROM posts WHERE deleted_at IS NULL AND status = 'published' ORDER BY view_count DESC LIMIT 1) as most_viewed_post_id
 FROM posts
 WHERE deleted_at IS NULL AND status = 'published';
+
+-- name: PreviewRenderPost :one
+-- This is a virtual query for sqlc to generate types if needed, 
+-- but we'll implement the logic in the handler.
+SELECT 1;

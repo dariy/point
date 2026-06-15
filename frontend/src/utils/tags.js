@@ -203,6 +203,7 @@ export function hideFlyout() { _hideFlyout(); }
  * @param {HTMLElement} [excludeEl] Clicks inside this element won't dismiss flyout
  */
 export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null) {
+  _hideFlyout();
   const flyout = _getFlyoutEl();
   while (flyout.firstChild) flyout.removeChild(flyout.firstChild);
 

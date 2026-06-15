@@ -129,7 +129,6 @@ export class Timeline extends Component {
       <div class="timeline-container" role="region" aria-label="Date timeline">
         <div class="timeline-track-wrapper">
           <div class="timeline-track">
-            <div class="timeline-tooltip" id="timeline-tooltip"></div>
             <div class="timeline-axis">
               <div class="timeline-axis-ticks"></div>
             </div>
@@ -199,61 +198,8 @@ export class Timeline extends Component {
   _wireGestures() {
     const trackWrapper = this.$(".timeline-track-wrapper");
     if (!trackWrapper) return;
-    const tooltip = this.$("#timeline-tooltip");
 
     let touchDragged = false;
-
-    trackWrapper.addEventListener("mousemove", (e) => {
-      if (this._isDragging || !tooltip) {
-        tooltip?.classList.remove("visible");
-        return;
-      }
-
-      const rect = trackWrapper.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      
-      const pill = e.target.closest(".timeline-pill-group");
-      const cluster = e.target.closest(".timeline-cluster");
-
-      if (pill || cluster) {
-        let text = "";
-        if (pill) {
-          const p = this.state.pills.find(item => item.slug === pill.dataset.slug);
-          if (p) text = `${p.year} &middot; ${p.post_count} post${p.post_count !== 1 ? 's' : ''}`;
-        } else {
-          const c = cluster.dataset;
-          text = `${c.min} \u2013 ${c.max}`;
-        }
-        tooltip.innerHTML = text;
-        tooltip.classList.add("visible");
-      } else if (
-        this.state.zoom >= 0.01 &&
-        (e.target.closest(".timeline-axis") || e.target.closest(".timeline-track"))
-      ) {
-        // Collapsed/clustered (zoom < 0.01) is a single "All years" cluster with
-        // no meaningful per-pixel year, so the scrubber tooltip is suppressed there.
-        const year = Math.round(this._getYearAtX(x));
-        // Only scrub within the real data range — don't show fabricated years
-        // before the first or after the last tag.
-        if (year >= this.state.extent.min && year <= this.state.extent.max) {
-          tooltip.textContent = String(year);
-          tooltip.classList.add("visible");
-        } else {
-          tooltip.classList.remove("visible");
-        }
-      } else {
-        tooltip.classList.remove("visible");
-      }
-
-      if (tooltip.classList.contains("visible")) {
-        tooltip.style.left = `${e.clientX}px`;
-        tooltip.style.top = `${rect.top}px`;
-      }
-    });
-
-    trackWrapper.addEventListener("mouseleave", () => {
-      tooltip?.classList.remove("visible");
-    });
 
     this._gestureController = new GestureController(trackWrapper, {
       onPanMove: (dx, _dy) => {

@@ -31,6 +31,7 @@ type Querier interface {
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteMedia(ctx context.Context, id int64) error
 	DeletePost(ctx context.Context, arg DeletePostParams) error
+	DeletePostTagsByTag(ctx context.Context, tagID int64) error
 	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTag(ctx context.Context, id int64) error
@@ -71,6 +72,9 @@ type Querier interface {
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
 	ListTrashedPosts(ctx context.Context, arg ListTrashedPostsParams) ([]Post, error)
+	MergePostTags(ctx context.Context, arg MergePostTagsParams) error
+	MergeTagChildren(ctx context.Context, arg MergeTagChildrenParams) error
+	MergeTagParents(ctx context.Context, arg MergeTagParentsParams) error
 	PublishPost(ctx context.Context, id int64) (Post, error)
 	RemoveTagFromPost(ctx context.Context, arg RemoveTagFromPostParams) error
 	RemoveTagRelationship(ctx context.Context, arg RemoveTagRelationshipParams) error

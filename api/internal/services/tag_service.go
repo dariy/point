@@ -214,6 +214,64 @@ func (g *TagGraph) PageTagIDs() map[int64]bool {
 	return g.PublicHiddenTagIDs(0)
 }
 
+// GetDisplayPath returns the hierarchical path for a tag, e.g. "Travel › Portugal".
+// If the tag has no parents, it returns an empty string.
+// If it has multiple paths, it returns the first one found.
+func (g *TagGraph) GetDisplayPath(id int64) string {
+	var ancestors []string
+	curr := id
+	visited := map[int64]bool{id: true}
+	for {
+		pids := g.Parents[curr]
+		if len(pids) == 0 {
+			break
+		}
+		// Pick the first unvisited parent to avoid cycles (though graph should be a DAG)
+		var next int64
+		found := false
+		for _, pid := range pids {
+			if !visited[pid] {
+				next = pid
+				found = true
+				break
+			}
+		}
+		if !found {
+			break
+		}
+		curr = next
+		visited[curr] = true
+		ancestors = append(ancestors, g.ByID[curr].Name)
+	}
+
+	// Reverse ancestors to get Root › ... › Parent
+	for i, j := 0, len(ancestors)-1; i < j; i, j = i+1, j-1 {
+		ancestors[i], ancestors[j] = ancestors[j], ancestors[i]
+	}
+
+	return strings.Join(ancestors, " › ")
+}
+
+func (g *TagGraph) GetSiblings(id int64) []models.Tag {
+	pids := g.Parents[id]
+	siblingMap := make(map[int64]bool)
+	for _, pid := range pids {
+		for _, cid := range g.Children[pid] {
+			if cid != id {
+				siblingMap[cid] = true
+			}
+		}
+	}
+	var siblings []models.Tag
+	for sid := range siblingMap {
+		siblings = append(siblings, g.ByID[sid])
+	}
+	sort.Slice(siblings, func(i, j int) bool {
+		return siblings[i].Name < siblings[j].Name
+	})
+	return siblings
+}
+
 func (g *TagGraph) GetDescendantIDs(tagID int64) []int64 {
 	result := make([]int64, 0)
 	visited := map[int64]bool{tagID: true}
@@ -383,6 +441,14 @@ func (s *TagService) GetTagByID(ctx context.Context, id int64) (models.Tag, erro
 		return models.Tag{}, echo.NewHTTPError(http.StatusNotFound, "tag not found")
 	}
 	return tag, nil
+}
+
+func (s *TagService) MergeTags(ctx context.Context, winnerID, loserID int64) error {
+	if err := s.repo.MergeTags(ctx, winnerID, loserID); err != nil {
+		return err
+	}
+	s.Invalidate()
+	return nil
 }
 
 func (s *TagService) GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error) {

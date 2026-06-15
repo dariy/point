@@ -38,11 +38,13 @@ export class LightSidebar extends Component {
     super(container, props);
     this.state = {
       manageExpanded: localStorage.getItem('sidebar_manage_expanded') === 'true',
+      collapsed: localStorage.getItem('sidebar_collapsed') === 'true',
     };
   }
 
   render() {
     const { currentPath = '', publicUrl = '/' } = this.props;
+    const { collapsed } = this.state;
     const version = store.get('version') || '';
 
     const isManageActive = MANAGE_ITEMS.some(item => 
@@ -57,9 +59,9 @@ export class LightSidebar extends Component {
       const cls = isActive ? ' class="nav-item active"' : ' class="nav-item"';
       return `
         <li${cls}>
-          <a href="${escapeHtml(item.href)}">
+          <a href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}">
             ${item.icon}
-            <span>${escapeHtml(item.label)}</span>
+            <span class="nav-label">${escapeHtml(item.label)}</span>
           </a>
         </li>`;
     };
@@ -68,24 +70,25 @@ export class LightSidebar extends Component {
     const manageItems = MANAGE_ITEMS.map(renderItem).join('');
 
     return `
-      <aside class="light-sidebar">
+      <aside class="light-sidebar${collapsed ? ' is-collapsed' : ''}">
         <div class="sidebar-header">
           <div class="site-branding">
             <a href="/light" class="site-title-link" aria-label="Admin home">
               <span class="site-title">
                 ${APP_LOGO_SVG}
-                Point
+                <span class="site-name">Point</span>
               </span>
             </a>
           </div>
+          <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar">${MENU_SVG}</button>
           <a href="${escapeHtml(publicUrl)}" class="public-home-link" title="View public site" aria-label="View public site" data-external>${EXTERNAL_LINK_SVG}</a>
         </div>
 
         <nav class="sidebar-nav" aria-label="Admin navigation">
           <div class="sidebar-primary-action">
-            <a href="/light/posts/new" class="btn btn-primary btn-block">
+            <a href="/light/posts/new" class="btn btn-primary btn-block" title="New Post" aria-label="Create new post">
               ${PLUS_SVG}
-              <span>New Post</span>
+              <span class="nav-label">New Post</span>
             </a>
           </div>
 
@@ -95,7 +98,7 @@ export class LightSidebar extends Component {
           </div>
 
           <div class="nav-group ${manageExpanded ? 'is-expanded' : 'is-collapsed'}" id="manage-group">
-            <button class="nav-group-toggle" id="manage-toggle" type="button" aria-expanded="${manageExpanded}">
+            <button class="nav-group-toggle" id="manage-toggle" type="button" aria-expanded="${manageExpanded}" title="Manage" aria-label="Toggle Manage group">
               <span class="nav-group-title">Manage</span>
               <span class="toggle-icon">${CHEVRON_SVG}</span>
             </button>
@@ -104,12 +107,12 @@ export class LightSidebar extends Component {
         </nav>
 
         <div class="sidebar-footer">
-          <div class="sidebar-version">${escapeHtml(version)}</div>
+          <div class="sidebar-version" aria-label="Version">${escapeHtml(version)}</div>
           <div class="sidebar-footer-actions">
             <div class="user-info">
               <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
             </div>
-            <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button">
+            <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button" title="Toggle Theme">
               <span class="icon-sun">${SUN_SVG}</span>
               <span class="icon-moon">${MOON_SVG}</span>
             </button>
@@ -119,6 +122,9 @@ export class LightSidebar extends Component {
   }
 
   afterRender() {
+    const { collapsed } = this.state;
+    document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
+
     if (!this._subscribedVersion) {
       this.subscribeStore(store, 'version', (v) => {
         const el = this.$('.sidebar-version');
@@ -142,6 +148,13 @@ export class LightSidebar extends Component {
       const current = store.get('theme') || 'auto';
       const next = current === 'dark' ? 'light' : 'dark';
       store.set('theme', next);
+    });
+
+    this.$('#sidebar-collapse-btn')?.addEventListener('click', () => {
+      const next = !this.state.collapsed;
+      this.setState({ collapsed: next });
+      localStorage.setItem('sidebar_collapsed', String(next));
+      document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', next);
     });
   }
 

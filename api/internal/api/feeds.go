@@ -59,7 +59,7 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Try cache first (TTL 1 hour)
-	if data, err := h.cacheService.GetWithTTL(ctx, "rss_feed.xml", 1*time.Hour); err == nil {
+	if data, err := h.cacheService.GetWithTTL(ctx, "feed.xml", 1*time.Hour); err == nil {
 		return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", data)
 	}
 
@@ -121,7 +121,7 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	)
 
 	// Save to cache
-	_ = h.cacheService.Set(ctx, "rss_feed.xml", []byte(xml))
+	_ = h.cacheService.Set(ctx, "feed.xml", []byte(xml))
 
 	return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", []byte(xml))
 }

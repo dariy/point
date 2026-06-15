@@ -376,3 +376,45 @@ LIMIT ?`
 
 	return r.scanTags(ctx, q, query, query, limit)
 }
+
+func (r *sqliteRepository) MergeTags(ctx context.Context, winnerID, loserID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	q := models.New(tx)
+
+	// 1. Move post_tags from loser to winner
+	if err := q.MergePostTags(ctx, models.MergePostTagsParams{WinnerID: winnerID, LoserID: loserID}); err != nil {
+		return err
+	}
+
+	// 2. Delete remaining post_tags for loser (duplicates handled by IGNORE in MergePostTags)
+	if err := q.DeletePostTagsByTag(ctx, loserID); err != nil {
+		return err
+	}
+
+	// 3. Move child relationships (loser's children become winner's children)
+	if err := q.MergeTagChildren(ctx, models.MergeTagChildrenParams{WinnerID: winnerID, LoserID: loserID}); err != nil {
+		return err
+	}
+
+	// 4. Move parent relationships (loser's parents become winner's parents)
+	if err := q.MergeTagParents(ctx, models.MergeTagParentsParams{WinnerID: winnerID, LoserID: loserID}); err != nil {
+		return err
+	}
+
+	// 5. Delete loser tag
+	if err := q.DeleteTag(ctx, loserID); err != nil {
+		return err
+	}
+
+	// 6. Update winner post_count
+	if err := q.UpdateTagPostCount(ctx, winnerID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}

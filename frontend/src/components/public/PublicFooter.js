@@ -114,7 +114,7 @@ export class PublicFooter extends Component {
     // carries the links that aren't reachable from the chrome: tags + RSS.
     const rssButton =
       settings.enable_rss !== false
-        ? `<a href="/feed" target="_blank">RSS</a>`
+        ? `<a href="/feed.xml" target="_blank">RSS</a>`
         : "";
 
     const rightLinks = [`<a href="/tags">All tags</a>`, rssButton]

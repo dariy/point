@@ -6,6 +6,8 @@
 
 import { LightSidebar } from './LightSidebar.js';
 import { AdminBottomBar } from './AdminBottomBar.js';
+import { CommandPalette } from './CommandPalette.js';
+import { ShortcutHelp } from './ShortcutHelp.js';
 import { store } from '../../store.js';
 import { syncQueue } from '../../utils/sync.js';
 import { setupHeaderCompact } from '../../utils/headerCompact.js';
@@ -37,6 +39,8 @@ export function adminLayoutTemplate({ title = 'Admin', actions = '', banner = ''
         <main class="light-content">${content}</main>
       </div>
       <div id="bottom-bar-mount"></div>
+      <div id="command-palette-mount"></div>
+      <div id="shortcut-help-mount"></div>
     </div>`;
 }
 
@@ -68,6 +72,9 @@ export function setupAdminLayout(component, { currentPath, publicUrl }) {
     publicUrl,
     onLogout,
   });
+
+  component.mountChild(CommandPalette, '#command-palette-mount');
+  component.mountChild(ShortcutHelp, '#shortcut-help-mount');
 
   component.$('#sync-pill-btn')?.addEventListener('click', () => onSyncPillClick());
 

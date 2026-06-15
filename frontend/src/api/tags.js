@@ -122,3 +122,13 @@ export function geocodeTag(id) {
 export function recalculateCounts() {
   return api.post('/api/tags/recalculate-counts');
 }
+
+/**
+ * Merge one tag into another.
+ * @param {number} loserId
+ * @param {{ winner_id: number, keep_redirect: boolean }} data
+ * @returns {Promise<null>}
+ */
+export function mergeTags(loserId, data) {
+  return api.post(`/api/tags/${loserId}/merge`, data);
+}

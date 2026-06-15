@@ -32,6 +32,7 @@ type mockRepository struct {
 	MockDeleteExpiredSessions     func(ctx context.Context) error
 	MockDeleteMedia               func(ctx context.Context, id int64) error
 	MockDeletePost                func(ctx context.Context, arg models.DeletePostParams) error
+	MockDeletePostTagsByTag       func(ctx context.Context, tagID int64) error
 	MockDeleteSession             func(ctx context.Context, arg models.DeleteSessionParams) error
 	MockDeleteSetting             func(ctx context.Context, key string) error
 	MockDeleteTag                 func(ctx context.Context, id int64) error
@@ -66,7 +67,11 @@ type mockRepository struct {
 	MockListSettings              func(ctx context.Context) ([]models.BlogSetting, error)
 	MockListTags                  func(ctx context.Context, includeEmptyFilter interface{}) ([]models.Tag, error)
 	MockListTrashedPosts          func(ctx context.Context, arg models.ListTrashedPostsParams) ([]models.Post, error)
-	MockPublishPost               func(ctx context.Context, id int64) (models.Post, error)
+	MockMergePostTags         func(ctx context.Context, arg models.MergePostTagsParams) error
+	MockMergeTagChildren      func(ctx context.Context, arg models.MergeTagChildrenParams) error
+	MockMergeTagParents       func(ctx context.Context, arg models.MergeTagParentsParams) error
+	MockMergeTags             func(ctx context.Context, winnerID, loserID int64) error
+	MockPublishPost           func(ctx context.Context, id int64) (models.Post, error)
 	MockRemoveTagFromPost         func(ctx context.Context, arg models.RemoveTagFromPostParams) error
 	MockRemoveTagRelationship     func(ctx context.Context, arg models.RemoveTagRelationshipParams) error
 	MockRestorePost               func(ctx context.Context, arg models.RestorePostParams) error
@@ -310,6 +315,13 @@ func (m *mockRepository) DeletePost(ctx context.Context, arg models.DeletePostPa
 	return fmt.Errorf("DeletePost not implemented")
 }
 
+func (m *mockRepository) DeletePostTagsByTag(ctx context.Context, tagID int64) error {
+	if m.MockDeletePostTagsByTag != nil {
+		return m.MockDeletePostTagsByTag(ctx, tagID)
+	}
+	return fmt.Errorf("DeletePostTagsByTag not implemented")
+}
+
 func (m *mockRepository) DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error {
 	if m.MockDeleteSession != nil {
 		return m.MockDeleteSession(ctx, arg)
@@ -546,6 +558,34 @@ func (m *mockRepository) ListTrashedPosts(ctx context.Context, arg models.ListTr
 		return m.MockListTrashedPosts(ctx, arg)
 	}
 	return nil, fmt.Errorf("ListTrashedPosts not implemented")
+}
+
+func (m *mockRepository) MergePostTags(ctx context.Context, arg models.MergePostTagsParams) error {
+	if m.MockMergePostTags != nil {
+		return m.MockMergePostTags(ctx, arg)
+	}
+	return fmt.Errorf("MergePostTags not implemented")
+}
+
+func (m *mockRepository) MergeTagChildren(ctx context.Context, arg models.MergeTagChildrenParams) error {
+	if m.MockMergeTagChildren != nil {
+		return m.MockMergeTagChildren(ctx, arg)
+	}
+	return fmt.Errorf("MergeTagChildren not implemented")
+}
+
+func (m *mockRepository) MergeTagParents(ctx context.Context, arg models.MergeTagParentsParams) error {
+	if m.MockMergeTagParents != nil {
+		return m.MockMergeTagParents(ctx, arg)
+	}
+	return fmt.Errorf("MergeTagParents not implemented")
+}
+
+func (m *mockRepository) MergeTags(ctx context.Context, winnerID, loserID int64) error {
+	if m.MockMergeTags != nil {
+		return m.MockMergeTags(ctx, winnerID, loserID)
+	}
+	return fmt.Errorf("MergeTags not implemented")
 }
 
 func (m *mockRepository) PublishPost(ctx context.Context, id int64) (models.Post, error) {

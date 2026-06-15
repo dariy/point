@@ -7,6 +7,7 @@
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
+import { openTagFamilyPopover } from "../../components/light/TagFamilyPopover.js";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import {
@@ -50,6 +51,7 @@ export default class PostsListPage extends Component {
       pagination: {},
       error: null,
       statusFilter: props.query?.status || "",
+      tagFilter: props.query?.tag || "",
       search: props.query?.search || "",
       page: parseInt(props.query?.page || "1", 10),
       selectMode: false,
@@ -125,10 +127,12 @@ export default class PostsListPage extends Component {
       .map((s) => `<option value="${s}"${p.status === s ? " selected" : ""}>${escapeHtml(STATUS_LABELS[s] || s)}</option>`)
       .join("");
 
-    const tags = (p.tags || []).map((t) => (typeof t === "string" ? t : t.name));
-    const chipsHtml = tags
-      .map((name) => `<span class="tag">${escapeHtml(name)}</span>`)
-      .join("");
+    const tagChips = (p.tags || []).map((t) => {
+      const name = typeof t === "string" ? t : t.name;
+      const id = typeof t === "object" ? t.id : null;
+      return `<span class="tag-chip tag" ${id ? `data-id="${id}"` : ""}>${escapeHtml(name)}</span>`;
+    });
+    const chipsHtml = tagChips.join("");
 
     return `
       <div class="post-card" data-post-id="${escapeHtml(String(p.id))}">
@@ -308,13 +312,13 @@ export default class PostsListPage extends Component {
                 <td class="actions-col">
                   <div class="actions">
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
-                       class="btn btn-sm" title="Edit">${EDIT_SVG}</a>
+                       class="btn btn-sm" title="Edit" aria-label="Edit post">${EDIT_SVG}</a>
                     <a href="/posts/${escapeHtml(p.slug)}" class="btn btn-sm"
-                       title="View" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
+                       title="View" aria-label="View on public site" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"
                             data-title="${escapeHtml(p.title)}"
-                            title="Move to Trash">${X_SVG}</button>
+                            title="Move to Trash" aria-label="Move to Trash">${X_SVG}</button>
                   </div>
                 </td>
               </tr>
@@ -333,7 +337,8 @@ export default class PostsListPage extends Component {
               </select>
               ${
                 !isTrash
-                  ? `<input type="search" id="search-input" class="form-input filter-search"
+                  ? `<div id="tag-filter-mount" class="tag-filter-container"></div>
+                     <input type="search" id="search-input" class="form-input filter-search"
                      placeholder="Search posts…" value="${escapeHtml(search)}">`
                   : ""
               }
@@ -421,6 +426,19 @@ export default class PostsListPage extends Component {
       });
     }
 
+    // Tag filter
+    if (!isTrash && !this.state.loading) {
+      this.mountChild(TagsInput, "#tag-filter-mount", {
+        tags: this.state.tagFilter ? [this.state.tagFilter] : [],
+        placeholder: "Filter by tag…",
+        onChange: (tags) => {
+          const val = tags[0] || "";
+          this.setState({ tagFilter: val, page: 1 });
+          this._load({ page: 1, tag: val });
+        }
+      });
+    }
+
     // Mount a TagsInput in every tags cell (skip for trash view)
     if (!isTrash && !this.state.loading && !this.state.error) {
       for (const post of this.state.posts) {
@@ -479,6 +497,59 @@ export default class PostsListPage extends Component {
             this._permanentlyDeletePost(id);
           },
         );
+      });
+    });
+
+    // Swipe gestures for cards
+    if (!isTrash && !this.state.loading) {
+      this.container.querySelectorAll('.post-card').forEach(card => {
+        let startX = 0;
+        let startY = 0;
+        let deltaX = 0;
+        let deltaY = 0;
+        const id = parseInt(card.dataset.id, 10);
+        const status = card.dataset.status;
+
+        card.addEventListener('touchstart', (e) => {
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          deltaX = 0;
+          deltaY = 0;
+          card.style.transition = 'none';
+        }, { passive: true });
+
+        card.addEventListener('touchmove', (e) => {
+          deltaX = e.touches[0].clientX - startX;
+          deltaY = e.touches[0].clientY - startY;
+          if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            card.style.transform = `translateX(${deltaX}px)`;
+            if (deltaX > 50) card.classList.add('swipe-right');
+            else if (deltaX < -50) card.classList.add('swipe-left');
+            else card.classList.remove('swipe-right', 'swipe-left');
+          }
+        }, { passive: true });
+
+        card.addEventListener('touchend', () => {
+          card.style.transition = 'transform 0.3s ease-out';
+          card.style.transform = '';
+          if (deltaX > 100) {
+            // Swipe Right: Toggle Publish
+            const nextStatus = status === 'published' ? 'draft' : 'published';
+            this._updatePostStatus(id, nextStatus);
+          } else if (deltaX < -100) {
+            // Swipe Left: Move to Trash
+            this._deletePost(id);
+          }
+          card.classList.remove('swipe-right', 'swipe-left');
+        });
+      });
+    }
+
+    // Tag family popover for chips
+    this.container.querySelectorAll(".tag-chip").forEach((chip) => {
+      chip.addEventListener("click", (_e) => {
+        const id = parseInt(chip.dataset.id, 10);
+        if (id) openTagFamilyPopover(id, chip);
       });
     });
 
@@ -700,11 +771,13 @@ export default class PostsListPage extends Component {
   /** Update the browser URL to reflect current filters without triggering a full navigation. */
   _syncUrl(overrides = {}) {
     const status = overrides.status ?? this.state.statusFilter;
+    const tag = overrides.tag ?? this.state.tagFilter;
     const search = overrides.search ?? this.state.search;
     const page = overrides.page ?? this.state.page;
 
     const params = new URLSearchParams();
     if (status) params.set("status", status);
+    if (tag) params.set("tag", tag);
     if (search) params.set("search", search);
     if (page > 1) params.set("page", String(page));
 
@@ -737,8 +810,10 @@ export default class PostsListPage extends Component {
       per_page: this._perPage ?? 20,
     };
     const status = overrides.status ?? this.state.statusFilter;
+    const tag = overrides.tag ?? this.state.tagFilter;
     const search = overrides.search ?? this.state.search;
     if (status) params.status = status;
+    if (tag) params.tag = tag;
     if (search) params.q = search;
 
     // Sync URL whenever filters change

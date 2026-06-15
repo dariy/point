@@ -10,7 +10,7 @@
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag } from '../../api/tags.js';
+import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag, mergeTags } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
 import { getNavMenu } from '../../api/pages.js';
 import { store } from '../../store.js';
@@ -136,6 +136,7 @@ export default class TagsManagerPage extends Component {
           <td><div class="tm-parents-cell">${parentBadges || '<span class="text-muted">—</span>'}</div></td>
           <td class="tm-actions">
             <button class="btn btn-sm edit-tag-btn"   data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
+            <button class="btn btn-sm merge-tag-btn"  data-id="${tag.id}" title="Merge into…">Merge…</button>
             <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
           </td>
         </tr>`;
@@ -359,10 +360,11 @@ export default class TagsManagerPage extends Component {
             <a class="tm-count-badge" href="/light/posts?search=${encodeURIComponent(node.slug)}" title="View posts tagged ${escapeHtml(node.slug)}">${node.post_count || 0}</a>
           </span>
           <div class="tm-actions">
-            <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit">${EDIT_SVG}</button>
-            <button class="btn btn-sm move-tag-btn"    data-id="${node.id}" data-parent-id="${parentAttr}" title="Move to parent…">Move…</button>
-            <button class="btn btn-sm add-child-btn"   data-id="${node.id}" title="Add child">+</button>
-            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${node.id}" title="Delete">${X_SVG}</button>
+            <button class="btn btn-sm edit-tag-btn"    data-id="${node.id}" title="Edit" aria-label="Edit tag">${EDIT_SVG}</button>
+            <button class="btn btn-sm merge-tag-btn"   data-id="${node.id}" title="Merge into…" aria-label="Merge into another tag">Merge…</button>
+            <button class="btn btn-sm move-tag-btn"    data-id="${node.id}" data-parent-id="${parentAttr}" title="Move to parent…" aria-label="Move to new parent">Move…</button>
+            <button class="btn btn-sm add-child-btn"   data-id="${node.id}" title="Add child" aria-label="Add child tag">+</button>
+            <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${node.id}" title="Delete" aria-label="Delete tag">${X_SVG}</button>
           </div>
         </div>
         ${isExpanded && hasChildren ? this._renderTree(node.childrenNodes, level + 1, node.id) : ''}
@@ -419,6 +421,7 @@ export default class TagsManagerPage extends Component {
           </span>
           <div class="tm-actions">
             <button class="btn btn-sm edit-tag-btn" data-id="${tag.id}" title="Edit">${EDIT_SVG}</button>
+            <button class="btn btn-sm merge-tag-btn" data-id="${tag.id}" title="Merge into…">Merge…</button>
             <button class="btn btn-sm move-tag-btn" data-id="${tag.id}" data-parent-id="" title="Move to parent…">Move…</button>
             <button class="btn btn-sm btn-danger delete-tag-btn" data-id="${tag.id}" title="Delete">${X_SVG}</button>
           </div>
@@ -481,6 +484,12 @@ export default class TagsManagerPage extends Component {
           const id = parseInt(btn.dataset.id, 10);
           const parentId = btn.dataset.parentId !== '' ? parseInt(btn.dataset.parentId, 10) : null;
           this._openMoveDialog(id, parentId);
+        });
+      });
+
+      this.container.querySelectorAll('.merge-tag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this._openMergeDialog(parseInt(btn.dataset.id, 10));
         });
       });
 
@@ -750,6 +759,85 @@ export default class TagsManagerPage extends Component {
         this._refreshNavTags();
       } catch (err) {
         store.set('toast', { message: err.message || 'Move failed.', type: 'error' });
+      }
+    });
+  }
+
+  // Merge… dialog: pick destination tag to merge into.
+  _openMergeDialog(loserId) {
+    const loser = this.state.tags.find(t => t.id === loserId);
+    if (!loser) return;
+
+    const available = this.state.tags
+      .filter(t => t.id !== loserId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const winnerItems = available.map(t => `
+      <label class="tm-merge-winner-item">
+        <input type="radio" name="tm-merge-winner" value="${t.id}">
+        <div class="tm-merge-winner-info">
+          <span class="tm-merge-winner-name">${escapeHtml(t.name)}</span>
+          ${t.name_path ? `<span class="tm-merge-winner-path">${escapeHtml(t.name_path)}</span>` : ''}
+        </div>
+      </label>`).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+      <div class="modal tm-merge-modal" role="dialog" aria-modal="true">
+        <button class="modal-close" aria-label="Close">×</button>
+        <div class="modal-header">
+          <h3>Merge "${escapeHtml(loser.name)}" into…</h3>
+        </div>
+        <div class="modal-body">
+          <p class="tm-section-label">Select destination tag</p>
+          <input type="text" class="form-input tm-merge-search" placeholder="Search tags…" autocomplete="off">
+          <div class="tm-merge-winner-list">${winnerItems}</div>
+          <p class="form-hint" style="margin-top:var(--spacing-md)">
+            Posts tagged <strong>${escapeHtml(loser.name)}</strong> will be re-tagged.
+            Hierarchy will be moved. <strong>${escapeHtml(loser.name)}</strong> will be deleted.
+          </p>
+          <label class="tm-flag-row" style="margin-top:var(--spacing-sm)">
+            <input type="checkbox" id="tm-merge-redirect" checked> Keep redirect (not yet implemented)
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="tm-merge-cancel-btn">Cancel</button>
+          <button type="button" class="btn btn-primary" id="tm-merge-confirm-btn">Merge Tags</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.querySelector('.modal-close').addEventListener('click', close);
+    overlay.querySelector('#tm-merge-cancel-btn').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('.tm-merge-search').addEventListener('input', e => {
+      const q = e.target.value.trim().toLowerCase();
+      overlay.querySelectorAll('.tm-merge-winner-item').forEach(item => {
+        const name = item.querySelector('.tm-merge-winner-name')?.textContent.toLowerCase() || '';
+        item.classList.toggle('hidden', q !== '' && !name.includes(q));
+      });
+    });
+
+    overlay.querySelector('#tm-merge-confirm-btn').addEventListener('click', async () => {
+      const radio = overlay.querySelector('input[name="tm-merge-winner"]:checked');
+      if (!radio) {
+        store.set('toast', { message: 'Select a destination tag first.', type: 'error' });
+        return;
+      }
+      const winnerId = parseInt(radio.value, 10);
+      const keepRedirect = overlay.querySelector('#tm-merge-redirect').checked;
+
+      close();
+      try {
+        await mergeTags(loserId, { winner_id: winnerId, keep_redirect: keepRedirect });
+        this._load();
+        this._refreshNavTags();
+        store.set('toast', { message: 'Tags merged successfully.', type: 'success' });
+      } catch (err) {
+        store.set('toast', { message: err.message || 'Merge failed.', type: 'error' });
       }
     });
   }

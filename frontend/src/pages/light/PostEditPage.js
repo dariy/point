@@ -18,6 +18,7 @@ import {
   updatePost,
   generatePreviewLink,
   publishPostToInstagram,
+  previewRender,
 } from "../../api/posts.js";
 import { getInstagramStatus } from "../../api/instagram.js";
 import {
@@ -108,6 +109,7 @@ export default class PostEditPage extends Component {
       igStatus: null,
       maximizedField: null,
       detailsOpen: this._readDetailsPref(),
+      showLivePreview: typeof window !== 'undefined' && window.innerWidth > 1400,
       menuOpen: false,
       hasPendingEdits: false,
     };
@@ -209,7 +211,7 @@ export default class PostEditPage extends Component {
     const cssSummary = (p.css || "").trim() ? "custom" : "none";
 
     return `
-            <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}">
+            <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}${this.state.showLivePreview ? " has-live-preview" : ""}">
               <div class="editor-main">
                 <div class="title-row">
                   <div class="title-input-wrapper">
@@ -229,6 +231,11 @@ export default class PostEditPage extends Component {
                   ${modeToggle}
                   ${contentArea}
                 </div>
+              </div>
+
+              <div class="editor-live-preview" id="live-preview-mount">
+                <div class="preview-header">Live Preview</div>
+                <div id="preview-content" class="preview-content post-content"></div>
               </div>
 
               <div class="details-backdrop" id="details-backdrop"></div>
@@ -569,6 +576,18 @@ export default class PostEditPage extends Component {
     this.container.querySelector("#ig-share-input")?.addEventListener("change", () => this._onInput());
     this.container.querySelector("#ig-publish-now-btn")?.addEventListener("click", () => this._publishToInstagram());
 
+    this._debouncedPreview = debounce(async () => {
+      if (!this.state.showLivePreview || this._unmounted) return;
+      const data = this._collectFormData();
+      try {
+        const { html } = await previewRender(data.content);
+        const mount = this.$("#preview-content");
+        if (mount) mount.innerHTML = html;
+      } catch (err) { /* ignore */ }
+    }, 1000);
+
+    if (this.state.showLivePreview) this._debouncedPreview();
+
     this._updateDetailsSummaries();
     this._setupWindowDragAndDrop();
   }
@@ -616,6 +635,7 @@ export default class PostEditPage extends Component {
     }, AUTOSAVE_IDLE_MS);
 
     this._debouncedAutosave();
+    this._debouncedPreview?.();
   }
 
   async _autosave() {

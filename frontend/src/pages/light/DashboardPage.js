@@ -8,15 +8,16 @@ import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getStats, getVersion } from '../../api/system.js';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
+import { listPosts, createPost } from '../../api/posts.js';
 import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
-import { formatFileSize } from '../../utils/formatters.js';
-import { PLUS_SVG } from '../../utils/icons.js';
+import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
+import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.js';
 
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], error: null, versionBanner: null };
+    this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], drafts: [], error: null, versionBanner: null };
   }
 
   render() {
@@ -37,11 +38,60 @@ export default class DashboardPage extends Component {
   }
 
   _renderContent() {
-    const { loading, stats, analyticsStats, topPosts, error } = this.state;
+    const { loading, stats, analyticsStats, topPosts, drafts, error } = this.state;
 
     if (loading) return `<div class="loading-spinner" aria-label="Loading…"></div>`;
     if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
-    return this._renderStats(stats, analyticsStats, topPosts);
+    return `
+      ${this._renderComposeStrip()}
+      <div class="dashboard-grid">
+        <div class="dashboard-main">
+          ${this._renderStats(stats, analyticsStats, topPosts)}
+        </div>
+        <div class="dashboard-sidebar">
+          ${this._renderContinueWriting(drafts)}
+        </div>
+      </div>
+    `;
+  }
+
+  _renderComposeStrip() {
+    return `
+      <div class="compose-strip-card card">
+        <div class="compose-strip">
+          <textarea id="compose-textarea" class="compose-textarea" placeholder="Compose something…" rows="1"></textarea>
+          <div class="compose-actions">
+            <button id="compose-attach-btn" class="btn btn-icon" title="Attach media" aria-label="Attach media">${MEDIA_SVG}</button>
+            <button id="compose-draft-btn" class="btn btn-primary btn-sm">Draft</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderContinueWriting(drafts) {
+    if (!drafts || drafts.length === 0) return '';
+
+    return `
+      <div class="card continue-writing-card">
+        <div class="card-header"><h2>Continue writing</h2></div>
+        <div class="card-body">
+          <ul class="drafts-list">
+            ${drafts.map(d => `
+              <li>
+                <a href="/light/posts/${d.id}/edit" class="draft-stub">
+                  <span class="draft-title">${escapeHtml(d.title || '(Untitled)')}</span>
+                  <span class="draft-date">${formatDateShort(d.updated_at || d.created_at)}</span>
+                </a>
+              </li>
+            `).join('')}
+          </ul>
+          <div class="card-footer-actions">
+            <a href="/light/posts?status=draft" class="btn btn-text btn-sm">View all drafts</a>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   _renderStats(s, analytics, topPosts) {
@@ -142,6 +192,36 @@ export default class DashboardPage extends Component {
         this.setState({ versionBanner: null });
       }
     });
+
+    // Compose strip interactions
+    const textarea = this.$('#compose-textarea');
+    if (textarea) {
+      textarea.addEventListener('input', () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = (textarea.scrollHeight) + 'px';
+      });
+
+      this.$('#compose-draft-btn')?.addEventListener('click', async () => {
+        const content = textarea.value.trim();
+        if (!content) return;
+        try {
+          const post = await createPost({
+            content,
+            status: 'draft',
+            title: content.split('\n')[0].substring(0, 50) || 'Untitled'
+          });
+          navigate(`/light/posts/${post.id}/edit`);
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Failed to create draft.', type: 'error' });
+        }
+      });
+
+      this.$('#compose-attach-btn')?.addEventListener('click', () => {
+        // Just go to full editor for now as media picker needs more context
+        const content = textarea.value.trim();
+        navigate(`/light/posts/new?content=${encodeURIComponent(content)}&openMedia=1`);
+      });
+    }
   }
 
   beforeUnmount() {
@@ -155,16 +235,18 @@ export default class DashboardPage extends Component {
 
   async _load() {
     try {
-      const [stats, analyticsStats, topPostsResp] = await Promise.all([
+      const [stats, analyticsStats, topPostsResp, draftsResp] = await Promise.all([
         getStats(),
         getPostAnalytics().catch(() => null),
         getTopPosts(10).catch(() => ({ posts: [] })),
+        listPosts({ status: 'draft', per_page: 5 }).catch(() => ({ posts: [] })),
       ]);
       this.setState({
         loading: false,
         stats,
         analyticsStats,
-        topPosts: topPostsResp.posts || [],
+        topPosts: topPostsResp.posts || topPostsResp.items || [],
+        drafts: draftsResp.posts || draftsResp.items || [],
         error: null,
       });
     } catch (err) {

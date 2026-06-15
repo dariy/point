@@ -101,9 +101,21 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 			loc = &l
 		}
 
+		displayPath := g.GetDisplayPath(id)
+		namePath := t.Name
+		if displayPath != "" {
+			namePath += " — " + displayPath
+		}
+		count := g.CountsAdmin[id]
+		if publicOnly {
+			count = g.CountsPublic[id]
+		}
+		namePath += " · " + strconv.FormatInt(count, 10)
+
 		resp := map[string]interface{}{
 			"id":                    t.ID,
 			"name":                  t.Name,
+			"name_path":             namePath,
 			"slug":                  t.Slug,
 			"description":           nullString(t.Description),
 			"kind":                  t.Kind,
@@ -248,8 +260,36 @@ func (h *TagHandler) renderTagResponse(c echo.Context, g *services.TagGraph, tag
 	resp["effective_hides_posts"] = g.EffectiveHidesPosts[tag.ID]
 	resp["post_count"] = g.CountsAdmin[tag.ID]
 
+	displayPath := g.GetDisplayPath(tag.ID)
+	namePath := tag.Name
+	if displayPath != "" {
+		namePath += " — " + displayPath
+	}
+	namePath += " · " + strconv.FormatInt(g.CountsAdmin[tag.ID], 10)
+	resp["name_path"] = namePath
+
+	siblings := g.GetSiblings(tag.ID)
+	siblingItems := make([]map[string]interface{}, 0, len(siblings))
+	for _, s := range siblings {
+		if publicOnly {
+			if g.EffectiveHidden[s.ID] {
+				continue
+			}
+			if minPosts > 0 && g.CountsPublic[s.ID] < minPosts {
+				continue
+			}
+		}
+		siblingItems = append(siblingItems, tagToListItem(s))
+	}
+	resp["siblings"] = siblingItems
+
 	if publicOnly {
 		resp["post_count"] = g.CountsPublic[tag.ID]
+		resp["name_path"] = tag.Name
+		if displayPath != "" {
+			resp["name_path"] = tag.Name + " — " + displayPath
+		}
+		resp["name_path"] = resp["name_path"].(string) + " · " + strconv.FormatInt(g.CountsPublic[tag.ID], 10)
 	} else {
 		if via, ok := g.HiddenVia[tag.ID]; ok {
 			resp["hidden_via"] = via
@@ -376,6 +416,15 @@ func (h *TagHandler) UpdateTag(c echo.Context) error {
 
 func (h *TagHandler) renderTagResponseWithStatus(c echo.Context, g *services.TagGraph, tag models.Tag, status int) error {
 	publicOnly := c.Get("user") == nil
+	var minPosts int64
+	if publicOnly {
+		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+		minPosts, _ = strconv.ParseInt(minPostsStr, 10, 64)
+		if minPosts < 0 {
+			minPosts = 0
+		}
+	}
+
 	parents := make([]models.Tag, 0)
 	for _, pid := range g.Parents[tag.ID] {
 		parents = append(parents, g.ByID[pid])
@@ -399,8 +448,36 @@ func (h *TagHandler) renderTagResponseWithStatus(c echo.Context, g *services.Tag
 	resp["effective_hides_posts"] = g.EffectiveHidesPosts[tag.ID]
 	resp["post_count"] = g.CountsAdmin[tag.ID]
 
+	displayPath := g.GetDisplayPath(tag.ID)
+	namePath := tag.Name
+	if displayPath != "" {
+		namePath += " — " + displayPath
+	}
+	namePath += " · " + strconv.FormatInt(g.CountsAdmin[tag.ID], 10)
+	resp["name_path"] = namePath
+
+	siblings := g.GetSiblings(tag.ID)
+	siblingItems := make([]map[string]interface{}, 0, len(siblings))
+	for _, s := range siblings {
+		if publicOnly {
+			if g.EffectiveHidden[s.ID] {
+				continue
+			}
+			if minPosts > 0 && g.CountsPublic[s.ID] < minPosts {
+				continue
+			}
+		}
+		siblingItems = append(siblingItems, tagToListItem(s))
+	}
+	resp["siblings"] = siblingItems
+
 	if publicOnly {
 		resp["post_count"] = g.CountsPublic[tag.ID]
+		resp["name_path"] = tag.Name
+		if displayPath != "" {
+			resp["name_path"] = tag.Name + " — " + displayPath
+		}
+		resp["name_path"] = resp["name_path"].(string) + " · " + strconv.FormatInt(g.CountsPublic[tag.ID], 10)
 	} else {
 		if via, ok := g.HiddenVia[tag.ID]; ok {
 			resp["hidden_via"] = via
@@ -765,4 +842,22 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 		resp["post_count"] = g.CountsPublic[tag.ID]
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *TagHandler) MergeTags(c echo.Context) error {
+	loserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+	var req struct {
+		WinnerID     int64 `json:"winner_id"`
+		KeepRedirect bool  `json:"keep_redirect"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	if err := h.tagService.MergeTags(c.Request().Context(), req.WinnerID, loserID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.NoContent(http.StatusNoContent)
 }

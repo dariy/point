@@ -995,3 +995,17 @@ func (h *PostHandler) PublishToInstagram(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, resp)
 }
+
+func (h *PostHandler) PreviewRender(c echo.Context) error {
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	html, err := h.postService.RenderContent(req.Content)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]string{"html": html})
+}

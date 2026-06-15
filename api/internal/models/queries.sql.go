@@ -636,6 +636,15 @@ func (q *Queries) DeletePost(ctx context.Context, arg DeletePostParams) error {
 	return err
 }
 
+const deletePostTagsByTag = `-- name: DeletePostTagsByTag :exec
+DELETE FROM post_tags WHERE tag_id = ?1
+`
+
+func (q *Queries) DeletePostTagsByTag(ctx context.Context, tagID int64) error {
+	_, err := q.db.ExecContext(ctx, deletePostTagsByTag, tagID)
+	return err
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions
 WHERE id = ? AND user_id = ?
@@ -1881,6 +1890,51 @@ func (q *Queries) ListTrashedPosts(ctx context.Context, arg ListTrashedPostsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const mergePostTags = `-- name: MergePostTags :exec
+UPDATE OR IGNORE post_tags SET tag_id = ?1
+WHERE tag_id = ?2
+`
+
+type MergePostTagsParams struct {
+	WinnerID int64 `json:"winner_id"`
+	LoserID  int64 `json:"loser_id"`
+}
+
+func (q *Queries) MergePostTags(ctx context.Context, arg MergePostTagsParams) error {
+	_, err := q.db.ExecContext(ctx, mergePostTags, arg.WinnerID, arg.LoserID)
+	return err
+}
+
+const mergeTagChildren = `-- name: MergeTagChildren :exec
+UPDATE OR IGNORE tag_relationships SET parent_id = ?1
+WHERE parent_id = ?2
+`
+
+type MergeTagChildrenParams struct {
+	WinnerID int64 `json:"winner_id"`
+	LoserID  int64 `json:"loser_id"`
+}
+
+func (q *Queries) MergeTagChildren(ctx context.Context, arg MergeTagChildrenParams) error {
+	_, err := q.db.ExecContext(ctx, mergeTagChildren, arg.WinnerID, arg.LoserID)
+	return err
+}
+
+const mergeTagParents = `-- name: MergeTagParents :exec
+UPDATE OR IGNORE tag_relationships SET child_id = ?1
+WHERE child_id = ?2
+`
+
+type MergeTagParentsParams struct {
+	WinnerID int64 `json:"winner_id"`
+	LoserID  int64 `json:"loser_id"`
+}
+
+func (q *Queries) MergeTagParents(ctx context.Context, arg MergeTagParentsParams) error {
+	_, err := q.db.ExecContext(ctx, mergeTagParents, arg.WinnerID, arg.LoserID)
+	return err
 }
 
 const publishPost = `-- name: PublishPost :one

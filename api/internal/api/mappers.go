@@ -133,6 +133,7 @@ func tagToListItem(t models.Tag) map[string]interface{} {
 	return map[string]interface{}{
 		"id":         t.ID,
 		"name":       t.Name,
+		"name_path":  t.Name, // Default, will be overridden if graph available
 		"slug":       t.Slug,
 		"nav_order":  nullInt64(t.NavOrder),
 		"post_count": t.PostCount,
@@ -167,6 +168,7 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 	return map[string]interface{}{
 		"id":                 t.ID,
 		"name":               t.Name,
+		"name_path":          t.Name, // default
 		"slug":               t.Slug,
 		"description":        nullString(t.Description),
 		"kind":               t.Kind,
@@ -182,6 +184,7 @@ func tagToFullResponse(t models.Tag, parents, children []models.Tag, loc *models
 		"created_at":         t.CreatedAt,
 		"parents":            parentItems,
 		"children":           childItems,
+		"siblings":           []map[string]interface{}{}, // Default
 		"locations":          tagLocationsResponse(loc),
 	}
 }

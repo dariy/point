@@ -20,7 +20,7 @@ import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { buildTagIndex, showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
+import { showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -65,7 +65,6 @@ export class PublicHeader extends Component {
     // components).  We prepend the root "site" crumb and append any active
     // facet crumbs derived from ViewContext.
 
-    const hasSiteCrumb = true; // always rendered
     const hasTagCrumbs = breadcrumb.length > 0;
 
     // Year facet crumb
@@ -186,10 +185,6 @@ export class PublicHeader extends Component {
     if (queryLabel) {
       facetCrumbsHtml += `<span class="breadcrumb-current breadcrumb-facet breadcrumb-query">${escapeHtml(queryLabel)}</span>`;
     }
-
-    // Determine breadcrumb-current for popover target
-    // It's the last "current" span/a in the breadcrumb
-    const hasAnyCurrent = hasTagCrumbs || yearLabel || queryLabel;
 
     const crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb">
       ${ariaLiveText ? `<span class="sr-only" aria-live="polite">${escapeHtml(ariaLiveText)}</span>` : ''}
@@ -402,6 +397,15 @@ export class PublicHeader extends Component {
         el.addEventListener('click', () => { clearTimeout(hoverTimer); hideFlyout(); });
       } else {
         el.addEventListener('click', (e) => {
+          if (el.classList.contains('is-flyout-open')) {
+            const href = el.getAttribute('href');
+            if (href) {
+              hideFlyout();
+              navigate(href);
+              e.preventDefault();
+              return;
+            }
+          }
           e.preventDefault();
           showCrumbDropdown(el, items, navigate, this._group);
         });

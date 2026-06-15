@@ -539,6 +539,7 @@ describe('Timeline Component', () => {
         const progress = (year - extent.min) / (extent.max - extent.min);
         return EDGE_PAD + progress * (trackWidth - 2 * EDGE_PAD) * zoom + panX;
       };
+      timeline._layout();
       timeline._updateHistogram(trackWidth, getX);
       timeline.container.querySelector = originalQS;
 

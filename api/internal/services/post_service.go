@@ -291,7 +291,7 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 			return nil, 0, err
 		}
 		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
-	} else if p.Search != "" {
+	} else if p.Search != "" || p.Tag != "" {
 	        posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, int64(p.PerPage), int64(offset))
 	        if err != nil {
 	                return nil, 0, err
