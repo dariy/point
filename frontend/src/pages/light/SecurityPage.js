@@ -104,7 +104,7 @@ export default class SecurityPage extends Component {
             ${!passkeySupported ? '<p class="text-muted">Passkeys are not supported by this browser.</p>' : `
               ${!passkeyStatus?.configured ? `
                 <p class="text-muted">Passkeys are not configured on this server.</p>
-              ` : passkeyStatus?.has_passkey ? `
+              ` : passkeyStatus?.registered ? `
                 <div class="passkey-status success">
                   <p>Passkey is registered.</p>
                   <button id="delete-passkey-btn" class="btn btn-sm btn-danger" ${passkeyWorking ? 'disabled' : ''}>Remove Passkey</button>

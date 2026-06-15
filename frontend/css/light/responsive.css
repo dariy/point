@@ -85,6 +85,14 @@
    =========================== */
 @media (max-width: 40em) {
 
+    /* Actions drop to line 2, full width, wrapping allowed */
+    .header-actions {
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        text-wrap-mode: wrap;
+        justify-content: flex-end;
+        order: 1;
+    }
 
     /* Hide drag handles — touch drag is unavailable */
     .tm-drag-handle {

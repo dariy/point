@@ -293,11 +293,11 @@ export default class SystemPage extends Component {
 
   async _load() {
     try {
-      const [backups, migrations, offlineStats, lastSync, queue, diskInfo] = await Promise.all([
+      const [backups, migrations, offlineStats, meta, queue, diskInfo] = await Promise.all([
         listBackups(),
         getMigrations(),
         getOfflineStats(),
-        getMeta('last_sync'),
+        getMeta(),
         getQueue(),
         getDiskInfo(),
       ]);
@@ -306,7 +306,7 @@ export default class SystemPage extends Component {
         backups: backups.backups || [],
         migrations: migrations.migrations || [],
         offlineStats,
-        lastSync: lastSync || null,
+        lastSync: meta?.lastSync || null,
         syncQueue: queue,
         diskInfo,
         error: null,
@@ -400,7 +400,7 @@ export default class SystemPage extends Component {
       });
 
       const lastSync = new Date().toISOString();
-      await saveMeta('last_sync', lastSync);
+      await saveMeta({ lastSync });
       
       this.setState({ downloadingOffline: false, lastSync, offlineStatusText: '' });
       store.set('toast', { message: 'Offline data updated.', type: 'success' });
