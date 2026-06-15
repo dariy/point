@@ -28,7 +28,7 @@ import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG } from "../../utils/icons.js";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 
 const AUTOSAVE_IDLE_MS = 5_000;
@@ -163,6 +163,7 @@ export default class PostEditPage extends Component {
     const detailsToggle = `
       <button id="details-toggle" class="btn btn-secondary" type="button"
               aria-controls="details-panel" aria-expanded="${this.state.detailsOpen ? 'true' : 'false'}">
+        ${SETTINGS_SVG}
         <span class="btn-label">Details</span>
       </button>`;
 
@@ -207,7 +208,6 @@ export default class PostEditPage extends Component {
     const featuredSummary = featured ? " · ★" : "";
     const statusSummary = escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + featuredSummary;
     const slugSummary = slug || "auto";
-    const excerptSummary = excerpt.trim() ? escapeHtml(this._truncate(excerpt.trim())) : "auto";
     const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
     const cssSummary = (p.css || "").trim() ? "custom" : "none";
 
@@ -219,6 +219,11 @@ export default class PostEditPage extends Component {
                     <input type="text" id="title-input" class="form-input editor-title" placeholder="Post title" value="${title}" required>
                     ${aiBtn("title")}
                   </div>
+                </div>
+
+                <div class="form-group excerpt-row">
+                  <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
+                  ${aiBtn("excerpt")}
                 </div>
 
                 <div class="tags-row">
@@ -290,19 +295,6 @@ export default class PostEditPage extends Component {
                           <span class="slug-prefix">/posts/</span>
                           <input type="text" id="slug-input" class="form-input editor-slug" placeholder="post-slug" value="${slug}" spellcheck="false">
                         </div>
-                      </div>
-                    </div>
-                  </details>
-
-                  <details class="details-group" data-group="excerpt">
-                    <summary class="details-group-summary-row">
-                      <span class="details-group-title">Excerpt</span>
-                      <span class="details-group-summary" id="summary-excerpt">${excerptSummary}</span>
-                    </summary>
-                    <div class="details-group-body">
-                      <div class="form-group excerpt-row">
-                        <textarea id="excerpt-editor" class="form-input editor-excerpt ${this.state.maximizedField === "excerpt" ? "is-maximized" : ""}" rows="3" placeholder="Post excerpt…">${escapeHtml(excerpt)}</textarea>
-                        ${aiBtn("excerpt")}
                       </div>
                     </div>
                   </details>
@@ -439,9 +431,6 @@ export default class PostEditPage extends Component {
     set("summary-status", statusSummary);
 
     set("summary-slug", q("#slug-input")?.value.trim() || "auto");
-
-    const excerpt = (q("#excerpt-editor")?.value || "").trim();
-    set("summary-excerpt", excerpt ? this._truncate(excerpt) : "auto");
 
     const immersive = q("#immersive-mode-select")?.value || "auto";
     set("summary-immersive", { immersive: "Immersive", "non-immersive": "Non-immersive" }[immersive] || "Auto");

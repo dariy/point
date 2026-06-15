@@ -266,7 +266,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     page.state.igStatus = { enabled: true, connected: true, default_share: false };
 
     const html = page.render();
-    const order = ['data-group="status"', 'data-group="slug"', 'data-group="excerpt"', 'data-group="immersive"', 'data-group="css"', 'data-group="instagram"'];
+    const order = ['data-group="status"', 'data-group="slug"', 'data-group="immersive"', 'data-group="css"', 'data-group="instagram"'];
     let last = -1;
     for (const marker of order) {
       const idx = html.indexOf(marker);
@@ -274,7 +274,6 @@ test('should preserve other fields when switching from visual to text mode', () 
       last = idx;
     }
     assert.ok(html.includes('id="summary-slug"') && html.includes('my-trip'), 'Slug summary reflects the slug');
-    assert.ok(html.includes('id="summary-excerpt"'), 'Excerpt summary present');
   });
 
   test('aria-hidden on the panel reflects persisted detailsOpen state', () => {

@@ -15,12 +15,30 @@ export function setupHeaderCompact(header) {
     // Measure without compact so we get natural sizes.
     header.classList.remove('compact');
 
-    const h1Rect = h1.getBoundingClientRect();
+    const titleRow = header.querySelector('.header-title-row');
     const actionsRect = actions.getBoundingClientRect();
 
+    let contentOverflows = false;
+    let maxRight = 0;
+
+    if (titleRow) {
+      for (const child of titleRow.children) {
+        if (child.scrollWidth > child.clientWidth) {
+          contentOverflows = true;
+        }
+        maxRight = Math.max(maxRight, child.getBoundingClientRect().right);
+      }
+    } else {
+      const h1Rect = h1.getBoundingClientRect();
+      maxRight = h1Rect.right;
+      if (h1.scrollWidth > h1.clientWidth) contentOverflows = true;
+    }
+
     // Only collapse when both are on the same line (same-row check via top).
+    const h1Rect = h1.getBoundingClientRect();
     const sameRow = Math.abs(h1Rect.top - actionsRect.top) < actionsRect.height;
-    if (sameRow && h1Rect.right + 16 >= actionsRect.left) {
+    
+    if (sameRow && (contentOverflows || maxRight + 16 >= actionsRect.left)) {
       header.classList.add('compact');
     }
   }

@@ -278,7 +278,7 @@ body {
 }
 
 .header-title-row {
-    flex: 1;
+    flex: 1 1 auto;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -291,6 +291,10 @@ body {
     color: var(--text-primary);
     transition: color var(--transition-theme);
     margin-left: var(--spacing-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .header-actions {
