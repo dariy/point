@@ -32,3 +32,5 @@ frontend/css/common/theme.css
 .bv/
 .worktrees/
 /frontend/index.html
+# br doctor per-run artifacts
+.doctor/

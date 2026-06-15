@@ -75,6 +75,7 @@ type Repository interface {
 	ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error)
 	UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error)
 	ListPublishedPostStubs(ctx context.Context) ([]PostStub, error)
+	ListPostNodesForGraph(ctx context.Context, publishedOnly bool) ([]GraphPostNode, error)
 	GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
 	CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
 	GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)

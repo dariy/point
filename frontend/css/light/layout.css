@@ -52,6 +52,11 @@ body {
     left: 0;
     top: 0;
     bottom: 0;
+    /* Pin to the dynamic viewport so the dark column always fills the visible
+       height. Relying on bottom:0 alone leaves a white gap below the column on
+       touch devices when the browser toolbar collapses on scroll. */
+    height: 100vh;
+    height: 100dvh;
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
     color: var(--sidebar-text);

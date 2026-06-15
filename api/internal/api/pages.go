@@ -586,6 +586,125 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 	})
 }
 
+// GetTagsGraph returns the data for the /tags force-graph view: tag nodes,
+// post ("shadow") nodes, parent/child (hierarchy) edges, and post→tag
+// (membership) edges. Anonymous viewers see only published posts and visible
+// tags; authenticated users see everything.
+func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
+	ctx := c.Request().Context()
+	user := c.Get("user")
+	publicOnly := user == nil
+
+	g, err := h.tagService.GetTagSnapshot(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	minPosts := getMinTagPostsSetting(allSettings)
+
+	// Tags hidden from public viewers: effective-hidden + below min post count.
+	excludeTagIDs := make(map[int64]bool)
+	if publicOnly {
+		for id := range g.EffectiveHidden {
+			excludeTagIDs[id] = true
+		}
+		if minPosts > 0 {
+			for id, count := range g.CountsPublic {
+				if count < minPosts {
+					excludeTagIDs[id] = true
+				}
+			}
+		}
+	}
+
+	// Tag nodes. kind + coordinates let the frontend classify year/geo nodes.
+	tags := make([]map[string]interface{}, 0, len(g.ByID))
+	for id, t := range g.ByID {
+		if publicOnly && excludeTagIDs[id] {
+			continue
+		}
+		node := map[string]interface{}{
+			"id":   id,
+			"name": t.Name,
+			"slug": t.Slug,
+			"kind": t.Kind,
+		}
+		if t.Latitude.Valid && t.Longitude.Valid {
+			node["latitude"] = t.Latitude.Float64
+			node["longitude"] = t.Longitude.Float64
+		}
+		if publicOnly {
+			node["post_count"] = g.CountsPublic[id]
+		} else {
+			node["post_count"] = g.CountsAdmin[id]
+		}
+		tags = append(tags, node)
+	}
+
+	// Hierarchy edges (skip edges touching an excluded tag for public viewers).
+	rels, err := h.tagService.GetAllTagRelationships(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	hierarchyEdges := make([]map[string]interface{}, 0, len(rels))
+	for _, rel := range rels {
+		if publicOnly && (excludeTagIDs[rel.ParentID] || excludeTagIDs[rel.ChildID]) {
+			continue
+		}
+		hierarchyEdges = append(hierarchyEdges, map[string]interface{}{
+			"parent": rel.ParentID,
+			"child":  rel.ChildID,
+		})
+	}
+
+	// Post nodes + membership edges.
+	postNodes, err := h.repo.ListPostNodesForGraph(ctx, publicOnly)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	postIDs := make([]int64, len(postNodes))
+	for i, p := range postNodes {
+		postIDs[i] = p.ID
+	}
+	tagsByPost, err := h.tagService.GetTagsByPostIDs(ctx, postIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	posts := make([]map[string]interface{}, 0, len(postNodes))
+	membershipEdges := make([]map[string]interface{}, 0)
+	for _, p := range postNodes {
+		edges := 0
+		for _, pt := range tagsByPost[p.ID] {
+			if publicOnly && excludeTagIDs[pt.ID] {
+				continue
+			}
+			membershipEdges = append(membershipEdges, map[string]interface{}{
+				"post": p.ID,
+				"tag":  pt.ID,
+			})
+			edges++
+		}
+		// Drop posts that connect to no visible tag (orphans under hidden tags).
+		if edges == 0 {
+			continue
+		}
+		posts = append(posts, map[string]interface{}{
+			"id":    p.ID,
+			"slug":  p.Slug,
+			"title": p.Title,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"tags":            tags,
+		"posts":           posts,
+		"hierarchyEdges":  hierarchyEdges,
+		"membershipEdges": membershipEdges,
+	})
+}
+
 // GetMapPage returns all tags that have coordinates, categorised by type
 // (country / city / other) for the public /map page.
 func (h *PagesHandler) GetMapPage(c echo.Context) error {

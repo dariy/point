@@ -534,6 +534,63 @@ ORDER BY published_at DESC, created_at DESC`
 	return stubs, rows.Err()
 }
 
+// GraphPostNode is a lightweight post descriptor (id, slug, title) used to
+// render posts as "shadow" nodes in the tags graph on /tags.
+type GraphPostNode struct {
+	ID    int64  `json:"id"`
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+}
+
+// ListPostNodesForGraph returns id, slug, title for the posts to render as nodes
+// in the tags graph. When publishedOnly is true, only published, non-hidden posts
+// (excluding posts buried under a hides_posts tag, mirroring ListPublishedPostStubs)
+// are returned; otherwise all non-deleted posts are returned. Newest first.
+func (r *sqliteRepository) ListPostNodesForGraph(ctx context.Context, publishedOnly bool) ([]GraphPostNode, error) {
+	var q string
+	if publishedOnly {
+		q = `
+SELECT id, slug, title
+FROM posts
+WHERE LOWER(status) = 'published'
+AND deleted_at IS NULL
+AND id NOT IN (
+    SELECT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE h(id) AS (
+            SELECT id FROM tags WHERE hides_posts = 1
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+        )
+        SELECT id FROM h
+    )
+)
+ORDER BY published_at DESC, created_at DESC`
+	} else {
+		q = `
+SELECT id, slug, title
+FROM posts
+WHERE deleted_at IS NULL
+ORDER BY published_at DESC, created_at DESC`
+	}
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var nodes []GraphPostNode
+	for rows.Next() {
+		var n GraphPostNode
+		if err := rows.Scan(&n.ID, &n.Slug, &n.Title); err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, n)
+	}
+	return nodes, rows.Err()
+}
+
 // GetPostsByTagIDs returns paginated posts that have at least one tag from the
 // given set of tag IDs. The status filter mirrors CountPostsByTag / GetPostsByTag.
 func (r *sqliteRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {

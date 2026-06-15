@@ -142,6 +142,7 @@ type mockRepository struct {
 	MockReplacePostContentPath          func(ctx context.Context, oldPath, newPath string) (int64, error)
 	MockUpdatePostThumbnailPath         func(ctx context.Context, oldPath, newPath string) (int64, error)
 	MockListPublishedPostStubs          func(ctx context.Context) ([]repository.PostStub, error)
+	MockListPostNodesForGraph           func(ctx context.Context, publishedOnly bool) ([]repository.GraphPostNode, error)
 	MockGetPostsByTagIDs                func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
 	MockCountPostsByTagIDs              func(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
 	MockGetPostsByTagIDsInYearRange     func(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
@@ -1042,6 +1043,13 @@ func (m *mockRepository) ListPublishedPostStubs(ctx context.Context) ([]reposito
 		return m.MockListPublishedPostStubs(ctx)
 	}
 	return nil, fmt.Errorf("ListPublishedPostStubs not implemented")
+}
+
+func (m *mockRepository) ListPostNodesForGraph(ctx context.Context, publishedOnly bool) ([]repository.GraphPostNode, error) {
+	if m.MockListPostNodesForGraph != nil {
+		return m.MockListPostNodesForGraph(ctx, publishedOnly)
+	}
+	return nil, fmt.Errorf("ListPostNodesForGraph not implemented")
 }
 
 func (m *mockRepository) GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error) {
