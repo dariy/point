@@ -312,3 +312,43 @@ func mediaToResponse(m models.Medium) map[string]interface{} {
 		"is_public":         m.IsPublic,
 	}
 }
+
+// parseUserAgent performs basic extraction of browser and OS names from a User-Agent string.
+func parseUserAgent(ua string) (browser, os string) {
+	uaLower := strings.ToLower(ua)
+
+	// OS detection
+	switch {
+	case strings.Contains(uaLower, "windows"):
+		os = "Windows"
+	case strings.Contains(uaLower, "macintosh") || strings.Contains(uaLower, "mac os x"):
+		os = "macOS"
+	case strings.Contains(uaLower, "android"):
+		os = "Android"
+	case strings.Contains(uaLower, "iphone") || strings.Contains(uaLower, "ipad") || strings.Contains(uaLower, "ipod"):
+		os = "iOS"
+	case strings.Contains(uaLower, "linux"):
+		os = "Linux"
+	default:
+		os = "Unknown"
+	}
+
+	// Browser detection
+	switch {
+	case strings.Contains(uaLower, "edg/"):
+		browser = "Edge"
+	case strings.Contains(uaLower, "opr/") || strings.Contains(uaLower, "opera"):
+		browser = "Opera"
+	case strings.Contains(uaLower, "firefox"):
+		browser = "Firefox"
+	case strings.Contains(uaLower, "chrome") || strings.Contains(uaLower, "criuos"):
+		browser = "Chrome"
+	case strings.Contains(uaLower, "safari") && !strings.Contains(uaLower, "chrome") && !strings.Contains(uaLower, "android"):
+		browser = "Safari"
+	default:
+		browser = "Unknown"
+	}
+
+	return browser, os
+}
+

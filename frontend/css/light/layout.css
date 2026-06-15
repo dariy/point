@@ -8,12 +8,42 @@ body {
 }
 
 .light-layout {
+    display: flex;
+    flex-direction: column;
     min-height: 100vh;
 }
 
-.light-container {
-    display: flex;
-    min-height: 100vh;
+.light-sidebar.is-collapsed {
+    width: var(--sidebar-collapsed-width, var(--size-4));
+}
+
+.light-sidebar.is-collapsed .site-name,
+.light-sidebar.is-collapsed .nav-label,
+.light-sidebar.is-collapsed .sidebar-version,
+.light-sidebar.is-collapsed .nav-group-title,
+.light-sidebar.is-collapsed .toggle-icon {
+    display: none;
+}
+
+.light-sidebar.is-collapsed .sidebar-header,
+.light-sidebar.is-collapsed .nav-item a,
+.light-sidebar.is-collapsed .sidebar-footer {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.light-layout--collapsed .light-main {
+    margin-left: var(--sidebar-collapsed-width, var(--size-4));
+}
+
+/* Mount points for fixed overlays — ensure they don't add to flow height */
+#sidebar-mount,
+#bottom-bar-mount,
+#command-palette-mount,
+#shortcut-help-mount {
+    height: 0;
+    overflow: visible;
 }
 
 /* Sidebar */
@@ -204,7 +234,6 @@ body {
 .light-main {
     flex: 1;
     margin-left: var(--sidebar-width);
-    min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
