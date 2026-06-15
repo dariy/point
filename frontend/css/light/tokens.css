@@ -319,6 +319,7 @@
     --tm-toggle-height: var(--size-1-375);
     --tm-toggle-font-size: var(--size-0-5625);
     --tm-toggle-spacer-width: var(--size-1-375);
+    --tm-node-body-gap: var(--size-0-5);
     --tm-row-meta-gap: var(--size-0-375);
     --tm-row-meta-min-width: var(--size-3-75);
     --tm-actions-gap: var(--size-0-1875);

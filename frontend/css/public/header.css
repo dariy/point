@@ -56,6 +56,18 @@
     margin-left: auto;
 }
 
+/* When the slot holds the /tags highlight filter, let it stretch to fill the
+   gap between the breadcrumb ("All tags") and the action buttons: shrink the
+   site-header to its content and let the slot grow instead of pushing right. */
+.site-header-inner:has(.header-tag-filter) > .site-header {
+    flex: 0 1 auto;
+}
+
+.site-header-inner:has(.header-tag-filter) > .site-nav-slot {
+    flex: 1 1 auto;
+    margin-left: var(--spacing-md);
+}
+
 
 .header-container {
     max-width: var(--content-max-width);
@@ -83,6 +95,16 @@
     flex-direction: row;
     align-items: center;
     gap: var(--spacing-sm);
+    flex-shrink: 0;
+}
+
+/* Post-action buttons (article toggle, share, edit) grouped beside the
+   breadcrumb so they stay put when navigating between pages instead of
+   shuffling among the right-hand nav items. */
+.branding-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--site-nav-gap);
     flex-shrink: 0;
 }
 
@@ -506,8 +528,8 @@
     display: flex;
 }
 
-/* hide edit button from branding when burger is active */
-.site-header-group.fold-nav .edit-btn-header {
+/* hide branding action buttons when burger is active (the burger holds copies) */
+.site-header-group.fold-nav .branding-actions {
     display: none;
 }
 

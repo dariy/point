@@ -7,17 +7,25 @@
  *   - edges:  hierarchy (tag→tag parent/child) | membership (post→tag)
  *
  * Node radius scales with degree (number of incident edges). Nodes are
- * draggable; the view supports wheel-zoom and background-drag pan. Hover (or the
- * search filter) highlights a node and its neighbours and fades the rest.
- * Clicking a tag/year/geo node navigates to /tags/<slug>; a post node navigates
- * to /posts/<slug>.
+ * draggable; the view supports wheel-zoom, two-finger pinch-zoom, and
+ * background-drag pan. Hover (or the search filter) highlights a node and its
+ * neighbours and fades the rest; hovering a tag also lights a "second wave"
+ * through its posts to the related tags that share them (those related tags get
+ * a dashed ring). A first click/tap selects + highlights a node (locking the
+ * highlight so you can follow its connections to a related node and click it); a
+ * second click/tap on the same node opens it — a tag/year/geo node navigates to
+ * /tags/<slug>, a post to /posts/<slug>. Clicking empty space clears it.
+ *
+ * Zoom is bounded below by "everything fits the viewport" (zooming out further
+ * is pointless), and the layout auto-frames itself once it settles.
  *
  * Usage:
  *   const g = new TagGraph(canvasEl, data, { onNavigate, onHover });
- *   g.start();                // build + run the layout
- *   g.setFilter('japan');     // highlight matching tag nodes
- *   g.resize();               // after a container resize
- *   g.destroy();              // stop the sim + remove listeners
+ *   g.start();                    // build + run the layout
+ *   g.setFilter('japan');         // highlight matching tag nodes
+ *   g.setTypeHidden('post', true);// show/hide a node kind (legend toggles)
+ *   g.resize();                   // after a container resize
+ *   g.destroy();                  // stop the sim + remove listeners
  */
 
 // Deterministic PRNG so the initial layout is stable across reloads.
@@ -38,14 +46,16 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const ALPHA_MIN = 0.001;
 const ALPHA_DECAY = 0.0228;
 const VELOCITY_DECAY = 0.82;
-const REPULSION = 340; // pairwise charge strength (world px²)
-const REPULSION_CUTOFF = 260;
-const GRAVITY = 0.019;
-const HIER_LEN = 78;
-const HIER_K = 0.22;
-const MEMB_LEN = 42;
-const MEMB_K = 0.10;
+const REPULSION = 560; // pairwise charge strength (world px²)
+const REPULSION_CUTOFF = 340;
+const GRAVITY = 0.015;
+const HIER_LEN = 110;
+const HIER_K = 0.20;
+const MEMB_LEN = 66;
+const MEMB_K = 0.09;
+const COLLIDE_PAD = 8; // extra gap kept between node rims (world px)
 const COLLIDE_ITERS = 2;
+const TAP_SLOP = 10; // max screen-px drift still counted as a tap (not a drag)
 
 function nodeRadius(type, degree) {
   if (type === 'post') return clamp(2.5 + 1.4 * Math.sqrt(degree), 3, 11);
@@ -71,10 +81,19 @@ export class TagGraph {
     this.ty = 0;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    this.hovered = null;
+    this.hovered = null; // mouse hover (highlight + cursor)
+    this.selected = null; // click/tap selection: 1st click selects, 2nd opens
     this.dragNode = null;
     this.panning = false;
     this.filterSet = null; // Set of node.id matching the search filter
+    this.hiddenTypes = new Set(); // node types toggled off via the legend
+    this._pointers = new Map(); // pointerId -> {x,y}, for multi-touch pinch
+    this._pinch = null;
+
+    this._aNodes = []; // visible nodes (drives physics / draw / picking)
+    this._aLinks = []; // visible links (both endpoints visible)
+    this._needFit = true; // fit-to-view once the initial layout settles
+    this._userView = false; // true once the user has zoomed/panned manually
 
     this._rafId = 0;
     this._running = false;
@@ -82,6 +101,7 @@ export class TagGraph {
     this._colors = this._readColors();
 
     this._buildGraph(data);
+    this._recomputeActive();
     this._bindEvents();
   }
 
@@ -173,7 +193,8 @@ export class TagGraph {
         this._tick();
       }
       this.alpha = 0;
-      this._draw();
+      this._needFit = false;
+      this._fitToView();
       return;
     }
     this._kick();
@@ -194,16 +215,28 @@ export class TagGraph {
     this._draw();
   }
 
+  /** Show or hide every node of `type` ('tag' | 'year' | 'geo' | 'post'). */
+  setTypeHidden(type, hidden) {
+    if (hidden) this.hiddenTypes.add(type);
+    else this.hiddenTypes.delete(type);
+    // Clear interaction state pointing at a now-hidden node.
+    if (this.hovered && this.hiddenTypes.has(this.hovered.type)) this.hovered = null;
+    if (this.selected && this.hiddenTypes.has(this.selected.type)) this.selected = null;
+    this._recomputeActive();
+    this.alpha = Math.max(this.alpha, 0.25);
+    this._kick();
+  }
+
   zoomBy(factor) {
     const { width, height } = this._cssSize();
     this._zoomAt(width / 2, height / 2, factor);
   }
 
   resetView() {
-    this.scale = 1;
-    this.tx = 0;
-    this.ty = 0;
     this.alpha = Math.max(this.alpha, 0.3);
+    this._needFit = true; // re-fit once it settles again
+    this._userView = false; // resume auto-framing
+    this._fitToView();
     this._kick();
   }
 
@@ -211,7 +244,9 @@ export class TagGraph {
     const { width, height } = this._cssSize();
     this.canvas.width = Math.round(width * this.dpr);
     this.canvas.height = Math.round(height * this.dpr);
-    this._draw();
+    // Keep everything framed across viewport changes until the user takes over.
+    if (this._userView) this._draw();
+    else this._fitToView();
   }
 
   refreshTheme() {
@@ -243,13 +278,72 @@ export class TagGraph {
         this._rafId = requestAnimationFrame(loop);
       } else {
         this._running = false;
+        // Layout has settled: frame everything once so all nodes are visible.
+        if (this._needFit) {
+          this._needFit = false;
+          this._fitToView();
+        }
       }
     };
     this._rafId = requestAnimationFrame(loop);
   }
 
+  // ── Active set + zoom-to-fit ──────────────────────────────────────────────────
+
+  _recomputeActive() {
+    const hidden = this.hiddenTypes;
+    this._aNodes = hidden.size ? this.nodes.filter((n) => !hidden.has(n.type)) : this.nodes;
+    this._aLinks = hidden.size
+      ? this.links.filter((l) => !hidden.has(l.source.type) && !hidden.has(l.target.type))
+      : this.links;
+  }
+
+  /** Bounding box (world coords) of the currently visible nodes, or null. */
+  _bounds() {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of this._aNodes) {
+      if (n.x - n.r < minX) minX = n.x - n.r;
+      if (n.y - n.r < minY) minY = n.y - n.r;
+      if (n.x + n.r > maxX) maxX = n.x + n.r;
+      if (n.y + n.r > maxY) maxY = n.y + n.r;
+    }
+    if (minX === Infinity) return null;
+    return { minX, minY, maxX, maxY };
+  }
+
+  /**
+   * Smallest scale at which every visible node fits in the viewport — this is
+   * the minimum zoom (zooming out past "everything visible" is pointless).
+   */
+  _fitScale() {
+    const b = this._bounds();
+    if (!b) return 0.2;
+    const { width, height } = this._cssSize();
+    const margin = 28; // breathing room + label space (screen px)
+    const bw = Math.max(b.maxX - b.minX, 1);
+    const bh = Math.max(b.maxY - b.minY, 1);
+    const s = Math.min((width - margin * 2) / bw, (height - margin * 2) / bh);
+    return clamp(s, 0.05, 4);
+  }
+
+  /** Center + scale so all visible nodes fit the viewport. */
+  _fitToView() {
+    const b = this._bounds();
+    if (!b) {
+      this._draw();
+      return;
+    }
+    const { width, height } = this._cssSize();
+    this.scale = this._fitScale();
+    const cx = (b.minX + b.maxX) / 2;
+    const cy = (b.minY + b.maxY) / 2;
+    this.tx = width / 2 - cx * this.scale;
+    this.ty = height / 2 - cy * this.scale;
+    this._draw();
+  }
+
   _tick() {
-    const nodes = this.nodes;
+    const nodes = this._aNodes;
     const { width, height } = this._cssSize();
     const cx = width / 2;
     const cy = height / 2;
@@ -301,7 +395,7 @@ export class TagGraph {
     }
 
     // Link springs.
-    for (const l of this.links) {
+    for (const l of this._aLinks) {
       const rest = l.kind === 'hierarchy' ? HIER_LEN : MEMB_LEN;
       const ks = l.kind === 'hierarchy' ? HIER_K : MEMB_K;
       const a = l.source;
@@ -342,7 +436,7 @@ export class TagGraph {
               if (m === n || m.id < n.id) continue;
               const dx = n.x - m.x;
               const dy = n.y - m.y;
-              const min = n.r + m.r + 2;
+              const min = n.r + m.r + COLLIDE_PAD;
               const d2 = dx * dx + dy * dy;
               if (d2 >= min * min || d2 === 0) continue;
               const dist = Math.sqrt(d2) || 1;
@@ -367,20 +461,48 @@ export class TagGraph {
   // ── Rendering ────────────────────────────────────────────────────────────────
 
   _focusSets() {
-    // Returns { focus:Set<id>|null, links:Set<link>|null } for hover/filter dimming.
-    let focusIds = null;
-    if (this.hovered) {
-      focusIds = new Set([this.hovered.id]);
-      const nbrs = this.neighbors.get(this.hovered.id);
-      if (nbrs) for (const id of nbrs) focusIds.add(id);
-    } else if (this.filterSet && this.filterSet.size) {
-      focusIds = new Set(this.filterSet);
-      for (const id of this.filterSet) {
-        const nbrs = this.neighbors.get(id);
-        if (nbrs) for (const n of nbrs) focusIds.add(n);
+    // Returns { focus:Set<id>, related:Set<id> } | null for hover/filter dimming.
+    //   focus   — every highlighted node (faded peers are dimmed)
+    //   related — the "second wave" tags reached through a hovered tag's posts;
+    //             ringed distinctly so the tag→post→tag connection is legible.
+    // A click/tap selection locks the highlight (so you can move to a related
+    // node and click it); otherwise the live mouse hover drives it.
+    const active = this.selected || this.hovered;
+    if (active) return this._expandFocus([active.id]);
+    if (this.filterSet && this.filterSet.size) return this._expandFocus([...this.filterSet]);
+    return null;
+  }
+
+  /**
+   * Build the highlighted set for `seedIds`. Each seed lights its direct
+   * neighbours; additionally, from a *tag* seed we step a second hop through
+   * each adjacent post to the other tags that share it — surfacing related
+   * tags and the two-segment path that connects them.
+   */
+  _expandFocus(seedIds) {
+    const focus = new Set(seedIds);
+    const related = new Set();
+    for (const id of seedIds) {
+      const seed = this.nodeById.get(id);
+      const nbrs = this.neighbors.get(id);
+      if (!nbrs) continue;
+      const seedIsTag = seed && seed.type !== 'post';
+      for (const nId of nbrs) {
+        focus.add(nId);
+        if (!seedIsTag) continue;
+        const nNode = this.nodeById.get(nId);
+        if (!nNode || nNode.type !== 'post') continue;
+        // Second wave: bridge post → the other tags that carry it.
+        const postNbrs = this.neighbors.get(nId);
+        if (!postNbrs) continue;
+        for (const tId of postNbrs) {
+          if (tId === id) continue;
+          focus.add(tId);
+          related.add(tId);
+        }
       }
     }
-    return focusIds;
+    return { focus, related };
   }
 
   _draw() {
@@ -388,7 +510,11 @@ export class TagGraph {
     const dpr = this.dpr;
     const { width, height } = this._cssSize();
     const c = this._colors;
-    const focus = this._focusSets();
+    const focusData = this._focusSets();
+    const focus = focusData && focusData.focus;
+    const related = focusData && focusData.related;
+    const active = this.selected || this.hovered; // node with the solid ring
+    const activeId = active ? active.id : null;
     const dim = (id) => (focus ? (focus.has(id) ? 1 : 0.12) : 1);
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -398,14 +524,20 @@ export class TagGraph {
     ctx.setTransform(dpr * this.scale, 0, 0, dpr * this.scale, dpr * this.tx, dpr * this.ty);
 
     // Edges.
-    for (const l of this.links) {
+    for (const l of this._aLinks) {
       const a = l.source;
       const b = l.target;
       const lit = !focus || (focus.has(a.id) && focus.has(b.id));
       const isHier = l.kind === 'hierarchy';
-      ctx.globalAlpha = (isHier ? 0.55 : 0.18) * (lit ? 1 : 0.08);
+      // With a focus, emphasise the lit path (so the tag→post→tag connection
+      // reads clearly) and fade everything else hard.
+      let alpha;
+      if (!focus) alpha = isHier ? 0.55 : 0.18;
+      else if (lit) alpha = isHier ? 0.85 : 0.6;
+      else alpha = (isHier ? 0.55 : 0.18) * 0.08;
+      ctx.globalAlpha = alpha;
       ctx.strokeStyle = isHier ? c.hierEdge : c.membEdge;
-      ctx.lineWidth = (isHier ? 1.4 : 0.7) / this.scale;
+      ctx.lineWidth = (isHier ? 1.4 : focus && lit ? 1.3 : 0.7) / this.scale;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -414,7 +546,7 @@ export class TagGraph {
     ctx.globalAlpha = 1;
 
     // Node circles.
-    for (const n of this.nodes) {
+    for (const n of this._aNodes) {
       ctx.globalAlpha = dim(n.id);
       ctx.beginPath();
       ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
@@ -425,10 +557,19 @@ export class TagGraph {
         ctx.strokeStyle = c.nodeStroke;
         ctx.stroke();
       }
-      if (this.hovered && this.hovered.id === n.id) {
+      if (activeId === n.id) {
         ctx.lineWidth = 2.5 / this.scale;
         ctx.strokeStyle = c.primary;
         ctx.stroke();
+      } else if (related && related.has(n.id)) {
+        // Second-wave tag: a dashed ring distinguishes "reached through a post"
+        // from the solid ring of the hovered node.
+        ctx.save();
+        ctx.setLineDash([4 / this.scale, 3 / this.scale]);
+        ctx.lineWidth = 2 / this.scale;
+        ctx.strokeStyle = c.primary;
+        ctx.stroke();
+        ctx.restore();
       }
     }
     ctx.globalAlpha = 1;
@@ -437,16 +578,16 @@ export class TagGraph {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (const n of this.nodes) {
+    for (const n of this._aNodes) {
       const showAlways = n.type !== 'post' && n.r * this.scale >= 16;
       const isFocus = focus && focus.has(n.id);
-      const isHover = this.hovered && this.hovered.id === n.id;
-      if (!showAlways && !isHover && !(isFocus && n.type !== 'post')) continue;
+      const isActive = activeId === n.id;
+      if (!showAlways && !isActive && !(isFocus && n.type !== 'post')) continue;
       const sx = n.x * this.scale + this.tx;
       const sy = n.y * this.scale + this.ty;
       const fontPx = n.type === 'post' ? 11 : clamp(11 + n.r * 0.25, 11, 16);
-      ctx.font = `${isHover ? 600 : 500} ${fontPx}px system-ui, sans-serif`;
-      ctx.globalAlpha = focus && !isFocus && !isHover ? 0.15 : 1;
+      ctx.font = `${isActive ? 600 : 500} ${fontPx}px system-ui, sans-serif`;
+      ctx.globalAlpha = focus && !isFocus && !isActive ? 0.15 : 1;
       const ly = sy + n.r * this.scale + fontPx * 0.9;
       ctx.lineWidth = 3;
       ctx.strokeStyle = c.labelHalo;
@@ -492,7 +633,10 @@ export class TagGraph {
     this._onMove = this._pointerMove.bind(this);
     this._onUp = this._pointerUp.bind(this);
     this._onWheel = this._wheel.bind(this);
-    this._onLeave = () => {
+    this._onLeave = (e) => {
+      // On touch, lifting a finger fires pointerleave — don't wipe the
+      // tap-selected node (that highlight must persist until the next tap).
+      if (e && e.pointerType === 'touch') return;
       if (this.hovered) {
         this.hovered = null;
         this.onHover(null);
@@ -502,6 +646,7 @@ export class TagGraph {
     this.canvas.addEventListener('pointerdown', this._onDown);
     this.canvas.addEventListener('pointermove', this._onMove);
     window.addEventListener('pointerup', this._onUp);
+    window.addEventListener('pointercancel', this._onUp);
     this.canvas.addEventListener('wheel', this._onWheel, { passive: false });
     this.canvas.addEventListener('pointerleave', this._onLeave);
   }
@@ -510,6 +655,7 @@ export class TagGraph {
     this.canvas.removeEventListener('pointerdown', this._onDown);
     this.canvas.removeEventListener('pointermove', this._onMove);
     window.removeEventListener('pointerup', this._onUp);
+    window.removeEventListener('pointercancel', this._onUp);
     this.canvas.removeEventListener('wheel', this._onWheel);
     this.canvas.removeEventListener('pointerleave', this._onLeave);
   }
@@ -527,7 +673,7 @@ export class TagGraph {
     const w = this._screenToWorld(sx, sy);
     let best = null;
     let bestD = Infinity;
-    for (const n of this.nodes) {
+    for (const n of this._aNodes) {
       const dx = n.x - w.x;
       const dy = n.y - w.y;
       const d2 = dx * dx + dy * dy;
@@ -542,6 +688,24 @@ export class TagGraph {
 
   _pointerDown(e) {
     const p = this._pointerPos(e);
+    this._pointers.set(e.pointerId, p);
+    this._needFit = false; // user is taking over the view
+
+    // A second finger turns the gesture into a pinch — drop any single-pointer
+    // drag/pan that the first finger started.
+    if (this._pointers.size === 2) {
+      this.dragNode = null;
+      this.panning = false;
+      this._beginPinch();
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (this._pointers.size > 2) return;
+
     const node = this._pickNode(p.x, p.y);
     this._downPos = p;
     this._downTime = Date.now();
@@ -560,10 +724,41 @@ export class TagGraph {
     }
   }
 
+  _beginPinch() {
+    const [a, b] = [...this._pointers.values()];
+    this._pinch = {
+      startDist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+      startScale: this.scale,
+      // World point under the initial midpoint, kept fixed for the gesture.
+      world: this._screenToWorld((a.x + b.x) / 2, (a.y + b.y) / 2),
+    };
+    this._moved = true; // suppress tap-navigation when the gesture ends
+  }
+
   _pointerMove(e) {
     const p = this._pointerPos(e);
+    if (this._pointers.has(e.pointerId)) this._pointers.set(e.pointerId, p);
+
+    // Pinch: scale by the finger-distance ratio, anchored on the moving
+    // midpoint (which also yields two-finger panning).
+    if (this._pinch && this._pointers.size >= 2) {
+      this._userView = true;
+      const [a, b] = [...this._pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      this.scale = clamp(this._pinch.startScale * (dist / this._pinch.startDist), this._fitScale(), 6);
+      this.tx = midX - this._pinch.world.x * this.scale;
+      this.ty = midY - this._pinch.world.y * this.scale;
+      this._draw();
+      return;
+    }
+
     if (this.dragNode) {
-      this._moved = true;
+      // Ignore sub-slop jitter so a stationary tap still registers as a tap.
+      if (this._downPos && Math.hypot(p.x - this._downPos.x, p.y - this._downPos.y) > TAP_SLOP) {
+        this._moved = true;
+      }
       const w = this._screenToWorld(p.x, p.y);
       this.dragNode.x = w.x;
       this.dragNode.y = w.y;
@@ -574,7 +769,10 @@ export class TagGraph {
       return;
     }
     if (this.panning) {
-      this._moved = true;
+      if (this._downPos && Math.hypot(p.x - this._downPos.x, p.y - this._downPos.y) > TAP_SLOP) {
+        this._moved = true;
+        this._userView = true;
+      }
       this.tx = p.x - this._panStart.x;
       this.ty = p.y - this._panStart.y;
       this._draw();
@@ -591,25 +789,63 @@ export class TagGraph {
   }
 
   _pointerUp(e) {
-    const wasDrag = this.dragNode;
-    const wasPan = this.panning;
-    this.dragNode = null;
-    this.panning = false;
+    this._pointers.delete(e.pointerId);
     try {
       this.canvas.releasePointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }
-    // Treat a short, near-stationary press as a click → navigate.
+
+    // Lifting a finger out of a pinch. If one finger remains, hand it back to
+    // single-finger panning without a jump; otherwise the gesture is over.
+    if (this._pinch) {
+      if (this._pointers.size < 2) {
+        this._pinch = null;
+        const rest = [...this._pointers.values()][0];
+        if (rest) {
+          this.panning = true;
+          this._panStart = { x: rest.x - this.tx, y: rest.y - this.ty };
+        }
+      }
+      this._draw();
+      return;
+    }
+
+    const wasDrag = this.dragNode;
+    const wasPan = this.panning;
+    this.dragNode = null;
+    this.panning = false;
+
+    // Treat a short, near-stationary press as a tap/click. For both mouse and
+    // touch the first selects + highlights the node (so you can follow its
+    // highlighted second-wave connections and click one); a second on the
+    // already-selected node opens it.
     if (this._downPos && !this._moved && Date.now() - this._downTime < 400) {
       const node = this._pickNode(this._downPos.x, this._downPos.y);
       if (node) {
-        const href = node.type === 'post' ? `/posts/${node.slug}` : `/tags/${node.slug}`;
-        this.onNavigate(href);
+        if (this.selected && this.selected.id === node.id) {
+          this._navigateTo(node);
+          return;
+        }
+        this.selected = node;
+        this.onHover(node);
+        this._draw();
         return;
       }
+      // Tap/click on empty space clears the current selection.
+      if (this.selected) {
+        this.selected = null;
+        this.onHover(null);
+        this._draw();
+      }
+      return;
     }
     if (wasDrag || wasPan) this._draw();
+  }
+
+  _navigateTo(node) {
+    const href = node.type === 'post' ? `/posts/${node.slug}` : `/tags/${node.slug}`;
+    this.onNavigate(href);
   }
 
   _wheel(e) {
@@ -620,7 +856,10 @@ export class TagGraph {
   }
 
   _zoomAt(sx, sy, factor) {
-    const newScale = clamp(this.scale * factor, 0.2, 6);
+    this._needFit = false;
+    this._userView = true;
+    // Min zoom = "everything visible"; zooming out past that is pointless.
+    const newScale = clamp(this.scale * factor, this._fitScale(), 6);
     const w = this._screenToWorld(sx, sy);
     this.scale = newScale;
     // Keep the point under the cursor fixed.

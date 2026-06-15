@@ -115,25 +115,14 @@ func (s *TagService) getGraph(ctx context.Context) (*TagGraph, error) {
 		g.Parents[rel.ChildID] = append(g.Parents[rel.ChildID], rel.ParentID)
 	}
 
-	// 1. Effective visibility: hidden
-	hiddenQueue := make([]int64, 0)
+	// 1. Effective visibility: hidden.
+	// Hidden is NOT inherited by descendants — only tags explicitly marked
+	// hidden are hidden. A useful child (e.g. "robot") stays visible even when
+	// its parent (e.g. "stuff") is hidden.
 	for _, t := range allTags {
 		if t.Hidden {
 			g.EffectiveHidden[t.ID] = true
 			g.HiddenVia[t.ID] = t.ID
-			hiddenQueue = append(hiddenQueue, t.ID)
-		}
-	}
-	for len(hiddenQueue) > 0 {
-		cur := hiddenQueue[0]
-		hiddenQueue = hiddenQueue[1:]
-		via := g.HiddenVia[cur]
-		for _, childID := range g.Children[cur] {
-			if !g.EffectiveHidden[childID] {
-				g.EffectiveHidden[childID] = true
-				g.HiddenVia[childID] = via
-				hiddenQueue = append(hiddenQueue, childID)
-			}
 		}
 	}
 

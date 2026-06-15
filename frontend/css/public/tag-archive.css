@@ -264,26 +264,40 @@
 }
 
 /* Inline header variant — the /tags highlight filter living in the header's
-   middle slot, left of the action buttons (point-x52z). */
+   middle slot (point-x52z). Styled like `.header-search-form`'s open input and
+   sized to span from the end of the "All tags" breadcrumb to the action
+   buttons.  The span is driven by the slot/site-header flex rules in header.css. */
 .tag-filter-box.header-tag-filter {
     margin: 0;
-    flex: 0 1 220px;
+    flex: 1 1 auto;
     min-width: 0;
+    max-width: none;
+    height: var(--header-search-form-height);
 }
 
 .header-tag-filter #tag-filter-input {
-    padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs) calc(var(--spacing-md) * 2.25);
+    width: 100%;
+    height: var(--input-type--search---height);
+    padding: 0 var(--input-type--search---padding) 0 calc(var(--spacing-md) * 2.25);
+    background: color-mix(in srgb, var(--surface-card) 95%, transparent);
+    backdrop-filter: blur(var(--input-type--search---backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--input-type--search----webkit-backdrop-filter));
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--input-type--search---border-radius);
     font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.header-tag-filter #tag-filter-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 var(--input-type--search---box-shadow) var(--color-primary-light);
 }
 
 /* Below the burger breakpoint the slot wraps to its own full-width row, so the
-   filter spans it. */
-@media (max-width: 640px) {
-    .tag-filter-box.header-tag-filter {
-        flex: 1 1 auto;
-        max-width: none;
-    }
-}
+   filter already spans it via flex: 1 1 auto. */
 
 /* Tree Collapse & Filter States */
 .tags-tree-item.is-hidden {
@@ -330,6 +344,29 @@
    =========================== */
 
 /* Node / edge colors — theme-aware, consumed by tagGraph.js via getComputedStyle. */
+/* Full-bleed page chrome — mirror the /map layout so the graph fills the
+   viewport below the header (the more canvas, the better, especially mobile). */
+.site-wrapper--graph {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.site-main--graph {
+    padding: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Center the loading spinner in the flex column (margin:auto = both axes). */
+.site-main--graph .loading-spinner {
+    margin: auto;
+}
+
 .tag-graph {
     --graph-tag: var(--color-primary);
     --graph-year: #e0a23a;
@@ -341,12 +378,9 @@
     --graph-label-halo: var(--bg-primary);
 
     position: relative;
+    flex: 1;
+    min-height: 0;
     width: 100%;
-    height: min(72vh, 720px);
-    min-height: 420px;
-    margin-top: var(--spacing-lg);
-    border: var(--border-width, 1px) solid var(--border-primary);
-    border-radius: var(--border-radius-lg, 12px);
     background:
         radial-gradient(circle at 50% 40%, var(--surface-hover) 0%, var(--bg-secondary) 70%);
     overflow: hidden;
@@ -376,20 +410,64 @@
     left: var(--spacing-sm);
     margin: 0;
     padding: var(--spacing-sm) var(--spacing-md);
-    list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     font-size: var(--font-size-xs, 0.75rem);
     color: var(--text-secondary);
     background: color-mix(in srgb, var(--surface-card) 88%, transparent);
     border: var(--border-width, 1px) solid var(--border-primary);
     border-radius: var(--border-radius-md, 8px);
     backdrop-filter: blur(4px);
-    pointer-events: none;
+    pointer-events: none; /* clicks pass through to the canvas… */
+    max-width: calc(100% - 2 * var(--spacing-sm));
 }
 
-.tag-graph-legend li {
+/* …except the type toggles, which are interactive. */
+.tag-graph-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    pointer-events: auto;
+}
+
+.tg-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    font: inherit;
+    line-height: 1.2;
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--surface-card) 60%, transparent);
+    border: var(--border-width, 1px) solid var(--border-primary);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: opacity var(--transition-fast), border-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.tg-toggle:hover {
+    border-color: var(--border-secondary);
+    color: var(--text-primary);
+}
+
+.tg-toggle.is-off {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.tg-toggle.is-off .tg-dot {
+    background: var(--text-muted);
+}
+
+.tag-graph-legend__lines {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tg-legend-row {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -455,11 +533,13 @@
 }
 
 @media (max-width: 640px) {
-    .tag-graph {
-        height: min(70vh, 560px);
-    }
     .tag-graph-legend {
         font-size: 0.7rem;
         padding: 6px 8px;
+        gap: 6px;
+    }
+    .tag-graph-controls button {
+        width: 36px;
+        height: 36px;
     }
 }

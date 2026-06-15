@@ -33,6 +33,12 @@ body {
     padding-right: 0;
 }
 
+/* Collapsed: don't let branding stretch — keep the logo centered in the column. */
+.light-sidebar.is-collapsed .sidebar-header .site-branding {
+    flex: 0 0 auto;
+    justify-content: center;
+}
+
 .light-layout--collapsed .light-main {
     margin-left: var(--sidebar-collapsed-width, var(--size-4));
 }
@@ -84,11 +90,23 @@ body {
     flex: 1;
 }
 
+/* Logo doubles as the sidebar collapse toggle (it's a <button>). */
 .sidebar-header .site-title-link {
     display: flex;
     align-items: center;
     color: var(--sidebar-text-hover);
     text-decoration: none;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.sidebar-header .site-title-link:hover .app-logo {
+    color: var(--color-primary);
 }
 
 .sidebar-header .site-title {
@@ -126,22 +144,6 @@ body {
     color: var(--sidebar-text-hover);
     background: transparent;
     border: none;
-}
-
-.sidebar-header .public-home-link {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--sidebar-text);
-    transition: color var(--transition-fast);
-    border: none;
-    background: transparent;
-    padding: 0;
-}
-
-.sidebar-header .public-home-link:hover {
-    color: var(--sidebar-text-hover);
 }
 
 .sidebar-footer .theme-toggle {

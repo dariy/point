@@ -22,6 +22,9 @@ import {
   EXIF_ISO_SVG,
   EXIF_CAMERA_SVG,
   EXIF_MODEL_SVG,
+  RSS_SVG,
+  SUN_SVG,
+  MOON_SVG,
 } from "../../utils/icons.js";
 import { store } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
@@ -109,17 +112,19 @@ export class PublicFooter extends Component {
       centerSlot = `<div id="pagination-mount"></div>`;
     }
 
-    // About (author link in .footer-copyright) and Map (header map button)
-    // already have canonical entry points elsewhere, so the footer nav only
-    // carries the links that aren't reachable from the chrome: tags + RSS.
+    // About (author link in .footer-copyright), Map and All tags (header
+    // buttons) already have canonical entry points elsewhere, so the footer
+    // actions only carry what isn't reachable from the chrome: RSS and the
+    // theme toggle (moved here from the header).
     const rssButton =
       settings.enable_rss !== false
-        ? `<a href="/feed.xml" target="_blank">RSS</a>`
+        ? `<a href="/feed.xml" target="_blank" rel="noopener" class="footer-action-btn" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
         : "";
 
-    const rightLinks = [`<a href="/tags">All tags</a>`, rssButton]
-      .filter(Boolean)
-      .join(" &middot; ");
+    const themeToggle = `<button class="footer-action-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
+                <span class="icon-sun">${SUN_SVG}</span>
+                <span class="icon-moon">${MOON_SVG}</span>
+              </button>`;
 
     return `
       <footer class="site-footer">
@@ -134,9 +139,10 @@ export class PublicFooter extends Component {
               ${centerSlot}
             </div>
             <div class="footer-right">
-              <nav class="footer-nav" aria-label="Footer navigation">
-                ${rightLinks}
-              </nav>
+              <div class="footer-actions">
+                ${rssButton}
+                ${themeToggle}
+              </div>
             </div>
           </div>
         </div>
@@ -144,6 +150,12 @@ export class PublicFooter extends Component {
   }
 
   afterRender() {
+    // Theme toggle (moved here from the header; always visible in the footer).
+    this.$("#theme-toggle")?.addEventListener("click", () => {
+      const current = store.get("theme") || "auto";
+      store.set("theme", current === "dark" ? "light" : "dark");
+    });
+
     const tagsEl = this.$(".immersive-tags");
     if (!tagsEl) return;
     const navTags = store.get("navTags") || [];

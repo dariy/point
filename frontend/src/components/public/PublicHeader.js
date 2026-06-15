@@ -21,7 +21,7 @@ import { store } from '../../store.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { APP_LOGO_SVG, MAP_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, MAP_SVG, TAGS_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
 
@@ -226,6 +226,11 @@ export class PublicHeader extends Component {
       return '';
     })();
 
+    const tagsButtonHtml = `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
+                   aria-label="All tags" title="All tags">
+                  ${TAGS_SVG}
+                </a>`;
+
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
 
     // Burger: root tags as links for mobile discoverability
@@ -249,7 +254,13 @@ export class PublicHeader extends Component {
                 ${!breadcrumb.length && !vc.years && !vc.query && subtitle ? `<p class="site-subtitle">${subtitle}</p>` : ''}
               </a>
               ${crumbHtml}
-              ${editButtonHeader}
+              ${(immersiveToggleHtml || shareButtonHtml || editButtonHeader)
+                ? `<div class="branding-actions">
+                ${immersiveToggleHtml}
+                ${shareButtonHtml}
+                ${editButtonHeader}
+              </div>`
+                : ''}
             </div>
           </div>
 
@@ -266,13 +277,8 @@ export class PublicHeader extends Component {
 
             <!-- Normal nav items (hidden when fold-nav active) -->
             <div class="site-nav-items">
+              ${tagsButtonHtml}
               ${mapButtonHtml}
-              ${immersiveToggleHtml}
-              ${shareButtonHtml}
-              <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" type="button">
-                <span class="icon-sun">${SUN_SVG}</span>
-                <span class="icon-moon">${MOON_SVG}</span>
-              </button>
             </div>
 
             <!-- Burger (shown when fold-nav active) -->
@@ -376,13 +382,11 @@ export class PublicHeader extends Component {
     this._group = this.$('.site-header-group');
     this._inner = this.$('.site-header-inner');
 
-    // Theme toggles (header + burger share the same handler)
-    const toggleTheme = () => {
+    // Theme toggle in the burger menu (the primary toggle now lives in the footer)
+    this.$('#burger-theme-toggle')?.addEventListener('click', () => {
       const current = store.get('theme') || 'auto';
       store.set('theme', current === 'dark' ? 'light' : 'dark');
-    };
-    this.$('#theme-toggle')?.addEventListener('click', toggleTheme);
-    this.$('#burger-theme-toggle')?.addEventListener('click', toggleTheme);
+    });
 
     // ── Crumb dropdowns ───────────────────────────────────────────────────────
     // Desktop (hover-capable): open on hover, click navigates to the crumb's page.

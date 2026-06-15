@@ -36,9 +36,9 @@ export default class TagsPage extends Component {
 
     if (loading) {
       return `
-        <div class="site-wrapper">
+        <div class="site-wrapper site-wrapper--graph">
           <div id="header-mount"></div>
-          <main class="site-main" aria-busy="true">
+          <main class="site-main site-main--graph" aria-busy="true">
             <div class="loading-spinner" aria-label="Loading tags…"></div>
           </main>
           <div id="footer-mount"></div>
@@ -69,32 +69,34 @@ export default class TagsPage extends Component {
       .join('');
 
     return `
-      <div class="site-wrapper">
+      <div class="site-wrapper site-wrapper--graph">
         <div id="header-mount"></div>
-        <main class="site-main">
-          <div class="main-container tags-graph-page">
-            <div class="tag-graph">
-              <canvas id="tag-graph-canvas" role="img" aria-label="Force-directed graph of tags and posts"></canvas>
+        <main class="site-main site-main--graph">
+          <div class="tag-graph">
+            <canvas id="tag-graph-canvas" role="img" aria-label="Force-directed graph of tags and posts"></canvas>
 
-              <ul class="tag-graph-legend" aria-hidden="true">
-                <li><span class="tg-dot tg-dot--tag"></span>Tag</li>
-                <li><span class="tg-dot tg-dot--year"></span>Year</li>
-                <li><span class="tg-dot tg-dot--geo"></span>Place</li>
-                <li><span class="tg-dot tg-dot--post"></span>Post</li>
-                <li><span class="tg-line tg-line--hier"></span>Parent/child</li>
-                <li><span class="tg-line tg-line--memb"></span>Shared post</li>
-                <li class="tag-graph-legend__hint">Size = connections</li>
-              </ul>
-
-              <div class="tag-graph-controls">
-                <button type="button" id="tg-zoom-in" aria-label="Zoom in">+</button>
-                <button type="button" id="tg-zoom-out" aria-label="Zoom out">−</button>
-                <button type="button" id="tg-reset" aria-label="Reset view">⟳</button>
+            <div class="tag-graph-legend">
+              <div class="tag-graph-toggles" role="group" aria-label="Show or hide node types">
+                <button type="button" class="tg-toggle" data-type="tag" aria-pressed="true"><span class="tg-dot tg-dot--tag"></span>Tag</button>
+                <button type="button" class="tg-toggle" data-type="year" aria-pressed="true"><span class="tg-dot tg-dot--year"></span>Year</button>
+                <button type="button" class="tg-toggle" data-type="geo" aria-pressed="true"><span class="tg-dot tg-dot--geo"></span>Place</button>
+                <button type="button" class="tg-toggle" data-type="post" aria-pressed="true"><span class="tg-dot tg-dot--post"></span>Post</button>
+              </div>
+              <div class="tag-graph-legend__lines" aria-hidden="true">
+                <span class="tg-legend-row"><span class="tg-line tg-line--hier"></span>Parent/child</span>
+                <span class="tg-legend-row"><span class="tg-line tg-line--memb"></span>Shared post</span>
+                <span class="tag-graph-legend__hint">Size = connections</span>
               </div>
             </div>
 
-            <ul class="sr-only" aria-label="All tags">${fallback}</ul>
+            <div class="tag-graph-controls">
+              <button type="button" id="tg-zoom-in" aria-label="Zoom in">+</button>
+              <button type="button" id="tg-zoom-out" aria-label="Zoom out">−</button>
+              <button type="button" id="tg-reset" aria-label="Reset view">⟳</button>
+            </div>
           </div>
+
+          <ul class="sr-only" aria-label="All tags">${fallback}</ul>
         </main>
         <div id="footer-mount"></div>
       </div>`;
@@ -146,6 +148,17 @@ export default class TagsPage extends Component {
     this.$('#tg-zoom-in')?.addEventListener('click', () => this._graph?.zoomBy(1.25));
     this.$('#tg-zoom-out')?.addEventListener('click', () => this._graph?.zoomBy(1 / 1.25));
     this.$('#tg-reset')?.addEventListener('click', () => this._graph?.resetView());
+
+    // Node-type toggles (Tag / Year / Place / Post) — show or hide each kind.
+    this.container.querySelectorAll('.tg-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.type;
+        const nowOff = btn.getAttribute('aria-pressed') === 'true';
+        btn.setAttribute('aria-pressed', String(!nowOff));
+        btn.classList.toggle('is-off', nowOff);
+        this._graph?.setTypeHidden(type, nowOff);
+      });
+    });
   }
 
   _initGraph() {

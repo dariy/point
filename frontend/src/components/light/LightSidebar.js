@@ -3,7 +3,6 @@
  *
  * Props:
  *   currentPath  {string}   Active route path
- *   publicUrl    {string}   URL for the public-site link (defaults to '/')
  *   user         {object}   Current user (display_name, username)
  *   onLogout     {Function} Called when user clicks logout
  */
@@ -12,7 +11,7 @@ import { Component } from '../Component.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import {
-  APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG,
+  APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
   THEMES_SVG, MENU_SVG, CHART_SVG, PLUS_SVG, CHEVRON_SVG,
 } from '../../utils/icons.js';
@@ -43,7 +42,7 @@ export class LightSidebar extends Component {
   }
 
   render() {
-    const { currentPath = '', publicUrl = '/' } = this.props;
+    const { currentPath = '' } = this.props;
     const { collapsed } = this.state;
     const version = store.get('version') || '';
 
@@ -73,15 +72,13 @@ export class LightSidebar extends Component {
       <aside class="light-sidebar${collapsed ? ' is-collapsed' : ''}">
         <div class="sidebar-header">
           <div class="site-branding">
-            <a href="/light" class="site-title-link" aria-label="Admin home">
+            <button type="button" id="sidebar-collapse-btn" class="site-title-link" title="Toggle Sidebar" aria-label="Toggle Sidebar">
               <span class="site-title">
                 ${APP_LOGO_SVG}
                 <span class="site-name">Point</span>
               </span>
-            </a>
+            </button>
           </div>
-          <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar">${MENU_SVG}</button>
-          <a href="${escapeHtml(publicUrl)}" class="public-home-link" title="View public site" aria-label="View public site" data-external>${EXTERNAL_LINK_SVG}</a>
         </div>
 
         <nav class="sidebar-nav" aria-label="Admin navigation">
