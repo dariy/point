@@ -32,7 +32,7 @@ export default class TagsPage extends Component {
   }
 
   render() {
-    const { loading, data, total, error, filter } = this.state;
+    const { loading, data, error } = this.state;
 
     if (loading) {
       return `
@@ -73,15 +73,6 @@ export default class TagsPage extends Component {
         <div id="header-mount"></div>
         <main class="site-main">
           <div class="main-container tags-graph-page">
-            <header class="tag-header">
-              <h1 class="tag-name">All Tags</h1>
-              <p class="tag-count">${escapeHtml(String(total))} tags</p>
-              <div class="tag-filter-box">
-                ${SEARCH_SVG}
-                <input type="search" id="tag-filter-input" placeholder="Highlight tags…" value="${escapeHtml(filter)}" aria-label="Highlight tags in the graph">
-              </div>
-            </header>
-
             <div class="tag-graph">
               <canvas id="tag-graph-canvas" role="img" aria-label="Force-directed graph of tags and posts"></canvas>
 
@@ -112,7 +103,24 @@ export default class TagsPage extends Component {
   afterRender() {
     const settings = store.get('settings') || {};
     const navTags = store.get('navTags') || [];
-    this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '/tags' });
+    const loaded = !this.state.loading && this.state.data && !this.state.error;
+
+    // Once the graph is loaded, surface "All tags (N)" as the breadcrumb and the
+    // highlight filter inline in the header — keeping the page body for the graph.
+    const filterSlot = loaded
+      ? `<div class="tag-filter-box header-tag-filter">
+           ${SEARCH_SVG}
+           <input type="search" id="tag-filter-input" placeholder="Highlight tags…" value="${escapeHtml(this.state.filter)}" aria-label="Highlight tags in the graph">
+         </div>`
+      : '';
+
+    this.mountChild(PublicHeader, '#header-mount', {
+      settings,
+      navTags,
+      currentPath: '/tags',
+      breadcrumb: loaded ? [{ name: `All tags (${this.state.total})` }] : [],
+      slot: filterSlot,
+    });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
     if (this.state.loading) {

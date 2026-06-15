@@ -11,6 +11,9 @@
  *                               Last item = current tag (may have a slug for a self-link).
  *   total           {number}    Post / result count shown as trailing count crumb.
  *   timelineVisible {boolean}   When true, suppress the year facet crumb (timeline shows it).
+ *   slot            {string}    Optional HTML inserted as a middle header item
+ *                               (between breadcrumb and action buttons; wraps to its
+ *                               own full-width row on mobile), e.g. a page control.
  */
 
 import { Component } from '../Component.js';
@@ -35,6 +38,7 @@ export class PublicHeader extends Component {
       showShare = false,
       immersive = false,
       onToggleImmersive = null,
+      slot = '',
     } = this.props;
 
     const user = store.get('user');
@@ -248,6 +252,8 @@ export class PublicHeader extends Component {
               ${editButtonHeader}
             </div>
           </div>
+
+          ${slot ? `<div class="site-nav-slot">${slot}</div>` : ''}
 
           <nav class="site-nav" aria-label="Main navigation">
 

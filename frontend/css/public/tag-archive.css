@@ -263,6 +263,28 @@
     box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
+/* Inline header variant — the /tags highlight filter living in the header's
+   middle slot, left of the action buttons (point-x52z). */
+.tag-filter-box.header-tag-filter {
+    margin: 0;
+    flex: 0 1 220px;
+    min-width: 0;
+}
+
+.header-tag-filter #tag-filter-input {
+    padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs) calc(var(--spacing-md) * 2.25);
+    font-size: var(--font-size-sm);
+}
+
+/* Below the burger breakpoint the slot wraps to its own full-width row, so the
+   filter spans it. */
+@media (max-width: 640px) {
+    .tag-filter-box.header-tag-filter {
+        flex: 1 1 auto;
+        max-width: none;
+    }
+}
+
 /* Tree Collapse & Filter States */
 .tags-tree-item.is-hidden {
     display: none;

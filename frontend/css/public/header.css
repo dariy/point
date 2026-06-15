@@ -44,6 +44,18 @@
     margin-left: auto;
 }
 
+/* Optional middle slot (page-specific control, e.g. the /tags highlight filter).
+   margin-left:auto pushes it — and the nav after it — to the right, keeping it
+   adjacent to the action buttons. */
+.site-header-inner > .site-nav-slot {
+    flex: 0 1 auto;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: var(--header-height);
+    margin-left: auto;
+}
+
 
 .header-container {
     max-width: var(--content-max-width);
@@ -665,6 +677,24 @@
 
 .breadcrumb-query {
     font-style: italic;
+}
+
+/* On narrow screens the middle slot wraps to its own full-width row below the
+   header (order:99 places it visually after the nav buttons). */
+@media (max-width: 640px) {
+    .site-header-inner {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: var(--header-height);
+    }
+
+    .site-header-inner > .site-nav-slot {
+        order: 99;
+        flex: 1 1 100%;
+        margin-left: 0;
+        height: auto;
+        padding: 0 var(--spacing-md) var(--spacing-sm);
+    }
 }
 
 /* Coarse pointer search overlay */
