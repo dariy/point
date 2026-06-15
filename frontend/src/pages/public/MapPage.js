@@ -16,6 +16,7 @@ import { getMapPage } from "../../api/pages.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { LOCK_SVG } from "../../utils/icons.js";
+import { ViewContext } from "../../utils/viewContext.js";
 
 const LEAFLET_JS = "/assets/vendor/leaflet/leaflet.js";
 const LEAFLET_CSS = "/assets/vendor/leaflet/leaflet.css";
@@ -75,8 +76,53 @@ export default class MapPage extends Component {
     this._markerLayer = null;
     this._tagMarkers = new Map();
     this._allTagsCount = 0;
-    this._currentRange = null;
     this._headerChild = null;
+  }
+
+  onRouteUpdate(params, query) {
+    this.props.params = params;
+    this.props.query = query;
+    // A timeline-scope change only re-filters the markers. Update them on the
+    // existing map instead of re-rendering the page, which would tear down and
+    // rebuild both the Leaflet map and the timeline (the visible "blink").
+    if (this._map && !this.state.error) {
+      this._refreshMap();
+    } else {
+      this._loadData();
+    }
+  }
+
+  async _refreshMap() {
+    const vc = ViewContext.current();
+    const params = {};
+    if (vc.years) {
+      params.year_from = vc.years[0];
+      params.year_to = vc.years[1];
+    }
+    let tags;
+    try {
+      ({ tags } = await getMapPage(params));
+    } catch (err) {
+      this.setState({
+        loading: false,
+        tags: [],
+        error: err.message || "Failed to load map data.",
+      });
+      return;
+    }
+    if (this._unmounted) return;
+    // Keep the unfiltered total so "Showing X of Y" stays meaningful under a filter.
+    if (!vc.years) this._allTagsCount = tags.length;
+    this.state.tags = tags;
+    this._redrawMarkers();
+    this._updateStats();
+    this._headerChild?.setProps({
+      breadcrumb: this._buildBreadcrumb(),
+      total: tags.length,
+    });
+    this._timeline?.setScope(
+      vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
+    );
   }
 
   render() {
@@ -100,7 +146,10 @@ export default class MapPage extends Component {
           <div id="header-mount"></div>
           <div id="timeline-mount"></div>
           <main class="site-main site-main--map">
-            <p class="error-message" role="alert">${escapeHtml(error)}</p>
+            <div class="map-fetch-error" role="alert">
+              <p class="map-fetch-error__message">${escapeHtml(error)}</p>
+              <button class="btn btn-primary btn-sm map-fetch-error__retry" id="map-retry-btn" type="button">Try again</button>
+            </div>
           </main>
           <div id="footer-mount"></div>
         </div>`;
@@ -120,42 +169,35 @@ export default class MapPage extends Component {
   afterRender() {
     document.body.classList.remove("immersive-layout", "ui-hidden");
 
-    const yearParam = this.props.params?.year;
-    let initialRange = null;
-    if (yearParam) {
-      const parts = yearParam.split("-");
-      if (parts.length === 2) {
-        const from = parseInt(parts[0], 10);
-        const to = parseInt(parts[1], 10);
-        if (!isNaN(from) && !isNaN(to)) {
-          initialRange = { from, to };
-          this._currentRange = { from, to };
-        }
-      } else {
-        const year = parseInt(yearParam, 10);
-        if (!isNaN(year)) {
-          initialRange = { from: year, to: year };
-          this._currentRange = { from: year, to: year };
-        }
-      }
-    }
+    const vc = ViewContext.current();
+    const initialRange = vc.years ? { from: vc.years[0], to: vc.years[1] } : null;
 
     const settings = store.get("settings") || {};
+    const canShowTimeline =
+      settings.timeline_mode === "all" ||
+      (store.get("user") && settings.timeline_mode === "hidden");
+    this._canShowTimeline = canShowTimeline;
     this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
       settings,
       currentPath: "/map",
       breadcrumb: this._buildBreadcrumb(),
+      total: this.state.tags?.length || 0,
+      timelineVisible: true,
     });
     this.mountChild(PublicFooter, "#footer-mount", { settings });
 
-    const canShowTimeline =
-      settings.timeline_mode === "all" ||
-      (store.get("user") && settings.timeline_mode === "hidden");
     if (canShowTimeline) {
-      this.mountChild(Timeline, "#timeline-mount", {
+      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
         mode: "filter",
         initialRange,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
+    }
+
+    const retryBtn = this.$("#map-retry-btn");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => {
+        this.setState({ loading: true, error: null });
       });
     }
 
@@ -168,8 +210,15 @@ export default class MapPage extends Component {
 
   async _loadData() {
     try {
-      const { tags } = await getMapPage();
-      this._allTagsCount = tags.length;
+      const vc = ViewContext.current();
+      const params = {};
+      if (vc.years) {
+        params.year_from = vc.years[0];
+        params.year_to = vc.years[1];
+      }
+      const { tags } = await getMapPage(params);
+      // Keep the unfiltered total so "Showing X of Y" stays meaningful under a filter.
+      if (!vc.years) this._allTagsCount = tags.length;
       this.setState({ loading: false, tags });
     } catch (err) {
       this.setState({
@@ -181,43 +230,24 @@ export default class MapPage extends Component {
   }
 
   _buildBreadcrumb() {
-    if (!this._currentRange) {
+    const vc = ViewContext.current();
+    if (!vc.years) {
       return [{ name: "map" }];
     }
-    const { from, to } = this._currentRange;
+    const from = vc.years[0];
+    const to = vc.years[1];
     const label = from === to ? String(from) : `${from}–${to}`;
     return [{ name: "map", href: "/map" }, { name: label }];
   }
 
-  async _onTimelineRangeChange({ from, to }) {
-    const hasRange = from !== undefined && to !== undefined;
-    const rangeStr = hasRange ? (from === to ? String(from) : `${from}-${to}`) : null;
-    
-    // Skip redundant updates if the range hasn't actually changed.
-    if (this._currentRange) {
-        const currentStr = this._currentRange.from === this._currentRange.to 
-            ? String(this._currentRange.from) 
-            : `${this._currentRange.from}-${this._currentRange.to}`;
-        if (rangeStr === currentStr) return;
-    } else if (!hasRange) {
-        return;
-    }
-
-    this._currentRange = hasRange ? { from, to } : null;
-    this._headerChild?.setProps({ breadcrumb: this._buildBreadcrumb() });
-
-    if (hasRange) {
-      history.replaceState(null, "", `/map/${rangeStr}`);
-    }
-    const params = hasRange ? { year_from: from, year_to: to } : {};
-    try {
-      const { tags } = await getMapPage(params);
-      this.state.tags = tags;
-      this._redrawMarkers();
-      this._updateStats();
-    } catch (err) {
-      console.error("Failed to filter map:", err);
-    }
+  async _onTimelineRangeChange({ from, to, isFullExtent }) {
+    const years = isFullExtent ? null : [from, to];
+    const vc = ViewContext.current();
+    const same = years
+      ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]
+      : !vc.years;
+    if (same) return;
+    ViewContext.update({ years }, { replace: true });
   }
 
   _updateStats() {
@@ -287,6 +317,7 @@ export default class MapPage extends Component {
     if (!this._map || !this._markerLayer) return;
     const L = window.L;
     this._markerLayer.clearLayers();
+    this._tagMarkers.clear();
 
     const { tags } = this.state;
 
@@ -399,7 +430,7 @@ export default class MapPage extends Component {
       bounds.push([tag.lat, tag.lng]);
     });
 
-    if (bounds.length && !this._currentRange) {
+    if (bounds.length && !ViewContext.current().years) {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
     }
 

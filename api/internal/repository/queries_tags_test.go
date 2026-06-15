@@ -6,7 +6,7 @@ import (
 )
 
 func TestRepository_Tags(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() {
 		_ = repo.Close()
 	}()
@@ -68,13 +68,13 @@ func TestRepository_TagRelationships(t *testing.T) {
 }
 
 func TestRepository_TagHierarchy(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() {
 		_ = repo.Close()
 	}()
 	ctx := context.Background()
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, sort_order) VALUES (1,'P','p',0),(2,'C','c',0)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'P','p'),(2,'C','c')`)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`)
 
 	children, err := repo.GetChildrenOfTag(ctx, 1)
@@ -96,8 +96,61 @@ func TestRepository_TagHierarchy(t *testing.T) {
 	}
 }
 
+// TestGetTagAncestors_PrefersBreadcrumbParent verifies that when a tag has
+// multiple parents, GetTagAncestors follows the branch whose parent has
+// in_breadcrumbs=1 rather than the first-inserted (lower-rowid) parent.
+//
+// Mirrors the real Kyiv case: Kyiv has two parents, city (in_breadcrumbs=0,
+// inserted first → lower rowid) and Ukraine (in_breadcrumbs=1, inserted
+// second → higher rowid). Without the fix the traversal follows city and
+// never reaches Ukraine.
+func TestGetTagAncestors_PrefersBreadcrumbParent(t *testing.T) {
+	repo := setupNewSchemaTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	// Tags: location(1), city(2, ib=0), country(3, ib=0), Ukraine(4, ib=1), Kyiv(5, ib=1)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, in_breadcrumbs) VALUES
+		(1,'location','location',0),
+		(2,'city','city',0),
+		(3,'country','country',0),
+		(4,'Ukraine','ukraine',1),
+		(5,'Kyiv','kyiv',1)`)
+
+	// Relationships: city→Kyiv inserted before Ukraine→Kyiv so city has the
+	// lower rowid and would be chosen first by the old (unfixed) code.
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,2)`) // location → city
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (1,3)`) // location → country
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (2,5)`) // city → Kyiv   (lower rowid: wrong branch)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (4,5)`) // Ukraine → Kyiv (higher rowid: right branch)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (3,4)`) // country → Ukraine
+
+	ancestors, err := repo.GetTagAncestors(ctx, 5) // Kyiv
+	if err != nil {
+		t.Fatalf("GetTagAncestors: %v", err)
+	}
+
+	// Build a name-set for easy assertion.
+	names := make(map[string]bool, len(ancestors))
+	for _, a := range ancestors {
+		names[a.Name] = true
+	}
+
+	if !names["Ukraine"] {
+		t.Errorf("expected Ukraine in ancestors, got %v", ancestors)
+	}
+	if names["city"] {
+		t.Errorf("expected city NOT in ancestors (wrong branch), got %v", ancestors)
+	}
+	// country and location have in_breadcrumbs=0 but are still valid ancestors
+	// in the traversal chain (they'll be filtered by the handler, not here).
+	if !names["country"] {
+		t.Errorf("expected country in ancestors, got %v", ancestors)
+	}
+}
+
 func TestRepository_GetCoOccurringTags(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
@@ -114,37 +167,3 @@ func TestRepository_GetCoOccurringTags(t *testing.T) {
 	}
 }
 
-func TestRepository_DropTagNameUnique(t *testing.T) {
-	repo := setupTestDB(t)
-	defer func() { _ = repo.Close() }()
-	ctx := context.Background()
-
-	// Initially, NewRepository might have already run it if schema was detected.
-	// We want to force it to run or at least test it.
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		t.Fatalf("DropTagNameUnique failed: %v", err)
-	}
-
-	// Idempotent
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		t.Fatalf("DropTagNameUnique idempotent failed: %v", err)
-	}
-
-	// Test the actual rebuild by simulating old state
-	_, _ = repo.DB().Exec(`DROP TABLE IF EXISTS tags`)
-	_, _ = repo.DB().Exec(`CREATE TABLE tags (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name VARCHAR(100) NOT NULL UNIQUE,
-		slug VARCHAR(100) NOT NULL UNIQUE,
-		description TEXT,
-		custom_url VARCHAR(200),
-		sort_order INTEGER,
-		post_count INTEGER NOT NULL DEFAULT 0,
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-	)`)
-	_, _ = repo.DB().Exec(`DELETE FROM migration_history WHERE name = 'drop_tags_name_unique'`)
-
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		t.Fatalf("DropTagNameUnique rebuild failed: %v", err)
-	}
-}

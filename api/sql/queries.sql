@@ -103,10 +103,16 @@ FROM posts p
 WHERE p.slug = ? AND p.deleted_at IS NULL LIMIT 1;
 
 -- name: ListPosts :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.*
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -120,19 +126,23 @@ WHERE
         WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END)
 ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: ListPostsByViews :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.*
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -146,18 +156,22 @@ WHERE
         WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END)
 ORDER BY p.view_count DESC, p.published_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPosts :one
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN sqlc.arg('status_filter') THEN p.status = sqlc.arg('status') ELSE 1=1 END)
     AND (CASE WHEN sqlc.arg('featured_filter') THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -171,23 +185,21 @@ WHERE
         WHEN sqlc.arg('include_hidden') THEN 1=1
         ELSE p.id NOT IN (
             SELECT pt.post_id FROM post_tags pt
-            WHERE pt.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt.tag_id IN (SELECT id FROM h)
         )
     END);
 
 -- name: CreatePost :one
 INSERT INTO posts (
-    title, slug, content, excerpt, formatter, status, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
+    title, slug, content, excerpt, formatter, status, type, is_featured, author_id, thumbnail_path, meta_description, view_count, published_at, scheduled_at, created_at, updated_at, css, immersive_mode, instagram_share
 ) VALUES (
-    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), sqlc.arg('scheduled_at'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, sqlc.arg('css'), sqlc.arg('immersive_mode'), sqlc.arg('instagram_share')
+    sqlc.arg('title'), sqlc.arg('slug'), sqlc.arg('content'), sqlc.arg('excerpt'), sqlc.arg('formatter'), sqlc.arg('status'), sqlc.arg('type'), sqlc.arg('is_featured'), sqlc.arg('author_id'), sqlc.arg('thumbnail_path'), sqlc.arg('meta_description'), 0, (CASE WHEN sqlc.arg('status') = 'published' THEN CURRENT_TIMESTAMP ELSE NULL END), sqlc.arg('scheduled_at'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, sqlc.arg('css'), sqlc.arg('immersive_mode'), sqlc.arg('instagram_share')
 )
 RETURNING *;
 
 -- name: UpdatePost :one
 UPDATE posts
-SET title = sqlc.arg('title'), slug = sqlc.arg('slug'), content = sqlc.arg('content'), excerpt = sqlc.arg('excerpt'), formatter = sqlc.arg('formatter'), status = sqlc.arg('status'), is_featured = sqlc.arg('is_featured'), thumbnail_path = sqlc.arg('thumbnail_path'), meta_description = sqlc.arg('meta_description'),
+SET title = sqlc.arg('title'), slug = sqlc.arg('slug'), content = sqlc.arg('content'), excerpt = sqlc.arg('excerpt'), formatter = sqlc.arg('formatter'), status = sqlc.arg('status'), type = sqlc.arg('type'), is_featured = sqlc.arg('is_featured'), thumbnail_path = sqlc.arg('thumbnail_path'), meta_description = sqlc.arg('meta_description'),
     scheduled_at = sqlc.arg('scheduled_at'),
     published_at = (CASE
         WHEN sqlc.arg('status') = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
@@ -281,23 +293,28 @@ SELECT * FROM tags
 WHERE slug = ? LIMIT 1;
 
 -- name: ListTags :many
-SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at FROM tags
 WHERE (CASE WHEN sqlc.arg('include_empty_filter') THEN 1=1 ELSE post_count > 0 END)
-ORDER BY sort_order ASC, name ASC;
+ORDER BY name ASC;
 
 -- name: CreateTag :one
 INSERT INTO tags (
-    name, slug, description, custom_url, sort_order, post_count, created_at
+    name, slug, description, kind, hidden, hides_posts, nav_order,
+    in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude,
+    post_count, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP
 )
-RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at;
+RETURNING *;
 
 -- name: UpdateTag :one
 UPDATE tags
-SET name = ?, slug = ?, description = ?, custom_url = ?, sort_order = ?
+SET name = ?, slug = ?, description = ?,
+    kind = ?, hidden = ?, hides_posts = ?, nav_order = ?,
+    in_breadcrumbs = ?, show_related = ?, in_ancestor_flyout = ?,
+    latitude = ?, longitude = ?
 WHERE id = ?
-RETURNING id, name, slug, description, custom_url, sort_order, post_count, created_at;
+RETURNING *;
 
 -- name: DeleteTag :exec
 DELETE FROM tags
@@ -322,6 +339,11 @@ DELETE FROM post_tags
 WHERE post_id = ?;
 
 -- name: GetPostsByTag :many
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT p.*
 FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
@@ -333,9 +355,7 @@ AND (CASE
         p.status = 'published'
         AND NOT EXISTS (
             SELECT 1 FROM post_tags pt2
-            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM h)
         )
     ELSE p.status IN ('published', 'hidden')
 END)
@@ -343,6 +363,11 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountPostsByTag :one
+WITH RECURSIVE h(id) AS (
+    SELECT id FROM tags WHERE hides_posts = 1
+    UNION
+    SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
+)
 SELECT COUNT(*) FROM posts p
 JOIN post_tags pt ON p.id = pt.post_id
 WHERE pt.tag_id = sqlc.arg('tag_id')
@@ -353,9 +378,7 @@ AND (CASE
         p.status = 'published'
         AND NOT EXISTS (
             SELECT 1 FROM post_tags pt2
-            WHERE pt2.post_id = p.id AND pt2.tag_id IN (
-                SELECT child_id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
-            )
+            WHERE pt2.post_id = p.id AND pt2.tag_id IN (SELECT id FROM h)
         )
     ELSE p.status IN ('published', 'hidden')
 END);
@@ -400,6 +423,21 @@ WHERE parent_id = ? AND child_id = ?;
 -- name: ClearTagRelationships :exec
 DELETE FROM tag_relationships
 WHERE parent_id = ? OR child_id = ?;
+
+-- name: MergePostTags :exec
+UPDATE OR IGNORE post_tags SET tag_id = sqlc.arg('winner_id')
+WHERE tag_id = sqlc.arg('loser_id');
+
+-- name: DeletePostTagsByTag :exec
+DELETE FROM post_tags WHERE tag_id = sqlc.arg('tag_id');
+
+-- name: MergeTagParents :exec
+UPDATE OR IGNORE tag_relationships SET child_id = sqlc.arg('winner_id')
+WHERE child_id = sqlc.arg('loser_id');
+
+-- name: MergeTagChildren :exec
+UPDATE OR IGNORE tag_relationships SET parent_id = sqlc.arg('winner_id')
+WHERE parent_id = sqlc.arg('loser_id');
 
 -- MEDIA
 
@@ -515,3 +553,8 @@ SELECT
     (SELECT id FROM posts WHERE deleted_at IS NULL AND status = 'published' ORDER BY view_count DESC LIMIT 1) as most_viewed_post_id
 FROM posts
 WHERE deleted_at IS NULL AND status = 'published';
+
+-- name: PreviewRenderPost :one
+-- This is a virtual query for sqlc to generate types if needed, 
+-- but we'll implement the logic in the handler.
+SELECT 1;

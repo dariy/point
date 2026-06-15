@@ -72,8 +72,8 @@ A complete feature listing for the Point self-hosted photo blog engine.
 | Hierarchical tag system | Tags form a directed acyclic graph (DAG): a tag can have multiple parents and multiple children. |
 | Recursive post counts | A parent tag's post count includes all posts on itself and every descendant — accurately reflecting its full scope. |
 | Recursive post retrieval | Browsing a parent tag's archive automatically surfaces posts from all child tags, enabling broad-to-narrow discovery. |
-| Tag visibility control | `is_hidden` removes a tag from all public navigation; `is_hidden_posts` hides posts carrying that tag from guests. |
-| Inherited hidden status | Setting a tag as hidden propagates to all its descendants — one toggle to hide an entire sub-hierarchy. |
+| Tag visibility control | `hidden` removes a tag from all public navigation; `hides_posts` hides posts carrying that tag from guests. Both flags are typed columns on the `tags` table. |
+| Inherited hidden status | Both `hidden` and `hides_posts` propagate to all descendants via BFS — one toggle to hide an entire sub-hierarchy or make all its posts guest-invisible. |
 | Location-aware tags | Tags can store a latitude/longitude coordinate, making them show up as pins on the map page. |
 | Tag reordering | Drag tags into a custom display order from the tag manager. |
 

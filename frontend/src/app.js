@@ -301,11 +301,13 @@ const routes = [
     path: "/map/:year",
     load: () => import("./pages/public/MapPage.js"),
     public: true,
+    key: "map",
   },
   {
     path: "/map",
     load: () => import("./pages/public/MapPage.js"),
     public: true,
+    key: "map",
   },
   {
     path: "/search",

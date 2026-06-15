@@ -7,8 +7,9 @@
  */
 
 import { Component } from '../Component.js';
-import { listTags } from '../../api/tags.js';
+import { listTags, createTag } from '../../api/tags.js';
 import { escapeHtml, debounce } from '../../utils/helpers.js';
+import { openTagFamilyPopover } from './TagFamilyPopover.js';
 
 let _tagInputCounter = 0;
 
@@ -21,6 +22,7 @@ export class TagsInput extends Component {
       input: '',
       suggestions: [],
       showSuggestions: false,
+      isPopoverOpen: false,
     };
     this._allTags = [];
     this._fetchSuggestions = debounce(this._fetchSuggestions.bind(this), 200);
@@ -29,7 +31,7 @@ export class TagsInput extends Component {
   render() {
     const { tags } = this.state;
     const badges = tags.map((t) =>
-      `<span class="tag">
+      `<span class="tag tag-chip" data-tag="${escapeHtml(t)}">
          ${escapeHtml(t)}
          <button class="tag-remove" data-tag="${escapeHtml(t)}" type="button" aria-label="Remove ${escapeHtml(t)}">×</button>
        </span>`
@@ -45,6 +47,16 @@ export class TagsInput extends Component {
   }
 
   afterRender() {
+    // Family popover
+    this.$$('.tag-chip').forEach((chip) => {
+      chip.addEventListener('click', (e) => {
+        if (e.target.classList.contains('tag-remove')) return;
+        const tagName = chip.dataset.tag;
+        const tagObj = this._allTags.find(t => t.name === tagName);
+        if (tagObj) openTagFamilyPopover(tagObj.id, chip);
+      });
+    });
+
     // Remove-tag buttons
     this.$$('.tag-remove').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -110,7 +122,11 @@ export class TagsInput extends Component {
 
     input.addEventListener('blur', () => {
       // Delay to allow suggestion click to register first.
-      setTimeout(() => this._hideSuggestions(), 200);
+      setTimeout(() => {
+        if (!this.state.isPopoverOpen) {
+          this._hideSuggestions();
+        }
+      }, 200);
     });
   }
 
@@ -130,11 +146,11 @@ export class TagsInput extends Component {
     try {
       if (!this._allTags.length) {
         const res = await listTags();
-        this._allTags = (res.tags || []).map((t) => t.name);
+        this._allTags = res.tags || [];
       }
       const lower = q.toLowerCase();
       const matches = this._allTags.filter(
-        (t) => t.toLowerCase().includes(lower) && !this.state.tags.includes(t)
+        (t) => t.name.toLowerCase().includes(lower) && !this.state.tags.includes(t.name)
       ).slice(0, 8);
       this._showSuggestions(matches, q);
     } catch {
@@ -151,10 +167,10 @@ export class TagsInput extends Component {
       box.textContent = '';
       const item = document.createElement('div');
       item.className = 'suggestion-item suggestion-create';
-      item.textContent = `Create "${input}"`;
+      item.textContent = `＋ Create "${input}"…`;
       item.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        this._addTag(input);
+        this._showCreateTagPopover(input);
       });
       box.appendChild(item);
       box.classList.add('show');
@@ -165,17 +181,138 @@ export class TagsInput extends Component {
     suggestions.forEach((s) => {
       const item = document.createElement('div');
       item.className = 'suggestion-item';
-      item.textContent = s;
+      item.textContent = s.name_path || s.name;
       item.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        this._addTag(s);
+        this._addTag(s.name);
       });
       box.appendChild(item);
     });
+
+    // Also add create option at the end if not an exact match
+    if (!suggestions.some(s => s.name.toLowerCase() === input.toLowerCase())) {
+      const createItem = document.createElement('div');
+      createItem.className = 'suggestion-item suggestion-create';
+      createItem.textContent = `＋ Create "${input}"…`;
+      createItem.style.borderTop = '1px solid var(--border-primary)';
+      createItem.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        this._showCreateTagPopover(input);
+      });
+      box.appendChild(createItem);
+    }
+
     box.classList.add('show');
   }
 
+  _showCreateTagPopover(name) {
+    const box = this.$(`#${this._uid}-suggestions`);
+    if (!box) return;
+
+    this.state.isPopoverOpen = true;
+    box.textContent = '';
+    const popover = document.createElement('div');
+    popover.className = 'tag-create-popover';
+    popover.innerHTML = `
+      <div class="field">
+        <label>Name</label>
+        <input type="text" class="new-tag-name" value="${escapeHtml(name)}">
+      </div>
+      <div class="field">
+        <label>Parent (optional)</label>
+        <div class="parent-field-wrapper">
+          <input type="text" class="new-tag-parent" placeholder="Search parents…" autocomplete="off">
+          <div class="parent-suggestions"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn-cancel">Cancel</button>
+        <button type="button" class="btn-create">Create</button>
+      </div>
+    `;
+
+    box.appendChild(popover);
+    box.classList.add('show');
+
+    const nameInput = popover.querySelector('.new-tag-name');
+    const parentInput = popover.querySelector('.new-tag-parent');
+    const parentSuggestions = popover.querySelector('.parent-suggestions');
+    const createBtn = popover.querySelector('.btn-create');
+    const cancelBtn = popover.querySelector('.btn-cancel');
+
+    let selectedParentId = null;
+
+    // Parent autocomplete logic
+    const fetchParentSuggestions = debounce(async (q) => {
+      const lower = q.toLowerCase();
+      const matches = this._allTags.filter(t => t.name.toLowerCase().includes(lower)).slice(0, 5);
+      parentSuggestions.textContent = '';
+      if (!matches.length) {
+        parentSuggestions.classList.remove('show');
+        return;
+      }
+      matches.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.textContent = m.name_path || m.name;
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          parentInput.value = m.name;
+          selectedParentId = m.id;
+          parentSuggestions.textContent = '';
+          parentSuggestions.classList.remove('show');
+        });
+        parentSuggestions.appendChild(item);
+      });
+      parentSuggestions.classList.add('show');
+    }, 200);
+
+    parentInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim();
+      if (!q) {
+        parentSuggestions.textContent = '';
+        parentSuggestions.classList.remove('show');
+        selectedParentId = null;
+        return;
+      }
+      fetchParentSuggestions(q);
+    });
+
+    const doCreate = async () => {
+      const finalName = nameInput.value.trim();
+      if (!finalName) return;
+      try {
+        const params = { name: finalName };
+        if (selectedParentId) {
+          params.parent_ids = [selectedParentId];
+        }
+        await createTag(params);
+        this._addTag(finalName);
+        this._hideSuggestions();
+        this._allTags = []; // Force refresh on next search
+      } catch (err) {
+        console.error('Failed to create tag', err);
+        alert('Failed to create tag. It may already exist.');
+      }
+    };
+
+    createBtn.addEventListener('click', doCreate);
+    cancelBtn.addEventListener('click', () => this._hideSuggestions());
+
+    popover.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doCreate();
+      } else if (e.key === 'Escape') {
+        this._hideSuggestions();
+      }
+    });
+
+    nameInput.focus();
+  }
+
   _hideSuggestions() {
+    this.state.isPopoverOpen = false;
     const box = this.$(`#${this._uid}-suggestions`);
     if (box) box.classList.remove('show');
   }

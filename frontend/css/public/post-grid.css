@@ -162,6 +162,12 @@
     cursor: pointer;
 }
 
+@media (pointer: coarse) {
+    .post-card-edit-btn {
+        opacity: 0.5;
+    }
+}
+
 .post-card:hover .post-card-edit-btn {
     opacity: 1;
 }
@@ -416,4 +422,16 @@
 @keyframes pulse {
     from { opacity: 0.3; }
     to { opacity: 0.6; }
+}
+
+/* --- Ultrawide Tier (point-x52z.9) --- */
+@media (min-width: 100rem) {
+    .featured-post {
+        grid-column: span 2;
+    }
+    /* In 4+ column grid, orphan expansion is disabled or adjusted.
+       Proposal D1 says hero spans 2, others span 1. */
+    .posts-grid .post-card-slot:last-child {
+        grid-column: auto;
+    }
 }

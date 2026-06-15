@@ -94,7 +94,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, igSvc, ts.URL)
+		postSvc := NewPostService(repo, settingsSvc, igSvc, nil, ts.URL)
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -166,7 +166,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, igSvc, ts.URL)
+		postSvc := NewPostService(repo, settingsSvc, igSvc, nil, ts.URL)
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -219,7 +219,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, igSvc, ts.URL)
+		postSvc := NewPostService(repo, settingsSvc, igSvc, nil, ts.URL)
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -253,7 +253,7 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 			},
 		}
 
-		postSvc := NewPostService(repo, settingsSvc, nil, "")
+		postSvc := NewPostService(repo, settingsSvc, nil, nil, "")
 		err := postSvc.CrossPostToInstagram(ctx, 1)
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -286,7 +286,7 @@ func igMockServer(t *testing.T) *httptest.Server {
 func igPostSvc(settings map[string]string, repo *mockRepository, ts *httptest.Server) *PostService {
 	settingsSvc := mockSettings(settings)
 	igSvc := NewInstagramService(settingsSvc).withBaseURL(ts.URL)
-	return NewPostService(repo, settingsSvc, igSvc, ts.URL)
+	return NewPostService(repo, settingsSvc, igSvc, nil, ts.URL)
 }
 
 // igShareRepo builds a minimal mockRepository for publish-hook tests.

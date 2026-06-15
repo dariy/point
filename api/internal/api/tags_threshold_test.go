@@ -112,7 +112,7 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 	_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: t1.ID})
 	_ = repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: t2.ID})
 
-	postHandler := NewPostHandler(services.NewPostService(repo, nil, nil, ""), settingsSvc, nil, tagSvc)
+	postHandler := NewPostHandler(services.NewPostService(repo, nil, nil, nil, ""), settingsSvc, nil, tagSvc)
 	req = httptest.NewRequest(http.MethodGet, "/posts/test-post", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
@@ -220,7 +220,7 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	handler := NewPostHandler(postSvc, settingsSvc, nil, tagSvc)
 	e := echo.New()
 
@@ -229,13 +229,12 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 	// 0. Create user
 	user, _ := repo.CreateUser(ctx, models.CreateUserParams{Username: "admin", PasswordHash: "hash", DisplayName: "Admin"})
 
-	// 1. Create _page system tag and a child tag
-	pageTag, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "_page", Slug: "_page"})
-	childTag, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "Child Page", Slug: "child-page"})
-	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: pageTag.ID, ChildID: childTag.ID})
+	// 1. Create a hidden tag and a child tag
+	pageTag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Page", Slug: "pagetag", Hidden: true})
+	childTag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Child Page", Slug: "child-page", ParentIDs: []int64{pageTag.ID}})
 
 	// 2. Create a normal tag
-	normalTag, _ := repo.CreateTag(ctx, models.CreateTagParams{Name: "Normal", Slug: "normal"})
+	normalTag, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Normal", Slug: "normal"})
 
 	// 3. Create a post with both tags
 	p, _ := repo.CreatePost(ctx, models.CreatePostParams{Title: "P", Slug: "p", Status: "published", AuthorID: user.ID})
@@ -274,7 +273,7 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 		if tag["slug"] == "child-page" {
 			foundChild = true
 		}
-		if tag["slug"] == "_page" {
+		if tag["slug"] == "pagetag" {
 			foundPage = true
 		}
 	}
@@ -282,14 +281,12 @@ func TestPostResponse_ExcludePageTags(t *testing.T) {
 	if !foundNormal {
 		t.Error("FAIL: 'normal' tag not found in post response")
 	}
-	if foundChild {
-		t.Error("FAIL: 'child-page' (descendant of _page) found in post response")
-	} else {
-		t.Log("PASS: 'child-page' correctly excluded from post response")
+	// Hidden is not inherited — the descendant of a hidden tag stays visible.
+	if !foundChild {
+		t.Error("FAIL: 'child-page' (descendant of hidden tag) should be present (hidden is not inherited)")
 	}
+	// The explicitly-hidden tag itself is excluded from post responses.
 	if foundPage {
-		t.Log("NOTE: '_page' tag found in post response (it is NOT an excluded descendant by current logic)")
-	} else {
-		t.Log("PASS: '_page' correctly excluded from post response")
+		t.Error("FAIL: 'pagetag' (explicitly hidden) found in post response")
 	}
 }

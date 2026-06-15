@@ -15,6 +15,7 @@ export default [
         URL: "readonly",
         URLSearchParams: "readonly",
         CustomEvent: "readonly",
+        Event: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
         console: "readonly",

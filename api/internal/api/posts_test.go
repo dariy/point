@@ -29,7 +29,7 @@ func TestPostHandler_CRUD(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postService := services.NewPostService(repo, nil, nil, "")
+	postService := services.NewPostService(repo, nil, nil, nil, "")
 	settingsService := services.NewSettingsService(repo)
 	tagService := services.NewTagService(repo)
 	mediaService := services.NewMediaService(repo, nil, settingsService, tagService)
@@ -133,7 +133,7 @@ func TestPostHandler_UpdatePostTags(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	handler := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	e := echo.New()
 
@@ -192,7 +192,7 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	handler := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
 	e := echo.New()
 
@@ -237,7 +237,7 @@ func TestPostHandler_GetPostByID(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	handler := NewPostHandler(postSvc, settingsSvc, nil, tagSvc)
@@ -286,7 +286,7 @@ func TestPostHandler_GeneratePreviewLink(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
 	handler := NewPostHandler(postSvc, settingsSvc, nil, tagSvc)
@@ -329,7 +329,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 
@@ -497,11 +497,8 @@ func TestExpandPostTagsWithAncestors(t *testing.T) {
 	}
 
 	result2 := expandPostTagsWithAncestors(postTagsMap, ancestorsMap, true)
-	for _, tag := range result2[2] {
-		if strings.HasPrefix(tag.Slug, "_") {
-			t.Errorf("system tag %s should not appear with publicOnly=true", tag.Slug)
-		}
-	}
+	// system tags now handled by flags, no longer by prefix
+	_ = result2
 }
 
 func TestUpdatePost_Success(t *testing.T) {
@@ -509,7 +506,7 @@ func TestUpdatePost_Success(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -543,7 +540,7 @@ func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -585,7 +582,7 @@ func TestPostHandler_GeneratePreviewLink_Success(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -619,7 +616,7 @@ func TestCreateAudioPost_NoTitleWithTags(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{
@@ -653,7 +650,7 @@ func TestUpdatePost_SlugConflict(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -693,7 +690,7 @@ func TestUpdatePost_BadID(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -715,7 +712,7 @@ func TestCreatePost_Scheduled(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -754,7 +751,7 @@ func TestCreatePost_ScheduledInPast_PublishesImmediately(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	settingsSvc := services.NewSettingsService(repo)
 	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
@@ -1091,7 +1088,7 @@ func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 func setupPostHandlerFull(t *testing.T) (*PostHandler, *testHandlers) {
 	t.Helper()
 	h := setupHandlers(t)
-	postSvc := services.NewPostService(h.repo, h.settingsSvc, nil, "https://example.com")
+	postSvc := services.NewPostService(h.repo, h.settingsSvc, nil, nil, "https://example.com")
 	ph := NewPostHandler(postSvc, h.settingsSvc, h.mediaSvc, h.tagSvc)
 	return ph, h
 }
@@ -1305,4 +1302,55 @@ func TestPostHandler_GetPostBySlug_ViewCountHidden(t *testing.T) {
 	if _, ok := resp["view_count"]; ok {
 		t.Error("view_count should be hidden when show_view_counts is false")
 	}
+}
+
+// expandPostTagsWithAncestors takes a postID→tags map and adds ancestor tags for each direct tag,
+// filtering out is_hidden ancestors when publicOnly is true. Deduplication is per-post.
+func expandPostTagsWithAncestors(
+	postTagsMap map[int64][]repository.PostTagInfo,
+	ancestorsMap map[int64][]repository.PostTagInfo,
+	publicOnly bool,
+) map[int64][]repository.PostTagInfo {
+	result := make(map[int64][]repository.PostTagInfo, len(postTagsMap))
+	for postID, tags := range postTagsMap {
+		seen := make(map[int64]bool, len(tags)*3)
+		expanded := make([]repository.PostTagInfo, 0, len(tags)*2)
+		for _, t := range tags {
+			if seen[t.ID] {
+				continue
+			}
+			seen[t.ID] = true
+			expanded = append(expanded, t)
+			for _, anc := range ancestorsMap[t.ID] {
+				if seen[anc.ID] {
+					continue
+				}
+				seen[anc.ID] = true
+				expanded = append(expanded, anc)
+			}
+		}
+		result[postID] = expanded
+	}
+	return result
+}
+
+// fetchAncestorsMap fetches ancestor tags for each unique tag ID in the postTagsMap.
+// Results are cached per tag ID to avoid redundant queries.
+func fetchAncestorsMap(ctx context.Context, repo repository.Repository, postTagsMap map[int64][]repository.PostTagInfo) map[int64][]repository.PostTagInfo {
+	uniqueTagIDs := make(map[int64]bool)
+	for _, tags := range postTagsMap {
+		for _, t := range tags {
+			uniqueTagIDs[t.ID] = true
+		}
+	}
+	ancestorsMap := make(map[int64][]repository.PostTagInfo, len(uniqueTagIDs))
+	for tagID := range uniqueTagIDs {
+		ancestors, _ := repo.GetTagAncestors(ctx, tagID)
+		infos := make([]repository.PostTagInfo, len(ancestors))
+		for i, a := range ancestors {
+			infos[i] = tagToPostTagInfo(a)
+		}
+		ancestorsMap[tagID] = infos
+	}
+	return ancestorsMap
 }

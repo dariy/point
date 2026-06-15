@@ -5,39 +5,23 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getStats, getVersion } from '../../api/system.js';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
-import { logout } from '../../api/auth.js';
+import { listPosts, createPost } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate } from '../../utils/helpers.js';
-import { formatFileSize } from '../../utils/formatters.js';
-import { REFRESH_SVG, WARNING_SVG, PLUS_SVG } from '../../utils/icons.js';
-import { setupHeaderCompact } from '../../utils/headerCompact.js';
+import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
+import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.js';
 
 export default class DashboardPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], error: null, versionBanner: null };
+    this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], drafts: [], error: null, versionBanner: null };
   }
 
   render() {
-    const { loading, stats, analyticsStats, topPosts, error, versionBanner } = this.state;
-
-    const content = loading
-      ? `<div class="loading-spinner" aria-label="Loading…"></div>`
-      : error
-        ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
-        : this._renderStats(stats, analyticsStats, topPosts);
-
-    const offline = store.get('offline_status') || {};
-    let syncPill = '';
-    if (offline.has_ops || offline.syncing) {
-      const text = offline.syncing ? `${REFRESH_SVG} Syncing…` : offline.failed ? `${WARNING_SVG} ${offline.failed} failed` : `● ${offline.pending} pending`;
-      const cls = `sync-pill ${offline.syncing ? 'syncing' : offline.failed ? 'failed' : 'pending'}`;
-      syncPill = `<button class="${cls}" id="dashboard-sync-pill">${text}</button>`;
-    }
-
+    const { versionBanner } = this.state;
     const banner = versionBanner
       ? `<div class="version-update-banner" role="status">
            Point ${escapeHtml(versionBanner)} is available. Update with: <code>./update.sh</code>
@@ -45,23 +29,69 @@ export default class DashboardPage extends Component {
          </div>`
       : '';
 
+    return adminLayoutTemplate({
+      title: 'Dashboard',
+      banner,
+      actions: `<a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>`,
+      content: this._renderContent()
+    });
+  }
+
+  _renderContent() {
+    const { loading, stats, analyticsStats, topPosts, drafts, error } = this.state;
+
+    if (loading) return `<div class="loading-spinner" aria-label="Loading…"></div>`;
+    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
     return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <div class="header-title-row">
-              <h1>Dashboard</h1>
-              ${syncPill}
-            </div>
-            <div class="header-actions">
-              <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
-            </div>
-          </header>
-          ${banner}
-          <main class="light-content">${content}</main>
+      ${this._renderComposeStrip()}
+      <div class="dashboard-grid">
+        <div class="dashboard-main">
+          ${this._renderStats(stats, analyticsStats, topPosts)}
         </div>
-      </div>`;
+        <div class="dashboard-sidebar">
+          ${this._renderContinueWriting(drafts)}
+        </div>
+      </div>
+    `;
+  }
+
+  _renderComposeStrip() {
+    return `
+      <div class="compose-strip-card card">
+        <div class="compose-strip">
+          <textarea id="compose-textarea" class="compose-textarea" placeholder="Compose something…" rows="1"></textarea>
+          <div class="compose-actions">
+            <button id="compose-attach-btn" class="btn btn-icon" title="Attach media" aria-label="Attach media">${MEDIA_SVG}</button>
+            <button id="compose-draft-btn" class="btn btn-primary btn-sm">Draft</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderContinueWriting(drafts) {
+    if (!drafts || drafts.length === 0) return '';
+
+    return `
+      <div class="card continue-writing-card">
+        <div class="card-header"><h2>Continue writing</h2></div>
+        <div class="card-body">
+          <ul class="drafts-list">
+            ${drafts.map(d => `
+              <li>
+                <a href="/light/posts/${d.id}/edit" class="draft-stub">
+                  <span class="draft-title">${escapeHtml(d.title || '(Untitled)')}</span>
+                  <span class="draft-date">${formatDateShort(d.updated_at || d.created_at)}</span>
+                </a>
+              </li>
+            `).join('')}
+          </ul>
+          <div class="card-footer-actions">
+            <a href="/light/posts?status=draft" class="btn btn-text btn-sm">View all drafts</a>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   _renderStats(s, analytics, topPosts) {
@@ -151,17 +181,8 @@ export default class DashboardPage extends Component {
   }
 
   afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    this.mountChild(LightSidebar, '#sidebar-mount', {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: '/light',
-      user: store.get('user') || {},
-      onLogout: this._handleLogout.bind(this),
-    });
-
-    this.$('#dashboard-sync-pill')?.addEventListener('click', () => {
-      const offline = store.get('offline_status') || {};
-      if (offline.failed) navigate('/light/system');
-      else if (offline.pending) import('../../utils/sync.js').then(m => m.syncQueue());
     });
 
     this.$('#dashboard-version-dismiss')?.addEventListener('click', () => {
@@ -171,15 +192,40 @@ export default class DashboardPage extends Component {
         this.setState({ versionBanner: null });
       }
     });
-  }
 
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
+    // Compose strip interactions
+    const textarea = this.$('#compose-textarea');
+    if (textarea) {
+      textarea.addEventListener('input', () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = (textarea.scrollHeight) + 'px';
+      });
+
+      this.$('#compose-draft-btn')?.addEventListener('click', async () => {
+        const content = textarea.value.trim();
+        if (!content) return;
+        try {
+          const post = await createPost({
+            content,
+            status: 'draft',
+            title: content.split('\n')[0].substring(0, 50) || 'Untitled'
+          });
+          navigate(`/light/posts/${post.id}/edit`);
+        } catch (err) {
+          store.set('toast', { message: err.message || 'Failed to create draft.', type: 'error' });
+        }
+      });
+
+      this.$('#compose-attach-btn')?.addEventListener('click', () => {
+        // Just go to full editor for now as media picker needs more context
+        const content = textarea.value.trim();
+        navigate(`/light/posts/new?content=${encodeURIComponent(content)}&openMedia=1`);
+      });
+    }
   }
 
   beforeUnmount() {
-    this._cleanupHeaderCompact?.();
+    this._cleanupAdminLayout?.();
   }
 
   mount() {
@@ -189,16 +235,18 @@ export default class DashboardPage extends Component {
 
   async _load() {
     try {
-      const [stats, analyticsStats, topPostsResp] = await Promise.all([
+      const [stats, analyticsStats, topPostsResp, draftsResp] = await Promise.all([
         getStats(),
         getPostAnalytics().catch(() => null),
         getTopPosts(10).catch(() => ({ posts: [] })),
+        listPosts({ status: 'draft', per_page: 5 }).catch(() => ({ posts: [] })),
       ]);
       this.setState({
         loading: false,
         stats,
         analyticsStats,
-        topPosts: topPostsResp.posts || [],
+        topPosts: topPostsResp.posts || topPostsResp.items || [],
+        drafts: draftsResp.posts || draftsResp.items || [],
         error: null,
       });
     } catch (err) {
@@ -219,11 +267,5 @@ export default class DashboardPage extends Component {
     } catch {
       // Version check failure is non-critical; silently ignore.
     }
-  }
-
-  async _handleLogout() {
-    try { await logout(); } catch { /* ignore */ }
-    store.set('user', null);
-    navigate('/', { replace: true });
   }
 }

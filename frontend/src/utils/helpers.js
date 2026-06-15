@@ -150,3 +150,67 @@ export function normalizeSettings(raw) {
   }
   return result;
 }
+/**
+ * Share a post using the native share API or fallback to clipboard.
+ *
+ * @param {{ title: string, url: string }} data
+ */
+export async function sharePost(data) {
+  if (navigator.share) {
+    try {
+      await navigator.share(data);
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.error('Share failed:', err);
+    }
+  }
+
+  // Fallback: copy to clipboard
+  try {
+    await navigator.clipboard.writeText(data.url);
+    const { store } = await import('../store.js');
+    store.set('toast', { message: 'Link copied to clipboard', type: 'success' });
+  } catch (err) {
+    console.error('Clipboard failed:', err);
+  }
+}
+
+/**
+ * Setup a long-press listener on an element.
+ *
+ * @param {HTMLElement} el
+ * @param {function(Event)} callback
+ * @param {number} [duration=400]
+ * @returns {function()} cleanup
+ */
+export function setupLongPress(el, callback, duration = 400) {
+  let timer = null;
+
+  const start = (e) => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      callback(e);
+    }, duration);
+  };
+
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchend', cancel, { passive: true });
+  el.addEventListener('touchmove', cancel, { passive: true });
+  el.addEventListener('contextmenu', (e) => {
+    if (e.pointerType === 'touch') e.preventDefault();
+  });
+
+  return () => {
+    cancel();
+    el.removeEventListener('touchstart', start);
+    el.removeEventListener('touchend', cancel);
+    el.removeEventListener('touchmove', cancel);
+  };
+}

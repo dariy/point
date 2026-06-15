@@ -2,8 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"strings"
 
 	"point-api/internal/models"
 )
@@ -20,14 +20,19 @@ func (r *sqliteRepository) GetTagAncestors(ctx context.Context, tagID int64) ([]
 		if err != nil || len(parents) == 0 {
 			break
 		}
-		// Prefer eligible parents: not a system tag (slug starts with "_").
-		// If multiple parents exist, skip ineligible ones so the breadcrumb
-		// path only travels through tags that should be visible.
+		// Prefer a parent that is in_breadcrumbs; fall back to the first
+		// unvisited parent so single-parent chains are unaffected.
 		var chosen *models.Tag
 		for i := range parents {
 			p := &parents[i]
-			if !visited[p.ID] && !strings.HasPrefix(p.Slug, "_") {
-				chosen = p
+			if visited[p.ID] {
+				continue
+			}
+			if chosen == nil {
+				chosen = p // first unvisited = fallback
+			}
+			if p.InBreadcrumbs {
+				chosen = p // prefer the breadcrumb-flagged branch
 				break
 			}
 		}
@@ -77,7 +82,7 @@ func (r *sqliteRepository) GetCoOccurringTags(ctx context.Context, tagID int64, 
 		statusClause = "AND p.status = 'published'"
 	}
 	q := fmt.Sprintf(`
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
 JOIN post_tags pt ON t.id = pt.tag_id
 JOIN posts p ON pt.post_id = p.id
@@ -88,7 +93,6 @@ AND pt.post_id IN (
     WHERE pt2.tag_id = ? AND p2.deleted_at IS NULL %s
 )
 AND t.id != ?
-AND t.slug NOT LIKE '\_%%' ESCAPE '\'
 AND t.post_count > 0
 GROUP BY t.id
 ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
@@ -101,8 +105,10 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 	var tags []models.Tag
 	for rows.Next() {
 		var t models.Tag
-		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		tags = append(tags, t)
@@ -110,15 +116,17 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 	return tags, rows.Err()
 }
 
-// TagRelationship represents a parent-child tag relationship pair.
+// TagRelationship represents a parent-child tag relationship pair with an optional sort order.
 type TagRelationship struct {
-	ParentID int64 `json:"parent_id"`
-	ChildID  int64 `json:"child_id"`
+	ParentID  int64         `json:"parent_id"`
+	ChildID   int64         `json:"child_id"`
+	SortOrder sql.NullInt64 `json:"sort_order"`
 }
 
-// GetAllTagRelationships returns all (parent_id, child_id) pairs from tag_relationships.
+// GetAllTagRelationships returns all (parent_id, child_id, sort_order) pairs from tag_relationships,
+// ordered by parent_id and sort_order.
 func (r *sqliteRepository) GetAllTagRelationships(ctx context.Context) ([]TagRelationship, error) {
-	const q = `SELECT parent_id, child_id FROM tag_relationships`
+	const q = `SELECT parent_id, child_id, sort_order FROM tag_relationships ORDER BY parent_id, sort_order ASC, child_id ASC`
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -129,7 +137,7 @@ func (r *sqliteRepository) GetAllTagRelationships(ctx context.Context) ([]TagRel
 	var pairs []TagRelationship
 	for rows.Next() {
 		var p TagRelationship
-		if err := rows.Scan(&p.ParentID, &p.ChildID); err != nil {
+		if err := rows.Scan(&p.ParentID, &p.ChildID, &p.SortOrder); err != nil {
 			return nil, err
 		}
 		pairs = append(pairs, p)
@@ -151,7 +159,7 @@ func (r *sqliteRepository) ClearTagChildren(ctx context.Context, parentID int64)
 	return err
 }
 
-// GetTagsWithoutLocation returns tags that have no row in tag_locations.
+// GetTagsWithoutLocation returns tags that have no coordinates set.
 // Only tags whose IDs are in the provided set are considered.
 func (r *sqliteRepository) GetTagsWithoutLocation(ctx context.Context, tagIDs []int64) ([]models.Tag, error) {
 	if len(tagIDs) == 0 {
@@ -169,10 +177,9 @@ func (r *sqliteRepository) GetTagsWithoutLocation(ctx context.Context, tagIDs []
 	}
 
 	q := `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
-LEFT JOIN tag_locations tl ON tl.tag_id = t.id
-WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
+WHERE t.id IN (` + placeholders + `) AND t.latitude IS NULL`
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -186,8 +193,10 @@ WHERE t.id IN (` + placeholders + `) AND tl.id IS NULL`
 	for rows.Next() {
 		var t models.Tag
 		if err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt,
+			&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -213,7 +222,7 @@ func (r *sqliteRepository) FindTagsByNames(ctx context.Context, names []string) 
 	}
 
 	q := `
-SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at
+SELECT id, name, slug, description, kind, hidden, hides_posts, nav_order, in_breadcrumbs, show_related, in_ancestor_flyout, latitude, longitude, post_count, created_at
 FROM tags WHERE lower(name) IN (` + placeholders + `)`
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -228,8 +237,10 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 	for rows.Next() {
 		var t models.Tag
 		if err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt,
+			&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -289,125 +300,121 @@ ORDER BY t.name ASC`
 	return result, rows.Err()
 }
 
-// GetMigrations returns all rows from the migration_history table ordered by applied_at descending.
-// Returns an empty slice if the table does not exist yet.
-// GetChildrenOfTag returns direct children of parentID, ordered by sort_order ASC, name ASC.
+// GetChildrenOfTag returns direct children of parentID, ordered by edge sort_order ASC, name ASC.
 func (r *sqliteRepository) GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error) {
 	const q = `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
 JOIN tag_relationships tr ON tr.child_id = t.id
 WHERE tr.parent_id = ?
-ORDER BY t.sort_order ASC, t.name ASC`
+ORDER BY tr.sort_order ASC, t.name ASC`
 	return r.scanTags(ctx, q, parentID)
 }
 
-// GetRootTags returns tags that have no parents, ordered by sort_order ASC, name ASC.
+// GetRootTags returns tags that have no parents, ordered by name ASC.
 func (r *sqliteRepository) GetRootTags(ctx context.Context) ([]models.Tag, error) {
 	const q = `
-SELECT t.id, t.name, t.slug, t.description, t.custom_url, t.sort_order, t.post_count, t.created_at
+SELECT t.id, t.name, t.slug, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs, t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count, t.created_at
 FROM tags t
 LEFT JOIN tag_relationships tr ON tr.child_id = t.id
 WHERE tr.parent_id IS NULL
-ORDER BY t.sort_order ASC, t.name ASC`
+ORDER BY t.name ASC`
 	return r.scanTags(ctx, q)
 }
 
-// UpdateTagSortOrder updates only the sort_order field for a tag.
+// UpdateTagSortOrder updates sort_order on all edges where child_id = id.
 func (r *sqliteRepository) UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE tags SET sort_order = ? WHERE id = ?`, sortOrder, id)
+	_, err := r.db.ExecContext(ctx, `UPDATE tag_relationships SET sort_order = ? WHERE child_id = ?`, sortOrder, id)
+	return err
+}
+
+// UpdateEdgeSortOrder updates sort_order on the specific edge (parentID, childID).
+func (r *sqliteRepository) UpdateEdgeSortOrder(ctx context.Context, parentID, childID int64, sortOrder int32) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE tag_relationships SET sort_order = ? WHERE parent_id = ? AND child_id = ?`, sortOrder, parentID, childID)
 	return err
 }
 
 // scanTags is a helper that executes a query and scans the result rows into []models.Tag.
 func (r *sqliteRepository) scanTags(ctx context.Context, q string, args ...interface{}) ([]models.Tag, error) {
-	rows, err := r.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	var items []models.Tag
-	for rows.Next() {
-		var t models.Tag
-		if err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Description, &t.CustomUrl,
-			&t.SortOrder, &t.PostCount, &t.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, t)
-	}
-	return items, rows.Err()
+        rows, err := r.db.QueryContext(ctx, q, args...)
+        if err != nil {
+                return nil, err
+        }
+        defer func() {
+                _ = rows.Close()
+        }()
+        var items []models.Tag
+        for rows.Next() {
+                var t models.Tag
+                if err := rows.Scan(
+                        &t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+                        &t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+                        &t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+                        &t.PostCount, &t.CreatedAt,
+                ); err != nil {
+                        return nil, err
+                }
+                items = append(items, t)
+        }
+        return items, rows.Err()
 }
 
-// DropTagNameUnique rebuilds the tags table to remove the UNIQUE constraint
-// from the name column, keeping only slug as unique.
-// This allows a user tag (e.g. slug="root") to share a display name with a
-// system tag (e.g. slug="_root", name="root").
-// It is idempotent: recorded as "drop_tags_name_unique" in migration_history.
-func (r *sqliteRepository) DropTagNameUnique(ctx context.Context) error {
-	if _, err := r.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS migration_history (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name VARCHAR(255) NOT NULL UNIQUE,
-			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`); err != nil {
-		return fmt.Errorf("create migration_history: %w", err)
+// SearchTags returns tags whose name matches the query.
+func (r *sqliteRepository) SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error) {
+	if query == "" {
+		return nil, nil
+	}
+	const q = `
+SELECT id, name, slug, description, kind, hidden, hides_posts,
+       nav_order, in_breadcrumbs, show_related, in_ancestor_flyout,
+       latitude, longitude, post_count, created_at
+FROM tags
+WHERE LOWER(name) LIKE '%' || LOWER(?) || '%'
+   OR LOWER(slug) LIKE '%' || LOWER(?) || '%'
+ORDER BY post_count DESC, name ASC
+LIMIT ?`
+
+	return r.scanTags(ctx, q, query, query, limit)
+}
+
+func (r *sqliteRepository) MergeTags(ctx context.Context, winnerID, loserID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	q := models.New(tx)
+
+	// 1. Move post_tags from loser to winner
+	if err := q.MergePostTags(ctx, models.MergePostTagsParams{WinnerID: winnerID, LoserID: loserID}); err != nil {
+		return err
 	}
 
-	var count int64
-	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM migration_history WHERE name = 'drop_tags_name_unique'`,
-	).Scan(&count); err != nil {
-		return fmt.Errorf("check migration_history: %w", err)
-	}
-	if count > 0 {
-		return nil
+	// 2. Delete remaining post_tags for loser (duplicates handled by IGNORE in MergePostTags)
+	if err := q.DeletePostTagsByTag(ctx, loserID); err != nil {
+		return err
 	}
 
-	// Confirm the UNIQUE constraint still exists before rebuilding.
-	// SQLite encodes constraint info in the CREATE TABLE statement stored in sqlite_master.
-	var ddl string
-	_ = r.db.QueryRowContext(ctx,
-		`SELECT sql FROM sqlite_master WHERE type='table' AND name='tags'`,
-	).Scan(&ddl)
-
-	if strings.Contains(ddl, "name VARCHAR(100) NOT NULL UNIQUE") ||
-		strings.Contains(ddl, "name VARCHAR(100)  NOT NULL UNIQUE") {
-		stmts := []string{
-			"PRAGMA foreign_keys = OFF",
-			`CREATE TABLE IF NOT EXISTS tags_new (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				name VARCHAR(100) NOT NULL,
-				slug VARCHAR(100) NOT NULL UNIQUE,
-				description TEXT,
-				custom_url VARCHAR(200),
-				sort_order INTEGER,
-				post_count INTEGER NOT NULL DEFAULT 0,
-				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-			)`,
-			`INSERT INTO tags_new (id, name, slug, description, custom_url, sort_order, post_count, created_at)
-			SELECT id, name, slug, description, custom_url, sort_order, post_count, created_at FROM tags`,
-			`DROP TABLE tags`,
-			`ALTER TABLE tags_new RENAME TO tags`,
-			`CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)`,
-			`CREATE INDEX IF NOT EXISTS idx_tags_slug ON tags(slug)`,
-			"PRAGMA foreign_keys = ON",
-		}
-		for _, stmt := range stmts {
-			if _, err := r.db.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("drop_tags_name_unique rebuild: %w", err)
-			}
-		}
+	// 3. Move child relationships (loser's children become winner's children)
+	if err := q.MergeTagChildren(ctx, models.MergeTagChildrenParams{WinnerID: winnerID, LoserID: loserID}); err != nil {
+		return err
 	}
 
-	if _, err := r.db.ExecContext(ctx,
-		`INSERT INTO migration_history (name, applied_at) VALUES ('drop_tags_name_unique', CURRENT_TIMESTAMP)`,
-	); err != nil {
-		return fmt.Errorf("record drop_tags_name_unique: %w", err)
+	// 4. Move parent relationships (loser's parents become winner's parents)
+	if err := q.MergeTagParents(ctx, models.MergeTagParentsParams{WinnerID: winnerID, LoserID: loserID}); err != nil {
+		return err
 	}
-	return nil
+
+	// 5. Delete loser tag
+	if err := q.DeleteTag(ctx, loserID); err != nil {
+		return err
+	}
+
+	// 6. Update winner post_count
+	if err := q.UpdateTagPostCount(ctx, winnerID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

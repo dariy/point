@@ -46,7 +46,7 @@ func TestFullWorkflow(t *testing.T) {
 	// Services
 	settingsSvc := services.NewSettingsService(repo)
 	authSvc := services.NewAuthService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	tagSvc := services.NewTagService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 
@@ -453,7 +453,7 @@ func setupHandlers(t *testing.T) *testHandlers {
 	}
 	settingsSvc := services.NewSettingsService(repo)
 	tagSvc := services.NewTagService(repo)
-	postSvc := services.NewPostService(repo, nil, nil, "")
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
 	authSvc := services.NewAuthService(repo)
 	mediaSvc := services.NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	cacheSvc := services.NewCacheService(tmpDir)
@@ -839,7 +839,7 @@ func TestGetPostBySlug_HiddenPostsTag(t *testing.T) {
 	c.SetParamValues("hidden-slug-post")
 	err := ph.GetPostBySlug(c)
 	if err == nil {
-		t.Error("expected 404 for post with _hide_posts tag (public user)")
+		t.Error("expected 404 for post with hides_posts tag (public user)")
 	}
 }
 
@@ -860,7 +860,7 @@ func TestGetPostByID_HiddenPostsTag(t *testing.T) {
 	c.SetParamValues(strconv.FormatInt(postID, 10))
 	err := ph.GetPostByID(c)
 	if err == nil {
-		t.Error("expected 404 for post with _hide_posts tag (public user)")
+		t.Error("expected 404 for post with hides_posts tag (public user)")
 	}
 }
 

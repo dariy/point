@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS posts (
     excerpt TEXT,
     formatter TEXT NOT NULL DEFAULT 'markdown',
     status TEXT NOT NULL DEFAULT 'draft',
+    type TEXT NOT NULL DEFAULT 'post',
     is_featured BOOLEAN NOT NULL DEFAULT 0,
     view_count INTEGER NOT NULL DEFAULT 0,
     published_at DATETIME,
@@ -52,8 +53,15 @@ CREATE TABLE IF NOT EXISTS tags (
     name VARCHAR(100) NOT NULL,
     slug VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    custom_url VARCHAR(200),
-    sort_order INTEGER,
+    kind TEXT NOT NULL DEFAULT 'tag',
+    hidden BOOLEAN NOT NULL DEFAULT 0,
+    hides_posts BOOLEAN NOT NULL DEFAULT 0,
+    nav_order INTEGER,
+    in_breadcrumbs BOOLEAN NOT NULL DEFAULT 0,
+    show_related BOOLEAN NOT NULL DEFAULT 0,
+    in_ancestor_flyout BOOLEAN NOT NULL DEFAULT 1,
+    latitude REAL,
+    longitude REAL,
     post_count INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -67,19 +75,11 @@ CREATE TABLE IF NOT EXISTS post_tags (
     PRIMARY KEY (post_id, tag_id)
 );
 
--- TagLocations
-CREATE TABLE IF NOT EXISTS tag_locations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tag_id INTEGER NOT NULL UNIQUE REFERENCES tags(id) ON DELETE CASCADE,
-    latitude FLOAT NOT NULL,
-    longitude FLOAT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_tag_locations_tag_id ON tag_locations(tag_id);
-
 -- TagRelationships (Hierarchy)
 CREATE TABLE IF NOT EXISTS tag_relationships (
     parent_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     child_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    sort_order INTEGER,
     PRIMARY KEY (parent_id, child_id)
 );
 

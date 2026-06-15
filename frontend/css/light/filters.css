@@ -4,6 +4,7 @@
 .filters {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-lg);
     padding: var(--spacing-md);
@@ -65,8 +66,34 @@
 .filter-search {
     flex: 1;
     min-width: var(--filter-search-min-width);
-    height: var(--filter-search-height);
+    height: var(--filter-select-height);
     padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
-    border-radius: var(--filter-search-border-radius);
+    font-weight: 500;
+    border-radius: var(--filter-select-border-radius);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Tag filter inside the filter bar — match height & shape of sibling controls */
+.tag-filter-container {
+    flex: 0 1 auto;
+    min-width: var(--filter-search-min-width);
+}
+
+.tag-filter-container .tags-input {
+    min-height: var(--filter-select-height);
+    height: var(--filter-select-height);
+    padding: 0 var(--spacing-sm);
+    border-radius: var(--filter-select-border-radius);
+    box-shadow: var(--shadow-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    align-items: center;
+    background: var(--surface-card);
+}
+
+.tag-filter-container .tags-input input {
+    padding: 0 var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
 }

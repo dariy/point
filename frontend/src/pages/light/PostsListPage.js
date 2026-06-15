@@ -5,8 +5,9 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { LightSidebar } from "../../components/light/LightSidebar.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { TagsInput } from "../../components/light/TagsInput.js";
+import { openTagFamilyPopover } from "../../components/light/TagFamilyPopover.js";
 import { Pagination } from "../../components/shared/Pagination.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import {
@@ -18,7 +19,6 @@ import {
   updatePost,
   setPostStatus,
 } from "../../api/posts.js";
-import { logout } from "../../api/auth.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
 import { formatDateShort } from "../../utils/formatters.js";
@@ -32,7 +32,6 @@ import {
   SELECT_SVG,
   PLUS_SVG,
 } from "../../utils/icons.js";
-import { setupHeaderCompact } from "../../utils/headerCompact.js";
 
 const STATUS_LABELS = {
   published: "Published",
@@ -52,6 +51,7 @@ export default class PostsListPage extends Component {
       pagination: {},
       error: null,
       statusFilter: props.query?.status || "",
+      tagFilter: props.query?.tag || "",
       search: props.query?.search || "",
       page: parseInt(props.query?.page || "1", 10),
       selectMode: false,
@@ -60,6 +60,117 @@ export default class PostsListPage extends Component {
   }
 
   render() {
+    const { selectMode, statusFilter } = this.state;
+    const isTrash = statusFilter === "trash";
+
+    const actions = `
+      ${!isTrash ? `<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select posts"}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>` : ""}
+      <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
+    `;
+
+    return adminLayoutTemplate({
+      title: "Posts",
+      actions,
+      content: this._renderContent()
+    });
+  }
+
+  _renderCardRow(p) {
+    const { selectedIds, statusFilter } = this.state;
+    const isTrash = statusFilter === "trash";
+    const isChecked = selectedIds.has(p.id);
+
+    const mediaUrl = p.media_url || "";
+    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
+    const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
+    const isAudio = /\.(mp3|m4a|ogg|wav|flac|aac|opus)$/i.test(mediaUrl);
+
+    let thumbInner = "";
+    if (isImage && p.media_url) {
+      thumbInner = `<img src="${escapeHtml(p.media_url + "?thumb")}" class="post-preview-img" loading="lazy">`;
+    } else if (isVideo) {
+      thumbInner = PLAY_SVG;
+    } else if (isAudio) {
+      thumbInner = MUSIC_SVG;
+    }
+
+    if (isTrash) {
+      const deletedAt = p.deleted_at?.value
+        ? formatDateShort(p.deleted_at.value)
+        : p.deleted_at
+          ? formatDateShort(p.deleted_at)
+          : "";
+      return `
+        <div class="post-card post-card--trash" data-post-id="${escapeHtml(String(p.id))}">
+          <div class="post-card-thumb post-card-thumb--muted"></div>
+          <div class="post-card-body">
+            <div class="post-card-title muted">${escapeHtml(p.title)}</div>
+            <div class="post-card-meta">
+              <span class="trash-status-label">Was: ${escapeHtml(STATUS_LABELS[p.status] || p.status)}</span>
+              ${deletedAt ? `· ${escapeHtml(deletedAt)}` : ""}
+            </div>
+            <div class="post-card-actions">
+              <button class="btn btn-sm restore-btn"
+                      data-id="${escapeHtml(String(p.id))}"
+                      data-title="${escapeHtml(p.title)}"
+                      title="Restore">${RESTORE_SVG} Restore</button>
+              <button class="btn btn-sm btn-danger perm-delete-btn"
+                      data-id="${escapeHtml(String(p.id))}"
+                      data-title="${escapeHtml(p.title)}"
+                      title="Delete permanently">${X_SVG} Delete</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    const cardStatusOptions = ["draft", "published", "scheduled", "hidden", "page"]
+      .map((s) => `<option value="${s}"${p.status === s ? " selected" : ""}>${escapeHtml(STATUS_LABELS[s] || s)}</option>`)
+      .join("");
+
+    const tagChips = (p.tags || []).map((t) => {
+      const name = typeof t === "string" ? t : t.name;
+      const id = typeof t === "object" ? t.id : null;
+      return `<span class="tag-chip tag" ${id ? `data-id="${id}"` : ""}>${escapeHtml(name)}</span>`;
+    });
+    const chipsHtml = tagChips.join("");
+
+    return `
+      <div class="post-card" data-post-id="${escapeHtml(String(p.id))}">
+        <div class="post-card-check-wrap">
+          <input type="checkbox" class="select-row-cb post-card-check" data-id="${escapeHtml(String(p.id))}" ${isChecked ? "checked" : ""}>
+        </div>
+        <div class="post-card-thumb">${thumbInner}</div>
+        <div class="post-card-body">
+          <div class="post-card-top">
+            <span class="post-card-title">${escapeHtml(p.title)}</span>
+            <select class="status-select badge-${escapeHtml(p.status)} status-change-btn" name="status" data-id="${escapeHtml(String(p.id))}">${cardStatusOptions}</select>
+          </div>
+          ${chipsHtml ? `<div class="post-card-chips">${chipsHtml}</div>` : ""}
+          <div class="post-card-meta">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</div>
+        </div>
+      </div>`;
+  }
+
+  _renderCardList() {
+    const { loading, posts, error, statusFilter, selectMode } = this.state;
+    const isTrash = statusFilter === "trash";
+
+    let inner;
+    if (loading) {
+      inner = `<p class="post-card-placeholder">Loading…</p>`;
+    } else if (error) {
+      inner = `<p class="post-card-placeholder error-state">${escapeHtml(error)}</p>`;
+    } else if (!posts.length) {
+      inner = `<p class="post-card-placeholder">${isTrash ? "Trash is empty." : "No posts found."}</p>`;
+    } else {
+      inner = posts.map((p) => this._renderCardRow(p)).join("");
+    }
+
+    const selectClass = selectMode && !isTrash ? " select-mode" : "";
+    return `<div class="posts-card-list${selectClass}" id="posts-card-list">${inner}</div>`;
+  }
+
+  _renderContent() {
     const {
       loading,
       posts,
@@ -137,7 +248,7 @@ export default class PostsListPage extends Component {
                   <td class="title-col">
                     <span class="table-link muted">${escapeHtml(p.title)}</span>
                   </td>
-                  <td class="updated-col">${escapeHtml(deletedAt)}</td>
+                  <td class="updated-col" title="Deleted">${escapeHtml(deletedAt)}</td>
                   <td class="actions-col">
                     <div class="actions">
                       <button class="btn btn-sm restore-btn"
@@ -197,17 +308,17 @@ export default class PostsListPage extends Component {
                     ${escapeHtml(p.title)}
                   </a>
                 </td>
-                <td class="updated-col">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
+                <td class="updated-col" title="Last updated">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
                 <td class="actions-col">
                   <div class="actions">
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
-                       class="btn btn-sm" title="Edit">${EDIT_SVG}</a>
+                       class="btn btn-sm" title="Edit" aria-label="Edit post">${EDIT_SVG}</a>
                     <a href="/posts/${escapeHtml(p.slug)}" class="btn btn-sm"
-                       title="View" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
+                       title="View" aria-label="View on public site" target="_blank" data-external>${EXTERNAL_LINK_SVG}</a>
                     <button class="btn btn-sm btn-danger delete-btn"
                             data-id="${escapeHtml(String(p.id))}"
                             data-title="${escapeHtml(p.title)}"
-                            title="Move to Trash">${X_SVG}</button>
+                            title="Move to Trash" aria-label="Move to Trash">${X_SVG}</button>
                   </div>
                 </td>
               </tr>
@@ -220,24 +331,14 @@ export default class PostsListPage extends Component {
               .join("");
 
     return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main posts-list-main">
-          <header class="light-header">
-            <h1>Posts</h1>
-            <div class="header-actions">
-              ${!isTrash ? `<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select posts"}">${selectMode ? X_SVG : SELECT_SVG}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>` : ""}
-              <a href="/light/posts/new" class="btn btn-primary" title="New Post">${PLUS_SVG}<span class="btn-label">New Post</span></a>
-            </div>
-          </header>
-          <main class="light-content">
             <div class="filters">
               <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || "draft")} filter-select">
                 ${statusOptions}
               </select>
               ${
                 !isTrash
-                  ? `<input type="search" id="search-input" class="form-input filter-search"
+                  ? `<div id="tag-filter-mount" class="tag-filter-container"></div>
+                     <input type="search" id="search-input" class="form-input filter-search"
                      placeholder="Search posts…" value="${escapeHtml(search)}">`
                   : ""
               }
@@ -246,6 +347,7 @@ export default class PostsListPage extends Component {
               selectMode && !isTrash
                 ? `
             <div class="bulk-toolbar" id="bulk-toolbar">
+              <label class="select-all-label"><input type="checkbox" id="select-all-cb"> Select all</label>
               <span id="bulk-count">0 selected</span>
               <select id="bulk-status-select">
                 <option value="draft">Draft</option>
@@ -260,31 +362,20 @@ export default class PostsListPage extends Component {
             }
             <div class="table-container">
               <table class="table">
-                <thead>
-                  <tr>
-                    ${selectMode && !isTrash ? '<th class="check-col"><input type="checkbox" id="select-all-cb"></th>' : ""}
-                    <th class="preview-col" colspan="2">Post</th>
-                    <th class="title-col"></th>
-                    <th class="updated-col">${isTrash ? "Deleted" : "Last updated"}</th>
-                    <th class="actions-col"></th>
-                  </tr>
-                </thead>
                 <tbody id="posts-tbody">${rows}</tbody>
               </table>
             </div>
-            <div id="pagination-mount"></div>
-          </main>
-        </div>
-      </div>`;
+            ${this._renderCardList()}
+            <div id="pagination-mount"></div>`;
   }
 
   afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    this.mountChild(LightSidebar, "#sidebar-mount", {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: "/light/posts",
-      user: store.get("user") || {},
-      onLogout: this._handleLogout.bind(this),
     });
+
+    const { statusFilter } = this.state;
+    const isTrash = statusFilter === "trash";
 
     if (!this.state.loading && this.state.pagination.pages > 1) {
       this.mountChild(Pagination, "#pagination-mount", {
@@ -296,7 +387,7 @@ export default class PostsListPage extends Component {
     }
 
     // Restore focus to search input after a re-render triggered by _load
-    const searchInput = this.$("#search-input");
+    const searchInput = this.container.querySelector("#search-input");
     if (searchInput) {
       if (this._restoreSearchFocus) {
         this._restoreSearchFocus = false;
@@ -317,17 +408,28 @@ export default class PostsListPage extends Component {
     }
 
     // Status filter
-    const statusFilter = this.$("#status-filter");
-    if (statusFilter) {
-      statusFilter.addEventListener("change", (e) => {
+    const statusFilterEl = this.container.querySelector("#status-filter");
+    if (statusFilterEl) {
+      statusFilterEl.addEventListener("change", (e) => {
         const val = e.target.value;
-        statusFilter.className = `status-select badge-${val || "draft"} filter-select`;
+        statusFilterEl.className = `status-select badge-${val || "draft"} filter-select`;
         this.setState({ statusFilter: val, page: 1 });
         this._load({ page: 1, status: val });
       });
     }
 
-    const isTrash = this.state.statusFilter === "trash";
+    // Tag filter
+    if (!isTrash && !this.state.loading) {
+      this.mountChild(TagsInput, "#tag-filter-mount", {
+        tags: this.state.tagFilter ? [this.state.tagFilter] : [],
+        placeholder: "Filter by tag…",
+        onChange: (tags) => {
+          const val = tags[0] || "";
+          this.setState({ tagFilter: val, page: 1 });
+          this._load({ page: 1, tag: val });
+        }
+      });
+    }
 
     // Mount a TagsInput in every tags cell (skip for trash view)
     if (!isTrash && !this.state.loading && !this.state.error) {
@@ -338,7 +440,7 @@ export default class PostsListPage extends Component {
 
     // Status change buttons (skip for trash view)
     if (!isTrash) {
-      this.$$(".status-change-btn").forEach((select) => {
+      this.container.querySelectorAll(".status-change-btn").forEach((select) => {
         select.addEventListener("change", async (e) => {
           const id = parseInt(select.dataset.id, 10);
           const newStatus = e.target.value;
@@ -348,7 +450,7 @@ export default class PostsListPage extends Component {
     }
 
     // Delete buttons (move to trash)
-    this.$$(".delete-btn").forEach((btn) => {
+    this.container.querySelectorAll(".delete-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -365,7 +467,7 @@ export default class PostsListPage extends Component {
     });
 
     // Restore buttons (trash view)
-    this.$$(".restore-btn").forEach((btn) => {
+    this.container.querySelectorAll(".restore-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -374,7 +476,7 @@ export default class PostsListPage extends Component {
     });
 
     // Permanently delete buttons (trash view)
-    this.$$(".perm-delete-btn").forEach((btn) => {
+    this.container.querySelectorAll(".perm-delete-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = parseInt(btn.dataset.id, 10);
         const title = btn.dataset.title;
@@ -390,41 +492,129 @@ export default class PostsListPage extends Component {
       });
     });
 
-    // Select mode (skip for trash view)
-    const selectModeBtn = this.$("#select-mode-btn");
-    if (selectModeBtn) {
-      selectModeBtn.addEventListener("click", () => {
-        this.setState({
-          selectMode: !this.state.selectMode,
-          selectedIds: new Set(),
+    // Swipe gestures for cards
+    if (!isTrash && !this.state.loading) {
+      this.container.querySelectorAll('.post-card').forEach(card => {
+        let startX = 0;
+        let startY = 0;
+        let deltaX = 0;
+        let deltaY = 0;
+        const id = parseInt(card.dataset.id, 10);
+        const status = card.dataset.status;
+
+        card.addEventListener('touchstart', (e) => {
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          deltaX = 0;
+          deltaY = 0;
+          card.style.transition = 'none';
+        }, { passive: true });
+
+        card.addEventListener('touchmove', (e) => {
+          deltaX = e.touches[0].clientX - startX;
+          deltaY = e.touches[0].clientY - startY;
+          if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            card.style.transform = `translateX(${deltaX}px)`;
+            if (deltaX > 50) card.classList.add('swipe-right');
+            else if (deltaX < -50) card.classList.add('swipe-left');
+            else card.classList.remove('swipe-right', 'swipe-left');
+          }
+        }, { passive: true });
+
+        card.addEventListener('touchend', () => {
+          card.style.transition = 'transform 0.3s ease-out';
+          card.style.transform = '';
+          if (deltaX > 100) {
+            // Swipe Right: Toggle Publish
+            const nextStatus = status === 'published' ? 'draft' : 'published';
+            this._updatePostStatus(id, nextStatus);
+          } else if (deltaX < -100) {
+            // Swipe Left: Move to Trash
+            this._deletePost(id);
+          }
+          card.classList.remove('swipe-right', 'swipe-left');
         });
       });
     }
 
+    // Tag family popover for chips
+    this.container.querySelectorAll(".tag-chip").forEach((chip) => {
+      chip.addEventListener("click", (_e) => {
+        const id = parseInt(chip.dataset.id, 10);
+        if (id) openTagFamilyPopover(id, chip);
+      });
+    });
+
+    // Select mode (skip for trash view)
+    this.$("#select-mode-btn")?.addEventListener("click", () => {
+        this.setState({
+          selectMode: !this.state.selectMode,
+          selectedIds: new Set(),
+        });
+    });
+
     if (this.state.selectMode && !isTrash) {
-      this.$("#select-all-cb").addEventListener(
+      this.container.querySelector("#select-all-cb")?.addEventListener(
         "change",
         this._handleSelectAll.bind(this),
       );
-      this.$$(".select-row-cb").forEach((cb) => {
+      this.container.querySelectorAll(".select-row-cb").forEach((cb) => {
         cb.addEventListener("change", this._handleSelectRow.bind(this));
       });
-      this.$("#bulk-apply-btn").addEventListener(
+      this.container.querySelector("#bulk-apply-btn")?.addEventListener(
         "click",
         this._handleBulkApply.bind(this),
       );
-      this.$("#bulk-delete-btn").addEventListener(
+      this.container.querySelector("#bulk-delete-btn")?.addEventListener(
         "click",
         this._handleBulkDelete.bind(this),
       );
       this._updateBulkToolbar();
     }
+
+    // Card view: tap to edit or toggle selection; long-press to enter select mode
+    this.container.querySelectorAll(".post-card").forEach((card) => {
+      const postId = parseInt(card.dataset.postId, 10);
+
+      if (!isTrash) {
+        let longPressTimer = null;
+        card.addEventListener("pointerdown", (e) => {
+          if (e.target.closest("select, button, a, input")) return;
+          longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            if (!this.state.selectMode) {
+              this.setState({ selectMode: true, selectedIds: new Set([postId]) });
+            }
+          }, 500);
+        });
+        const cancelTimer = () => {
+          if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        };
+        card.addEventListener("pointerup", cancelTimer);
+        card.addEventListener("pointermove", cancelTimer);
+        card.addEventListener("pointercancel", cancelTimer);
+      }
+
+      card.addEventListener("click", (e) => {
+        if (e.target.closest("select, button, a, input")) return;
+        if (isTrash) return;
+        if (this.state.selectMode) {
+          const cb = card.querySelector(".select-row-cb");
+          if (cb) {
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          return;
+        }
+        navigate(`/light/posts/${postId}/edit`);
+      });
+    });
   }
 
   _handleSelectAll(e) {
     const isChecked = e.target.checked;
     const { posts, selectedIds } = this.state;
-    this.$$(".select-row-cb").forEach((cb) => {
+    this.container.querySelectorAll(".select-row-cb").forEach((cb) => {
       cb.checked = isChecked;
     });
     if (isChecked) {
@@ -447,10 +637,10 @@ export default class PostsListPage extends Component {
 
   _updateBulkToolbar() {
     const n = this.state.selectedIds.size;
-    const bulkCount = this.$("#bulk-count");
-    const applyBtn = this.$("#bulk-apply-btn");
-    const deleteBtn = this.$("#bulk-delete-btn");
-    const selectAllCb = this.$("#select-all-cb");
+    const bulkCount = this.container.querySelector("#bulk-count");
+    const applyBtn = this.container.querySelector("#bulk-apply-btn");
+    const deleteBtn = this.container.querySelector("#bulk-delete-btn");
+    const selectAllCb = this.container.querySelector("#select-all-cb");
 
     if (bulkCount) bulkCount.textContent = `${n} selected`;
     if (applyBtn) applyBtn.disabled = n === 0;
@@ -472,7 +662,7 @@ export default class PostsListPage extends Component {
   }
 
   async _handleBulkApply() {
-    const status = this.$("#bulk-status-select").value;
+    const status = this.container.querySelector("#bulk-status-select").value;
     const ids = Array.from(this.state.selectedIds);
     let successCount = 0;
     let failCount = 0;
@@ -553,23 +743,17 @@ export default class PostsListPage extends Component {
     window.addEventListener("resize", this._onResize);
   }
 
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
-  }
-
   beforeUnmount() {
-    this._cleanupHeaderCompact?.();
+    this._cleanupAdminLayout?.();
     if (this._onResize) window.removeEventListener("resize", this._onResize);
   }
 
   /** Measure how many table rows fit in the available container height. */
   _calcPerPage() {
-    const container = this.$(".table-container");
-    const thead = this.$("thead");
-    const probeRow = this.$("tbody tr");
-    if (!container || !thead || !probeRow) return 20;
-    const bodyHeight = container.clientHeight - thead.offsetHeight;
+    const container = this.container.querySelector(".table-container");
+    const probeRow = this.container.querySelector("tbody tr");
+    if (!container || !probeRow) return 20;
+    const bodyHeight = container.clientHeight;
     // Each post item now takes two <tr> rows.
     const rowHeight = (probeRow.offsetHeight || 44) * 2;
     return Math.max(5, Math.floor(bodyHeight / rowHeight));
@@ -578,11 +762,13 @@ export default class PostsListPage extends Component {
   /** Update the browser URL to reflect current filters without triggering a full navigation. */
   _syncUrl(overrides = {}) {
     const status = overrides.status ?? this.state.statusFilter;
+    const tag = overrides.tag ?? this.state.tagFilter;
     const search = overrides.search ?? this.state.search;
     const page = overrides.page ?? this.state.page;
 
     const params = new URLSearchParams();
     if (status) params.set("status", status);
+    if (tag) params.set("tag", tag);
     if (search) params.set("search", search);
     if (page > 1) params.set("page", String(page));
 
@@ -593,15 +779,19 @@ export default class PostsListPage extends Component {
 
   async _load(overrides = {}) {
     // Check focus before any DOM mutation so we can restore it after re-render
-    const searchEl = this.$("#search-input");
+    const searchEl = this.container.querySelector("#search-input");
     const searchHadFocus = searchEl && document.activeElement === searchEl;
 
     // Show loading indicator in-place — no full re-render, no focus loss.
-    // The string is fully static (no user data), so innerHTML is safe here.
-    const tbody = this.$("#posts-tbody");
+    // The strings are fully static (no user data), so innerHTML is safe here.
+    const tbody = this.container.querySelector("#posts-tbody");
     const colspan = this.state.selectMode ? 6 : 5;
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
+    }
+    const cardList = this.container.querySelector("#posts-card-list");
+    if (cardList) {
+      cardList.innerHTML = `<p class="post-card-placeholder">Loading…</p>`; // static, safe
     }
     this.state.loading = true;
     this.state.error = null;
@@ -611,8 +801,10 @@ export default class PostsListPage extends Component {
       per_page: this._perPage ?? 20,
     };
     const status = overrides.status ?? this.state.statusFilter;
+    const tag = overrides.tag ?? this.state.tagFilter;
     const search = overrides.search ?? this.state.search;
     if (status) params.status = status;
+    if (tag) params.tag = tag;
     if (search) params.q = search;
 
     // Sync URL whenever filters change
@@ -644,7 +836,7 @@ export default class PostsListPage extends Component {
 
   /** Mount a TagsInput directly in the tags cell for a post row. Saves on change. */
   _mountTagEditor(post) {
-    const mount = this.$(`#tags-cell-${post.id}`);
+    const mount = this.container.querySelector(`#tags-cell-${post.id}`);
     if (!mount) return;
 
     const initialTags = (post.tags || []).map((t) =>
@@ -759,15 +951,5 @@ export default class PostsListPage extends Component {
     } finally {
       select.classList.remove("badge-loading");
     }
-  }
-
-  async _handleLogout() {
-    try {
-      await logout();
-    } catch {
-      /* ignore */
-    }
-    store.set("user", null);
-    navigate("/", { replace: true });
   }
 }

@@ -128,3 +128,95 @@
 .tag-strip-scroll .tag-link {
     transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), scale var(--transition-fast);
 }
+
+/* Unified Tag Family Flyout (point-x52z.13) */
+.tag-family-flyout {
+    position: fixed;
+    z-index: 1100;
+    background: var(--bg-elevated);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-xs) 0;
+    min-width: 200px;
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: flyoutFadeIn 0.2s ease-out;
+}
+
+.tag-family-flyout.hidden {
+    display: none;
+}
+
+.flyout-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.flyout-section + .flyout-section {
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+.flyout-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.flyout-item:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.flyout-item .count {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.flyout-ancestors .flyout-item {
+    opacity: 0.8;
+}
+
+.flyout-current {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--surface-active);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.flyout-children {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Bottom Sheet for Mobile */
+@media (max-width: 640px) {
+    .tag-family-flyout.bottom-sheet {
+        top: auto !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+        transform: translateY(0);
+        animation: sheetSlideUp 0.3s ease-out;
+    }
+}
+
+@keyframes flyoutFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sheetSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}

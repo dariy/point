@@ -60,7 +60,7 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		"id":               post.ID,
 		"title":            post.Title,
 		"slug":             post.Slug,
-		"type":             getPostTypeFromModels(post.Status, tags),
+		"type":             post.Type,
 		"content":          post.Content,
 		"content_html":     htmlContent,
 		"css":              post.Css,
@@ -101,17 +101,21 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 
 	isAdmin := c.Get("user") != nil
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
+	if !isAdmin && snap != nil {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
 	postMedia := h.fetchPostMedia(ctx, post)
 	resp := buildPostResponse(post, tags, htmlContent, excludeTagIDs, postMedia)
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	var effectiveHiddenPosts map[int64]bool
+	if snap != nil {
+		effectiveHiddenPosts = snap.EffectiveHidesPosts
+	}
 	injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 	injectPostInstagramFields(resp, post)
 	return resp, nil
@@ -166,13 +170,14 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	posts, total, err := h.postService.ListPosts(c.Request().Context(), services.ListPostsParams{
-		Page:          page,
-		PerPage:       int32(perPage),
-		Status:        status,
-		FeaturedOnly:  featured,
-		IncludeDrafts: includeDrafts,
-		Search:        search,
-		SortBy:        c.QueryParam("sort"),
+	        Page:          page,
+	        PerPage:       int32(perPage),
+	        Status:        status,
+	        FeaturedOnly:  featured,
+	        IncludeDrafts: includeDrafts,
+	        Search:        search,
+	        Tag:           c.QueryParam("tag"),
+	        SortBy:        c.QueryParam("sort"),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -185,16 +190,18 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	postTagsMap, _ := h.postService.GetTagsByPostIDs(c.Request().Context(), postIDs)
 
 	isAdmin := c.Get("user") != nil
+	snap, _ := h.tagService.GetTagSnapshot(c.Request().Context())
 	var effectiveHiddenPosts map[int64]bool
-	if isAdmin {
-		effectiveHiddenPosts, _ = h.tagService.EffectivelyHiddenPostsTagIDs(c.Request().Context())
-	}
-
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
-		minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
-		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(c.Request().Context(), minPosts)
+
+	if snap != nil {
+		if isAdmin {
+			effectiveHiddenPosts = snap.EffectiveHidesPosts
+		} else {
+			minPostsStr, _ := h.settingsService.GetSetting(c.Request().Context(), "min_tag_posts_to_show", "0")
+			minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
+			excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
+		}
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
@@ -209,17 +216,28 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 
 	pages := int(math.Ceil(float64(total) / float64(perPage)))
 	if pages == 0 {
-		pages = 1
+	        pages = 1
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"posts":    postResponses,
-		"total":    total,
-		"page":     page,
-		"per_page": perPage,
-		"pages":    pages,
-	})
-}
+	response := map[string]interface{}{
+	        "posts":    postResponses,
+	        "total":    total,
+	        "page":     page,
+	        "per_page": perPage,
+	        "pages":    pages,
+	}
+
+	if tagParam := c.QueryParam("tag"); tagParam != "" && snap != nil {
+	        if t, ok := snap.BySlug[strings.ToLower(tagParam)]; ok {
+	                response["tag"] = map[string]interface{}{
+	                        "name": t.Name,
+	                        "slug": t.Slug,
+	                }
+	        }
+	}
+
+	return c.JSON(http.StatusOK, response)
+	}
 
 func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	slug := c.Param("slug")
@@ -231,14 +249,18 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	ctx := c.Request().Context()
 	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	var effectiveHiddenPosts map[int64]bool
+	if snap != nil {
+		effectiveHiddenPosts = snap.EffectiveHidesPosts
+	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
 		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
-			if effectiveHiddenPosts[t.ID] {
+			if effectiveHiddenPosts != nil && effectiveHiddenPosts[t.ID] {
 				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 			}
 		}
@@ -249,10 +271,10 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 	}
 
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
+	if !isAdmin && snap != nil {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
@@ -287,7 +309,11 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 	}
 
 	// Compute effective hidden-posts tag set
-	hiddenTagIDs, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	var hiddenTagIDs map[int64]bool
+	if snap != nil {
+		hiddenTagIDs = snap.EffectiveHidesPosts
+	}
 
 	// Fetch all published post stubs (lightweight: id, slug, published_at)
 	stubs, err := h.postService.ListPublishedPostStubs(ctx)
@@ -307,14 +333,13 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 	found := false
 
 	var filterTagIDs map[int64]bool
-	if tagFilter != "" {
-		t, err := h.tagService.GetTagBySlug(ctx, tagFilter)
-		if err == nil {
+	if tagFilter != "" && snap != nil {
+		if t, ok := snap.BySlug[strings.ToLower(tagFilter)]; ok {
 			filterTagIDs = make(map[int64]bool)
 			filterTagIDs[t.ID] = true
-			desc, _ := h.tagService.GetTagDescendants(ctx, t.ID)
-			for _, d := range desc {
-				filterTagIDs[d.ID] = true
+			descIDs := snap.GetDescendantIDs(t.ID)
+			for _, dID := range descIDs {
+				filterTagIDs[dID] = true
 			}
 		}
 	}
@@ -376,24 +401,28 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	ctx := c.Request().Context()
 	tags, _ := h.postService.GetTagsForPost(ctx, post.ID)
 
-	effectiveHiddenPosts, _ := h.tagService.EffectivelyHiddenPostsTagIDs(ctx)
+	snap, _ := h.tagService.GetTagSnapshot(ctx)
+	var effectiveHiddenPosts map[int64]bool
+	if snap != nil {
+		effectiveHiddenPosts = snap.EffectiveHidesPosts
+	}
 	isAdmin := c.Get("user") != nil
 	if !isAdmin {
 		if strings.EqualFold(post.Status, "draft") || strings.EqualFold(post.Status, "hidden") {
 			return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 		}
 		for _, t := range tags {
-			if effectiveHiddenPosts[t.ID] {
+			if effectiveHiddenPosts != nil && effectiveHiddenPosts[t.ID] {
 				return echo.NewHTTPError(http.StatusNotFound, "Post not found")
 			}
 		}
 	}
 
 	var excludeTagIDs map[int64]bool
-	if !isAdmin {
+	if !isAdmin && snap != nil {
 		minPostsStr, _ := h.settingsService.GetSetting(ctx, "min_tag_posts_to_show", "0")
 		minPosts, _ := strconv.ParseInt(minPostsStr, 10, 64)
-		excludeTagIDs, _ = h.tagService.PublicHiddenTagIDs(ctx, minPosts)
+		excludeTagIDs = snap.PublicHiddenTagIDs(minPosts)
 	}
 	// Admin sees all tags (including hidden/year tags) for accurate editing
 
@@ -418,6 +447,7 @@ type CreatePostRequest struct {
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
 	Status          string   `json:"status"`
+	Type            string   `json:"type"`
 	IsFeatured      bool     `json:"is_featured"`
 	ThumbnailPath   string   `json:"thumbnail_path"`
 	MetaDescription string   `json:"meta_description"`
@@ -447,6 +477,10 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 	if req.Status == "" {
 		req.Status = "draft"
 	}
+	if req.Type == "" && req.Status == "page" {
+		req.Type = "page"
+		req.Status = "published"
+	}
 	if req.Formatter == "" {
 		req.Formatter = "markdown"
 	}
@@ -473,6 +507,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
 		Status:          req.Status,
+		Type:            req.Type,
 		IsFeatured:      req.IsFeatured,
 		AuthorID:        authorID,
 		ThumbnailPath:   req.ThumbnailPath,
@@ -513,6 +548,7 @@ type UpdatePostRequest struct {
 	Slug            string   `json:"slug"`
 	Formatter       string   `json:"formatter"`
 	Status          string   `json:"status"`
+	Type            string   `json:"type"`
 	IsFeatured      bool     `json:"is_featured"`
 	ThumbnailPath   string   `json:"thumbnail_path"`
 	MetaDescription string   `json:"meta_description"`
@@ -563,6 +599,13 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	if req.Status == "" {
 		req.Status = old.Status
 	}
+	if req.Type == "" && req.Status == "page" {
+		req.Type = "page"
+		req.Status = "published"
+	}
+	if req.Type == "" {
+		req.Type = old.Type
+	}
 
 	if scheduledAt != nil && time.Now().Before(*scheduledAt) {
 		req.Status = "scheduled"
@@ -583,6 +626,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		Slug:            req.Slug,
 		Formatter:       req.Formatter,
 		Status:          req.Status,
+		Type:            req.Type,
 		IsFeatured:      req.IsFeatured,
 		ThumbnailPath:   req.ThumbnailPath,
 		MetaDescription: req.MetaDescription,
@@ -856,6 +900,7 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 		Slug:      "",
 		Formatter: "markdown",
 		Status:    "draft",
+		Type:      "audio",
 		AuthorID:  authorID,
 		Tags:      tags,
 	})
@@ -949,4 +994,18 @@ func (h *PostHandler) PublishToInstagram(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *PostHandler) PreviewRender(c echo.Context) error {
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	html, err := h.postService.RenderContent(req.Content)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]string{"html": html})
 }

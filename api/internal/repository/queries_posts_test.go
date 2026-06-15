@@ -50,7 +50,7 @@ func TestRepository_ListPostsWithSearch(t *testing.T) {
 
 	insertUserAndPost(t, repo, "hello-world", "published")
 
-	rows, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "hello", 10, 0)
+	rows, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "hello", "", 10, 0)
 	if err != nil {
 		t.Fatalf("ListPostsWithSearch failed: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestRepository_ListPostsWithSearch(t *testing.T) {
 		t.Errorf("expected 1 result, got %d", len(rows))
 	}
 
-	count, err := repo.CountPostsWithSearch(ctx, false, "", false, false, false, "hello")
+	count, err := repo.CountPostsWithSearch(ctx, false, "", false, false, false, "hello", "")
 	if err != nil {
 		t.Fatalf("CountPostsWithSearch failed: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestRepository_ListPostsWithSearch(t *testing.T) {
 	}
 
 	// no match
-	rows2, _ := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "zzznomatch", 10, 0)
+	rows2, _ := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "zzznomatch", "", 10, 0)
 	if len(rows2) != 0 {
 		t.Errorf("expected 0 results for no-match, got %d", len(rows2))
 	}
@@ -268,20 +268,20 @@ func TestRepository_ListPostsWithSearchStatusFilters(t *testing.T) {
 	insertUserAndPost(t, repo, "draft-post", "draft")
 
 	// Status filter: only published
-	rows, _ := repo.ListPostsWithSearch(ctx, true, "published", false, false, false, "", 10, 0)
+	rows, _ := repo.ListPostsWithSearch(ctx, true, "published", false, false, false, "", "", 10, 0)
 	if len(rows) != 1 {
 		t.Errorf("status filter published: expected 1, got %d", len(rows))
 	}
 
 	// Include drafts
-	rows2, _ := repo.ListPostsWithSearch(ctx, false, "", false, true, false, "", 10, 0)
+	rows2, _ := repo.ListPostsWithSearch(ctx, false, "", false, true, false, "", "", 10, 0)
 	if len(rows2) != 2 {
 		t.Errorf("includeDrafts: expected 2, got %d", len(rows2))
 	}
 
 	// Featured filter
 	_, _ = repo.DB().Exec(`UPDATE posts SET is_featured=1 WHERE slug='pub-post'`)
-	rows3, _ := repo.ListPostsWithSearch(ctx, false, "", true, true, false, "", 10, 0)
+	rows3, _ := repo.ListPostsWithSearch(ctx, false, "", true, true, false, "", "", 10, 0)
 	if len(rows3) != 1 {
 		t.Errorf("featured filter: expected 1, got %d", len(rows3))
 	}
@@ -348,9 +348,8 @@ func TestRepository_PostsInYearRange(t *testing.T) {
 
 	_, pid := insertUserAndPost(t, repo, "year-post", "published")
 
-	// Setup _in_timeline -> 2024 -> year-post
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10, 'Timeline', '_in_timeline'), (11, '2024', '2024')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10, 11)`)
+	// Setup 2024 -> year-post
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, kind) VALUES (11, '2024', '2024', 'year')`)
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, 11)`, pid)
 
 	arg := models.ListPostsParams{Limit: 10}

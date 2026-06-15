@@ -37,6 +37,21 @@ export function getTagsPage() {
 }
 
 /**
+ * Tags graph data: tag nodes, post ("shadow") nodes, and the two edge sets
+ * (parent/child hierarchy + post→tag membership) for the /tags force graph.
+ *
+ * @returns {Promise<{
+ *   tags: Array<{id:number,name:string,slug:string,kind:string,latitude?:number,longitude?:number,post_count:number}>,
+ *   posts: Array<{id:number,slug:string,title:string}>,
+ *   hierarchyEdges: Array<{parent:number,child:number}>,
+ *   membershipEdges: Array<{post:number,tag:number}>
+ * }>}
+ */
+export function getTagsGraph() {
+  return api.get('/api/pages/graph');
+}
+
+/**
  * Map page data: tags with coordinates, categorised as country / city / other.
  *
  * @param {{ year_from?: number, year_to?: number }} [params]

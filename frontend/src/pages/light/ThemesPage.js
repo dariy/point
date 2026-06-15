@@ -5,14 +5,12 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { LightSidebar } from "../../components/light/LightSidebar.js";
+import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.js";
-import { logout } from "../../api/auth.js";
 import { parseTheme } from "../../utils/themeParser.js";
 import { store } from "../../store.js";
-import { escapeHtml, navigate } from "../../utils/helpers.js";
-import { STAR_SVG, SETTINGS_SVG } from "../../utils/icons.js";
-import { setupHeaderCompact } from "../../utils/headerCompact.js";
+import { escapeHtml } from "../../utils/helpers.js";
+import { STAR_SVG } from "../../utils/icons.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { CssEditor } from "../../components/light/CssEditor.js";
 
@@ -32,149 +30,99 @@ export default class ThemesPage extends Component {
   }
 
   render() {
+    return adminLayoutTemplate({
+      title: 'Themes',
+      content: this._renderContent()
+    });
+  }
+
+  _renderContent() {
     const { loading, error, themes, activeTheme, saving, savingCSS } = this.state;
 
-    let content = "";
-    if (loading) {
-      content = `<div class="loading-spinner" aria-label="Loading themes…"></div>`;
-    } else if (error) {
-      content = `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
-    } else {
-      content = `
+    if (loading) return `<div class="loading-spinner" aria-label="Loading themes…"></div>`;
+    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+
+    return `
         <div class="themes-grid">
           ${themes.map((theme) => this._renderThemeCard(theme, activeTheme, saving)).join("")}
         </div>
         
-        <section class="custom-css-section">
-          <div class="section-header">
+        <section class="custom-css-section card">
+          <div class="card-header">
             <h2>Custom CSS</h2>
-            <p class="section-desc">Add global CSS definitions that apply site-wide, across all pages and themes.</p>
-          </div>
-          <div class="form-group">
-            <div id="custom-css-editor-mount"></div>
-          </div>
-          <div class="form-actions">
-            <button id="save-css-btn" class="btn btn-primary" ${savingCSS ? "disabled" : ""}>
-              ${savingCSS ? "Saving…" : "Save Custom CSS"}
+            <button id="save-css-btn" class="btn btn-sm btn-primary" ${savingCSS ? "disabled" : ""}>
+              ${savingCSS ? "Saving…" : "Save CSS"}
             </button>
           </div>
+          <div class="card-body">
+            <p class="form-hint">Applied globally to the public site.</p>
+            <div id="css-editor-mount"></div>
+          </div>
         </section>`;
-    }
-
-    return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <h1>Themes</h1>
-            <div class="header-actions">
-               <a href="/light/settings" class="btn btn-secondary" title="Settings">${SETTINGS_SVG}<span class="btn-label">Settings</span></a>
-            </div>
-          </header>
-          <main class="light-content">
-            ${content}
-          </main>
-        </div>
-      </div>`;
   }
 
   _renderThemeCard(theme, activeTheme, saving) {
-    const isActive = activeTheme && activeTheme.name === theme.name;
-    const cardClass = isActive ? "theme-card active" : "theme-card";
+    const isActive = activeTheme === theme.name;
+    const { colors } = parseTheme(theme.css || "");
+
+    const swatch = (color) =>
+      `<span class="theme-swatch" style="background-color: ${escapeHtml(color)}"></span>`;
 
     return `
-      <div class="${cardClass}" data-name="${escapeHtml(theme.name)}">
-        <div class="theme-card-preview" style="background-color: ${escapeHtml(theme.preview_color || "#eee")}">
-          <div class="theme-preview-mock">
-            <div class="mock-header"></div>
-            <div class="mock-content">
-              <div class="mock-line"></div>
-              <div class="mock-line short"></div>
-              <div class="mock-line"></div>
-            </div>
+      <article class="theme-card ${isActive ? "active" : ""}">
+        <div class="theme-preview" style="background-color: ${escapeHtml(colors.background || "#fff")}">
+          <div class="theme-preview-inner">
+            <h3 style="color: ${escapeHtml(colors.primary || "#000")}">Heading</h3>
+            <p style="color: ${escapeHtml(colors.text || "#333")}">Sample text content.</p>
           </div>
-          ${isActive ? `<span class="active-badge">${STAR_SVG} Active</span>` : ""}
-        </div>
-        <div class="theme-card-body">
-          <h3 class="theme-name">${escapeHtml(theme.name)}</h3>
-          <p class="theme-description">${escapeHtml(theme.description || "No description available.")}</p>
-          <div class="theme-modes">
-            <span class="theme-mode-badge theme-mode-light" title="Light mode">&#9728;</span>
-            ${theme.has_dark_mode ? `<span class="theme-mode-badge theme-mode-dark" title="Dark mode">&#9790;</span>` : ""}
-          </div>
-          <div class="theme-card-footer">
-            ${
-              isActive
-                ? `<button class="btn btn-sm btn-secondary" disabled>Currently Active</button>`
-                : `<button class="btn btn-sm btn-primary activate-theme-btn" data-name="${escapeHtml(theme.name)}" ${saving ? "disabled" : ""}>
-                  ${saving ? "Activating…" : "Activate"}
-                </button>`
-            }
+          <div class="theme-swatches">
+            ${colors.primary ? swatch(colors.primary) : ""}
+            ${colors.accent ? swatch(colors.accent) : ""}
+            ${colors.background ? swatch(colors.background) : ""}
           </div>
         </div>
-      </div>`;
-  }
-
-  beforeRender() {
-    this._cleanupHeaderCompact?.();
-    this._cleanupHeaderCompact = null;
-  }
-
-  beforeUnmount() {
-    this._cleanupHeaderCompact?.();
-    if (this._onKeyDown) {
-      document.removeEventListener("keydown", this._onKeyDown);
-    }
+        <div class="theme-info">
+          <div class="theme-name">${escapeHtml(theme.name)}</div>
+          <button class="btn btn-sm ${isActive ? "btn-secondary" : "btn-primary"} set-active-btn" 
+                  data-name="${escapeHtml(theme.name)}" ${isActive || saving ? "disabled" : ""}>
+            ${isActive ? STAR_SVG + " Active" : "Set Active"}
+          </button>
+        </div>
+      </article>`;
   }
 
   afterRender() {
-    this._cleanupHeaderCompact = setupHeaderCompact(this.$('.light-header'));
-    this.mountChild(LightSidebar, "#sidebar-mount", {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: "/light/themes",
-      user: store.get("user") || {},
-      onLogout: this._handleLogout.bind(this),
     });
-
-    if (this.state.loading || this.state.error) return;
 
     setupTextareaMaximizer(this.container);
 
-    const editorValue = this._cssEditorRef
-      ? this._cssEditorRef.getValue()
-      : (this.state.customCSS || "");
-    this._cssEditorRef = this.mountChild(CssEditor, "#custom-css-editor-mount", {
-      value: editorValue,
+    if (this.state.loading || this.state.error) return;
+
+    this.container.querySelectorAll(".set-active-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this._handleSetActive(btn.dataset.name));
+    });
+
+    this.mountChild(CssEditor, "#css-editor-mount", {
+      value: this.state.customCSS,
       isMaximized: this.state.isMaximized,
-      onChange: () => {},
+      onChange: (val) => {
+        this.state.customCSS = val;
+      },
     });
 
-    this.$$(".activate-theme-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        this._handleActivate(btn.dataset.name);
-      });
-    });
-
-    this.$("#save-css-btn")?.addEventListener("click", () => {
-      this._handleSaveCSS();
-    });
-
-    this.container.addEventListener("textarea:save", () => {
-      this._handleSaveCSS();
-    });
+    this.container.querySelector("#save-css-btn")?.addEventListener("click", () => this._handleSaveCSS());
 
     this.container.addEventListener("textarea:maximize", (e) => {
       this.state.isMaximized = e.detail.isMaximized;
     });
 
-    // Page-level Ctrl+S
-    const onKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        this._handleSaveCSS();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    this._onKeyDown = onKeyDown;
+    this.container.addEventListener("textarea:save", () => this._handleSaveCSS());
+  }
+
+  beforeUnmount() {
+    this._cleanupAdminLayout?.();
   }
 
   mount() {
@@ -183,80 +131,47 @@ export default class ThemesPage extends Component {
   }
 
   async _load() {
-    this.setState({ loading: true, error: null });
     try {
-      const [themes, activeTheme, customCSSData] = await Promise.all([
+      const [themes, activeTheme, customCSS] = await Promise.all([
         getThemes(),
         getActiveTheme(),
         getCustomCSS(),
       ]);
       this.setState({
         loading: false,
-        themes: themes || [],
-        activeTheme: activeTheme,
-        customCSS: customCSSData?.css || "",
+        themes: themes.themes || [],
+        activeTheme: activeTheme.name,
+        customCSS: customCSS.css || "",
+        error: null,
       });
     } catch (err) {
       console.error("[ThemesPage] load error:", err);
-      store.set("toast", { message: "Could not load themes.", type: "error" });
-      this.setState({ loading: false, error: "Failed to load themes." });
+      this.setState({ loading: false, error: "Could not load themes." });
     }
   }
 
-  async _handleActivate(name) {
+  async _handleSetActive(name) {
     this.setState({ saving: true });
     try {
-      const activeTheme = await setActiveTheme(name);
-      store.set("toast", {
-        message: `Theme "${name}" activated.`,
-        type: "success",
-      });
-
-      // Re-parse the theme so the admin UI reflects the new theme immediately
-      await parseTheme({ bust: true });
-
-      this.setState({ saving: false, activeTheme });
+      await setActiveTheme(name);
+      store.set("toast", { message: `Theme "${name}" activated.`, type: "success" });
+      this.setState({ saving: false, activeTheme: name });
     } catch (err) {
-      console.error("[ThemesPage] activate error:", err);
-      store.set("toast", {
-        message: err.message || "Failed to activate theme.",
-        type: "error",
-      });
+      store.set("toast", { message: err.message || "Failed to set theme.", type: "error" });
       this.setState({ saving: false });
     }
   }
 
   async _handleSaveCSS() {
-    const css = this._cssEditorRef ? this._cssEditorRef.getValue() : this.state.customCSS;
+    const css = this.state.customCSS;
     this.setState({ savingCSS: true });
     try {
       await updateCustomCSS(css);
-      store.set("toast", {
-        message: "Custom CSS saved successfully.",
-        type: "success",
-      });
-
-      // Refresh the theme in the UI
-      await parseTheme({ bust: true });
-
-      this.setState({ savingCSS: false, customCSS: css });
+      store.set("toast", { message: "Custom CSS saved.", type: "success" });
+      this.setState({ savingCSS: false });
     } catch (err) {
-      console.error("[ThemesPage] save css error:", err);
-      store.set("toast", {
-        message: err.message || "Failed to save custom CSS.",
-        type: "error",
-      });
+      store.set("toast", { message: err.message || "Failed to save CSS.", type: "error" });
       this.setState({ savingCSS: false });
     }
-  }
-
-  async _handleLogout() {
-    try {
-      await logout();
-    } catch {
-      /* ignore */
-    }
-    store.set("user", null);
-    navigate("/", { replace: true });
   }
 }

@@ -5,17 +5,29 @@
 .timeline-container {
     position: relative;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding-left: var(--spacing-md);
     background: var(--surface-card);
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
     overflow: hidden;
-    touch-action: none;
+    touch-action: pan-y;
 }
 
 .timeline-track-wrapper {
     position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
     height: 56px;
     cursor: grab;
+}
+
+@media (pointer: coarse) {
+    .timeline-track-wrapper {
+        height: 64px;
+    }
 }
 
 .timeline-track-wrapper::before,
@@ -79,15 +91,15 @@
 
 .timeline-center-indicator {
     position: absolute;
-    top: 0;
+    top: 36px;
     left: 50%;
     width: 2px;
-    height: 100%;
+    height: 8px;
     background: var(--color-primary);
-    opacity: 0.2;
     pointer-events: none;
     z-index: 2;
     transform: translateX(-50%);
+    border-radius: 99px;
 }
 
 /* ── Pills ────────────────────────────────────────────────────────────────── */
@@ -101,12 +113,18 @@
 .timeline-pill-group,
 .timeline-cluster {
     position: absolute;
-    top: 10px;
+    top: 8px;
     transform: translateX(-50%);
     z-index: 3;
 }
 
+.timeline-pills-mount.is-animating .timeline-pill-group,
+.timeline-pills-mount.is-animating .timeline-cluster {
+    transition: left 200ms ease-out;
+}
+
 .timeline-pill-btn {
+    position: relative;
     appearance: none;
     background: var(--surface-card);
     border: var(--border-width) solid var(--border-primary);
@@ -129,6 +147,18 @@
     align-items: center;
 }
 
+.timeline-pill-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+    width: 100%;
+    height: 100%;
+}
+
 .timeline-pill-btn:hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
@@ -147,6 +177,7 @@
 /* ── Clusters ─────────────────────────────────────────────────────────────── */
 
 .timeline-cluster-btn {
+    position: relative;
     appearance: none;
     background: var(--surface-card);
     border: var(--border-width) dashed var(--border-primary);
@@ -167,6 +198,18 @@
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.timeline-cluster-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+    width: 100%;
+    height: 100%;
 }
 
 .timeline-cluster-btn:hover {
@@ -212,9 +255,22 @@
         opacity var(--transition-fast);
 }
 
-.timeline-nav-btn.visible {
+/* Desktop: fade in on container hover when visible */
+.timeline-container:hover .timeline-nav-btn.visible {
     opacity: 1;
     pointer-events: auto;
+}
+
+/* Mobile: always visible when overflowing, smaller size */
+@media (max-width: 48em), (pointer: coarse) {
+    .timeline-nav-btn {
+        width: 28px;
+        height: 28px;
+    }
+    .timeline-nav-btn.visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 .timeline-nav-btn:hover {
@@ -345,5 +401,147 @@
     .timeline-cluster-btn,
     .timeline-nav-btn {
         transition: none !important;
+    }
+}
+
+/* ── Zoom Hint ────────────────────────────────────────────────────────────── */
+
+.timeline-zoom-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.timeline-zoom-hint.visible {
+    opacity: 1;
+}
+
+/* ── Expanded Pills (Consolidated Range Indicator) ────────────────────────── */
+
+.timeline-pill-group.expanded,
+.timeline-cluster.expanded {
+    z-index: 10;
+}
+
+.timeline-pill-group.expanded .timeline-pill-btn,
+.timeline-cluster.expanded .timeline-cluster-btn {
+    background: var(--surface-hover);
+    border-color: var(--color-primary);
+    color: var(--text-color);
+    box-shadow: var(--shadow-md);
+    gap: var(--spacing-sm);
+}
+
+/* ── Density Histogram (point-0b98.6) ────────────────────────────────────── */
+
+.timeline-histogram {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 16px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.timeline-hist-bar {
+    position: absolute;
+    bottom: 0;
+    width: 9px;
+    /* --border-subtle is undefined in some themes, which renders the bar
+       transparent. Fall back to a defined neutral so every cluster's density
+       bars stay visible — not just the active (primary-tinted) one. */
+    background: var(--text-muted, #94a3b8);
+    opacity: 0.55;
+    border-radius: 1px 1px 0 0;
+    transform: translateX(-50%);
+    transition: background-color 0.2s, opacity 0.2s, height 0.3s ease-out;
+}
+
+.timeline-hist-bar.is-active {
+    background: var(--color-primary, #2563eb);
+    opacity: 0.45;
+}
+
+/* ── Hover Tooltips (point-0b98.8) ────────────────────────────────────────── */
+
+/* ── Gesture Hint (point-0b98.7) ──────────────────────────────────────────── */
+
+.timeline-gesture-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--color-black-alpha-60);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--border-radius-lg);
+    font-size: var(--font-size-sm);
+    pointer-events: none;
+    z-index: 100;
+    transition: opacity 0.5s ease;
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+}
+
+.timeline-gesture-hint.fade-out {
+    opacity: 0;
+}
+
+/* ── All Years Pill ───────────────────────────────────────────────────────── */
+
+.timeline-cluster.all-years {
+    z-index: 4;
+}
+
+.timeline-cluster.all-years .timeline-cluster-btn {
+    border-style: solid;
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+/* ── Mobile Bottom Sheet (point-0b98.10) ──────────────────────────────────── */
+
+@media (max-width: 640px) {
+    .timeline-popover {
+        position: fixed !important;
+        top: auto !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+        transform: translateY(0);
+        animation: sheetSlideUp 0.3s ease-out;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .timeline-popover.hidden {
+        transform: translateY(100%);
+    }
+    
+    .timeline-popover-list li {
+        padding: var(--spacing-md) var(--spacing-lg);
+        font-size: var(--font-size-md);
+    }
+    
+    /* Scrim */
+    .timeline-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 1000;
+        animation: fadeIn 0.2s ease-out;
     }
 }

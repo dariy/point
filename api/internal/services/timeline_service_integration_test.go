@@ -11,18 +11,11 @@ func TestTimelineService_Timeline(t *testing.T) {
 	ctx := context.Background()
 	svc, tagSvc, postSvc, userID := setupTimelineService(t)
 
-	// 1. Setup tag hierarchy
-	// _in_timeline is already there from EnsureSystemTags
-	inTimeline, _ := svc.repo.GetTagBySlug(ctx, "_in_timeline")
-
-	// Create some year/decade tags
-	y2024, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "2024"})
-	y2023, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "2023"})
-	d2020s, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "2020s"})
-	garbage, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "not-a-year"})
-
-	// Reparent them to _in_timeline
-	_ = tagSvc.SetTagChildren(ctx, inTimeline.ID, []int64{y2024.ID, y2023.ID, d2020s.ID, garbage.ID})
+	// 1. Setup tags with Kind: "year"
+	_, _ = tagSvc.CreateTag(ctx, CreateTagParams{Name: "2024", Kind: "year"})
+	_, _ = tagSvc.CreateTag(ctx, CreateTagParams{Name: "2023", Kind: "year"})
+	_, _ = tagSvc.CreateTag(ctx, CreateTagParams{Name: "2020s", Kind: "year"})
+	_, _ = tagSvc.CreateTag(ctx, CreateTagParams{Name: "not-a-year", Kind: "year"})
 
 	// 2. Create some posts and tag them
 	p1, _, _ := postSvc.CreatePost(ctx, CreatePostParams{Title: "Post 1", Status: "published", AuthorID: userID})
@@ -87,13 +80,9 @@ func TestTimelineService_LocationsFor(t *testing.T) {
 	svc, tagSvc, postSvc, userID := setupTimelineService(t)
 
 	// Setup tags
-	y2024, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "2024"})
+	_, _ = tagSvc.CreateTag(ctx, CreateTagParams{Name: "2024", Kind: "year"})
 	berlin, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "Berlin"})
 	paris, _ := tagSvc.CreateTag(ctx, CreateTagParams{Name: "Paris"})
-
-	// InTimeline
-	inTimeline, _ := svc.repo.GetTagBySlug(ctx, "_in_timeline")
-	_ = tagSvc.SetTagChildren(ctx, inTimeline.ID, []int64{y2024.ID})
 
 	// Mark as locations
 	_ = svc.repo.UpsertTagLocation(ctx, berlin.ID, 52.5, 13.4)
