@@ -29,17 +29,24 @@ describe('PostEditPage', () => {
       activeElement: {},
       addEventListener: () => {},
       removeEventListener: () => {},
+      querySelector: () => null,
       querySelectorAll: () => []
     };
     global.window = {
         Point: { emit: () => {}, on: () => {} },
         location: { pathname: '' },
         history: { replaceState: () => {} },
+        matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
         addEventListener: () => {},
         removeEventListener: () => {},
         dispatchEvent: () => {}
     };
 
+    global.localStorage = {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {}
+    };
     const mod = await import('../src/pages/light/PostEditPage.js');
     PostEditPage = mod.default;
   });
@@ -63,10 +70,11 @@ describe('PostEditPage', () => {
     page.state.loading = false;
     page.state.isNew = false;
     page.state.deleting = true;
+    page.state.post = { status: 'published' };
     
     const html = page.render();
     assert.ok(html.includes('id="delete-btn"') && html.includes('disabled'), 'Delete button should be disabled');
-    assert.ok(html.includes('id="save-btn"') && html.includes('disabled'), 'Save button should be disabled');
+    assert.ok(html.includes('id="update-btn"') && html.includes('disabled'), 'Update button should be disabled');
     assert.ok(html.includes('id="analyze-btn"') && html.includes('disabled'), 'Analyze button should be disabled');
   });
 test('should preserve other fields when switching from visual to text mode', () => {
@@ -84,6 +92,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     setAttribute: () => {},
     value: '',
     checked: false,
+    insertAdjacentHTML: () => {},
     ...overrides
   });
 
@@ -142,6 +151,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     setAttribute: () => {},
     value: '',
     checked: false,
+    insertAdjacentHTML: () => {},
     ...overrides
   });
 
@@ -231,6 +241,53 @@ test('should preserve other fields when switching from visual to text mode', () 
     const html = page.render();
     assert.ok(html.includes('badge-danger'), 'Failed badge present');
     assert.ok(html.includes('No image'), 'Error text visible');
+  });
+
+  test('should render the Details toggle button and rail/sheet panel', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test', slug: 'test' };
+
+    const html = page.render();
+    assert.ok(html.includes('id="details-toggle"'), 'Details header toggle present');
+    assert.ok(html.includes('aria-controls="details-panel"'), 'Toggle controls the panel');
+    assert.ok(html.includes('id="details-panel"'), 'Details panel present');
+    assert.ok(html.includes('id="details-backdrop"'), 'Sheet backdrop present');
+  });
+
+  test('should render collapsible groups with summaries in spec order', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test', slug: 'my-trip' };
+    page.state.igStatus = { enabled: true, connected: true, default_share: false };
+
+    const html = page.render();
+    const order = ['data-group="status"', 'data-group="slug"', 'data-group="excerpt"', 'data-group="immersive"', 'data-group="css"', 'data-group="instagram"'];
+    let last = -1;
+    for (const marker of order) {
+      const idx = html.indexOf(marker);
+      assert.ok(idx > last, `${marker} should appear after the previous group`);
+      last = idx;
+    }
+    assert.ok(html.includes('id="summary-slug"') && html.includes('my-trip'), 'Slug summary reflects the slug');
+    assert.ok(html.includes('id="summary-excerpt"'), 'Excerpt summary present');
+  });
+
+  test('aria-hidden on the panel reflects persisted detailsOpen state', () => {
+    const container = { querySelector: () => null, querySelectorAll: () => [] };
+    const page = new PostEditPage(container, { params: { id: '1' } });
+    page.state.loading = false;
+    page.state.isNew = false;
+    page.state.post = { id: 1, title: 'Test' };
+
+    page.state.detailsOpen = true;
+    assert.ok(page.render().includes('aria-hidden="false"'), 'panel visible when open');
+    page.state.detailsOpen = false;
+    assert.ok(page.render().includes('aria-hidden="true"'), 'panel hidden when closed');
   });
 
   test('should use default_share for new posts when igStatus loaded', () => {

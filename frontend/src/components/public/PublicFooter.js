@@ -7,7 +7,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml, navigate } from "../../utils/helpers.js";
+import { escapeHtml } from "../../utils/helpers.js";
 import {
   renderTagLink,
   buildTagIndex,
@@ -22,8 +22,12 @@ import {
   EXIF_ISO_SVG,
   EXIF_CAMERA_SVG,
   EXIF_MODEL_SVG,
+  RSS_SVG,
+  SUN_SVG,
+  MOON_SVG,
 } from "../../utils/icons.js";
 import { store } from "../../store.js";
+import { ViewContext } from "../../utils/viewContext.js";
 
 // Fields shown publicly, in display order.
 // icon: SVG string; fmt: optional value formatter.
@@ -108,25 +112,58 @@ export class PublicFooter extends Component {
       centerSlot = `<div id="pagination-mount"></div>`;
     }
 
+    // About (author link in .footer-copyright), Map and All tags (header
+    // buttons) already have canonical entry points elsewhere, so the footer
+    // actions only carry what isn't reachable from the chrome: RSS and the
+    // theme toggle (moved here from the header).
+    const rssButton =
+      settings.enable_rss !== false
+        ? `<a href="/feed.xml" target="_blank" rel="noopener" class="footer-action-btn" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
+        : "";
+
+    const themeToggle = `<button class="footer-action-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
+                <span class="icon-sun">${SUN_SVG}</span>
+                <span class="icon-moon">${MOON_SVG}</span>
+              </button>`;
+
     return `
       <footer class="site-footer">
         <div class="footer-container">
           <div class="footer-content">
-            <p class="footer-copyright">
-              <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>` : ""}
-            </p>
-            ${centerSlot}
+            <div class="footer-left">
+              <p class="footer-copyright">
+                <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>` : ""}
+              </p>
+            </div>
+            <div class="footer-center">
+              ${centerSlot}
+            </div>
+            <div class="footer-right">
+              <div class="footer-actions">
+                ${rssButton}
+                ${themeToggle}
+              </div>
+            </div>
           </div>
         </div>
       </footer>`;
   }
 
   afterRender() {
+    // Theme toggle (moved here from the header; always visible in the footer).
+    this.$("#theme-toggle")?.addEventListener("click", () => {
+      const current = store.get("theme") || "auto";
+      store.set("theme", current === "dark" ? "light" : "dark");
+    });
+
     const tagsEl = this.$(".immersive-tags");
     if (!tagsEl) return;
     const navTags = store.get("navTags") || [];
     const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
-    this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndex, navigate);
+    this._cleanupFlyout = setupTagFlyout(tagsEl, tagIndex, (url) => {
+      const slug = url.replace("/tags/", "");
+      ViewContext.update({ tag: slug, postSlug: null, query: null });
+    });
 
     const pill = tagsEl.querySelector(".exif-pill");
     if (pill) this._setupExifPill(pill);

@@ -2,6 +2,27 @@
  * Global Map Styles
  */
 
+/* Error state shown when the map data fetch fails */
+.map-fetch-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-2xl) var(--spacing-xl);
+    margin: var(--spacing-2xl) auto;
+    max-width: 28rem;
+    text-align: center;
+    color: var(--color-danger);
+    background-color: var(--color-danger-alpha-08);
+    border: var(--border-width) solid var(--color-danger-alpha-25);
+    border-radius: var(--border-radius);
+}
+
+.map-fetch-error__message {
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
 .map-container {
     height: calc(100vh - var(--map-container-height));
     min-height: var(--map-container-min-height);

@@ -1,3 +1,107 @@
+/* Dashboard Layout Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: var(--spacing-xl);
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dashboard-main {
+    min-width: 0;
+}
+
+.dashboard-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+}
+
+/* Compose Strip */
+.compose-strip-card {
+    margin-bottom: var(--spacing-xl);
+}
+
+.compose-strip {
+    display: flex;
+    flex-direction: column;
+}
+
+.compose-textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: var(--spacing-md);
+    border: none;
+    background: transparent;
+    font-size: var(--font-size-lg);
+    color: var(--text-primary);
+    resize: none;
+    overflow-y: hidden;
+}
+
+.compose-textarea:focus {
+    outline: none;
+}
+
+.compose-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--surface-default);
+    border-top: 1px solid var(--border-primary);
+    border-bottom-left-radius: var(--border-radius-lg);
+    border-bottom-right-radius: var(--border-radius-lg);
+}
+
+/* Continue Writing */
+.drafts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.drafts-list li {
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.drafts-list li:last-child {
+    border-bottom: none;
+}
+
+.draft-stub {
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-md) 0;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: color 0.2s;
+}
+
+.draft-stub:hover {
+    color: var(--color-primary);
+}
+
+.draft-title {
+    font-weight: 500;
+}
+
+.draft-date {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.card-footer-actions {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--border-primary);
+}
+
 /* ===========================
    Dashboard
    =========================== */

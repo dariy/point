@@ -21,7 +21,6 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	fences "github.com/stefanfritsch/goldmark-fences"
 	"github.com/yuin/goldmark"
-	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
@@ -32,6 +31,7 @@ type PostService struct {
 	repo             repository.Repository
 	settingsService  *SettingsService
 	instagramService *InstagramService
+	tagService       *TagService
 	appURL           string
 	md               goldmark.Markdown
 	policy           *bluemonday.Policy
@@ -39,7 +39,7 @@ type PostService struct {
 	viewMu           sync.Mutex
 }
 
-func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService, appURL string) *PostService {
+func NewPostService(repo repository.Repository, settingsService *SettingsService, instagramService *InstagramService, tagService *TagService, appURL string) *PostService {
 	var blockParsers []util.PrioritizedValue
 	for _, p := range parser.DefaultBlockParsers() {
 		if p.Priority != 100 {
@@ -60,9 +60,6 @@ func NewPostService(repo repository.Repository, settingsService *SettingsService
 			extension.Typographer,
 			attributes.Extension,
 			&fences.Extender{},
-			highlighting.NewHighlighting(
-				highlighting.WithStyle("monokai"),
-			),
 		),
 		goldmark.WithRendererOptions(
 			html.WithHardWraps(),
@@ -133,6 +130,7 @@ func NewPostService(repo repository.Repository, settingsService *SettingsService
 		repo:             repo,
 		settingsService:  settingsService,
 		instagramService: instagramService,
+		tagService:       tagService,
 		appURL:           strings.TrimSuffix(strings.TrimSpace(appURL), "/"),
 		md:               md,
 		policy:           policy,
@@ -250,16 +248,17 @@ func (s *PostService) RenderContent(content string) (string, error) {
 }
 
 type ListPostsParams struct {
-	Page          int32
-	PerPage       int32
-	Status        string
-	FeaturedOnly  bool
-	IncludeDrafts bool
-	IncludeHidden bool
-	Search        string
-	YearFrom      int
-	YearTo        int
-	SortBy        string
+        Page          int32
+        PerPage       int32
+        Status        string
+        FeaturedOnly  bool
+        IncludeDrafts bool
+        IncludeHidden bool
+        Search        string
+        Tag           string
+        YearFrom      int
+        YearTo        int
+        SortBy        string
 }
 
 func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]models.Post, int64, error) {
@@ -292,12 +291,12 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 			return nil, 0, err
 		}
 		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
-	} else if p.Search != "" {
-		posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, int64(p.PerPage), int64(offset))
-		if err != nil {
-			return nil, 0, err
-		}
-		total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search)
+	} else if p.Search != "" || p.Tag != "" {
+	        posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, int64(p.PerPage), int64(offset))
+	        if err != nil {
+	                return nil, 0, err
+	        }
+	        total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag)
 	} else {
 		if p.SortBy == "views" {
 			posts, err = s.repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
@@ -362,6 +361,7 @@ type CreatePostParams struct {
 	Slug            string
 	Formatter       string
 	Status          string
+	Type            string
 	IsFeatured      bool
 	AuthorID        int64
 	ThumbnailPath   string
@@ -377,6 +377,10 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 
 	sanitizedCSS, strippedProps := SanitizePostCSS(p.CSS)
 
+	if p.Type == "" {
+		p.Type = "post"
+	}
+
 	post, err := s.repo.CreatePost(ctx, models.CreatePostParams{
 		Title:           p.Title,
 		Slug:            p.Slug,
@@ -387,6 +391,7 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
+		Type:            p.Type,
 		IsFeatured:      p.IsFeatured,
 		AuthorID:        p.AuthorID,
 		ThumbnailPath:   sql.NullString{String: p.ThumbnailPath, Valid: p.ThumbnailPath != ""},
@@ -420,6 +425,9 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 
 	// Update tag counts
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
 
 	return post, strippedProps, nil
 }
@@ -475,6 +483,7 @@ type UpdatePostParams struct {
 	Slug            string
 	Formatter       string
 	Status          string
+	Type            string
 	IsFeatured      bool
 	ThumbnailPath   string
 	MetaDescription string
@@ -489,6 +498,10 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 
 	sanitizedCSS, strippedProps := SanitizePostCSS(p.CSS)
 
+	if p.Type == "" {
+		p.Type = "post"
+	}
+
 	post, err := s.repo.UpdatePost(ctx, models.UpdatePostParams{
 		Title:           p.Title,
 		Slug:            p.Slug,
@@ -499,6 +512,7 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		Excerpt:         sql.NullString{String: p.Excerpt, Valid: p.Excerpt != ""},
 		Formatter:       p.Formatter,
 		Status:          p.Status,
+		Type:            p.Type,
 		IsFeatured:      p.IsFeatured,
 		ThumbnailPath:   sql.NullString{String: p.ThumbnailPath, Valid: p.ThumbnailPath != ""},
 		MetaDescription: sql.NullString{String: p.MetaDescription, Valid: p.MetaDescription != ""},
@@ -521,6 +535,9 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 	}
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
 
 	return post, strippedProps, nil
 }
@@ -541,10 +558,13 @@ func (s *PostService) UpdatePostTags(ctx context.Context, postID int64, tagNames
 	}
 
 	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
 	return nil
 }
 
-// getOrCreateTag looks up a tag by slug, creating it if absent and auto-assigning _pending.
+// getOrCreateTag looks up a tag by slug, creating it (parentless, i.e. Unfiled) if absent.
 func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.Tag, error) {
 	slug := utils.Slugify(name)
 	tag, err := s.repo.GetTagBySlug(ctx, slug)
@@ -552,17 +572,7 @@ func (s *PostService) getOrCreateTag(ctx context.Context, name string) (models.T
 		return tag, nil
 	}
 	tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{Name: name, Slug: slug})
-	if err != nil {
-		return tag, err
-	}
-	// Auto-assign to _pending so new tags appear in the admin tree.
-	if pending, perr := s.repo.GetTagBySlug(ctx, "_pending"); perr == nil {
-		_ = s.repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{
-			ParentID: pending.ID,
-			ChildID:  tag.ID,
-		})
-	}
-	return tag, nil
+	return tag, err
 }
 
 func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status string) (models.Post, error) {
@@ -590,19 +600,45 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 	}
 
 	// published_at logic handled in repository.UpdatePost based on status
-	return s.repo.UpdatePost(ctx, params)
+	post, err = s.repo.UpdatePost(ctx, params)
+	if err == nil {
+		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
+	return post, err
 }
 
 func (s *PostService) SoftDeletePost(ctx context.Context, id, authorID int64) error {
-	return s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID})
+	if err := s.repo.SoftDeletePost(ctx, models.SoftDeletePostParams{ID: id, AuthorID: authorID}); err != nil {
+		return err
+	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
+	return nil
 }
 
 func (s *PostService) RestorePost(ctx context.Context, id, authorID int64) error {
-	return s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID})
+	if err := s.repo.RestorePost(ctx, models.RestorePostParams{ID: id, AuthorID: authorID}); err != nil {
+		return err
+	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
+	return nil
 }
 
 func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID int64) error {
-	return s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID})
+	if err := s.repo.DeletePost(ctx, models.DeletePostParams{ID: id, AuthorID: authorID}); err != nil {
+		return err
+	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil {
+		s.tagService.Invalidate()
+	}
+	return nil
 }
 
 func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32) ([]models.Post, int64, error) {
@@ -629,6 +665,8 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 	if err != nil {
 		return post, err
 	}
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	if s.tagService != nil { s.tagService.Invalidate() }
 	if s.settingsService != nil && post.InstagramShare {
 		enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
 		if enabledStr == "true" || enabledStr == "1" {
@@ -643,7 +681,12 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {
-	return s.repo.WithdrawPost(ctx, id)
+	post, err := s.repo.WithdrawPost(ctx, id)
+	if err == nil {
+		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		if s.tagService != nil { s.tagService.Invalidate() }
+	}
+	return post, err
 }
 
 // GeneratePreviewLink creates a preview token for a post valid for 7 days.
@@ -693,6 +736,7 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 	}
 	if len(published) > 0 {
 		_ = s.repo.UpdateAllTagPostCounts(ctx)
+		if s.tagService != nil { s.tagService.Invalidate() }
 		fmt.Printf("Scheduled publishing: published %d post(s)\n", len(published))
 		if s.settingsService != nil {
 			enabledStr, _ := s.settingsService.GetSetting(ctx, "enable_instagram", "false")
@@ -817,9 +861,7 @@ func (s *PostService) expandCaptionTemplate(ctx context.Context, template string
 	tags, _ := s.repo.GetTagsForPost(ctx, post.ID)
 	var tagStrings []string
 	for _, t := range tags {
-		if !strings.HasPrefix(t.Slug, "_") {
-			tagStrings = append(tagStrings, "#"+t.Name)
-		}
+		tagStrings = append(tagStrings, "#"+t.Name)
 	}
 	res = strings.ReplaceAll(res, "{tags}", strings.Join(tagStrings, " "))
 

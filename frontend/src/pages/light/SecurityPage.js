@@ -5,16 +5,16 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import {
   getSessions, deleteSession, deleteAllOtherSessions,
-  changePassword, logout,
+  changePassword,
   getPasskeyStatus, registerPasskey, deletePasskey,
-  getApiKeys, createApiKey, revokeApiKey, deleteApiKey
+  getApiKeys, createApiKey, deleteApiKey
 } from '../../api/auth.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
 
 export default class SecurityPage extends Component {
@@ -33,39 +33,43 @@ export default class SecurityPage extends Component {
   }
 
   render() {
+    return adminLayoutTemplate({
+      title: 'Security',
+      content: this._renderContent()
+    });
+  }
+
+  _renderContent() {
     const {
       loading, error, sessions, changingPassword,
       passkeySupported, passkeyStatus, passkeyWorking,
       apiKeys
     } = this.state;
 
-    const apiKeyList = loading
-      ? `<div class="loading-spinner" aria-label="Loading API keys…"></div>`
-      : !apiKeys.length
+    if (loading) return '<div class="loading-spinner" aria-label="Loading security info…"></div>';
+    if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
+
+    const apiKeyList = !apiKeys.length
         ? `<p class="empty-state">No API keys found.</p>`
         : `
           <div class="table-container">
             <table class="table">
               <thead>
                 <tr>
-                  <th>Name / Prefix</th><th>Last Used</th><th>Created</th><th>Actions</th>
+                  <th>Name</th>
+                  <th>Key Prefix</th>
+                  <th>Created</th>
+                  <th class="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 ${apiKeys.map(k => `
-                  <tr ${k.revoked_at ? 'class="revoked-row"' : ''}>
-                    <td>
-                      <div class="key-name"><strong>${escapeHtml(k.name)}</strong></div>
-                      <div class="key-prefix"><code style="font-size: 0.85em">${escapeHtml(k.prefix)}...</code></div>
-                      ${k.revoked_at ? '<span class="badge badge-danger">Revoked</span>' : ''}
-                    </td>
-                    <td>${k.last_used_at ? escapeHtml(formatDateShort(k.last_used_at)) : 'Never'}</td>
+                  <tr>
+                    <td><strong>${escapeHtml(k.name)}</strong></td>
+                    <td><code class="font-mono">${escapeHtml(k.prefix)}\u2026</code></td>
                     <td>${escapeHtml(formatDateShort(k.created_at))}</td>
-                    <td>
-                      ${!k.revoked_at
-                        ? `<button class="btn btn-sm btn-secondary revoke-key-btn" data-id="${k.id}">Revoke</button>`
-                        : `<button class="btn btn-sm btn-danger delete-key-btn" data-id="${k.id}">Delete</button>`
-                      }
+                    <td class="text-right">
+                      <button class="btn btn-sm btn-danger delete-api-key-btn" data-id="${k.id}" title="Delete">Delete</button>
                     </td>
                   </tr>
                 `).join('')}
@@ -73,192 +77,244 @@ export default class SecurityPage extends Component {
             </table>
           </div>`;
 
-    const sessionList = loading
-      ? `<div class="loading-spinner" aria-label="Loading sessions…"></div>`
-      : error
-        ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
-        : !sessions.length
-          ? `<p class="empty-state">No active sessions found.</p>`
-          : `
+    return `
+      <div class="security-grid">
+        <section class="card">
+          <div class="card-header"><h2>Change Password</h2></div>
+          <div class="card-body">
+            <form id="change-password-form">
+              <div class="form-group">
+                <label class="form-label" for="old-password">Current Password</label>
+                <input type="password" id="old-password" class="form-input" required autocomplete="current-password">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="new-password">New Password</label>
+                <input type="password" id="new-password" class="form-input" required autocomplete="new-password">
+              </div>
+              <button type="submit" class="btn btn-primary" ${changingPassword ? 'disabled' : ''}>
+                ${changingPassword ? 'Updating…' : 'Update Password'}
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header"><h2>Passkeys (WebAuthn)</h2></div>
+          <div class="card-body">
+            ${!passkeySupported ? '<p class="text-muted">Passkeys are not supported by this browser.</p>' : `
+              ${passkeyStatus?.registered ? `
+                <div class="passkey-status success">
+                  <p>Passkey is registered.</p>
+                  <button id="delete-passkey-btn" class="btn btn-sm btn-danger" ${passkeyWorking ? 'disabled' : ''}>Remove Passkey</button>
+                </div>
+              ` : `
+                <p>Register a passkey for faster, more secure login.</p>
+                <button id="register-passkey-btn" class="btn btn-primary" ${passkeyWorking ? 'disabled' : ''}>Register Passkey</button>
+              `}
+            `}
+          </div>
+        </section>
+
+        <section class="card security-full-width">
+          <div class="card-header">
+            <h2>Active Sessions</h2>
+            <button id="logout-others-btn" class="btn btn-sm btn-secondary">Logout All Other Sessions</button>
+          </div>
+          <div class="card-body">
             <div class="table-container">
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Device / IP</th><th>Last Active</th><th>Actions</th>
+                    <th>Device / Browser</th>
+                    <th>Last Active</th>
+                    <th class="text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${sessions.map(s => `
-                    <tr ${s.is_current ? 'class="current-session"' : ''}>
+                    <tr class="${s.is_current ? 'session-current' : ''}">
                       <td>
-                        <div class="session-ua">${escapeHtml(s.user_agent || 'Unknown Device')}</div>
-                        <div class="session-ip"><small>${escapeHtml(s.ip_address || 'Unknown IP')}</small></div>
-                        ${s.is_current ? '<span class="badge badge-primary">Current</span>' : ''}
+                        <strong>${escapeHtml(s.ua_browser || 'Unknown')} on ${escapeHtml(s.ua_os || 'Unknown')}</strong>
+                        ${s.is_current ? ' <span class="badge badge-success">Current</span>' : ''}
                       </td>
-                      <td>${escapeHtml(formatDateShort(s.last_active_at))}</td>
-                      <td>
-                        ${s.is_current
-                          ? '—'
-                          : `<button class="btn btn-sm btn-danger delete-session-btn" data-id="${s.id}">Revoke</button>`
-                        }
+                      <td>${escapeHtml(formatDateShort(s.last_active))}</td>
+                      <td class="text-right">
+                        ${!s.is_current ? `<button class="btn btn-sm btn-danger delete-session-btn" data-id="${s.id}">Logout</button>` : ''}
                       </td>
                     </tr>
                   `).join('')}
                 </tbody>
               </table>
-            </div>`;
-
-    return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <h1>Security</h1>
-          </header>
-          <main class="light-content">
-
-            <div class="card" style="margin-bottom: var(--spacing-xl)">
-              <div class="card-header"><h2>Change Password</h2></div>
-              <div class="card-body">
-                <form id="password-form">
-                  <div class="form-group">
-                    <label for="current-password">Current Password</label>
-                    <input type="password" id="current-password" class="form-input" required autocomplete="current-password">
-                  </div>
-                  <div class="form-group">
-                    <label for="new-password">New Password</label>
-                    <input type="password" id="new-password" class="form-input" required autocomplete="new-password" minlength="8">
-                  </div>
-                  <div class="form-group">
-                    <label for="confirm-password">Confirm New Password</label>
-                    <input type="password" id="confirm-password" class="form-input" required autocomplete="new-password">
-                  </div>
-                  <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" ${changingPassword ? 'disabled' : ''}>
-                      ${changingPassword ? 'Changing…' : 'Update Password'}
-                    </button>
-                  </div>
-                </form>
-              </div>
             </div>
+          </div>
+        </section>
 
-            ${passkeySupported && passkeyStatus?.configured !== false ? `
-            <div class="card" style="margin-bottom: var(--spacing-xl)">
-              <div class="card-header"><h2>Passkeys</h2></div>
-              <div class="card-body">
-                ${passkeyStatus === null
-                  ? `<div class="loading-spinner" aria-label="Loading passkey status…"></div>`
-                  : passkeyStatus.has_passkey
-                    ? `
-                      <p>A passkey is registered on this account. You can use it to sign in without a password.</p>
-                      <button id="remove-passkey-btn" class="btn btn-sm btn-danger" ${passkeyWorking ? 'disabled' : ''}>
-                        ${passkeyWorking ? 'Removing…' : 'Remove Passkey'}
-                      </button>`
-                    : `
-                      <p>No passkey registered. Register a passkey to sign in with biometrics or a hardware key.</p>
-                      <button id="add-passkey-btn" class="btn btn-sm btn-primary" ${passkeyWorking ? 'disabled' : ''}>
-                        ${passkeyWorking ? 'Registering…' : 'Register Passkey'}
-                      </button>`
-                }
-              </div>
-            </div>` : ''}
-
-            <div class="card" style="margin-bottom: var(--spacing-xl)">
-              <div class="card-header">
-                <h2>API Keys</h2>
-                <div class="header-actions">
-                  <button id="add-key-btn" class="btn btn-sm btn-primary">Generate New Key</button>
-                </div>
-              </div>
-              <div class="card-body">
-                <p class="text-muted" style="margin-bottom: var(--spacing-md)">
-                  API keys allow programmatic access to your blog. They should be treated as securely as your password.
-                </p>
-                ${apiKeyList}
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="card-header">
-                <h2>Active Sessions</h2>
-                <div class="header-actions">
-                  <button id="revoke-all-btn" class="btn btn-sm btn-secondary">Revoke All Others</button>
-                </div>
-              </div>
-              <div class="card-body">
-                ${sessionList}
-              </div>
-            </div>
-
-          </main>
-        </div>
+        <section class="card security-full-width">
+          <div class="card-header">
+            <h2>API Keys</h2>
+            <button id="create-api-key-btn" class="btn btn-sm btn-primary">Create New API Key</button>
+          </div>
+          <div class="card-body">
+            ${apiKeyList}
+          </div>
+        </section>
       </div>`;
   }
 
   afterRender() {
-    this.mountChild(LightSidebar, '#sidebar-mount', {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: '/light/security',
-      user: store.get('user') || {},
-      onLogout: this._handleLogout.bind(this),
     });
 
-    if (this.state.loading && !this.state.error) return;
+    if (this.state.loading || this.state.error) return;
 
-    // Password form
-    this.$('#password-form')?.addEventListener('submit', (e) => {
+    this.container.querySelector('#change-password-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      this._handlePasswordChange();
+      this._handleChangePassword();
     });
 
-    // Revoke individual session
-    this.$$('.delete-session-btn').forEach(btn => {
+    this.container.querySelector('#logout-others-btn')?.addEventListener('click', () => {
+      this._showConfirm('Logout others', 'Logout all other active sessions?', 'Logout Others', 'danger', () => {
+        this._handleLogoutOthers();
+      });
+    });
+
+    this.container.querySelectorAll('.delete-session-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.id, 10);
-        this._handleRevoke(id);
+        this._handleDeleteSession(btn.dataset.id);
       });
     });
 
-    // API Key actions
-    this.$('#add-key-btn')?.addEventListener('click', () => this._handleCreateApiKey());
+    this.container.querySelector('#register-passkey-btn')?.addEventListener('click', () => this._handleRegisterPasskey());
+    this.container.querySelector('#delete-passkey-btn')?.addEventListener('click', () => this._handleDeletePasskey());
 
-    this.$$('.revoke-key-btn').forEach(btn => {
+    this.container.querySelector('#create-api-key-btn')?.addEventListener('click', () => this._handleCreateApiKey());
+    this.container.querySelectorAll('.delete-api-key-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.id, 10);
-        this._showConfirm('Revoke API Key', 'Revoke this API key? Any applications using it will no longer be able to authenticate.', 'Revoke', 'danger', () => {
-          this._handleRevokeApiKey(id);
-        });
+        this._handleDeleteApiKey(btn.dataset.id);
       });
     });
+  }
 
-    this.$$('.delete-key-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.id, 10);
-        this._showConfirm('Delete API Key Record', 'Permanently delete this API key record from history?', 'Delete', 'danger', () => {
-          this._handleDeleteApiKey(id);
-        });
-      });
-    });
-
-    // Passkey actions
-    this.$('#add-passkey-btn')?.addEventListener('click', () => this._handleAddPasskey());
-    this.$('#remove-passkey-btn')?.addEventListener('click', () => {
-      this._showConfirm('Remove passkey', 'Remove the registered passkey? You will only be able to sign in with your password.', 'Remove', 'danger', () => {
-        this._handleRemovePasskey();
-      });
-    });
-
-    // Revoke all other sessions
-    this.$('#revoke-all-btn')?.addEventListener('click', () => {
-      this._showConfirm('Revoke all sessions', 'Revoke all other active sessions? You will remain logged in on this device.', 'Revoke', 'danger', () => {
-        this._handleRevokeAll();
-      });
-    });
+  beforeUnmount() {
+    this._cleanupAdminLayout?.();
   }
 
   mount() {
     super.mount();
     this._load();
-    if (this.state.passkeySupported) this._loadPasskeyStatus();
+  }
+
+  async _load() {
+    try {
+      const [sessions, passkeyStatus, apiKeys] = await Promise.all([
+        getSessions(),
+        this.state.passkeySupported ? getPasskeyStatus() : Promise.resolve(null),
+        getApiKeys()
+      ]);
+      this.setState({
+        loading: false,
+        sessions: sessions.sessions || [],
+        passkeyStatus,
+        apiKeys: apiKeys.keys || [],
+        error: null
+      });
+    } catch (err) {
+      console.error('[SecurityPage] load error:', err);
+      this.setState({ loading: false, error: 'Could not load security information.' });
+    }
+  }
+
+  async _handleChangePassword() {
+    const oldEl = this.container.querySelector('#old-password');
+    const newEl = this.container.querySelector('#new-password');
+    const oldPassword = oldEl.value;
+    const newPassword = newEl.value;
+
+    this.setState({ changingPassword: true });
+    try {
+      await changePassword(oldPassword, newPassword);
+      store.set('toast', { message: 'Password updated successfully.', type: 'success' });
+      oldEl.value = '';
+      newEl.value = '';
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to update password.', type: 'error' });
+    } finally {
+      this.setState({ changingPassword: false });
+    }
+  }
+
+  async _handleLogoutOthers() {
+    try {
+      await deleteAllOtherSessions();
+      store.set('toast', { message: 'Other sessions logged out.', type: 'success' });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to logout other sessions.', type: 'error' });
+    }
+  }
+
+  async _handleDeleteSession(id) {
+    try {
+      await deleteSession(id);
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to delete session.', type: 'error' });
+    }
+  }
+
+  async _handleRegisterPasskey() {
+    this.setState({ passkeyWorking: true });
+    try {
+      await registerPasskey();
+      store.set('toast', { message: 'Passkey registered.', type: 'success' });
+      this._load();
+    } catch (err) {
+      if (err.name !== 'NotAllowedError') {
+        store.set('toast', { message: err.message || 'Failed to register passkey.', type: 'error' });
+      }
+    } finally {
+      this.setState({ passkeyWorking: false });
+    }
+  }
+
+  async _handleDeletePasskey() {
+    if (!confirm('Remove passkey? You will need to use your password to login.')) return;
+    this.setState({ passkeyWorking: true });
+    try {
+      await deletePasskey();
+      store.set('toast', { message: 'Passkey removed.', type: 'success' });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to remove passkey.', type: 'error' });
+    } finally {
+      this.setState({ passkeyWorking: false });
+    }
+  }
+
+  async _handleCreateApiKey() {
+    const name = prompt('Enter a name for the new API key:');
+    if (!name) return;
+
+    try {
+      const result = await createApiKey(name);
+      this._showConfirm('API Key Created', `Please copy your API key now. It will not be shown again:\n\n${result.key}`, 'Copy to Clipboard', 'primary', () => {
+        navigator.clipboard.writeText(result.key);
+      });
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to create API key.', type: 'error' });
+    }
+  }
+
+  async _handleDeleteApiKey(id) {
+    if (!confirm('Permanently delete this API key? Applications using it will lose access.')) return;
+    try {
+      await deleteApiKey(id);
+      this._load();
+    } catch (err) {
+      store.set('toast', { message: err.message || 'Failed to delete API key.', type: 'error' });
+    }
   }
 
   _showConfirm(title, message, confirmText, variant, onConfirm) {
@@ -273,162 +329,5 @@ export default class SecurityPage extends Component {
       onCancel:  () => { dialog.unmount(); mount.remove(); },
     });
     dialog.mount();
-  }
-
-  async _load() {
-    this.setState({ loading: true, error: null });
-    try {
-      const [sessionData, apiKeyData] = await Promise.all([
-        getSessions(),
-        getApiKeys()
-      ]);
-      this.setState({
-        loading: false,
-        sessions: sessionData.sessions || [],
-        apiKeys: apiKeyData.api_keys || []
-      });
-    } catch (err) {
-      console.error('[SecurityPage] load error:', err);
-      store.set('toast', { message: 'Could not load security data.', type: 'error' });
-      this.setState({ loading: false, sessions: [], apiKeys: [] });
-    }
-  }
-
-  async _handleCreateApiKey() {
-    const name = window.prompt('Enter a name for this API key (e.g. "Mobile App", "CI/CD"):');
-    if (!name) return;
-
-    try {
-      const { api_key, raw_key } = await createApiKey(name);
-      
-      // Show raw key modal
-      const mount = document.createElement('div');
-      document.body.appendChild(mount);
-      const dialog = new ConfirmDialog(mount, {
-        title: 'API Key Created',
-        allowHtml: true,
-        message: `
-          <p>Your new API key <strong>"${escapeHtml(api_key.name)}"</strong> has been generated.</p>
-          <div class="alert alert-warning" style="margin: var(--spacing-md) 0">
-            <strong>CRITICAL:</strong> This is the only time you will see this key. Copy it now and store it securely.
-          </div>
-          <div class="form-group">
-            <input type="text" class="form-input" value="${escapeHtml(raw_key)}" readonly onclick="this.select()" style="font-family: monospace; font-size: 0.9em; background: var(--bg-secondary)">
-          </div>
-        `,
-        confirmText: 'I have saved the key',
-        variant: 'primary',
-        onConfirm: () => { dialog.unmount(); mount.remove(); this._load(); },
-        onCancel:  () => { dialog.unmount(); mount.remove(); this._load(); },
-      });
-      dialog.mount();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to create API key.', type: 'error' });
-    }
-  }
-
-  async _handleRevokeApiKey(id) {
-    try {
-      await revokeApiKey(id);
-      store.set('toast', { message: 'API key revoked.', type: 'success' });
-      this._load();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Revoke failed.', type: 'error' });
-    }
-  }
-
-  async _handleDeleteApiKey(id) {
-    try {
-      await deleteApiKey(id);
-      store.set('toast', { message: 'API key record deleted.', type: 'success' });
-      this._load();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
-    }
-  }
-
-  async _handlePasswordChange() {
-    const currentPass = this.$('#current-password')?.value;
-    const newPass     = this.$('#new-password')?.value;
-    const confirmPass = this.$('#confirm-password')?.value;
-
-    if (newPass !== confirmPass) {
-      store.set('toast', { message: 'New passwords do not match.', type: 'error' });
-      return;
-    }
-
-    this.setState({ changingPassword: true });
-    try {
-      await changePassword(currentPass, newPass);
-      store.set('toast', { message: 'Password updated successfully.', type: 'success' });
-      this.$('#password-form')?.reset();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to change password.', type: 'error' });
-    } finally {
-      this.setState({ changingPassword: false });
-    }
-  }
-
-  async _handleRevoke(id) {
-    try {
-      await deleteSession(id);
-      store.set('toast', { message: 'Session revoked.', type: 'success' });
-      this._load();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Revoke failed.', type: 'error' });
-    }
-  }
-
-  async _handleRevokeAll() {
-    try {
-      await deleteAllOtherSessions();
-      store.set('toast', { message: 'Other sessions revoked.', type: 'success' });
-      this._load();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Revoke failed.', type: 'error' });
-    }
-  }
-
-  async _loadPasskeyStatus() {
-    try {
-      const status = await getPasskeyStatus();
-      this.setState({ passkeyStatus: status });
-    } catch {
-      this.setState({ passkeyStatus: { has_passkey: false, configured: false } });
-    }
-  }
-
-  async _handleAddPasskey() {
-    this.setState({ passkeyWorking: true });
-    try {
-      await registerPasskey();
-      store.set('toast', { message: 'Passkey registered successfully.', type: 'success' });
-      await this._loadPasskeyStatus();
-    } catch (err) {
-      if (err?.name !== 'NotAllowedError') {
-        store.set('toast', { message: err?.message || 'Failed to register passkey.', type: 'error' });
-      }
-    } finally {
-      this.setState({ passkeyWorking: false });
-    }
-  }
-
-  async _handleRemovePasskey() {
-    this.setState({ passkeyWorking: true });
-    try {
-      await deletePasskey();
-      store.set('toast', { message: 'Passkey removed.', type: 'success' });
-      await this._loadPasskeyStatus();
-    } catch (err) {
-      store.set('toast', { message: err?.message || 'Failed to remove passkey.', type: 'error' });
-    } finally {
-      this.setState({ passkeyWorking: false });
-    }
-  }
-
-  async _handleLogout() {
-    try { await logout(); } catch { /* ignore */ }
-    store.set('user', null);
-    navigate('/', { replace: true });
   }
 }

@@ -7,7 +7,7 @@
  *  3. Offline API and Image serving.
  */
 
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
@@ -197,6 +197,19 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request).catch(() => caches.match("/assets/css/common/theme.css")),
     );
+    return;
+  }
+
+  // 5c. Real server-served files (RSS feed, sitemap, robots). These are NOT SPA
+  // routes — let them hit the network so the backend serves the actual file
+  // instead of the cached app shell.
+  if (
+    url.pathname === "/feed" ||
+    url.pathname === "/feed.xml" ||
+    url.pathname === "/sitemap.xml" ||
+    url.pathname === "/robots.txt"
+  ) {
+    event.respondWith(fetch(request));
     return;
   }
 

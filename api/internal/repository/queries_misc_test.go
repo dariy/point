@@ -9,7 +9,7 @@ import (
 )
 
 func TestRepository_Extra(t *testing.T) {
-	repo := setupTestDB(t)
+	repo := setupNewSchemaTestDB(t)
 	defer func() {
 		_ = repo.Close()
 	}()
@@ -89,7 +89,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	if _, err := repo.GetTagsByPostIDs(ctx, []int64{1}); err == nil {
 		t.Error("GetTagsByPostIDs: expected error")
 	}
-	if _, err := repo.GetYearTagsByLocationTagIDs(ctx, []int64{1}, 1); err == nil {
+	if _, err := repo.GetYearTagsByLocationTagIDs(ctx, []int64{1}); err == nil {
 		t.Error("GetYearTagsByLocationTagIDs: expected error")
 	}
 	if _, err := repo.GetTagLocationsByTagIDs(ctx, []int64{1}); err == nil {
@@ -128,7 +128,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	if err := repo.SetMediaPublic(ctx, 1, true, nil); err == nil {
 		t.Error("SetMediaPublic: expected error")
 	}
-	if _, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "test", 10, 0); err == nil {
+	if _, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, "test", "", 10, 0); err == nil {
 		t.Error("ListPostsWithSearch: expected error")
 	}
 	if _, err := repo.CountPostsByTagIDs(ctx, []int64{1}, true, false, false); err == nil {

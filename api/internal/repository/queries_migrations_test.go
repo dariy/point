@@ -145,6 +145,8 @@ func TestRepository_MigrateWithOldSchema(t *testing.T) {
 	ctx := context.Background()
 
 	boolCols := []string{
+		"ALTER TABLE tags ADD COLUMN custom_url VARCHAR(200)",
+		"ALTER TABLE tags ADD COLUMN sort_order INTEGER",
 		"ALTER TABLE tags ADD COLUMN is_important BOOLEAN NOT NULL DEFAULT 0",
 		"ALTER TABLE tags ADD COLUMN is_featured BOOLEAN NOT NULL DEFAULT 0",
 		"ALTER TABLE tags ADD COLUMN is_hidden BOOLEAN NOT NULL DEFAULT 0",

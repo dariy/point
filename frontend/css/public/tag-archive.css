@@ -182,3 +182,364 @@
     color: var(--color-primary);
     border-radius: var(--border-radius-sm);
 }
+
+/* Search Results Tag Strip (point-x52z.8) */
+.search-tag-results {
+  margin: 0 var(--space-4) var(--space-8);
+}
+.search-tag-results-title {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+.search-tag-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.search-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 12px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--text-color);
+  font-size: var(--font-sm);
+  transition: border-color 0.2s, background 0.2s;
+}
+.search-tag-chip:hover {
+  border-color: var(--color-primary);
+  background: var(--surface-active);
+}
+.search-tag-chip .tag-count {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-top: 0; /* Reset from .tag-count global */
+}
+@media (min-width: 768px) {
+  .search-tag-results {
+    margin: 0 var(--space-8) var(--space-8);
+  }
+}
+
+/* Tag Filter Box (point-x52z.18) */
+.tag-filter-box {
+    position: relative;
+    max-width: 400px;
+    margin: var(--spacing-lg) auto 0;
+    display: flex;
+    align-items: center;
+}
+
+.tag-filter-box svg {
+    position: absolute;
+    left: var(--spacing-md);
+    width: var(--svg-width-alt3);
+    height: var(--svg-height-alt3);
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+#tag-filter-input {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) calc(var(--spacing-md) * 2.5);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    font-size: var(--font-size-md);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#tag-filter-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+/* Inline header variant — the /tags highlight filter living in the header's
+   middle slot (point-x52z). Styled like `.header-search-form`'s open input and
+   sized to span from the end of the "All tags" breadcrumb to the action
+   buttons.  The span is driven by the slot/site-header flex rules in header.css. */
+.tag-filter-box.header-tag-filter {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+    height: var(--header-search-form-height);
+}
+
+.header-tag-filter #tag-filter-input {
+    width: 100%;
+    height: var(--input-type--search---height);
+    padding: 0 var(--input-type--search---padding) 0 calc(var(--spacing-md) * 2.25);
+    background: color-mix(in srgb, var(--surface-card) 95%, transparent);
+    backdrop-filter: blur(var(--input-type--search---backdrop-filter));
+    -webkit-backdrop-filter: blur(var(--input-type--search----webkit-backdrop-filter));
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--input-type--search---border-radius);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.header-tag-filter #tag-filter-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 var(--input-type--search---box-shadow) var(--color-primary-light);
+}
+
+/* Below the burger breakpoint the slot wraps to its own full-width row, so the
+   filter already spans it via flex: 1 1 auto. */
+
+/* Tree Collapse & Filter States */
+.tags-tree-item.is-hidden {
+    display: none;
+}
+
+.tags-tree-item[aria-expanded="false"] > .tags-tree-children {
+    display: none;
+}
+
+.toggle-branch {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0 var(--spacing-xs);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, color 0.2s;
+}
+
+.toggle-branch:hover {
+    color: var(--text-primary);
+}
+
+.tags-tree-item[aria-expanded="false"] > .tags-tree-row .toggle-branch svg {
+    transform: rotate(-90deg);
+}
+
+.tags-tree-item.is-match > .tags-tree-row .tag-link {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.tags-tree-row {
+    display: flex;
+    align-items: center;
+}
+
+/* ===========================
+   Tag Graph (force-directed /tags view)
+   =========================== */
+
+/* Node / edge colors — theme-aware, consumed by tagGraph.js via getComputedStyle. */
+/* Full-bleed page chrome — mirror the /map layout so the graph fills the
+   viewport below the header (the more canvas, the better, especially mobile). */
+.site-wrapper--graph {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.site-main--graph {
+    padding: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Center the loading spinner in the flex column (margin:auto = both axes). */
+.site-main--graph .loading-spinner {
+    margin: auto;
+}
+
+.tag-graph {
+    --graph-tag: var(--color-primary);
+    --graph-year: #e0a23a;
+    --graph-geo: #2bb6a3;
+    --graph-post: rgba(100, 116, 139, 0.40);
+    --graph-hier-edge: var(--color-primary);
+    --graph-memb-edge: var(--text-muted);
+    --graph-node-stroke: var(--bg-primary);
+    --graph-label-halo: var(--bg-primary);
+
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    background:
+        radial-gradient(circle at 50% 40%, var(--surface-hover) 0%, var(--bg-secondary) 70%);
+    overflow: hidden;
+}
+
+[data-theme="dark"] .tag-graph {
+    --graph-year: #d9a441;
+    --graph-geo: #2dbfab;
+    --graph-post: rgba(148, 163, 184, 0.32);
+}
+
+#tag-graph-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+}
+
+#tag-graph-canvas:active {
+    cursor: grabbing;
+}
+
+.tag-graph-legend {
+    position: absolute;
+    top: var(--spacing-sm);
+    left: var(--spacing-sm);
+    margin: 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+    border: var(--border-width, 1px) solid var(--border-primary);
+    border-radius: var(--border-radius-md, 8px);
+    backdrop-filter: blur(4px);
+    pointer-events: none; /* clicks pass through to the canvas… */
+    max-width: calc(100% - 2 * var(--spacing-sm));
+}
+
+/* …except the type toggles, which are interactive. */
+.tag-graph-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    pointer-events: auto;
+}
+
+.tg-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    font: inherit;
+    line-height: 1.2;
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--surface-card) 60%, transparent);
+    border: var(--border-width, 1px) solid var(--border-primary);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: opacity var(--transition-fast), border-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.tg-toggle:hover {
+    border-color: var(--border-secondary);
+    color: var(--text-primary);
+}
+
+.tg-toggle.is-off {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.tg-toggle.is-off .tg-dot {
+    background: var(--text-muted);
+}
+
+.tag-graph-legend__lines {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tg-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tag-graph-legend__hint {
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.tg-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    border: 1px solid var(--bg-primary);
+}
+
+.tg-dot--tag  { background: var(--graph-tag); }
+.tg-dot--year { background: var(--graph-year); }
+.tg-dot--geo  { background: var(--graph-geo); }
+.tg-dot--post { background: var(--graph-post); }
+
+.tg-line {
+    width: 16px;
+    height: 0;
+    flex: 0 0 auto;
+}
+
+.tg-line--hier { border-top: 2px solid var(--graph-hier-edge); }
+.tg-line--memb { border-top: 1px solid var(--graph-memb-edge); }
+
+.tag-graph-controls {
+    position: absolute;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tag-graph-controls button {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+    border: var(--border-width, 1px) solid var(--border-primary);
+    border-radius: var(--border-radius-sm, 6px);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tag-graph-controls button:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-secondary);
+    color: var(--color-primary);
+}
+
+@media (max-width: 640px) {
+    .tag-graph-legend {
+        font-size: 0.7rem;
+        padding: 6px 8px;
+        gap: 6px;
+    }
+    .tag-graph-controls button {
+        width: 36px;
+        height: 36px;
+    }
+}

@@ -8,12 +8,65 @@ body {
 }
 
 .light-layout {
+    display: flex;
+    flex-direction: column;
     min-height: 100vh;
 }
 
-.light-container {
-    display: flex;
-    min-height: 100vh;
+.light-sidebar.is-collapsed {
+    width: var(--sidebar-collapsed-width, var(--size-4));
+}
+
+.light-sidebar.is-collapsed .site-name,
+.light-sidebar.is-collapsed .nav-label,
+.light-sidebar.is-collapsed .sidebar-version,
+.light-sidebar.is-collapsed .nav-group-title,
+.light-sidebar.is-collapsed .toggle-icon {
+    display: none;
+}
+
+/* Collapsed: only the width shrinks and labels hide. Icons keep their
+   expanded horizontal position (left-aligned at spacing-lg) so nothing jumps
+   sideways — just drop the right padding so the narrow column fits. */
+.light-sidebar.is-collapsed .sidebar-header,
+.light-sidebar.is-collapsed .nav-item a,
+.light-sidebar.is-collapsed .sidebar-footer {
+    padding-right: 0;
+}
+
+/* Collapsed: stack footer actions one per line like nav-items, left-aligned
+   on the same icon rail. DOM order is logout then theme-toggle; reverse so
+   theme-toggle is first and the exit/logout action is last. */
+.light-sidebar.is-collapsed .sidebar-footer-actions {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+}
+
+.light-sidebar.is-collapsed .user-info {
+    flex: 0 0 auto;
+}
+
+/* Collapsed: reset the theme-toggle's fixed dimensions and border so it
+   sits flush-left on the same icon rail as the logout button. */
+.light-sidebar.is-collapsed .theme-toggle {
+    width: auto;
+    height: auto;
+    border: none;
+    justify-content: flex-start;
+}
+
+.light-layout--collapsed .light-main {
+    margin-left: var(--sidebar-collapsed-width, var(--size-4));
+}
+
+/* Mount points for fixed overlays — ensure they don't add to flow height */
+#sidebar-mount,
+#bottom-bar-mount,
+#command-palette-mount,
+#shortcut-help-mount {
+    height: 0;
+    overflow: visible;
 }
 
 /* Sidebar */
@@ -22,6 +75,11 @@ body {
     left: 0;
     top: 0;
     bottom: 0;
+    /* Pin to the dynamic viewport so the dark column always fills the visible
+       height. Relying on bottom:0 alone leaves a white gap below the column on
+       touch devices when the browser toolbar collapses on scroll. */
+    height: 100vh;
+    height: 100dvh;
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
     color: var(--sidebar-text);
@@ -49,11 +107,23 @@ body {
     flex: 1;
 }
 
+/* Logo doubles as the sidebar collapse toggle (it's a <button>). */
 .sidebar-header .site-title-link {
     display: flex;
     align-items: center;
     color: var(--sidebar-text-hover);
     text-decoration: none;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.sidebar-header .site-title-link:hover .app-logo {
+    color: var(--color-primary);
 }
 
 .sidebar-header .site-title {
@@ -91,22 +161,6 @@ body {
     color: var(--sidebar-text-hover);
     background: transparent;
     border: none;
-}
-
-.sidebar-header .public-home-link {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--sidebar-text);
-    transition: color var(--transition-fast);
-    border: none;
-    background: transparent;
-    padding: 0;
-}
-
-.sidebar-header .public-home-link:hover {
-    color: var(--sidebar-text-hover);
 }
 
 .sidebar-footer .theme-toggle {
@@ -204,7 +258,6 @@ body {
 .light-main {
     flex: 1;
     margin-left: var(--sidebar-width);
-    min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
@@ -410,3 +463,338 @@ body {
     margin-top: var(--spacing-lg);
     text-align: center;
 }
+
+/* ===========================
+   Sidebar: Primary Action
+   =========================== */
+.sidebar-primary-action {
+    padding: 0 var(--spacing-sm) var(--spacing-xs);
+}
+
+.sidebar-primary-action .btn {
+    justify-content: center;
+    gap: var(--spacing-xs);
+    padding-left: var(--spacing-md);
+    padding-right: var(--spacing-md);
+}
+
+/* ===========================
+   Sidebar: Nav Groups (Write / Manage)
+   =========================== */
+.nav-group {
+    margin-top: var(--spacing-xs);
+}
+
+.nav-group + .nav-group {
+    border-top: var(--border-width) solid var(--sidebar-border);
+    padding-top: var(--spacing-xs);
+}
+
+.nav-group-title {
+    display: block;
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--sidebar-text);
+    opacity: 0.45;
+    padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-xs);
+    margin: 0;
+    line-height: 1;
+    user-select: none;
+}
+
+.nav-group-toggle {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+
+.nav-group-toggle .nav-group-title {
+    flex: 1;
+}
+
+.nav-group-toggle:hover .nav-group-title {
+    opacity: 0.75;
+}
+
+.nav-group-toggle .toggle-icon {
+    display: flex;
+    align-items: center;
+    padding-right: var(--spacing-lg);
+    color: var(--sidebar-text);
+    opacity: 0.4;
+    transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.nav-group-toggle:hover .toggle-icon {
+    opacity: 0.7;
+}
+
+.nav-group.is-collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.nav-group-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.nav-group.is-collapsed .nav-group-items {
+    display: none;
+}
+
+/* ===========================
+   Admin Bottom Bar (mobile)
+   =========================== */
+.admin-bottom-bar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background-color: var(--header-bg);
+    border-top: var(--border-width) solid var(--header-border);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    transition: background-color var(--transition-theme), border-color var(--transition-theme);
+}
+
+.bottom-bar-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    padding: 0.5rem 0 0.4rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    transition: color var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-bar-item[aria-current="page"],
+.bottom-bar-item.active {
+    color: var(--color-primary);
+}
+
+.bottom-bar-item:not(.bottom-bar-add):hover {
+    color: var(--text-primary);
+}
+
+.bottom-bar-icon {
+    width: 1.375rem;
+    height: 1.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bottom-bar-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.bottom-bar-label {
+    display: block;
+}
+
+.bottom-bar-add {
+    padding-bottom: 0.4rem;
+    color: var(--color-primary);
+}
+
+.add-icon-wrap {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+    transition: background-color var(--transition-fast), scale var(--transition-fast);
+}
+
+.bottom-bar-add:active .add-icon-wrap {
+    scale: 0.9;
+}
+
+/* More action sheet */
+.admin-more-sheet-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.admin-more-sheet-overlay.active {
+    display: flex;
+    align-items: flex-end;
+}
+
+.admin-more-sheet {
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    background: var(--surface-card);
+    border-top-left-radius: var(--border-radius-lg);
+    border-top-right-radius: var(--border-radius-lg);
+    padding: var(--spacing-md);
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
+    transition: background-color var(--transition-theme);
+}
+
+.more-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-md);
+}
+
+.more-sheet-header h3 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.more-sheet-close {
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-hover);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.more-sheet-close:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+}
+
+.more-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.more-grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-xs);
+    min-height: 3.75rem;
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    color: var(--text-secondary);
+    background: var(--surface-hover);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.more-grid-item.active,
+.more-grid-item:hover {
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+.more-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.more-item-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1.2;
+    color: inherit;
+}
+
+.more-sheet-divider {
+    border: none;
+    border-top: var(--border-width) solid var(--border-primary);
+    margin: var(--spacing-sm) 0;
+}
+
+.more-sheet-footer {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.more-footer-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    min-height: 3.5rem;
+    border-radius: var(--border-radius);
+    background: var(--surface-hover);
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.more-footer-btn:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+}
+
+.more-footer-btn.text-danger {
+    color: var(--color-danger);
+}
+
+.more-footer-btn.text-danger:hover {
+    background: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+.more-footer-btn svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+}
+
+/* Theme icon in More Sheet (show sun in dark mode, moon in light mode) */
+.more-footer-btn .icon-sun,
+.more-footer-btn .icon-moon {
+    display: none;
+}
+
+[data-theme="dark"] .more-footer-btn .icon-sun { display: flex; }
+:root:not([data-theme="dark"]) .more-footer-btn .icon-moon,
+[data-theme="light"] .more-footer-btn .icon-moon { display: flex; }
+[data-theme="light"] .more-footer-btn .icon-sun { display: none; }

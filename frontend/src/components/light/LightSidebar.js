@@ -3,7 +3,6 @@
  *
  * Props:
  *   currentPath  {string}   Active route path
- *   publicUrl    {string}   URL for the public-site link (defaults to '/')
  *   user         {object}   Current user (display_name, username)
  *   onLogout     {Function} Called when user clicks logout
  */
@@ -12,18 +11,19 @@ import { Component } from '../Component.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import {
-  APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG,
+  APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
-  THEMES_SVG, MENU_SVG, CHART_SVG,
+  THEMES_SVG, MENU_SVG, CHART_SVG, PLUS_SVG, CHEVRON_SVG,
 } from '../../utils/icons.js';
 
-const HAMBURGER_SVG = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="2" y1="5" x2="18" y2="5"/><line x1="2" y1="10" x2="18" y2="10"/><line x1="2" y1="15" x2="18" y2="15"/></svg>`;
-
-const NAV_ITEMS = [
-  { href: '/light',          label: 'Dashboard', icon: DASHBOARD_SVG },
+const WRITE_ITEMS = [
+  { href: '/light',          label: 'Home',      icon: DASHBOARD_SVG },
   { href: '/light/posts',    label: 'Posts',     icon: POSTS_SVG     },
   { href: '/light/media',    label: 'Media',     icon: MEDIA_SVG     },
   { href: '/light/tags',     label: 'Tags',      icon: TAGS_SVG      },
+];
+
+const MANAGE_ITEMS = [
   { href: '/light/analytics', label: 'Analytics', icon: CHART_SVG     },
   { href: '/light/menu',     label: 'Menu',      icon: MENU_SVG      },
   { href: '/light/themes',   label: 'Themes',    icon: THEMES_SVG    },
@@ -33,48 +33,83 @@ const NAV_ITEMS = [
 ];
 
 export class LightSidebar extends Component {
+  constructor(container, props = {}) {
+    super(container, props);
+    this.state = {
+      manageExpanded: localStorage.getItem('sidebar_manage_expanded') === 'true',
+      collapsed: localStorage.getItem('sidebar_collapsed') === 'true',
+    };
+  }
+
   render() {
-    const { currentPath = '', publicUrl = '/' } = this.props;
+    const { currentPath = '' } = this.props;
+    const { collapsed } = this.state;
     const version = store.get('version') || '';
 
-    const navItems = NAV_ITEMS.map(({ href, label, icon }) => {
-      const isActive = href === '/light'
-        ? currentPath === href
-        : currentPath === href || currentPath.startsWith(href + '/');
+    const isManageActive = MANAGE_ITEMS.some(item => 
+       currentPath === item.href || currentPath.startsWith(item.href + '/')
+    );
+    const manageExpanded = this.state.manageExpanded || isManageActive;
+
+    const renderItem = (item) => {
+      const isActive = item.href === '/light'
+        ? currentPath === item.href
+        : currentPath === item.href || currentPath.startsWith(item.href + '/');
       const cls = isActive ? ' class="nav-item active"' : ' class="nav-item"';
       return `
         <li${cls}>
-          <a href="${escapeHtml(href)}">
-            ${icon}
-            ${escapeHtml(label)}
+          <a href="${escapeHtml(item.href)}" title="${escapeHtml(item.label)}">
+            ${item.icon}
+            <span class="nav-label">${escapeHtml(item.label)}</span>
           </a>
         </li>`;
-    }).join('');
+    };
+
+    const writeItems = WRITE_ITEMS.map(renderItem).join('');
+    const manageItems = MANAGE_ITEMS.map(renderItem).join('');
 
     return `
-      <aside class="light-sidebar">
+      <aside class="light-sidebar${collapsed ? ' is-collapsed' : ''}">
         <div class="sidebar-header">
           <div class="site-branding">
-            <a href="/light" class="site-title-link" aria-label="Admin home">
+            <button type="button" id="sidebar-collapse-btn" class="site-title-link" title="Toggle Sidebar" aria-label="Toggle Sidebar">
               <span class="site-title">
                 ${APP_LOGO_SVG}
-                Point
+                <span class="site-name">Point</span>
               </span>
+            </button>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Admin navigation">
+          <div class="sidebar-primary-action">
+            <a href="/light/posts/new" class="btn btn-primary btn-block" title="New Post" aria-label="Create new post">
+              ${PLUS_SVG}
+              <span class="nav-label">New Post</span>
             </a>
           </div>
-          <a href="${escapeHtml(publicUrl)}" class="public-home-link" title="View public site" aria-label="View public site" data-external>${EXTERNAL_LINK_SVG}</a>
 
-        </div>
-        <nav class="sidebar-nav" aria-label="Admin navigation">
-          <ul>${navItems}</ul>
+          <div class="nav-group">
+            <h2 class="nav-group-title">Write</h2>
+            <ul class="nav-group-items">${writeItems}</ul>
+          </div>
+
+          <div class="nav-group ${manageExpanded ? 'is-expanded' : 'is-collapsed'}" id="manage-group">
+            <button class="nav-group-toggle" id="manage-toggle" type="button" aria-expanded="${manageExpanded}" title="Manage" aria-label="Toggle Manage group">
+              <span class="nav-group-title">Manage</span>
+              <span class="toggle-icon">${CHEVRON_SVG}</span>
+            </button>
+            <ul class="nav-group-items">${manageItems}</ul>
+          </div>
         </nav>
+
         <div class="sidebar-footer">
-          <div class="sidebar-version">${escapeHtml(version)}</div>
+          <div class="sidebar-version" aria-label="Version">${escapeHtml(version)}</div>
           <div class="sidebar-footer-actions">
             <div class="user-info">
               <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>
             </div>
-            <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button">
+            <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button" title="Toggle Theme">
               <span class="icon-sun">${SUN_SVG}</span>
               <span class="icon-moon">${MOON_SVG}</span>
             </button>
@@ -84,6 +119,9 @@ export class LightSidebar extends Component {
   }
 
   afterRender() {
+    const { collapsed } = this.state;
+    document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
+
     if (!this._subscribedVersion) {
       this.subscribeStore(store, 'version', (v) => {
         const el = this.$('.sidebar-version');
@@ -91,6 +129,12 @@ export class LightSidebar extends Component {
       });
       this._subscribedVersion = true;
     }
+
+    this.$('#manage-toggle')?.addEventListener('click', () => {
+      const next = !this.state.manageExpanded;
+      this.setState({ manageExpanded: next });
+      localStorage.setItem('sidebar_manage_expanded', String(next));
+    });
 
     const btn = this.$('#logout-btn');
     if (btn && this.props.onLogout) {
@@ -103,7 +147,12 @@ export class LightSidebar extends Component {
       store.set('theme', next);
     });
 
-    this._setupMobileToggle();
+    this.$('#sidebar-collapse-btn')?.addEventListener('click', () => {
+      const next = !this.state.collapsed;
+      this.setState({ collapsed: next });
+      localStorage.setItem('sidebar_collapsed', String(next));
+      document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', next);
+    });
   }
 
   beforeUnmount() {
@@ -111,53 +160,5 @@ export class LightSidebar extends Component {
     if (overlay) {
       overlay.classList.remove('active');
     }
-  }
-
-  _setupMobileToggle() {
-    // Find the sibling .light-header within the same .light-layout.
-    const layout = this.container.closest('.light-layout') || this.container.parentElement;
-    const header = layout?.querySelector('.light-header');
-    if (!header) return;
-
-    // Inject hamburger button only once.
-    if (!header.querySelector('.sidebar-toggle-btn')) {
-      const hamBtn = document.createElement('button');
-      hamBtn.className = 'sidebar-toggle-btn';
-      hamBtn.type = 'button';
-      hamBtn.setAttribute('aria-label', 'Toggle navigation');
-      hamBtn.innerHTML = HAMBURGER_SVG;
-      header.insertBefore(hamBtn, header.firstChild);
-    }
-
-    // Create overlay if not yet present.
-    let overlay = document.querySelector('.sidebar-overlay');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.className = 'sidebar-overlay';
-      document.body.appendChild(overlay);
-    }
-
-    const sidebar = this.$('.light-sidebar');
-    const toggleOpen = () => {
-      const isOpen = sidebar.classList.contains('open');
-      sidebar.classList.toggle('open', !isOpen);
-      overlay.classList.toggle('active', !isOpen);
-    };
-    const close = () => {
-      sidebar.classList.remove('open');
-      overlay.classList.remove('active');
-    };
-
-    // Re-bind each time (component may re-render after navigation).
-    const hamBtn = header.querySelector('.sidebar-toggle-btn');
-    if (hamBtn) hamBtn.onclick = toggleOpen;
-    overlay.onclick = close;
-
-    // Close on any navigation link within the sidebar.
-    this.$$('a').forEach(a => {
-      if (!a.hasAttribute('data-external') && a.target !== '_blank') {
-        a.addEventListener('click', close);
-      }
-    });
   }
 }

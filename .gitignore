@@ -31,3 +31,6 @@ frontend/css/common/theme.css
 # bv (beads viewer) local config and caches
 .bv/
 .worktrees/
+/frontend/index.html
+# br doctor per-run artifacts
+.doctor/

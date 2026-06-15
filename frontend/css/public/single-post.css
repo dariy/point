@@ -143,6 +143,12 @@
     transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast), scale var(--transition-fast);
 }
 
+@media (pointer: coarse) {
+    .code-copy-btn {
+        opacity: 0.5;
+    }
+}
+
 .post-content pre:hover .code-copy-btn,
 .code-copy-btn:focus-visible {
     opacity: 1;
@@ -325,5 +331,67 @@
 @media (max-width: 48em) {
     .post-side-nav-btn {
         display: none;
+    }
+}
+
+/* --- Ultrawide Tier (point-x52z.16) --- */
+.post-layout-grid {
+    display: block; /* default */
+}
+
+.post-meta-rail {
+    margin-bottom: var(--spacing-xl);
+    padding-bottom: var(--spacing-md);
+    border-bottom: var(--border-width) solid var(--border-primary);
+}
+
+.post-meta-rail .post-date {
+    display: block;
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
+}
+
+.post-tags-vertical .tag-strip-scroll {
+    flex-wrap: wrap;
+    overflow: visible;
+}
+
+@media (min-width: 112rem) {
+    .post-single {
+        max-width: none;
+        width: 100%;
+    }
+    
+    .post-layout-grid {
+        display: grid;
+        grid-template-columns: 240px minmax(0, var(--content-narrow)) 1fr;
+        gap: var(--spacing-2xl);
+        align-items: start;
+    }
+    
+    .post-meta-rail {
+        grid-column: 1;
+        position: sticky;
+        top: calc(var(--header-height) + var(--spacing-xl));
+        border-bottom: none;
+        text-align: right;
+    }
+    
+    .post-main {
+        grid-column: 2;
+    }
+    
+    /* Figure breakout: images can expand beyond the prose width */
+    .post-content img {
+        width: calc(100% + 400px);
+        margin-left: -200px;
+        max-width: none;
+    }
+    
+    /* Ensure small images or videos don't stretch weirdly if not intended */
+    .post-content .media-exif-wrapper img {
+        width: 100%;
+        margin-left: 0;
     }
 }

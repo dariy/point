@@ -63,17 +63,19 @@ type Repository interface {
 	MigrateFlagsToSystemTags(ctx context.Context) error
 	RebuildTagsTableDropBooleans(ctx context.Context) error
 	EnsureSystemTags(ctx context.Context) error
+	MigrateTagFlagsFromSystemTags(ctx context.Context) error
 
 	// Posts
 	ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
 	CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
-	ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, limit, offset int64) ([]models.Post, error)
-	CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string) (int64, error)
+	ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error)
+	CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error)
 	GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error)
 	GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error)
 	ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error)
 	UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error)
 	ListPublishedPostStubs(ctx context.Context) ([]PostStub, error)
+	ListPostNodesForGraph(ctx context.Context, publishedOnly bool) ([]GraphPostNode, error)
 	GetPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
 	CountPostsByTagIDs(ctx context.Context, tagIDs []int64, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
 	GetPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool, limit, offset int64) ([]models.Post, error)
@@ -86,6 +88,7 @@ type Repository interface {
 	BackupDB(ctx context.Context, destPath string) error
 
 	// Tags
+	SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error)
 	GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error)
 	GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error)
 	GetCoOccurringTags(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error)
@@ -98,14 +101,15 @@ type Repository interface {
 	GetChildrenOfTag(ctx context.Context, parentID int64) ([]models.Tag, error)
 	GetRootTags(ctx context.Context) ([]models.Tag, error)
 	UpdateTagSortOrder(ctx context.Context, id int64, sortOrder int32) error
-	DropTagNameUnique(ctx context.Context) error
+	UpdateEdgeSortOrder(ctx context.Context, parentID, childID int64, sortOrder int32) error
+	MergeTags(ctx context.Context, winnerID, loserID int64) error
 
 	// Timeline
 	ListMapTagsForYearRange(ctx context.Context, fromYear, toYear int) ([]MapYearRangeTag, error)
 	ListInTimelineDescendants(ctx context.Context) ([]InTimelineTag, error)
 	ListInTimelineDescendantsForTag(ctx context.Context, contextTagSlug string) ([]InTimelineTag, error)
 	GetLocationTagsCoOccurringWith(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]LocationTagCoOccurrence, error)
-	GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64, yearParentID int64) (map[int64][]PostTagInfo, error)
+	GetYearTagsByLocationTagIDs(ctx context.Context, locTagIDs []int64) (map[int64][]PostTagInfo, error)
 }
 
 type sqliteRepository struct {

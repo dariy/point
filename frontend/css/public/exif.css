@@ -35,6 +35,13 @@
   line-height: 1;
 }
 
+@media (pointer: coarse) {
+  .exif-info-btn {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+}
+
 .media-exif-wrapper:hover .exif-info-btn,
 .media-exif-wrapper:focus-within .exif-info-btn {
   opacity: 1;

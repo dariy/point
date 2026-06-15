@@ -52,9 +52,7 @@ func TestTimelineHandler_Gating(t *testing.T) {
 			// Need some data so it doesn't 404 on "empty timeline"
 			// Actually h.GetTimeline returns 404 if len(pills) == 0.
 			// Let's seed a pill.
-			_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug) VALUES ('2024', '2024')`)
-			_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
-				SELECT p.id, c.id FROM tags p, tags c WHERE p.slug = '_in_timeline' AND c.slug = '2024'`)
+			_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug, kind) VALUES ('2024', '2024', 'year')`)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/timeline", nil)
 			rec := httptest.NewRecorder()
@@ -91,9 +89,7 @@ func TestTimelineHandler_Payload(t *testing.T) {
 	_ = settingsSvc.SetSetting(ctx, "timeline_mode", "all", "string")
 
 	// Seed data
-	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug) VALUES ('2024', '2024')`)
-	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tag_relationships (parent_id, child_id)
-		SELECT p.id, c.id FROM tags p, tags c WHERE p.slug = '_in_timeline' AND c.slug = '2024'`)
+	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug, kind) VALUES ('2024', '2024', 'year')`)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/timeline", nil)
 	rec := httptest.NewRecorder()

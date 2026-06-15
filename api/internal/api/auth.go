@@ -184,6 +184,8 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 		ID           int64     `json:"id"`
 		IPAddress    string    `json:"ip_address"`
 		UserAgent    string    `json:"user_agent"`
+		UABrowser    string    `json:"ua_browser"`
+		UAOS         string    `json:"ua_os"`
 		CreatedAt    time.Time `json:"created_at"`
 		LastActivity time.Time `json:"last_active_at"`
 		ExpiresAt    time.Time `json:"expires_at"`
@@ -192,10 +194,13 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 
 	result := make([]sessionItem, len(sessions))
 	for i, s := range sessions {
+		browser, os := parseUserAgent(s.UserAgent)
 		result[i] = sessionItem{
 			ID:           s.ID,
 			IPAddress:    s.IpAddress,
 			UserAgent:    s.UserAgent,
+			UABrowser:    browser,
+			UAOS:         os,
 			CreatedAt:    s.CreatedAt,
 			LastActivity: s.LastActivity,
 			ExpiresAt:    s.ExpiresAt,

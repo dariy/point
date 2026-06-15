@@ -49,7 +49,7 @@ jobs:
           go test ./... -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           file: api/coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -11,6 +12,17 @@ func setupTestDB(t *testing.T) Repository {
 		t.Fatalf("failed to create test repository: %v", err)
 	}
 
+	return repo
+}
+
+// setupNewSchemaTestDB creates an in-memory test DB with the post-migration schema
+// (typed flag columns on tags, no tag_locations table, sort_order on tag_relationships).
+func setupNewSchemaTestDB(t *testing.T) Repository {
+	t.Helper()
+	repo := setupTestDB(t)
+	if err := repo.MigrateTagFlagsFromSystemTags(context.Background()); err != nil {
+		t.Fatalf("MigrateTagFlagsFromSystemTags: %v", err)
+	}
 	return repo
 }
 
