@@ -92,6 +92,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     setAttribute: () => {},
     value: '',
     checked: false,
+    insertAdjacentHTML: () => {},
     ...overrides
   });
 
@@ -150,6 +151,7 @@ test('should preserve other fields when switching from visual to text mode', () 
     setAttribute: () => {},
     value: '',
     checked: false,
+    insertAdjacentHTML: () => {},
     ...overrides
   });
 

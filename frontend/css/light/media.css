@@ -13,6 +13,31 @@
 /* ===========================
    Folder Tree
    =========================== */
+.mb-breadcrumbs {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+}
+
+.mb-breadcrumb-item {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.mb-breadcrumb-item:hover {
+    text-decoration: underline;
+}
+
+.mb-breadcrumb-separator {
+    color: var(--text-tertiary);
+}
+
 .media-folder-tree {
     flex: 0 0 var(--media-folder-tree-flex);
     min-width: var(--media-folder-tree-min-width);

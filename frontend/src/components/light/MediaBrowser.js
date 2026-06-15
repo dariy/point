@@ -143,9 +143,9 @@ export class MediaBrowser extends Component {
         </div>
 
         ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ''}
-        <div class="mb-top-bar mobile-only">
+        ${pickerMode ? `<div class="mb-top-bar mobile-only">
           ${this._renderBreadcrumbs()}
-        </div>
+        </div>` : ''}
         <div class="media-layout">
           ${folderTree}
           <div class="media-content">
@@ -160,7 +160,8 @@ export class MediaBrowser extends Component {
   _renderBreadcrumbs() {
     const { selectedFolder } = this.state;
     const parts = selectedFolder ? selectedFolder.split('/') : [];
-    let crumbs = `<button class="mb-breadcrumb-item" data-folder="">All Media</button>`;
+    const rootLabel = this.props.pickerMode ? 'All Media' : 'Media';
+    let crumbs = `<button class="mb-breadcrumb-item" data-folder="">${escapeHtml(rootLabel)}</button>`;
     let currentPath = '';
     parts.forEach((p, i) => {
       currentPath += (currentPath ? '/' : '') + p;
@@ -489,6 +490,19 @@ export class MediaBrowser extends Component {
         this._load({ page: 1 });
       });
     });
+
+    if (!pickerMode) {
+      const h1 = document.querySelector('.light-header .header-title-row h1');
+      if (h1) {
+        h1.innerHTML = this._renderBreadcrumbs();
+        h1.querySelectorAll('.mb-breadcrumb-item').forEach(btn => {
+          btn.addEventListener('click', () => {
+            this.setState({ selectedFolder: btn.dataset.folder || null });
+            this._load({ page: 1 });
+          });
+        });
+      }
+    }
 
     fileInput?.addEventListener('change', () => {
       this._uploadFiles(Array.from(fileInput.files));
