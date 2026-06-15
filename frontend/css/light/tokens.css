@@ -152,8 +152,6 @@
     --filter-select-background-size: var(--size-0-75);
     --filter-select-transform: var(--size-0-0625);
     --filter-search-min-width: var(--size-12);
-    --filter-search-height: var(--size-2);
-    --filter-search-border-radius: var(--size-1);
     --app-logo-width: var(--size-1);
     --homepage-link-width: var(--size-1-25);
     --homepage-link-height: var(--size-1-25);
@@ -319,6 +317,7 @@
     --tm-toggle-height: var(--size-1-375);
     --tm-toggle-font-size: var(--size-0-5625);
     --tm-toggle-spacer-width: var(--size-1-375);
+    --tm-node-body-gap: var(--size-0-5);
     --tm-row-meta-gap: var(--size-0-375);
     --tm-row-meta-min-width: var(--size-3-75);
     --tm-actions-gap: var(--size-0-1875);

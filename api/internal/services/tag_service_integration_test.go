@@ -4,11 +4,12 @@ package services
 
 import (
 	"context"
-	"strings"
+	"net/http"
 	"testing"
 
 	"point-api/internal/models"
-	"point-api/internal/repository"
+
+	"github.com/labstack/echo/v4"
 )
 
 func TestTagService_CRUD(t *testing.T) {
@@ -385,73 +386,6 @@ func TestTagService_GetTagsByPostIDs(t *testing.T) {
 	}
 }
 
-func TestBuildEffectivelyHiddenIDs(t *testing.T) {
-	// System tag _hidden (ID=100) is parent; descendants should all be hidden.
-	tags := []models.Tag{
-		{ID: 100, Slug: "_hidden"},
-		{ID: 1, Slug: "tag1"},
-		{ID: 2, Slug: "tag2"},
-		{ID: 3, Slug: "tag3"},
-	}
-	rels := []repository.TagRelationship{
-		{ParentID: 100, ChildID: 1}, // direct child of _hidden
-		{ParentID: 1, ChildID: 2},
-		{ParentID: 2, ChildID: 3},
-	}
-
-	hidden := buildEffectivelyHiddenIDs(tags, rels)
-	if !hidden[1] {
-		t.Error("tag 1 should be hidden (direct child of _hidden)")
-	}
-	if !hidden[2] {
-		t.Error("tag 2 should be hidden (descendant)")
-	}
-	if !hidden[3] {
-		t.Error("tag 3 should be hidden (grandparent propagation)")
-	}
-
-	// Tag not connected to _hidden should not be hidden.
-	tags2 := []models.Tag{
-		{ID: 100, Slug: "_hidden"},
-		{ID: 10, Slug: "tag10"},
-		{ID: 11, Slug: "tag11"},
-	}
-	rels2 := []repository.TagRelationship{{ParentID: 10, ChildID: 11}}
-	hidden2 := buildEffectivelyHiddenIDs(tags2, rels2)
-	if hidden2[10] {
-		t.Error("tag 10 should NOT be hidden (not under _hidden)")
-	}
-	if hidden2[11] {
-		t.Error("tag 11 should NOT be hidden (parent not under _hidden)")
-	}
-}
-
-func TestBuildEffectivelyHiddenPostsTagIDs(t *testing.T) {
-	// System tag _hide_posts (ID=100) is parent; descendants should all hide posts.
-	tags := []models.Tag{
-		{ID: 100, Slug: "_hide_posts"},
-		{ID: 1, Slug: "tag1"},
-		{ID: 2, Slug: "tag2"},
-		{ID: 3, Slug: "tag3"},
-	}
-	rels := []repository.TagRelationship{
-		{ParentID: 100, ChildID: 1},
-		{ParentID: 1, ChildID: 2},
-		{ParentID: 2, ChildID: 3},
-	}
-
-	hiddenPosts := buildEffectivelyHiddenPostsTagIDs(tags, rels)
-	if !hiddenPosts[1] {
-		t.Error("tag 1 should hide posts (direct child of _hide_posts)")
-	}
-	if !hiddenPosts[2] {
-		t.Error("tag 2 should hide posts (inherited from tag 1)")
-	}
-	if !hiddenPosts[3] {
-		t.Error("tag 3 should hide posts (inherited via chain)")
-	}
-}
-
 func TestTagService_EffectivelyHidden(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {
@@ -461,39 +395,41 @@ func TestTagService_EffectivelyHidden(t *testing.T) {
 	svc := NewTagService(repo)
 	ctx := context.Background()
 
-	// Empty DB — both return empty maps without error
-	hiddenPosts, err := svc.EffectivelyHiddenPostsTagIDs(ctx)
+	// Empty DB — returns empty maps without error
+	snap, err := svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("EffectivelyHiddenPostsTagIDs failed: %v", err)
+		t.Fatalf("GetTagSnapshot failed: %v", err)
 	}
-	if len(hiddenPosts) != 0 {
-		t.Errorf("expected empty map, got %v", hiddenPosts)
+	if len(snap.EffectiveHidesPosts) != 0 {
+		t.Errorf("expected empty map, got %v", snap.EffectiveHidesPosts)
+	}
+	if len(snap.EffectiveHidden) != 0 {
+		t.Errorf("expected empty map, got %v", snap.EffectiveHidden)
 	}
 
-	hidden, err := svc.EffectivelyHiddenIDs(ctx)
-	if err != nil {
-		t.Fatalf("EffectivelyHiddenIDs failed: %v", err)
-	}
-	if len(hidden) != 0 {
-		t.Errorf("expected empty map, got %v", hidden)
-	}
-
-	// Set up _hidden system tag and make a tag its child.
-	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, post_count) VALUES ('Hidden','_hidden',0)`)
+	// Set up a tag with hidden=true and make another tag its child.
+	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, hidden, post_count) VALUES ('Hidden','hiddentag',1,0)`)
 	_, _ = repo.DB().Exec(`INSERT INTO tags (name, slug, post_count) VALUES ('Secret','secret',0)`)
 	_, _ = repo.DB().Exec(`
 		INSERT INTO tag_relationships (parent_id, child_id)
-		SELECT h.id, s.id FROM tags h, tags s WHERE h.slug='_hidden' AND s.slug='secret'`)
+		SELECT h.id, s.id FROM tags h, tags s WHERE h.slug='hiddentag' AND s.slug='secret'`)
 
-	var secretID int64
+	var secretID, hiddenID int64
 	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug='secret'`).Scan(&secretID)
+	_ = repo.DB().QueryRow(`SELECT id FROM tags WHERE slug='hiddentag'`).Scan(&hiddenID)
 
-	hidden, err = svc.EffectivelyHiddenIDs(ctx)
+	// Invalidate to force rebuild
+	svc.Invalidate()
+	snap, err = svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("EffectivelyHiddenIDs (with data) failed: %v", err)
+		t.Fatalf("GetTagSnapshot (with data) failed: %v", err)
 	}
-	if !hidden[secretID] {
-		t.Errorf("expected secret tag (id=%d) to be hidden", secretID)
+	if !snap.EffectiveHidden[hiddenID] {
+		t.Errorf("expected hidden tag (id=%d) to be hidden", hiddenID)
+	}
+	// Hidden is not inherited — the child of a hidden parent stays visible.
+	if snap.EffectiveHidden[secretID] {
+		t.Errorf("expected secret tag (id=%d) NOT to be hidden (no inheritance)", secretID)
 	}
 }
 
@@ -580,9 +516,6 @@ func TestTagService_ListTagsPublicOnly(t *testing.T) {
 	for _, tag := range public {
 		if tag.ID == visible.ID {
 			found = true
-		}
-		if strings.HasPrefix(tag.Slug, "_") {
-			t.Errorf("system tag appeared in publicOnly results: %s", tag.Name)
 		}
 	}
 	if !found {
@@ -760,21 +693,23 @@ func TestTagService_WithRelatedIDs(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	ids, err := svc.WithRelatedIDs(ctx)
+	snap, err := svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("WithRelatedIDs failed: %v", err)
+		t.Fatalf("GetTagSnapshot failed: %v", err)
 	}
+	ids := snap.WithRelatedIDs()
 	if len(ids) != 0 {
 		t.Errorf("expected empty map, got %d entries", len(ids))
 	}
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10,'_with_related','_with_related'),(20,'User','user')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10,20)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, show_related) VALUES (20,'User','user', 1)`)
 
-	ids, err = svc.WithRelatedIDs(ctx)
+	svc.Invalidate()
+	snap, err = svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("WithRelatedIDs (with data) failed: %v", err)
+		t.Fatalf("GetTagSnapshot (with data) failed: %v", err)
 	}
+	ids = snap.WithRelatedIDs()
 	if !ids[20] {
 		t.Error("expected tag 20 in WithRelatedIDs result")
 	}
@@ -785,21 +720,23 @@ func TestTagService_InBreadcrumbsIDs(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	ids, err := svc.InBreadcrumbsIDs(ctx)
+	snap, err := svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("InBreadcrumbsIDs failed: %v", err)
+		t.Fatalf("GetTagSnapshot failed: %v", err)
 	}
+	ids := snap.InBreadcrumbsIDs()
 	if len(ids) != 0 {
 		t.Errorf("expected empty map, got %d entries", len(ids))
 	}
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (10,'_is_in_breadcrumbs','_is_in_breadcrumbs'),(30,'User','user2')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (10,30)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, in_breadcrumbs) VALUES (30,'User','user2', 1)`)
 
-	ids, err = svc.InBreadcrumbsIDs(ctx)
+	svc.Invalidate()
+	snap, err = svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("InBreadcrumbsIDs (with data) failed: %v", err)
+		t.Fatalf("GetTagSnapshot (with data) failed: %v", err)
 	}
+	ids = snap.InBreadcrumbsIDs()
 	if !ids[30] {
 		t.Error("expected tag 30 in InBreadcrumbsIDs result")
 	}
@@ -890,25 +827,88 @@ func TestTagService_PageTagIDs(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	ctx := context.Background()
 
-	// No _page tag — should return empty map, not error
-	ids, err := svc.PageTagIDs(ctx)
+	// No hidden tags — should return empty map, not error
+	snap, err := svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("PageTagIDs (no _page) failed: %v", err)
+		t.Fatalf("GetTagSnapshot failed: %v", err)
 	}
+	ids := snap.PageTagIDs()
 	if len(ids) != 0 {
 		t.Errorf("expected empty map, got %d entries", len(ids))
 	}
 
-	// Create _page tag and a child tag
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (200,'page','_page')`)
+	// Create a hidden tag and a child tag
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug,hidden) VALUES (200,'HiddenParent','hidden-parent',1)`)
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (201,'About','about')`)
 	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id,child_id) VALUES (200,201)`)
 
-	ids2, err := svc.PageTagIDs(ctx)
+	svc.Invalidate()
+	snap, err = svc.GetTagSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("PageTagIDs failed: %v", err)
+		t.Fatalf("GetTagSnapshot (with data) failed: %v", err)
 	}
-	if !ids2[201] {
-		t.Errorf("expected tag 201 to be a page tag ID")
+	ids2 := snap.PageTagIDs()
+	if !ids2[200] {
+		t.Errorf("expected hidden tag 200 to be a page tag ID")
+	}
+	// Hidden is not inherited — the child of a hidden parent stays visible.
+	if ids2[201] {
+		t.Errorf("expected tag 201 NOT to be a page tag ID (hidden is not inherited)")
+	}
+}
+
+func TestTagService_CycleRejection(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	service := NewTagService(repo)
+	ctx := context.Background()
+
+	// Create tags: A, B, C
+	tagA, _ := service.CreateTag(ctx, CreateTagParams{Name: "A", Slug: "a"})
+	tagB, _ := service.CreateTag(ctx, CreateTagParams{Name: "B", Slug: "b"})
+	tagC, _ := service.CreateTag(ctx, CreateTagParams{Name: "C", Slug: "c"})
+
+	// Create hierarchy: A -> B -> C
+	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: tagA.ID, ChildID: tagB.ID})
+	_ = repo.AddTagRelationship(ctx, models.AddTagRelationshipParams{ParentID: tagB.ID, ChildID: tagC.ID})
+
+	// Try to add C -> A (should fail)
+	err := service.SetTagParents(ctx, tagA.ID, []int64{tagC.ID})
+	if err == nil {
+		t.Error("expected error when creating cycle C -> A -> B -> C, but got nil")
+	} else {
+		he, ok := err.(*echo.HTTPError)
+		if !ok || he.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %v", err)
+		} else {
+			t.Logf("Got expected error (Parents): %v", he.Message)
+		}
+	}
+
+	// Try to add A -> C as a child of C (should fail)
+	// A -> B -> C already exists. Adding A as a child of C means C -> A.
+	err = service.SetTagChildren(ctx, tagC.ID, []int64{tagA.ID})
+	if err == nil {
+		t.Error("expected error when creating cycle A -> C -> B -> A, but got nil")
+	} else {
+		he, ok := err.(*echo.HTTPError)
+		if !ok || he.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %v", err)
+		} else {
+			t.Logf("Got expected error (Children): %v", he.Message)
+		}
+	}
+
+	// Try direct AddTagRelationship
+	err = service.AddTagRelationship(ctx, tagC.ID, tagA.ID)
+	if err == nil {
+		t.Error("expected error when creating cycle C -> A -> B -> C via AddTagRelationship, but got nil")
+	} else {
+		he, ok := err.(*echo.HTTPError)
+		if !ok || he.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %v", err)
+		} else {
+			t.Logf("Got expected error (AddTagRelationship): %v", he.Message)
+		}
 	}
 }

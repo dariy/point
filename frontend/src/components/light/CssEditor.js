@@ -111,10 +111,26 @@ export class CssEditor extends Component {
     btn.innerHTML = this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG;
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
 
+    const container = editorElement.closest('.css-editor-container');
+
     if (this.isMaximized) {
       document.body.classList.add('textarea-maximized-body-lock');
+      // Move container to body to avoid z-index/stacking context traps
+      if (container) {
+        this._placeholder = document.createElement('div');
+        this._placeholder.className = 'css-editor-placeholder';
+        this._placeholder.style.height = container.offsetHeight + 'px';
+        container.parentNode.insertBefore(this._placeholder, container);
+        document.body.appendChild(container);
+      }
     } else {
       document.body.classList.remove('textarea-maximized-body-lock');
+      // Restore container
+      if (container && this._placeholder) {
+        this._placeholder.parentNode.insertBefore(container, this._placeholder);
+        this._placeholder.remove();
+        this._placeholder = null;
+      }
     }
 
     this.container.dispatchEvent(new CustomEvent('textarea:maximize', {

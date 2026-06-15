@@ -336,8 +336,7 @@ func TestTagHandler_GetTagByIDWithLocation(t *testing.T) {
 	h := NewTagHandler(tagSvc, settingsSvc)
 	e := echo.New()
 
-	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (1,'T','t')`)
-	_, _ = repo.DB().Exec(`INSERT INTO tag_locations (tag_id, latitude, longitude) VALUES (1,45.5,73.5)`)
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug, latitude, longitude) VALUES (1,'T','t',45.5,73.5)`)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -396,10 +395,8 @@ func TestTagHandler_ListTags_WithRelationships(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
 
-	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug) VALUES (1,'Parent','parent'),(2,'Child','child')`)
+	_, _ = h.repo.DB().Exec(`INSERT INTO tags (id,name,slug,latitude,longitude) VALUES (1,'Parent','parent',48.85,2.35),(2,'Child','child',NULL,NULL)`)
 	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id,child_id) VALUES (1,2)`)
-
-	_, _ = h.repo.DB().Exec(`INSERT INTO tag_locations (tag_id,latitude,longitude) VALUES (1,48.85,2.35)`)
 
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 	e := echo.New()
@@ -551,11 +548,10 @@ func TestTagHandler_GetTagBySlug_DBError(t *testing.T) {
 }
 
 func insertHiddenSystemTag(h *testHandlers) int64 {
-	var id int64
-	_ = h.repo.DB().QueryRow(
-		`INSERT INTO tags (name, slug, post_count, created_at) VALUES ('_hidden','_hidden',0,datetime('now')) RETURNING id`,
-	).Scan(&id)
-	return id
+	tag, _ := h.tagSvc.CreateTag(context.Background(), services.CreateTagParams{
+		Name: "Hidden", Slug: "hiddentag", Hidden: true,
+	})
+	return tag.ID
 }
 
 func TestTagHandler_GetTagByID_EffectivelyHidden(t *testing.T) {
@@ -564,18 +560,28 @@ func TestTagHandler_GetTagByID_EffectivelyHidden(t *testing.T) {
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 
 	hiddenID := insertHiddenSystemTag(h)
-	child, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "Secret", Slug: "secret-hidden"})
-	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (?,?)`, hiddenID, child.ID)
+	child, _ := h.tagSvc.CreateTag(context.Background(), services.CreateTagParams{
+		Name: "Secret", Slug: "secret-hidden", ParentIDs: []int64{hiddenID},
+	})
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues(strings.Trim(mustJSON(child.ID), "\""))
+	c.SetParamValues(strings.Trim(mustJSON(hiddenID), "\""))
 	err := th.GetTagByID(c)
 	if err == nil {
-		t.Error("expected 404 for effectively hidden tag (public)")
+		t.Error("expected 404 for hidden tag (public)")
+	}
+
+	// Hidden is not inherited — the child of a hidden tag is publicly reachable.
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec2)
+	c2.SetParamNames("id")
+	c2.SetParamValues(strings.Trim(mustJSON(child.ID), "\""))
+	if err := th.GetTagByID(c2); err != nil {
+		t.Errorf("expected child of hidden tag to be reachable (no inheritance), got error: %v", err)
 	}
 }
 
@@ -585,18 +591,28 @@ func TestTagHandler_GetTagBySlug_EffectivelyHidden(t *testing.T) {
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 
 	hiddenID := insertHiddenSystemTag(h)
-	child, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "Secret2", Slug: "secret2-hidden"})
-	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (?,?)`, hiddenID, child.ID)
+	_, _ = h.tagSvc.CreateTag(context.Background(), services.CreateTagParams{
+		Name: "Secret2", Slug: "secret2-hidden", ParentIDs: []int64{hiddenID},
+	})
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("slug")
-	c.SetParamValues("secret2-hidden")
+	c.SetParamValues("hiddentag")
 	err := th.GetTagBySlug(c)
 	if err == nil {
 		t.Error("expected 404 for hidden tag by slug (public)")
+	}
+
+	// Hidden is not inherited — the child stays publicly reachable.
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec2)
+	c2.SetParamNames("slug")
+	c2.SetParamValues("secret2-hidden")
+	if err := th.GetTagBySlug(c2); err != nil {
+		t.Errorf("expected child of hidden tag to be reachable (no inheritance), got error: %v", err)
 	}
 }
 
@@ -605,7 +621,7 @@ func TestTagHandler_GetTagBySlug_AdminInjectHidden(t *testing.T) {
 	defer h.close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 
-	tag, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "AdminTag", Slug: "admintag"})
+	tag, _ := h.tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "AdminTag", Slug: "admintag"})
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -624,7 +640,7 @@ func TestTagHandler_UpdateTag_BindError(t *testing.T) {
 	h := setupHandlers(t)
 	defer h.close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
-	tag, _ := h.tagSvc.CreateTag(nil_ctx(), services.CreateTagParams{Name: "Bindme", Slug: "bindme"})
+	tag, _ := h.tagSvc.CreateTag(context.Background(), services.CreateTagParams{Name: "Bindme", Slug: "bindme"})
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader("{notjson}"))
@@ -657,14 +673,8 @@ func TestTagHandler_RecalculateCounts_DBError(t *testing.T) {
 }
 
 func insertHidePostsSystemTag(h *testHandlers) int64 {
-	var sysID int64
-	_ = h.repo.DB().QueryRow(
-		`INSERT INTO tags (name, slug, post_count, created_at) VALUES ('_hide_posts','_hide_posts',0,datetime('now')) RETURNING id`,
-	).Scan(&sysID)
-	var childID int64
-	_ = h.repo.DB().QueryRow(
-		`INSERT INTO tags (name, slug, post_count, created_at) VALUES ('HidePosts','hide-posts-child',0,datetime('now')) RETURNING id`,
-	).Scan(&childID)
-	_, _ = h.repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (?,?)`, sysID, childID)
-	return childID
+	tag, _ := h.tagSvc.CreateTag(context.Background(), services.CreateTagParams{
+		Name: "HidePosts", Slug: "hidepoststag", HidesPosts: true,
+	})
+	return tag.ID
 }

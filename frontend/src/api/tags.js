@@ -7,7 +7,7 @@
 import { api } from './client.js';
 
 /**
- * @param {{ include_empty?: boolean, important_only?: boolean }} [params]
+ * @param {{ include_empty?: boolean, important_only?: boolean, q?: string }} [params]
  * @returns {Promise<{ tags: object[], total: number }>}
  */
 export function listTags(params = {}) {
@@ -50,6 +50,36 @@ export function updateTag(id, data) {
 }
 
 /**
+ * Patch a tag — only the provided fields are updated (merge semantics).
+ * @param {number} id
+ * @param {object} fields  Partial tag fields to update
+ * @returns {Promise<object>}
+ */
+export function patchTag(id, fields) {
+  return api.patch(`/api/tags/${id}`, fields);
+}
+
+/**
+ * Replace all parent relationships for a tag.
+ * @param {number} id
+ * @param {number[]} ids  Parent IDs (empty array = unfiled)
+ * @returns {Promise<object>}
+ */
+export function setTagParents(id, ids) {
+  return api.put(`/api/tags/${id}/parents`, { ids });
+}
+
+/**
+ * Replace all child relationships for a tag.
+ * @param {number} id
+ * @param {number[]} ids  Child IDs
+ * @returns {Promise<object>}
+ */
+export function setTagChildren(id, ids) {
+  return api.put(`/api/tags/${id}/children`, { ids });
+}
+
+/**
  * @param {number} id
  * @returns {Promise<null>}
  */
@@ -68,6 +98,18 @@ export function reorderTag(tagId, data) {
 }
 
 /**
+ * Move a tag to a position within a sibling group under a specific parent.
+ * Only renumbers the sort_order for that parent's edge group; other parents
+ * are untouched.
+ * @param {number} tagId
+ * @param {{ parent_id: number, after_id: number|null }} data  after_id=null → front
+ * @returns {Promise<object>}
+ */
+export function moveTag(tagId, data) {
+  return api.post(`/api/tags/${tagId}/move`, data);
+}
+
+/**
  * Geocode a tag by its name via Nominatim and store the result.
  * @param {number} id
  * @returns {Promise<{ latitude: number, longitude: number }>}
@@ -79,4 +121,14 @@ export function geocodeTag(id) {
 /** Recalculate all tag post counts. */
 export function recalculateCounts() {
   return api.post('/api/tags/recalculate-counts');
+}
+
+/**
+ * Merge one tag into another.
+ * @param {number} loserId
+ * @param {{ winner_id: number, keep_redirect: boolean }} data
+ * @returns {Promise<null>}
+ */
+export function mergeTags(loserId, data) {
+  return api.post(`/api/tags/${loserId}/merge`, data);
 }

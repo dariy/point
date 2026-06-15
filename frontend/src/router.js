@@ -102,13 +102,15 @@ class Router {
     } else {
       history.pushState(null, "", path);
     }
-    this._render(path);
+    // Always render using the browser's resolved location to ensure absolute
+    // path matching in the router.
+    this._render(location.pathname + location.search + location.hash);
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
 
   _onPopState() {
-    this._render(location.pathname + location.search);
+    this._render(location.pathname + location.search + location.hash);
   }
 
   _onNavigate(event) {
@@ -127,6 +129,7 @@ class Router {
     if (event.defaultPrevented) return;
     const anchor = event.target.closest("a[href]");
     if (!anchor) return;
+
     const href = anchor.getAttribute("href");
     if (
       !href ||
@@ -140,8 +143,14 @@ class Router {
     ) {
       return;
     }
+
+    // Use the resolved pathname, search and hash from the anchor element
+    // instead of the raw href attribute. This ensures that relative links are
+    // correctly resolved against the current base URL before we attempt to match.
+    const path = anchor.pathname + anchor.search + anchor.hash;
+
     event.preventDefault();
-    this.navigate(href);
+    this.navigate(path);
   }
 
   /**
@@ -152,8 +161,12 @@ class Router {
    * @returns {Record<string,string>|null}
    */
   _match(pattern, pathname) {
-    const patParts = pattern.split("/");
-    const urlParts = pathname.split("/");
+    // Normalize: remove trailing slashes and multiple slashes
+    const cleanPattern = pattern.replace(/\/+$/, "") || "/";
+    const cleanPathname = pathname.replace(/\/+$/, "") || "/";
+
+    const patParts = cleanPattern.split("/");
+    const urlParts = cleanPathname.split("/");
     if (patParts.length !== urlParts.length) return null;
 
     const params = {};
@@ -232,6 +245,7 @@ class Router {
       try {
         const res = await fetch("/api/setup/status", {
           credentials: "include",
+          cache: "no-store",
         });
         if (!res.ok) throw new Error("unavailable");
         const data = await res.json();
@@ -262,13 +276,22 @@ class Router {
     }
 
     // Same-route optimisation: reuse the existing page instance when navigating
-    // between pages that share the same route pattern (e.g. post → post).
+    // between pages that share the same route pattern (e.g. post → post), or
+    // distinct patterns that resolve to the same page via an explicit shared
+    // `key` (e.g. /map and /map/:year). Reuse calls onRouteUpdate so the page
+    // can refresh in place instead of remounting.
+    const sameRoute =
+      this._currentRoute === matchedRoute ||
+      (this._currentRoute &&
+        matchedRoute.key &&
+        this._currentRoute.key === matchedRoute.key);
     if (
       this._currentPage &&
-      this._currentRoute === matchedRoute &&
+      sameRoute &&
       typeof this._currentPage.onRouteUpdate === "function"
     ) {
       store.set("route", { pathname, params, query });
+      this._currentRoute = matchedRoute;
       this._currentPage.onRouteUpdate(params, query);
       return;
     }

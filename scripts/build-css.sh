@@ -54,12 +54,14 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/common/reset.css \
     "$CSS_DIR"/public/tokens.css \
     "$CSS_DIR"/common/buttons.css \
+    "$CSS_DIR"/common/flash-messages.css \
     "$CSS_DIR"/common/empty-state.css \
     "$CSS_DIR"/common/pagination.css \
     "$CSS_DIR"/common/category-chips.css \
     "$CSS_DIR"/common/theme-toggle.css \
     "$CSS_DIR"/common/utilities.css \
     "$CSS_DIR"/common/login-overlay.css \
+    "$CSS_DIR"/common/prism.css \
     "$CSS_DIR"/public/layout.css \
     "$CSS_DIR"/public/header.css \
     "$CSS_DIR"/public/header-tags.css \

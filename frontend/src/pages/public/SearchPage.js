@@ -12,13 +12,21 @@ import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
+import { listTags } from '../../api/tags.js';
 import { store } from '../../store.js';
-import { escapeHtml, navigate } from '../../utils/helpers.js';
+import { escapeHtml } from '../../utils/helpers.js';
+import { ViewContext } from '../../utils/viewContext.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
     super(container, props);
-    this.state = { loading: true, data: null, error: null };
+    this.state = { loading: true, data: null, tags: [], error: null };
+  }
+
+  onRouteUpdate(params, query) {
+    this.props.params = params;
+    this.props.query = query;
+    this._load();
   }
 
   render() {
@@ -51,6 +59,7 @@ export default class SearchPage extends Component {
         <div id="header-mount"></div>
         <main class="site-main">
           <div class="main-container">
+            <div id="tag-results-mount"></div>
             <div id="grid-mount" class="grid-expand-mount">
             </div>
             <div id="pagination-mount"></div>
@@ -85,8 +94,14 @@ export default class SearchPage extends Component {
       navTags: rootMenu,
       currentPath: '/search',
       breadcrumb,
+      total: this.state.data?.total || 0,
+      timelineVisible: false,
     });
     this.mountChild(PublicFooter, '#footer-mount', { settings });
+
+    if (this.state.tags.length > 0) {
+      this._renderTagResults();
+    }
 
     if (this.state.loading || !this.state.data) return;
 
@@ -104,9 +119,30 @@ export default class SearchPage extends Component {
         page,
         pages,
         total,
-        onPage: (p) => navigate(`/search?q=${encodeURIComponent(this.props.query.q || '')}&page=${p}`),
+        onPage: (p) => ViewContext.update({ page: p }),
       });
     }
+  }
+
+  _renderTagResults() {
+    const mount = this.$('#tag-results-mount');
+    if (!mount) return;
+
+    const tagsHtml = this.state.tags.map(t => `
+      <a href="/tags/${escapeHtml(t.slug)}" class="search-tag-chip">
+        <span class="tag-name">${escapeHtml(t.name)}</span>
+        <span class="tag-count">${t.post_count}</span>
+      </a>
+    `).join('');
+
+    mount.innerHTML = `
+      <div class="search-tag-results">
+        <h3 class="search-tag-results-title">Tags</h3>
+        <div class="search-tag-strip">
+          ${tagsHtml}
+        </div>
+      </div>
+    `;
   }
 
   mount() {
@@ -115,21 +151,30 @@ export default class SearchPage extends Component {
   }
 
   async _load() {
-    const q = this.props.query?.q || '';
-    const page = parseInt(this.props.query?.page || '1', 10);
+    const vc = ViewContext.current();
     
-    document.title = q ? `Search: ${q} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
+    let titleQuery = vc.query || '';
+    if (vc.tag) titleQuery += ` in ${vc.tag}`;
+    
+    document.title = titleQuery ? `Search: ${titleQuery} — ${store.get('settings')?.blog_title || 'Blog'}` : 'Search';
 
-    if (!q.trim()) {
-      this.setState({ loading: false, data: { posts: [], total: 0, page: 1, pages: 1 }, error: null });
+    if (!vc.query?.trim()) {
+      this.setState({ loading: false, data: { posts: [], total: 0, page: 1, pages: 1 }, tags: [], error: null });
       return;
     }
 
     try {
-      const data = await listPosts({ q, page, status: 'published' });
-      this.setState({ loading: false, data, error: null });
+      const params = { q: vc.query, page: vc.page, status: 'published' };
+      if (vc.tag) params.tag = vc.tag;
+
+      const [data, tagsData] = await Promise.all([
+        listPosts(params),
+        listTags({ q: vc.query, include_empty: false })
+      ]);
+      
+      this.setState({ loading: false, data, tags: tagsData.tags || [], error: null });
     } catch (err) {
-      this.setState({ loading: false, data: null, error: err.message || 'Failed to search.' });
+      this.setState({ loading: false, data: null, tags: [], error: err.message || 'Failed to search.' });
     }
   }
 }

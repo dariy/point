@@ -93,7 +93,7 @@ func TestSchedulerService_New(t *testing.T) {
 	settingsSvc := NewSettingsService(repo)
 	tagSvc := NewTagService(repo)
 	authSvc := NewAuthService(repo)
-	postSvc := NewPostService(repo, nil, nil, "")
+	postSvc := NewPostService(repo, nil, nil, nil, "")
 	mediaSvc := NewMediaService(repo, cfg, settingsSvc, tagSvc)
 	systemSvc := NewSystemService(repo, dir)
 

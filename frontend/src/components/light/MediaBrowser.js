@@ -41,6 +41,7 @@ export class MediaBrowser extends Component {
       uploading: false,
       draggingOver: false,
       selectedIds: new Set(),
+      selectMode: false,
     };
     this._dragCount = 0;
     this._dragListeners = [];
@@ -131,10 +132,20 @@ export class MediaBrowser extends Component {
          </div>`;
 
     return `
-      <div class="media-browser${pickerMode ? ' media-browser--picker' : ''}">
+      <div class="media-browser${pickerMode ? ' media-browser--picker' : ''}${this.state.selectMode ? ' media-browser--select-mode' : ''}">
         <input type="file" id="mb-file-input" multiple accept="image/*,video/*,audio/*" style="display:none">
 
+        <div class="mb-mobile-capture-buttons mobile-only">
+          <button id="mb-capture-camera-btn" class="btn btn-primary" title="Take photo">📸<span class="btn-label"> Camera</span></button>
+          <button id="mb-capture-video-btn" class="btn btn-primary" title="Record video">📹<span class="btn-label"> Video</span></button>
+          <input type="file" id="mb-capture-camera-input" accept="image/*" capture="camera" style="display:none">
+          <input type="file" id="mb-capture-video-input" accept="video/*" capture="camcorder" style="display:none">
+        </div>
+
         ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ''}
+        ${pickerMode ? `<div class="mb-top-bar mobile-only">
+          ${this._renderBreadcrumbs()}
+        </div>` : ''}
         <div class="media-layout">
           ${folderTree}
           <div class="media-content">
@@ -144,6 +155,20 @@ export class MediaBrowser extends Component {
         </div>
         ${dropOverlay}
       </div>`;
+  }
+
+  _renderBreadcrumbs() {
+    const { selectedFolder } = this.state;
+    const parts = selectedFolder ? selectedFolder.split('/') : [];
+    const rootLabel = this.props.pickerMode ? 'All Media' : 'Media';
+    let crumbs = `<button class="mb-breadcrumb-item" data-folder="">${escapeHtml(rootLabel)}</button>`;
+    let currentPath = '';
+    parts.forEach((p, i) => {
+      currentPath += (currentPath ? '/' : '') + p;
+      const label = i === 1 ? MONTH_NAMES[parseInt(p, 10) - 1] || p : p;
+      crumbs += ` <span class="mb-breadcrumb-separator">/</span> <button class="mb-breadcrumb-item" data-folder="${escapeHtml(currentPath)}">${escapeHtml(label)}</button>`;
+    });
+    return `<div class="mb-breadcrumbs">${crumbs}</div>`;
   }
 
   _renderItem(m, selectedIds) {
@@ -166,7 +191,7 @@ export class MediaBrowser extends Component {
 
     const copyPath = m.path || (m.original_path ? m.original_path.replace('/media/originals', '') : '');
 
-    const pickerCheckbox = pickerMode ? `
+    const pickerCheckbox = (pickerMode || this.state.selectMode) ? `
       <label class="media-item-checkbox" title="${isSelected ? 'Deselect' : 'Select'}">
         <input type="checkbox" class="media-item-check" data-id="${escapeHtml(String(m.id))}"
                ${isSelected ? 'checked' : ''} aria-label="Select ${escapeHtml(m.filename)}">
@@ -177,14 +202,14 @@ export class MediaBrowser extends Component {
     const actions = pickerMode ? '' : `
       <div class="media-item-actions">
         <a href="${escapeHtml(m.original_path || '')}" class="btn btn-sm" target="_blank"
-           rel="noopener" title="View original">↗</a>
+           rel="noopener" title="View original" aria-label="View original file">↗</a>
         <button class="btn btn-sm rename-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Rename">${EDIT_SVG}</button>
+                data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${EDIT_SVG}</button>
         <button class="btn btn-sm btn-danger delete-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Delete">✕</button>
-        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF">ℹ EXIF</button>
+                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">✕</button>
+        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">ℹ EXIF</button>
       </div>`;
 
     return `
@@ -447,6 +472,38 @@ export class MediaBrowser extends Component {
 
     this.$('#mb-upload-btn')?.addEventListener('click', () => fileInput?.click());
 
+    // Mobile capture buttons
+    this.$('#mb-capture-camera-btn')?.addEventListener('click', () => this.$('#mb-capture-camera-input')?.click());
+    this.$('#mb-capture-video-btn')?.addEventListener('click', () => this.$('#mb-capture-video-input')?.click());
+
+    const onCapture = (e) => {
+      this._uploadFiles(Array.from(e.target.files));
+      e.target.value = '';
+    };
+    this.$('#mb-capture-camera-input')?.addEventListener('change', onCapture);
+    this.$('#mb-capture-video-input')?.addEventListener('change', onCapture);
+
+    // Breadcrumbs
+    this.$$('.mb-breadcrumb-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.setState({ selectedFolder: btn.dataset.folder || null });
+        this._load({ page: 1 });
+      });
+    });
+
+    if (!pickerMode) {
+      const h1 = document.querySelector('.light-header .header-title-row h1');
+      if (h1) {
+        h1.innerHTML = this._renderBreadcrumbs();
+        h1.querySelectorAll('.mb-breadcrumb-item').forEach(btn => {
+          btn.addEventListener('click', () => {
+            this.setState({ selectedFolder: btn.dataset.folder || null });
+            this._load({ page: 1 });
+          });
+        });
+      }
+    }
+
     fileInput?.addEventListener('change', () => {
       this._uploadFiles(Array.from(fileInput.files));
       fileInput.value = '';
@@ -465,7 +522,7 @@ export class MediaBrowser extends Component {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const year = btn.dataset.year;
-        const expanded = this.state.expandedYears[year] !== false;
+        const expanded = this.state.expandedYears[year] === true;
         this.setState({ expandedYears: { ...this.state.expandedYears, [year]: !expanded } });
       });
     });
@@ -492,8 +549,8 @@ export class MediaBrowser extends Component {
       this.setState({ expandedYears: newExpanded });
     });
 
-    if (pickerMode) {
-      // Picker: toggle selection via checkbox or clicking the item
+    if (pickerMode || this.state.selectMode) {
+      // Picker/Select: toggle selection via checkbox or clicking the item
       this.$$('.media-item').forEach((item) => {
         item.addEventListener('click', (e) => {
           // Don't trigger if clicking directly on checkbox label (it handles its own state)
@@ -508,7 +565,27 @@ export class MediaBrowser extends Component {
           this._toggleSelection(id);
         });
       });
-    } else {
+    }
+
+    if (!pickerMode) {
+      // Long-press to enter select mode (standalone only)
+      this.$$('.media-item').forEach(item => {
+        let timer = null;
+        const start = () => {
+          timer = setTimeout(() => {
+            if (!this.state.selectMode) {
+              const id = parseInt(item.dataset.id, 10);
+              this.setState({ selectMode: true, selectedIds: new Set([id]) });
+            }
+          }, 600);
+        };
+        const cancel = () => { if (timer) clearTimeout(timer); timer = null; };
+        item.addEventListener('pointerdown', start);
+        item.addEventListener('pointerup', cancel);
+        item.addEventListener('pointerleave', cancel);
+        item.addEventListener('pointercancel', cancel);
+      });
+
       // Standalone: delete, copy, lightbox
       this.$$('.delete-media-btn').forEach((btn) => {
         btn.addEventListener('click', () => {

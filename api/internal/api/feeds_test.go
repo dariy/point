@@ -20,7 +20,7 @@ func TestFeedsHandler(t *testing.T) {
 		_ = repo.Close()
 	}()
 
-	postService := services.NewPostService(repo, nil, nil, "")
+	postService := services.NewPostService(repo, nil, nil, nil, "")
 	tagService := services.NewTagService(repo)
 	settingsService := services.NewSettingsService(repo)
 	cacheService := services.NewCacheService(t.TempDir())
@@ -40,7 +40,7 @@ func TestFeedsHandler(t *testing.T) {
 	}
 
 	// Test RSS
-	req = httptest.NewRequest(http.MethodGet, "/rss.xml", nil)
+	req = httptest.NewRequest(http.MethodGet, "/feed.xml", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
 	if err := handler.RSSFeed(c); err != nil {

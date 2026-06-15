@@ -70,7 +70,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	apiKeyService := services.NewApiKeyService(repo)
 	tagService := services.NewTagService(repo)
 	instagramService := services.NewInstagramService(settingsService)
-	postService := services.NewPostService(repo, settingsService, instagramService, cfg.AppURL)
+	postService := services.NewPostService(repo, settingsService, instagramService, tagService, cfg.AppURL)
 	mediaService := services.NewMediaService(repo, cfg, settingsService, tagService)
 	systemService := services.NewSystemService(repo, cfg.StoragePath)
 	cacheService := services.NewCacheService(cfg.StoragePath)
@@ -99,6 +99,12 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	e := echo.New()
 	e.HideBanner = true
+
+	// Redirect HTTP to HTTPS if AppURL is configured as HTTPS.
+	if strings.HasPrefix(cfg.AppURL, "https://") {
+		e.Pre(middleware.HTTPSRedirect())
+	}
+
 	e.HTTPErrorHandler = api.CustomHTTPErrorHandler
 
 	// Handlers
@@ -207,6 +213,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	// ── Feed routes (crawlers & feed readers) ──────────────────────────────────
 	e.GET("/feed.xml", feedsHandler.RSSFeed)
+	e.GET("/feed", feedsHandler.RSSFeed) // alias used by the public footer link
 	e.GET("/sitemap.xml", feedsHandler.Sitemap)
 	e.GET("/robots.txt", feedsHandler.RobotsTxt)
 
@@ -246,7 +253,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	postsGroup.GET("", postHandler.ListPosts, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/analytics", postHandler.GetPostAnalytics, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("", postHandler.CreatePost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	postsGroup.POST("/audio", postHandler.CreateAudioPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/preview-render", postHandler.PreviewRender, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/slug/:slug", postHandler.GetPostBySlug, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/:slug/page", postHandler.GetPostPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/:id", postHandler.GetPostByID, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -273,7 +280,12 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	tagsGroup.GET("/slug/:slug", tagHandler.GetTagBySlug, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	tagsGroup.GET("/slug/:slug/posts", tagHandler.GetPostsByTag, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	tagsGroup.PUT("/:id", tagHandler.UpdateTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.PATCH("/:id", tagHandler.PatchTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	tagsGroup.DELETE("/:id", tagHandler.DeleteTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.PUT("/:id/parents", tagHandler.SetTagParents, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.PUT("/:id/children", tagHandler.SetTagChildren, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.POST("/:id/move", tagHandler.MoveTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	tagsGroup.POST("/:id/merge", tagHandler.MergeTags, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	tagsGroup.POST("/:id/reorder", tagHandler.ReorderTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	tagsGroup.POST("/:id/geocode", tagHandler.GeocodeTag, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
@@ -357,6 +369,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	pagesGroup.GET("/home", pagesHandler.GetHomePage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/graph", pagesHandler.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
@@ -708,6 +721,22 @@ func main() {
 			`CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at)`,
 		},
 		{
+			"add_posts_type_column",
+			`ALTER TABLE posts ADD COLUMN type TEXT NOT NULL DEFAULT 'post'`,
+		},
+		{
+			"migrate_post_type_audio_from_tags",
+			`UPDATE posts SET type = 'audio' WHERE id IN (SELECT post_id FROM post_tags WHERE tag_id IN (SELECT id FROM tags WHERE slug = '_type_audio'))`,
+		},
+		{
+			"migrate_post_type_page_from_tags",
+			`UPDATE posts SET type = 'page' WHERE id IN (SELECT post_id FROM post_tags WHERE tag_id IN (SELECT id FROM tags WHERE slug = '_type_page'))`,
+		},
+		{
+			"migrate_post_type_from_status_page",
+			`UPDATE posts SET type = 'page', status = 'published' WHERE status = 'page'`,
+		},
+		{
 			"create_webauthn_credentials_table",
 			`CREATE TABLE IF NOT EXISTS webauthn_credentials (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -767,10 +796,10 @@ func main() {
 		slog.Warn("migration failed", "name", "rename_system_tags_names_no_underscore", "error", err)
 	}
 
-	// Drop the UNIQUE constraint from tags.name so that a user tag (e.g. slug="root")
-	// can share its name with the system tag (slug="_root"). Only slug stays unique.
-	if err := repo.DropTagNameUnique(ctx); err != nil {
-		slog.Warn("drop_tags_name_unique failed", "error", err)
+	// Migrate tag system: translate system-tag graph edges to typed columns, fold
+	// tag_locations into tags, drop old columns, delete system tags.
+	if err := repo.MigrateTagFlagsFromSystemTags(ctx); err != nil {
+		slog.Warn("tag_flags_from_system_tags failed", "error", err)
 	}
 
 	// Ensure a secret key is available for session signing.

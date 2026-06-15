@@ -21,7 +21,7 @@ AND p.id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            SELECT id FROM tags WHERE hides_posts = 1
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -69,7 +69,7 @@ AND id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
         WITH RECURSIVE h(id) AS (
-            SELECT child_id AS id FROM tag_relationships WHERE parent_id = (SELECT id FROM tags WHERE slug = '_hide_posts')
+            SELECT id FROM tags WHERE hides_posts = 1
             UNION
             SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
         )
@@ -120,7 +120,7 @@ func (r *sqliteRepository) GetPublicTagsForSitemap(ctx context.Context) ([]struc
 }, error) {
 	const q = `
 SELECT id, slug FROM tags
-WHERE post_count > 0 AND slug NOT LIKE '\_%%' ESCAPE '\' AND id NOT IN (SELECT tr.child_id FROM tag_relationships tr JOIN tags t ON t.id = tr.parent_id WHERE t.slug = '_hidden')
+WHERE post_count > 0 AND hidden = 0
 ORDER BY name ASC`
 
 	rows, err := r.db.QueryContext(ctx, q)

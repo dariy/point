@@ -1,5 +1,5 @@
 import { Component } from '../../components/Component.js';
-import { LightSidebar } from '../../components/light/LightSidebar.js';
+import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.js';
 import { escapeHtml } from '../../utils/helpers.js';
 
@@ -15,7 +15,7 @@ export default class AnalyticsPage extends Component {
   }
 
   afterRender() {
-    this.mountChild(LightSidebar, '#sidebar-mount', {
+    this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: '/light/analytics',
     });
 
@@ -23,6 +23,10 @@ export default class AnalyticsPage extends Component {
       this._fetchStarted = true;
       this._loadData();
     }
+  }
+
+  beforeUnmount() {
+    this._cleanupAdminLayout?.();
   }
 
   async _loadData() {
@@ -46,72 +50,57 @@ export default class AnalyticsPage extends Component {
   }
 
   render() {
-    const { loading, stats, topPosts, error } = this.state;
-
-    const content = loading
-      ? `<div class="loading-spinner" aria-label="Loading…"></div>`
-      : error
-        ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
-        : this._renderAnalytics(stats, topPosts);
-
-    return `
-      <div class="light-layout">
-        <div id="sidebar-mount"></div>
-        <div class="light-main">
-          <header class="light-header">
-            <div class="header-title-row">
-              <h1>Analytics</h1>
-            </div>
-          </header>
-          <main class="light-content">${content}</main>
-        </div>
-      </div>`;
+    return adminLayoutTemplate({
+      title: 'Analytics',
+      content: this._renderContent()
+    });
   }
 
-  _renderAnalytics(stats, topPosts) {
-    return `
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Total Views</div>
-          <div class="stat-value stat-primary">${escapeHtml(String(stats.total_views ?? 0))}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Average Views / Post</div>
-          <div class="stat-value">${escapeHtml(String(Math.round(stats.average_views_per_post ?? 0)))}</div>
-        </div>
-      </div>
+  _renderContent() {
+    const { loading, stats, topPosts, error } = this.state;
 
-      <div class="card" style="margin-top: var(--spacing-xl)">
-        <div class="card-header">
-          <h2>Top 10 Posts</h2>
+    if (loading) return '<div class="loading-spinner"></div>';
+    if (error) return `<p class="error">${escapeHtml(error)}</p>`;
+    if (!stats) return '<p>No data available</p>';
+
+    return `
+      <div class="analytics-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Views</div>
+            <div class="stat-value stat-primary">${escapeHtml(String(stats.total_views || 0))}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Posts</div>
+            <div class="stat-value">${escapeHtml(String(stats.total_posts || 0))}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Avg Views / Post</div>
+            <div class="stat-value">${escapeHtml(String(Math.round(stats.average_views_per_post || 0)))}</div>
+          </div>
         </div>
-        <div class="card-body">
-          <div class="table-container">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Post Title</th>
-                  <th class="text-right">Views</th>
-                  <th class="text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${topPosts.map(post => `
+
+        <div class="card" style="margin-top: var(--spacing-xl)">
+          <div class="card-header"><h2>Top Posts</h2></div>
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table">
+                <thead>
                   <tr>
-                    <td>
-                      <a href="/light/posts/${post.id}/edit" class="post-title-link">
-                        ${escapeHtml(post.title)}
-                      </a>
-                    </td>
-                    <td class="text-right font-mono">${escapeHtml(String(post.view_count ?? 0))}</td>
-                    <td class="text-right">
-                      <span class="status-pill status-${post.status}">${escapeHtml(post.status)}</span>
-                    </td>
+                    <th>Title</th>
+                    <th class="text-right">Views</th>
                   </tr>
-                `).join('')}
-                ${topPosts.length === 0 ? '<tr><td colspan="3" class="text-center">No posts found</td></tr>' : ''}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  ${topPosts.map(p => `
+                    <tr>
+                      <td><a href="/light/posts/${p.id}/edit">${escapeHtml(p.title)}</a></td>
+                      <td class="text-right font-mono">${escapeHtml(String(p.view_count || 0))}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

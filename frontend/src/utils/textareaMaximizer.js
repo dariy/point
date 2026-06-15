@@ -53,11 +53,23 @@ export function setupTextareaMaximizer(container) {
       btn.innerHTML = isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG;
       btn.title = isMaximized ? 'Minimize' : 'Maximize';
       
-      // Prevent body scrolling when maximized
+      // Prevent body scrolling and stacking context traps when maximized
       if (isMaximized) {
         document.body.classList.add('textarea-maximized-body-lock');
+        if (parent) {
+          textarea._placeholder = document.createElement('div');
+          textarea._placeholder.className = 'textarea-placeholder';
+          textarea._placeholder.style.height = parent.offsetHeight + 'px';
+          parent.parentNode.insertBefore(textarea._placeholder, parent);
+          document.body.appendChild(parent);
+        }
       } else {
         document.body.classList.remove('textarea-maximized-body-lock');
+        if (parent && textarea._placeholder) {
+          textarea._placeholder.parentNode.insertBefore(parent, textarea._placeholder);
+          textarea._placeholder.remove();
+          textarea._placeholder = null;
+        }
       }
 
       // If it's the main content editor, we might want to notify it

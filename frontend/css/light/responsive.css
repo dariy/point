@@ -11,69 +11,36 @@
     }
 }
 
-/* Sidebar overlay (hidden by default; shown on mobile when sidebar is open) */
-.sidebar-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 149; /* below sidebar (150) */
-    background: var(--color-black-alpha-40);
-}
-
-.sidebar-overlay.active {
-    display: block;
-}
-
-/* Hamburger button — hidden on desktop, visible on mobile */
-.sidebar-toggle-btn {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: var(--sidebar-toggle-btn-width);
-    height: var(--sidebar-toggle-btn-height);
-    padding: 0;
-    background: none;
-    border: var(--border-width) solid var(--border-primary);
-    border-radius: var(--border-radius);
-    color: var(--text-primary);
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
-.sidebar-toggle-btn:hover {
-    background: var(--surface-hover);
-}
-
 @media (max-width: 48em) {
     :root {
         --sidebar-width: 0;
     }
 
-    .sidebar-toggle-btn {
-        display: flex;
-    }
-
     .light-sidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        z-index: 150;
-        transform: translateX(-100%);
-        width: var(--light-sidebar-width);
-        transition: transform var(--transition-normal);
+        display: none;
     }
 
-    .light-sidebar.open {
-        transform: translateX(0);
-    }
-
-    .light-main {
+    .light-main,
+    .light-layout--collapsed .light-main {
         margin-left: 0;
+        padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0));
+    }
+
+    .admin-bottom-bar {
+        display: flex;
     }
 
     .light-content {
         padding: var(--spacing-md);
+    }
+
+    /* Posts list: swap table for cards */
+    .table-container:has(#posts-tbody) {
+        display: none;
+    }
+
+    .posts-card-list {
+        display: block;
     }
 
     .stats-grid {
@@ -117,21 +84,14 @@
    Tags Manager — portrait phones
    =========================== */
 @media (max-width: 40em) {
-    /* Header: two rows — [hamburger + title] then [actions] */
-    .light-header {
-        height: auto;
-        min-height: var(--header-height);
-        flex-wrap: wrap;
-        padding-top: var(--spacing-sm);
-        padding-bottom: var(--spacing-sm);
-        row-gap: var(--light-header-row-gap);
-    }
 
     /* Actions drop to line 2, full width, wrapping allowed */
     .header-actions {
         flex-basis: 100%;
         flex-wrap: wrap;
         text-wrap-mode: wrap;
+        justify-content: flex-end;
+        order: 1;
     }
 
     /* Hide drag handles — touch drag is unavailable */
@@ -147,15 +107,48 @@
         padding: 0;
     }
 
-    .tm-row .tm-actions {
-        order: 5;
+    /* ── Swipe-to-reveal actions ── */
+    .tm-node,
+    .tm-unfiled-node {
+        overflow: hidden;
     }
 
-    /* Two-line tree rows:
-       Line 1 – expand toggle + tag name + count badge
-       Line 2 – flag buttons + action buttons              */
     .tm-row {
-        flex-wrap: wrap;
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform;
+    }
+
+    .tm-row .tm-actions {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        transform: translateX(100%);
+        display: flex;
+        align-items: center;
+        gap: var(--tm-actions-gap);
+        padding: 0 var(--spacing-sm);
+        background: var(--surface-card);
+        opacity: 1;
+        pointer-events: auto;
+        border-left: var(--border-width) solid var(--border-primary);
+    }
+
+    .tm-row.tm-row--revealed {
+        background-color: var(--surface-hover);
+    }
+
+    /* List-view table rows: same concept but on <tr> / <td> */
+    .tm-tags-table .tm-actions {
+        position: static;
+        transform: none;
+        border-left: none;
+        padding: 0;
+    }
+
+    /* Single-line tree rows: actions revealed by swiping left */
+    .tm-row {
+        flex-wrap: nowrap;
         align-items: center;
         gap: var(--spacing-xs) var(--spacing-sm);
         min-height: auto;
@@ -179,8 +172,9 @@
         flex-shrink: 1;
     }
 
-    /* Hide flag buttons on portrait — keep only edit/add/delete actions */
-    .tm-flags-row {
+    /* Hide flag badges on portrait — accessible via editor modal */
+    .tm-flags-row,
+    .tm-badges-row {
         display: none;
     }
 
@@ -208,5 +202,54 @@
 
     .filters {
         flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filters .filter-select,
+    .filters .filter-search,
+    .filters .tag-filter-container {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+/* ===========================
+   Touch / Coarse Pointer
+   ≥44px targets; always-visible overlays (no hover available)
+   =========================== */
+@media (pointer: coarse) {
+    :root {
+        /* Icon action buttons: table rows, media overlays, tree rows */
+        --btn-width: var(--size-2-75);
+        --btn-height: var(--size-2-75);
+        /* copy-path inline button */
+        --copy-path-btn-width: var(--size-2-75);
+        --copy-path-btn-height: var(--size-2-75);
+        /* EXIF row delete button */
+        --exif-delete-btn-width: var(--size-2-75);
+        --exif-delete-btn-height: var(--size-2-75);
+        /* Tag manager flag toggles */
+        --tm-flag-toggle-width: var(--size-2-75);
+        --tm-flag-toggle-height: var(--size-2-75);
+    }
+
+    /* Tree rows: restore ≥44px touch target (overrides the min-height:auto at 40em) */
+    .tm-row {
+        min-height: 2.75rem;
+    }
+
+    /* Media item action buttons: always render at low opacity instead of hover-only */
+    .media-item-actions {
+        opacity: 0.7;
+    }
+
+    /* Copy-path button: always visible */
+    .media-item-info .copy-path-btn {
+        opacity: 0.7;
+    }
+
+    /* EXIF delete button: always render at low opacity instead of hover-only */
+    .exif-delete-btn {
+        opacity: 0.7;
     }
 }
