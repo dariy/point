@@ -232,11 +232,11 @@ export class PublicHeader extends Component {
 
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
 
-    // Burger: root tags as links for mobile discoverability
     const burgerTagLinksHtml = navTags.length
-      ? navTags.map(t =>
-          `<a href="/tags/${escapeHtml(t.slug)}" class="burger-link burger-tag-link">${escapeHtml(t.name)}</a>`
-        ).join('')
+      ? navTags.map(t => {
+          const href = t.url || `/tags/${escapeHtml(t.slug)}`;
+          return `<a href="${href}" class="burger-link burger-tag-link">${escapeHtml(t.name)}</a>`;
+        }).join('')
       : '';
 
     return `
@@ -429,6 +429,7 @@ export class PublicHeader extends Component {
         name: t.name,
         slug: t.slug,
         count: t.post_count,
+        href: t.url || (t.slug ? `/tags/${t.slug}` : null),
       }));
       if (siteCrumb) attachCrumbDropdown(siteCrumb, rootItems);
       if (siteTitleLink) attachCrumbDropdown(siteTitleLink, rootItems);
@@ -452,7 +453,7 @@ export class PublicHeader extends Component {
         name: c.name,
         slug: c.slug,
         count: c.post_count,
-        href: tagHref(c.slug, childPath),
+        href: c.url || tagHref(c.slug, childPath),
       }));
       attachCrumbDropdown(el, childItems);
     });

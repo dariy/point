@@ -291,7 +291,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
 
   containerEl.querySelectorAll('.tag-link').forEach((link) => {
     const href = link.getAttribute('href');
-    if (!href || href.startsWith('http')) return;
+    if (!href || href.startsWith('http') || !href.startsWith('/tags/')) return;
     const slug = href.replace('/tags/', '').split('?')[0];
 
     // Desktop hover

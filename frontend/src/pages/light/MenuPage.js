@@ -98,19 +98,25 @@ export default class MenuPage extends Component {
           <div class="card-body">
             <p>Choose how the site navigation menu is generated:</p>
             <div class="radio-group">
-              <label class="radio-label">
-                <input type="radio" name="menu-mode" value="tags" ${mode === 'tags' ? 'checked' : ''}>
-                <span class="radio-text">
-                  <strong>Automatic (Tags-based)</strong>
-                  <small>Hierarchical tags from the Tag Manager are automatically used.</small>
-                </span>
+              <label class="radio-card">
+                <input type="radio" class="radio-input" name="menu-mode" value="tags" ${mode === 'tags' ? 'checked' : ''}>
+                <div class="radio-content">
+                  <span class="radio-indicator"></span>
+                  <span class="radio-text">
+                    <strong>Automatic (Tags-based)</strong>
+                    <small>Hierarchical tags from the Tag Manager are automatically used.</small>
+                  </span>
+                </div>
               </label>
-              <label class="radio-label">
-                <input type="radio" name="menu-mode" value="custom" ${mode === 'custom' ? 'checked' : ''}>
-                <span class="radio-text">
-                  <strong>Custom (Manual)</strong>
-                  <small>Manually define links and labels for the navigation menu.</small>
-                </span>
+              <label class="radio-card">
+                <input type="radio" class="radio-input" name="menu-mode" value="custom" ${mode === 'custom' ? 'checked' : ''}>
+                <div class="radio-content">
+                  <span class="radio-indicator"></span>
+                  <span class="radio-text">
+                    <strong>Custom (Manual)</strong>
+                    <small>Manually define links and labels for the navigation menu.</small>
+                  </span>
+                </div>
               </label>
             </div>
           </div>
@@ -128,22 +134,26 @@ export default class MenuPage extends Component {
 
   _renderVisualEditor(items) {
     const rows = items.map((item, index) => `
-      <div class="menu-item-row" data-index="${index}" style="margin-left: ${item.depth * 24}px">
+      <div class="menu-row" data-index="${index}" style="margin-left: ${item.depth * 24}px">
         <span class="drag-handle">\u22ee\u22ee</span>
-        <input type="text" class="form-input item-label" placeholder="Label" value="${escapeHtml(item.label)}">
-        <input type="text" class="form-input item-url" placeholder="URL (optional)" value="${escapeHtml(item.url)}">
-        <div class="item-actions">
-          <button class="btn btn-sm indent-btn" title="Indent">\u21e5</button>
-          <button class="btn btn-sm outdent-btn" title="Outdent">\u21e4</button>
-          <button class="btn btn-sm btn-danger delete-item-btn" title="Remove">&times;</button>
+        <div class="menu-row-inputs">
+          <input type="text" class="form-input menu-label-input item-label" placeholder="Label" value="${escapeHtml(item.label)}">
+          <input type="text" class="form-input menu-url-input item-url" placeholder="URL (optional)" value="${escapeHtml(item.url)}">
+        </div>
+        <div class="menu-row-actions">
+          <button class="row-btn indent-btn" title="Indent">\u21e5</button>
+          <button class="row-btn outdent-btn" title="Outdent">\u21e4</button>
+          <button class="row-btn row-btn-delete delete-item-btn" title="Remove">&times;</button>
         </div>
       </div>
     `).join('');
 
     return `
       <div class="menu-visual-editor">
-        <div class="menu-items-list" id="menu-items-list">${rows}</div>
-        <button id="add-item-btn" class="btn btn-secondary" style="margin-top: var(--spacing-md)">+ Add Item</button>
+        <div class="menu-items" id="menu-items-list">${rows}</div>
+        <div class="menu-add-bar">
+          <button id="add-item-btn" class="btn btn-secondary">+ Add Item</button>
+        </div>
       </div>`;
   }
 
@@ -186,7 +196,7 @@ export default class MenuPage extends Component {
       this.setState({ items });
     });
 
-    this.container.querySelectorAll('.menu-item-row').forEach(row => {
+    this.container.querySelectorAll('.menu-row').forEach(row => {
       const index = parseInt(row.dataset.index, 10);
       row.querySelector('.delete-item-btn').addEventListener('click', () => {
         const items = this._collectVisualItems();
@@ -213,7 +223,7 @@ export default class MenuPage extends Component {
   }
 
   _collectVisualItems() {
-    const rows = this.container.querySelectorAll('.menu-item-row');
+    const rows = this.container.querySelectorAll('.menu-row');
     const items = [];
     rows.forEach(row => {
       const label = row.querySelector('.item-label').value.trim();
@@ -246,9 +256,28 @@ export default class MenuPage extends Component {
 
   async _handleSave() {
     let markdown = '';
+    let apiItems = [];
     if (this.state.mode === 'custom') {
       const items = this.state.editFormat === 'visual' ? this._collectVisualItems() : parseMarkdown(this.container.querySelector('#menu-markdown-input').value);
       markdown = serializeMarkdown(items);
+
+      const stack = [];
+      for (const item of items) {
+        const node = { name: item.label, url: item.url, children: [] };
+        if (item.depth === 0) {
+          apiItems.push(node);
+          stack[0] = node;
+        } else {
+          const parent = stack[item.depth - 1] || stack[stack.length - 1] || apiItems[apiItems.length - 1];
+          if (parent) {
+            parent.children.push(node);
+            stack[item.depth] = node;
+          } else {
+            apiItems.push(node);
+            stack[0] = node;
+          }
+        }
+      }
     }
 
     this.setState({ saving: true });
@@ -256,6 +285,7 @@ export default class MenuPage extends Component {
       await updateAdminNavMenu({
         mode: this.state.mode,
         custom_markdown: markdown,
+        items: apiItems,
       });
       
       // Refresh global nav tags

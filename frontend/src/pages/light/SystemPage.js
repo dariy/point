@@ -196,8 +196,8 @@ export default class SystemPage extends Component {
       const syncText = lastSync ? `Last updated: ${formatDateShort(lastSync)}` : 'Never updated';
       body = `
         <div class="offline-stats">
-          <div class="stat-row"><span>Posts:</span> <strong>${stats.posts}</strong></div>
-          <div class="stat-row"><span>Media:</span> <strong>${stats.media}</strong> (${formatFileSize(stats.media_size)})</div>
+          <div class="stat-row"><span>Posts:</span> <strong>${stats.post_count}</strong></div>
+          <div class="stat-row"><span>Media:</span> <strong>${stats.image_count}</strong> (${formatFileSize((stats.original_bytes || 0) + (stats.thumbnail_bytes || 0))})</div>
           <p class="form-hint">${syncText}</p>
         </div>
         <div class="offline-actions" style="margin-top: var(--spacing-md)">

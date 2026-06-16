@@ -37,8 +37,9 @@ func (h *NavMenuHandler) GetAdminNavMenu(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"mode":  mode,
-		"items": items,
+		"mode":            mode,
+		"items":           items,
+		"custom_markdown": all["custom_markdown"],
 	})
 }
 
@@ -48,8 +49,9 @@ func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	var body struct {
-		Mode  string                `json:"mode"`
-		Items []services.NavTagNode `json:"items"`
+		Mode           string                `json:"mode"`
+		Items          []services.NavTagNode `json:"items"`
+		CustomMarkdown string                `json:"custom_markdown"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
@@ -74,8 +76,13 @@ func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	if err := h.settingsService.SetSetting(ctx, "custom_markdown", body.CustomMarkdown, "string"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"mode":  body.Mode,
-		"items": body.Items,
+		"mode":            body.Mode,
+		"items":           body.Items,
+		"custom_markdown": body.CustomMarkdown,
 	})
 }
