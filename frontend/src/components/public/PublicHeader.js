@@ -117,10 +117,11 @@ export class PublicHeader extends Component {
     // Root "site" crumb — always a link to /, has ▾ caret for root-tags dropdown
     const siteHasChildren = navTags.length > 0;
     const siteHasFollowingCrumbs = hasTagCrumbs || yearLabel || queryLabel;
+    const siteClass = siteHasFollowingCrumbs ? 'breadcrumb-link' : 'breadcrumb-current';
     const siteCrumbHtml = `<span class="crumb-pair" id="site-crumb-pair">
-      <a href="/" class="breadcrumb-link crumb-site${siteHasChildren ? ' has-dropdown' : ''}" data-crumb="site"
-         aria-label="${title}"${siteHasChildren ? ' aria-haspopup="true"' : ''}>${title}${siteHasChildren ? '<span class="crumb-caret" aria-hidden="true">&#9662;</span>' : ''}</a>
-      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true">/</span>' : ''}
+      <a href="/" class="${siteClass} crumb-site${siteHasChildren ? ' has-dropdown' : ''}" data-crumb="site"
+         aria-label="${title}"${siteHasChildren ? ' aria-haspopup="true"' : ''}>${title}</a>
+      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true"></span>' : ''}
     </span>`;
 
     // Tag ancestry crumbs from `breadcrumb` prop
@@ -137,7 +138,6 @@ export class PublicHeader extends Component {
           : crumb.slug
             ? `/tags/${escapeHtml(crumb.slug)}`
             : null;
-        const caretHtml = hasChildren ? `<span class="crumb-caret" aria-hidden="true">&#9662;</span>` : '';
         // If there are facet crumbs after this, it's a non-final crumb visually
         const hasFacets = yearLabel || queryLabel;
         if (hasFacets) {
@@ -145,31 +145,30 @@ export class PublicHeader extends Component {
           if (href) {
             return `<span class="crumb-pair">
               <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-                 data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</a>
-              <span class="breadcrumb-separator" aria-hidden="true">/</span>
+                 data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
+              <span class="breadcrumb-separator" aria-hidden="true"></span>
             </span>`;
           }
           return `<span class="crumb-pair">
-            <span class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</span>
-            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>
+            <span class="breadcrumb-separator" aria-hidden="true"></span>
           </span>`;
         }
         // Terminal: breadcrumb-current
         if (href) {
           return `<a href="${href}" class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-             data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</a>`;
+             data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>`;
         }
-        return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</span>`;
+        return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
       }
 
       // Non-last tag crumb — foldable crumb-pair with optional dropdown
       const href = crumb.href || (crumb.slug ? `/tags/${escapeHtml(crumb.slug)}` : '/');
       const hasChildren = this._crumbHasChildren(crumb, navTags);
-      const caretHtml = hasChildren ? `<span class="crumb-caret" aria-hidden="true">&#9662;</span>` : '';
       return `<span class="crumb-pair">
         <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-           data-crumb-slug="${escapeHtml(crumb.slug || '')}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</a>
-        <span class="breadcrumb-separator" aria-hidden="true">/</span>
+           data-crumb-slug="${escapeHtml(crumb.slug || '')}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
+        <span class="breadcrumb-separator" aria-hidden="true"></span>
       </span>`;
     }).join('');
 
@@ -182,7 +181,7 @@ export class PublicHeader extends Component {
       } else {
         facetCrumbsHtml += `<span class="crumb-pair crumb-facet-pair">
           <span class="breadcrumb-link breadcrumb-facet breadcrumb-year">${escapeHtml(yearLabel)}</span>
-          <span class="breadcrumb-separator" aria-hidden="true">/</span>
+          <span class="breadcrumb-separator" aria-hidden="true"></span>
         </span>`;
       }
     }
@@ -424,13 +423,15 @@ export class PublicHeader extends Component {
 
     // "site" crumb → root navTags dropdown
     const siteCrumb = this.$('.crumb-site');
-    if (siteCrumb && navTags.length) {
+    const siteTitleLink = this.$('.site-title-link');
+    if (navTags.length) {
       const rootItems = navTags.map(t => ({
         name: t.name,
         slug: t.slug,
         count: t.post_count,
       }));
-      attachCrumbDropdown(siteCrumb, rootItems);
+      if (siteCrumb) attachCrumbDropdown(siteCrumb, rootItems);
+      if (siteTitleLink) attachCrumbDropdown(siteTitleLink, rootItems);
     }
 
     // Tag crumbs with children → sub-tags dropdown.

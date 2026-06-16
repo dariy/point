@@ -20,8 +20,7 @@ body {
 .light-sidebar.is-collapsed .site-name,
 .light-sidebar.is-collapsed .nav-label,
 .light-sidebar.is-collapsed .sidebar-version,
-.light-sidebar.is-collapsed .nav-group-title,
-.light-sidebar.is-collapsed .toggle-icon {
+.light-sidebar.is-collapsed .nav-group-title {
     display: none;
 }
 
@@ -32,6 +31,24 @@ body {
 .light-sidebar.is-collapsed .nav-item a,
 .light-sidebar.is-collapsed .sidebar-footer {
     padding-right: 0;
+}
+
+.light-sidebar.is-collapsed .nav-group-toggle {
+    padding: var(--spacing-sm) 0 var(--spacing-sm) var(--spacing-lg);
+    color: var(--sidebar-text);
+    transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.light-sidebar.is-collapsed .nav-group-toggle:hover {
+    color: var(--sidebar-text-hover);
+    background-color: var(--sidebar-active-bg);
+}
+
+.light-sidebar.is-collapsed .nav-group-toggle .toggle-icon {
+    width: 18px;
+    justify-content: center;
+    opacity: 1;
+    color: inherit;
 }
 
 /* Collapsed: stack footer actions one per line like nav-items, left-aligned
@@ -506,13 +523,14 @@ body {
     margin: 0;
     line-height: 1;
     user-select: none;
+    text-align: left;
 }
 
 .nav-group-toggle {
     display: flex;
     align-items: center;
     width: 100%;
-    padding: 0;
+    padding: 0 var(--spacing-lg) 0 0;
     background: none;
     border: none;
     cursor: pointer;
@@ -521,6 +539,7 @@ body {
 
 .nav-group-toggle .nav-group-title {
     flex: 1;
+    padding-right: 0; /* Remove extra right padding since it's now on the parent */
 }
 
 .nav-group-toggle:hover .nav-group-title {
@@ -530,7 +549,6 @@ body {
 .nav-group-toggle .toggle-icon {
     display: flex;
     align-items: center;
-    padding-right: var(--spacing-lg);
     color: var(--sidebar-text);
     opacity: 0.4;
     transition: transform var(--transition-fast), opacity var(--transition-fast);

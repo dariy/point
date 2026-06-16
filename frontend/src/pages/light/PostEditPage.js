@@ -771,6 +771,8 @@ export default class PostEditPage extends Component {
     document.removeEventListener("dragleave", this._onDragLeave);
     document.removeEventListener("dragover", this._onDragOver);
     document.removeEventListener("drop", this._onDrop);
+    document.removeEventListener("dragstart", this._onDragStart);
+    document.removeEventListener("dragend", this._onDragEnd);
     document.body.classList.remove("drag-active");
     this._mediaPicker?.destroy();
     this._mediaPicker = null;
@@ -785,15 +787,41 @@ export default class PostEditPage extends Component {
     document.removeEventListener("dragleave", this._onDragLeave);
     document.removeEventListener("dragover", this._onDragOver);
     document.removeEventListener("drop", this._onDrop);
+    document.removeEventListener("dragstart", this._onDragStart);
+    document.removeEventListener("dragend", this._onDragEnd);
+    
     this._dragCount = 0;
-    this._onDragEnter = () => { this._dragCount++; document.body.classList.add("drag-active"); };
-    this._onDragLeave = () => { this._dragCount--; if (this._dragCount === 0) document.body.classList.remove("drag-active"); };
-    this._onDragOver = (e) => { e.preventDefault(); };
+    this._internalDrag = false;
+
+    this._onDragStart = () => { this._internalDrag = true; };
+    this._onDragEnd = () => { this._internalDrag = false; };
+
+    this._onDragEnter = (e) => {
+      if (this._internalDrag) return;
+      const types = e.dataTransfer?.types;
+      if (!types || !Array.from(types).includes("Files")) return;
+      this._dragCount++;
+      document.body.classList.add("drag-active");
+    };
+    this._onDragLeave = (e) => {
+      if (this._internalDrag) return;
+      const types = e.dataTransfer?.types;
+      if (!types || !Array.from(types).includes("Files")) return;
+      this._dragCount--;
+      if (this._dragCount === 0) document.body.classList.remove("drag-active");
+    };
+    this._onDragOver = (e) => {
+      if (!this._internalDrag) e.preventDefault();
+    };
     this._onDrop = (e) => {
+      if (this._internalDrag) return;
       e.preventDefault(); this._dragCount = 0; document.body.classList.remove("drag-active");
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
       files.forEach(f => this._uploadAndInsert(f));
     };
+
+    document.addEventListener("dragstart", this._onDragStart);
+    document.addEventListener("dragend", this._onDragEnd);
     document.addEventListener("dragenter", this._onDragEnter);
     document.addEventListener("dragleave", this._onDragLeave);
     document.addEventListener("dragover", this._onDragOver);
@@ -820,7 +848,11 @@ export default class PostEditPage extends Component {
     this._visualEditorRef = this.mountChild(VisualEditor, "#visual-editor-mount", {
       nodes: this._nodes,
       mediaByPath: this._mediaByPath || {},
-      onChange: (nodes) => { this._nodes = nodes; this._onInput(); },
+      onChange: (nodes) => {
+        this._nodes = nodes;
+        this._visualEditorRef.setProps({ nodes: this._nodes });
+        this._onInput();
+      },
       onInput: () => this._onInput(),
       onAddMedia: (index) => {
         this._mediaPicker.open((items) => {

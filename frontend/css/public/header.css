@@ -132,6 +132,36 @@
     transition: color var(--transition-theme);
 }
 
+.site-breadcrumb .breadcrumb-separator::after {
+    content: "→";
+    margin: 0 4px;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    transition: transform 100ms ease;
+}
+
+.site-breadcrumb .breadcrumb-link.has-dropdown:hover + .breadcrumb-separator::after,
+.site-breadcrumb .breadcrumb-link.is-flyout-open + .breadcrumb-separator::after {
+    transform: rotate(90deg);
+}
+
+.site-breadcrumb .breadcrumb-current.has-dropdown::after {
+    content: "←";
+    margin-left: 8px;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    transition: transform 100ms ease;
+}
+
+.site-breadcrumb .breadcrumb-current.has-dropdown:hover::after,
+.site-breadcrumb .breadcrumb-current.has-dropdown.is-flyout-open::after {
+    transform: rotate(-90deg);
+}
+
 .site-breadcrumb .breadcrumb-current {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -221,6 +251,7 @@
     top: calc(100% + 2px);
     left: 0;
     white-space: nowrap;
+    pointer-events: none;
 }
 
 .site-nav {
@@ -688,20 +719,6 @@
 
 /* --- Unified Breadcrumb: facet crumbs + count --- */
 
-/* ▾ caret on crumbs that have a dropdown */
-.crumb-caret {
-    font-size: 0.65em;
-    margin-left: 2px;
-    opacity: 0.6;
-    transition: opacity var(--transition-fast);
-    vertical-align: middle;
-}
-
-.breadcrumb-link.has-dropdown:hover .crumb-caret,
-.breadcrumb-current.has-dropdown:hover .crumb-caret {
-    opacity: 1;
-}
-
 /* Facet crumbs (year / query) — plain text, no box */
 .breadcrumb-facet {
     color: var(--text-secondary);
@@ -716,7 +733,7 @@
 
 /* On narrow screens the middle slot wraps to its own full-width row below the
    header (order:99 places it visually after the nav buttons). */
-@media (max-width: 640px) {
+@media (max-width: 720px) {
     .site-header-inner {
         flex-wrap: wrap;
         height: auto;

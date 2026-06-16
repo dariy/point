@@ -512,7 +512,7 @@
 
 /* ── Mobile Bottom Sheet (point-0b98.10) ──────────────────────────────────── */
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
     .timeline-popover {
         position: fixed !important;
         top: auto !important;

@@ -253,7 +253,7 @@ export class MediaBrowser extends Component {
 
     const preview =
       isImage && thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy">`
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" draggable="false">`
         : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${
             fileType === "video" ? "▶" : fileType === "audio" ? "♫" : "📄"
           }</div>`;
@@ -383,7 +383,7 @@ export class MediaBrowser extends Component {
     return `
       <div class="exif-panel" id="exif-panel-${escapeHtml(String(m.id))}" hidden>
         <div class="exif-panel-heading">
-          <span class="exif-panel-title">EXIF / Camera data</span>
+          <span class="exif-panel-title">${INFO_SVG} EXIF / Camera data</span>
         </div>
         <table class="exif-table">
           <thead><tr><th>Field</th><th>Value</th><th></th></tr></thead>
@@ -391,7 +391,7 @@ export class MediaBrowser extends Component {
         </table>
         <div class="exif-actions">
           <button class="btn btn-sm exif-add-btn" type="button">+ Add field</button>
-          <button class="btn btn-sm exif-save-btn" type="button" data-id="${escapeHtml(String(m.id))}">Save EXIF</button>
+          <button class="btn btn-sm btn-primary exif-save-btn" type="button" data-id="${escapeHtml(String(m.id))}">Save EXIF</button>
           <button class="btn btn-sm exif-revert-btn" type="button" data-id="${escapeHtml(String(m.id))}">Revert to original</button>
           <button class="btn btn-sm exif-reextract-btn" type="button" data-id="${escapeHtml(String(m.id))}">Re-extract from file</button>
         </div>
@@ -1015,17 +1015,27 @@ export class MediaBrowser extends Component {
     // conflicting with PostEditPage's document-level drag handler.
     const target = pickerMode ? this.container : document;
 
+    this._internalDrag = false;
+    const onDragStart = () => { this._internalDrag = true; };
+    const onDragEnd = () => { this._internalDrag = false; };
+
     const onEnter = (e) => {
+      if (this._internalDrag) return;
       if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount++;
       if (this._dragCount === 1) this.setState({ draggingOver: true });
     };
-    const onLeave = () => {
+    const onLeave = (e) => {
+      if (this._internalDrag) return;
+      if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount = Math.max(0, this._dragCount - 1);
       if (this._dragCount === 0) this.setState({ draggingOver: false });
     };
-    const onOver = (e) => e.preventDefault();
+    const onOver = (e) => {
+      if (!this._internalDrag) e.preventDefault();
+    };
     const onDrop = (e) => {
+      if (this._internalDrag) return;
       e.preventDefault();
       this._dragCount = 0;
       this.setState({ draggingOver: false });
@@ -1038,11 +1048,16 @@ export class MediaBrowser extends Component {
     target.addEventListener("dragover", onOver);
     target.addEventListener("drop", onDrop);
 
+    document.addEventListener("dragstart", onDragStart);
+    document.addEventListener("dragend", onDragEnd);
+
     this._dragListeners = [
       [target, "dragenter", onEnter],
       [target, "dragleave", onLeave],
       [target, "dragover", onOver],
       [target, "drop", onDrop],
+      [document, "dragstart", onDragStart],
+      [document, "dragend", onDragEnd],
     ];
   }
 
