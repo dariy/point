@@ -90,6 +90,7 @@ type Post struct {
 	InstagramMediaID     sql.NullString `json:"instagram_media_id"`
 	InstagramPublishedAt sql.NullTime   `json:"instagram_published_at"`
 	InstagramError       sql.NullString `json:"instagram_error"`
+	InstagramID          sql.NullString `json:"instagram_id"`
 }
 
 type PostTag struct {

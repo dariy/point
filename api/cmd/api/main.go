@@ -121,7 +121,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
-	instagramHandler := api.NewInstagramHandler(svcs.Instagram, svcs.Settings, &cfg)
+	instagramImportService := services.NewInstagramImportService(svcs.Instagram, svcs.Media, svcs.Post)
+	instagramHandler := api.NewInstagramHandler(svcs.Instagram, instagramImportService, svcs.Settings, &cfg)
 
 	// WebAuthn handler — nil service if AppURL is not configured (passkeys require HTTPS + known origin)
 	var webauthnSvc *services.WebAuthnService
@@ -326,6 +327,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	igGroup.GET("/callback", instagramHandler.Callback)
 	igGroup.POST("/disconnect", instagramHandler.Disconnect)
 	igGroup.GET("/status", instagramHandler.Status)
+	igGroup.POST("/import", instagramHandler.StartImport)
+	igGroup.GET("/import/status", instagramHandler.GetImportStatus)
 
 	// ── Themes Routes ──────────────────────────────────────────────────────────
 	themesGroup := e.Group("/api/themes")

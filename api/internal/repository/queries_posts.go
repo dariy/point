@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"point-api/internal/models"
@@ -1061,4 +1062,59 @@ GROUP BY d.root_id`
 		result[tagID] = count
 	}
 	return result, rows.Err()
+}
+
+// GetExistingInstagramIDs returns the subset of the supplied IDs that are
+// already present in posts — matched against both instagram_id (import) and
+// instagram_media_id (cross-posted from Point).  Idempotent-import callers
+// should skip any IDs returned here.
+func (r *sqliteRepository) GetExistingInstagramIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	// Build a VALUES list to use with IN.
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	inList := strings.Join(placeholders, ",")
+
+	q := fmt.Sprintf(`
+SELECT COALESCE(instagram_id, instagram_media_id)
+FROM posts
+WHERE deleted_at IS NULL
+  AND (
+    instagram_id      IN (%s)
+    OR instagram_media_id IN (%s)
+  )`, inList, inList)
+
+	// Args need to be doubled: once for instagram_id IN, once for instagram_media_id IN.
+	doubleArgs := append(args, args...)
+	rows, err := r.db.QueryContext(ctx, q, doubleArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var found []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		found = append(found, id)
+	}
+	return found, rows.Err()
+}
+
+// SetPostInstagramID stores the Instagram media ID on a post after import.
+func (r *sqliteRepository) SetPostInstagramID(ctx context.Context, postID int64, instagramID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE posts SET instagram_id = ? WHERE id = ?`,
+		instagramID, postID,
+	)
+	return err
 }

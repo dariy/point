@@ -10,8 +10,8 @@
        render-blocking by the inline script below; the inactive one uses
        media="not all" so it is downloaded eagerly but not applied.
        app.js re-applies _applySection() on every SPA route change. -->
-  <link id="css-public" rel="stylesheet" href="/assets/css/main.css?v=__BUILD_VERSION__" />
-  <link id="css-light"  rel="stylesheet" href="/assets/css/light.css?v=__BUILD_VERSION__" media="not all" />
+  <link id="css-public" rel="stylesheet" href="/assets/css/main.css?v=dev-20260616-172858" />
+  <link id="css-light"  rel="stylesheet" href="/assets/css/light.css?v=dev-20260616-172858" media="not all" />
   <!-- Switch CSS media before stylesheets are parsed so the browser never
        has to re-apply a stylesheet mid-load (which triggers Firefox's
        "Layout was forced before the page was fully loaded" warning). -->
@@ -41,7 +41,7 @@
   <div id="toasts" aria-live="polite" aria-atomic="true"></div>
 
   <!-- App bootstrap — type=module enables ES module imports -->
-  <script type="module" src="/assets/js/app.js?v=__BUILD_VERSION__"></script>
+  <script type="module" src="/assets/js/app.js?v=dev-20260616-172858"></script>
 
 </body>
 </html>

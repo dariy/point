@@ -12,6 +12,7 @@ import {
   updateMapCoords, getDiskInfo,
 } from '../../api/system.js';
 import { getOfflineStats, getOfflineSnapshot } from '../../api/offline.js';
+import { getInstagramStatus, triggerInstagramImport, getInstagramImportStatus } from '../../api/instagram.js';
 import { saveSnapshot, saveMeta, getMeta } from '../../utils/offlineStore.js';
 import { preCacheImages } from '../../utils/imageCache.js';
 import { getQueue, resetFailedOps, updateStatus } from '../../utils/mutationQueue.js';
@@ -46,6 +47,11 @@ export default class SystemPage extends Component {
       syncQueue: [],
 
       diskInfo: null,
+
+      // Instagram import state
+      igConnected: false,
+      igImportStatus: null,   // last fetched importStatusResponse
+      igImporting: false,
     };
   }
 
@@ -61,6 +67,7 @@ export default class SystemPage extends Component {
       loading, error, backups, migrations, creatingBackup, updatingCoords, coordsResult,
       offlineStats, loadingOfflineStats, downloadingOffline, offlineProgress, offlineStatusText, lastSync,
       syncQueue: queue, diskInfo,
+      igConnected, igImportStatus, igImporting,
     } = this.state;
 
     if (loading) return '<div class="loading-spinner" aria-label="Loading system info\u2026"></div>';
@@ -69,6 +76,7 @@ export default class SystemPage extends Component {
     const offlineSection = this._renderOfflineSection(offlineStats, loadingOfflineStats, downloadingOffline, offlineProgress, offlineStatusText, lastSync);
     const syncSection = this._renderSyncSection(queue);
     const diskSection = diskInfo ? this._renderDiskSection(diskInfo) : '';
+    const igImportSection = igConnected ? this._renderInstagramImportSection(igImportStatus, igImporting) : '';
 
     return `
       <div class="system-grid">
@@ -94,6 +102,7 @@ export default class SystemPage extends Component {
         ${diskSection}
         ${offlineSection}
         ${syncSection}
+        ${igImportSection}
 
         <section class="card system-full-width">
           <div class="card-header">
@@ -212,6 +221,40 @@ export default class SystemPage extends Component {
       </section>`;
   }
 
+  _renderInstagramImportSection(status, importing) {
+    const running = status?.running || importing;
+    const btnLabel = running ? 'Importing\u2026' : 'Import / Sync Now';
+    let statusHtml = '';
+    if (status) {
+      if (running && status.progress) {
+        const p = status.progress;
+        const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+        statusHtml = `
+          <div class="progress-container" style="margin-top:var(--spacing-sm)">
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <p class="progress-text">${p.done}/${p.total} — imported: ${p.imported}, skipped: ${p.skipped}, errors: ${p.errors}</p>
+          </div>`;
+      } else if (!running) {
+        const parts = [];
+        if (status.imported !== undefined) parts.push(`Imported: ${status.imported}`);
+        if (status.skipped !== undefined) parts.push(`Skipped: ${status.skipped}`);
+        if (status.errors !== undefined) parts.push(`Errors: ${status.errors}`);
+        if (status.finished_at) parts.push(`Last run: ${formatDateShort(status.finished_at)}`);
+        if (parts.length) statusHtml = `<p class="system-msg">${escapeHtml(parts.join(' · '))}</p>`;
+        if (status.error) statusHtml += `<p class="system-msg error">${escapeHtml(status.error)}</p>`;
+      }
+    }
+    return `
+      <section class="card">
+        <div class="card-header"><h2>Instagram Import</h2></div>
+        <div class="card-body">
+          <p>Import all Instagram posts into Point as drafts. Already-imported posts are skipped (idempotent).</p>
+          <button id="ig-import-btn" class="btn btn-secondary" ${running ? 'disabled' : ''}>${btnLabel}</button>
+          ${statusHtml}
+        </div>
+      </section>`;
+  }
+
   _renderSyncSection(queue) {
     const failedCount = queue.filter(op => op.failed).length;
     const pendingCount = queue.filter(op => !op.failed).length;
@@ -262,6 +305,7 @@ export default class SystemPage extends Component {
     this.container.querySelector('#download-offline-btn')?.addEventListener('click', () => this._handleDownloadOffline());
     this.container.querySelector('#reset-sync-btn')?.addEventListener('click', () => this._handleResetSync());
     this.container.querySelector('#sync-now-btn')?.addEventListener('click', () => this._handleSyncNow());
+    this.container.querySelector('#ig-import-btn')?.addEventListener('click', () => this._handleStartImport());
 
     this.container.querySelectorAll('.restore-backup-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -284,6 +328,10 @@ export default class SystemPage extends Component {
 
   beforeUnmount() {
     this._cleanupAdminLayout?.();
+    if (this._importPollTimer) {
+      clearInterval(this._importPollTimer);
+      this._importPollTimer = null;
+    }
   }
 
   mount() {
@@ -293,14 +341,20 @@ export default class SystemPage extends Component {
 
   async _load() {
     try {
-      const [backups, migrations, offlineStats, meta, queue, diskInfo] = await Promise.all([
+      const [backups, migrations, offlineStats, meta, queue, diskInfo, igStatus] = await Promise.all([
         listBackups(),
         getMigrations(),
         getOfflineStats(),
         getMeta('last_sync'),
         getQueue(),
         getDiskInfo(),
+        getInstagramStatus().catch(() => null),
       ]);
+      const igConnected = igStatus?.connected || false;
+      let igImportStatus = null;
+      if (igConnected) {
+        igImportStatus = await getInstagramImportStatus().catch(() => null);
+      }
       this.setState({
         loading: false,
         backups: backups.backups || [],
@@ -309,8 +363,12 @@ export default class SystemPage extends Component {
         lastSync: meta || null,
         syncQueue: queue,
         diskInfo,
+        igConnected,
+        igImportStatus,
         error: null,
       });
+      // If an import was already running when we loaded, start polling.
+      if (igImportStatus?.running) this._startImportPoll();
     } catch (err) {
       console.error('[SystemPage] load error:', err);
       this.setState({ loading: false, error: 'Could not load system information: ' + (err.message || err.toString() || JSON.stringify(err)) });
@@ -428,6 +486,34 @@ export default class SystemPage extends Component {
     } catch (err) {
       /* already handled in syncQueue */
     }
+  }
+
+  async _handleStartImport() {
+    this.setState({ igImporting: true });
+    try {
+      await triggerInstagramImport();
+      this._startImportPoll();
+    } catch (err) {
+      this.setState({ igImporting: false });
+      store.set('toast', { message: err.message || 'Import failed to start.', type: 'error' });
+    }
+  }
+
+  _startImportPoll() {
+    if (this._importPollTimer) return; // already polling
+    this._importPollTimer = setInterval(async () => {
+      try {
+        const status = await getInstagramImportStatus();
+        this.setState({ igImportStatus: status, igImporting: status.running });
+        if (!status.running) {
+          clearInterval(this._importPollTimer);
+          this._importPollTimer = null;
+          if (status.imported > 0) {
+            store.set('toast', { message: `Import done: ${status.imported} imported, ${status.skipped} skipped.`, type: 'success' });
+          }
+        }
+      } catch (e) { /* silently ignore poll errors */ }
+    }, 2500);
   }
 
   _showConfirm(title, message, confirmText, variant, onConfirm) {
