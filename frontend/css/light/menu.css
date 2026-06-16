@@ -234,3 +234,13 @@
     outline: none;
     box-shadow: inset 0 0 0 2px var(--color-primary);
 }
+
+.menu-row.dragging {
+    opacity: 0.5;
+}
+
+.menu-row.drag-over {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+}
+

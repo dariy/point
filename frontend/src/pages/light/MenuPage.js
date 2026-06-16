@@ -134,8 +134,8 @@ export default class MenuPage extends Component {
 
   _renderVisualEditor(items) {
     const rows = items.map((item, index) => `
-      <div class="menu-row" data-index="${index}" style="margin-left: ${item.depth * 24}px">
-        <span class="drag-handle">\u22ee\u22ee</span>
+      <div class="menu-row" data-index="${index}" draggable="true" style="margin-left: ${item.depth * 24}px">
+        <span class="drag-handle" style="cursor: grab;">\u22ee\u22ee</span>
         <div class="menu-row-inputs">
           <input type="text" class="form-input menu-label-input item-label" placeholder="Label" value="${escapeHtml(item.label)}">
           <input type="text" class="form-input menu-url-input item-url" placeholder="URL (optional)" value="${escapeHtml(item.url)}">
@@ -196,6 +196,8 @@ export default class MenuPage extends Component {
       this.setState({ items });
     });
 
+    let dragSrcIndex = -1;
+
     this.container.querySelectorAll('.menu-row').forEach(row => {
       const index = parseInt(row.dataset.index, 10);
       row.querySelector('.delete-item-btn').addEventListener('click', () => {
@@ -212,6 +214,45 @@ export default class MenuPage extends Component {
         const items = this._collectVisualItems();
         items[index].depth = Math.max(0, items[index].depth - 1);
         this.setState({ items });
+      });
+
+      row.addEventListener('dragstart', (e) => {
+        dragSrcIndex = index;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', index.toString());
+        row.classList.add('dragging');
+      });
+
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+      });
+
+      row.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        row.classList.add('drag-over');
+      });
+
+      row.addEventListener('dragleave', (e) => {
+        row.classList.remove('drag-over');
+      });
+
+      row.addEventListener('drop', (e) => {
+        e.stopPropagation();
+        row.classList.remove('drag-over');
+        if (dragSrcIndex !== -1 && dragSrcIndex !== index) {
+          const items = this._collectVisualItems();
+          const [movedItem] = items.splice(dragSrcIndex, 1);
+          items.splice(index, 0, movedItem);
+          this.setState({ items });
+        }
+        return false;
+      });
+
+      row.addEventListener('dragend', (e) => {
+        row.classList.remove('dragging');
+        this.container.querySelectorAll('.menu-row').forEach(r => r.classList.remove('drag-over'));
       });
     });
 
