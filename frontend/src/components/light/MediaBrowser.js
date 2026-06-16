@@ -189,7 +189,7 @@ export class MediaBrowser extends Component {
         ${LOCK_SVG}
       </div>`;
 
-    const copyPath = m.path || (m.original_path ? m.original_path.replace('/media/originals', '') : '');
+    const copyPath = m.path || '';
 
     const pickerCheckbox = (pickerMode || this.state.selectMode) ? `
       <label class="media-item-checkbox" title="${isSelected ? 'Deselect' : 'Select'}">
@@ -201,7 +201,7 @@ export class MediaBrowser extends Component {
 
     const actions = pickerMode ? '' : `
       <div class="media-item-actions">
-        <a href="${escapeHtml(m.original_path || '')}" class="btn btn-sm" target="_blank"
+        <a href="${escapeHtml(m.path || '')}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original" aria-label="View original file">↗</a>
         <button class="btn btn-sm rename-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
@@ -215,7 +215,7 @@ export class MediaBrowser extends Component {
     return `
       <div class="media-item${isSelected ? ' media-item--selected' : ''}"
            data-id="${escapeHtml(String(m.id))}"${
-        isImage ? ` data-src="${escapeHtml(m.original_path || '')}" data-alt="${escapeHtml(m.filename)}"` : ''}>
+        isImage ? ` data-src="${escapeHtml(m.path || '')}" data-alt="${escapeHtml(m.filename)}"` : ''}>
         ${pickerCheckbox}
         ${publicStatus}
         <div class="media-item-preview${isImage && !pickerMode ? ' media-item-preview--clickable' : ''}">${preview}</div>
