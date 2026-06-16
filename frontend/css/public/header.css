@@ -121,8 +121,6 @@
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1;
-    min-width: 0;
-    overflow: hidden;
 }
 
 .site-breadcrumb .breadcrumb-separator {
@@ -163,12 +161,11 @@
 }
 
 .site-breadcrumb .breadcrumb-current {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     transition: color var(--transition-theme);
     color: var(--text-primary);
     text-decoration: none;
+    flex-shrink: 0;
 }
 
 .site-breadcrumb a.breadcrumb-current:hover {
@@ -179,6 +176,7 @@
     color: var(--text-secondary);
     text-decoration: none;
     transition: color var(--transition-theme);
+    white-space: nowrap;
 }
 
 .site-breadcrumb .breadcrumb-link:hover {
@@ -547,8 +545,18 @@
 .crumb-pair {
     display: contents;
 }
-.crumb-pair.folded {
+
+.crumb-pair.folded > * {
     display: none;
+}
+
+.crumb-pair.folded.show-ellipsis::before {
+    content: "…";
+    color: var(--text-tertiary);
+}
+
+.crumb-pair.folded.show-ellipsis .breadcrumb-separator {
+    display: inline;
 }
 
 /* Step 3: nav collapses to burger */
@@ -578,8 +586,16 @@
 }
 
 /* Step 4: breadcrumb-current shows ellipsis and acts as popover trigger */
+.site-header-group.fold-current .site-breadcrumb {
+    min-width: 0;
+}
+
 .site-header-group.fold-current .breadcrumb-current {
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 /* ===========================

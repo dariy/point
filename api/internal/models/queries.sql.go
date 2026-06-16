@@ -195,6 +195,8 @@ type CountPostsParams struct {
 	FeaturedFilter interface{} `json:"featured_filter"`
 	IncludeDrafts  interface{} `json:"include_drafts"`
 	IncludeHidden  interface{} `json:"include_hidden"`
+	// IncludePages, when true, keeps type=page rows in results (admin views).
+	IncludePages bool `json:"include_pages"`
 }
 
 func (q *Queries) CountPosts(ctx context.Context, arg CountPostsParams) (int64, error) {
@@ -1591,6 +1593,9 @@ type ListPostsParams struct {
 	IncludeHidden  interface{} `json:"include_hidden"`
 	Offset         int64       `json:"offset"`
 	Limit          int64       `json:"limit"`
+	// IncludePages, when true, keeps type=page rows in results (admin views).
+	// Consumed by the hand-written sqliteRepository.ListPosts override.
+	IncludePages bool `json:"include_pages"`
 }
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {

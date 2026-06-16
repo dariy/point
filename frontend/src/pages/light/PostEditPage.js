@@ -185,7 +185,9 @@ export default class PostEditPage extends Component {
     const p = post || {};
     const title = escapeHtml(p.title || "");
     const slug = escapeHtml(p.slug || "");
-    const status = p.status || "draft";
+    // "Page" is surfaced as a status in the UI but is really type=page (always
+    // published). Show "Page" selected whenever the post is a page.
+    const status = p.type === "page" ? "page" : (p.status || "draft");
     const featured = p.is_featured || false;
     const excerpt = p.excerpt || "";
 
@@ -497,7 +499,10 @@ export default class PostEditPage extends Component {
       });
     });
 
-    this.$("#update-btn")?.addEventListener("click", () => this._save({ status: 'published' }));
+    // "Update" (for already-published posts) saves whatever status the user
+    // picked in the Status dropdown, so a published post can be moved to
+    // hidden/draft/page. "Publish" is an explicit action for unpublished posts.
+    this.$("#update-btn")?.addEventListener("click", () => this._save());
     this.$("#publish-btn")?.addEventListener("click", () => this._save({ status: 'published' }));
 
     if (!this._mediaPicker) {
@@ -697,7 +702,7 @@ export default class PostEditPage extends Component {
     clearTimeout(this._maxWaitTimer); this._maxWaitTimer = null;
     if (this._unmounted || this.state.saving || this.state.deleting || !this.state.hasPendingEdits) return;
 
-    const data = this._collectFormData();
+    const data = this._applyPageType(this._collectFormData());
     if (!data.title) return;
 
     store.set('autosave_status', { status: 'saving' });
@@ -732,8 +737,17 @@ export default class PostEditPage extends Component {
     }
   }
 
+  // The status dropdown offers "page", but a page is really type=page +
+  // status=published. Map the chosen status onto the real (status, type) pair.
+  // Done after overrides are merged so explicit status actions (publish/hidden/
+  // draft) correctly turn a page back into a regular post.
+  _applyPageType(data) {
+    if (data.status === "page") return { ...data, status: "published", type: "page" };
+    return { ...data, type: "post" };
+  }
+
   async _save(overrides = {}) {
-    const data = { ...this._collectFormData(), ...overrides };
+    const data = this._applyPageType({ ...this._collectFormData(), ...overrides });
     if (!data.title) { store.set("toast", { message: "Title is required.", type: "error" }); return; }
 
     this.setState({ saving: true });

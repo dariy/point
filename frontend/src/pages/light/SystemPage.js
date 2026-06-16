@@ -297,7 +297,7 @@ export default class SystemPage extends Component {
         listBackups(),
         getMigrations(),
         getOfflineStats(),
-        getMeta(),
+        getMeta('last_sync'),
         getQueue(),
         getDiskInfo(),
       ]);
@@ -306,14 +306,14 @@ export default class SystemPage extends Component {
         backups: backups.backups || [],
         migrations: migrations.migrations || [],
         offlineStats,
-        lastSync: meta?.lastSync || null,
+        lastSync: meta || null,
         syncQueue: queue,
         diskInfo,
         error: null,
       });
     } catch (err) {
       console.error('[SystemPage] load error:', err);
-      this.setState({ loading: false, error: 'Could not load system information.' });
+      this.setState({ loading: false, error: 'Could not load system information: ' + (err.message || err.toString() || JSON.stringify(err)) });
     }
   }
 
@@ -400,7 +400,7 @@ export default class SystemPage extends Component {
       });
 
       const lastSync = new Date().toISOString();
-      await saveMeta({ lastSync });
+      await saveMeta('last_sync', lastSync);
       
       this.setState({ downloadingOffline: false, lastSync, offlineStatusText: '' });
       store.set('toast', { message: 'Offline data updated.', type: 'success' });

@@ -135,8 +135,8 @@ type mockRepository struct {
 	MockMigrateTagFlagsFromSystemTags   func(ctx context.Context) error
 	MockListPostsInYearRange            func(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
 	MockCountPostsInYearRange           func(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
-	MockListPostsWithSearch             func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error)
-	MockCountPostsWithSearch            func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error)
+	MockListPostsWithSearch             func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error)
+	MockCountPostsWithSearch            func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error)
 	MockGetPostByPreviewToken           func(ctx context.Context, token string) (models.Post, error)
 	MockGetPostNavigation               func(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error)
 	MockReplacePostContentPath          func(ctx context.Context, oldPath, newPath string) (int64, error)
@@ -996,16 +996,16 @@ func (m *mockRepository) CountPostsInYearRange(ctx context.Context, fromYear, to
 	return 0, fmt.Errorf("CountPostsInYearRange not implemented")
 }
 
-func (m *mockRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error) {
+func (m *mockRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error) {
 	if m.MockListPostsWithSearch != nil {
-		return m.MockListPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, tag, limit, offset)
+		return m.MockListPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, tag, onlyPages, limit, offset)
 	}
 	return nil, fmt.Errorf("ListPostsWithSearch not implemented")
 }
 
-func (m *mockRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error) {
+func (m *mockRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error) {
 	if m.MockCountPostsWithSearch != nil {
-		return m.MockCountPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, tag)
+		return m.MockCountPostsWithSearch(ctx, statusFilter, status, featuredFilter, includeDrafts, includeHidden, search, tag, onlyPages)
 	}
 	return 0, fmt.Errorf("CountPostsWithSearch not implemented")
 }

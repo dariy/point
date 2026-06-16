@@ -11,12 +11,15 @@ import (
 // ListPosts returns all posts, with optional filters.
 func (r *sqliteRepository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
 	const q = `
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    -- Pages (type=page) are kept out of public listings; admin views pass
+    -- includePages=true to manage them alongside posts.
+    AND (CASE WHEN ? THEN 1=1 ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -39,6 +42,7 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
+		arg.IncludePages,
 		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
 		arg.IncludeDrafts, arg.IncludeHidden,
 		arg.Limit, arg.Offset)
@@ -54,7 +58,7 @@ LIMIT ? OFFSET ?`
 		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
-			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
@@ -71,6 +75,7 @@ func (r *sqliteRepository) CountPosts(ctx context.Context, arg models.CountPosts
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN 1=1 ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -92,6 +97,7 @@ WHERE
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
+		arg.IncludePages,
 		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
 		arg.IncludeDrafts, arg.IncludeHidden,
 	).Scan(&count)
@@ -122,6 +128,7 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
 FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
     AND p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -181,6 +188,7 @@ _hide(id) AS (
 SELECT COUNT(*) FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
     AND p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -201,19 +209,22 @@ WHERE p.id IN (SELECT post_id FROM _yposts)
 	return count, err
 }
 
-func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error) {
+func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    -- Pages (type=page) are excluded from normal listings (feed, search, tag);
+    -- onlyPages=true flips this to return pages exclusively (admin "Page" filter).
+    AND (CASE WHEN ? THEN p.type = 'page' ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -264,6 +275,7 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
+		onlyPages,
 		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
 		tag, tag,
 		search, search, search, search, search,
@@ -280,7 +292,7 @@ LIMIT ? OFFSET ?`
 		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
-			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
@@ -293,7 +305,7 @@ LIMIT ? OFFSET ?`
 
 // CountPostsWithSearch counts posts matched by the extended search (title, slug,
 // content, tag name, tag slug).
-func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error) {
+func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
@@ -303,6 +315,7 @@ WITH RECURSIVE ehp(id) AS (
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN p.type = 'page' ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -352,6 +365,7 @@ WHERE
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
+		onlyPages,
 		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
 		tag, tag,
 		search, search, search, search, search,

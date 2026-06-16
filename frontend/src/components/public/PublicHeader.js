@@ -687,11 +687,33 @@ export class PublicHeader extends Component {
   _overflows(inner) {
     void inner.offsetWidth; // force reflow
 
-    // Check if the nav exits the container boundary.
+    // The breadcrumb renders at its natural width (overflow:visible) and the
+    // branding box has min-width:0, so an over-wide breadcrumb shrinks the
+    // branding box and spills its content *under* the nav rather than pushing
+    // nav.right past the container — a nav-vs-container check would never fire.
+    // Instead compare the branding's content right edge to the limit it must not
+    // cross: the nav's left edge when they share a row, else the container edge
+    // (the layout wraps the nav onto its own row below 720px).
     // scrollWidth is unreliable on overflow:visible flex containers in Chrome,
     // so compare bounding rects instead.
     const innerRight = inner.getBoundingClientRect().right;
     const navEl = inner.querySelector('.site-nav');
+    // Measure the breadcrumb itself: it holds the crumbs + leaf and is the thing
+    // the fold algorithm shrinks. (branding-actions sit after it but get moved to
+    // the burger by fold-nav, so they must not be the measured element.)
+    const content = inner.querySelector('.site-breadcrumb');
+    if (content) {
+      const cRect = content.getBoundingClientRect();
+      if (navEl) {
+        const nRect = navEl.getBoundingClientRect();
+        const sameRow = Math.abs(nRect.top - cRect.top) < cRect.height;
+        const limit = sameRow ? nRect.left : innerRight;
+        return cRect.right > limit - 1;
+      }
+      return cRect.right > innerRight + 1;
+    }
+
+    // Fallback: nav (or header) exits the container boundary.
     if (navEl) return navEl.getBoundingClientRect().right > innerRight + 1;
     const headerEl = inner.querySelector('.site-header');
     return headerEl ? headerEl.getBoundingClientRect().right > innerRight + 1 : false;
@@ -701,7 +723,9 @@ export class PublicHeader extends Component {
     const group = this._group;
     if (!group) return;
     group.classList.remove('fold-title', 'fold-nav', 'fold-current');
-    group.querySelectorAll('.crumb-pair.folded').forEach((p) => p.classList.remove('folded'));
+    group.querySelectorAll('.crumb-pair.folded').forEach((p) => {
+      p.classList.remove('folded', 'show-ellipsis');
+    });
     this._closeBurger();
     group.querySelector('#crumb-popover')?.classList.remove('is-open');
   }
@@ -714,34 +738,51 @@ export class PublicHeader extends Component {
     this._resetFold();
     if (!this._overflows(inner)) return;
 
-    // Step 1: hide site-title text
+    // Step 1: hide site subtitle
     group.classList.add('fold-title');
     if (!this._overflows(inner)) return;
 
-    // Step 2: fold breadcrumb pairs left to right
+    // Step 2: fold breadcrumb pairs left to right (excluding site title)
     // Drop facet pairs first, then tag pairs
     const allPairs = [...group.querySelectorAll('.crumb-pair')];
-    // Try folding facet pairs before tag pairs to preserve tag context
     const facetPairs = allPairs.filter(p => p.classList.contains('crumb-facet-pair'));
-    const tagPairs = allPairs.filter(p => !p.classList.contains('crumb-facet-pair'));
+    const tagPairs = allPairs.filter(p => !p.classList.contains('crumb-facet-pair') && p.id !== 'site-crumb-pair');
+    const sitePair = allPairs.find(p => p.id === 'site-crumb-pair');
 
-    // Then fold facet pairs
+    const checkEllipsis = () => {
+      const allFolded = group.querySelectorAll('.crumb-pair.folded');
+      allFolded.forEach(p => p.classList.remove('show-ellipsis'));
+      if (allFolded.length > 0) {
+        allFolded[allFolded.length - 1].classList.add('show-ellipsis');
+      }
+    };
+
+    // Fold facet pairs
     for (const pair of facetPairs) {
       pair.classList.add('folded');
+      checkEllipsis();
       if (!this._overflows(inner)) return;
     }
 
-    // Then fold tag pairs left to right
+    // Fold tag pairs left to right
     for (const pair of tagPairs) {
       pair.classList.add('folded');
+      checkEllipsis();
       if (!this._overflows(inner)) return;
     }
 
-    // Step 3: collapse nav to burger
+    // Step 3: fold site title if it still overflows
+    if (sitePair) {
+      sitePair.classList.add('folded');
+      checkEllipsis();
+      if (!this._overflows(inner)) return;
+    }
+
+    // Step 4: collapse nav to burger
     group.classList.add('fold-nav');
     if (!this._overflows(inner)) return;
 
-    // Step 4: last resort — ellipsis on breadcrumb-current
+    // Step 5: last resort — ellipsis on breadcrumb-current
     group.classList.add('fold-current');
   }
 
