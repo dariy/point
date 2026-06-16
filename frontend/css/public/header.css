@@ -87,7 +87,7 @@
     gap: var(--spacing-sm);
     flex-shrink: 1;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .header-left-group {
@@ -175,6 +175,12 @@
     line-height: 1;
 }
 
+.site-title-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .site-title-link:hover,
 .site-title-link:hover * {
     color: var(--color-primary);
@@ -208,6 +214,13 @@
     color: var(--text-tertiary);
     margin: 0;
     transition: color var(--transition-theme);
+}
+
+.site-title-link .site-subtitle {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    white-space: nowrap;
 }
 
 .site-nav {
