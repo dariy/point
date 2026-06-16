@@ -863,8 +863,19 @@ export default class PostEditPage extends Component {
 
   mount() {
     super.mount();
-    if (this.state.postId) this._loadPost(this.state.postId);
-    else getInstagramStatus().catch(() => null).then(igStatus => { if (!this._unmounted) this.setState({ igStatus }); });
+    if (this.state.postId) {
+      this._loadPost(this.state.postId);
+    } else {
+      const initialContent = sessionStorage.getItem("newPostInitialContent");
+      if (initialContent) {
+        this.state.post = { ...(this.state.post || {}), content: initialContent };
+        if (this.state.editorMode === "visual") {
+          this._nodes = parseNodes(initialContent);
+        }
+        sessionStorage.removeItem("newPostInitialContent");
+      }
+      getInstagramStatus().catch(() => null).then(igStatus => { if (!this._unmounted) this.setState({ igStatus }); });
+    }
     if (this.props.query?.share === "pending") this._processShareQueue();
   }
 

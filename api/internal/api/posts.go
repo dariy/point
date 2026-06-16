@@ -140,6 +140,9 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	status := c.QueryParam("status")
+	if status == "all" {
+		status = ""
+	}
 	featured := c.QueryParam("featured") == "true"
 	includeDrafts := c.Get("user") != nil
 	search := c.QueryParam("q")

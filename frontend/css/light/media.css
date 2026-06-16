@@ -600,6 +600,161 @@
     background: var(--bg-primary);
 }
 
+/* ===========================
+   Selection Bar & Select Mode
+   =========================== */
+.mb-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--color-primary-light);
+    border: var(--border-width) solid var(--color-primary);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-md);
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.mb-selection-count {
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+.mb-selection-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.mb-selection-actions .btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.mb-selection-actions .btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Checkboxes in select mode */
+.media-browser--select-mode .media-item {
+    cursor: pointer;
+}
+
+.media-browser--select-mode .media-item-checkbox {
+    display: flex;
+}
+
+/* Hide some actions in select mode to avoid accidental clicks */
+.media-browser--select-mode .media-item-actions {
+    display: none !important;
+}
+
+/* ===========================
+   Referring Posts Panel
+   =========================== */
+.referring-posts-panel {
+    background-color: var(--surface-hover);
+    border-top: var(--border-width) solid var(--border-primary);
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+}
+
+.referring-posts-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.referring-posts-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.referring-posts-title svg {
+    width: 14px;
+    height: 14px;
+}
+
+.referring-posts-loading,
+.referring-posts-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: var(--spacing-xs) 0;
+}
+
+.referring-posts-error {
+    color: var(--color-danger);
+    padding: var(--spacing-xs) 0;
+}
+
+.referring-posts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.referring-post-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-xs);
+    background-color: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-sm);
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.referring-post-link:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--border-secondary);
+}
+
+.referring-post-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: var(--spacing-sm);
+}
+
+.referring-post-status {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.referring-post-status--published {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+}
+
+.referring-post-status--draft {
+    background-color: var(--color-warning-light);
+    color: var(--color-warning);
+}
+
+.referring-post-status--hidden {
+    background-color: var(--color-black-alpha-10);
+    color: var(--text-secondary);
+}
+
 .dropped-media-preview img {
     width: 100%;
     max-width: 100%;

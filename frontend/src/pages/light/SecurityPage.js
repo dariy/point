@@ -7,6 +7,7 @@
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
+import { PromptDialog } from '../../components/shared/PromptDialog.js';
 import {
   getSessions, deleteSession, deleteAllOtherSessions,
   changePassword,
@@ -281,42 +282,45 @@ export default class SecurityPage extends Component {
   }
 
   async _handleDeletePasskey() {
-    if (!confirm('Remove passkey? You will need to use your password to login.')) return;
-    this.setState({ passkeyWorking: true });
-    try {
-      await deletePasskey();
-      store.set('toast', { message: 'Passkey removed.', type: 'success' });
-      this._load();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to remove passkey.', type: 'error' });
-    } finally {
-      this.setState({ passkeyWorking: false });
-    }
+    this._showConfirm('Remove Passkey', 'Remove passkey? You will need to use your password to login.', 'Remove', 'danger', async () => {
+      this.setState({ passkeyWorking: true });
+      try {
+        await deletePasskey();
+        store.set('toast', { message: 'Passkey removed.', type: 'success' });
+        this._load();
+      } catch (err) {
+        store.set('toast', { message: err.message || 'Failed to remove passkey.', type: 'error' });
+      } finally {
+        this.setState({ passkeyWorking: false });
+      }
+    });
   }
 
   async _handleCreateApiKey() {
-    const name = prompt('Enter a name for the new API key:');
-    if (!name) return;
+    this._showPrompt('Create API Key', 'Enter a name for the new API key:', '', 'Create', async (name) => {
+      if (!name) return;
 
-    try {
-      const result = await createApiKey(name);
-      this._showConfirm('API Key Created', `Please copy your API key now. It will not be shown again:\n\n${result.key}`, 'Copy to Clipboard', 'primary', () => {
-        navigator.clipboard.writeText(result.key);
-      });
-      this._load();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to create API key.', type: 'error' });
-    }
+      try {
+        const result = await createApiKey(name);
+        this._showConfirm('API Key Created', `Please copy your API key now. It will not be shown again:\n\n${result.key}`, 'Copy to Clipboard', 'primary', () => {
+          navigator.clipboard.writeText(result.key);
+        });
+        this._load();
+      } catch (err) {
+        store.set('toast', { message: err.message || 'Failed to create API key.', type: 'error' });
+      }
+    });
   }
 
   async _handleDeleteApiKey(id) {
-    if (!confirm('Permanently delete this API key? Applications using it will lose access.')) return;
-    try {
-      await deleteApiKey(id);
-      this._load();
-    } catch (err) {
-      store.set('toast', { message: err.message || 'Failed to delete API key.', type: 'error' });
-    }
+    this._showConfirm('Delete API Key', 'Permanently delete this API key? Applications using it will lose access.', 'Delete', 'danger', async () => {
+      try {
+        await deleteApiKey(id);
+        this._load();
+      } catch (err) {
+        store.set('toast', { message: err.message || 'Failed to delete API key.', type: 'error' });
+      }
+    });
   }
 
   _showConfirm(title, message, confirmText, variant, onConfirm) {
@@ -329,6 +333,20 @@ export default class SecurityPage extends Component {
       variant,
       onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
       onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
+  }
+
+  _showPrompt(title, message, defaultValue, confirmText, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new PromptDialog(mount, {
+      title,
+      message,
+      defaultValue,
+      confirmText,
+      onConfirm: (val) => { dialog.unmount(); mount.remove(); onConfirm(val); },
+      onCancel: () => { dialog.unmount(); mount.remove(); }
     });
     dialog.mount();
   }

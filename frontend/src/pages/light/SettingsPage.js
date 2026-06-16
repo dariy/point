@@ -13,6 +13,7 @@ import {
   escapeHtml,
 } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 
 const SETTING_GROUPS = [
   {
@@ -304,7 +305,7 @@ export default class SettingsPage extends Component {
     });
 
     this.container.querySelector("#ig-disconnect-btn")?.addEventListener("click", async () => {
-      if (confirm("Disconnect Instagram? You will need to re-authenticate to post to Instagram.")) {
+      this._showConfirm("Disconnect Instagram", "Disconnect Instagram? You will need to re-authenticate to post to Instagram.", "Disconnect", "danger", async () => {
         try {
           const { disconnectInstagram } = await import('../../api/instagram.js');
           await disconnectInstagram();
@@ -315,7 +316,7 @@ export default class SettingsPage extends Component {
             type: "error",
           });
         }
-      }
+      });
     });
 
     // Auto-scroll to group if hash is present
@@ -399,5 +400,19 @@ export default class SettingsPage extends Component {
       });
       this.setState({ saving: false });
     }
+  }
+
+  _showConfirm(title, message, confirmText, variant, onConfirm) {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant,
+      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
+      onCancel:  () => { dialog.unmount(); mount.remove(); },
+    });
+    dialog.mount();
   }
 }
