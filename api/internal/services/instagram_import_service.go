@@ -305,8 +305,23 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 		}
 
 		// 4. Build post fields. Hashtags become reusable tags and are stripped
-		// from the caption text used for the title/body.
+		// from the caption text used for the title/body. The Instagram
+		// publication year is added as its own tag so imported posts can be
+		// browsed by year.
 		tags, cleanedCaption := parseHashtags(item.Caption)
+		if !item.Timestamp.IsZero() {
+			year := item.Timestamp.Format("2006")
+			alreadyTagged := false
+			for _, t := range tags {
+				if t == year {
+					alreadyTagged = true
+					break
+				}
+			}
+			if !alreadyTagged {
+				tags = append(tags, year)
+			}
+		}
 		title, body := splitCaption(cleanedCaption)
 		if title == "" {
 			title = fmt.Sprintf("Instagram %s", item.Timestamp.Format("2006-01-02"))

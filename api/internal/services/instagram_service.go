@@ -434,6 +434,19 @@ type InstagramMediaChild struct {
 	ThumbnailURL string `json:"thumbnail_url"`
 }
 
+// parseInstagramTimestamp parses the timestamp string returned by the Graph
+// /media endpoint. Instagram emits a numeric timezone offset without a colon
+// (e.g. "2026-06-09T18:37:59+0000"), which is NOT valid RFC3339, so RFC3339 is
+// tried only as a fallback. Returns the zero time if no layout matches.
+func parseInstagramTimestamp(s string) time.Time {
+	for _, layout := range []string{"2006-01-02T15:04:05-0700", time.RFC3339} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
 // InstagramMedia represents one item returned by the /media Graph endpoint.
 type InstagramMedia struct {
 	ID           string                `json:"id"`
@@ -502,9 +515,7 @@ func (s *InstagramService) ListUserMedia(ctx context.Context) ([]InstagramMedia,
 				Permalink:    d.Permalink,
 				ThumbnailURL: d.ThumbnailURL,
 			}
-			if t, err := time.Parse(time.RFC3339, d.Timestamp); err == nil {
-				m.Timestamp = t
-			}
+			m.Timestamp = parseInstagramTimestamp(d.Timestamp)
 			if d.Children != nil {
 				m.Children = d.Children.Data
 			}
