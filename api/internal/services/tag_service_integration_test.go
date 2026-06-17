@@ -5,6 +5,7 @@ package services
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"point-api/internal/models"
@@ -647,6 +648,70 @@ func TestTagService_UpdateMissingCoordsNoBaseTags(t *testing.T) {
 	}
 	if result["updated_count"] != 0 {
 		t.Errorf("expected 0 updated, got %v", result["updated_count"])
+	}
+}
+
+func TestTagService_TagPostWithLocation(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := NewPostService(repo, nil, nil, nil, "")
+	insertTestUser(t, postSvc)
+	post, _, err := postSvc.CreatePost(ctx, CreatePostParams{
+		Title: "Geo", Slug: "geo", AuthorID: 1, Status: "draft",
+	})
+	if err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+
+	// Mock the Nominatim reverse endpoint. The "city" field must win over the
+	// less-specific "name" field.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"name":"Trastevere","address":{"suburb":"Trastevere","city":"Rome","country":"Italy"}}`))
+	}))
+	defer srv.Close()
+
+	svc := NewTagService(repo)
+	svc.nominatimReverseURL = srv.URL
+
+	const lat, lon = 41.889, 12.469
+	tag, err := svc.TagPostWithLocation(ctx, post.ID, lat, lon)
+	if err != nil {
+		t.Fatalf("TagPostWithLocation failed: %v", err)
+	}
+	if tag.Name != "Rome" {
+		t.Errorf("expected tag name Rome, got %q", tag.Name)
+	}
+	if !tag.Latitude.Valid || tag.Latitude.Float64 != lat || !tag.Longitude.Valid || tag.Longitude.Float64 != lon {
+		t.Errorf("expected coordinates %f,%f on tag, got %+v / %+v", lat, lon, tag.Latitude, tag.Longitude)
+	}
+
+	tags, err := postSvc.GetTagsForPost(ctx, post.ID)
+	if err != nil {
+		t.Fatalf("GetTagsForPost failed: %v", err)
+	}
+	found := false
+	for _, tg := range tags {
+		if tg.ID == tag.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected post to be tagged with %q (id %d)", tag.Name, tag.ID)
+	}
+
+	// A second image from the same city must reuse the existing tag, not create
+	// a duplicate, and attach it to a different post.
+	post2, _, _ := postSvc.CreatePost(ctx, CreatePostParams{
+		Title: "Geo2", Slug: "geo2", AuthorID: 1, Status: "draft",
+	})
+	tag2, err := svc.TagPostWithLocation(ctx, post2.ID, lat, lon)
+	if err != nil {
+		t.Fatalf("second TagPostWithLocation failed: %v", err)
+	}
+	if tag2.ID != tag.ID {
+		t.Errorf("expected reuse of tag %d, got new tag %d", tag.ID, tag2.ID)
 	}
 }
 
