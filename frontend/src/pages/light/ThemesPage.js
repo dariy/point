@@ -65,16 +65,12 @@ export default class ThemesPage extends Component {
     const isActive = activeTheme === theme.name;
     const colors = {
       primary: theme.preview_color || "#000",
-      background: theme.has_dark_mode ? "#1a1a1a" : "#fff",
       text: theme.has_dark_mode ? "#f0f0f0" : "#333",
     };
 
-    const swatch = (color) =>
-      `<span class="theme-swatch" style="background-color: ${escapeHtml(color)}"></span>`;
-
     return `
       <article class="theme-card ${isActive ? "active" : ""}">
-        <div class="theme-card-preview" style="background-color: ${escapeHtml(colors.background)}">
+        <div class="theme-card-preview">
           <div class="theme-preview-mock" style="background-color: ${theme.has_dark_mode ? '#1a1a1a' : '#ffffff'}">
             <div class="mock-header" style="background-color: ${escapeHtml(colors.primary)}"></div>
             <div class="mock-content">

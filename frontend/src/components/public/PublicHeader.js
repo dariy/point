@@ -42,6 +42,8 @@ export class PublicHeader extends Component {
     } = this.props;
 
     const user = store.get('user');
+    const blogSettings = store.get('settings') || {};
+    const isCustomMenu = blogSettings.nav_menu_mode === 'custom';
     const title    = escapeHtml(settings.blog_title || 'Photo Blog');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
 
@@ -234,8 +236,15 @@ export class PublicHeader extends Component {
 
     const burgerTagLinksHtml = navTags.length
       ? navTags.map(t => {
-          const href = t.url || `/tags/${escapeHtml(t.slug)}`;
-          return `<a href="${href}" class="burger-link burger-tag-link">${escapeHtml(t.name)}</a>`;
+          const href = t.url ? escapeHtml(t.url) : `/tags/${escapeHtml(t.slug)}`;
+          let html = `<a href="${href}" class="burger-link burger-tag-link">${escapeHtml(t.name)}</a>`;
+          if (isCustomMenu && t.children && t.children.length) {
+              t.children.forEach(c => {
+                  const cHref = c.url ? escapeHtml(c.url) : `/tags/${escapeHtml(c.slug)}`;
+                  html += `<a href="${cHref}" class="burger-link burger-sub-link">${escapeHtml(c.name)}</a>`;
+              });
+          }
+          return html;
         }).join('')
       : '';
 
@@ -688,28 +697,20 @@ export class PublicHeader extends Component {
   _overflows(inner) {
     void inner.offsetWidth; // force reflow
 
-    // The breadcrumb renders at its natural width (overflow:visible) and the
-    // branding box has min-width:0, so an over-wide breadcrumb shrinks the
-    // branding box and spills its content *under* the nav rather than pushing
-    // nav.right past the container — a nav-vs-container check would never fire.
-    // Instead compare the branding's content right edge to the limit it must not
-    // cross: the nav's left edge when they share a row, else the container edge
-    // (the layout wraps the nav onto its own row below 720px).
-    // scrollWidth is unreliable on overflow:visible flex containers in Chrome,
-    // so compare bounding rects instead.
     const innerRight = inner.getBoundingClientRect().right;
     const navEl = inner.querySelector('.site-nav');
-    // Measure the breadcrumb itself: it holds the crumbs + leaf and is the thing
-    // the fold algorithm shrinks. (branding-actions sit after it but get moved to
-    // the burger by fold-nav, so they must not be the measured element.)
+
     const content = inner.querySelector('.site-breadcrumb');
+
     if (content) {
       const cRect = content.getBoundingClientRect();
-      if (navEl) {
-        const nRect = navEl.getBoundingClientRect();
-        const sameRow = Math.abs(nRect.top - cRect.top) < cRect.height;
-        const limit = sameRow ? nRect.left : innerRight;
-        return cRect.right > limit - 1;
+      const nRect = navEl ? navEl.getBoundingClientRect() : null;
+      
+      const sameRow = nRect ? Math.abs(nRect.top - cRect.top) < cRect.height : true;
+      
+      if (nRect) {
+         const limit = sameRow ? nRect.left : innerRight;
+         return cRect.right > limit - 1;
       }
       return cRect.right > innerRight + 1;
     }
