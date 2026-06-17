@@ -23,6 +23,7 @@ import { store } from "../../store.js";
 import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { MediaViewer } from "./MediaViewer.js";
+import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
 
 const _prismLoading = new Map();
 const _LANG_DEPS = {
@@ -50,29 +51,6 @@ async function _loadPrismLang(lang) {
   })();
   _prismLoading.set(lang, p);
   return p;
-}
-
-const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogv", "m4v", "avi", "mkv"]);
-const AUDIO_EXTS = new Set(["mp3", "m4a", "ogg", "wav", "flac", "aac", "opus"]);
-
-/** Return 'video', 'audio', 'image', or null based on file extension. */
-function mediaTypeFromPath(path) {
-  const ext = (path.split(".").pop() || "").toLowerCase();
-  if (VIDEO_EXTS.has(ext)) return "video";
-  if (AUDIO_EXTS.has(ext)) return "audio";
-  const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "heic", "heif", "bmp"]);
-  if (IMAGE_EXTS.has(ext)) return "image";
-  return null;
-}
-
-function stripHtml(html) {
-  if (!html) return "";
-  let previous;
-  do {
-    previous = html;
-    html = html.replace(/<[^>]*>/g, "");
-  } while (html !== previous);
-  return html;
 }
 
 /**
@@ -119,7 +97,7 @@ export class PostContent extends Component {
     const immersive = forceImmersive || shouldUseImmersive(post);
     if (immersive) {
       document.body.classList.add("immersive-layout");
-      const items = this._mediaFromHtml(post.content_html || "");
+      const items = mediaFromHtml(post.content_html || "");
       this.mountChild(MediaViewer, '#media-viewer-mount', {
         items,
         startIndex: this.props.startIndex || 0,
@@ -198,48 +176,6 @@ export class PostContent extends Component {
     return `<nav class="post-side-nav" aria-label="Post side navigation">${prev}${next}</nav>`;
   }
 
-  _mediaFromHtml(html) {
-    const items = [];
-    if (html.includes("<hr>") || html.includes("<hr/>") || html.includes("<hr />")) {
-      const segments = html.split(/<hr\s*\/?>/i);
-      for (const segment of segments) {
-        const trimmed = segment.trim();
-        if (!trimmed) continue;
-        const segmentMedia = this._extractMedia(trimmed);
-        const text = stripHtml(trimmed).replace(/&nbsp;/g, " ").trim();
-        if (segmentMedia.length === 1 && (text.length === 0 || text === segmentMedia[0].url)) {
-          items.push(segmentMedia[0]);
-        } else {
-          items.push({ type: "html", html: trimmed });
-        }
-      }
-      if (items.length > 0) return items;
-    }
-    return this._extractMedia(html);
-  }
-
-  _extractMedia(html) {
-    const items = [];
-    for (const m of html.matchAll(/<img[^>]+>/gi)) {
-      const src = (m[0].match(/\ssrc="([^"]*)"/i) || [])[1] || "";
-      const alt = (m[0].match(/\salt="([^"]*)"/i) || [])[1] || "";
-      if (src) items.push({ type: "image", url: src, alt });
-    }
-    for (const m of html.matchAll(/<(?:video|source)[^>]*\ssrc="([^"]*)"[^>]*/gi)) if (m[1]) items.push({ type: "video", url: m[1] });
-    for (const m of html.matchAll(/<audio[^>]*\ssrc="([^"]*)"[^>]*/gi)) if (m[1]) items.push({ type: "audio", url: m[1] });
-    if (items.length === 0) {
-      const text = stripHtml(html).trim();
-      for (const line of text.split(/\n+/)) {
-        const url = line.trim();
-        if (url) {
-          const type = mediaTypeFromPath(url);
-          if (type) items.push({ type, url });
-        }
-      }
-    }
-    return items;
-  }
-
   _enhanceLinks(body) {
     body.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href") || "";
@@ -255,7 +191,7 @@ export class PostContent extends Component {
     const fallbackAlt = post?.excerpt || post?.title || "";
     body.querySelectorAll("img").forEach((img) => { if (!img.getAttribute("alt")) img.setAttribute("alt", fallbackAlt); });
     if (onEnterImmersive) {
-      const items = this._mediaFromHtml(post.content_html || "");
+      const items = mediaFromHtml(post.content_html || "");
       const images = Array.from(body.querySelectorAll("img")).filter((img) => !img.closest("a[href]"));
       images.forEach((img) => {
         img.classList.add("zoomable");

@@ -24,6 +24,7 @@ export default class PostPage extends Component {
     this._loadVersion = 0;
   }
   beforeUnmount() {
+    clearTimeout(this._spinnerTimer);
     if (this._keyListener) document.removeEventListener('keydown', this._keyListener);
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
@@ -148,19 +149,36 @@ export default class PostPage extends Component {
     // If #content-mount exists we're in loaded state — update content area in-place.
     const contentEl = this.container.querySelector('#content-mount');
     if (contentEl && this._contentChild) {
-      this._contentChild.unmount();
-      this._children = this._children.filter(c => c !== this._contentChild);
-      this._contentChild = null;
-      const spinner = document.createElement('div');
-      spinner.className = 'loading-spinner';
-      spinner.setAttribute('aria-label', 'Loading post…');
-      contentEl.textContent = '';
-      contentEl.appendChild(spinner);
+      // Keep the current post on screen while the next one loads; only fall
+      // back to a spinner if the load is slow. Adjacent posts are preloaded
+      // (and cached) by the immersive viewer, so they resolve within a frame
+      // and the swap is seamless — no spinner blink at the end of a swipe.
+      clearTimeout(this._spinnerTimer);
+      this._spinnerTimer = setTimeout(() => {
+        if (version !== this._loadVersion || this._unmounted) return;
+        this._showContentSpinner();
+      }, 180);
       this._load(version, true);
     } else {
       // Still in initial loading state — supersede the old load, fall back to full render.
       this._load(version, false);
     }
+  }
+
+  /** Replace the current content with a loading spinner (slow in-place load). */
+  _showContentSpinner() {
+    const contentEl = this.container.querySelector('#content-mount');
+    if (!contentEl) return;
+    if (this._contentChild) {
+      this._contentChild.unmount();
+      this._children = this._children.filter(c => c !== this._contentChild);
+      this._contentChild = null;
+    }
+    const spinner = document.createElement('div');
+    spinner.className = 'loading-spinner';
+    spinner.setAttribute('aria-label', 'Loading post…');
+    contentEl.textContent = '';
+    contentEl.appendChild(spinner);
   }
 
   /**
@@ -176,6 +194,7 @@ export default class PostPage extends Component {
    * created fresh here.
    */
   _applyPostUpdate(post, nav, startIndex, forceImmersive) {
+    clearTimeout(this._spinnerTimer);
     this.state = { loading: false, post, nav, error: null, startIndex, forceImmersive };
 
     const settings = store.get('settings') || {};
@@ -212,8 +231,16 @@ export default class PostPage extends Component {
 
     this._footerChild?.setProps({ settings, immersiveTags, immersiveNav, exifMedia });
 
-    // Content was unmounted in onRouteUpdate(); mount a fresh instance.
+    // The previous post may still be on screen (fast cached load) or already
+    // replaced by a spinner (slow load). Either way, tear down the old content
+    // child before mounting the new one so its listeners don't leak. unmount()
+    // clears #content-mount, so the swap is atomic.
     const contentEl = this.container.querySelector('#content-mount');
+    if (this._contentChild) {
+      this._contentChild.unmount();
+      this._children = this._children.filter(c => c !== this._contentChild);
+      this._contentChild = null;
+    }
     if (contentEl) {
       const onEnterImmersive = (idx = 0) => {
         const hash = idx === 0 ? "" : `#${idx + 1}`;
@@ -236,6 +263,7 @@ export default class PostPage extends Component {
   }
 
   _showContentError(msg) {
+    clearTimeout(this._spinnerTimer);
     const contentEl = this.container.querySelector('#content-mount');
     if (contentEl) {
       if (this._contentChild) {

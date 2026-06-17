@@ -7,13 +7,36 @@
 import { api } from './client.js';
 
 /**
+ * Short-lived read cache for the paginated list pages, so the public grid can
+ * preload the previous/next page and then navigate to it without a visible
+ * reload (the swipe-committed route swap resolves from cache within a
+ * microtask, before paint). Mirrors the post read cache in posts.js.
+ */
+const _pageCache = new Map();           // key -> { t, data }
+const PAGE_CACHE_TTL_MS = 60000;        // 1 min — long enough to linger before swiping
+
+function _cachedPage(key, fetcher) {
+  const hit = _pageCache.get(key);
+  if (hit && Date.now() - hit.t < PAGE_CACHE_TTL_MS) return hit.data;
+  const data = fetcher();           // a promise; cached so concurrent callers share it
+  _pageCache.set(key, { t: Date.now(), data });
+  data.catch(() => _pageCache.delete(key));   // don't cache rejections
+  return data;
+}
+
+/** Clear the list-page cache — called after any post mutation so edits show at once. */
+export function clearPageCache() {
+  _pageCache.clear();
+}
+
+/**
  * Home page data: recent posts, tag cloud, public settings.
  *
  * @param {{ page?: number, per_page?: number }} [params]
  * @returns {Promise<{ posts: object, tag_cloud: object[], settings: object }>}
  */
 export function getHomePage(params = {}) {
-  return api.get('/api/pages/home', params);
+  return _cachedPage(`home:${JSON.stringify(params)}`, () => api.get('/api/pages/home', params));
 }
 
 /**
@@ -24,7 +47,10 @@ export function getHomePage(params = {}) {
  * @returns {Promise<{ tag: object, breadcrumbs: object[], posts: object }>}
  */
 export function getTagPage(slug, params = {}) {
-  return api.get(`/api/pages/tags/${encodeURIComponent(slug)}`, params);
+  return _cachedPage(
+    `tag:${slug}:${JSON.stringify(params)}`,
+    () => api.get(`/api/pages/tags/${encodeURIComponent(slug)}`, params),
+  );
 }
 
 /**
