@@ -1,9 +1,97 @@
 package services
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+
+	"point-api/internal/config"
 )
+
+// newTestImportService builds an InstagramImportService backed by a real
+// MediaService (in-memory DB + temp storage) so downloadMediaURL can be
+// exercised end to end.
+func newTestImportService(t *testing.T) *InstagramImportService {
+	t.Helper()
+	repo := setupTestDB(t)
+	t.Cleanup(func() { _ = repo.Close() })
+
+	cfg := &config.Config{
+		StoragePath:     t.TempDir(),
+		ThumbnailWidth:  400,
+		ThumbnailHeight: 300,
+	}
+	settings := NewSettingsService(repo)
+	media := NewMediaService(repo, cfg, settings, NewTagService(repo))
+	return NewInstagramImportService(nil, media, NewPostService(repo, nil, nil, nil, ""))
+}
+
+func TestDownloadMediaURLVideoExtension(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string // request path served
+		contentType string
+		wantSuffix  string
+	}{
+		{"video url with mp4 extension", "/clip.mp4", "video/mp4", ".mp4"},
+		{"video url without extension uses mime", "/video", "video/mp4", ".mp4"},
+		{"image url with jpg extension", "/photo.jpg", "image/jpeg", ".jpg"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", tt.contentType)
+				_, _ = w.Write([]byte("fake-media-bytes-" + tt.name))
+			}))
+			defer srv.Close()
+
+			svc := newTestImportService(t)
+			path, err := svc.downloadMediaURL(context.Background(), srv.URL+tt.path, "")
+			if err != nil {
+				t.Fatalf("downloadMediaURL: %v", err)
+			}
+			if !strings.HasSuffix(path, tt.wantSuffix) {
+				t.Errorf("stored path = %q, want suffix %q", path, tt.wantSuffix)
+			}
+		})
+	}
+}
+
+func TestExtForMime(t *testing.T) {
+	tests := []struct {
+		mime string
+		want string
+	}{
+		{"video/mp4", ".mp4"},
+		{"video/quicktime", ".mov"},
+		{"image/jpeg", ".jpg"},
+		{"image/png", ".png"},
+		{"audio/mpeg", ".mp3"},
+		{"application/x-not-a-real-type", ".jpg"}, // unknown → default
+		{"", ".jpg"},                              // empty → default
+	}
+	for _, tt := range tests {
+		t.Run(tt.mime, func(t *testing.T) {
+			if got := extForMime(tt.mime); got != tt.want {
+				t.Errorf("extForMime(%q) = %q, want %q", tt.mime, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildPostContentMixedMedia(t *testing.T) {
+	got := buildPostContent([]string{
+		"originals/2025/06/123_clip.mp4",
+		"originals/2025/06/456_photo.jpg",
+	})
+	want := "/2025/06/123_clip.mp4\n/2025/06/456_photo.jpg"
+	if got != want {
+		t.Errorf("buildPostContent = %q, want %q", got, want)
+	}
+}
 
 func TestParseHashtags(t *testing.T) {
 	tests := []struct {

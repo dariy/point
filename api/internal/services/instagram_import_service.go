@@ -5,12 +5,41 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 )
+
+// mimeExt maps common CDN content types to a file extension. The stored file's
+// extension determines how the media is rendered downstream (image vs <video>
+// vs <audio>), so videos and audio must keep a correct extension rather than
+// the image default.
+var mimeExt = map[string]string{
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/gif":       ".gif",
+	"image/webp":      ".webp",
+	"video/mp4":       ".mp4",
+	"video/quicktime": ".mov",
+	"video/webm":      ".webm",
+	"audio/mpeg":      ".mp3",
+	"audio/mp4":       ".m4a",
+}
+
+// extForMime returns a file extension for a MIME type, preferring an explicit
+// mapping and falling back to the stdlib mime registry, then ".jpg".
+func extForMime(mimeType string) string {
+	if ext, ok := mimeExt[mimeType]; ok {
+		return ext
+	}
+	if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
+		return exts[0]
+	}
+	return ".jpg"
+}
 
 // hashtagRE matches Instagram-style hashtags: a '#' followed by one or more
 // letters (any language), digits, or underscores.
@@ -85,11 +114,13 @@ func (s *InstagramImportService) downloadMediaURL(ctx context.Context, mediaURL,
 		mimeType = "image/jpeg"
 	}
 
-	// Derive a filename if none supplied.
+	// Derive a filename if none supplied. The extension comes from the CDN URL
+	// path when present, otherwise from the Content-Type so videos and audio
+	// keep an extension that renders correctly.
 	if filename == "" {
 		ext := filepath.Ext(resp.Request.URL.Path)
 		if ext == "" {
-			ext = ".jpg"
+			ext = extForMime(mimeType)
 		}
 		filename = fmt.Sprintf("ig_%d%s", time.Now().UnixNano(), ext)
 	}
@@ -105,15 +136,17 @@ func (s *InstagramImportService) downloadMediaURL(ctx context.Context, mediaURL,
 	return m.OriginalPath, nil
 }
 
-// buildPostContent converts a list of image paths into the block-based content
-// format used by PostEditPage (one IMAGE_PATH per line, wrapped in a node block).
+// buildPostContent converts a list of media paths (images and/or videos) into
+// the block-based content format used by PostEditPage (one media path per line).
+// The backend renders bare paths as <img>/<video>/<audio> based on the file
+// extension, so video paths just work here.
 //
 // The format must match IMAGE_PATH_RE in the frontend PostEditPage:
 //
 //	/2025/06/originals/2025/06/...jpg
-func buildPostContent(imagePaths []string) string {
+func buildPostContent(mediaPaths []string) string {
 	var parts []string
-	for _, p := range imagePaths {
+	for _, p := range mediaPaths {
 		// Strip the leading "originals/" prefix if present — the frontend expects
 		// paths starting with the year.
 		trimmed := strings.TrimPrefix(p, "originals/")
@@ -216,7 +249,7 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 		}
 
 		// 3. Download media.
-		var imagePaths []string
+		var mediaPaths []string
 		var downloadErr error
 
 		switch item.MediaType {
@@ -234,20 +267,22 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 					downloadErr = err
 					break
 				}
-				imagePaths = append(imagePaths, p)
+				mediaPaths = append(mediaPaths, p)
 			}
 		case "VIDEO":
-			// Use thumbnail for video posts.
-			u := item.ThumbnailURL
+			// VIDEO covers both regular video posts and Reels (Reels report
+			// media_type=VIDEO). Download the actual video file (media_url),
+			// falling back to the thumbnail image only when none is available.
+			u := item.MediaURL
 			if u == "" {
-				u = item.MediaURL
+				u = item.ThumbnailURL
 			}
 			if u != "" {
 				p, err := s.downloadMediaURL(ctx, u, "")
 				if err != nil {
 					downloadErr = err
 				} else {
-					imagePaths = append(imagePaths, p)
+					mediaPaths = append(mediaPaths, p)
 				}
 			}
 		default: // IMAGE
@@ -256,7 +291,7 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 				if err != nil {
 					downloadErr = err
 				} else {
-					imagePaths = append(imagePaths, p)
+					mediaPaths = append(mediaPaths, p)
 				}
 			}
 		}
@@ -276,7 +311,7 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 		if title == "" {
 			title = fmt.Sprintf("Instagram %s", item.Timestamp.Format("2006-01-02"))
 		}
-		content := buildPostContent(imagePaths)
+		content := buildPostContent(mediaPaths)
 		if body != "" && content != "" {
 			content = content + "\n\n" + body
 		} else if body != "" {
