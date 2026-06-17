@@ -7,7 +7,7 @@
  *  3. Offline API and Image serving.
  */
 
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v7";
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).

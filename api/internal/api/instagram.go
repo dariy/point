@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"point-api/internal/config"
@@ -21,14 +23,27 @@ type instagramConnector interface {
 	GetConnectedAccount(ctx context.Context) (username, igUserID, accountType string, err error)
 }
 
-type InstagramHandler struct {
-	instagram instagramConnector
-	settings  *services.SettingsService
-	cfg       *config.Config
+// importState tracks a single in-flight (or recently finished) import run.
+type importState struct {
+	mu       sync.Mutex
+	running  bool
+	progress services.ImportProgress
+	result   *services.ImportResult
+	err      string
+	startedAt time.Time
+	finishedAt time.Time
 }
 
-func NewInstagramHandler(ig *services.InstagramService, s *services.SettingsService, cfg *config.Config) *InstagramHandler {
-	return &InstagramHandler{instagram: ig, settings: s, cfg: cfg}
+type InstagramHandler struct {
+	instagram instagramConnector
+	importer  *services.InstagramImportService
+	settings  *services.SettingsService
+	cfg       *config.Config
+	state     importState
+}
+
+func NewInstagramHandler(ig *services.InstagramService, importer *services.InstagramImportService, s *services.SettingsService, cfg *config.Config) *InstagramHandler {
+	return &InstagramHandler{instagram: ig, importer: importer, settings: s, cfg: cfg}
 }
 
 // Connect redirects the admin to Meta's OAuth dialog.
@@ -163,4 +178,140 @@ func (h *InstagramHandler) Status(c echo.Context) error {
 		Enabled:        enabled,
 		DefaultShare:   defaultShare,
 	})
+}
+
+// importStatusResponse is the JSON shape for GET /api/instagram/import/status.
+type importStatusResponse struct {
+	Running    bool                    `json:"running"`
+	Imported   int                     `json:"imported"`
+	Skipped    int                     `json:"skipped"`
+	Errors     int                     `json:"errors"`
+	StartedAt  string                  `json:"started_at,omitempty"`
+	FinishedAt string                  `json:"finished_at,omitempty"`
+	Progress   *services.ImportProgress `json:"progress,omitempty"`
+	ErrorMsg   string                  `json:"error,omitempty"`
+	Messages   []string                `json:"messages,omitempty"`
+}
+
+// triggerAuthorID returns the first admin user ID (1) for posts created during import.
+// A proper implementation would look up the authenticated user from the session.
+const triggerAuthorID int64 = 1
+
+// StartImport kicks off a background import goroutine (one at a time).
+// POST /api/instagram/import
+func (h *InstagramHandler) StartImport(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Guard: importer must be initialised.
+	if h.importer == nil {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "import service not available")
+	}
+	// Guard: Instagram must be connected.
+	if !h.settings.SecretIsSet(ctx, "instagram_access_token") {
+		return echo.NewHTTPError(http.StatusBadRequest, "Instagram is not connected")
+	}
+
+	h.state.mu.Lock()
+	if h.state.running {
+		h.state.mu.Unlock()
+		return c.JSON(http.StatusConflict, echo.Map{"message": "import already running"})
+	}
+	h.state.running = true
+	h.state.result = nil
+	h.state.err = ""
+	h.state.progress = services.ImportProgress{}
+	h.state.startedAt = time.Now()
+	h.state.finishedAt = time.Time{}
+	h.state.mu.Unlock()
+
+	// Run in background.
+	go func() {
+		bgCtx := context.Background()
+		result, err := h.importer.ImportAccount(bgCtx, triggerAuthorID, func(p services.ImportProgress) {
+			h.state.mu.Lock()
+			h.state.progress = p
+			h.state.mu.Unlock()
+		})
+
+		h.state.mu.Lock()
+		h.state.running = false
+		h.state.finishedAt = time.Now()
+		if err != nil {
+			h.state.err = err.Error()
+		} else {
+			h.state.result = &result
+		}
+		h.state.mu.Unlock()
+
+		// Persist summary to blog_settings for survival across restarts.
+		if err == nil {
+			summary, _ := json.Marshal(map[string]interface{}{
+				"imported":    result.Imported,
+				"skipped":     result.Skipped,
+				"errors":      result.Errors,
+				"finished_at": time.Now().UTC().Format(time.RFC3339),
+			})
+			_ = h.settings.SetSetting(bgCtx, "instagram_import_last_run", string(summary), "string")
+		}
+	}()
+
+	return c.JSON(http.StatusAccepted, echo.Map{"message": "import started"})
+}
+
+// GetImportStatus returns the current (or last) import state.
+// GET /api/instagram/import/status
+func (h *InstagramHandler) GetImportStatus(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	h.state.mu.Lock()
+	running := h.state.running
+	prog := h.state.progress
+	result := h.state.result
+	errMsg := h.state.err
+	startedAt := h.state.startedAt
+	finishedAt := h.state.finishedAt
+	h.state.mu.Unlock()
+
+	resp := importStatusResponse{Running: running}
+
+	if running {
+		resp.Progress = &prog
+		resp.Imported = prog.Imported
+		resp.Skipped = prog.Skipped
+		resp.Errors = prog.Errors
+		if !startedAt.IsZero() {
+			resp.StartedAt = startedAt.UTC().Format(time.RFC3339)
+		}
+	} else if result != nil {
+		resp.Imported = result.Imported
+		resp.Skipped = result.Skipped
+		resp.Errors = result.Errors
+		resp.Messages = result.Messages
+		if !startedAt.IsZero() {
+			resp.StartedAt = startedAt.UTC().Format(time.RFC3339)
+		}
+		if !finishedAt.IsZero() {
+			resp.FinishedAt = finishedAt.UTC().Format(time.RFC3339)
+		}
+	} else {
+		// No in-memory state — fall back to persisted last-run summary.
+		raw, _ := h.settings.GetSetting(ctx, "instagram_import_last_run", "")
+		if raw != "" {
+			var persisted struct {
+				Imported   int    `json:"imported"`
+				Skipped    int    `json:"skipped"`
+				Errors     int    `json:"errors"`
+				FinishedAt string `json:"finished_at"`
+			}
+			if json.Unmarshal([]byte(raw), &persisted) == nil {
+				resp.Imported = persisted.Imported
+				resp.Skipped = persisted.Skipped
+				resp.Errors = persisted.Errors
+				resp.FinishedAt = persisted.FinishedAt
+			}
+		}
+	}
+
+	resp.ErrorMsg = errMsg
+	return c.JSON(http.StatusOK, resp)
 }

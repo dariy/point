@@ -63,22 +63,21 @@ export default class ThemesPage extends Component {
 
   _renderThemeCard(theme, activeTheme, saving) {
     const isActive = activeTheme === theme.name;
-    const { colors } = parseTheme(theme.css || "");
-
-    const swatch = (color) =>
-      `<span class="theme-swatch" style="background-color: ${escapeHtml(color)}"></span>`;
+    const colors = {
+      primary: theme.preview_color || "#000",
+      text: theme.has_dark_mode ? "#f0f0f0" : "#333",
+    };
 
     return `
       <article class="theme-card ${isActive ? "active" : ""}">
-        <div class="theme-preview" style="background-color: ${escapeHtml(colors.background || "#fff")}">
-          <div class="theme-preview-inner">
-            <h3 style="color: ${escapeHtml(colors.primary || "#000")}">Heading</h3>
-            <p style="color: ${escapeHtml(colors.text || "#333")}">Sample text content.</p>
-          </div>
-          <div class="theme-swatches">
-            ${colors.primary ? swatch(colors.primary) : ""}
-            ${colors.accent ? swatch(colors.accent) : ""}
-            ${colors.background ? swatch(colors.background) : ""}
+        <div class="theme-card-preview">
+          <div class="theme-preview-mock" style="background-color: ${theme.has_dark_mode ? '#1a1a1a' : '#ffffff'}">
+            <div class="mock-header" style="background-color: ${escapeHtml(colors.primary)}"></div>
+            <div class="mock-content">
+              <div class="mock-line" style="background-color: ${escapeHtml(colors.text)}"></div>
+              <div class="mock-line" style="background-color: ${escapeHtml(colors.text)}"></div>
+              <div class="mock-line short" style="background-color: ${escapeHtml(colors.text)}"></div>
+            </div>
           </div>
         </div>
         <div class="theme-info">
@@ -139,7 +138,7 @@ export default class ThemesPage extends Component {
       ]);
       this.setState({
         loading: false,
-        themes: themes.themes || [],
+        themes: Array.isArray(themes) ? themes : (themes.themes || []),
         activeTheme: activeTheme.name,
         customCSS: customCSS.css || "",
         error: null,

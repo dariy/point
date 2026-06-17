@@ -198,9 +198,16 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		return models.Medium{}, err
 	}
 
-	uniqueFilename := fmt.Sprintf("%d_%s", now.Unix(), p.Filename)
+	// Strip any directory components from the user-provided filename to
+	// prevent path traversal (e.g. "../../etc/passwd").
+	safeFilename := filepath.Base(filepath.Clean("/" + p.Filename))
+	uniqueFilename := fmt.Sprintf("%d_%s", now.Unix(), safeFilename)
 	originalRelPath := filepath.Join("originals", datePath, uniqueFilename)
-	originalFullPath := filepath.Join(s.cfg.StoragePath, "media", originalRelPath)
+	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	originalFullPath := filepath.Clean(filepath.Join(mediaBase, originalRelPath))
+	if !strings.HasPrefix(originalFullPath, mediaBase+string(filepath.Separator)) {
+		return models.Medium{}, fmt.Errorf("invalid media path")
+	}
 
 	// Process media
 	var width, height sql.NullInt64

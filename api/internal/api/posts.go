@@ -140,6 +140,9 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	}
 
 	status := c.QueryParam("status")
+	if status == "all" {
+		status = ""
+	}
 	featured := c.QueryParam("featured") == "true"
 	includeDrafts := c.Get("user") != nil
 	search := c.QueryParam("q")
@@ -175,9 +178,11 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	        Status:        status,
 	        FeaturedOnly:  featured,
 	        IncludeDrafts: includeDrafts,
-	        Search:        search,
-	        Tag:           c.QueryParam("tag"),
-	        SortBy:        c.QueryParam("sort"),
+	        // Admins manage pages alongside posts; the public feed never includes them.
+	        IncludePages: includeDrafts,
+	        Search:       search,
+	        Tag:          c.QueryParam("tag"),
+	        SortBy:       c.QueryParam("sort"),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

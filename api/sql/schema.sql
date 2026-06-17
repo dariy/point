@@ -39,13 +39,15 @@ CREATE TABLE IF NOT EXISTS posts (
     instagram_status TEXT NOT NULL DEFAULT 'none',
     instagram_media_id TEXT,
     instagram_published_at DATETIME,
-    instagram_error TEXT
+    instagram_error TEXT,
+    instagram_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
 CREATE INDEX IF NOT EXISTS idx_posts_published_at ON posts(published_at);
 CREATE INDEX IF NOT EXISTS idx_posts_scheduled_at ON posts(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_posts_preview_token ON posts(preview_token);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_instagram_id ON posts(instagram_id) WHERE instagram_id IS NOT NULL;
 
 -- Tags
 CREATE TABLE IF NOT EXISTS tags (

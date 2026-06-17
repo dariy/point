@@ -17,12 +17,12 @@
 .site-header-inner {
     max-width: var(--content-max-width);
     margin: 0 auto;
-    /* Three-part layout: [site-header] [tags-bar] [site-nav] */
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
     height: var(--header-height);
     overflow: visible;
+    position: relative;
 }
 
 /* site-header: logo/title + breadcrumb on the left */
@@ -35,6 +35,7 @@
     height: var(--header-height);
     padding: 0 var(--spacing-md);
 }
+
 
 /* site-nav (direct child of inner): action buttons on the right */
 .site-header-inner > .site-nav {
@@ -87,7 +88,7 @@
     gap: var(--spacing-sm);
     flex-shrink: 1;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .header-left-group {
@@ -121,8 +122,6 @@
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1;
-    min-width: 0;
-    overflow: hidden;
 }
 
 .site-breadcrumb .breadcrumb-separator {
@@ -132,13 +131,42 @@
     transition: color var(--transition-theme);
 }
 
+.site-breadcrumb .breadcrumb-separator::after {
+    content: "→";
+    margin: 0 4px;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    transition: transform 100ms ease;
+}
+
+.site-breadcrumb .breadcrumb-link.has-dropdown:hover + .breadcrumb-separator::after,
+.site-breadcrumb .breadcrumb-link.is-flyout-open + .breadcrumb-separator::after {
+    transform: rotate(90deg);
+}
+
+.site-breadcrumb .breadcrumb-current.has-dropdown::after {
+    content: "←";
+    margin-left: 8px;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    transition: transform 100ms ease;
+}
+
+.site-breadcrumb .breadcrumb-current.has-dropdown:hover::after,
+.site-breadcrumb .breadcrumb-current.has-dropdown.is-flyout-open::after {
+    transform: rotate(-90deg);
+}
+
 .site-breadcrumb .breadcrumb-current {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     transition: color var(--transition-theme);
     color: var(--text-primary);
     text-decoration: none;
+    flex-shrink: 0;
 }
 
 .site-breadcrumb a.breadcrumb-current:hover {
@@ -149,6 +177,7 @@
     color: var(--text-secondary);
     text-decoration: none;
     transition: color var(--transition-theme);
+    white-space: nowrap;
 }
 
 .site-breadcrumb .breadcrumb-link:hover {
@@ -173,6 +202,12 @@
     align-items: center;
     gap: var(--spacing-sm);
     line-height: 1;
+}
+
+.site-title-link {
+    position: relative;
+    display: flex;
+    align-items: center;
 }
 
 .site-title-link:hover,
@@ -208,6 +243,14 @@
     color: var(--text-tertiary);
     margin: 0;
     transition: color var(--transition-theme);
+}
+
+.site-title-link .site-subtitle {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 .site-nav {
@@ -334,6 +377,30 @@
 .dropdown-item:hover {
     background-color: var(--surface-hover);
     color: var(--text-primary);
+}
+
+.nav-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--spacing-md);
+    height: var(--header-action-btn-height);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-pill);
+    text-decoration: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: var(--shadow-sm);
+    white-space: nowrap;
+}
+
+.nav-pill:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow-md);
 }
 
 /* Post Header Bar (Immersive Mode) */
@@ -503,7 +570,22 @@
 .crumb-pair {
     display: contents;
 }
-.crumb-pair.folded {
+
+.crumb-pair.folded > * {
+    display: none;
+}
+
+.crumb-pair.folded.show-ellipsis::before {
+    content: "…";
+    color: var(--text-tertiary);
+}
+
+.crumb-pair.folded.show-ellipsis .breadcrumb-separator {
+    display: inline;
+}
+
+/* Step 1: hide site subtitle */
+.site-header-group.fold-title .site-subtitle {
     display: none;
 }
 
@@ -534,8 +616,16 @@
 }
 
 /* Step 4: breadcrumb-current shows ellipsis and acts as popover trigger */
+.site-header-group.fold-current .site-breadcrumb {
+    min-width: 0;
+}
+
 .site-header-group.fold-current .breadcrumb-current {
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 /* ===========================
@@ -632,6 +722,12 @@
     font-weight: 500;
 }
 
+.burger-sub-link {
+    padding-left: var(--spacing-lg);
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
 /* ===========================
    Crumb Popover
    =========================== */
@@ -675,20 +771,6 @@
 
 /* --- Unified Breadcrumb: facet crumbs + count --- */
 
-/* ▾ caret on crumbs that have a dropdown */
-.crumb-caret {
-    font-size: 0.65em;
-    margin-left: 2px;
-    opacity: 0.6;
-    transition: opacity var(--transition-fast);
-    vertical-align: middle;
-}
-
-.breadcrumb-link.has-dropdown:hover .crumb-caret,
-.breadcrumb-current.has-dropdown:hover .crumb-caret {
-    opacity: 1;
-}
-
 /* Facet crumbs (year / query) — plain text, no box */
 .breadcrumb-facet {
     color: var(--text-secondary);
@@ -703,7 +785,7 @@
 
 /* On narrow screens the middle slot wraps to its own full-width row below the
    header (order:99 places it visually after the nav buttons). */
-@media (max-width: 640px) {
+@media (max-width: 720px) {
     .site-header-inner {
         flex-wrap: wrap;
         height: auto;

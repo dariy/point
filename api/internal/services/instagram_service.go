@@ -425,3 +425,96 @@ func (s *InstagramService) PublishContainer(ctx context.Context, creationID stri
 	}
 	return resp.ID, nil
 }
+
+// InstagramMediaChild is one image/video inside a CAROUSEL_ALBUM.
+type InstagramMediaChild struct {
+	ID           string `json:"id"`
+	MediaType    string `json:"media_type"`
+	MediaURL     string `json:"media_url"`
+	ThumbnailURL string `json:"thumbnail_url"`
+}
+
+// InstagramMedia represents one item returned by the /media Graph endpoint.
+type InstagramMedia struct {
+	ID           string                `json:"id"`
+	Caption      string                `json:"caption"`
+	MediaType    string                `json:"media_type"`   // IMAGE | VIDEO | CAROUSEL_ALBUM
+	MediaURL     string                `json:"media_url"`
+	Permalink    string                `json:"permalink"`
+	Timestamp    time.Time             `json:"timestamp"`
+	ThumbnailURL string                `json:"thumbnail_url"` // VIDEO only
+	Children     []InstagramMediaChild `json:"children"`
+}
+
+// ListUserMedia returns all media items for the connected account, following
+// pagination cursors until all pages are exhausted.
+func (s *InstagramService) ListUserMedia(ctx context.Context) ([]InstagramMedia, error) {
+	token, err := s.secret(ctx, "instagram_access_token")
+	if err != nil {
+		return nil, err
+	}
+	igUserID, err := s.secret(ctx, "instagram_user_id")
+	if err != nil {
+		return nil, err
+	}
+
+	const fields = "id,caption,media_type,media_url,permalink,timestamp,thumbnail_url,children{media_url,media_type,thumbnail_url}"
+	params := url.Values{
+		"fields":       {fields},
+		"access_token": {token},
+	}
+	rawURL := fmt.Sprintf("%s/%s/media?%s", s.graphBaseURL, igUserID, params.Encode())
+
+	var all []InstagramMedia
+	for rawURL != "" {
+		body, err := s.get(ctx, rawURL)
+		if err != nil {
+			return nil, fmt.Errorf("list user media: %w", err)
+		}
+
+		var page struct {
+			Data []struct {
+				ID           string `json:"id"`
+				Caption      string `json:"caption"`
+				MediaType    string `json:"media_type"`
+				MediaURL     string `json:"media_url"`
+				Permalink    string `json:"permalink"`
+				Timestamp    string `json:"timestamp"`
+				ThumbnailURL string `json:"thumbnail_url"`
+				Children     *struct {
+					Data []InstagramMediaChild `json:"data"`
+				} `json:"children"`
+			} `json:"data"`
+			Paging *struct {
+				Next string `json:"next"`
+			} `json:"paging"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, fmt.Errorf("decode media page: %w", err)
+		}
+
+		for _, d := range page.Data {
+			m := InstagramMedia{
+				ID:           d.ID,
+				Caption:      d.Caption,
+				MediaType:    d.MediaType,
+				MediaURL:     d.MediaURL,
+				Permalink:    d.Permalink,
+				ThumbnailURL: d.ThumbnailURL,
+			}
+			if t, err := time.Parse(time.RFC3339, d.Timestamp); err == nil {
+				m.Timestamp = t
+			}
+			if d.Children != nil {
+				m.Children = d.Children.Data
+			}
+			all = append(all, m)
+		}
+
+		rawURL = ""
+		if page.Paging != nil {
+			rawURL = page.Paging.Next
+		}
+	}
+	return all, nil
+}

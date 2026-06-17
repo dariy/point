@@ -165,8 +165,10 @@ export class PostContent extends Component {
   }
 
   _renderNormal(post, prevPost, nextPost) {
+    const settings = store.get("settings") || {};
+    const isCustomMenu = settings.nav_menu_mode === 'custom';
     const navTags = store.get("navTags") || [];
-    const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
+    const tagIndex = (navTags.length && !isCustomMenu) ? buildTagIndex(navTags) : null;
     const tags = renderTagStrip(post.tags, tagIndex);
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     const postCss = post.css ? `<style id="post-css">${post.css}</style>` : "";

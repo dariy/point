@@ -1,23 +1,29 @@
 /* ── Admin EXIF panel (MediaBrowser + VisualEditor) ─────── */
 .exif-panel {
-  margin-top: var(--spacing-md);
+  background-color: var(--surface-hover);
   border-top: var(--border-width) solid var(--border-primary);
-  padding-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  font-size: var(--font-size-xs);
 }
 
 .exif-panel-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .exif-panel-title {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.exif-panel-title svg {
+  width: 14px;
+  height: 14px;
 }
 
 .exif-table {

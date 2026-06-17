@@ -174,6 +174,7 @@ function _hideFlyout() {
   if (_flyoutEl) {
     _flyoutEl.classList.add('hidden');
     _flyoutEl.classList.remove('bottom-sheet');
+    _flyoutEl.style.minWidth = '';
   }
   _activeLink = null;
   if (_activeCard) {
@@ -227,6 +228,7 @@ export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null)
 
   flyout.appendChild(section);
 
+  flyout.style.minWidth = 'max-content';
   flyout.style.visibility = 'hidden';
   flyout.classList.remove('hidden');
 
@@ -245,7 +247,15 @@ export function showCrumbDropdown(anchorEl, items, navigateFn, excludeEl = null)
     let top = anchorRect.bottom + gap;
     if (top + flyH > window.innerHeight - 8) top = anchorRect.top - flyH - gap;
 
-    let left = anchorRect.left;
+    let arrowCenterLeft;
+    if (anchorEl.classList.contains('breadcrumb-link') && anchorEl.nextElementSibling && anchorEl.nextElementSibling.classList.contains('breadcrumb-separator')) {
+      const sepRect = anchorEl.nextElementSibling.getBoundingClientRect();
+      arrowCenterLeft = sepRect.left + sepRect.width / 2;
+    } else {
+      arrowCenterLeft = anchorRect.right;
+    }
+
+    let left = arrowCenterLeft - (flyW / 2);
     left = Math.max(8, Math.min(left, window.innerWidth - flyW - 8));
 
     flyout.style.top = `${top}px`;
@@ -281,7 +291,7 @@ export function setupTagFlyout(containerEl, tagIndex, navigateFn, hostEl = null)
 
   containerEl.querySelectorAll('.tag-link').forEach((link) => {
     const href = link.getAttribute('href');
-    if (!href || href.startsWith('http')) return;
+    if (!href || href.startsWith('http') || !href.startsWith('/tags/')) return;
     const slug = href.replace('/tags/', '').split('?')[0];
 
     // Desktop hover

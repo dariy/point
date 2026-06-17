@@ -124,3 +124,100 @@ input[type="password"] {
     height: auto;
     width: auto;
 }
+
+/* ===========================
+   Premium Radio Cards
+   =========================== */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.radio-card {
+    position: relative;
+    display: block;
+    cursor: pointer;
+    margin: 0;
+}
+
+.radio-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.radio-content {
+    display: flex;
+    align-items: flex-start;
+    padding: var(--spacing-lg);
+    background-color: var(--surface-card);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--border-radius-lg);
+    transition: all var(--transition-normal) ease;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.radio-card:hover .radio-content {
+    border-color: var(--color-primary-alpha-30, var(--color-primary));
+    background-color: var(--surface-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.radio-input:focus-visible + .radio-content {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.radio-input:checked + .radio-content {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary-alpha-10, rgba(59, 130, 246, 0.05));
+    box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.radio-indicator {
+    content: '';
+    display: block;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--border-secondary);
+    background-color: var(--surface-body);
+    margin-right: var(--spacing-md);
+    margin-top: 2px; /* align with text */
+    flex-shrink: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: inset 0 0 0 4px var(--surface-card);
+    position: relative;
+}
+
+.radio-input:checked + .radio-content .radio-indicator {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary);
+    box-shadow: inset 0 0 0 4px var(--surface-card);
+}
+
+.radio-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.radio-text strong {
+    font-size: var(--font-size-md);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.radio-text small {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.radio-card:active .radio-content {
+    transform: scale(0.98);
+}
