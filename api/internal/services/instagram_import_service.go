@@ -4,11 +4,17 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// hashtagRE matches Instagram-style hashtags: a '#' followed by one or more
+// letters (any language), digits, or underscores.
+var hashtagRE = regexp.MustCompile(`#([\p{L}\p{N}_]+)`)
 
 // ImportProgress is sent via the progress callback during ImportAccount.
 type ImportProgress struct {
@@ -113,6 +119,39 @@ func buildPostContent(imagePaths []string) string {
 		parts = append(parts, "/"+trimmed)
 	}
 	return strings.Join(parts, "\n")
+}
+
+// parseHashtags extracts unique hashtag names (without the leading '#') from an
+// Instagram caption and returns them alongside the caption stripped of those
+// hashtags. Tag reuse downstream is slug-based, so the returned names match
+// existing tags regardless of case; duplicates within the caption are removed
+// case-insensitively while preserving the first-seen spelling.
+func parseHashtags(caption string) (tags []string, cleaned string) {
+	matches := hashtagRE.FindAllStringSubmatch(caption, -1)
+	seen := make(map[string]struct{}, len(matches))
+	for _, m := range matches {
+		name := m[1]
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		tags = append(tags, name)
+	}
+
+	// Remove the hashtags from the caption text and tidy the whitespace they
+	// leave behind (collapse intra-line runs, then collapse blank-line runs).
+	stripped := hashtagRE.ReplaceAllString(caption, "")
+	lines := strings.Split(stripped, "\n")
+	for i, ln := range lines {
+		lines[i] = strings.Join(strings.Fields(ln), " ")
+	}
+	cleaned = strings.Join(lines, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+	cleaned = strings.TrimSpace(cleaned)
+	return tags, cleaned
 }
 
 // splitCaption splits an Instagram caption into (title, body).
@@ -224,11 +263,15 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 		if downloadErr != nil {
 			result.Errors++
 			result.Messages = append(result.Messages, fmt.Sprintf("download %s: %v", item.ID, downloadErr))
+			slog.Warn("instagram import: download failed",
+				"instagram_id", item.ID, "media_type", item.MediaType, "error", downloadErr)
 			continue
 		}
 
-		// 4. Build post fields.
-		title, body := splitCaption(item.Caption)
+		// 4. Build post fields. Hashtags become reusable tags and are stripped
+		// from the caption text used for the title/body.
+		tags, cleanedCaption := parseHashtags(item.Caption)
+		title, body := splitCaption(cleanedCaption)
 		if title == "" {
 			title = fmt.Sprintf("Instagram %s", item.Timestamp.Format("2006-01-02"))
 		}
@@ -248,10 +291,13 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 			Type:      "post",
 			Formatter: "markdown",
 			AuthorID:  authorID,
+			Tags:      tags,
 		})
 		if err != nil {
 			result.Errors++
 			result.Messages = append(result.Messages, fmt.Sprintf("create post for %s: %v", item.ID, err))
+			slog.Warn("instagram import: create post failed",
+				"instagram_id", item.ID, "media_type", item.MediaType, "error", err)
 			continue
 		}
 
@@ -274,6 +320,10 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 			Current:  "done",
 		})
 	}
+
+	slog.Info("instagram import finished",
+		"total", total, "imported", result.Imported,
+		"skipped", result.Skipped, "errors", result.Errors)
 
 	return result, nil
 }

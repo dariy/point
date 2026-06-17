@@ -242,6 +242,16 @@ export default class SystemPage extends Component {
         if (status.finished_at) parts.push(`Last run: ${formatDateShort(status.finished_at)}`);
         if (parts.length) statusHtml = `<p class="system-msg">${escapeHtml(parts.join(' · '))}</p>`;
         if (status.error) statusHtml += `<p class="system-msg error">${escapeHtml(status.error)}</p>`;
+        if (Array.isArray(status.messages) && status.messages.length) {
+          const items = status.messages
+            .map((m) => `<li>${escapeHtml(m)}</li>`)
+            .join('');
+          statusHtml += `
+            <details class="ig-import-details">
+              <summary>${status.messages.length} message${status.messages.length === 1 ? '' : 's'}</summary>
+              <ul class="ig-import-messages">${items}</ul>
+            </details>`;
+        }
       }
     }
     return `
