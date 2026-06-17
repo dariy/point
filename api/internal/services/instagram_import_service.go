@@ -17,13 +17,14 @@ import (
 var hashtagRE = regexp.MustCompile(`#([\p{L}\p{N}_]+)`)
 
 // ImportProgress is sent via the progress callback during ImportAccount.
+// JSON tags are lowercase to match the frontend's import-status polling.
 type ImportProgress struct {
-	Total    int
-	Done     int
-	Imported int
-	Skipped  int
-	Errors   int
-	Current  string // human-readable description of the item being processed
+	Total    int    `json:"total"`
+	Done     int    `json:"done"`
+	Imported int    `json:"imported"`
+	Skipped  int    `json:"skipped"`
+	Errors   int    `json:"errors"`
+	Current  string `json:"current"` // human-readable description of the item being processed
 }
 
 // ImportResult is returned when ImportAccount finishes.
