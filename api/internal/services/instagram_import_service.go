@@ -4,20 +4,56 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"mime"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
 
+// mimeExt maps common CDN content types to a file extension. The stored file's
+// extension determines how the media is rendered downstream (image vs <video>
+// vs <audio>), so videos and audio must keep a correct extension rather than
+// the image default.
+var mimeExt = map[string]string{
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/gif":       ".gif",
+	"image/webp":      ".webp",
+	"video/mp4":       ".mp4",
+	"video/quicktime": ".mov",
+	"video/webm":      ".webm",
+	"audio/mpeg":      ".mp3",
+	"audio/mp4":       ".m4a",
+}
+
+// extForMime returns a file extension for a MIME type, preferring an explicit
+// mapping and falling back to the stdlib mime registry, then ".jpg".
+func extForMime(mimeType string) string {
+	if ext, ok := mimeExt[mimeType]; ok {
+		return ext
+	}
+	if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
+		return exts[0]
+	}
+	return ".jpg"
+}
+
+// hashtagRE matches Instagram-style hashtags: a '#' followed by one or more
+// letters (any language), digits, or underscores.
+var hashtagRE = regexp.MustCompile(`#([\p{L}\p{N}_]+)`)
+
 // ImportProgress is sent via the progress callback during ImportAccount.
+// JSON tags are lowercase to match the frontend's import-status polling.
 type ImportProgress struct {
-	Total    int
-	Done     int
-	Imported int
-	Skipped  int
-	Errors   int
-	Current  string // human-readable description of the item being processed
+	Total    int    `json:"total"`
+	Done     int    `json:"done"`
+	Imported int    `json:"imported"`
+	Skipped  int    `json:"skipped"`
+	Errors   int    `json:"errors"`
+	Current  string `json:"current"` // human-readable description of the item being processed
 }
 
 // ImportResult is returned when ImportAccount finishes.
@@ -78,11 +114,13 @@ func (s *InstagramImportService) downloadMediaURL(ctx context.Context, mediaURL,
 		mimeType = "image/jpeg"
 	}
 
-	// Derive a filename if none supplied.
+	// Derive a filename if none supplied. The extension comes from the CDN URL
+	// path when present, otherwise from the Content-Type so videos and audio
+	// keep an extension that renders correctly.
 	if filename == "" {
 		ext := filepath.Ext(resp.Request.URL.Path)
 		if ext == "" {
-			ext = ".jpg"
+			ext = extForMime(mimeType)
 		}
 		filename = fmt.Sprintf("ig_%d%s", time.Now().UnixNano(), ext)
 	}
@@ -98,21 +136,56 @@ func (s *InstagramImportService) downloadMediaURL(ctx context.Context, mediaURL,
 	return m.OriginalPath, nil
 }
 
-// buildPostContent converts a list of image paths into the block-based content
-// format used by PostEditPage (one IMAGE_PATH per line, wrapped in a node block).
+// buildPostContent converts a list of media paths (images and/or videos) into
+// the block-based content format used by PostEditPage (one media path per line).
+// The backend renders bare paths as <img>/<video>/<audio> based on the file
+// extension, so video paths just work here.
 //
 // The format must match IMAGE_PATH_RE in the frontend PostEditPage:
 //
 //	/2025/06/originals/2025/06/...jpg
-func buildPostContent(imagePaths []string) string {
+func buildPostContent(mediaPaths []string) string {
 	var parts []string
-	for _, p := range imagePaths {
+	for _, p := range mediaPaths {
 		// Strip the leading "originals/" prefix if present — the frontend expects
 		// paths starting with the year.
 		trimmed := strings.TrimPrefix(p, "originals/")
 		parts = append(parts, "/"+trimmed)
 	}
 	return strings.Join(parts, "\n")
+}
+
+// parseHashtags extracts unique hashtag names (without the leading '#') from an
+// Instagram caption and returns them alongside the caption stripped of those
+// hashtags. Tag reuse downstream is slug-based, so the returned names match
+// existing tags regardless of case; duplicates within the caption are removed
+// case-insensitively while preserving the first-seen spelling.
+func parseHashtags(caption string) (tags []string, cleaned string) {
+	matches := hashtagRE.FindAllStringSubmatch(caption, -1)
+	seen := make(map[string]struct{}, len(matches))
+	for _, m := range matches {
+		name := m[1]
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		tags = append(tags, name)
+	}
+
+	// Remove the hashtags from the caption text and tidy the whitespace they
+	// leave behind (collapse intra-line runs, then collapse blank-line runs).
+	stripped := hashtagRE.ReplaceAllString(caption, "")
+	lines := strings.Split(stripped, "\n")
+	for i, ln := range lines {
+		lines[i] = strings.Join(strings.Fields(ln), " ")
+	}
+	cleaned = strings.Join(lines, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+	cleaned = strings.TrimSpace(cleaned)
+	return tags, cleaned
 }
 
 // splitCaption splits an Instagram caption into (title, body).
@@ -176,7 +249,7 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 		}
 
 		// 3. Download media.
-		var imagePaths []string
+		var mediaPaths []string
 		var downloadErr error
 
 		switch item.MediaType {
@@ -194,20 +267,22 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 					downloadErr = err
 					break
 				}
-				imagePaths = append(imagePaths, p)
+				mediaPaths = append(mediaPaths, p)
 			}
 		case "VIDEO":
-			// Use thumbnail for video posts.
-			u := item.ThumbnailURL
+			// VIDEO covers both regular video posts and Reels (Reels report
+			// media_type=VIDEO). Download the actual video file (media_url),
+			// falling back to the thumbnail image only when none is available.
+			u := item.MediaURL
 			if u == "" {
-				u = item.MediaURL
+				u = item.ThumbnailURL
 			}
 			if u != "" {
 				p, err := s.downloadMediaURL(ctx, u, "")
 				if err != nil {
 					downloadErr = err
 				} else {
-					imagePaths = append(imagePaths, p)
+					mediaPaths = append(mediaPaths, p)
 				}
 			}
 		default: // IMAGE
@@ -216,7 +291,7 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 				if err != nil {
 					downloadErr = err
 				} else {
-					imagePaths = append(imagePaths, p)
+					mediaPaths = append(mediaPaths, p)
 				}
 			}
 		}
@@ -224,15 +299,34 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 		if downloadErr != nil {
 			result.Errors++
 			result.Messages = append(result.Messages, fmt.Sprintf("download %s: %v", item.ID, downloadErr))
+			slog.Warn("instagram import: download failed",
+				"instagram_id", item.ID, "media_type", item.MediaType, "error", downloadErr)
 			continue
 		}
 
-		// 4. Build post fields.
-		title, body := splitCaption(item.Caption)
+		// 4. Build post fields. Hashtags become reusable tags and are stripped
+		// from the caption text used for the title/body. The Instagram
+		// publication year is added as its own tag so imported posts can be
+		// browsed by year.
+		tags, cleanedCaption := parseHashtags(item.Caption)
+		if !item.Timestamp.IsZero() {
+			year := item.Timestamp.Format("2006")
+			alreadyTagged := false
+			for _, t := range tags {
+				if t == year {
+					alreadyTagged = true
+					break
+				}
+			}
+			if !alreadyTagged {
+				tags = append(tags, year)
+			}
+		}
+		title, body := splitCaption(cleanedCaption)
 		if title == "" {
 			title = fmt.Sprintf("Instagram %s", item.Timestamp.Format("2006-01-02"))
 		}
-		content := buildPostContent(imagePaths)
+		content := buildPostContent(mediaPaths)
 		if body != "" && content != "" {
 			content = content + "\n\n" + body
 		} else if body != "" {
@@ -248,10 +342,13 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 			Type:      "post",
 			Formatter: "markdown",
 			AuthorID:  authorID,
+			Tags:      tags,
 		})
 		if err != nil {
 			result.Errors++
 			result.Messages = append(result.Messages, fmt.Sprintf("create post for %s: %v", item.ID, err))
+			slog.Warn("instagram import: create post failed",
+				"instagram_id", item.ID, "media_type", item.MediaType, "error", err)
 			continue
 		}
 
@@ -274,6 +371,10 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 			Current:  "done",
 		})
 	}
+
+	slog.Info("instagram import finished",
+		"total", total, "imported", result.Imported,
+		"skipped", result.Skipped, "errors", result.Errors)
 
 	return result, nil
 }

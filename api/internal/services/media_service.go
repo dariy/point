@@ -262,7 +262,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	}
 
 	// Save to DB
-	return s.repo.CreateMedia(ctx, models.CreateMediaParams{
+	media, err := s.repo.CreateMedia(ctx, models.CreateMediaParams{
 		Filename:         p.Filename,
 		OriginalPath:     originalRelPath,
 		ThumbnailPath:    thumbnailRelPath,
@@ -279,6 +279,33 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		OriginalMetadata: metadataJSON,
 		UploadedAt:       now,
 	})
+	if err != nil {
+		return models.Medium{}, err
+	}
+
+	// When an image is added to a post and carries GPS coordinates, derive a
+	// location tag from those coordinates and attach it to the post. Best-effort:
+	// failures (e.g. no network, no place name) must not fail the upload.
+	s.tagPostFromGPS(ctx, p.PostID, metadata)
+
+	return media, nil
+}
+
+// tagPostFromGPS reverse-geocodes the GPS coordinates found in EXIF metadata and
+// attaches the resulting location tag to the post. It is a no-op when there is no
+// post, no GPS data, or no tag service configured.
+func (s *MediaService) tagPostFromGPS(ctx context.Context, postID *int64, metadata map[string]interface{}) {
+	if postID == nil || s.tagService == nil {
+		return
+	}
+	lat, latOK := metadata["GPSLatitude"].(float64)
+	lon, lonOK := metadata["GPSLongitude"].(float64)
+	if !latOK || !lonOK {
+		return
+	}
+	if _, err := s.tagService.TagPostWithLocation(ctx, *postID, lat, lon); err != nil {
+		slog.Warn("location tagging from EXIF GPS failed", "post_id", *postID, "error", err)
+	}
 }
 
 // ImportFromPath copies a file from srcPath into the managed media store and

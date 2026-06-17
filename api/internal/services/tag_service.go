@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,10 +22,11 @@ import (
 )
 
 type TagService struct {
-	repo             repository.Repository
-	nominatimBaseURL string
-	mu               sync.RWMutex
-	graph            *TagGraph
+	repo                repository.Repository
+	nominatimBaseURL    string
+	nominatimReverseURL string
+	mu                  sync.RWMutex
+	graph               *TagGraph
 }
 
 // TagGraph is an in-memory snapshot of the tag system, including hierarchy,
@@ -32,22 +34,23 @@ type TagService struct {
 type TagGraph struct {
 	ByID                map[int64]models.Tag
 	BySlug              map[string]models.Tag
-	Children            map[int64][]int64          // ordered by edge sort_order
-	Parents             map[int64][]int64           // unordered
-	EffectiveHidden     map[int64]bool             // BFS from hidden=1 tags
-	EffectiveHidesPosts map[int64]bool             // BFS from hides_posts=1 tags
-	HiddenVia           map[int64]int64            // tagID -> ancestorID that caused hiding
-	CountsPublic        map[int64]int64            // recursive CTE: published only
-	CountsAdmin         map[int64]int64            // recursive CTE: all posts
-	NavTree             []NavTagNode               // tags with nav_order set
-	YearTags            []models.Tag               // tags with kind='year'
+	Children            map[int64][]int64 // ordered by edge sort_order
+	Parents             map[int64][]int64 // unordered
+	EffectiveHidden     map[int64]bool    // BFS from hidden=1 tags
+	EffectiveHidesPosts map[int64]bool    // BFS from hides_posts=1 tags
+	HiddenVia           map[int64]int64   // tagID -> ancestorID that caused hiding
+	CountsPublic        map[int64]int64   // recursive CTE: published only
+	CountsAdmin         map[int64]int64   // recursive CTE: all posts
+	NavTree             []NavTagNode      // tags with nav_order set
+	YearTags            []models.Tag      // tags with kind='year'
 	BuiltAt             time.Time
 }
 
 func NewTagService(repo repository.Repository) *TagService {
 	return &TagService{
-		repo:             repo,
-		nominatimBaseURL: "https://nominatim.openstreetmap.org/search",
+		repo:                repo,
+		nominatimBaseURL:    "https://nominatim.openstreetmap.org/search",
+		nominatimReverseURL: "https://nominatim.openstreetmap.org/reverse",
 	}
 }
 
@@ -151,7 +154,7 @@ func (s *TagService) getGraph(ctx context.Context) (*TagGraph, error) {
 
 	// 4. Nav Tree (requires CountsPublic)
 	// We'll build this on demand or here? Proposal says it's a field in TagGraph.
-	// Since buildNavTree is complex and depends on publicOnly/minPosts, 
+	// Since buildNavTree is complex and depends on publicOnly/minPosts,
 	// maybe we store a version with minPosts=0 and filter it later,
 	// or just build it here with default settings.
 	// The proposal says: navTree []NavTagNode (from nav_order tags).
@@ -374,7 +377,6 @@ func (g *TagGraph) buildNavTree(minPosts int64) []NavTagNode {
 	return result
 }
 
-
 func (s *TagService) ListTags(ctx context.Context, includeEmpty, publicOnly bool) ([]models.Tag, error) {
 	g, err := s.getGraph(ctx)
 	if err != nil {
@@ -485,7 +487,6 @@ func (s *TagService) CreateTag(ctx context.Context, p CreateTagParams) (models.T
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Name)
 	}
-
 
 	if p.Kind == "" {
 		p.Kind = "tag"
@@ -609,7 +610,6 @@ func (s *TagService) ExpandTagsWithAncestors(ctx context.Context, tagIDs []int64
 	}
 	return result, nil
 }
-
 
 func (s *TagService) GetTagParents(ctx context.Context, id int64) ([]models.Tag, error) {
 	g, err := s.getGraph(ctx)
@@ -772,7 +772,6 @@ func (s *TagService) UpdateTag(ctx context.Context, p UpdateTagParams) (models.T
 	if p.Slug == "" {
 		p.Slug = utils.Slugify(p.Name)
 	}
-
 
 	tag, err := s.repo.UpdateTag(ctx, models.UpdateTagParams{
 		ID:               p.ID,
@@ -1136,6 +1135,104 @@ func (s *TagService) GeocodeTag(ctx context.Context, id int64) (float64, float64
 	return lat, lon, nil
 }
 
+// reverseGeocode resolves the name of the populated place at the given
+// coordinates via the Nominatim reverse API. It returns the most specific
+// place name available (city, then town/village/municipality, then county,
+// state, and finally country). An error is returned when the lookup fails or
+// no usable place name is present.
+func (s *TagService) reverseGeocode(ctx context.Context, lat, lon float64) (string, error) {
+	params := url.Values{
+		"lat":            {strconv.FormatFloat(lat, 'f', -1, 64)},
+		"lon":            {strconv.FormatFloat(lon, 'f', -1, 64)},
+		"format":         {"jsonv2"},
+		"zoom":           {"10"}, // city level
+		"addressdetails": {"1"},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		s.nominatimReverseURL+"?"+params.Encode(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Point/1.0.0")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	body, _ := io.ReadAll(resp.Body)
+
+	var result struct {
+		Name    string `json:"name"`
+		Address struct {
+			City         string `json:"city"`
+			Town         string `json:"town"`
+			Village      string `json:"village"`
+			Municipality string `json:"municipality"`
+			Hamlet       string `json:"hamlet"`
+			Suburb       string `json:"suburb"`
+			County       string `json:"county"`
+			State        string `json:"state"`
+			Country      string `json:"country"`
+		} `json:"address"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("parse reverse geocode response: %w", err)
+	}
+
+	a := result.Address
+	for _, candidate := range []string{
+		a.City, a.Town, a.Village, a.Municipality, a.Hamlet, a.Suburb,
+		a.County, a.State, result.Name, a.Country,
+	} {
+		if name := strings.TrimSpace(candidate); name != "" {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("no place name for coordinates %f,%f", lat, lon)
+}
+
+// TagPostWithLocation reverse-geocodes the given coordinates to a place name,
+// finds or creates a location tag carrying those coordinates, and attaches the
+// tag to the post. It is best-effort: callers may ignore the returned error.
+func (s *TagService) TagPostWithLocation(ctx context.Context, postID int64, lat, lon float64) (models.Tag, error) {
+	name, err := s.reverseGeocode(ctx, lat, lon)
+	if err != nil {
+		return models.Tag{}, err
+	}
+
+	slug := utils.Slugify(name)
+	tag, err := s.repo.GetTagBySlug(ctx, slug)
+	if err != nil {
+		// Tag does not exist yet — create it with the coordinates.
+		tag, err = s.repo.CreateTag(ctx, models.CreateTagParams{
+			Name:      name,
+			Slug:      slug,
+			Latitude:  sql.NullFloat64{Float64: lat, Valid: true},
+			Longitude: sql.NullFloat64{Float64: lon, Valid: true},
+		})
+		if err != nil {
+			return models.Tag{}, fmt.Errorf("create location tag %q: %w", name, err)
+		}
+	} else if !tag.Latitude.Valid || !tag.Longitude.Valid {
+		// Existing tag without coordinates — backfill them.
+		if err := s.repo.UpsertTagLocation(ctx, tag.ID, lat, lon); err != nil {
+			return models.Tag{}, fmt.Errorf("set location for tag %q: %w", name, err)
+		}
+	}
+
+	if err := s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: postID, TagID: tag.ID}); err != nil {
+		return models.Tag{}, fmt.Errorf("attach location tag to post: %w", err)
+	}
+
+	_ = s.repo.UpdateAllTagPostCounts(ctx)
+	s.Invalidate()
+	return tag, nil
+}
+
 // UpdateMissingCoords geocodes city/country descendant tags that have no coordinates.
 // Uses the Nominatim OpenStreetMap API (1 req/sec rate limit).
 func (s *TagService) UpdateMissingCoords(ctx context.Context) (map[string]interface{}, error) {
@@ -1417,8 +1514,6 @@ func (s *TagService) GetHierarchicalNavTags(ctx context.Context, rootID *int64, 
 	}
 	return result, nil
 }
-
-
 
 // SearchTags returns tags matching the query string.
 func (s *TagService) SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error) {
