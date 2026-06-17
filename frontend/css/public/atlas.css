@@ -1,0 +1,247 @@
+/* Atlas — experimental "tags on the map" page.
+ *
+ * One full-height Leaflet map. Clicking a geo-tag fans its related tags / years
+ * / posts out as chips anchored on the map, wired back to the place. */
+
+.site-wrapper--atlas {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.site-main--atlas {
+    padding: 0;
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+}
+
+.site-main--atlas .loading-spinner {
+    margin: auto;
+}
+
+.atlas-map {
+    /* Cloud palette (kept local so it works without the .tag-graph host). */
+    --atlas-tag: var(--color-primary, #e05c00);
+    --atlas-year: #d39327;
+    --atlas-geo: #1f9e8e;
+    --atlas-topic: #8a5cd6;
+    --atlas-post: #5b6678;
+
+    flex: 1;
+    position: relative;
+    min-height: 0;
+}
+
+.atlas-map #atlas-map-el {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    width: 100%;
+}
+
+/* ── Geo-tag markers ───────────────────────────────────────────────────────── */
+
+.atlas-marker__dot {
+    display: block;
+    border-radius: 50%;
+    background: rgba(31, 158, 142, 0.72);
+    border: 2px solid rgba(31, 158, 142, 1);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    transition:
+        transform 0.12s ease,
+        background 0.12s ease;
+}
+
+.atlas-marker:hover .atlas-marker__dot {
+    transform: scale(1.12);
+}
+
+.atlas-marker--active .atlas-marker__dot {
+    background: var(--color-primary, #e05c00);
+    border-color: var(--color-primary, #e05c00);
+    box-shadow: 0 0 0 5px rgba(224, 92, 0, 0.28);
+}
+
+/* ── Cloud chips (satellite tags / posts) ──────────────────────────────────── */
+
+/* Leaflet sizes this wrapper to 0×0; the chip centres itself on the latlng. */
+.leaflet-marker-icon.atlas-node-wrap {
+    background: transparent;
+    border: 0;
+}
+
+.atlas-node {
+    --c: var(--atlas-tag);
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: center;
+    max-width: 200px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: nowrap;
+    cursor: pointer;
+    color: var(--c);
+    border: 1.5px solid var(--c);
+    background: var(--bg-primary, #fff);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.22);
+    transform-origin: center;
+    animation: atlas-pop 0.28s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+    transition:
+        background 0.12s ease,
+        color 0.12s ease;
+}
+
+/* On hover the pill fills with its accent colour; the label flips to white. */
+.atlas-node:hover {
+    color: #fff;
+    background: var(--c);
+    z-index: 1000;
+}
+
+.atlas-node--tag {
+    --c: var(--atlas-tag);
+}
+.atlas-node--year {
+    --c: var(--atlas-year);
+}
+.atlas-node--geo {
+    --c: var(--atlas-geo);
+}
+.atlas-node--topic {
+    --c: var(--atlas-topic);
+}
+.atlas-node--post {
+    --c: var(--atlas-post);
+    font-weight: 500;
+    font-style: italic;
+}
+
+/* Connector lines fade in with the chips. */
+.leaflet-overlay-pane .atlas-link {
+    animation: atlas-fade 0.34s ease both;
+}
+
+/* ── Hint + legend overlays ────────────────────────────────────────────────── */
+
+.atlas-hint {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.12));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
+    pointer-events: none;
+}
+
+.atlas-hint.is-hidden {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+}
+
+.atlas-legend {
+    position: absolute;
+    bottom: 18px;
+    left: 12px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.12));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+
+.atlas-legend__row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.atlas-legend__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+}
+
+.atlas-legend__dot--geo {
+    color: var(--atlas-geo, #1f9e8e);
+}
+.atlas-legend__dot--tag {
+    color: var(--atlas-tag, #e05c00);
+}
+.atlas-legend__dot--year {
+    color: var(--atlas-year, #d39327);
+}
+.atlas-legend__dot--post {
+    color: var(--atlas-post, #5b6678);
+}
+
+/* The legend custom props live on .atlas-map; mirror them here for the dots. */
+.atlas-legend {
+    --atlas-tag: var(--color-primary, #e05c00);
+    --atlas-year: #d39327;
+    --atlas-geo: #1f9e8e;
+    --atlas-post: #5b6678;
+}
+
+@keyframes atlas-pop {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.4);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes atlas-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-node,
+    .leaflet-overlay-pane .atlas-link {
+        animation: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .atlas-node {
+        font-size: 11px;
+        max-width: 150px;
+    }
+    .atlas-hint {
+        font-size: 0.78rem;
+    }
+}

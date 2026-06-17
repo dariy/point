@@ -21,7 +21,7 @@ import { store } from '../../store.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { APP_LOGO_SVG, MAP_SVG, TAGS_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, MAP_SVG, GLOBE_SVG, TAGS_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
 
@@ -232,6 +232,11 @@ export class PublicHeader extends Component {
                   ${TAGS_SVG}
                 </a>`;
 
+    const atlasButtonHtml = `<a href="/atlas" class="header-action-btn${currentPath === '/atlas' ? ' active' : ''}"
+                   aria-label="Atlas (experimental)" title="Atlas — map &amp; tags">
+                  ${GLOBE_SVG}
+                </a>`;
+
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
 
     const burgerTagLinksHtml = navTags.length
@@ -287,6 +292,7 @@ export class PublicHeader extends Component {
             <div class="site-nav-items">
               ${tagsButtonHtml}
               ${mapButtonHtml}
+              ${atlasButtonHtml}
             </div>
 
             <!-- Burger (shown when fold-nav active) -->
@@ -307,6 +313,7 @@ export class PublicHeader extends Component {
                 <div class="burger-sitemap">
                   <a href="/tags" class="burger-link">All tags</a>
                   <a href="/map" class="burger-link">Map</a>
+                  <a href="/atlas" class="burger-link">Atlas</a>
                   <a href="/light" class="burger-link">About</a>
                   ${user ? `<a href="/light" class="burger-link">Admin</a>` : ''}
                 </div>

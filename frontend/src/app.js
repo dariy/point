@@ -310,6 +310,11 @@ const routes = [
     key: "map",
   },
   {
+    path: "/atlas",
+    load: () => import("./pages/public/AtlasPage.js"),
+    public: true,
+  },
+  {
     path: "/search",
     load: () => import("./pages/public/SearchPage.js"),
     public: true,
