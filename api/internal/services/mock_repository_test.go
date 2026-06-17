@@ -169,6 +169,8 @@ type mockRepository struct {
 	MockListInTimelineDescendantsForTag func(ctx context.Context, contextTagSlug string) ([]repository.InTimelineTag, error)
 	MockGetLocationTagsCoOccurringWith  func(ctx context.Context, dateTagSlug, contextTagSlug string, limit int) ([]repository.LocationTagCoOccurrence, error)
 	MockGetYearTagsByLocationTagIDs     func(ctx context.Context, locTagIDs []int64) (map[int64][]repository.PostTagInfo, error)
+	MockGetExistingInstagramIDs         func(ctx context.Context, ids []string) ([]string, error)
+	MockSetPostInstagramID              func(ctx context.Context, postID int64, instagramID string) error
 }
 
 // Ensure mockRepository implements repository.Repository
@@ -1236,4 +1238,18 @@ func (m *mockRepository) GetYearTagsByLocationTagIDs(ctx context.Context, locTag
 		return m.MockGetYearTagsByLocationTagIDs(ctx, locTagIDs)
 	}
 	return nil, fmt.Errorf("GetYearTagsByLocationTagIDs not implemented")
+}
+
+func (m *mockRepository) GetExistingInstagramIDs(ctx context.Context, ids []string) ([]string, error) {
+	if m.MockGetExistingInstagramIDs != nil {
+		return m.MockGetExistingInstagramIDs(ctx, ids)
+	}
+	return nil, nil
+}
+
+func (m *mockRepository) SetPostInstagramID(ctx context.Context, postID int64, instagramID string) error {
+	if m.MockSetPostInstagramID != nil {
+		return m.MockSetPostInstagramID(ctx, postID, instagramID)
+	}
+	return nil
 }
