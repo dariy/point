@@ -125,6 +125,15 @@ export class ViewContext {
       return path; // Map doesn't use query params for tags/years usually
     }
 
+    // Atlas view — keeps its path and carries the year range as ?timeline=.
+    if (this.path.startsWith('/atlas')) {
+      if (this.years) {
+        params.set('timeline', `${this.years[0]}-${this.years[1]}`);
+      }
+      const atlasSearch = params.toString();
+      return atlasSearch ? `/atlas?${atlasSearch}` : '/atlas';
+    }
+
     // Search view
     if (this.query) {
       path = '/search';

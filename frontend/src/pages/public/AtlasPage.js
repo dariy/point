@@ -16,11 +16,14 @@
 import { Component } from "../../components/Component.js";
 import { PublicHeader } from "../../components/public/PublicHeader.js";
 import { PublicFooter } from "../../components/public/PublicFooter.js";
+import { Timeline } from "../../components/public/Timeline.js";
 import { getTagsGraph } from "../../api/pages.js";
 import { store } from "../../store.js";
+import { ViewContext } from "../../utils/viewContext.js";
 import {
   escapeHtml,
   navigate,
+  safeUrl,
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
@@ -86,6 +89,18 @@ function truncate(s, n) {
 }
 
 /**
+ * Year span [lo, hi] covered by a year-tag slug, mirroring the timeline's
+ * parser: "2024" → [2024, 2024]; "2020s" (decade) → [2020, 2029]. Returns null
+ * for anything that isn't a year/decade slug.
+ */
+function parseYearSpan(slug) {
+  const m = /^(\d{4})(s?)$/.exec(slug || "");
+  if (!m) return null;
+  const y = parseInt(m[1], 10);
+  return m[2] ? [y, y + 9] : [y, y];
+}
+
+/**
  * Place `count` chips on concentric rings around the origin (pixel space).
  * Inner rings fill first; arc spacing keeps pills from colliding.
  */
@@ -130,6 +145,14 @@ export default class AtlasPage extends Component {
     this._hiddenTypes = new Set(); // node types filtered out via the legend
     this._reposition = () => this._repositionCloud();
 
+    // Timeline year filtering (mirrors /map). `_activePostIds` is the set of
+    // posts inside the selected year range (null = no filter); `_yearDimmed` is
+    // the set of place-tags that hold no in-range post, dimmed on the base map.
+    this._timeline = null;
+    this._activePostIds = null;
+    this._yearDimmed = null;
+    this._yearSpansByPost = new Map(); // postId -> [[lo, hi], …] from year-tags
+
     // Indexes derived from the graph payload (built once on load).
     this._tagsById = new Map();
     this._postsById = new Map();
@@ -147,6 +170,7 @@ export default class AtlasPage extends Component {
       return `
         <div class="site-wrapper site-wrapper--atlas">
           <div id="header-mount"></div>
+          <div id="timeline-mount"></div>
           <main class="site-main site-main--atlas" aria-busy="true">
             <div class="loading-spinner" aria-label="Loading atlas…"></div>
           </main>
@@ -158,6 +182,7 @@ export default class AtlasPage extends Component {
       return `
         <div class="site-wrapper site-wrapper--atlas">
           <div id="header-mount"></div>
+          <div id="timeline-mount"></div>
           <main class="site-main site-main--atlas">
             <div class="main-container">
               <p class="error-message" role="alert">${escapeHtml(error)}</p>
@@ -170,6 +195,7 @@ export default class AtlasPage extends Component {
     return `
       <div class="site-wrapper site-wrapper--atlas">
         <div id="header-mount"></div>
+        <div id="timeline-mount"></div>
         <main class="site-main site-main--atlas">
           <div class="atlas-map">
             <div id="atlas-map-el"></div>
@@ -193,8 +219,23 @@ export default class AtlasPage extends Component {
     this.mountChild(PublicHeader, "#header-mount", {
       settings,
       currentPath: "/atlas",
+      timelineVisible: true,
     });
     this.mountChild(PublicFooter, "#footer-mount", { settings });
+
+    // Timeline year filter — same visibility gating as /map: shown to everyone
+    // in "all" mode, and to signed-in users when it's "hidden" from the public.
+    const canShowTimeline =
+      settings.timeline_mode === "all" ||
+      (store.get("user") && settings.timeline_mode === "hidden");
+    if (canShowTimeline) {
+      const vc = ViewContext.current();
+      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
+        mode: "filter",
+        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
+        onRangeChange: (range) => this._onTimelineRangeChange(range),
+      });
+    }
 
     if (this.state.loading) {
       this._load();
@@ -204,6 +245,83 @@ export default class AtlasPage extends Component {
 
     this._wireToggles();
     this._initMap();
+  }
+
+  /**
+   * A timeline-scope change arrives as a same-route navigation (the ?timeline=
+   * query param). Re-filter the existing map in place instead of re-rendering —
+   * rebuilding would tear down and reflow both the Leaflet map and the timeline.
+   */
+  onRouteUpdate(params, query) {
+    this.props.params = params;
+    this.props.query = query;
+    if (this._map && !this.state.error) {
+      this._applyYearScope();
+      const vc = ViewContext.current();
+      this._timeline?.setScope(
+        vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
+      );
+    } else {
+      this._load();
+    }
+  }
+
+  /** Timeline emitted a new range — push it to the URL (drives onRouteUpdate). */
+  _onTimelineRangeChange({ from, to, isFullExtent }) {
+    const years = isFullExtent ? null : [from, to];
+    const vc = ViewContext.current();
+    const same = years
+      ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]
+      : !vc.years;
+    if (same) return;
+    ViewContext.update({ years }, { replace: true });
+  }
+
+  /**
+   * Recompute the active post set + base-map dimming for the current year scope
+   * and refresh any open cloud. With no filter both fall back to null (every
+   * post in play, nothing dimmed by date).
+   */
+  _applyYearScope() {
+    const vc = ViewContext.current();
+    this._activePostIds = vc.years
+      ? this._postsInRange(vc.years[0], vc.years[1])
+      : null;
+    this._yearDimmed = vc.years ? this._buildYearDimmed() : null;
+
+    // An open cloud is sliced from `_activePostIds`, so rebuild it under the new scope.
+    if (this._activeTag && this._activeAnchor) {
+      this._clearCloud();
+      this._spawnCloud(this._activeTag, this._activeAnchor);
+    }
+    this._refreshBaseDim();
+  }
+
+  /** Posts carrying a year-tag whose span intersects [from, to]. */
+  _postsInRange(from, to) {
+    const out = new Set();
+    for (const [postId, spans] of this._yearSpansByPost) {
+      for (const [lo, hi] of spans) {
+        if (lo <= to && hi >= from) {
+          out.add(postId);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Place-tags whose sub-tree holds no in-range post (dimmed under a filter). */
+  _buildYearDimmed() {
+    const dimmed = new Set();
+    for (const d of this._baseDimmables) {
+      const tag = this._tagsById.get(d.tagId);
+      if (!tag) continue;
+      // _buildSubgraph already honours `_activePostIds`, so an empty post set
+      // means this place contributes nothing inside the selected years.
+      if (this._buildSubgraph(tag).postIds.size === 0) dimmed.add(d.tagId);
+    }
+    return dimmed;
   }
 
   /** Legend toggles hide/show a node type (tag/year/post) like the /tags page. */
@@ -248,6 +366,18 @@ export default class AtlasPage extends Component {
       this._postsByTag.get(e.tag).add(e.post);
       if (!this._tagsByPost.has(e.post)) this._tagsByPost.set(e.post, new Set());
       this._tagsByPost.get(e.post).add(e.tag);
+
+      // Record each post's date span(s) from the year-tags it carries, so the
+      // timeline can filter posts client-side without re-fetching the graph.
+      const t = this._tagsById.get(e.tag);
+      if (t && t.kind === "year") {
+        const span = parseYearSpan(t.slug);
+        if (span) {
+          if (!this._yearSpansByPost.has(e.post))
+            this._yearSpansByPost.set(e.post, []);
+          this._yearSpansByPost.get(e.post).push(span);
+        }
+      }
     });
 
     this._hierarchyEdges = data.hierarchyEdges || [];
@@ -434,6 +564,9 @@ export default class AtlasPage extends Component {
     if (bounds.length) {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
     }
+
+    // Honour any year range carried in the URL now that the places exist.
+    this._applyYearScope();
   }
 
   // ── Selection → on-map cloud ────────────────────────────────────────────────
@@ -465,16 +598,17 @@ export default class AtlasPage extends Component {
     this._clearCloud();
     this._activeSetActive?.(false);
 
-    // Dim every place not connected to this selection, so the selected place and
-    // the places it shares posts with stand out (mirrors the /tags graph). Done
-    // before setActive so the active place keeps its own highlight on top.
-    this._applyBaseDim(this._buildSubgraph(tag).tagIds);
-
-    setActive(true);
-    this._activeSetActive = setActive;
     this._activeKey = key;
     this._activeTag = tag;
     this._activeAnchor = anchorLatLng;
+
+    // Dim every place not connected to this selection, so the selected place and
+    // the places it shares posts with stand out (mirrors the /tags graph). Done
+    // before setActive so the active place keeps its own highlight on top.
+    this._refreshBaseDim();
+
+    setActive(true);
+    this._activeSetActive = setActive;
 
     this.$("#atlas-hint")?.classList.add("is-hidden");
 
@@ -487,13 +621,20 @@ export default class AtlasPage extends Component {
   }
 
   /**
-   * Dim every base-map place whose tag isn't in `connectedTagIds`; pass null to
-   * restore them all. The selected place and the places it shares posts with stay
-   * at full strength, focusing the map on the active selection like /tags does.
+   * Reconcile base-map place dimming with both filters that can hide a place:
+   * an active selection dims everything not connected to it; failing that, a
+   * year filter dims places with no in-range post. With neither, all places sit
+   * at full strength. The selection takes precedence so its focus reads clearly.
    */
-  _applyBaseDim(connectedTagIds) {
+  _refreshBaseDim() {
+    const connected = this._activeTag
+      ? this._buildSubgraph(this._activeTag).tagIds
+      : null;
     for (const d of this._baseDimmables) {
-      d.setDim(connectedTagIds ? !connectedTagIds.has(d.tagId) : false);
+      let dim = false;
+      if (connected) dim = !connected.has(d.tagId);
+      else if (this._yearDimmed) dim = this._yearDimmed.has(d.tagId);
+      d.setDim(dim);
     }
   }
 
@@ -524,9 +665,13 @@ export default class AtlasPage extends Component {
       });
     }
 
+    // When a year filter is active only in-range posts feed the slice; co-tags
+    // are then derived from those posts, so the whole cloud narrows to the years.
     const postIds = new Set();
     placeTagIds.forEach((tid) => {
-      (this._postsByTag.get(tid) || []).forEach((p) => postIds.add(p));
+      (this._postsByTag.get(tid) || []).forEach((p) => {
+        if (!this._activePostIds || this._activePostIds.has(p)) postIds.add(p);
+      });
     });
 
     const tagIds = new Set(placeTagIds);
@@ -578,6 +723,8 @@ export default class AtlasPage extends Component {
 
     const postSats = [];
     if (!hidden.has("post")) {
+      const useThumbnails =
+        (store.get("settings") || {}).use_thumbnails !== false;
       postIds.forEach((id) => {
         const p = this._postsById.get(id);
         if (!p) return;
@@ -587,6 +734,8 @@ export default class AtlasPage extends Component {
           label: p.title || p.slug,
           href: `/posts/${p.slug}`,
           max: 24,
+          // Image posts reveal a thumbnail when their place is selected.
+          thumb: useThumbnails ? p.media_url || null : null,
         });
       });
     }
@@ -638,9 +787,17 @@ export default class AtlasPage extends Component {
 
     const sats = ordered.map((node, i) => {
       const ll = llOf(nodePos.get(node.key));
+      // Image posts lead with a thumbnail tucked into the chip; the modifier
+      // class lets the CSS reshape the pill around it.
+      const thumbUrl = node.thumb && safeUrl(node.thumb);
+      const thumbHtml =
+        thumbUrl && thumbUrl !== "#"
+          ? `<img class="atlas-node__thumb" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" />`
+          : "";
+      const thumbClass = thumbHtml ? " atlas-node--has-thumb" : "";
       const icon = L.divIcon({
         className: "atlas-node-wrap",
-        html: `<span class="atlas-node atlas-node--${node.kind}" style="animation-delay:${i * 16}ms" title="${escapeHtml(node.label)}">${escapeHtml(truncate(node.label, node.max))}</span>`,
+        html: `<span class="atlas-node atlas-node--${node.kind}${thumbClass}" style="animation-delay:${i * 16}ms" title="${escapeHtml(node.label)}">${thumbHtml}${escapeHtml(truncate(node.label, node.max))}</span>`,
         iconSize: [0, 0],
       });
       const marker = L.marker(ll, { icon, keyboard: false, riseOnHover: true });
@@ -814,12 +971,13 @@ export default class AtlasPage extends Component {
 
   _clearSelection() {
     this._clearCloud();
-    this._applyBaseDim(null);
     this._activeSetActive?.(false);
     this._activeSetActive = null;
     this._activeKey = null;
     this._activeTag = null;
     this._activeAnchor = null;
+    // No selection now, so dimming falls back to whatever the year filter wants.
+    this._refreshBaseDim();
     this.$("#atlas-hint")?.classList.remove("is-hidden");
   }
 

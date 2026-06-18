@@ -68,7 +68,7 @@ export function getTagsPage() {
  *
  * @returns {Promise<{
  *   tags: Array<{id:number,name:string,slug:string,kind:string,latitude?:number,longitude?:number,post_count:number}>,
- *   posts: Array<{id:number,slug:string,title:string}>,
+ *   posts: Array<{id:number,slug:string,title:string,media_url?:string}>,
  *   hierarchyEdges: Array<{parent:number,child:number}>,
  *   membershipEdges: Array<{post:number,tag:number}>
  * }>}

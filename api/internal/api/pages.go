@@ -690,11 +690,17 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 		if edges == 0 {
 			continue
 		}
-		posts = append(posts, map[string]interface{}{
+		node := map[string]interface{}{
 			"id":    p.ID,
 			"slug":  p.Slug,
 			"title": p.Title,
-		})
+		}
+		// A single preview URL (thumbnail, else first image/video in content) so
+		// image posts can render a thumbnail chip in the atlas cloud.
+		if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
+			node["media_url"] = *mediaURL
+		}
+		posts = append(posts, node)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

@@ -182,6 +182,23 @@
     font-style: italic;
 }
 
+/* Image posts lead with a thumbnail tucked inside the pill. Pad the left edge
+   in a touch so the rounded image sits flush against the chip's curve. */
+.atlas-node--has-thumb {
+    padding-left: 4px;
+    gap: 6px;
+}
+
+.atlas-node__thumb {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    object-fit: cover;
+    background: color-mix(in srgb, var(--c) 18%, transparent);
+    box-shadow: 0 0 0 1.5px var(--bg-primary, #fff);
+}
+
 /* Connector lines fade in with the chips. */
 .leaflet-overlay-pane .atlas-link {
     animation: atlas-fade 0.34s ease both;
