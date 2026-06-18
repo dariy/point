@@ -180,7 +180,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'sha256-+20twPiohHfGLZsSvahDBaYeh7l+te5yNz5UDCAfqsA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'sha256-h5MCsXkmw9HW4cD8PyxqPx6lksihxngF3WC4UFUG1kM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 	// Extra security headers not covered by middleware.Secure

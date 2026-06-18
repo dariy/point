@@ -132,6 +132,7 @@ export default class PostEditPage extends Component {
     const isPublished = status === "published";
     
     const actions = `
+      <button id="save-btn" class="btn btn-secondary" type="button" style="margin-right: var(--spacing-sm);">Save</button>
       <div class="header-split-button ${menuOpen ? 'is-menu-open' : ''}">
         ${isPublished ? `
           <button id="update-btn" class="btn btn-primary main-action" type="button">Update</button>
@@ -167,8 +168,14 @@ export default class PostEditPage extends Component {
         <span class="btn-label">Details</span>
       </button>`;
 
+    let backUrl = "/light/posts";
+    try {
+      const stored = sessionStorage.getItem('point:admin:posts-list-url');
+      if (stored) backUrl = stored;
+    } catch { /* ignore */ }
+
     return adminLayoutTemplate({
-      title: `<a href="/light/posts" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
+      title: `<a href="${escapeHtml(backUrl)}" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
       actions: detailsToggle + actions,
       content: this._renderContent()
     });
@@ -502,6 +509,7 @@ export default class PostEditPage extends Component {
     // "Update" (for already-published posts) saves whatever status the user
     // picked in the Status dropdown, so a published post can be moved to
     // hidden/draft/page. "Publish" is an explicit action for unpublished posts.
+    this.$("#save-btn")?.addEventListener("click", () => this._save());
     this.$("#update-btn")?.addEventListener("click", () => this._save());
     this.$("#publish-btn")?.addEventListener("click", () => this._save({ status: 'published' }));
 

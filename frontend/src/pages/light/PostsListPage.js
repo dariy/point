@@ -377,6 +377,10 @@ export default class PostsListPage extends Component {
       currentPath: "/light/posts",
     });
 
+    try {
+      sessionStorage.setItem('point:admin:posts-list-url', window.location.pathname + window.location.search);
+    } catch { /* ignore */ }
+
     const { statusFilter } = this.state;
     const isTrash = statusFilter === "trash";
 

@@ -7,7 +7,6 @@
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.js";
-import { parseTheme } from "../../utils/themeParser.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { STAR_SVG } from "../../utils/icons.js";

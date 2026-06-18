@@ -6,7 +6,7 @@ set -eo pipefail
 # Get the absolute path to the project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
+HOST=$LOCAL_RUN
 cd "$PROJECT_ROOT"
 
 # Cleanup function to be called on EXIT

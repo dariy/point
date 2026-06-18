@@ -23,6 +23,7 @@ export class TagsInput extends Component {
       suggestions: [],
       showSuggestions: false,
       isPopoverOpen: false,
+      selectedIndex: -1,
     };
     this._allTags = [];
     this._fetchSuggestions = debounce(this._fetchSuggestions.bind(this), 200);
@@ -106,10 +107,43 @@ export class TagsInput extends Component {
     });
 
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ',') {
+      const box = this.$(`#${this._uid}-suggestions`);
+      const isBoxVisible = box && box.classList.contains('show');
+      const items = isBoxVisible ? Array.from(box.querySelectorAll('.suggestion-item')) : [];
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (!isBoxVisible || !items.length) return;
         e.preventDefault();
-        const val = input.value.trim().replace(/,$/, '');
-        if (val) this._addTag(val);
+        
+        if (this.state.selectedIndex >= 0 && items[this.state.selectedIndex]) {
+          items[this.state.selectedIndex].classList.remove('selected');
+        }
+
+        if (e.key === 'ArrowDown') {
+          this.state.selectedIndex = (this.state.selectedIndex + 1) % items.length;
+        } else {
+          this.state.selectedIndex = this.state.selectedIndex - 1;
+          if (this.state.selectedIndex < 0) this.state.selectedIndex = items.length - 1;
+        }
+
+        items[this.state.selectedIndex].classList.add('selected');
+        items[this.state.selectedIndex].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        if (isBoxVisible && this.state.selectedIndex >= 0 && items[this.state.selectedIndex]) {
+          items[this.state.selectedIndex].dispatchEvent(new MouseEvent('mousedown'));
+        } else {
+          const val = input.value.trim().replace(/,$/, '');
+          if (val) this._addTag(val);
+        }
+      } else if (e.key === 'Tab') {
+        if (isBoxVisible && items.length > 0) {
+          e.preventDefault();
+          const indexToSelect = this.state.selectedIndex >= 0 ? this.state.selectedIndex : 0;
+          if (items[indexToSelect]) {
+            items[indexToSelect].dispatchEvent(new MouseEvent('mousedown'));
+          }
+        }
       } else if (e.key === 'Backspace' && !input.value && this.state.tags.length) {
         const tags = this.state.tags.slice(0, -1);
         this.setState({ tags });
@@ -159,8 +193,21 @@ export class TagsInput extends Component {
   }
 
   _showSuggestions(suggestions, input) {
+    this.state.selectedIndex = -1;
     const box = this.$(`#${this._uid}-suggestions`);
     if (!box) return;
+
+    // Check if we should drop up
+    const inputEl = this.$(`#${this._uid}-text`);
+    if (inputEl) {
+      const rect = inputEl.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 250 && rect.top > 250) {
+        box.classList.add('drop-up');
+      } else {
+        box.classList.remove('drop-up');
+      }
+    }
 
     if (!suggestions.length) {
       // Show option to create a new tag.
@@ -215,19 +262,19 @@ export class TagsInput extends Component {
     popover.className = 'tag-create-popover';
     popover.innerHTML = `
       <div class="field">
-        <label>Name</label>
-        <input type="text" class="new-tag-name" value="${escapeHtml(name)}">
+        <label class="form-label">Name</label>
+        <input type="text" class="new-tag-name form-input" value="${escapeHtml(name)}">
       </div>
       <div class="field">
-        <label>Parent (optional)</label>
+        <label class="form-label">Parent (optional)</label>
         <div class="parent-field-wrapper">
-          <input type="text" class="new-tag-parent" placeholder="Search parents…" autocomplete="off">
-          <div class="parent-suggestions"></div>
+          <input type="text" class="new-tag-parent form-input" placeholder="Search parents…" autocomplete="off">
+          <div class="parent-suggestions tags-suggestions"></div>
         </div>
       </div>
-      <div class="actions">
-        <button type="button" class="btn-cancel">Cancel</button>
-        <button type="button" class="btn-create">Create</button>
+      <div class="popover-actions" style="display:flex; justify-content: flex-end; gap: var(--spacing-sm); margin-top: var(--spacing-sm);">
+        <button type="button" class="btn btn-secondary btn-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary btn-create">Create</button>
       </div>
     `;
 

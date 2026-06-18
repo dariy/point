@@ -156,3 +156,26 @@ func TestParseHashtags(t *testing.T) {
 		})
 	}
 }
+
+func TestAppendTagUnique(t *testing.T) {
+	tests := []struct {
+		name string
+		tags []string
+		add  string
+		want []string
+	}{
+		{name: "empty", tags: nil, add: "instagram", want: []string{"instagram"}},
+		{name: "appends new", tags: []string{"summer"}, add: "instagram", want: []string{"summer", "instagram"}},
+		{name: "skips exact duplicate", tags: []string{"instagram"}, add: "instagram", want: []string{"instagram"}},
+		{name: "skips case-insensitive duplicate", tags: []string{"Instagram"}, add: "instagram", want: []string{"Instagram"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := appendTagUnique(tt.tags, tt.add)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("appendTagUnique(%#v, %q) = %#v, want %#v", tt.tags, tt.add, got, tt.want)
+			}
+		})
+	}
+}

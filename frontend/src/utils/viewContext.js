@@ -24,6 +24,8 @@ export class ViewContext {
     this.query = query.q || null;
     /** @type {number} */
     this.page = parseInt(query.page, 10) || 1;
+    /** @type {number|null} Posts per page — device-fit, persisted in the URL. */
+    this.perPage = parseInt(query.per_page, 10) || null;
     /** @type {string|null} Post slug */
     this.postSlug = null;
 
@@ -95,6 +97,7 @@ export class ViewContext {
     if ('years' in changes) next.years = changes.years;
     if ('query' in changes) next.query = changes.query;
     if ('page' in changes) next.page = changes.page;
+    if ('per_page' in changes) next.perPage = changes.per_page;
     if ('postSlug' in changes) next.postSlug = changes.postSlug;
 
     // Reset page to 1 if primary filters change, unless page was explicitly provided
@@ -125,6 +128,15 @@ export class ViewContext {
       return path; // Map doesn't use query params for tags/years usually
     }
 
+    // Atlas view — keeps its path and carries the year range as ?timeline=.
+    if (this.path.startsWith('/atlas')) {
+      if (this.years) {
+        params.set('timeline', `${this.years[0]}-${this.years[1]}`);
+      }
+      const atlasSearch = params.toString();
+      return atlasSearch ? `/atlas?${atlasSearch}` : '/atlas';
+    }
+
     // Search view
     if (this.query) {
       path = '/search';
@@ -152,6 +164,10 @@ export class ViewContext {
 
     if (this.page > 1) {
       params.set('page', this.page.toString());
+    }
+
+    if (this.perPage) {
+      params.set('per_page', this.perPage.toString());
     }
 
     const search = params.toString();

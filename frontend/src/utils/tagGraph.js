@@ -64,11 +64,12 @@ function nodeRadius(type, degree) {
 }
 
 export class TagGraph {
-  constructor(canvas, data, { onNavigate = () => {}, onHover = () => {} } = {}) {
+  constructor(canvas, data, { onNavigate = () => {}, onHover = () => {}, onSelect = () => {} } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.onNavigate = onNavigate;
     this.onHover = onHover;
+    this.onSelect = onSelect;
 
     this.nodes = [];
     this.links = [];
@@ -215,16 +216,49 @@ export class TagGraph {
     this._draw();
   }
 
-  /** Show or hide every node of `type` ('tag' | 'year' | 'geo' | 'post'). */
   setTypeHidden(type, hidden) {
     if (hidden) this.hiddenTypes.add(type);
     else this.hiddenTypes.delete(type);
     // Clear interaction state pointing at a now-hidden node.
     if (this.hovered && this.hiddenTypes.has(this.hovered.type)) this.hovered = null;
-    if (this.selected && this.hiddenTypes.has(this.selected.type)) this.selected = null;
+    if (this.selected && this.hiddenTypes.has(this.selected.type)) {
+      this.selected = null;
+      this.onSelect(null);
+    }
     this._recomputeActive();
     this.alpha = Math.max(this.alpha, 0.25);
     this._kick();
+  }
+
+  selectNodeBySlug(slug) {
+    if (!slug) {
+      if (this.selected) {
+        this.selected = null;
+        this._draw();
+      }
+      return null;
+    }
+    const node = this.nodes.find(n => n.slug === slug && n.type !== 'post');
+    if (node && this.selected !== node) {
+      this.selected = node;
+      this._draw();
+    }
+    return node;
+  }
+
+  getSelectionStats() {
+    if (!this.selected) return null;
+    const focusData = this._expandFocus([this.selected.id]);
+    let tagCount = 0;
+    let postCount = 0;
+    for (const id of focusData.focus) {
+      const n = this.nodeById.get(id);
+      if (n) {
+        if (n.type === 'post') postCount++;
+        else if (n.id !== this.selected.id) tagCount++;
+      }
+    }
+    return { tagCount, postCount };
   }
 
   zoomBy(factor) {
@@ -828,6 +862,7 @@ export class TagGraph {
           return;
         }
         this.selected = node;
+        this.onSelect(node);
         this.onHover(node);
         this._draw();
         return;
@@ -835,6 +870,7 @@ export class TagGraph {
       // Tap/click on empty space clears the current selection.
       if (this.selected) {
         this.selected = null;
+        this.onSelect(null);
         this.onHover(null);
         this._draw();
       }

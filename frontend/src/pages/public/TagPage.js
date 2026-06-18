@@ -15,6 +15,7 @@ import { Component } from "../../components/Component.js";
 import { PublicHeader } from "../../components/public/PublicHeader.js";
 import { PublicFooter } from "../../components/public/PublicFooter.js";
 import { PostGrid } from "../../components/public/PostGrid.js";
+import { PostCard } from "../../components/public/PostCard.js";
 import {
   PostContent,
   shouldUseImmersive,
@@ -35,6 +36,7 @@ import {
   rubberBand,
 } from "../../utils/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { computePerPage, cachedPerPage } from "../../utils/gridFit.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -82,6 +84,23 @@ export default class TagPage extends Component {
       this._load();
       return;
     }
+
+    // A swipe that committed has already slid the preloaded neighbour grid to
+    // centre (the "committed ghost"); we just hand off to the real grid under
+    // it with no fade. Otherwise crossfade like post-to-post navigation: fade
+    // the current grid out while the next page loads, then fade the fresh grid
+    // in.
+    const gridMount = this.$("#grid-mount");
+    const seamless = this._seamlessSwipe;
+    this._seamlessSwipe = false;
+    const fromSwipe = seamless || !!(gridMount && gridMount.style.transform);
+    let fadeOut = Promise.resolve();
+    if (gridMount && !fromSwipe) {
+      gridMount.style.transition = "opacity 0.2s ease-in";
+      gridMount.style.opacity = "0";
+      fadeOut = new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
     let data;
     try {
       data = await getTagPage(slug, this._buildParams(vc));
@@ -91,6 +110,8 @@ export default class TagPage extends Component {
       this.setState({ loading: false, data: null, post: null, error: msg });
       return;
     }
+    if (this._unmounted) return;
+    await fadeOut;
     if (this._unmounted) return;
     this.state.data = data;
     this.state.error = null;
@@ -107,10 +128,34 @@ export default class TagPage extends Component {
       vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
     );
     this._timeline?.setCount(this.state.data?.pagination?.total ?? this.state.data?.total ?? 0);
+
+    const newGrid = this.$("#grid-mount");
+    if (seamless) {
+      // The real grid is now mounted and centred directly under the committed
+      // ghost; drop the ghost to reveal it — identical pixels, so no blink.
+      this._committedGhost?.remove();
+      this._committedGhost = null;
+    } else if (newGrid) {
+      // Fade the freshly-mounted grid in. _mountPostContent() reset the mount's
+      // inline styles, so we start from a clean opacity:0 and transition up.
+      newGrid.style.transition = "none";
+      newGrid.style.opacity = "0";
+      void newGrid.offsetWidth; // force reflow so the next change animates
+      newGrid.style.transition = "opacity 0.2s ease-out";
+      newGrid.style.opacity = "1";
+    }
+  }
+
+  _minPerPage() {
+    return (store.get("settings") || {}).posts_per_page || 10;
   }
 
   _buildParams(vc) {
-    const params = { page: vc.page };
+    // per_page is the device-fit value from the URL, or the cached estimate for
+    // a fresh load that hasn't been reconciled against the real grid yet.
+    const perPage = vc.perPage || cachedPerPage(this._minPerPage());
+    this._loadedPerPage = perPage;
+    const params = { page: vc.page, per_page: perPage };
     if (vc.years) {
       params.year_from = vc.years[0];
       params.year_to = vc.years[1];
@@ -120,6 +165,30 @@ export default class TagPage extends Component {
     // matching the branch the user drilled through (tags form a DAG).
     if (this.props.query?.path) params.path = this.props.query.path;
     return params;
+  }
+
+  // Measure the rendered grid and, if the viewport fits a different number of
+  // posts than we loaded, persist the new per_page to the URL — recomputing the
+  // page so the first post currently shown stays visible on the resized list.
+  _reconcilePerPage({ fromResize = false } = {}) {
+    if (this._unmounted || this._isPostView()) return;
+    const grid = this.$(".posts-grid");
+    if (!grid) return;
+    const vc = ViewContext.current();
+    // An explicit per_page in the URL is reproduced as-is on load; only an
+    // actual resize re-fits it to the new window.
+    if (!fromResize && vc.perPage) return;
+    const fit = computePerPage(this._minPerPage(), grid);
+    const current = this._loadedPerPage || fit;
+    if (fit === current) return;
+    const firstIndex = (vc.page - 1) * current;
+    const newPage = Math.floor(firstIndex / fit) + 1;
+    ViewContext.update({ per_page: fit, page: newPage }, { replace: true });
+  }
+
+  _onResize() {
+    clearTimeout(this._resizeTimer);
+    this._resizeTimer = setTimeout(() => this._reconcilePerPage({ fromResize: true }), 200);
   }
 
   render() {
@@ -368,7 +437,11 @@ export default class TagPage extends Component {
       );
     }
 
-    this._setupGestures(pagination, slug);
+    this._setupGestures(pagination);
+    this._preloadAdjacentGrids(pagination, slug);
+
+    // After the real grid has laid out, fit per_page to the viewport.
+    requestAnimationFrame(() => this._reconcilePerPage());
   }
 
   _clearPostContent() {
@@ -380,133 +453,236 @@ export default class TagPage extends Component {
     this._postChildren = [];
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._clearPageGhosts();
   }
 
-  _setupGestures(pagination, slug) {
-    // Always set up gestures so horizontal swipes are captured and rubber-banded
-    // even on single-page lists (prevents browser history back/forward).
-    {
-      const gridMount = this.$("#grid-mount");
-      let previewEl = null;
-      this._gesture = new GestureController(this.$(".site-main"), {
-        onSwipeMove: (dx, dy) => {
-          if (Math.abs(dx) > Math.abs(dy)) {
-            const blocked =
-              (dx < 0 && pagination.page >= pagination.pages) ||
-              (dx > 0 && pagination.page <= 1);
-            const tx = blocked ? rubberBand(dx) : dx;
-            gridMount.style.transform = `translateX(${tx}px)`;
-            gridMount.style.transition = "none";
-            gridMount.style.opacity = blocked
-              ? Math.max(0.85, 1 - Math.abs(tx) / (window.innerWidth || 500))
-              : Math.max(0.2, 1 - Math.abs(tx) / (window.innerWidth || 500));
+  _setupGestures(pagination) {
+    // Always capture horizontal swipes (even on single-page lists) so they
+    // rubber-band instead of triggering browser history back/forward.
+    const gridMount = this.$("#grid-mount");
+    const vw = () => window.innerWidth || 500;
+    const atEnd = () => pagination.page >= pagination.pages;
+    const atStart = () => pagination.page <= 1;
 
-            if (blocked) return;
+    this._gesture = new GestureController(this.$(".site-main"), {
+      onSwipeMove: (dx, dy) => {
+        if (Math.abs(dx) <= Math.abs(dy)) return;
+        const dir = dx < 0 ? "next" : "prev";
+        const blocked = (dir === "next" && atEnd()) || (dir === "prev" && atStart());
+        const tx = blocked ? rubberBand(dx) : dx;
+        const ratio = Math.abs(tx) / vw();
 
-            if (!previewEl) {
-              previewEl = document.createElement("div");
-              previewEl.className = "grid-preview-placeholder";
-              previewEl.innerHTML = `
-                  <div class="posts-grid placeholder-grid" style="opacity: 0.5;">
-                    <div class="post-card-slot"></div>
-                    <div class="post-card-slot"></div>
-                    <div class="post-card-slot"></div>
-                    <div class="post-card-slot"></div>
-                  </div>
-                `;
-              gridMount.parentElement.appendChild(previewEl);
+        gridMount.style.transition = "none";
+        gridMount.style.transform = `translateX(${tx}px)`;
 
-              const targetPage =
-                dx < 0 ? pagination.page + 1 : pagination.page - 1;
-              getTagPage(slug, { page: targetPage })
-                .then((data) => {
-                  if (previewEl && data.posts) {
-                    const html = data.posts
-                      .map((p, i) => {
-                        const img = p.media?.find(
-                          (m) => m.type === "image",
-                        )?.url;
-                        const bg = img
-                          ? `url(${img}) center/cover`
-                          : "var(--surface-card)";
-                        const cls =
-                          i === data.posts.findIndex((x) => x.is_featured)
-                            ? " featured-post"
-                            : "";
-                        return `<div class="post-card-slot${cls}"><div class="post-card" style="background: ${bg}; opacity: 0.8;"></div></div>`;
-                      })
-                      .join("");
-                    previewEl.innerHTML = `<div class="posts-grid">${html}</div>`;
-                  }
-                })
-                .catch(() => {});
-            }
+        // Slide the preloaded neighbour grid in from the opposite edge, in
+        // lockstep with the outgoing grid — the same "infinite stripe" feel as
+        // the immersive post-to-post swipe.
+        const ghost = blocked ? null : this._pageGhost(dir);
+        gridMount.style.opacity = String(
+          ghost ? Math.max(0, 1 - ratio) : Math.max(blocked ? 0.85 : 0.2, 1 - ratio),
+        );
 
-            const offset = dx < 0 ? "100%" : "-100%";
-            previewEl.style.transform = `translateX(calc(${offset} + ${dx}px))`;
-          }
-        },
-        onSwipeCancel: () => {
-          if (gridMount) {
-            gridMount.style.transition =
-              "transform 0.3s ease, opacity 0.3s ease";
-            gridMount.style.transform = "";
-            gridMount.style.opacity = "1";
-          }
-          if (previewEl) {
-            previewEl.style.transition =
-              "transform 0.3s ease, opacity 0.3s ease";
-            previewEl.style.opacity = "0";
-            setTimeout(() => {
-              previewEl?.remove();
-              previewEl = null;
-            }, 300);
-          }
-        },
-        onSwipeCommit: (dir) => {
-          if (dir === "left" && pagination.page < pagination.pages) {
-            ViewContext.update({ page: pagination.page + 1 });
-          } else if (dir === "right" && pagination.page > 1) {
-            ViewContext.update({ page: pagination.page - 1 });
-          } else {
-            // Reset visuals if not committed
-            if (gridMount) {
-              gridMount.style.transition =
-                "transform 0.3s ease, opacity 0.3s ease";
-              gridMount.style.transform = "";
-              gridMount.style.opacity = "1";
-            }
-            if (previewEl) {
-              previewEl.style.transition =
-                "transform 0.3s ease, opacity 0.3s ease";
-              previewEl.style.opacity = "0";
-              setTimeout(() => {
-                previewEl?.remove();
-                previewEl = null;
-              }, 300);
-            }
-          }
-        },
-      });
-      this._trackpad = new TrackpadDetector(this.$(".site-main"), {
-        onHorizontal: (dir) => {
-          if (dir === "left" && pagination.page < pagination.pages) {
-            ViewContext.update({ page: pagination.page + 1 });
-          } else if (dir === "right" && pagination.page > 1) {
-            ViewContext.update({ page: pagination.page - 1 });
-          }
-        },
-      });
+        this._clearOtherPeek(dir);
+        if (ghost) {
+          const offset = dir === "next" ? vw() : -vw();
+          ghost.style.transition = "none";
+          ghost.style.transform = `translateX(${offset + tx}px)`;
+          ghost.style.opacity = String(Math.min(1, ratio));
+          ghost.style.zIndex = "10";
+          this._peekGhost = ghost;
+        }
+      },
+      onSwipeCancel: () => this._resetGridSwipe(),
+      onSwipeCommit: (dir) => {
+        const d = dir === "left" ? "next" : "prev";
+        if ((d === "next" && atEnd()) || (d === "prev" && atStart())) {
+          this._resetGridSwipe();
+        } else {
+          this._commitPageSwipe(d, pagination);
+        }
+      },
+    });
+
+    this._trackpad = new TrackpadDetector(this.$(".site-main"), {
+      onHorizontal: (dir) => {
+        if (dir === "left" && pagination.page < pagination.pages) {
+          ViewContext.update({ page: pagination.page + 1 });
+        } else if (dir === "right" && pagination.page > 1) {
+          ViewContext.update({ page: pagination.page - 1 });
+        }
+      },
+    });
+  }
+
+  // ── Adjacent-page preloading + swipe peek ──────────────────────────────────
+
+  /** The preloaded ghost grid element for a drag direction, if ready. */
+  _pageGhost(dir) {
+    return this._pageGhosts?.[dir]?.el || null;
+  }
+
+  /**
+   * Preload the previous/next page and render its grid into an off-screen ghost
+   * element, so a swipe reveals the real next page (not a skeleton) and a
+   * committed swipe hands off to it seamlessly. Mirrors MediaViewer's
+   * _preloadNeighbors for the immersive carousel.
+   */
+  async _preloadAdjacentGrids(pagination, slug) {
+    this._pageGhosts = this._pageGhosts || { prev: null, next: null };
+    const container = this.$("#grid-mount")?.parentElement;
+    if (!container || !pagination || pagination.pages <= 1) return;
+    const version = (this._ghostVersion = (this._ghostVersion || 0) + 1);
+    const vc = ViewContext.current();
+
+    const build = async (dir) => {
+      const page = dir === "next" ? pagination.page + 1 : pagination.page - 1;
+      if (page < 1 || page > pagination.pages) return;
+      let data;
+      try {
+        data = await getTagPage(slug, this._buildParams({ ...vc, page }));
+      } catch {
+        return;
+      }
+      if (this._unmounted || version !== this._ghostVersion) return;
+      const el = document.createElement("div");
+      el.className = "grid-preview-placeholder";
+      el.dataset.edge = dir;
+      el.innerHTML = this._buildGridHtml(data.posts || [], slug, page);
+      el.style.transform = `translateX(${dir === "next" ? "100%" : "-100%"})`;
+      el.style.opacity = "0";
+      container.appendChild(el);
+      this._pageGhosts[dir] = { page, el };
+    };
+    await Promise.all([build("prev"), build("next")]);
+  }
+
+  /** Build static grid markup (real cards, no listeners) for a ghost preview. */
+  _buildGridHtml(posts, slug, page) {
+    if (!posts.length) return '<p class="empty-state">No posts in this tag yet.</p>';
+    const settings = store.get("settings") || {};
+    const heroIndex = posts.findIndex((p) => p.is_featured);
+    const dummy = document.createElement("div");
+    const slots = posts
+      .map((post, i) => {
+        const cls = i === heroIndex ? " featured-post" : "";
+        const card = new PostCard(dummy, {
+          post,
+          showViewCount: !!settings.show_view_counts,
+          useThumbnails: settings.use_thumbnails !== false,
+          isHero: i === heroIndex,
+          tagSlug: slug,
+          tagPage: page,
+        }).render();
+        return `<div class="post-card-slot${cls}">${card}</div>`;
+      })
+      .join("");
+    return `<div class="posts-grid">${slots}</div>`;
+  }
+
+  /** Remove the off-screen ghost grids and invalidate any in-flight preload. */
+  _clearPageGhosts() {
+    this._ghostVersion = (this._ghostVersion || 0) + 1;
+    if (this._pageGhosts) {
+      for (const dir of ["prev", "next"]) {
+        this._pageGhosts[dir]?.el?.remove();
+        this._pageGhosts[dir] = null;
+      }
     }
+    this._peekGhost = null;
+  }
+
+  /** Snap a ghost peeking from the wrong side back off-screen instantly. */
+  _clearOtherPeek(dir) {
+    const g = this._peekGhost;
+    if (g && g.dataset.edge !== dir) {
+      g.style.transition = "none";
+      g.style.transform = `translateX(${g.dataset.edge === "next" ? "100%" : "-100%"})`;
+      g.style.opacity = "0";
+      this._peekGhost = null;
+    }
+  }
+
+  /** Animate the active grid back and settle the peeking ghost off-screen. */
+  _resetGridSwipe() {
+    const gridMount = this.$("#grid-mount");
+    if (gridMount) {
+      gridMount.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+      gridMount.style.transform = "";
+      gridMount.style.opacity = "1";
+    }
+    const g = this._peekGhost;
+    if (g) {
+      const w = window.innerWidth || 500;
+      g.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+      g.style.transform = `translateX(${g.dataset.edge === "next" ? w : -w}px)`;
+      g.style.opacity = "0";
+      this._peekGhost = null;
+    }
+  }
+
+  /**
+   * Carry a committed swipe to rest: the active grid finishes sliding off while
+   * the preloaded neighbour grid slides to centre, then the route swaps under
+   * it — the new page's real grid mounts beneath the ghost and the ghost is
+   * dropped, so the motion flows unbroken with no reload blink.
+   */
+  _commitPageSwipe(dir, pagination) {
+    const ghost = this._pageGhost(dir);
+    const targetPage = dir === "next" ? pagination.page + 1 : pagination.page - 1;
+
+    // No preloaded grid yet (slow network / just landed): fall back to the
+    // plain crossfade by navigating straight away.
+    if (!ghost) {
+      this._resetGridSwipe();
+      ViewContext.update({ page: targetPage });
+      return;
+    }
+
+    const gridMount = this.$("#grid-mount");
+    const w = window.innerWidth || 500;
+    const T = "transform 0.28s ease-out, opacity 0.28s ease-out";
+
+    if (gridMount) {
+      gridMount.style.transition = T;
+      gridMount.style.transform = `translateX(${dir === "next" ? -w : w}px)`;
+      gridMount.style.opacity = "0";
+    }
+    ghost.style.transition = T;
+    ghost.style.transform = "translateX(0)";
+    ghost.style.opacity = "1";
+    ghost.style.zIndex = "11";
+
+    // Hold this ghost on screen across the route swap; _refreshPostContent drops
+    // it once the real grid is mounted underneath.
+    this._committedGhost = ghost;
+    this._pageGhosts[dir] = null;
+    this._peekGhost = null;
+
+    setTimeout(() => {
+      if (this._unmounted) return;
+      this._seamlessSwipe = true;
+      ViewContext.update({ page: targetPage });
+    }, 280);
   }
 
   beforeUnmount() {
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._clearPageGhosts();
+    this._committedGhost?.remove();
+    this._committedGhost = null;
+    clearTimeout(this._resizeTimer);
+    if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
     removeCanonical();
   }
 
   mount() {
+    // Seed the per_page cache from the window size so the first fetch is sized
+    // before the grid exists to be measured.
+    if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
+    this._resizeHandler = () => this._onResize();
+    window.addEventListener("resize", this._resizeHandler);
     super.mount();
     this._load();
   }

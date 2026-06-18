@@ -21,6 +21,8 @@ import { store } from '../../store.js';
 import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';
 import { TagGraph } from '../../utils/tagGraph.js';
+import { Timeline } from '../../components/public/Timeline.js';
+import { ViewContext } from '../../utils/viewContext.js';
 
 export default class TagsPage extends Component {
   constructor(container, props = {}) {
@@ -71,6 +73,7 @@ export default class TagsPage extends Component {
     return `
       <div class="site-wrapper site-wrapper--graph">
         <div id="header-mount"></div>
+        <div id="timeline-mount"></div>
         <main class="site-main site-main--graph">
           <div class="tag-graph">
             <canvas id="tag-graph-canvas" role="img" aria-label="Force-directed graph of tags and posts"></canvas>
@@ -104,31 +107,25 @@ export default class TagsPage extends Component {
 
   afterRender() {
     const settings = store.get('settings') || {};
-    const navTags = store.get('navTags') || [];
-    const loaded = !this.state.loading && this.state.data && !this.state.error;
-
-    // Once the graph is loaded, surface "All tags (N)" as the breadcrumb and the
-    // highlight filter inline in the header — keeping the page body for the graph.
-    const filterSlot = loaded
-      ? `<div class="tag-filter-box header-tag-filter">
-           ${SEARCH_SVG}
-           <input type="search" id="tag-filter-input" placeholder="Highlight tags…" value="${escapeHtml(this.state.filter)}" aria-label="Highlight tags in the graph">
-         </div>`
-      : '';
-
-    this.mountChild(PublicHeader, '#header-mount', {
-      settings,
-      navTags,
-      currentPath: '/tags',
-      breadcrumb: loaded ? [{ name: `All tags (${this.state.total})` }] : [],
-      slot: filterSlot,
-    });
+    this._updateBreadcrumb(null);
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
     if (this.state.loading) {
       this._load();
       return;
     }
+
+    this._canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    if (this._canShowTimeline) {
+      const vc = ViewContext.current();
+      this._timeline = this.mountChild(Timeline, '#timeline-mount', {
+        mode: 'filter',
+        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
+        onRangeChange: (range) => this._onTimelineRangeChange(range),
+        total: this.state.total,
+      });
+    }
+
     if (this.state.error || !this.state.data) return;
 
     this._initGraph();
@@ -159,6 +156,87 @@ export default class TagsPage extends Component {
         this._graph?.setTypeHidden(type, nowOff);
       });
     });
+
+    // Apply URL selection on initial load if query exists
+    this._applyUrlSelection();
+  }
+
+  onRouteUpdate(params, query) {
+    const oldQuery = this.props.query || {};
+    this.props.query = query || {};
+    if (oldQuery.timeline !== query.timeline) {
+      this.setState({ loading: true });
+    } else {
+      this._applyUrlSelection();
+    }
+  }
+
+  _onTimelineRangeChange({ from, to, isFullExtent }) {
+    const years = isFullExtent ? null : [from, to];
+    const vc = ViewContext.current();
+    const same = years
+      ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]
+      : !vc.years;
+    if (same) return;
+
+    const slug = Object.keys(this.props.query || {}).find(k => k !== 'timeline') || null;
+    let url = '/tags';
+    const p = new URLSearchParams();
+    if (slug) p.set(slug, '');
+    if (years) p.set('timeline', `${years[0]}-${years[1]}`);
+    
+    let searchStr = p.toString();
+    // remove trailing = for flag params
+    searchStr = searchStr.replace(/=&/g, '&').replace(/=$/, '');
+    if (searchStr) url += '?' + searchStr;
+    navigate(url);
+  }
+
+  _onGraphSelect(node) {
+    if (node && node.type !== 'post') {
+      navigate('/tags?' + node.slug);
+    } else {
+      navigate('/tags');
+    }
+  }
+
+  _applyUrlSelection() {
+    if (!this._graph) return;
+    const slug = Object.keys(this.props.query || {}).find(k => k !== 'timeline') || null;
+    const node = this._graph.selectNodeBySlug(slug);
+    this._updateBreadcrumb(node);
+  }
+
+  _updateBreadcrumb(node) {
+    const loaded = !this.state.loading && this.state.data && !this.state.error;
+    
+    let breadcrumb = loaded ? [{ name: `All tags (${this.state.total})` }] : [];
+    if (loaded && node) {
+      const stats = this._graph?.getSelectionStats();
+      if (stats) {
+        breadcrumb = [
+          { name: 'All tags', url: '/tags' },
+          { name: `${node.name} (${stats.tagCount} tags, ${stats.postCount} posts)` }
+        ];
+      }
+    }
+
+    const settings = store.get('settings') || {};
+    const navTags = store.get('navTags') || [];
+    const filterSlot = loaded
+      ? `<div class="tag-filter-box header-tag-filter">
+           ${SEARCH_SVG}
+           <input type="search" id="tag-filter-input" placeholder="Highlight tags…" value="${escapeHtml(this.state.filter)}" aria-label="Highlight tags in the graph">
+         </div>`
+      : '';
+
+    this.mountChild(PublicHeader, '#header-mount', {
+      settings,
+      navTags,
+      currentPath: '/tags',
+      breadcrumb,
+      slot: filterSlot,
+    });
   }
 
   _initGraph() {
@@ -167,6 +245,7 @@ export default class TagsPage extends Component {
 
     this._graph = new TagGraph(canvas, this.state.data, {
       onNavigate: (href) => navigate(href),
+      onSelect: (node) => this._onGraphSelect(node)
     });
     this._graph.start();
 
@@ -200,7 +279,13 @@ export default class TagsPage extends Component {
 
   async _load() {
     try {
-      const data = await getTagsGraph();
+      const vc = ViewContext.current();
+      const params = {};
+      if (vc.years) {
+        params.year_from = vc.years[0];
+        params.year_to = vc.years[1];
+      }
+      const data = await getTagsGraph(params);
       document.title = 'Tags';
       setCanonical(`${window.location.origin}/tags`);
       this.setState({

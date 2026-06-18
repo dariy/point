@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -549,23 +550,28 @@ ORDER BY published_at DESC, created_at DESC`
 	return stubs, rows.Err()
 }
 
-// GraphPostNode is a lightweight post descriptor (id, slug, title) used to
-// render posts as "shadow" nodes in the tags graph on /tags.
+// GraphPostNode is a lightweight post descriptor used to render posts as
+// "shadow" nodes in the tags graph on /tags and the cloud on /atlas. The
+// thumbnail/content fields back a single preview URL (see extractMediaURL) and
+// are not serialized themselves.
 type GraphPostNode struct {
-	ID    int64  `json:"id"`
-	Slug  string `json:"slug"`
-	Title string `json:"title"`
+	ID            int64          `json:"id"`
+	Slug          string         `json:"slug"`
+	Title         string         `json:"title"`
+	ThumbnailPath sql.NullString `json:"-"`
+	Content       string         `json:"-"`
 }
 
-// ListPostNodesForGraph returns id, slug, title for the posts to render as nodes
-// in the tags graph. When publishedOnly is true, only published, non-hidden posts
-// (excluding posts buried under a hides_posts tag, mirroring ListPublishedPostStubs)
-// are returned; otherwise all non-deleted posts are returned. Newest first.
+// ListPostNodesForGraph returns the posts to render as nodes in the tags graph,
+// including thumbnail_path + content so callers can derive a preview image URL.
+// When publishedOnly is true, only published, non-hidden posts (excluding posts
+// buried under a hides_posts tag, mirroring ListPublishedPostStubs) are
+// returned; otherwise all non-deleted posts are returned. Newest first.
 func (r *sqliteRepository) ListPostNodesForGraph(ctx context.Context, publishedOnly bool) ([]GraphPostNode, error) {
 	var q string
 	if publishedOnly {
 		q = `
-SELECT id, slug, title
+SELECT id, slug, title, thumbnail_path, content
 FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
@@ -583,7 +589,7 @@ AND id NOT IN (
 ORDER BY published_at DESC, created_at DESC`
 	} else {
 		q = `
-SELECT id, slug, title
+SELECT id, slug, title, thumbnail_path, content
 FROM posts
 WHERE deleted_at IS NULL
 ORDER BY published_at DESC, created_at DESC`
@@ -598,7 +604,7 @@ ORDER BY published_at DESC, created_at DESC`
 	var nodes []GraphPostNode
 	for rows.Next() {
 		var n GraphPostNode
-		if err := rows.Scan(&n.ID, &n.Slug, &n.Title); err != nil {
+		if err := rows.Scan(&n.ID, &n.Slug, &n.Title, &n.ThumbnailPath, &n.Content); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, n)
