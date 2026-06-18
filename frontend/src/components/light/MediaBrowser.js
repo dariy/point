@@ -28,7 +28,7 @@ import {
   updateMediaEXIF,
   revertMediaEXIF,
 } from "../../api/media.js";
-import { listPosts, createPost } from "../../api/posts.js";
+import { listPosts } from "../../api/posts.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
@@ -40,7 +40,6 @@ import {
   LOCK_SVG,
   TRASH_SVG,
   INFO_SVG,
-  POSTS_SVG,
   LINK_SVG,
   PLUS_SVG,
 } from "../../utils/icons.js";

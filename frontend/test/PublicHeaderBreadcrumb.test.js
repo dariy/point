@@ -145,8 +145,10 @@ describe('PublicHeader unified breadcrumb', () => {
       { pathname: '/', query: {} },
       { navTags: [{ name: 'Travel', slug: 'travel', post_count: 10 }] },
     );
+    // The caret is rendered via CSS (.has-dropdown::after); markup signals it
+    // with the has-dropdown class and aria-haspopup on the site crumb.
     assert.ok(markup.includes('has-dropdown'), 'Should have has-dropdown class');
-    assert.ok(markup.includes('crumb-caret'), 'Should render caret');
+    assert.ok(markup.includes('aria-haspopup="true"'), 'Should mark the dropdown for assistive tech');
   });
 
   test('site crumb has no dropdown caret when navTags empty', () => {
@@ -154,7 +156,8 @@ describe('PublicHeader unified breadcrumb', () => {
       { pathname: '/', query: {} },
       { navTags: [] },
     );
-    assert.ok(!markup.includes('crumb-caret'), 'Should not render caret when no navTags');
+    assert.ok(!markup.includes('has-dropdown'), 'Should not render dropdown when no navTags');
+    assert.ok(!markup.includes('aria-haspopup'), 'Should not mark a dropdown when no navTags');
   });
 
   // ── Aria-live announcement ────────────────────────────────────────────────

@@ -234,7 +234,7 @@ export default class MenuPage extends Component {
         row.classList.add('drag-over');
       });
 
-      row.addEventListener('dragleave', (e) => {
+      row.addEventListener('dragleave', () => {
         row.classList.remove('drag-over');
       });
 
@@ -250,7 +250,7 @@ export default class MenuPage extends Component {
         return false;
       });
 
-      row.addEventListener('dragend', (e) => {
+      row.addEventListener('dragend', () => {
         row.classList.remove('dragging');
         this.container.querySelectorAll('.menu-row').forEach(r => r.classList.remove('drag-over'));
       });
