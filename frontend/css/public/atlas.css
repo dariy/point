@@ -137,6 +137,17 @@
     box-shadow: 0 0 0 2px var(--c);
 }
 
+/* The selected place's title, pinned on its own dot at the cloud centre. It
+   reads as the active node: filled with its accent, lifted above the chips. */
+.atlas-node--center {
+    color: #fff;
+    background: var(--c);
+    z-index: 1002;
+    box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--c) 28%, transparent),
+        0 2px 9px rgba(0, 0, 0, 0.3);
+}
+
 .atlas-node--tag {
     --c: var(--atlas-tag);
 }

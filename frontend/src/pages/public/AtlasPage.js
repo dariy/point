@@ -650,14 +650,46 @@ export default class AtlasPage extends Component {
       return { key: node.key, marker };
     });
 
+    // The selected place's title sits on its own dot at the centre, so the active
+    // node reads as a chip like the rest of the cloud instead of a bare marker.
+    // It's pinned to the anchor latlng, so it stays put across zoom without
+    // needing repositioning, and mirrors the place's two-click model on click.
+    const centerKind = this._kindOf(tag);
+    const centerIcon = L.divIcon({
+      className: "atlas-node-wrap",
+      html: `<span class="atlas-node atlas-node--${centerKind} atlas-node--center" title="${escapeHtml(tag.name)}">${escapeHtml(truncate(tag.name, 30))}</span>`,
+      iconSize: [0, 0],
+    });
+    const centerMarker = L.marker(anchorLatLng, {
+      icon: centerIcon,
+      keyboard: false,
+      riseOnHover: true,
+    });
+    centerMarker.on("click", (e) => {
+      L.DomEvent.stop(e);
+      if (this._cloud && this._cloud.focusKey !== null) {
+        this._cloud.focusKey = null;
+        this._applyCloudFocus();
+      } else {
+        navigate(`/tags/${tag.slug}`);
+      }
+    });
+    this._cloudMarkers.addLayer(centerMarker);
+
     this._cloud = {
       anchorLatLng,
       nodePos,
       sats,
       edges,
       cloudNeighbors,
+      centerKey,
       focusKey: null,
     };
+
+    // Open the cloud already focused on the selected place: items more than one
+    // hop away (or more than the tag→post→tag two hops) dim out from the start,
+    // rather than every chip lighting up at once.
+    this._applyCloudFocus();
   }
 
   /**
@@ -703,11 +735,18 @@ export default class AtlasPage extends Component {
     return { focus, related };
   }
 
-  /** Apply the current cloud focus (or clear it) to chip + connector styling. */
+  /**
+   * Apply the current cloud focus to chip + connector styling. With no chip
+   * explicitly selected the focus falls back to the centre place, so the cloud's
+   * resting state already dims anything not close enough to the selection. The
+   * dashed "related" ring is reserved for an explicit chip focus to keep the
+   * default overview clean.
+   */
   _applyCloudFocus() {
     if (!this._cloud) return;
-    const { sats, edges, focusKey } = this._cloud;
-    const data = focusKey ? this._expandCloudFocus(focusKey) : null;
+    const { sats, edges, focusKey, centerKey } = this._cloud;
+    const seed = focusKey || centerKey;
+    const data = seed ? this._expandCloudFocus(seed) : null;
     const focus = data && data.focus;
     const related = data && data.related;
 
@@ -719,7 +758,7 @@ export default class AtlasPage extends Component {
       el.classList.toggle("atlas-node--sel", focusKey === s.key);
       el.classList.toggle(
         "atlas-node--related",
-        !!(related && related.has(s.key) && focusKey !== s.key),
+        !!(related && related.has(s.key) && focusKey && focusKey !== s.key),
       );
     }
     for (const e of edges) {
