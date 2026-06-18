@@ -179,7 +179,7 @@ export default class MapPage extends Component {
     this._canShowTimeline = canShowTimeline;
     this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
       settings,
-      currentPath: "/map",
+      currentPath: "/tags",
       breadcrumb: this._buildBreadcrumb(),
       total: this.state.tags?.length || 0,
       timelineVisible: true,
@@ -237,7 +237,7 @@ export default class MapPage extends Component {
     const from = vc.years[0];
     const to = vc.years[1];
     const label = from === to ? String(from) : `${from}–${to}`;
-    return [{ name: "map", href: "/map" }, { name: label }];
+    return [{ name: "map", href: "/tags" }, { name: label }];
   }
 
   async _onTimelineRangeChange({ from, to, isFullExtent }) {

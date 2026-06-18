@@ -216,26 +216,25 @@ export class PublicHeader extends Component {
          </a>`
       : '';
 
-    const mapButtonHtml = (() => {
-      const visibility = settings.map_mode || 'off';
-      if (visibility === 'all' || (user && visibility === 'hidden')) {
-        return `<a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
-                   aria-label="Map view">
-                  ${MAP_SVG}
-                </a>`;
-      }
-      return '';
-    })();
+    // A single nav entry surfaces whichever tags module the admin selected
+    // (tag cloud / map / atlas). Hidden entirely when disabled, or when it is
+    // admins-only and the visitor is logged out. See resolveTagsModule() / the
+    // backend tagsModuleAccessible gate.
+    const tagsModule = settings.tags_module || 'atlas';
+    const tagsVisibility = settings.tags_visibility || 'hidden';
+    const tagsVisible = tagsModule !== 'none' && (tagsVisibility === 'all' || !!user);
+    const tagsMeta = {
+      cloud: { icon: TAGS_SVG, label: 'All tags' },
+      map: { icon: MAP_SVG, label: 'Map' },
+      atlas: { icon: GLOBE_SVG, label: 'Atlas' },
+    }[tagsModule] || { icon: TAGS_SVG, label: 'All tags' };
 
-    const tagsButtonHtml = `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
-                   aria-label="All tags" title="All tags">
-                  ${TAGS_SVG}
-                </a>`;
-
-    const atlasButtonHtml = `<a href="/atlas" class="header-action-btn${currentPath === '/atlas' ? ' active' : ''}"
-                   aria-label="Atlas (experimental)" title="Atlas — map &amp; tags">
-                  ${GLOBE_SVG}
-                </a>`;
+    const tagsButtonHtml = tagsVisible
+      ? `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
+                   aria-label="${tagsMeta.label}" title="${tagsMeta.label}">
+                  ${tagsMeta.icon}
+                </a>`
+      : '';
 
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
 
@@ -291,8 +290,6 @@ export class PublicHeader extends Component {
             <!-- Normal nav items (hidden when fold-nav active) -->
             <div class="site-nav-items">
               ${tagsButtonHtml}
-              ${mapButtonHtml}
-              ${atlasButtonHtml}
             </div>
 
             <!-- Burger (shown when fold-nav active) -->
@@ -311,9 +308,7 @@ export class PublicHeader extends Component {
                 </div>
 
                 <div class="burger-sitemap">
-                  <a href="/tags" class="burger-link">All tags</a>
-                  <a href="/map" class="burger-link">Map</a>
-                  <a href="/atlas" class="burger-link">Atlas</a>
+                  ${tagsVisible ? `<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
                   <a href="/light" class="burger-link">About</a>
                   ${user ? `<a href="/light" class="burger-link">Admin</a>` : ''}
                 </div>

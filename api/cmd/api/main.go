@@ -764,6 +764,16 @@ func main() {
 			"add_webauthn_backup_state_column",
 			`ALTER TABLE webauthn_credentials ADD COLUMN backup_state INTEGER NOT NULL DEFAULT 0`,
 		},
+		{
+			"add_tags_module_setting",
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 VALUES ('tags_module', 'atlas', 'string', CURRENT_TIMESTAMP)`,
+		},
+		{
+			"add_tags_visibility_setting",
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 VALUES ('tags_visibility', 'hidden', 'string', CURRENT_TIMESTAMP)`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {

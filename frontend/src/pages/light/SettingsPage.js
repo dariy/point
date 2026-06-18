@@ -38,7 +38,8 @@ const SETTING_GROUPS = [
       "show_tag_cloud",
       "show_immersive_excerpt",
       "exif_visibility",
-      "map_mode",
+      "tags_module",
+      "tags_visibility",
       "timeline_mode",
     ],
   },
@@ -61,6 +62,12 @@ const SETTING_GROUPS = [
     keys: ["enable_instagram", "instagram_client_id", "instagram_client_secret"],
   },
 ];
+
+// Friendlier labels for keys whose snake_case name reads poorly.
+const LABEL_OVERRIDES = {
+  tags_module: "Show tags",
+  tags_visibility: "Tags visible to",
+};
 
 const NUMERIC_KEYS = new Set([
   "posts_per_page",
@@ -123,10 +130,12 @@ export default class SettingsPage extends Component {
       if (key === "gemini_prompt_tags" || key === "gemini_prompt_excerpt")
         continue;
       const value = settings[key] ?? "";
-      const label = key
-        .split("_")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
+      const label =
+        LABEL_OVERRIDES[key] ||
+        key
+          .split("_")
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
 
       let input = "";
       let isToggle = false;
@@ -173,13 +182,31 @@ export default class SettingsPage extends Component {
             <option value="admin"${v === "admin" ? " selected" : ""}>Admins only</option>
             <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
           </select>`;
-      } else if (key === "map_mode" || key === "timeline_mode") {
+      } else if (key === "timeline_mode") {
         const v = value || "off";
         input = `
           <select name="${key}" id="${key}" class="form-select">
             <option value="off"${v === "off" ? " selected" : ""}>Off</option>
             <option value="hidden"${v === "hidden" ? " selected" : ""}>Hidden (Admins only)</option>
             <option value="all"${v === "all" ? " selected" : ""}>All (Everyone)</option>
+          </select>`;
+      } else if (key === "tags_module") {
+        // Single selector for the /tags page module. "None" hides the /tags
+        // entry entirely and redirects /tags → home.
+        const v = value || "atlas";
+        input = `
+          <select name="${key}" id="${key}" class="form-select">
+            <option value="none"${v === "none" ? " selected" : ""}>None (hidden)</option>
+            <option value="cloud"${v === "cloud" ? " selected" : ""}>Tag cloud</option>
+            <option value="map"${v === "map" ? " selected" : ""}>Map</option>
+            <option value="atlas"${v === "atlas" ? " selected" : ""}>Atlas</option>
+          </select>`;
+      } else if (key === "tags_visibility") {
+        const v = value || "hidden";
+        input = `
+          <select name="${key}" id="${key}" class="form-select">
+            <option value="hidden"${v === "hidden" ? " selected" : ""}>Admins only</option>
+            <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
           </select>`;
       } else if (
         NUMERIC_KEYS.has(key) ||
