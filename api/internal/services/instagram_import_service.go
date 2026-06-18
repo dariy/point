@@ -188,6 +188,19 @@ func parseHashtags(caption string) (tags []string, cleaned string) {
 	return tags, cleaned
 }
 
+// appendTagUnique appends name to tags unless an equivalent tag is already
+// present. Tag reuse downstream is slug-based and case-insensitive, so the
+// comparison ignores case to avoid creating duplicate tags that differ only in
+// capitalization (e.g. a caption's "#Instagram" vs. the injected "instagram").
+func appendTagUnique(tags []string, name string) []string {
+	for _, t := range tags {
+		if strings.EqualFold(t, name) {
+			return tags
+		}
+	}
+	return append(tags, name)
+}
+
 // splitCaption splits an Instagram caption into (title, body).
 // The first line becomes the title; the remainder is the body.
 func splitCaption(caption string) (title, body string) {
@@ -305,22 +318,15 @@ func (s *InstagramImportService) ImportAccount(ctx context.Context, authorID int
 		}
 
 		// 4. Build post fields. Hashtags become reusable tags and are stripped
-		// from the caption text used for the title/body. The Instagram
-		// publication year is added as its own tag so imported posts can be
-		// browsed by year.
+		// from the caption text used for the title/body. Every imported post is
+		// tagged "instagram" so the whole import can be browsed as a group, and
+		// the Instagram publication year is added as its own tag so imported
+		// posts can be browsed by year. The "instagram" tag (and any missing
+		// year tag) is created by CreatePost when it doesn't already exist.
 		tags, cleanedCaption := parseHashtags(item.Caption)
+		tags = appendTagUnique(tags, "instagram")
 		if !item.Timestamp.IsZero() {
-			year := item.Timestamp.Format("2006")
-			alreadyTagged := false
-			for _, t := range tags {
-				if t == year {
-					alreadyTagged = true
-					break
-				}
-			}
-			if !alreadyTagged {
-				tags = append(tags, year)
-			}
+			tags = appendTagUnique(tags, item.Timestamp.Format("2006"))
 		}
 		title, body := splitCaption(cleanedCaption)
 		if title == "" {
