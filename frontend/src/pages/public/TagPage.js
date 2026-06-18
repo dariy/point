@@ -36,6 +36,7 @@ import {
   rubberBand,
 } from "../../utils/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { computePerPage, cachedPerPage } from "../../utils/gridFit.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -145,8 +146,16 @@ export default class TagPage extends Component {
     }
   }
 
+  _minPerPage() {
+    return (store.get("settings") || {}).posts_per_page || 10;
+  }
+
   _buildParams(vc) {
-    const params = { page: vc.page };
+    // per_page is the device-fit value from the URL, or the cached estimate for
+    // a fresh load that hasn't been reconciled against the real grid yet.
+    const perPage = vc.perPage || cachedPerPage(this._minPerPage());
+    this._loadedPerPage = perPage;
+    const params = { page: vc.page, per_page: perPage };
     if (vc.years) {
       params.year_from = vc.years[0];
       params.year_to = vc.years[1];
@@ -156,6 +165,30 @@ export default class TagPage extends Component {
     // matching the branch the user drilled through (tags form a DAG).
     if (this.props.query?.path) params.path = this.props.query.path;
     return params;
+  }
+
+  // Measure the rendered grid and, if the viewport fits a different number of
+  // posts than we loaded, persist the new per_page to the URL — recomputing the
+  // page so the first post currently shown stays visible on the resized list.
+  _reconcilePerPage({ fromResize = false } = {}) {
+    if (this._unmounted || this._isPostView()) return;
+    const grid = this.$(".posts-grid");
+    if (!grid) return;
+    const vc = ViewContext.current();
+    // An explicit per_page in the URL is reproduced as-is on load; only an
+    // actual resize re-fits it to the new window.
+    if (!fromResize && vc.perPage) return;
+    const fit = computePerPage(this._minPerPage(), grid);
+    const current = this._loadedPerPage || fit;
+    if (fit === current) return;
+    const firstIndex = (vc.page - 1) * current;
+    const newPage = Math.floor(firstIndex / fit) + 1;
+    ViewContext.update({ per_page: fit, page: newPage }, { replace: true });
+  }
+
+  _onResize() {
+    clearTimeout(this._resizeTimer);
+    this._resizeTimer = setTimeout(() => this._reconcilePerPage({ fromResize: true }), 200);
   }
 
   render() {
@@ -406,6 +439,9 @@ export default class TagPage extends Component {
 
     this._setupGestures(pagination);
     this._preloadAdjacentGrids(pagination, slug);
+
+    // After the real grid has laid out, fit per_page to the viewport.
+    requestAnimationFrame(() => this._reconcilePerPage());
   }
 
   _clearPostContent() {
@@ -636,10 +672,17 @@ export default class TagPage extends Component {
     this._clearPageGhosts();
     this._committedGhost?.remove();
     this._committedGhost = null;
+    clearTimeout(this._resizeTimer);
+    if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
     removeCanonical();
   }
 
   mount() {
+    // Seed the per_page cache from the window size so the first fetch is sized
+    // before the grid exists to be measured.
+    if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
+    this._resizeHandler = () => this._onResize();
+    window.addEventListener("resize", this._resizeHandler);
     super.mount();
     this._load();
   }

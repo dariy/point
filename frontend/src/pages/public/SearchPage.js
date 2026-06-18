@@ -16,6 +16,7 @@ import { listTags } from '../../api/tags.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { ViewContext } from '../../utils/viewContext.js';
+import { computePerPage, cachedPerPage } from '../../utils/gridFit.js';
 
 export default class SearchPage extends Component {
   constructor(container, props = {}) {
@@ -122,6 +123,37 @@ export default class SearchPage extends Component {
         onPage: (p) => ViewContext.update({ page: p }),
       });
     }
+
+    // After the real grid has laid out, fit per_page to the viewport.
+    requestAnimationFrame(() => this._reconcilePerPage());
+  }
+
+  _minPerPage() {
+    return (store.get('settings') || {}).posts_per_page || 10;
+  }
+
+  // Measure the rendered grid and, if the viewport fits a different number of
+  // posts than we loaded, persist the new per_page to the URL — recomputing the
+  // page so the first post currently shown stays visible on the resized list.
+  _reconcilePerPage({ fromResize = false } = {}) {
+    if (this._unmounted) return;
+    const grid = this.$('.posts-grid');
+    if (!grid) return;
+    const vc = ViewContext.current();
+    // An explicit per_page in the URL is reproduced as-is on load; only an
+    // actual resize re-fits it to the new window.
+    if (!fromResize && vc.perPage) return;
+    const fit = computePerPage(this._minPerPage(), grid);
+    const current = this._loadedPerPage || fit;
+    if (fit === current) return;
+    const firstIndex = (vc.page - 1) * current;
+    const newPage = Math.floor(firstIndex / fit) + 1;
+    ViewContext.update({ per_page: fit, page: newPage }, { replace: true });
+  }
+
+  _onResize() {
+    clearTimeout(this._resizeTimer);
+    this._resizeTimer = setTimeout(() => this._reconcilePerPage({ fromResize: true }), 200);
   }
 
   _renderTagResults() {
@@ -146,8 +178,18 @@ export default class SearchPage extends Component {
   }
 
   mount() {
+    // Seed the per_page cache from the window size so the first fetch is sized
+    // before the grid exists to be measured.
+    if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
+    this._resizeHandler = () => this._onResize();
+    window.addEventListener('resize', this._resizeHandler);
     super.mount();
     this._load();
+  }
+
+  beforeUnmount() {
+    clearTimeout(this._resizeTimer);
+    if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
   }
 
   async _load() {
@@ -164,7 +206,9 @@ export default class SearchPage extends Component {
     }
 
     try {
-      const params = { q: vc.query, page: vc.page, status: 'published' };
+      const perPage = vc.perPage || cachedPerPage(this._minPerPage());
+      this._loadedPerPage = perPage;
+      const params = { q: vc.query, page: vc.page, per_page: perPage, status: 'published' };
       if (vc.tag) params.tag = vc.tag;
 
       const [data, tagsData] = await Promise.all([

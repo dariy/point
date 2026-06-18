@@ -149,7 +149,7 @@ export class Timeline extends Component {
       return;
     }
 
-    this._resizeObserver = new ResizeObserver(() => this._layout());
+    this._resizeObserver = new ResizeObserver(() => this._relayout());
     this._resizeObserver.observe(this.container);
 
     this._wireGestures();
@@ -1179,6 +1179,37 @@ export class Timeline extends Component {
       }
     };
     this._animRaf = requestAnimationFrame(step);
+  }
+
+  /**
+   * Relayout in response to a track resize (e.g. tablet rotation). panX is an
+   * absolute pixel offset, so a width change would otherwise leave the previously
+   * centered chip stranded off-center. Capture the centered year under the old
+   * geometry, then re-center on it so panX is recomputed for the new width.
+   */
+  _relayout() {
+    if (this._unmounted) return;
+    // Don't fight an in-flight gesture or animation; those drive panX themselves.
+    if (this._isDragging || this._isPinching || this._animRaf) {
+      this._layout();
+      return;
+    }
+
+    const item = this._findCenteredItem();
+    if (!item) {
+      // No prior layout to anchor to (initial observe), or collapsed with no
+      // pills resolved yet — collapsed panX still tracks width, so just relayout.
+      if (this.state.zoom < 0.01) {
+        this._initCollapsed();
+      } else {
+        this._layout();
+      }
+      return;
+    }
+
+    const year =
+      item.type === "cluster" ? (item.minYear + item.maxYear) / 2 : item.year;
+    this._centerOnYear(year);
   }
 
   _layout() {

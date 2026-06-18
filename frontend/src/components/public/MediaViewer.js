@@ -135,6 +135,8 @@ export class MediaViewer extends Component {
     this._slides = slides;
     this._dots = dots;
 
+    let lastTapTime = 0;
+
     const { items = [], media = [], onStep, onClose } = this.props;
 
     // EXIF info control — a single button + overlay at the viewer level (like
@@ -209,7 +211,13 @@ export class MediaViewer extends Component {
     // Close
     this._on(this.$('.lightbox-close'), 'click', () => onClose?.());
     this._on(wrapper, 'click', (e) => {
-        if (e.target === wrapper || e.target === visuals) onClose?.();
+        if (Date.now() - lastTapTime < 500) return;
+        if (e.target === wrapper || e.target === visuals) {
+            onClose?.();
+            return;
+        }
+        if (e.target.closest('a, button, .immersive-nav-panel, input, .post-info-card')) return;
+        document.body.classList.contains('ui-hidden') ? this._showUI() : this._hideUI();
     });
 
     // Share
@@ -259,6 +267,7 @@ export class MediaViewer extends Component {
       },
       onPinchEnd: () => this._constrainZoom(true),
       onTap: (x, y) => {
+        lastTapTime = Date.now();
         const tapped = document.elementFromPoint(x, y);
         if (tapped?.closest('a, button, .immersive-nav-panel, input, .post-info-card')) return;
         document.body.classList.contains('ui-hidden') ? this._showUI() : this._hideUI();

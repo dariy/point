@@ -106,6 +106,7 @@ export default class TagsPage extends Component {
   }
 
   afterRender() {
+    const settings = store.get('settings') || {};
     this._updateBreadcrumb(null);
     this.mountChild(PublicFooter, '#footer-mount', { settings });
 
