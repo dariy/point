@@ -29,6 +29,7 @@ import { hideFlyout } from '../../utils/tags.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { mediaFromHtml } from '../../utils/postMedia.js';
+import { exifVisible, buildExifMap, metadataForSrc, createImmersiveExifControl } from '../../utils/exif.js';
 
 const MIN_SHOW_MS = 2000;
 
@@ -134,7 +135,26 @@ export class MediaViewer extends Component {
     this._slides = slides;
     this._dots = dots;
 
-    const { items = [], onStep, onClose } = this.props;
+    const { items = [], media = [], onStep, onClose } = this.props;
+
+    // EXIF info control — a single button + overlay at the viewer level (like
+    // the share button, so it sits above the site header instead of being
+    // swallowed by it). Per-slide metadata is resolved up front and the control
+    // re-points to the active slide via _updateExif() on every step.
+    const settings = store.get('settings') || {};
+    this._exifMeta = null;
+    if (exifVisible(settings, store.get('user')) && media.length) {
+      const exifMap = buildExifMap(media);
+      const meta = items.map((it) =>
+        it.type === 'image' && it.url ? metadataForSrc(exifMap, it.url) : null,
+      );
+      if (meta.some(Boolean)) {
+        this._exifMeta = meta;
+        this._exifControl = createImmersiveExifControl();
+        wrapper.append(this._exifControl.btn, this._exifControl.overlay);
+        this._updateExif();
+      }
+    }
 
     const goTo = (i) => {
       const n = slides.length;
@@ -177,6 +197,7 @@ export class MediaViewer extends Component {
 
       dots.forEach((d, j) => d.classList.toggle('active', j === this._index));
       this._resetZoom();
+      this._updateExif();
       onStep?.(this._index);
     };
 
@@ -595,9 +616,19 @@ export class MediaViewer extends Component {
   _hideUI() { hideFlyout(); document.body.classList.add('ui-hidden'); }
 
   _on(t, e, s, i) { if (t) { t.addEventListener(e, s, i); this._listeners.push([t, e, s, i]); } }
+  /** Point the EXIF control at the active slide (no-op when no EXIF present). */
+  _updateExif() {
+    if (!this._exifControl || !this._exifMeta) return;
+    this._exifControl.setMetadata(this._exifMeta[this._index] || null);
+  }
+
   _cleanup() {
     this._listeners.forEach(([t, e, s, i]) => t.removeEventListener(e, s, i));
     this._listeners = []; this._gesture?.destroy(); this._trackpad?.destroy();
+    // The EXIF control lives inside the re-rendered wrapper; drop our reference
+    // so a stale control isn't reused after the next render.
+    this._exifControl = null;
+    this._exifMeta = null;
     // Invalidate any in-flight neighbor preload and drop peek references; the
     // ghost elements live inside the re-rendered visuals and are discarded with it.
     this._neighborVersion++;

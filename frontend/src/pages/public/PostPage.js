@@ -106,8 +106,7 @@ export default class PostPage extends Component {
     // Immersive footer shows post tags + post-to-post navigation; normal footer shows pagination slot
     const immersiveTags = immersive ? (post?.tags || []) : [];
     const immersiveNav = immersive ? { prev: nav?.prev || null, next: nav?.next || null } : null;
-    const exifMedia = immersive ? (post?.media || []) : [];
-    this._footerChild = this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags, immersiveNav, exifMedia });
+    this._footerChild = this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags, immersiveNav });
 
     if (!post) return;
 
@@ -210,7 +209,6 @@ export default class PostPage extends Component {
 
     const immersiveTags = immersive ? (post.tags || []) : [];
     const immersiveNav = immersive ? { prev: nav?.prev || null, next: nav?.next || null } : null;
-    const exifMedia = immersive ? (post.media || []) : [];
 
     // setProps() replaces container.innerHTML without clearing the container
     // first, so the header/footer are never briefly empty during the update.
@@ -229,7 +227,7 @@ export default class PostPage extends Component {
       },
     });
 
-    this._footerChild?.setProps({ settings, immersiveTags, immersiveNav, exifMedia });
+    this._footerChild?.setProps({ settings, immersiveTags, immersiveNav });
 
     // The previous post may still be on screen (fast cached load) or already
     // replaced by a spinner (slow load). Either way, tear down the old content

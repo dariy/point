@@ -24,6 +24,7 @@ import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { MediaViewer } from "./MediaViewer.js";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
+import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.js";
 
 const _prismLoading = new Map();
 const _LANG_DEPS = {
@@ -100,6 +101,7 @@ export class PostContent extends Component {
       const items = mediaFromHtml(post.content_html || "");
       this.mountChild(MediaViewer, '#media-viewer-mount', {
         items,
+        media: post.media || [],
         startIndex: this.props.startIndex || 0,
         showShare: true,
         navPrev: prevPost,
@@ -206,6 +208,18 @@ export class PostContent extends Component {
       });
     }
     body.querySelectorAll("audio, video").forEach((el) => el.setAttribute("controls", ""));
+
+    // EXIF info buttons — per-image camera data, when visibility allows.
+    const settings = store.get("settings") || {};
+    if (exifVisible(settings, store.get("user")) && post?.media?.length) {
+      const exifMap = buildExifMap(post.media);
+      body.querySelectorAll("img").forEach((img) => {
+        // Skip linked images — wrapping them would let the ⓘ button trigger the link.
+        if (img.closest("a[href]")) return;
+        const meta = metadataForSrc(exifMap, img.getAttribute("src") || img.src || "");
+        if (meta) attachExifToImage(img, meta);
+      });
+    }
   }
 
   _enhanceCodeBlocks(body) {
