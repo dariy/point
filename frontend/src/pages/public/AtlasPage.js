@@ -175,7 +175,7 @@ export default class AtlasPage extends Component {
             <div id="atlas-map-el"></div>
             <div class="atlas-hint" id="atlas-hint">Click a place to reveal its tags &amp; posts</div>
             <div class="atlas-legend" role="group" aria-label="Filter node types">
-              <span class="atlas-legend__row atlas-legend__row--static"><span class="atlas-legend__dot atlas-legend__dot--geo"></span>Place</span>
+              <button type="button" class="atlas-toggle" data-type="geo" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--geo"></span>Place</button>
               <button type="button" class="atlas-toggle" data-type="tag" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--tag"></span>Tag</button>
               <button type="button" class="atlas-toggle" data-type="year" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--year"></span>Year</button>
               <button type="button" class="atlas-toggle" data-type="post" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--post"></span>Post</button>
@@ -393,12 +393,10 @@ export default class AtlasPage extends Component {
 
           layer.on("click", (e) => {
             L.DomEvent.stop(e);
-            this._select(
-              tag,
-              layer.getBounds().getCenter(),
-              setActive,
-              "c" + tag.id,
-            );
+            // Anchor the cloud where the user actually clicked: a polygon's
+            // bounding-box centre can sit far from the click (or outside the
+            // shape entirely) for sprawling or concave countries.
+            this._select(tag, e.latlng, setActive, "c" + tag.id);
           });
         },
       }).addTo(this._countryLayer);
@@ -445,19 +443,22 @@ export default class AtlasPage extends Component {
    * the source's own highlight (marker class or polygon style); `key` is a
    * stable id identifying the place.
    *
-   * Clicking a place follows the same two-click model as the cloud chips (and
-   * the /tags graph): the first click reveals the place's connections (its
-   * cloud, everything lit). If a chip is currently focused, the next click on
-   * the place collapses back to that overview; once the place itself is the
-   * selection, a further click opens its tag page. Empty-map clicks dismiss.
+   * The first click reveals the place's connections (its cloud, everything
+   * lit). Clicking the place again re-anchors its cloud to the new click point
+   * and redraws it as a fresh overview — handy for country shapes, where a
+   * second click elsewhere in the shape recentres the cloud there. The place
+   * itself never navigates; only its centre title chip opens the tag page
+   * (see the centre marker handler in _spawnCloud). Empty-map clicks dismiss.
    */
   _select(tag, anchorLatLng, setActive, key) {
     if (this._activeKey === key) {
-      if (this._cloud && this._cloud.focusKey !== null) {
-        this._cloud.focusKey = null;
-        this._applyCloudFocus();
-      } else {
-        navigate(`/tags/${tag.slug}`);
+      // Re-clicking the active place recentres its cloud on the new click point
+      // (redraw from the new centre) instead of opening its tag page.
+      this._activeAnchor = anchorLatLng;
+      this._clearCloud();
+      this._spawnCloud(tag, anchorLatLng);
+      if (typeof this._map.panInside === "function") {
+        this._map.panInside(anchorLatLng, { padding: [220, 220] });
       }
       return;
     }
@@ -556,8 +557,9 @@ export default class AtlasPage extends Component {
     const hidden = this._hiddenTypes;
     const centerKey = "t" + tag.id;
 
-    // Satellite tag chips (everything except the centre). Place chips have no
-    // toggle — they're the structural backbone, always shown.
+    // Satellite tag chips (everything except the centre). The "Place" toggle
+    // hides geo chips here (via _hiddenTypes) while leaving the map markers —
+    // and the selected place's own centre chip — untouched.
     const tagSats = [];
     tagIds.forEach((id) => {
       if (id === tag.id) return;
@@ -618,7 +620,7 @@ export default class AtlasPage extends Component {
       const style =
         kind === "hier"
           ? { color: "#1f9e8e", weight: 1.8, opacity: baseOpacity }
-          : { color: "#8a93a6", weight: 1.1, opacity: baseOpacity, dashArray: "3 4" };
+          : { color: "#8a93a6", weight: 1.6, opacity: baseOpacity, dashArray: "3 4" };
       const line = L.polyline([llOf(nodePos.get(a)), llOf(nodePos.get(b))], {
         ...style,
         className: "atlas-link",
@@ -653,7 +655,7 @@ export default class AtlasPage extends Component {
     // The selected place's title sits on its own dot at the centre, so the active
     // node reads as a chip like the rest of the cloud instead of a bare marker.
     // It's pinned to the anchor latlng, so it stays put across zoom without
-    // needing repositioning, and mirrors the place's two-click model on click.
+    // needing repositioning, and is the sole click target that opens the tag page.
     const centerKind = this._kindOf(tag);
     const centerIcon = L.divIcon({
       className: "atlas-node-wrap",
@@ -665,14 +667,14 @@ export default class AtlasPage extends Component {
       keyboard: false,
       riseOnHover: true,
     });
+    // The centre title chip is the only way to open the place's tag page —
+    // clicking the place's shape/marker recentres the cloud instead. It follows
+    // the same two-click model as the satellite chips: the first click focuses
+    // it (lighting its connections), a second click on the focused centre opens
+    // the tag page.
     centerMarker.on("click", (e) => {
       L.DomEvent.stop(e);
-      if (this._cloud && this._cloud.focusKey !== null) {
-        this._cloud.focusKey = null;
-        this._applyCloudFocus();
-      } else {
-        navigate(`/tags/${tag.slug}`);
-      }
+      this._focusCloudNode(centerKey, `/tags/${tag.slug}`);
     });
     this._cloudMarkers.addLayer(centerMarker);
 
@@ -683,12 +685,12 @@ export default class AtlasPage extends Component {
       edges,
       cloudNeighbors,
       centerKey,
+      centerMarker,
       focusKey: null,
     };
 
-    // Open the cloud already focused on the selected place: items more than one
-    // hop away (or more than the tag→post→tag two hops) dim out from the start,
-    // rather than every chip lighting up at once.
+    // Open the cloud as a full overview — every chip the place touches is lit.
+    // Dimming only kicks in once the user focuses a specific chip.
     this._applyCloudFocus();
   }
 
@@ -736,17 +738,24 @@ export default class AtlasPage extends Component {
   }
 
   /**
-   * Apply the current cloud focus to chip + connector styling. With no chip
-   * explicitly selected the focus falls back to the centre place, so the cloud's
-   * resting state already dims anything not close enough to the selection. The
-   * dashed "related" ring is reserved for an explicit chip focus to keep the
-   * default overview clean.
+   * Apply the current cloud focus to chip + connector styling. The centre place
+   * is the cloud's subject, so with no satellite chip focused — the initial
+   * overview, or after returning focus to the centre — the whole cloud stays
+   * lit, showing everything the place touches. Dimming (and the dashed "related"
+   * ring) engages only once a satellite chip is focused, narrowing to that
+   * chip's direct + tag→post→tag connections.
    */
   _applyCloudFocus() {
     if (!this._cloud) return;
-    const { sats, edges, focusKey, centerKey } = this._cloud;
-    const seed = focusKey || centerKey;
-    const data = seed ? this._expandCloudFocus(seed) : null;
+    const { sats, edges, focusKey, centerKey, centerMarker } = this._cloud;
+    // Focusing the centre re-shows the full overview — every chip lit, exactly
+    // as the cloud first opened. The centre is the cloud's subject, so
+    // "selecting" it means lighting everything it touches rather than narrowing
+    // to a single chip's connections.
+    const data =
+      focusKey && focusKey !== centerKey
+        ? this._expandCloudFocus(focusKey)
+        : null;
     const focus = data && data.focus;
     const related = data && data.related;
 
@@ -761,6 +770,21 @@ export default class AtlasPage extends Component {
         !!(related && related.has(s.key) && focusKey && focusKey !== s.key),
       );
     }
+
+    // The centre place is the cloud's subject. In the overview (no chip focused)
+    // it stays the bold, lit anchor; when it is itself focused it keeps that
+    // selected look. Once a *different* chip is focused the centre is no longer
+    // the active selection, but every cloud node is a connection of the place,
+    // so it must stay visible — it only sheds its filled accent for a plain
+    // outline (never dimmed) to show it's no longer selected.
+    const centerEl = centerMarker?._icon?.firstElementChild;
+    if (centerEl) {
+      centerEl.classList.toggle(
+        "atlas-node--center-blur",
+        !!focusKey && focusKey !== centerKey,
+      );
+    }
+
     for (const e of edges) {
       const lit = !focus || (focus.has(e.a) && focus.has(e.b));
       e.line.setStyle({ opacity: lit ? e.baseOpacity : e.baseOpacity * 0.12 });

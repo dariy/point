@@ -101,10 +101,15 @@
     background: var(--bg-primary, #fff);
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.22);
     transform-origin: center;
-    animation: atlas-pop 0.28s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+    /* `backwards` (not `both`): the entrance still fades/staggers in, but the
+       animation must NOT retain its `to` state — a filling animation outranks
+       normal author rules in the cascade and would pin opacity to 1, silently
+       defeating `.atlas-node--dim`'s focus dimming. */
+    animation: atlas-pop 0.28s cubic-bezier(0.2, 0.8, 0.3, 1.2) backwards;
     transition:
         background 0.12s ease,
-        color 0.12s ease;
+        color 0.12s ease,
+        opacity 0.12s ease;
 }
 
 /* On hover the pill fills with its accent colour; the label flips to white. */
@@ -146,6 +151,17 @@
     box-shadow:
         0 0 0 4px color-mix(in srgb, var(--c) 28%, transparent),
         0 2px 9px rgba(0, 0, 0, 0.3);
+}
+
+/* When another chip takes focus, the centre place is no longer the active
+   selection. Every cloud node is a connection of the place, so the centre stays
+   fully visible (never dimmed) — it just drops its filled accent and halo back
+   to a plain outline chip so the focused chip reads as the subject. */
+.atlas-node--center.atlas-node--center-blur {
+    color: var(--c);
+    background: var(--bg-primary, #fff);
+    z-index: 1;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.22);
 }
 
 .atlas-node--tag {
@@ -222,7 +238,8 @@
     gap: 6px;
 }
 
-/* Tag / Year / Post are interactive filters; Place is a static key entry. */
+/* Place / Tag / Year / Post are all interactive filter toggles. Toggling
+   "Place" off hides geo chips in a place's cloud but keeps the map markers. */
 .atlas-toggle {
     width: 100%;
     padding: 2px 4px;
