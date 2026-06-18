@@ -65,6 +65,7 @@
 .lightbox-close {
     top: var(--spacing-md);
     right: var(--spacing-md);
+    z-index: 30;
 }
 
 .lightbox-prev {

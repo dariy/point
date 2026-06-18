@@ -68,8 +68,8 @@ type Repository interface {
 	// Posts
 	ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error)
 	CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error)
-	ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error)
-	CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error)
+	ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error)
+	CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error)
 	GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error)
 	GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error)
 	ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error)
@@ -82,6 +82,8 @@ type Repository interface {
 	CountPostsByTagIDsInYearRange(ctx context.Context, tagIDs []int64, fromYear, toYear int, publishedOnly bool, includeDrafts bool, includeHidden bool) (int64, error)
 	GetAllPublishedPostContents(ctx context.Context) ([]PostContentRow, error)
 	GetHierarchicalPostCounts(ctx context.Context, publishedOnly bool) (map[int64]int64, error)
+	GetExistingInstagramIDs(ctx context.Context, ids []string) ([]string, error)
+	SetPostInstagramID(ctx context.Context, postID int64, instagramID string) error
 
 	// System
 	GetSystemStats(ctx context.Context) (SystemStats, error)
@@ -205,6 +207,7 @@ func NewRepository(dbURL string) (Repository, error) {
 			{"instagram_media_id", `ALTER TABLE posts ADD COLUMN instagram_media_id TEXT`},
 			{"instagram_published_at", `ALTER TABLE posts ADD COLUMN instagram_published_at DATETIME`},
 			{"instagram_error", `ALTER TABLE posts ADD COLUMN instagram_error TEXT`},
+			{"instagram_id", `ALTER TABLE posts ADD COLUMN instagram_id TEXT`},
 		} {
 			if _, err := db.Exec(m.stmt); err != nil {
 				if !isDuplicateColumnError(err) {
@@ -237,6 +240,11 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 `); err != nil {
 			return nil, fmt.Errorf("migration failed (add_api_keys): %w", err)
+		}
+
+		if err := repo.ApplyMigration(context.Background(), "posts_instagram_id_unique_idx",
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_instagram_id ON posts(instagram_id) WHERE instagram_id IS NOT NULL`); err != nil {
+			return nil, fmt.Errorf("migration failed (posts_instagram_id_unique_idx): %w", err)
 		}
 	}
 

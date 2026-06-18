@@ -132,6 +132,7 @@ export default class PostEditPage extends Component {
     const isPublished = status === "published";
     
     const actions = `
+      <button id="save-btn" class="btn btn-secondary" type="button" style="margin-right: var(--spacing-sm);">Save</button>
       <div class="header-split-button ${menuOpen ? 'is-menu-open' : ''}">
         ${isPublished ? `
           <button id="update-btn" class="btn btn-primary main-action" type="button">Update</button>
@@ -167,8 +168,14 @@ export default class PostEditPage extends Component {
         <span class="btn-label">Details</span>
       </button>`;
 
+    let backUrl = "/light/posts";
+    try {
+      const stored = sessionStorage.getItem('point:admin:posts-list-url');
+      if (stored) backUrl = stored;
+    } catch { /* ignore */ }
+
     return adminLayoutTemplate({
-      title: `<a href="/light/posts" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
+      title: `<a href="${escapeHtml(backUrl)}" class="header-back-link" title="Back to Posts">←</a> ${titleText}`,
       actions: detailsToggle + actions,
       content: this._renderContent()
     });
@@ -185,7 +192,9 @@ export default class PostEditPage extends Component {
     const p = post || {};
     const title = escapeHtml(p.title || "");
     const slug = escapeHtml(p.slug || "");
-    const status = p.status || "draft";
+    // "Page" is surfaced as a status in the UI but is really type=page (always
+    // published). Show "Page" selected whenever the post is a page.
+    const status = p.type === "page" ? "page" : (p.status || "draft");
     const featured = p.is_featured || false;
     const excerpt = p.excerpt || "";
 
@@ -497,7 +506,11 @@ export default class PostEditPage extends Component {
       });
     });
 
-    this.$("#update-btn")?.addEventListener("click", () => this._save({ status: 'published' }));
+    // "Update" (for already-published posts) saves whatever status the user
+    // picked in the Status dropdown, so a published post can be moved to
+    // hidden/draft/page. "Publish" is an explicit action for unpublished posts.
+    this.$("#save-btn")?.addEventListener("click", () => this._save());
+    this.$("#update-btn")?.addEventListener("click", () => this._save());
     this.$("#publish-btn")?.addEventListener("click", () => this._save({ status: 'published' }));
 
     if (!this._mediaPicker) {
@@ -697,7 +710,7 @@ export default class PostEditPage extends Component {
     clearTimeout(this._maxWaitTimer); this._maxWaitTimer = null;
     if (this._unmounted || this.state.saving || this.state.deleting || !this.state.hasPendingEdits) return;
 
-    const data = this._collectFormData();
+    const data = this._applyPageType(this._collectFormData());
     if (!data.title) return;
 
     store.set('autosave_status', { status: 'saving' });
@@ -732,8 +745,17 @@ export default class PostEditPage extends Component {
     }
   }
 
+  // The status dropdown offers "page", but a page is really type=page +
+  // status=published. Map the chosen status onto the real (status, type) pair.
+  // Done after overrides are merged so explicit status actions (publish/hidden/
+  // draft) correctly turn a page back into a regular post.
+  _applyPageType(data) {
+    if (data.status === "page") return { ...data, status: "published", type: "page" };
+    return { ...data, type: "post" };
+  }
+
   async _save(overrides = {}) {
-    const data = { ...this._collectFormData(), ...overrides };
+    const data = this._applyPageType({ ...this._collectFormData(), ...overrides });
     if (!data.title) { store.set("toast", { message: "Title is required.", type: "error" }); return; }
 
     this.setState({ saving: true });
@@ -771,6 +793,8 @@ export default class PostEditPage extends Component {
     document.removeEventListener("dragleave", this._onDragLeave);
     document.removeEventListener("dragover", this._onDragOver);
     document.removeEventListener("drop", this._onDrop);
+    document.removeEventListener("dragstart", this._onDragStart);
+    document.removeEventListener("dragend", this._onDragEnd);
     document.body.classList.remove("drag-active");
     this._mediaPicker?.destroy();
     this._mediaPicker = null;
@@ -785,15 +809,41 @@ export default class PostEditPage extends Component {
     document.removeEventListener("dragleave", this._onDragLeave);
     document.removeEventListener("dragover", this._onDragOver);
     document.removeEventListener("drop", this._onDrop);
+    document.removeEventListener("dragstart", this._onDragStart);
+    document.removeEventListener("dragend", this._onDragEnd);
+    
     this._dragCount = 0;
-    this._onDragEnter = () => { this._dragCount++; document.body.classList.add("drag-active"); };
-    this._onDragLeave = () => { this._dragCount--; if (this._dragCount === 0) document.body.classList.remove("drag-active"); };
-    this._onDragOver = (e) => { e.preventDefault(); };
+    this._internalDrag = false;
+
+    this._onDragStart = () => { this._internalDrag = true; };
+    this._onDragEnd = () => { this._internalDrag = false; };
+
+    this._onDragEnter = (e) => {
+      if (this._internalDrag) return;
+      const types = e.dataTransfer?.types;
+      if (!types || !Array.from(types).includes("Files")) return;
+      this._dragCount++;
+      document.body.classList.add("drag-active");
+    };
+    this._onDragLeave = (e) => {
+      if (this._internalDrag) return;
+      const types = e.dataTransfer?.types;
+      if (!types || !Array.from(types).includes("Files")) return;
+      this._dragCount--;
+      if (this._dragCount === 0) document.body.classList.remove("drag-active");
+    };
+    this._onDragOver = (e) => {
+      if (!this._internalDrag) e.preventDefault();
+    };
     this._onDrop = (e) => {
+      if (this._internalDrag) return;
       e.preventDefault(); this._dragCount = 0; document.body.classList.remove("drag-active");
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
       files.forEach(f => this._uploadAndInsert(f));
     };
+
+    document.addEventListener("dragstart", this._onDragStart);
+    document.addEventListener("dragend", this._onDragEnd);
     document.addEventListener("dragenter", this._onDragEnter);
     document.addEventListener("dragleave", this._onDragLeave);
     document.addEventListener("dragover", this._onDragOver);
@@ -820,7 +870,11 @@ export default class PostEditPage extends Component {
     this._visualEditorRef = this.mountChild(VisualEditor, "#visual-editor-mount", {
       nodes: this._nodes,
       mediaByPath: this._mediaByPath || {},
-      onChange: (nodes) => { this._nodes = nodes; this._onInput(); },
+      onChange: (nodes) => {
+        this._nodes = nodes;
+        this._visualEditorRef.setProps({ nodes: this._nodes });
+        this._onInput();
+      },
       onInput: () => this._onInput(),
       onAddMedia: (index) => {
         this._mediaPicker.open((items) => {
@@ -863,8 +917,19 @@ export default class PostEditPage extends Component {
 
   mount() {
     super.mount();
-    if (this.state.postId) this._loadPost(this.state.postId);
-    else getInstagramStatus().catch(() => null).then(igStatus => { if (!this._unmounted) this.setState({ igStatus }); });
+    if (this.state.postId) {
+      this._loadPost(this.state.postId);
+    } else {
+      const initialContent = sessionStorage.getItem("newPostInitialContent");
+      if (initialContent) {
+        this.state.post = { ...(this.state.post || {}), content: initialContent };
+        if (this.state.editorMode === "visual") {
+          this._nodes = parseNodes(initialContent);
+        }
+        sessionStorage.removeItem("newPostInitialContent");
+      }
+      getInstagramStatus().catch(() => null).then(igStatus => { if (!this._unmounted) this.setState({ igStatus }); });
+    }
     if (this.props.query?.share === "pending") this._processShareQueue();
   }
 

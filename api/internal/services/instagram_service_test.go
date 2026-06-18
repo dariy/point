@@ -9,9 +9,60 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"point-api/internal/models"
 )
+
+func TestParseInstagramTimestamp(t *testing.T) {
+	tests := []struct {
+		name      string
+		in        string
+		wantZero  bool
+		wantYear  int
+		wantMonth time.Month
+	}{
+		{
+			name:      "instagram numeric offset without colon",
+			in:        "2026-06-09T18:37:59+0000",
+			wantYear:  2026,
+			wantMonth: time.June,
+		},
+		{
+			name:      "rfc3339 with colon offset",
+			in:        "2024-01-15T08:00:00+02:00",
+			wantYear:  2024,
+			wantMonth: time.January,
+		},
+		{
+			name:     "empty string",
+			in:       "",
+			wantZero: true,
+		},
+		{
+			name:     "unparseable",
+			in:       "not a date",
+			wantZero: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseInstagramTimestamp(tt.in)
+			if tt.wantZero {
+				if !got.IsZero() {
+					t.Errorf("got %v, want zero time", got)
+				}
+				return
+			}
+			if got.IsZero() {
+				t.Fatalf("got zero time, want %d-%02d", tt.wantYear, tt.wantMonth)
+			}
+			if got.Year() != tt.wantYear || got.Month() != tt.wantMonth {
+				t.Errorf("got %d-%02d, want %d-%02d", got.Year(), got.Month(), tt.wantYear, tt.wantMonth)
+			}
+		})
+	}
+}
 
 // mockSecrets returns a SettingsService backed by a mockRepository that serves
 // the provided key→value map as secrets.

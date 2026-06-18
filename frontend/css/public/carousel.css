@@ -29,6 +29,13 @@
     z-index: 10;
 }
 
+/* Cross-post peek: the preloaded first/last image of an adjacent post that
+   slides in from the opposite edge during a drag (positioned inline by JS). */
+.carousel-slide.edge-ghost {
+    z-index: 5;
+    will-change: transform, opacity;
+}
+
 /* Immersive navigation panels — replace arrow buttons */
 .immersive-nav-panel {
     position: absolute;

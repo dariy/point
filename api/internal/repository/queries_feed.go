@@ -17,6 +17,7 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status,
 FROM posts p
 WHERE LOWER(p.status) = 'published'
 AND p.deleted_at IS NULL
+AND p.type != 'page'
 AND p.id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (

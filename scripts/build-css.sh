@@ -44,6 +44,8 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/light/exif.css \
     "$CSS_DIR"/light/responsive.css \
     "$CSS_DIR"/common/lightbox.css \
+    "$CSS_DIR"/public/carousel.css \
+    "$CSS_DIR"/public/immersive.css \
     > "$CSS_DIR"/light.css
 
 echo "Built light.css ($(wc -c < "$CSS_DIR"/light.css) bytes)"
@@ -76,6 +78,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/public/carousel.css \
     "$CSS_DIR"/common/lightbox.css \
     "$CSS_DIR"/public/map.css \
+    "$CSS_DIR"/public/atlas.css \
     "$CSS_DIR"/public/timeline.css \
     "$CSS_DIR"/public/drop-zone.css \
     "$CSS_DIR"/public/responsive.css \

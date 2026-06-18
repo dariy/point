@@ -51,7 +51,8 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
 	"show_tag_cloud":         true,
-	"map_mode":               true,
+	"tags_module":            true,
+	"tags_visibility":        true,
 	"timeline_mode":          true,
 }
 
@@ -595,12 +596,18 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 	user := c.Get("user")
 	publicOnly := user == nil
 
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+
+	// The graph backs both the "tag cloud" and "atlas" modules served at /tags.
+	if !tagsModuleAccessible(allSettings, []string{"cloud", "atlas"}, publicOnly) {
+		return echo.NewHTTPError(http.StatusNotFound, "tags not found")
+	}
+
 	g, err := h.tagService.GetTagSnapshot(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 	minPosts := getMinTagPostsSetting(allSettings)
 
 	// Tags hidden from public viewers: effective-hidden + below min post count.
@@ -690,11 +697,17 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 		if edges == 0 {
 			continue
 		}
-		posts = append(posts, map[string]interface{}{
+		node := map[string]interface{}{
 			"id":    p.ID,
 			"slug":  p.Slug,
 			"title": p.Title,
-		})
+		}
+		// A single preview URL (thumbnail, else first image/video in content) so
+		// image posts can render a thumbnail chip in the atlas cloud.
+		if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
+			node["media_url"] = *mediaURL
+		}
+		posts = append(posts, node)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -719,15 +732,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	mapSettings, _ := h.settingsService.GetAllSettings(ctx)
 
-	mapMode := mapSettings["map_mode"]
-	if mapMode == "" {
-		mapMode = "off"
-	}
-
-	if publicOnly && mapMode != "all" {
-		return echo.NewHTTPError(http.StatusNotFound, "map not found")
-	}
-	if !publicOnly && mapMode == "off" {
+	if !tagsModuleAccessible(mapSettings, []string{"map"}, publicOnly) {
 		return echo.NewHTTPError(http.StatusNotFound, "map not found")
 	}
 
@@ -921,6 +926,41 @@ func getMinTagPostsSetting(settings map[string]string) int64 {
 		return 0
 	}
 	return v
+}
+
+// Default values for the consolidated "show tags" setting. A single module
+// (tag cloud / map / atlas) is surfaced at /tags; tags_visibility controls
+// whether the public sees it or only logged-in admins.
+const (
+	defaultTagsModule     = "atlas"
+	defaultTagsVisibility = "hidden"
+)
+
+// tagsModuleAccessible reports whether the currently-selected tags module may be
+// served for the given request. `want` lists the module values the calling
+// endpoint can render (e.g. the graph endpoint backs both "cloud" and "atlas").
+//
+// Rules: "none" hides the feature from everyone. Otherwise admins always have
+// access, while the public sees it only when tags_visibility is "all".
+func tagsModuleAccessible(settings map[string]string, want []string, publicOnly bool) bool {
+	module := getSettingOr(settings, "tags_module", defaultTagsModule)
+	if module == "none" {
+		return false
+	}
+	matched := false
+	for _, w := range want {
+		if w == module {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return false
+	}
+	if publicOnly {
+		return getSettingOr(settings, "tags_visibility", defaultTagsVisibility) == "all"
+	}
+	return true
 }
 
 // GetNavMenu returns the hierarchical tag tree (or custom menu) for navigation,

@@ -1,47 +1,93 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="auto">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="" />
-  <title>Loading…</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        />
+        <meta name="description" content="" />
+        <title>Loading…</title>
 
-  <!-- CSS — public and admin bundles both preloaded. The correct bundle is made
+        <!-- CSS — public and admin bundles both preloaded. The correct bundle is made
        render-blocking by the inline script below; the inactive one uses
        media="not all" so it is downloaded eagerly but not applied.
        app.js re-applies _applySection() on every SPA route change. -->
-  <link id="css-public" rel="stylesheet" href="/assets/css/main.css?v=__BUILD_VERSION__" />
-  <link id="css-light"  rel="stylesheet" href="/assets/css/light.css?v=__BUILD_VERSION__" media="not all" />
-  <!-- Switch CSS media before stylesheets are parsed so the browser never
+        <link
+            id="css-public"
+            rel="stylesheet"
+            href="/assets/css/main.css?v=__BUILD_VERSION__"
+        />
+        <link
+            id="css-light"
+            rel="stylesheet"
+            href="/assets/css/light.css?v=__BUILD_VERSION__"
+            media="not all"
+        />
+        <!-- Switch CSS media before stylesheets are parsed so the browser never
        has to re-apply a stylesheet mid-load (which triggers Firefox's
        "Layout was forced before the page was fully loaded" warning). -->
-  <script>
-    (function(){var p=location.pathname,l=p.startsWith('/light')||p==='/setup';document.documentElement.dataset.section=l?'light':'public';if(l){var a=document.getElementById('css-public'),b=document.getElementById('css-light');if(a)a.media='not all';if(b)b.media='all';}})();
-  </script>
+        <script>
+            (function () {
+                var p = location.pathname,
+                    l = p.startsWith("/light") || p === "/setup";
+                document.documentElement.dataset.section = l
+                    ? "light"
+                    : "public";
+                if (l) {
+                    var a = document.getElementById("css-public"),
+                        b = document.getElementById("css-light");
+                    if (a) a.media = "not all";
+                    if (b) b.media = "all";
+                }
+            })();
+        </script>
 
-  <!-- PWA -->
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#0a0a0a" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <!-- PWA -->
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#0a0a0a" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta
+            name="apple-mobile-web-app-status-bar-style"
+            content="black-translucent"
+        />
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
-  <link rel="icon" type="image/png" sizes="128x128" href="/assets/images/favicon-128.png" />
-  <link rel="apple-touch-icon" sizes="512x512" href="/assets/images/favicon-512.png" />
-  <link rel="alternate" type="application/rss+xml" title="RSS Feed" href="/feed.xml" />
-</head>
-<body>
+        <!-- Favicon -->
+        <link
+            rel="icon"
+            type="image/svg+xml"
+            href="/assets/images/favicon.svg"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="128x128"
+            href="/assets/images/favicon-128.png"
+        />
+        <link
+            rel="apple-touch-icon"
+            sizes="512x512"
+            href="/assets/images/favicon-512.png"
+        />
+        <link
+            rel="alternate"
+            type="application/rss+xml"
+            title="RSS Feed"
+            href="/feed.xml"
+        />
+    </head>
+    <body>
+        <!-- SPA mount point — all content rendered here by JavaScript -->
+        <div id="app" role="main"></div>
 
-  <!-- SPA mount point — all content rendered here by JavaScript -->
-  <div id="app" role="main"></div>
+        <!-- Toast container — rendered by ToastContainer component -->
+        <div id="toasts" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Toast container — rendered by ToastContainer component -->
-  <div id="toasts" aria-live="polite" aria-atomic="true"></div>
-
-  <!-- App bootstrap — type=module enables ES module imports -->
-  <script type="module" src="/assets/js/app.js?v=__BUILD_VERSION__"></script>
-
-</body>
+        <!-- App bootstrap — type=module enables ES module imports -->
+        <script
+            type="module"
+            src="/assets/js/app.js?v=__BUILD_VERSION__"
+        ></script>
+    </body>
 </html>

@@ -5,6 +5,30 @@
  */
 
 import { api } from './client.js';
+import { clearPageCache } from './pages.js';
+
+/**
+ * Short-lived read cache for post reads + navigation, so the immersive viewer
+ * can prefetch an adjacent post and then navigate to it without a visible
+ * reload (the route swap resolves from cache within a microtask, before paint).
+ */
+const _readCache = new Map();           // key -> { t, data }
+const READ_CACHE_TTL_MS = 120000;       // 2 min — long enough to linger on a photo before swiping
+
+function _cachedRead(key, fetcher) {
+  const hit = _readCache.get(key);
+  if (hit && Date.now() - hit.t < READ_CACHE_TTL_MS) return hit.data;
+  const data = fetcher();           // a promise; cached so concurrent callers share it
+  _readCache.set(key, { t: Date.now(), data });
+  data.catch(() => _readCache.delete(key));   // don't cache rejections
+  return data;
+}
+
+/** Clear the post read cache — called after any mutation so edits show at once. */
+export function clearPostReadCache() {
+  _readCache.clear();
+  clearPageCache();
+}
 
 /**
  * List posts with optional filters.
@@ -31,7 +55,7 @@ export function getPost(id) {
  * @returns {Promise<object>}
  */
 export function getPostBySlug(slug) {
-  return api.get(`/api/posts/slug/${slug}`);
+  return _cachedRead(`slug:${slug}`, () => api.get(`/api/posts/slug/${slug}`));
 }
 
 /**
@@ -40,6 +64,7 @@ export function getPostBySlug(slug) {
  * @returns {Promise<object>}
  */
 export function createPost(data) {
+  clearPostReadCache();
   return api.post('/api/posts', data);
 }
 
@@ -50,6 +75,7 @@ export function createPost(data) {
  * @returns {Promise<object>}
  */
 export function updatePost(id, data) {
+  clearPostReadCache();
   return api.put(`/api/posts/${id}`, data);
 }
 
@@ -59,6 +85,7 @@ export function updatePost(id, data) {
  * @returns {Promise<null>}
  */
 export function deletePost(id) {
+  clearPostReadCache();
   return api.delete(`/api/posts/${id}`);
 }
 
@@ -68,6 +95,7 @@ export function deletePost(id) {
  * @returns {Promise<null>}
  */
 export function restorePost(id) {
+  clearPostReadCache();
   return api.post(`/api/posts/${id}/restore`);
 }
 
@@ -77,6 +105,7 @@ export function restorePost(id) {
  * @returns {Promise<null>}
  */
 export function permanentlyDeletePost(id) {
+  clearPostReadCache();
   return api.delete(`/api/posts/${id}/permanent`);
 }
 
@@ -105,6 +134,7 @@ export function generatePreviewLink(id) {
  * @returns {Promise<object>}
  */
 export function setPostStatus(id, status) {
+  clearPostReadCache();
   return api.patch(`/api/posts/${id}/status`, { status });
 }
 
@@ -115,6 +145,7 @@ export function setPostStatus(id, status) {
  * @returns {Promise<object>}
  */
 export function updatePostTags(id, tags) {
+  clearPostReadCache();
   return api.patch(`/api/posts/${id}/tags`, { tags });
 }
 
@@ -124,7 +155,7 @@ export function updatePostTags(id, tags) {
  * @returns {Promise<{ prev: object|null, next: object|null }>}
  */
 export function getPostNavigation(id) {
-  return api.get(`/api/posts/${id}/navigation`);
+  return _cachedRead(`nav:${id}`, () => api.get(`/api/posts/${id}/navigation`));
 }
 
 /**

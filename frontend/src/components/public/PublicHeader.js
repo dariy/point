@@ -21,7 +21,7 @@ import { store } from '../../store.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { APP_LOGO_SVG, MAP_SVG, TAGS_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, MAP_SVG, GLOBE_SVG, TAGS_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
 
@@ -42,6 +42,8 @@ export class PublicHeader extends Component {
     } = this.props;
 
     const user = store.get('user');
+    const blogSettings = store.get('settings') || {};
+    const isCustomMenu = blogSettings.nav_menu_mode === 'custom';
     const title    = escapeHtml(settings.blog_title || 'Photo Blog');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
 
@@ -117,10 +119,11 @@ export class PublicHeader extends Component {
     // Root "site" crumb — always a link to /, has ▾ caret for root-tags dropdown
     const siteHasChildren = navTags.length > 0;
     const siteHasFollowingCrumbs = hasTagCrumbs || yearLabel || queryLabel;
+    const siteClass = siteHasFollowingCrumbs ? 'breadcrumb-link' : 'breadcrumb-current';
     const siteCrumbHtml = `<span class="crumb-pair" id="site-crumb-pair">
-      <a href="/" class="breadcrumb-link crumb-site${siteHasChildren ? ' has-dropdown' : ''}" data-crumb="site"
-         aria-label="${title}"${siteHasChildren ? ' aria-haspopup="true"' : ''}>${title}${siteHasChildren ? '<span class="crumb-caret" aria-hidden="true">&#9662;</span>' : ''}</a>
-      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true">/</span>' : ''}
+      <a href="/" class="${siteClass} crumb-site${siteHasChildren ? ' has-dropdown' : ''}" data-crumb="site"
+         aria-label="${title}"${siteHasChildren ? ' aria-haspopup="true"' : ''}>${title}</a>
+      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true"></span>' : ''}
     </span>`;
 
     // Tag ancestry crumbs from `breadcrumb` prop
@@ -137,7 +140,6 @@ export class PublicHeader extends Component {
           : crumb.slug
             ? `/tags/${escapeHtml(crumb.slug)}`
             : null;
-        const caretHtml = hasChildren ? `<span class="crumb-caret" aria-hidden="true">&#9662;</span>` : '';
         // If there are facet crumbs after this, it's a non-final crumb visually
         const hasFacets = yearLabel || queryLabel;
         if (hasFacets) {
@@ -145,31 +147,30 @@ export class PublicHeader extends Component {
           if (href) {
             return `<span class="crumb-pair">
               <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-                 data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</a>
-              <span class="breadcrumb-separator" aria-hidden="true">/</span>
+                 data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
+              <span class="breadcrumb-separator" aria-hidden="true"></span>
             </span>`;
           }
           return `<span class="crumb-pair">
-            <span class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</span>
-            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>
+            <span class="breadcrumb-separator" aria-hidden="true"></span>
           </span>`;
         }
         // Terminal: breadcrumb-current
         if (href) {
           return `<a href="${href}" class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-             data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</a>`;
+             data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>`;
         }
-        return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</span>`;
+        return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
       }
 
       // Non-last tag crumb — foldable crumb-pair with optional dropdown
       const href = crumb.href || (crumb.slug ? `/tags/${escapeHtml(crumb.slug)}` : '/');
       const hasChildren = this._crumbHasChildren(crumb, navTags);
-      const caretHtml = hasChildren ? `<span class="crumb-caret" aria-hidden="true">&#9662;</span>` : '';
       return `<span class="crumb-pair">
         <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-           data-crumb-slug="${escapeHtml(crumb.slug || '')}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}${caretHtml}</a>
-        <span class="breadcrumb-separator" aria-hidden="true">/</span>
+           data-crumb-slug="${escapeHtml(crumb.slug || '')}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
+        <span class="breadcrumb-separator" aria-hidden="true"></span>
       </span>`;
     }).join('');
 
@@ -182,7 +183,7 @@ export class PublicHeader extends Component {
       } else {
         facetCrumbsHtml += `<span class="crumb-pair crumb-facet-pair">
           <span class="breadcrumb-link breadcrumb-facet breadcrumb-year">${escapeHtml(yearLabel)}</span>
-          <span class="breadcrumb-separator" aria-hidden="true">/</span>
+          <span class="breadcrumb-separator" aria-hidden="true"></span>
         </span>`;
       }
     }
@@ -215,29 +216,40 @@ export class PublicHeader extends Component {
          </a>`
       : '';
 
-    const mapButtonHtml = (() => {
-      const visibility = settings.map_mode || 'off';
-      if (visibility === 'all' || (user && visibility === 'hidden')) {
-        return `<a href="/map" class="header-action-btn${currentPath === '/map' ? ' active' : ''}"
-                   aria-label="Map view">
-                  ${MAP_SVG}
-                </a>`;
-      }
-      return '';
-    })();
+    // A single nav entry surfaces whichever tags module the admin selected
+    // (tag cloud / map / atlas). Hidden entirely when disabled, or when it is
+    // admins-only and the visitor is logged out. See resolveTagsModule() / the
+    // backend tagsModuleAccessible gate.
+    const tagsModule = settings.tags_module || 'atlas';
+    const tagsVisibility = settings.tags_visibility || 'hidden';
+    const tagsVisible = tagsModule !== 'none' && (tagsVisibility === 'all' || !!user);
+    const tagsMeta = {
+      cloud: { icon: TAGS_SVG, label: 'All tags' },
+      map: { icon: MAP_SVG, label: 'Map' },
+      atlas: { icon: GLOBE_SVG, label: 'Atlas' },
+    }[tagsModule] || { icon: TAGS_SVG, label: 'All tags' };
 
-    const tagsButtonHtml = `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
-                   aria-label="All tags" title="All tags">
-                  ${TAGS_SVG}
-                </a>`;
+    const tagsButtonHtml = tagsVisible
+      ? `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
+                   aria-label="${tagsMeta.label}" title="${tagsMeta.label}">
+                  ${tagsMeta.icon}
+                </a>`
+      : '';
 
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
 
-    // Burger: root tags as links for mobile discoverability
     const burgerTagLinksHtml = navTags.length
-      ? navTags.map(t =>
-          `<a href="/tags/${escapeHtml(t.slug)}" class="burger-link burger-tag-link">${escapeHtml(t.name)}</a>`
-        ).join('')
+      ? navTags.map(t => {
+          const href = t.url ? escapeHtml(t.url) : `/tags/${escapeHtml(t.slug)}`;
+          let html = `<a href="${href}" class="burger-link burger-tag-link">${escapeHtml(t.name)}</a>`;
+          if (isCustomMenu && t.children && t.children.length) {
+              t.children.forEach(c => {
+                  const cHref = c.url ? escapeHtml(c.url) : `/tags/${escapeHtml(c.slug)}`;
+                  html += `<a href="${cHref}" class="burger-link burger-sub-link">${escapeHtml(c.name)}</a>`;
+              });
+          }
+          return html;
+        }).join('')
       : '';
 
     return `
@@ -278,7 +290,6 @@ export class PublicHeader extends Component {
             <!-- Normal nav items (hidden when fold-nav active) -->
             <div class="site-nav-items">
               ${tagsButtonHtml}
-              ${mapButtonHtml}
             </div>
 
             <!-- Burger (shown when fold-nav active) -->
@@ -297,8 +308,7 @@ export class PublicHeader extends Component {
                 </div>
 
                 <div class="burger-sitemap">
-                  <a href="/tags" class="burger-link">All tags</a>
-                  <a href="/map" class="burger-link">Map</a>
+                  ${tagsVisible ? `<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
                   <a href="/light" class="burger-link">About</a>
                   ${user ? `<a href="/light" class="burger-link">Admin</a>` : ''}
                 </div>
@@ -424,13 +434,16 @@ export class PublicHeader extends Component {
 
     // "site" crumb → root navTags dropdown
     const siteCrumb = this.$('.crumb-site');
-    if (siteCrumb && navTags.length) {
+    const siteTitleLink = this.$('.site-title-link');
+    if (navTags.length) {
       const rootItems = navTags.map(t => ({
         name: t.name,
         slug: t.slug,
         count: t.post_count,
+        href: t.url || (t.slug ? `/tags/${t.slug}` : null),
       }));
-      attachCrumbDropdown(siteCrumb, rootItems);
+      if (siteCrumb) attachCrumbDropdown(siteCrumb, rootItems);
+      if (siteTitleLink) attachCrumbDropdown(siteTitleLink, rootItems);
     }
 
     // Tag crumbs with children → sub-tags dropdown.
@@ -451,7 +464,7 @@ export class PublicHeader extends Component {
         name: c.name,
         slug: c.slug,
         count: c.post_count,
-        href: tagHref(c.slug, childPath),
+        href: c.url || tagHref(c.slug, childPath),
       }));
       attachCrumbDropdown(el, childItems);
     });
@@ -686,11 +699,25 @@ export class PublicHeader extends Component {
   _overflows(inner) {
     void inner.offsetWidth; // force reflow
 
-    // Check if the nav exits the container boundary.
-    // scrollWidth is unreliable on overflow:visible flex containers in Chrome,
-    // so compare bounding rects instead.
     const innerRight = inner.getBoundingClientRect().right;
     const navEl = inner.querySelector('.site-nav');
+
+    const content = inner.querySelector('.site-breadcrumb');
+
+    if (content) {
+      const cRect = content.getBoundingClientRect();
+      const nRect = navEl ? navEl.getBoundingClientRect() : null;
+      
+      const sameRow = nRect ? Math.abs(nRect.top - cRect.top) < cRect.height : true;
+      
+      if (nRect) {
+         const limit = sameRow ? nRect.left : innerRight;
+         return cRect.right > limit - 1;
+      }
+      return cRect.right > innerRight + 1;
+    }
+
+    // Fallback: nav (or header) exits the container boundary.
     if (navEl) return navEl.getBoundingClientRect().right > innerRight + 1;
     const headerEl = inner.querySelector('.site-header');
     return headerEl ? headerEl.getBoundingClientRect().right > innerRight + 1 : false;
@@ -700,7 +727,9 @@ export class PublicHeader extends Component {
     const group = this._group;
     if (!group) return;
     group.classList.remove('fold-title', 'fold-nav', 'fold-current');
-    group.querySelectorAll('.crumb-pair.folded').forEach((p) => p.classList.remove('folded'));
+    group.querySelectorAll('.crumb-pair.folded').forEach((p) => {
+      p.classList.remove('folded', 'show-ellipsis');
+    });
     this._closeBurger();
     group.querySelector('#crumb-popover')?.classList.remove('is-open');
   }
@@ -713,34 +742,51 @@ export class PublicHeader extends Component {
     this._resetFold();
     if (!this._overflows(inner)) return;
 
-    // Step 1: hide site-title text
+    // Step 1: hide site subtitle
     group.classList.add('fold-title');
     if (!this._overflows(inner)) return;
 
-    // Step 2: fold breadcrumb pairs left to right
+    // Step 2: fold breadcrumb pairs left to right (excluding site title)
     // Drop facet pairs first, then tag pairs
     const allPairs = [...group.querySelectorAll('.crumb-pair')];
-    // Try folding facet pairs before tag pairs to preserve tag context
     const facetPairs = allPairs.filter(p => p.classList.contains('crumb-facet-pair'));
-    const tagPairs = allPairs.filter(p => !p.classList.contains('crumb-facet-pair'));
+    const tagPairs = allPairs.filter(p => !p.classList.contains('crumb-facet-pair') && p.id !== 'site-crumb-pair');
+    const sitePair = allPairs.find(p => p.id === 'site-crumb-pair');
 
-    // Then fold facet pairs
+    const checkEllipsis = () => {
+      const allFolded = group.querySelectorAll('.crumb-pair.folded');
+      allFolded.forEach(p => p.classList.remove('show-ellipsis'));
+      if (allFolded.length > 0) {
+        allFolded[allFolded.length - 1].classList.add('show-ellipsis');
+      }
+    };
+
+    // Fold facet pairs
     for (const pair of facetPairs) {
       pair.classList.add('folded');
+      checkEllipsis();
       if (!this._overflows(inner)) return;
     }
 
-    // Then fold tag pairs left to right
+    // Fold tag pairs left to right
     for (const pair of tagPairs) {
       pair.classList.add('folded');
+      checkEllipsis();
       if (!this._overflows(inner)) return;
     }
 
-    // Step 3: collapse nav to burger
+    // Step 3: fold site title if it still overflows
+    if (sitePair) {
+      sitePair.classList.add('folded');
+      checkEllipsis();
+      if (!this._overflows(inner)) return;
+    }
+
+    // Step 4: collapse nav to burger
     group.classList.add('fold-nav');
     if (!this._overflows(inner)) return;
 
-    // Step 4: last resort — ellipsis on breadcrumb-current
+    // Step 5: last resort — ellipsis on breadcrumb-current
     group.classList.add('fold-current');
   }
 

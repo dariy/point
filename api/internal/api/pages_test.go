@@ -270,12 +270,87 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	}
 }
 
+// TestPagesHandler_GetTagsGraph_MediaURL verifies the graph payload carries a
+// preview media_url for image posts (so the atlas cloud can show a thumbnail)
+// and omits it for text-only posts.
+func TestPagesHandler_GetTagsGraph_MediaURL(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+
+	tag, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Tag1", Slug: "tag-1"})
+	if err != nil {
+		t.Fatalf("tag creation failed: %v", err)
+	}
+
+	// An image post (explicit thumbnail) and a text-only post, both tagged.
+	imgPost, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title:         "Image Post",
+		Status:        "published",
+		AuthorID:      userID,
+		ThumbnailPath: "/media/originals/photo.jpg",
+		Tags:          []string{tag.Name},
+	})
+	if err != nil {
+		t.Fatalf("image post creation failed: %v", err)
+	}
+	textPost, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title:    "Text Post",
+		Status:   "published",
+		AuthorID: userID,
+		Tags:     []string{tag.Name},
+	})
+	if err != nil {
+		t.Fatalf("text post creation failed: %v", err)
+	}
+
+	// Expose the tag graph publicly so the unauthenticated request is served.
+	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "cloud", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/pages/graph", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := ph.GetTagsGraph(c); err != nil {
+		t.Fatalf("GetTagsGraph failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Posts []struct {
+			ID       int64  `json:"id"`
+			MediaURL string `json:"media_url"`
+		} `json:"posts"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	byID := map[int64]string{}
+	for _, p := range resp.Posts {
+		byID[p.ID] = p.MediaURL
+	}
+	if got := byID[imgPost.ID]; got != "/photo.jpg" {
+		t.Errorf("image post media_url = %q, want /photo.jpg", got)
+	}
+	if got, ok := byID[textPost.ID]; got != "" {
+		t.Errorf("text post should have no media_url, got %q (present=%v)", got, ok)
+	}
+}
+
 func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()
 
 	ctx := context.Background()
-	_ = h.settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "map", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
 
 	// Create user
 	userID := insertUser(h.repo)

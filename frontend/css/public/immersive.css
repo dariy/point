@@ -235,6 +235,18 @@
     color: var(--footer-text);
 }
 
+/* Smooth text hand-off when crossing between immersive posts: the freshly
+   rendered title and footer fade in as the dragged photo settles into place. */
+@keyframes immersiveTextIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.immersive-layout .site-header .breadcrumb-current,
+.immersive-layout .site-footer .footer-content {
+    animation: immersiveTextIn 0.35s ease-out;
+}
+
 /* Immersive Components */
 .immersive-wrapper {
     position: relative;

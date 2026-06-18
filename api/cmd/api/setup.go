@@ -90,7 +90,8 @@ func runSetupCLI(repo repository.Repository, svcs *AppServices) {
 		{"use_thumbnails", "true", "boolean"},
 		{"show_view_counts", "false", "boolean"},
 		{"show_tag_cloud", "true", "boolean"},
-		{"map_mode", "off", "string"},
+		{"tags_module", "atlas", "string"},
+		{"tags_visibility", "hidden", "string"},
 		{"enable_backup", "false", "boolean"},
 	}
 

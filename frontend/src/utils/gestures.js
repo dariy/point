@@ -47,6 +47,10 @@ export class GestureController {
    * @param {number}   [opts.edgeIgnorePx=30]
    * @param {number}   [opts.doubleTapMs=300]
    * @param {number}   [opts.tapMovePx=8]
+   * @param {number}   [opts.directionRatio=1.3]  horizontal motion must exceed
+   *   vertical by this factor to commit to a horizontal swipe; otherwise the
+   *   gesture is treated as vertical. Keeps a near-vertical drag with a slight
+   *   sideways lean from flipping the page.
    */
   constructor(element, opts = {}) {
     this._el = element;
@@ -56,6 +60,7 @@ export class GestureController {
       edgeIgnorePx: 30,
       doubleTapMs: 300,
       tapMovePx: 8,
+      directionRatio: 1.3,
       ...opts,
     };
     this._state = STATE.IDLE;
@@ -180,7 +185,7 @@ export class GestureController {
       const moved = Math.max(absDx, absDy);
       if (moved < this._opts.commitThresholdPx) return;
 
-      if (absDx >= absDy) {
+      if (absDx >= absDy * this._opts.directionRatio) {
         // Edge protection: ignore swipes starting in system back-gesture zones
         if (
           this._startX < this._opts.edgeIgnorePx ||
@@ -302,16 +307,25 @@ export class TrackpadDetector {
    * @param {Function} opts.onHorizontal     Called with 'left' | 'right'
    * @param {number}   [opts.thresholdDeltaX=60]
    * @param {number}   [opts.maxDeltaY=30]
+   * @param {number}   [opts.dominanceRatio=1.5]  deltaX must exceed deltaY by
+   *   this factor, so a vertical scroll with sideways jitter never fires.
    * @param {number}   [opts.cooldownMs=600]
    */
   constructor(
     element,
-    { onHorizontal, thresholdDeltaX = 60, maxDeltaY = 30, cooldownMs = 600 },
+    {
+      onHorizontal,
+      thresholdDeltaX = 60,
+      maxDeltaY = 30,
+      dominanceRatio = 1.5,
+      cooldownMs = 600,
+    },
   ) {
     this._el = element;
     this.onHorizontal = onHorizontal;
     this.thresholdDeltaX = thresholdDeltaX;
     this.maxDeltaY = maxDeltaY;
+    this.dominanceRatio = dominanceRatio;
     this.cooldownMs = cooldownMs;
     this._lastFired = 0;
 
@@ -330,7 +344,11 @@ export class TrackpadDetector {
       return;
     const absDx = Math.abs(e.deltaX);
     const absDy = Math.abs(e.deltaY);
-    if (absDx > this.thresholdDeltaX && absDy < this.maxDeltaY) {
+    if (
+      absDx > this.thresholdDeltaX &&
+      absDy < this.maxDeltaY &&
+      absDx > absDy * this.dominanceRatio
+    ) {
       this._lastFired = now;
       if (this.onHorizontal) this.onHorizontal(e.deltaX > 0 ? "left" : "right");
     }

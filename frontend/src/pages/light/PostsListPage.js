@@ -16,7 +16,6 @@ import {
   restorePost,
   permanentlyDeletePost,
   updatePostTags,
-  updatePost,
   setPostStatus,
 } from "../../api/posts.js";
 import { store } from "../../store.js";
@@ -41,6 +40,10 @@ const STATUS_LABELS = {
   scheduled: "Scheduled",
   trash: "Trash",
 };
+
+// "Page" is surfaced as a status in the UI but is really type=page (always
+// published). Treat any type=page post as having the effective status "page".
+const effStatus = (p) => (p.type === "page" ? "page" : (p.status || "draft"));
 
 export default class PostsListPage extends Component {
   constructor(container, props = {}) {
@@ -124,7 +127,7 @@ export default class PostsListPage extends Component {
     }
 
     const cardStatusOptions = ["draft", "published", "scheduled", "hidden", "page"]
-      .map((s) => `<option value="${s}"${p.status === s ? " selected" : ""}>${escapeHtml(STATUS_LABELS[s] || s)}</option>`)
+      .map((s) => `<option value="${s}"${effStatus(p) === s ? " selected" : ""}>${escapeHtml(STATUS_LABELS[s] || s)}</option>`)
       .join("");
 
     const tagChips = (p.tags || []).map((t) => {
@@ -143,7 +146,7 @@ export default class PostsListPage extends Component {
         <div class="post-card-body">
           <div class="post-card-top">
             <span class="post-card-title">${escapeHtml(p.title)}</span>
-            <select class="status-select badge-${escapeHtml(p.status)} status-change-btn" name="status" data-id="${escapeHtml(String(p.id))}">${cardStatusOptions}</select>
+            <select class="status-select badge-${escapeHtml(effStatus(p))} status-change-btn" name="status" data-id="${escapeHtml(String(p.id))}">${cardStatusOptions}</select>
           </div>
           ${chipsHtml ? `<div class="post-card-chips">${chipsHtml}</div>` : ""}
           <div class="post-card-meta">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</div>
@@ -278,12 +281,12 @@ export default class PostsListPage extends Component {
                   </a>
                 </td>
                 <td class="status-col">
-                  <select class="status-select badge-${escapeHtml(p.status)} status-change-btn"
+                  <select class="status-select badge-${escapeHtml(effStatus(p))} status-change-btn"
                           name="status" data-id="${escapeHtml(String(p.id))}">
                     ${["draft", "published", "scheduled", "hidden", "page"]
                       .map(
                         (s) => `
-                      <option value="${s}"${p.status === s ? " selected" : ""}>
+                      <option value="${s}"${effStatus(p) === s ? " selected" : ""}>
                         ${escapeHtml(STATUS_LABELS[s] || s)}
                       </option>
                     `,
@@ -373,6 +376,10 @@ export default class PostsListPage extends Component {
     this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: "/light/posts",
     });
+
+    try {
+      sessionStorage.setItem('point:admin:posts-list-url', window.location.pathname + window.location.search);
+    } catch { /* ignore */ }
 
     const { statusFilter } = this.state;
     const isTrash = statusFilter === "trash";
@@ -929,27 +936,33 @@ export default class PostsListPage extends Component {
       navigate(`/light/posts/${id}/edit?openSchedule=1`);
       return;
     }
-    const originalStatus =
-      this.state.posts.find((p) => p.id === id)?.status || "draft";
-    select.classList.add("badge-loading");
+    const post0 = this.state.posts.find((p) => p.id === id);
+    const originalStatus = post0 ? effStatus(post0) : "draft";
+    select?.classList.add("badge-loading");
     try {
-      const updated = await updatePost(id, { status });
+      // The dedicated status endpoint preserves all other fields and maps the
+      // "page" shorthand to a published page (type=page) server-side; any other
+      // status turns a page back into a regular post.
+      const updated = await setPostStatus(id, status);
       // Update local state silently to prevent full re-render
       const post = this.state.posts.find((p) => p.id === id);
-      if (post) post.status = updated.status.toLowerCase();
+      if (post) {
+        post.status = updated.status.toLowerCase();
+        post.type = (updated.type || "post").toLowerCase();
+      }
 
       // Update UI
-      select.className = `status-select badge-${updated.status.toLowerCase()} status-change-btn`;
+      if (select) select.className = `status-select badge-${effStatus(updated)} status-change-btn`;
       store.set("toast", { message: "Status updated.", type: "success" });
     } catch (err) {
       // Revert select value on failure
-      select.value = originalStatus;
+      if (select) select.value = originalStatus;
       store.set("toast", {
         message: err.message || "Update failed.",
         type: "error",
       });
     } finally {
-      select.classList.remove("badge-loading");
+      select?.classList.remove("badge-loading");
     }
   }
 }

@@ -13,18 +13,51 @@
  *   getSelectedItems()  Returns array of selected media objects.
  */
 
-import { Component } from '../Component.js';
-import { Pagination } from '../shared/Pagination.js';
-import { MediaLightbox } from '../public/MediaLightbox.js';
-import { ConfirmDialog } from '../shared/ConfirmDialog.js';
-import { PromptDialog } from '../shared/PromptDialog.js';
-import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF } from '../../api/media.js';
-import { store } from '../../store.js';
-import { escapeHtml } from '../../utils/helpers.js';
-import { formatFileSize, formatDateShort } from '../../utils/formatters.js';
-import { FOLDER_SVG, CALENDAR_SVG, CHEVRON_SVG, EDIT_SVG, LOCK_SVG } from '../../utils/icons.js';
+import { Component } from "../Component.js";
+import { Pagination } from "../shared/Pagination.js";
+import { MediaLightbox } from "../public/MediaLightbox.js";
+import { ConfirmDialog } from "../shared/ConfirmDialog.js";
+import { PromptDialog } from "../shared/PromptDialog.js";
+import {
+  listMedia,
+  uploadMedia,
+  deleteMedia,
+  renameMedia,
+  getMediaFolders,
+  reextractMediaEXIF,
+  updateMediaEXIF,
+  revertMediaEXIF,
+} from "../../api/media.js";
+import { listPosts } from "../../api/posts.js";
+import { store } from "../../store.js";
+import { escapeHtml, navigate } from "../../utils/helpers.js";
+import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
+import {
+  FOLDER_SVG,
+  CALENDAR_SVG,
+  CHEVRON_SVG,
+  EDIT_SVG,
+  LOCK_SVG,
+  TRASH_SVG,
+  INFO_SVG,
+  LINK_SVG,
+  PLUS_SVG,
+} from "../../utils/icons.js";
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 export class MediaBrowser extends Component {
   constructor(container, props = {}) {
@@ -33,7 +66,7 @@ export class MediaBrowser extends Component {
       loading: true,
       media: [],
       pagination: {},
-      typeFilter: '',
+      typeFilter: "",
       selectedFolder: null,
       folders: [],
       expandedYears: {},
@@ -42,6 +75,8 @@ export class MediaBrowser extends Component {
       draggingOver: false,
       selectedIds: new Set(),
       selectMode: false,
+      // per-item referring-posts panel: { [mediaId]: { loading, posts, error } }
+      referringPostsState: {},
     };
     this._dragCount = 0;
     this._dragListeners = [];
@@ -51,14 +86,26 @@ export class MediaBrowser extends Component {
   }
 
   render() {
-    const { loading, media, typeFilter, error, uploading, draggingOver,
-            folders, selectedFolder, expandedYears, selectedIds } = this.state;
+    const {
+      loading,
+      media,
+      typeFilter,
+      error,
+      uploading,
+      draggingOver,
+      folders,
+      selectedFolder,
+      expandedYears,
+      selectedIds,
+    } = this.state;
     const pickerMode = this.props.pickerMode;
 
-    const typeOptions = ['', 'image', 'video', 'audio', 'file'].map((t) => {
-      const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : 'All types';
-      return `<option value="${t}"${typeFilter === t ? ' selected' : ''}>${label}</option>`;
-    }).join('');
+    const typeOptions = ["", "image", "video", "audio", "file"]
+      .map((t) => {
+        const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
+        return `<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
+      })
+      .join("");
 
     const grid = loading
       ? `<div class="loading-spinner" aria-label="Loading media…"></div>`
@@ -66,7 +113,7 @@ export class MediaBrowser extends Component {
         ? `<p class="error-state" role="alert">${escapeHtml(error)}</p>`
         : !media.length
           ? `<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`
-          : `<div class="media-grid">${media.map((m) => this._renderItem(m, selectedIds)).join('')}</div>`;
+          : `<div class="media-grid">${media.map((m) => this._renderItem(m, selectedIds)).join("")}</div>`;
 
     // Group folders by year for the tree
     const yearGroups = {};
@@ -81,71 +128,79 @@ export class MediaBrowser extends Component {
         <button id="mb-upload-btn" class="btn btn-sm btn-secondary" title="Upload files">⬆ Upload</button>
         <select id="mb-type-filter" class="filter-select">${typeOptions}</select>
 
-        <button class="folder-tree-item folder-tree-all${!selectedFolder ? ' active' : ''}" data-folder="">
+        <button class="folder-tree-item folder-tree-all${!selectedFolder ? " active" : ""}" data-folder="">
           <span class="folder-tree-icon">${FOLDER_SVG}</span>
           <span class="folder-tree-label">All media</span>
         </button>
-        ${sortedYears.map((year) => {
-          const expanded = expandedYears[year] === true;
-          const months = yearGroups[year];
-          const isYearActive = selectedFolder === year;
-          const hasActiveMonth = months.some((f) => selectedFolder === f.path);
-          
-          return `
-            <div class="folder-year-group${expanded ? ' is-expanded' : ''}">
-              <div class="folder-year-row${isYearActive ? ' active' : ''}${hasActiveMonth ? ' has-active-child' : ''}">
-                <button class="folder-year-arrow${expanded ? ' rotated' : ''}" data-year="${escapeHtml(year)}" aria-label="${expanded ? 'Collapse' : 'Expand'}">
+        ${sortedYears
+          .map((year) => {
+            const expanded = expandedYears[year] === true;
+            const months = yearGroups[year];
+            const isYearActive = selectedFolder === year;
+            const hasActiveMonth = months.some(
+              (f) => selectedFolder === f.path,
+            );
+
+            return `
+            <div class="folder-year-group${expanded ? " is-expanded" : ""}">
+              <div class="folder-year-row${isYearActive ? " active" : ""}${hasActiveMonth ? " has-active-child" : ""}">
+                <button class="folder-year-arrow${expanded ? " rotated" : ""}" data-year="${escapeHtml(year)}" aria-label="${expanded ? "Collapse" : "Expand"}">
                   ${CHEVRON_SVG}
                 </button>
-                <button class="folder-tree-item folder-year-label${isYearActive ? ' active' : ''}" data-folder="${escapeHtml(year)}">
+                <button class="folder-tree-item folder-year-label${isYearActive ? " active" : ""}" data-folder="${escapeHtml(year)}">
                   <span class="folder-tree-icon">${CALENDAR_SVG}</span>
                   <span class="folder-tree-label">${escapeHtml(year)}</span>
                 </button>
               </div>
-              <div class="folder-year-months${expanded ? '' : ' hidden'}">
-                ${months.map((f) => {
-                  const monthName = MONTH_NAMES[parseInt(f.month, 10) - 1] || f.month;
-                  const isActive = selectedFolder === f.path;
-                  return `
-                    <button class="folder-tree-item folder-month-btn${isActive ? ' active' : ''}"
+              <div class="folder-year-months${expanded ? "" : " hidden"}">
+                ${months
+                  .map((f) => {
+                    const monthName =
+                      MONTH_NAMES[parseInt(f.month, 10) - 1] || f.month;
+                    const isActive = selectedFolder === f.path;
+                    return `
+                    <button class="folder-tree-item folder-month-btn${isActive ? " active" : ""}"
                             data-folder="${escapeHtml(f.path)}">
                       <span class="folder-tree-label">${escapeHtml(monthName)}</span>
                     </button>`;
-                }).join('')}
+                  })
+                  .join("")}
               </div>
             </div>`;
-        }).join('')}
+          })
+          .join("")}
       </nav>`;
 
     const dropOverlay = pickerMode
-      ? `<div class="media-browser-drop-overlay${draggingOver ? ' visible' : ''}" aria-hidden="true">
+      ? `<div class="media-browser-drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
            </div>
          </div>`
-      : `<div class="drop-overlay${draggingOver ? ' visible' : ''}" aria-hidden="true">
+      : `<div class="drop-overlay${draggingOver ? " visible" : ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
              <div class="drop-overlay-icon">⬆</div>
              <div>Drop files to upload</div>
            </div>
          </div>`;
 
+    const selectionBar =
+      !pickerMode && this.state.selectMode ? this._renderSelectionBar() : "";
+
     return `
-      <div class="media-browser${pickerMode ? ' media-browser--picker' : ''}${this.state.selectMode ? ' media-browser--select-mode' : ''}">
+      <div class="media-browser${pickerMode ? " media-browser--picker" : ""}${this.state.selectMode ? " media-browser--select-mode" : ""}">
         <input type="file" id="mb-file-input" multiple accept="image/*,video/*,audio/*" style="display:none">
 
-        <div class="mb-mobile-capture-buttons mobile-only">
-          <button id="mb-capture-camera-btn" class="btn btn-primary" title="Take photo">📸<span class="btn-label"> Camera</span></button>
-          <button id="mb-capture-video-btn" class="btn btn-primary" title="Record video">📹<span class="btn-label"> Video</span></button>
-          <input type="file" id="mb-capture-camera-input" accept="image/*" capture="camera" style="display:none">
-          <input type="file" id="mb-capture-video-input" accept="video/*" capture="camcorder" style="display:none">
-        </div>
-
-        ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ''}
-        ${pickerMode ? `<div class="mb-top-bar mobile-only">
+        ${uploading ? `<div class="upload-progress-banner" aria-live="polite">Uploading…</div>` : ""}
+        ${selectionBar}
+        ${
+          pickerMode
+            ? `<div class="mb-top-bar mobile-only">
           ${this._renderBreadcrumbs()}
-        </div>` : ''}
+        </div>`
+            : ""
+        }
         <div class="media-layout">
           ${folderTree}
           <div class="media-content">
@@ -159,72 +214,114 @@ export class MediaBrowser extends Component {
 
   _renderBreadcrumbs() {
     const { selectedFolder } = this.state;
-    const parts = selectedFolder ? selectedFolder.split('/') : [];
-    const rootLabel = this.props.pickerMode ? 'All Media' : 'Media';
+    const parts = selectedFolder ? selectedFolder.split("/") : [];
+    const rootLabel = this.props.pickerMode ? "All Media" : "Media";
     let crumbs = `<button class="mb-breadcrumb-item" data-folder="">${escapeHtml(rootLabel)}</button>`;
-    let currentPath = '';
+    let currentPath = "";
     parts.forEach((p, i) => {
-      currentPath += (currentPath ? '/' : '') + p;
+      currentPath += (currentPath ? "/" : "") + p;
       const label = i === 1 ? MONTH_NAMES[parseInt(p, 10) - 1] || p : p;
       crumbs += ` <span class="mb-breadcrumb-separator">/</span> <button class="mb-breadcrumb-item" data-folder="${escapeHtml(currentPath)}">${escapeHtml(label)}</button>`;
     });
     return `<div class="mb-breadcrumbs">${crumbs}</div>`;
   }
 
+  _renderSelectionBar() {
+    const count = this.state.selectedIds.size;
+    return `
+      <div class="mb-selection-bar" role="toolbar" aria-label="Selection actions">
+        <span class="mb-selection-count">${count} selected</span>
+        <div class="mb-selection-actions">
+          <button id="mb-sel-create-post" class="btn btn-sm btn-primary" title="Create new post with selected images" ${count === 0 ? "disabled" : ""}>
+            ${PLUS_SVG} Create post
+          </button>
+          <button id="mb-sel-delete" class="btn btn-sm btn-danger" title="Delete selected files" ${count === 0 ? "disabled" : ""}>
+            ${TRASH_SVG} Delete (${count})
+          </button>
+        </div>
+        <button id="mb-sel-cancel" class="btn btn-sm btn-secondary" title="Exit selection mode">✕ Cancel</button>
+      </div>`;
+  }
+
   _renderItem(m, selectedIds) {
     const pickerMode = this.props.pickerMode;
-    const fileType = (m.file_type || '').toLowerCase();
-    const isImage = fileType === 'image';
+    const fileType = (m.file_type || "").toLowerCase();
+    const isImage = fileType === "image";
     const thumb = m.thumbnail_path || (isImage ? m.original_path : null);
     const isSelected = selectedIds.has(m.id);
 
-    const preview = isImage && thumb
-      ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy">`
-      : `<div class="file-icon" aria-label="${escapeHtml(fileType || 'file')}">${
-          fileType === 'video' ? '▶' : fileType === 'audio' ? '♫' : '📄'
-        }</div>`;
+    const preview =
+      isImage && thumb
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(m.filename)}" loading="lazy" draggable="false">`
+        : `<div class="file-icon" aria-label="${escapeHtml(fileType || "file")}">${
+            fileType === "video" ? "▶" : fileType === "audio" ? "♫" : "📄"
+          }</div>`;
 
-    const publicStatus = m.is_public ? '' : `
+    const publicStatus = m.is_public
+      ? ""
+      : `
       <div class="media-item-status" title="Private (hidden from guests)">
         ${LOCK_SVG}
       </div>`;
 
-    const copyPath = m.path || (m.original_path ? m.original_path.replace('/media/originals', '') : '');
+    const copyPath = m.path || "";
 
-    const pickerCheckbox = (pickerMode || this.state.selectMode) ? `
-      <label class="media-item-checkbox" title="${isSelected ? 'Deselect' : 'Select'}">
+    const pickerCheckbox =
+      pickerMode || this.state.selectMode
+        ? `
+      <label class="media-item-checkbox" title="${isSelected ? "Deselect" : "Select"}">
         <input type="checkbox" class="media-item-check" data-id="${escapeHtml(String(m.id))}"
-               ${isSelected ? 'checked' : ''} aria-label="Select ${escapeHtml(m.filename)}">
-      </label>` : '';
+               ${isSelected ? "checked" : ""} aria-label="Select ${escapeHtml(m.filename)}">
+      </label>`
+        : "";
 
-    const exifPanel = pickerMode ? '' : this._renderExifPanel(m);
+    const exifPanel = pickerMode ? "" : this._renderExifPanel(m);
+    const refPanel =
+      !pickerMode && isImage ? this._renderReferringPostsInline(m) : "";
 
-    const actions = pickerMode ? '' : `
+    const actions = pickerMode
+      ? ""
+      : `
       <div class="media-item-actions">
-        <a href="${escapeHtml(m.original_path || '')}" class="btn btn-sm" target="_blank"
+        <a href="${escapeHtml(m.path || "")}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original" aria-label="View original file">↗</a>
+        ${
+          isImage
+            ? `<button class="btn btn-sm create-post-btn"
+                data-id="${escapeHtml(String(m.id))}"
+                data-path="${escapeHtml(m.path || "")}" title="Create post with this image" aria-label="Create post with this image">${PLUS_SVG}</button>`
+            : ""
+        }
         <button class="btn btn-sm rename-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
                 data-name="${escapeHtml(m.filename)}" title="Rename" aria-label="Rename file">${EDIT_SVG}</button>
         <button class="btn btn-sm btn-danger delete-media-btn"
                 data-id="${escapeHtml(String(m.id))}"
-                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">✕</button>
-        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">ℹ EXIF</button>
+                data-name="${escapeHtml(m.filename)}" title="Delete" aria-label="Delete file">${TRASH_SVG}</button>
+        <button class="btn btn-sm exif-toggle-btn" data-id="${escapeHtml(String(m.id))}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${INFO_SVG}</button>
+
       </div>`;
 
     return `
-      <div class="media-item${isSelected ? ' media-item--selected' : ''}"
+      <div class="media-item${isSelected ? " media-item--selected" : ""}"
            data-id="${escapeHtml(String(m.id))}"${
-        isImage ? ` data-src="${escapeHtml(m.original_path || '')}" data-alt="${escapeHtml(m.filename)}"` : ''}>
+             isImage
+               ? ` data-src="${escapeHtml(m.path || "")}" data-alt="${escapeHtml(m.filename)}"`
+               : ""
+           }>
         ${pickerCheckbox}
         ${publicStatus}
-        <div class="media-item-preview${isImage && !pickerMode ? ' media-item-preview--clickable' : ''}">${preview}</div>
+        <div class="media-item-preview${isImage && !pickerMode ? " media-item-preview--clickable" : ""}">${preview}</div>
         <div class="media-item-info">
           <div class="media-item-name-row">
             <div class="media-item-name" title="Click to select: ${escapeHtml(m.path)}">${escapeHtml(m.path)}</div>
-            ${pickerMode ? '' : `
+            ${
+              pickerMode
+                ? ""
+                : `
               <button class="btn btn-sm copy-path-btn"
-                      data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>`}
+                      data-path="${escapeHtml(copyPath)}" title="Copy path to clipboard">⎘</button>`
+            }
           </div>
           <div class="media-item-meta">
             ${escapeHtml(formatFileSize(m.file_size))} · ${escapeHtml(formatDateShort(m.uploaded_at))}
@@ -232,23 +329,60 @@ export class MediaBrowser extends Component {
         </div>
         ${actions}
         ${exifPanel}
+        ${refPanel}
+      </div>`;
+  }
+
+  _renderReferringPostsInline(m) {
+    const st = (this.state.referringPostsState || {})[m.id];
+    if (!st) return "";
+
+    let body = "";
+    if (st.loading) {
+      body = `<div class="referring-posts-loading">Searching…</div>`;
+    } else if (st.error) {
+      body = `<div class="referring-posts-error">${escapeHtml(st.error)}</div>`;
+    } else if (!st.posts || st.posts.length === 0) {
+      return "";
+    } else {
+      body = `<ul class="referring-posts-list">${st.posts
+        .map(
+          (p) => `
+        <li>
+          <a href="/light/posts/${escapeHtml(String(p.id))}/edit" class="referring-post-link">
+            <span class="referring-post-title">${escapeHtml(p.title || "(Untitled)")}</span>
+            <span class="referring-post-status referring-post-status--${escapeHtml(p.status || "draft")}">${escapeHtml(p.status || "draft")}</span>
+          </a>
+        </li>`,
+        )
+        .join("")}</ul>`;
+    }
+    return `
+      <div class="referring-posts-panel inline" id="ref-panel-${escapeHtml(String(m.id))}">
+        <div class="referring-posts-header">
+          <span class="referring-posts-title">${LINK_SVG} Used in posts</span>
+        </div>
+        ${body}
       </div>`;
   }
 
   _renderExifPanel(m) {
     const metadata = m.metadata || {};
-    const rows = Object.entries(metadata).map(([k, v]) =>
-      `<tr>
+    const rows = Object.entries(metadata)
+      .map(
+        ([k, v]) =>
+          `<tr>
         <td><input class="exif-key" value="${escapeHtml(String(k))}" placeholder="Field name" aria-label="EXIF field name"></td>
         <td><input class="exif-val" value="${escapeHtml(String(v))}" placeholder="Value" aria-label="EXIF value"></td>
         <td><button class="exif-delete-btn" type="button" title="Remove field" aria-label="Remove EXIF field">\u00d7</button></td>
-      </tr>`
-    ).join('');
+      </tr>`,
+      )
+      .join("");
 
     return `
       <div class="exif-panel" id="exif-panel-${escapeHtml(String(m.id))}" hidden>
         <div class="exif-panel-heading">
-          <span class="exif-panel-title">EXIF / Camera data</span>
+          <span class="exif-panel-title">${INFO_SVG} EXIF / Camera data</span>
         </div>
         <table class="exif-table">
           <thead><tr><th>Field</th><th>Value</th><th></th></tr></thead>
@@ -256,7 +390,7 @@ export class MediaBrowser extends Component {
         </table>
         <div class="exif-actions">
           <button class="btn btn-sm exif-add-btn" type="button">+ Add field</button>
-          <button class="btn btn-sm exif-save-btn" type="button" data-id="${escapeHtml(String(m.id))}">Save EXIF</button>
+          <button class="btn btn-sm btn-primary exif-save-btn" type="button" data-id="${escapeHtml(String(m.id))}">Save EXIF</button>
           <button class="btn btn-sm exif-revert-btn" type="button" data-id="${escapeHtml(String(m.id))}">Revert to original</button>
           <button class="btn btn-sm exif-reextract-btn" type="button" data-id="${escapeHtml(String(m.id))}">Re-extract from file</button>
         </div>
@@ -265,50 +399,52 @@ export class MediaBrowser extends Component {
 
   _bindExifPanels() {
     // Toggle visibility
-    this.container.querySelectorAll('.exif-toggle-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+    this.container.querySelectorAll(".exif-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const panel = this.container.querySelector(`#exif-panel-${btn.dataset.id}`);
+        const panel = this.container.querySelector(
+          `#exif-panel-${btn.dataset.id}`,
+        );
         if (panel) panel.hidden = !panel.hidden;
       });
     });
 
     // Delete a row
     const bindDeleteBtns = (scope) => {
-      scope.querySelectorAll('.exif-delete-btn').forEach((btn) => {
-        btn.addEventListener('click', () => btn.closest('tr').remove());
+      scope.querySelectorAll(".exif-delete-btn").forEach((btn) => {
+        btn.addEventListener("click", () => btn.closest("tr").remove());
       });
     };
     bindDeleteBtns(this.container);
 
     // Add a new blank row using DOM API (no innerHTML with user data)
-    this.container.querySelectorAll('.exif-add-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const tbody = btn.closest('.exif-panel').querySelector('.exif-rows');
-        const tr = document.createElement('tr');
+    this.container.querySelectorAll(".exif-add-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tbody = btn.closest(".exif-panel").querySelector(".exif-rows");
+        const tr = document.createElement("tr");
 
-        const tdKey = document.createElement('td');
-        const inputKey = document.createElement('input');
-        inputKey.className = 'exif-key';
-        inputKey.placeholder = 'Field name';
-        inputKey.setAttribute('aria-label', 'EXIF field name');
+        const tdKey = document.createElement("td");
+        const inputKey = document.createElement("input");
+        inputKey.className = "exif-key";
+        inputKey.placeholder = "Field name";
+        inputKey.setAttribute("aria-label", "EXIF field name");
         tdKey.appendChild(inputKey);
 
-        const tdVal = document.createElement('td');
-        const inputVal = document.createElement('input');
-        inputVal.className = 'exif-val';
-        inputVal.placeholder = 'Value';
-        inputVal.setAttribute('aria-label', 'EXIF value');
+        const tdVal = document.createElement("td");
+        const inputVal = document.createElement("input");
+        inputVal.className = "exif-val";
+        inputVal.placeholder = "Value";
+        inputVal.setAttribute("aria-label", "EXIF value");
         tdVal.appendChild(inputVal);
 
-        const tdDel = document.createElement('td');
-        const delBtn = document.createElement('button');
-        delBtn.className = 'exif-delete-btn';
-        delBtn.type = 'button';
-        delBtn.title = 'Remove field';
-        delBtn.setAttribute('aria-label', 'Remove EXIF field');
-        delBtn.textContent = '\u00d7';
-        delBtn.addEventListener('click', () => tr.remove());
+        const tdDel = document.createElement("td");
+        const delBtn = document.createElement("button");
+        delBtn.className = "exif-delete-btn";
+        delBtn.type = "button";
+        delBtn.title = "Remove field";
+        delBtn.setAttribute("aria-label", "Remove EXIF field");
+        delBtn.textContent = "\u00d7";
+        delBtn.addEventListener("click", () => tr.remove());
         tdDel.appendChild(delBtn);
 
         tr.appendChild(tdKey);
@@ -319,139 +455,186 @@ export class MediaBrowser extends Component {
     });
 
     // Save EXIF — validates alphanumeric+space, writes to file via PUT /exif
-    this.container.querySelectorAll('.exif-save-btn').forEach((btn) => {
-      btn.addEventListener('click', async () => {
+    this.container.querySelectorAll(".exif-save-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
         const id = parseInt(btn.dataset.id, 10);
-        const panel = btn.closest('.exif-panel');
+        const panel = btn.closest(".exif-panel");
         const fields = {};
         const invalid = [];
-        panel.querySelectorAll('.exif-rows tr').forEach((tr) => {
-          const key = tr.querySelector('.exif-key')?.value.trim();
-          const val = tr.querySelector('.exif-val')?.value.trim();
+        panel.querySelectorAll(".exif-rows tr").forEach((tr) => {
+          const key = tr.querySelector(".exif-key")?.value.trim();
+          const val = tr.querySelector(".exif-val")?.value.trim();
           if (!key) return;
           if (val && !/^[a-zA-Z0-9 ]*$/.test(val)) {
             invalid.push(key);
           } else {
-            fields[key] = val || '';
+            fields[key] = val || "";
           }
         });
         if (invalid.length > 0) {
-          store.set('toast', { message: `Invalid characters in: ${invalid.join(', ')}. Only letters, numbers and spaces allowed.`, type: 'error' });
+          store.set("toast", {
+            message: `Invalid characters in: ${invalid.join(", ")}. Only letters, numbers and spaces allowed.`,
+            type: "error",
+          });
           return;
         }
         try {
           await updateMediaEXIF(id, fields);
-          store.set('toast', { message: 'EXIF saved.', type: 'success' });
+          store.set("toast", { message: "EXIF saved.", type: "success" });
         } catch (err) {
-          store.set('toast', { message: err.message || 'Save failed.', type: 'error' });
+          store.set("toast", {
+            message: err.message || "Save failed.",
+            type: "error",
+          });
         }
       });
     });
 
     // Revert EXIF — restores original_metadata captured at upload
-    this.container.querySelectorAll('.exif-revert-btn').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Revert to the original EXIF captured at upload? This will overwrite your edits.')) return;
-        const id = parseInt(btn.dataset.id, 10);
-        try {
-          const updated = await revertMediaEXIF(id);
-          const metadata = updated.metadata || {};
-          const panel = btn.closest('.exif-panel');
-          const tbody = panel.querySelector('.exif-rows');
-          while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
-          Object.entries(metadata).forEach(([k, v]) => {
-            const tr = document.createElement('tr');
-            const tdKey = document.createElement('td');
-            const inputKey = document.createElement('input');
-            inputKey.className = 'exif-key';
-            inputKey.placeholder = 'Field name';
-            inputKey.setAttribute('aria-label', 'EXIF field name');
-            inputKey.value = String(k);
-            tdKey.appendChild(inputKey);
-            const tdVal = document.createElement('td');
-            const inputVal = document.createElement('input');
-            inputVal.className = 'exif-val';
-            inputVal.placeholder = 'Value';
-            inputVal.setAttribute('aria-label', 'EXIF value');
-            inputVal.value = String(v);
-            tdVal.appendChild(inputVal);
-            const tdDel = document.createElement('td');
-            const delBtn = document.createElement('button');
-            delBtn.className = 'exif-delete-btn';
-            delBtn.type = 'button';
-            delBtn.title = 'Remove field';
-            delBtn.setAttribute('aria-label', 'Remove EXIF field');
-            delBtn.textContent = '\u00d7';
-            tdDel.appendChild(delBtn);
-            tr.appendChild(tdKey);
-            tr.appendChild(tdVal);
-            tr.appendChild(tdDel);
-            tbody.appendChild(tr);
-          });
-          store.set('toast', { message: 'EXIF reverted to original.', type: 'success' });
-        } catch (err) {
-          store.set('toast', { message: err.message || 'Revert failed.', type: 'error' });
-        }
+    this.container.querySelectorAll(".exif-revert-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mountEl = document.createElement("div");
+        document.body.appendChild(mountEl);
+        const dialog = new ConfirmDialog(mountEl, {
+          title: "Revert EXIF",
+          message: "Revert to the original EXIF captured at upload? This will overwrite your edits.",
+          confirmText: "Revert",
+          variant: "warning",
+          onConfirm: async () => {
+            dialog.unmount();
+            mountEl.remove();
+            const id = parseInt(btn.dataset.id, 10);
+            try {
+              const updated = await revertMediaEXIF(id);
+              const metadata = updated.metadata || {};
+              const panel = btn.closest(".exif-panel");
+              const tbody = panel.querySelector(".exif-rows");
+              while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+              Object.entries(metadata).forEach(([k, v]) => {
+                const tr = document.createElement("tr");
+                const tdKey = document.createElement("td");
+                const inputKey = document.createElement("input");
+                inputKey.className = "exif-key";
+                inputKey.placeholder = "Field name";
+                inputKey.setAttribute("aria-label", "EXIF field name");
+                inputKey.value = String(k);
+                tdKey.appendChild(inputKey);
+                const tdVal = document.createElement("td");
+                const inputVal = document.createElement("input");
+                inputVal.className = "exif-val";
+                inputVal.placeholder = "Value";
+                inputVal.setAttribute("aria-label", "EXIF value");
+                inputVal.value = String(v);
+                tdVal.appendChild(inputVal);
+                const tdDel = document.createElement("td");
+                const delBtn = document.createElement("button");
+                delBtn.className = "exif-delete-btn";
+                delBtn.type = "button";
+                delBtn.title = "Remove field";
+                delBtn.setAttribute("aria-label", "Remove EXIF field");
+                delBtn.textContent = "\u00d7";
+                tdDel.appendChild(delBtn);
+                tr.appendChild(tdKey);
+                tr.appendChild(tdVal);
+                tr.appendChild(tdDel);
+                tbody.appendChild(tr);
+              });
+              store.set("toast", {
+                message: "EXIF reverted to original.",
+                type: "success",
+              });
+            } catch (err) {
+              store.set("toast", {
+                message: err.message || "Revert failed.",
+                type: "error",
+              });
+            }
+          },
+          onCancel: () => {
+            dialog.unmount();
+            mountEl.remove();
+          },
+        });
+        dialog.mount();
       });
     });
 
     // Re-extract — rebuilds rows via DOM API
-    this.container.querySelectorAll('.exif-reextract-btn').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Re-extract will overwrite manual EXIF edits with data from the original file. Continue?')) return;
-        const id = parseInt(btn.dataset.id, 10);
-        try {
-          const updated = await reextractMediaEXIF(id);
-          const metadata = updated.metadata || {};
-          const panel = btn.closest('.exif-panel');
-          const tbody = panel.querySelector('.exif-rows');
+    this.container.querySelectorAll(".exif-reextract-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mountEl = document.createElement("div");
+        document.body.appendChild(mountEl);
+        const dialog = new ConfirmDialog(mountEl, {
+          title: "Re-extract from file",
+          message: "Re-extract will overwrite manual EXIF edits with data from the original file. Continue?",
+          confirmText: "Re-extract",
+          variant: "warning",
+          onConfirm: async () => {
+            dialog.unmount();
+            mountEl.remove();
+            const id = parseInt(btn.dataset.id, 10);
+            try {
+              const updated = await reextractMediaEXIF(id);
+              const metadata = updated.metadata || {};
+              const panel = btn.closest(".exif-panel");
+              const tbody = panel.querySelector(".exif-rows");
 
-          // Clear existing rows
-          while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+              // Clear existing rows
+              while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
 
-          // Rebuild rows via DOM API
-          Object.entries(metadata).forEach(([k, v]) => {
-            const tr = document.createElement('tr');
+              // Rebuild rows via DOM API
+              Object.entries(metadata).forEach(([k, v]) => {
+                const tr = document.createElement("tr");
 
-            const tdKey = document.createElement('td');
-            const inputKey = document.createElement('input');
-            inputKey.className = 'exif-key';
-            inputKey.placeholder = 'Field name';
-            inputKey.setAttribute('aria-label', 'EXIF field name');
-            inputKey.value = String(k); // safe: sets value property, not attribute
-            tdKey.appendChild(inputKey);
+                const tdKey = document.createElement("td");
+                const inputKey = document.createElement("input");
+                inputKey.className = "exif-key";
+                inputKey.placeholder = "Field name";
+                inputKey.setAttribute("aria-label", "EXIF field name");
+                inputKey.value = String(k); // safe: sets value property, not attribute
+                tdKey.appendChild(inputKey);
 
-            const tdVal = document.createElement('td');
-            const inputVal = document.createElement('input');
-            inputVal.className = 'exif-val';
-            inputVal.placeholder = 'Value';
-            inputVal.setAttribute('aria-label', 'EXIF value');
-            inputVal.value = String(v); // safe: sets value property
-            tdVal.appendChild(inputVal);
+                const tdVal = document.createElement("td");
+                const inputVal = document.createElement("input");
+                inputVal.className = "exif-val";
+                inputVal.placeholder = "Value";
+                inputVal.setAttribute("aria-label", "EXIF value");
+                inputVal.value = String(v); // safe: sets value property
+                tdVal.appendChild(inputVal);
 
-            const tdDel = document.createElement('td');
-            const delBtn = document.createElement('button');
-            delBtn.className = 'exif-delete-btn';
-            delBtn.type = 'button';
-            delBtn.title = 'Remove field';
-            delBtn.setAttribute('aria-label', 'Remove EXIF field');
-            delBtn.textContent = '\u00d7';
-            delBtn.addEventListener('click', () => tr.remove());
-            tdDel.appendChild(delBtn);
+                const tdDel = document.createElement("td");
+                const delBtn = document.createElement("button");
+                delBtn.className = "exif-delete-btn";
+                delBtn.type = "button";
+                delBtn.title = "Remove field";
+                delBtn.setAttribute("aria-label", "Remove EXIF field");
+                delBtn.textContent = "\u00d7";
+                delBtn.addEventListener("click", () => tr.remove());
+                tdDel.appendChild(delBtn);
 
-            tr.appendChild(tdKey);
-            tr.appendChild(tdVal);
-            tr.appendChild(tdDel);
-            tbody.appendChild(tr);
-          });
+                tr.appendChild(tdKey);
+                tr.appendChild(tdVal);
+                tr.appendChild(tdDel);
+                tbody.appendChild(tr);
+              });
 
-          const msg = Object.keys(metadata).length
-            ? 'EXIF re-extracted.'
-            : 'No EXIF data found in this file.';
-          store.set('toast', { message: msg, type: 'success' });
-        } catch (err) {
-          store.set('toast', { message: err.message || 'Re-extract failed.', type: 'error' });
-        }
+              const msg = Object.keys(metadata).length
+                ? "EXIF re-extracted."
+                : "No EXIF data found in this file.";
+              store.set("toast", { message: msg, type: "success" });
+            } catch (err) {
+              store.set("toast", {
+                message: err.message || "Re-extract failed.",
+                type: "error",
+              });
+            }
+          },
+          onCancel: () => {
+            dialog.unmount();
+            mountEl.remove();
+          },
+        });
+        dialog.mount();
       });
     });
   }
@@ -460,7 +643,7 @@ export class MediaBrowser extends Component {
     const { pickerMode } = this.props;
 
     if (!this.state.loading && this.state.pagination.pages > 1) {
-      this.mountChild(Pagination, '#mb-pagination-mount', {
+      this.mountChild(Pagination, "#mb-pagination-mount", {
         page: this.state.pagination.page,
         pages: this.state.pagination.pages,
         total: this.state.pagination.total,
@@ -468,35 +651,41 @@ export class MediaBrowser extends Component {
       });
     }
 
-    const fileInput = this.$('#mb-file-input');
+    const fileInput = this.$("#mb-file-input");
 
-    this.$('#mb-upload-btn')?.addEventListener('click', () => fileInput?.click());
+    this.$("#mb-upload-btn")?.addEventListener("click", () =>
+      fileInput?.click(),
+    );
 
     // Mobile capture buttons
-    this.$('#mb-capture-camera-btn')?.addEventListener('click', () => this.$('#mb-capture-camera-input')?.click());
-    this.$('#mb-capture-video-btn')?.addEventListener('click', () => this.$('#mb-capture-video-input')?.click());
+    this.$("#mb-capture-camera-btn")?.addEventListener("click", () =>
+      this.$("#mb-capture-camera-input")?.click(),
+    );
+    this.$("#mb-capture-video-btn")?.addEventListener("click", () =>
+      this.$("#mb-capture-video-input")?.click(),
+    );
 
     const onCapture = (e) => {
       this._uploadFiles(Array.from(e.target.files));
-      e.target.value = '';
+      e.target.value = "";
     };
-    this.$('#mb-capture-camera-input')?.addEventListener('change', onCapture);
-    this.$('#mb-capture-video-input')?.addEventListener('change', onCapture);
+    this.$("#mb-capture-camera-input")?.addEventListener("change", onCapture);
+    this.$("#mb-capture-video-input")?.addEventListener("change", onCapture);
 
     // Breadcrumbs
-    this.$$('.mb-breadcrumb-item').forEach(btn => {
-      btn.addEventListener('click', () => {
+    this.$$(".mb-breadcrumb-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
         this.setState({ selectedFolder: btn.dataset.folder || null });
         this._load({ page: 1 });
       });
     });
 
     if (!pickerMode) {
-      const h1 = document.querySelector('.light-header .header-title-row h1');
+      const h1 = document.querySelector(".light-header .header-title-row h1");
       if (h1) {
         h1.innerHTML = this._renderBreadcrumbs();
-        h1.querySelectorAll('.mb-breadcrumb-item').forEach(btn => {
-          btn.addEventListener('click', () => {
+        h1.querySelectorAll(".mb-breadcrumb-item").forEach((btn) => {
+          btn.addEventListener("click", () => {
             this.setState({ selectedFolder: btn.dataset.folder || null });
             this._load({ page: 1 });
           });
@@ -504,32 +693,34 @@ export class MediaBrowser extends Component {
       }
     }
 
-    fileInput?.addEventListener('change', () => {
+    fileInput?.addEventListener("change", () => {
       this._uploadFiles(Array.from(fileInput.files));
-      fileInput.value = '';
+      fileInput.value = "";
     });
 
     this._wireDragDrop(fileInput, pickerMode);
 
-    this.$('#mb-type-filter')?.addEventListener('change', (e) => {
+    this.$("#mb-type-filter")?.addEventListener("change", (e) => {
       this.setState({ typeFilter: e.target.value });
       this._load({ page: 1 });
       this._loadFolders();
     });
 
     // Folder year expansion toggle (arrow only)
-    this.$$('.folder-year-arrow').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+    this.$$(".folder-year-arrow").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const year = btn.dataset.year;
         const expanded = this.state.expandedYears[year] === true;
-        this.setState({ expandedYears: { ...this.state.expandedYears, [year]: !expanded } });
+        this.setState({
+          expandedYears: { ...this.state.expandedYears, [year]: !expanded },
+        });
       });
     });
 
     // Folder / "all" / Year selection
-    this.$$('.folder-tree-item').forEach((btn) => {
-      btn.addEventListener('click', () => {
+    this.$$(".folder-tree-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
         const folder = btn.dataset.folder || null;
         this.setState({ selectedFolder: folder });
         this._load({ page: 1 });
@@ -537,30 +728,35 @@ export class MediaBrowser extends Component {
     });
 
     // Toggle all years when clicking the "All media" icon
-    this.$('.folder-tree-all .folder-tree-icon')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const allYears = [...new Set(this.state.folders.map((f) => f.year))];
-      // A year is collapsed if not explicitly set to true (since default is now collapsed)
-      const anyCollapsed = allYears.some((y) => this.state.expandedYears[y] !== true);
-      const newExpanded = {};
-      allYears.forEach((y) => {
-        newExpanded[y] = anyCollapsed;
-      });
-      this.setState({ expandedYears: newExpanded });
-    });
+    this.$(".folder-tree-all .folder-tree-icon")?.addEventListener(
+      "click",
+      (e) => {
+        e.stopPropagation();
+        const allYears = [...new Set(this.state.folders.map((f) => f.year))];
+        // A year is collapsed if not explicitly set to true (since default is now collapsed)
+        const anyCollapsed = allYears.some(
+          (y) => this.state.expandedYears[y] !== true,
+        );
+        const newExpanded = {};
+        allYears.forEach((y) => {
+          newExpanded[y] = anyCollapsed;
+        });
+        this.setState({ expandedYears: newExpanded });
+      },
+    );
 
     if (pickerMode || this.state.selectMode) {
       // Picker/Select: toggle selection via checkbox or clicking the item
-      this.$$('.media-item').forEach((item) => {
-        item.addEventListener('click', (e) => {
+      this.$$(".media-item").forEach((item) => {
+        item.addEventListener("click", (e) => {
           // Don't trigger if clicking directly on checkbox label (it handles its own state)
-          if (e.target.closest('.media-item-checkbox')) return;
+          if (e.target.closest(".media-item-checkbox")) return;
           const id = parseInt(item.dataset.id, 10);
           this._toggleSelection(id);
         });
       });
-      this.$$('.media-item-check').forEach((checkbox) => {
-        checkbox.addEventListener('change', () => {
+      this.$$(".media-item-check").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
           const id = parseInt(checkbox.dataset.id, 10);
           this._toggleSelection(id);
         });
@@ -568,8 +764,21 @@ export class MediaBrowser extends Component {
     }
 
     if (!pickerMode) {
+      // Selection bar actions
+      this.$("#mb-sel-cancel")?.addEventListener("click", () => {
+        this.setState({ selectMode: false, selectedIds: new Set() });
+      });
+
+      this.$("#mb-sel-create-post")?.addEventListener("click", () => {
+        this._createPostFromSelected();
+      });
+
+      this.$("#mb-sel-delete")?.addEventListener("click", () => {
+        this._deleteSelected();
+      });
+
       // Long-press to enter select mode (standalone only)
-      this.$$('.media-item').forEach(item => {
+      this.$$(".media-item").forEach((item) => {
         let timer = null;
         const start = () => {
           timer = setTimeout(() => {
@@ -579,46 +788,70 @@ export class MediaBrowser extends Component {
             }
           }, 600);
         };
-        const cancel = () => { if (timer) clearTimeout(timer); timer = null; };
-        item.addEventListener('pointerdown', start);
-        item.addEventListener('pointerup', cancel);
-        item.addEventListener('pointerleave', cancel);
-        item.addEventListener('pointercancel', cancel);
+        const cancel = () => {
+          if (timer) clearTimeout(timer);
+          timer = null;
+        };
+        item.addEventListener("pointerdown", start);
+        item.addEventListener("pointerup", cancel);
+        item.addEventListener("pointerleave", cancel);
+        item.addEventListener("pointercancel", cancel);
       });
 
       // Standalone: delete, copy, lightbox
-      this.$$('.delete-media-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
+      this.$$(".delete-media-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
           const id = parseInt(btn.dataset.id, 10);
           this._showDeleteConfirm(id, btn.dataset.name);
         });
       });
 
-      this.$$('.copy-path-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
+      // Create post from single image
+      this.$$(".create-post-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const path = btn.dataset.path;
+          this._createPostWithImage(path);
+        });
+      });
+
+      this.$$(".copy-path-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
           const path = btn.dataset.path;
           if (navigator.clipboard) {
-            navigator.clipboard.writeText(path).then(() => {
-              store.set('toast', { message: `Copied: ${path}`, type: 'success' });
-            }).catch(() => {
-              store.set('toast', { message: 'Copy failed', type: 'error' });
-            });
+            navigator.clipboard
+              .writeText(path)
+              .then(() => {
+                store.set("toast", {
+                  message: `Copied: ${path}`,
+                  type: "success",
+                });
+              })
+              .catch(() => {
+                store.set("toast", { message: "Copy failed", type: "error" });
+              });
           } else {
-            store.set('toast', { message: 'Clipboard unavailable (requires HTTPS)', type: 'error' });
+            store.set("toast", {
+              message: "Clipboard unavailable (requires HTTPS)",
+              type: "error",
+            });
           }
         });
       });
 
-      this.$$('.rename-media-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
+      this.$$(".rename-media-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
           const id = parseInt(btn.dataset.id, 10);
           const oldName = btn.dataset.name;
           this._showRenamePrompt(id, oldName);
         });
       });
 
-      this.$$('.media-item-name').forEach((el) => {
-        el.addEventListener('click', (e) => {
+      this.$$(".media-item-name").forEach((el) => {
+        el.addEventListener("click", (e) => {
           e.stopPropagation(); // Don't trigger item selection or lightbox
           const selection = window.getSelection();
           const range = document.createRange();
@@ -628,13 +861,19 @@ export class MediaBrowser extends Component {
         });
       });
 
-      const imageItems = Array.from(this.$$('.media-item[data-src]'));
+      const imageItems = Array.from(this.$$(".media-item[data-src]"));
       if (imageItems.length > 0) {
-        const images = imageItems.map((el) => ({ src: el.dataset.src, alt: el.dataset.alt || '' }));
+        const images = imageItems.map((el) => ({
+          src: el.dataset.src,
+          alt: el.dataset.alt || "",
+        }));
         imageItems.forEach((el, index) => {
-          el.querySelector('.media-item-preview')?.addEventListener('click', () => {
-            this._lightbox.open(images, index);
-          });
+          el.querySelector(".media-item-preview")?.addEventListener(
+            "click",
+            () => {
+              this._lightbox.open(images, index);
+            },
+          );
         });
       }
 
@@ -655,6 +894,105 @@ export class MediaBrowser extends Component {
     this.setState({ selectedIds });
   }
 
+  /** Navigate to a new post pre-seeded with one image path in content. */
+  _createPostWithImage(imagePath) {
+    // Store the initial content in sessionStorage so PostEditPage can pick it up.
+    if (imagePath) {
+      sessionStorage.setItem("newPostInitialContent", imagePath);
+    }
+    navigate("/light/posts/new");
+  }
+
+  /** Create a post from all currently selected images (standalone mode). */
+  async _createPostFromSelected() {
+    const items = Array.from(this.state.selectedIds)
+      .map((id) => this._selectedItemsById[id])
+      .filter(Boolean);
+    if (items.length === 0) {
+      store.set("toast", { message: "No images selected.", type: "error" });
+      return;
+    }
+    const content = items.map((m) => m.path).join("\n");
+    sessionStorage.setItem("newPostInitialContent", content);
+    this.setState({ selectMode: false, selectedIds: new Set() });
+    navigate("/light/posts/new");
+  }
+
+  /** Show a confirm and then delete all selected files. */
+  _deleteSelected() {
+    const ids = Array.from(this.state.selectedIds);
+    if (ids.length === 0) return;
+    this._showBulkDeleteConfirm(ids);
+  }
+
+  _showBulkDeleteConfirm(ids) {
+    const mountEl = document.createElement("div");
+    document.body.appendChild(mountEl);
+    import("../shared/ConfirmDialog.js").then(({ ConfirmDialog }) => {
+      const dialog = new ConfirmDialog(mountEl, {
+        title: "Delete files",
+        message: `Delete ${ids.length} file${ids.length !== 1 ? "s" : ""}? This cannot be undone.`,
+        confirmText: "Delete all",
+        variant: "danger",
+        onConfirm: async () => {
+          dialog.unmount();
+          mountEl.remove();
+          await this._bulkDelete(ids);
+        },
+        onCancel: () => {
+          dialog.unmount();
+          mountEl.remove();
+        },
+      });
+      dialog.mount();
+    });
+  }
+
+  async _bulkDelete(ids) {
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await deleteMedia(id);
+        deleted++;
+      } catch {
+        failed++;
+      }
+    }
+    store.set("toast", {
+      message: `Deleted ${deleted}${failed ? `, ${failed} failed` : ""}.`,
+      type: failed ? "warning" : "success",
+    });
+    this.setState({ selectMode: false, selectedIds: new Set() });
+    this._selectedItemsById = {};
+    this._load();
+    this._loadFolders();
+  }
+
+  async _loadReferringPosts(id, imagePath) {
+    const rps = { ...this.state.referringPostsState };
+    rps[id] = { loading: true, posts: null, error: null };
+    this.setState({ referringPostsState: rps });
+    try {
+      const data = await listPosts({
+        q: imagePath,
+        per_page: 50,
+        status: "all",
+      });
+      const rps2 = { ...this.state.referringPostsState };
+      rps2[id] = { loading: false, posts: data.posts || [], error: null };
+      this.setState({ referringPostsState: rps2 });
+    } catch (err) {
+      const rps2 = { ...this.state.referringPostsState };
+      rps2[id] = {
+        loading: false,
+        posts: null,
+        error: err.message || "Search failed.",
+      };
+      this.setState({ referringPostsState: rps2 });
+    }
+  }
+
   /**
    * Returns the currently selected media objects (picker mode only).
    * Persists across page and folder changes.
@@ -668,24 +1006,35 @@ export class MediaBrowser extends Component {
     // Remove any previously registered listeners before re-registering.
     // afterRender fires on every setState re-render, so without this cleanup
     // each render accumulates an extra set of document-level drop handlers.
-    for (const [t, ev, fn] of this._dragListeners) t.removeEventListener(ev, fn);
+    for (const [t, ev, fn] of this._dragListeners)
+      t.removeEventListener(ev, fn);
     this._dragListeners = [];
 
     // In picker mode, scope drag-drop to the component container to avoid
     // conflicting with PostEditPage's document-level drag handler.
     const target = pickerMode ? this.container : document;
 
+    this._internalDrag = false;
+    const onDragStart = () => { this._internalDrag = true; };
+    const onDragEnd = () => { this._internalDrag = false; };
+
     const onEnter = (e) => {
-      if (!e.dataTransfer?.types?.includes('Files')) return;
+      if (this._internalDrag) return;
+      if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount++;
       if (this._dragCount === 1) this.setState({ draggingOver: true });
     };
-    const onLeave = () => {
+    const onLeave = (e) => {
+      if (this._internalDrag) return;
+      if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount = Math.max(0, this._dragCount - 1);
       if (this._dragCount === 0) this.setState({ draggingOver: false });
     };
-    const onOver = (e) => e.preventDefault();
+    const onOver = (e) => {
+      if (!this._internalDrag) e.preventDefault();
+    };
     const onDrop = (e) => {
+      if (this._internalDrag) return;
       e.preventDefault();
       this._dragCount = 0;
       this.setState({ draggingOver: false });
@@ -693,16 +1042,21 @@ export class MediaBrowser extends Component {
       if (files.length) this._uploadFiles(files);
     };
 
-    target.addEventListener('dragenter', onEnter);
-    target.addEventListener('dragleave', onLeave);
-    target.addEventListener('dragover', onOver);
-    target.addEventListener('drop', onDrop);
+    target.addEventListener("dragenter", onEnter);
+    target.addEventListener("dragleave", onLeave);
+    target.addEventListener("dragover", onOver);
+    target.addEventListener("drop", onDrop);
+
+    document.addEventListener("dragstart", onDragStart);
+    document.addEventListener("dragend", onDragEnd);
 
     this._dragListeners = [
-      [target, 'dragenter', onEnter],
-      [target, 'dragleave', onLeave],
-      [target, 'dragover', onOver],
-      [target, 'drop', onDrop],
+      [target, "dragenter", onEnter],
+      [target, "dragleave", onLeave],
+      [target, "dragover", onOver],
+      [target, "drop", onDrop],
+      [document, "dragstart", onDragStart],
+      [document, "dragend", onDragEnd],
     ];
   }
 
@@ -744,13 +1098,25 @@ export class MediaBrowser extends Component {
 
     try {
       const data = await listMedia(params);
+      const media = data.media || [];
       this.setState({
         loading: false,
-        media: data.media || [],
+        media,
         pagination: { page: data.page, pages: data.pages, total: data.total },
       });
+
+      if (!this.props.pickerMode) {
+        media.forEach((m) => {
+          if ((m.file_type || "").toLowerCase() === "image" && m.path) {
+            this._loadReferringPosts(m.id, m.path);
+          }
+        });
+      }
     } catch (err) {
-      this.setState({ loading: false, error: err.message || 'Failed to load media.' });
+      this.setState({
+        loading: false,
+        error: err.message || "Failed to load media.",
+      });
     }
   }
 
@@ -770,9 +1136,9 @@ export class MediaBrowser extends Component {
     }
 
     this.setState({ uploading: false });
-    store.set('toast', {
-      message: `Uploaded ${uploadedItems.length}${failed ? `, ${failed} failed` : ''}.`,
-      type: failed ? 'warning' : 'success',
+    store.set("toast", {
+      message: `Uploaded ${uploadedItems.length}${failed ? `, ${failed} failed` : ""}.`,
+      type: failed ? "warning" : "success",
     });
 
     await this._load();
@@ -790,13 +1156,13 @@ export class MediaBrowser extends Component {
   }
 
   _showDeleteConfirm(id, name) {
-    const mountEl = document.createElement('div');
+    const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
     const dialog = new ConfirmDialog(mountEl, {
-      title: 'Delete file',
+      title: "Delete file",
       message: `Delete "${name}"?`,
-      confirmText: 'Delete',
-      variant: 'danger',
+      confirmText: "Delete",
+      variant: "danger",
       onConfirm: () => {
         dialog.unmount();
         mountEl.remove();
@@ -811,20 +1177,24 @@ export class MediaBrowser extends Component {
   }
 
   _showRenamePrompt(id, oldName) {
-    const mountEl = document.createElement('div');
+    const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
     const dialog = new PromptDialog(mountEl, {
-      title: 'Rename file',
-      message: 'Enter new name:',
+      title: "Rename file",
+      message: "Enter new name:",
       defaultValue: oldName,
-      confirmText: 'Rename',
+      confirmText: "Rename",
       onConfirm: (newName) => {
         dialog.unmount();
         mountEl.remove();
         // Sanitise: keep only letters, digits, hyphens and underscores.
-        const safe = (newName || '').trim().replace(/[^a-zA-Z0-9\-_]/g, '');
+        const safe = (newName || "").trim().replace(/[^a-zA-Z0-9\-_]/g, "");
         if (!safe) {
-          store.set('toast', { message: 'Name must contain letters, digits, hyphens or underscores only.', type: 'error' });
+          store.set("toast", {
+            message:
+              "Name must contain letters, digits, hyphens or underscores only.",
+            type: "error",
+          });
           return;
         }
         if (safe !== oldName) {
@@ -842,22 +1212,28 @@ export class MediaBrowser extends Component {
   async _deleteMedia(id) {
     try {
       await deleteMedia(id);
-      store.set('toast', { message: 'File deleted.', type: 'success' });
+      store.set("toast", { message: "File deleted.", type: "success" });
       this._load();
       this._loadFolders();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Delete failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Delete failed.",
+        type: "error",
+      });
     }
   }
 
   async _renameMedia(id, newFilename) {
     try {
       await renameMedia(id, newFilename);
-      store.set('toast', { message: 'File renamed.', type: 'success' });
+      store.set("toast", { message: "File renamed.", type: "success" });
       this._load();
       this._loadFolders();
     } catch (err) {
-      store.set('toast', { message: err.message || 'Rename failed.', type: 'error' });
+      store.set("toast", {
+        message: err.message || "Rename failed.",
+        type: "error",
+      });
     }
   }
 }

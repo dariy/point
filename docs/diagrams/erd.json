@@ -1,0 +1,36 @@
+{
+  "direction": "LR",
+  "nodes": [
+    {"id": "users", "label": "users", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;", "width": 120, "height": 60, "group": "auth", "groupLabel": "Auth & Users"},
+    {"id": "sessions", "label": "sessions", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 120, "height": 60, "group": "auth"},
+    {"id": "webauthn_credentials", "label": "webauthn_credentials", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 140, "height": 60, "group": "auth"},
+    {"id": "api_keys", "label": "api_keys", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 120, "height": 60, "group": "auth"},
+
+    {"id": "posts", "label": "posts", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;", "width": 120, "height": 60, "group": "content", "groupLabel": "Content"},
+    {"id": "media", "label": "media", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;", "width": 120, "height": 60, "group": "content"},
+    {"id": "media_visibility_log", "label": "media_visibility_log", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 140, "height": 60, "group": "content"},
+
+    {"id": "tags", "label": "tags", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;", "width": 120, "height": 60, "group": "taxonomy", "groupLabel": "Taxonomy"},
+    {"id": "post_tags", "label": "post_tags", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 120, "height": 60, "group": "taxonomy"},
+    {"id": "tag_relationships", "label": "tag_relationships", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 140, "height": 60, "group": "taxonomy"},
+
+    {"id": "blog_settings", "label": "blog_settings", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 120, "height": 60, "group": "config", "groupLabel": "Config"},
+    {"id": "blog_secrets", "label": "blog_secrets", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;", "width": 120, "height": 60, "group": "config"}
+  ],
+  "edges": [
+    {"source": "sessions", "target": "users", "label": "user_id"},
+    {"source": "webauthn_credentials", "target": "users", "label": "user_id"},
+    {"source": "api_keys", "target": "users", "label": "user_id"},
+    {"source": "posts", "target": "users", "label": "author_id"},
+    
+    {"source": "media", "target": "posts", "label": "post_id"},
+    {"source": "media_visibility_log", "target": "media", "label": "media_id"},
+    {"source": "media_visibility_log", "target": "posts", "label": "post_id"},
+
+    {"source": "post_tags", "target": "posts", "label": "post_id"},
+    {"source": "post_tags", "target": "tags", "label": "tag_id"},
+    
+    {"source": "tag_relationships", "target": "tags", "label": "parent_id"},
+    {"source": "tag_relationships", "target": "tags", "label": "child_id"}
+  ]
+}

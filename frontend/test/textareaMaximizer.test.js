@@ -24,6 +24,17 @@ describe('textareaMaximizer', () => {
             el.children = el.children || [];
             el.children.push(child);
             child.parentElement = el;
+            child.parentNode = el;
+          },
+          insertBefore: (newNode) => {
+            el.children = el.children || [];
+            el.children.push(newNode);
+            newNode.parentNode = el;
+          },
+          remove: () => {
+            if (el.parentNode && el.parentNode.children) {
+              el.parentNode.children = el.parentNode.children.filter(c => c !== el);
+            }
           },
           dispatchEvent: (event) => {
             el.dispatched = el.dispatched || [];
@@ -49,7 +60,8 @@ describe('textareaMaximizer', () => {
         classList: {
           add: () => {},
           remove: () => {}
-        }
+        },
+        appendChild: () => {}
       }
     };
 
@@ -125,6 +137,13 @@ describe('textareaMaximizer', () => {
         appendChild: (child) => {
           textarea.parentElement.children.push(child);
           child.parentElement = textarea.parentElement;
+        },
+        // Grandparent node — toggleMaximize reparents the textarea's container
+        // to document.body and leaves a placeholder behind via insertBefore.
+        parentNode: {
+          insertBefore: (newNode) => {
+            newNode.parentNode = textarea.parentElement.parentNode;
+          }
         }
       }
     };

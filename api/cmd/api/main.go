@@ -121,7 +121,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	timelineHandler := api.NewTimelineHandler(svcs.Timeline, svcs.Settings)
 	setupHandler := api.NewSetupHandler(svcs.Auth, svcs.Settings, repo)
 	navMenuHandler := api.NewNavMenuHandler(svcs.Settings)
-	instagramHandler := api.NewInstagramHandler(svcs.Instagram, svcs.Settings, &cfg)
+	instagramImportService := services.NewInstagramImportService(svcs.Instagram, svcs.Media, svcs.Post)
+	instagramHandler := api.NewInstagramHandler(svcs.Instagram, instagramImportService, svcs.Settings, &cfg)
 
 	// WebAuthn handler — nil service if AppURL is not configured (passkeys require HTTPS + known origin)
 	var webauthnSvc *services.WebAuthnService
@@ -179,7 +180,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'sha256-+20twPiohHfGLZsSvahDBaYeh7l+te5yNz5UDCAfqsA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'sha256-h5MCsXkmw9HW4cD8PyxqPx6lksihxngF3WC4UFUG1kM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://*.basemaps.cartocdn.com; frame-ancestors 'none'",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 	}))
 	// Extra security headers not covered by middleware.Secure
@@ -326,6 +327,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	igGroup.GET("/callback", instagramHandler.Callback)
 	igGroup.POST("/disconnect", instagramHandler.Disconnect)
 	igGroup.GET("/status", instagramHandler.Status)
+	igGroup.POST("/import", instagramHandler.StartImport)
+	igGroup.GET("/import/status", instagramHandler.GetImportStatus)
 
 	// ── Themes Routes ──────────────────────────────────────────────────────────
 	themesGroup := e.Group("/api/themes")
@@ -760,6 +763,16 @@ func main() {
 		{
 			"add_webauthn_backup_state_column",
 			`ALTER TABLE webauthn_credentials ADD COLUMN backup_state INTEGER NOT NULL DEFAULT 0`,
+		},
+		{
+			"add_tags_module_setting",
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 VALUES ('tags_module', 'atlas', 'string', CURRENT_TIMESTAMP)`,
+		},
+		{
+			"add_tags_visibility_setting",
+			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 VALUES ('tags_visibility', 'hidden', 'string', CURRENT_TIMESTAMP)`,
 		},
 	}
 	for _, m := range migrations {

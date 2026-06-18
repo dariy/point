@@ -7,8 +7,11 @@
     background: var(--header-bg);
     border-bottom: var(--border-width) solid var(--border-primary);
     backdrop-filter: blur(var(--site-header-group-backdrop-filter));
-    -webkit-backdrop-filter: blur(var(--site-header-group--webkit-backdrop-filter));
-    transition: background-color var(--transition-theme),
+    -webkit-backdrop-filter: blur(
+        var(--site-header-group--webkit-backdrop-filter)
+    );
+    transition:
+        background-color var(--transition-theme),
         border-color var(--transition-theme);
     overflow: visible;
 }
@@ -17,12 +20,12 @@
 .site-header-inner {
     max-width: var(--content-max-width);
     margin: 0 auto;
-    /* Three-part layout: [site-header] [tags-bar] [site-nav] */
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
     height: var(--header-height);
     overflow: visible;
+    position: relative;
 }
 
 /* site-header: logo/title + breadcrumb on the left */
@@ -68,7 +71,6 @@
     margin-left: var(--spacing-md);
 }
 
-
 .header-container {
     max-width: var(--content-max-width);
     margin: 0 auto;
@@ -87,7 +89,7 @@
     gap: var(--spacing-sm);
     flex-shrink: 1;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .header-left-group {
@@ -108,7 +110,7 @@
     flex-shrink: 0;
 }
 
-.header-left-group>* {
+.header-left-group > * {
     height: var(----height);
 }
 
@@ -121,8 +123,6 @@
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1;
-    min-width: 0;
-    overflow: hidden;
 }
 
 .site-breadcrumb .breadcrumb-separator {
@@ -132,13 +132,46 @@
     transition: color var(--transition-theme);
 }
 
+.site-breadcrumb .breadcrumb-separator::after {
+    content: "→";
+    margin: 0 4px;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    transition: transform 100ms ease;
+}
+
+.site-breadcrumb
+    .breadcrumb-link.has-dropdown:hover
+    + .breadcrumb-separator::after,
+.site-breadcrumb
+    .breadcrumb-link.is-flyout-open
+    + .breadcrumb-separator::after {
+    transform: rotate(90deg);
+}
+
+.site-breadcrumb .breadcrumb-current.has-dropdown::after {
+    content: "←";
+    margin-left: 8px;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    transition: transform 100ms ease;
+}
+
+.site-breadcrumb .breadcrumb-current.has-dropdown:hover::after,
+.site-breadcrumb .breadcrumb-current.has-dropdown.is-flyout-open::after {
+    transform: rotate(-90deg);
+}
+
 .site-breadcrumb .breadcrumb-current {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     transition: color var(--transition-theme);
     color: var(--text-primary);
     text-decoration: none;
+    flex-shrink: 0;
 }
 
 .site-breadcrumb a.breadcrumb-current:hover {
@@ -149,6 +182,7 @@
     color: var(--text-secondary);
     text-decoration: none;
     transition: color var(--transition-theme);
+    white-space: nowrap;
 }
 
 .site-breadcrumb .breadcrumb-link:hover {
@@ -175,11 +209,16 @@
     line-height: 1;
 }
 
+.site-title-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .site-title-link:hover,
 .site-title-link:hover * {
     color: var(--color-primary);
 }
-
 
 .app-logo {
     display: inline-block;
@@ -206,8 +245,17 @@
 .site-subtitle {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
+    padding-left: var(--spacing-sm);
     margin: 0;
     transition: color var(--transition-theme);
+}
+
+.site-title-link .site-subtitle {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 .site-nav {
@@ -222,7 +270,9 @@
     align-items: center;
     position: relative;
     height: var(--header-search-form-height);
-    width: var(--header-search-form-width); /* Match button width to reserve space */
+    width: var(
+        --header-search-form-width
+    ); /* Match button width to reserve space */
     z-index: 105; /* place above tags-filters (which has 100) */
 }
 
@@ -233,7 +283,12 @@
     margin: 0;
     border: var(--border-width) solid transparent;
     background: transparent;
-    transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity var(--transition-fast), padding var(--transition-fast), border-color var(--transition-fast), scale var(--transition-fast);
+    transition:
+        width 300ms cubic-bezier(0.4, 0, 0.2, 1),
+        opacity var(--transition-fast),
+        padding var(--transition-fast),
+        border-color var(--transition-fast),
+        scale var(--transition-fast);
     height: var(--input-type--search---height);
     border-radius: var(--input-type--search---border-radius);
     font-size: var(--font-size-sm);
@@ -251,19 +306,28 @@
     padding: 0 var(--input-type--search---padding) 0 var(--spacing-md);
     background: color-mix(in srgb, var(--surface-card) 95%, transparent);
     backdrop-filter: blur(var(--input-type--search---backdrop-filter));
-    -webkit-backdrop-filter: blur(var(--input-type--search----webkit-backdrop-filter));
+    -webkit-backdrop-filter: blur(
+        var(--input-type--search----webkit-backdrop-filter)
+    );
     border-color: var(--border-primary);
 }
 
 .header-search-form.is-active input[type="search"]:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 var(--input-type--search---box-shadow) var(--color-primary-alpha);
+    box-shadow: 0 0 0 var(--input-type--search---box-shadow)
+        var(--color-primary-alpha);
 }
 
 .header-search-form .search-toggle-btn {
     position: relative;
     z-index: 11;
-    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast), scale var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast),
+        scale var(--transition-fast);
 }
 
 .header-search-form.is-active .search-toggle-btn {
@@ -276,7 +340,9 @@
 /* Provide search icon active state hover */
 .header-search-form.is-active .search-toggle-btn:hover {
     color: var(--color-primary);
-    transform: scale(1.05); /* Slight pop, keeping it simple instead of big box shadow */
+    transform: scale(
+        1.05
+    ); /* Slight pop, keeping it simple instead of big box shadow */
 }
 
 @media (max-width: var(--media-query-1)) {
@@ -313,7 +379,11 @@
     opacity: 0;
     visibility: hidden;
     transform: translateY(calc(var(--dropdown-menu-transform) * -1));
-    transition: opacity var(--transition-fast), visibility var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
+    transition:
+        opacity var(--transition-fast),
+        visibility var(--transition-fast),
+        transform var(--transition-fast),
+        scale var(--transition-fast);
     z-index: 50;
 }
 
@@ -328,12 +398,43 @@
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
-    transition: background-color var(--transition-fast), color var(--transition-fast), scale var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast),
+        scale var(--transition-fast);
 }
 
 .dropdown-item:hover {
     background-color: var(--surface-hover);
     color: var(--text-primary);
+}
+
+.nav-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--spacing-md);
+    height: var(--header-action-btn-height);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius-pill);
+    text-decoration: none;
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+    box-shadow: var(--shadow-sm);
+    white-space: nowrap;
+}
+
+.nav-pill:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow-md);
 }
 
 /* Post Header Bar (Immersive Mode) */
@@ -403,7 +504,13 @@
     border-radius: var(--border-radius);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), scale var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        transform var(--transition-fast),
+        scale var(--transition-fast);
     text-decoration: none;
     box-shadow: var(--shadow-sm);
 }
@@ -413,7 +520,7 @@
     .theme-toggle::after,
     .create-post::after,
     .light-link::after {
-        content: '';
+        content: "";
         position: absolute;
         top: 50%;
         left: 50%;
@@ -503,7 +610,22 @@
 .crumb-pair {
     display: contents;
 }
-.crumb-pair.folded {
+
+.crumb-pair.folded > * {
+    display: none;
+}
+
+.crumb-pair.folded.show-ellipsis::before {
+    content: "…";
+    color: var(--text-tertiary);
+}
+
+.crumb-pair.folded.show-ellipsis .breadcrumb-separator {
+    display: inline;
+}
+
+/* Step 1: hide site subtitle */
+.site-header-group.fold-title .site-subtitle {
     display: none;
 }
 
@@ -534,8 +656,16 @@
 }
 
 /* Step 4: breadcrumb-current shows ellipsis and acts as popover trigger */
+.site-header-group.fold-current .site-breadcrumb {
+    min-width: 0;
+}
+
 .site-header-group.fold-current .breadcrumb-current {
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 /* ===========================
@@ -632,6 +762,12 @@
     font-weight: 500;
 }
 
+.burger-sub-link {
+    padding-left: var(--spacing-lg);
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
 /* ===========================
    Crumb Popover
    =========================== */
@@ -659,7 +795,9 @@
     color: var(--text-secondary);
     text-decoration: none;
     white-space: nowrap;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
 }
 
 .crumb-popover .popover-item:hover {
@@ -675,20 +813,6 @@
 
 /* --- Unified Breadcrumb: facet crumbs + count --- */
 
-/* ▾ caret on crumbs that have a dropdown */
-.crumb-caret {
-    font-size: 0.65em;
-    margin-left: 2px;
-    opacity: 0.6;
-    transition: opacity var(--transition-fast);
-    vertical-align: middle;
-}
-
-.breadcrumb-link.has-dropdown:hover .crumb-caret,
-.breadcrumb-current.has-dropdown:hover .crumb-caret {
-    opacity: 1;
-}
-
 /* Facet crumbs (year / query) — plain text, no box */
 .breadcrumb-facet {
     color: var(--text-secondary);
@@ -703,7 +827,7 @@
 
 /* On narrow screens the middle slot wraps to its own full-width row below the
    header (order:99 places it visually after the nav buttons). */
-@media (max-width: 640px) {
+@media (max-width: 720px) {
     .site-header-inner {
         flex-wrap: wrap;
         height: auto;
@@ -764,7 +888,9 @@
     color: var(--text-secondary);
     text-decoration: none;
     border-radius: var(--border-radius);
-    transition: background-color var(--transition-fast), color var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
 }
 .burger-link:hover {
     background-color: var(--surface-hover);
@@ -818,7 +944,9 @@
     text-decoration: none;
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
-    transition: background-color 0.2s, color 0.2s;
+    transition:
+        background-color 0.2s,
+        color 0.2s;
 }
 
 .typeahead-item:hover {

@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"point-api/internal/models"
@@ -11,12 +13,15 @@ import (
 // ListPosts returns all posts, with optional filters.
 func (r *sqliteRepository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
 	const q = `
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    -- Pages (type=page) are kept out of public listings; admin views pass
+    -- includePages=true to manage them alongside posts.
+    AND (CASE WHEN ? THEN 1=1 ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -39,6 +44,7 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
+		arg.IncludePages,
 		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
 		arg.IncludeDrafts, arg.IncludeHidden,
 		arg.Limit, arg.Offset)
@@ -54,7 +60,7 @@ LIMIT ? OFFSET ?`
 		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
-			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
@@ -71,6 +77,7 @@ func (r *sqliteRepository) CountPosts(ctx context.Context, arg models.CountPosts
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN 1=1 ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -92,6 +99,7 @@ WHERE
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
+		arg.IncludePages,
 		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
 		arg.IncludeDrafts, arg.IncludeHidden,
 	).Scan(&count)
@@ -122,6 +130,7 @@ SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_
 FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
     AND p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -181,6 +190,7 @@ _hide(id) AS (
 SELECT COUNT(*) FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
     AND p.deleted_at IS NULL
+    AND p.type != 'page'
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -201,19 +211,22 @@ WHERE p.id IN (SELECT post_id FROM _yposts)
 	return count, err
 }
 
-func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, limit, offset int64) ([]models.Post, error) {
+func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
        p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
+    -- Pages (type=page) are excluded from normal listings (feed, search, tag);
+    -- onlyPages=true flips this to return pages exclusively (admin "Page" filter).
+    AND (CASE WHEN ? THEN p.type = 'page' ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -264,6 +277,7 @@ ORDER BY p.published_at DESC, p.created_at DESC
 LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, q,
+		onlyPages,
 		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
 		tag, tag,
 		search, search, search, search, search,
@@ -280,7 +294,7 @@ LIMIT ? OFFSET ?`
 		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
-			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
 			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
@@ -293,7 +307,7 @@ LIMIT ? OFFSET ?`
 
 // CountPostsWithSearch counts posts matched by the extended search (title, slug,
 // content, tag name, tag slug).
-func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string) (int64, error) {
+func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error) {
 	const q = `
 WITH RECURSIVE ehp(id) AS (
     SELECT id FROM tags WHERE hides_posts = 1
@@ -303,6 +317,7 @@ WITH RECURSIVE ehp(id) AS (
 SELECT COUNT(*) FROM posts p
 WHERE
     p.deleted_at IS NULL
+    AND (CASE WHEN ? THEN p.type = 'page' ELSE p.type != 'page' END)
     AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
     AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
     AND (CASE
@@ -352,6 +367,7 @@ WHERE
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, q,
+		onlyPages,
 		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
 		tag, tag,
 		search, search, search, search, search,
@@ -534,23 +550,28 @@ ORDER BY published_at DESC, created_at DESC`
 	return stubs, rows.Err()
 }
 
-// GraphPostNode is a lightweight post descriptor (id, slug, title) used to
-// render posts as "shadow" nodes in the tags graph on /tags.
+// GraphPostNode is a lightweight post descriptor used to render posts as
+// "shadow" nodes in the tags graph on /tags and the cloud on /atlas. The
+// thumbnail/content fields back a single preview URL (see extractMediaURL) and
+// are not serialized themselves.
 type GraphPostNode struct {
-	ID    int64  `json:"id"`
-	Slug  string `json:"slug"`
-	Title string `json:"title"`
+	ID            int64          `json:"id"`
+	Slug          string         `json:"slug"`
+	Title         string         `json:"title"`
+	ThumbnailPath sql.NullString `json:"-"`
+	Content       string         `json:"-"`
 }
 
-// ListPostNodesForGraph returns id, slug, title for the posts to render as nodes
-// in the tags graph. When publishedOnly is true, only published, non-hidden posts
-// (excluding posts buried under a hides_posts tag, mirroring ListPublishedPostStubs)
-// are returned; otherwise all non-deleted posts are returned. Newest first.
+// ListPostNodesForGraph returns the posts to render as nodes in the tags graph,
+// including thumbnail_path + content so callers can derive a preview image URL.
+// When publishedOnly is true, only published, non-hidden posts (excluding posts
+// buried under a hides_posts tag, mirroring ListPublishedPostStubs) are
+// returned; otherwise all non-deleted posts are returned. Newest first.
 func (r *sqliteRepository) ListPostNodesForGraph(ctx context.Context, publishedOnly bool) ([]GraphPostNode, error) {
 	var q string
 	if publishedOnly {
 		q = `
-SELECT id, slug, title
+SELECT id, slug, title, thumbnail_path, content
 FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
@@ -568,7 +589,7 @@ AND id NOT IN (
 ORDER BY published_at DESC, created_at DESC`
 	} else {
 		q = `
-SELECT id, slug, title
+SELECT id, slug, title, thumbnail_path, content
 FROM posts
 WHERE deleted_at IS NULL
 ORDER BY published_at DESC, created_at DESC`
@@ -583,7 +604,7 @@ ORDER BY published_at DESC, created_at DESC`
 	var nodes []GraphPostNode
 	for rows.Next() {
 		var n GraphPostNode
-		if err := rows.Scan(&n.ID, &n.Slug, &n.Title); err != nil {
+		if err := rows.Scan(&n.ID, &n.Slug, &n.Title, &n.ThumbnailPath, &n.Content); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, n)
@@ -1047,4 +1068,59 @@ GROUP BY d.root_id`
 		result[tagID] = count
 	}
 	return result, rows.Err()
+}
+
+// GetExistingInstagramIDs returns the subset of the supplied IDs that are
+// already present in posts — matched against both instagram_id (import) and
+// instagram_media_id (cross-posted from Point).  Idempotent-import callers
+// should skip any IDs returned here.
+func (r *sqliteRepository) GetExistingInstagramIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	// Build a VALUES list to use with IN.
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	inList := strings.Join(placeholders, ",")
+
+	q := fmt.Sprintf(`
+SELECT COALESCE(instagram_id, instagram_media_id)
+FROM posts
+WHERE deleted_at IS NULL
+  AND (
+    instagram_id      IN (%s)
+    OR instagram_media_id IN (%s)
+  )`, inList, inList)
+
+	// Args need to be doubled: once for instagram_id IN, once for instagram_media_id IN.
+	doubleArgs := append(args, args...)
+	rows, err := r.db.QueryContext(ctx, q, doubleArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var found []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		found = append(found, id)
+	}
+	return found, rows.Err()
+}
+
+// SetPostInstagramID stores the Instagram media ID on a post after import.
+func (r *sqliteRepository) SetPostInstagramID(ctx context.Context, postID int64, instagramID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE posts SET instagram_id = ? WHERE id = ?`,
+		instagramID, postID,
+	)
+	return err
 }

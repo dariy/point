@@ -70,9 +70,6 @@
 
 /* Phone Landscape Tier (point-x52z.10) */
 @media (max-width: 48em) and (orientation: landscape) {
-    .site-header .site-branding {
-        display: none;
-    }
     .site-header-inner {
         height: var(--header-height-compact, 3.5rem);
     }

@@ -254,6 +254,7 @@ type ListPostsParams struct {
         FeaturedOnly  bool
         IncludeDrafts bool
         IncludeHidden bool
+        IncludePages  bool
         Search        string
         Tag           string
         YearFrom      int
@@ -268,12 +269,33 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 	var total int64
 	var err error
 
+	// "page" is a type, not a status. A status filter of "page" means "only
+	// pages"; route it through the search query (which knows how to filter by
+	// type) and drop the bogus status match.
+	onlyPages := strings.EqualFold(p.Status, "page")
+	if onlyPages {
+		p.Status = ""
+		posts, err = s.repo.ListPostsWithSearch(ctx, false, "", p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, "", "", true, int64(p.PerPage), int64(offset))
+		if err != nil {
+			return nil, 0, err
+		}
+		total, err = s.repo.CountPostsWithSearch(ctx, false, "", p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, "", "", true)
+		if err != nil {
+			return nil, 0, err
+		}
+		if posts == nil {
+			posts = []models.Post{}
+		}
+		return posts, total, nil
+	}
+
 	countParams := models.CountPostsParams{
 		StatusFilter:   p.Status != "",
 		Status:         p.Status,
 		FeaturedFilter: p.FeaturedOnly,
 		IncludeDrafts:  p.IncludeDrafts,
 		IncludeHidden:  p.IncludeHidden,
+		IncludePages:   p.IncludePages,
 	}
 
 	if p.YearFrom > 0 && p.YearTo > 0 {
@@ -292,11 +314,11 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 		}
 		total, err = s.repo.CountPostsInYearRange(ctx, p.YearFrom, p.YearTo, countParams)
 	} else if p.Search != "" || p.Tag != "" {
-	        posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, int64(p.PerPage), int64(offset))
+	        posts, err = s.repo.ListPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false, int64(p.PerPage), int64(offset))
 	        if err != nil {
 	                return nil, 0, err
 	        }
-	        total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag)
+	        total, err = s.repo.CountPostsWithSearch(ctx, p.Status != "", p.Status, p.FeaturedOnly, p.IncludeDrafts, p.IncludeHidden, p.Search, p.Tag, false)
 	} else {
 		if p.SortBy == "views" {
 			posts, err = s.repo.ListPostsByViews(ctx, models.ListPostsByViewsParams{
@@ -317,6 +339,7 @@ func (s *PostService) ListPosts(ctx context.Context, p ListPostsParams) ([]model
 				Limit:          int64(p.PerPage),
 				Offset:         int64(offset),
 				IncludeHidden:  p.IncludeHidden,
+				IncludePages:   p.IncludePages,
 			})
 		}
 		if err != nil {
@@ -582,6 +605,16 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 		return models.Post{}, err
 	}
 
+	// "page" is a UI shorthand for a published post of type=page. Map the
+	// requested status onto the real (status, type) pair; any other status
+	// turns a page back into a regular post.
+	newStatus := strings.ToLower(status)
+	newType := "post"
+	if newStatus == "page" {
+		newStatus = "published"
+		newType = "page"
+	}
+
 	params := models.UpdatePostParams{
 		ID:              post.ID,
 		AuthorID:        post.AuthorID,
@@ -592,7 +625,8 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 		ImmersiveMode:   post.ImmersiveMode,
 		Excerpt:         post.Excerpt,
 		Formatter:       post.Formatter,
-		Status:          strings.ToLower(status),
+		Status:          newStatus,
+		Type:            newType,
 		IsFeatured:      post.IsFeatured,
 		ThumbnailPath:   post.ThumbnailPath,
 		MetaDescription: post.MetaDescription,

@@ -179,7 +179,7 @@ export default class MapPage extends Component {
     this._canShowTimeline = canShowTimeline;
     this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
       settings,
-      currentPath: "/map",
+      currentPath: "/tags",
       breadcrumb: this._buildBreadcrumb(),
       total: this.state.tags?.length || 0,
       timelineVisible: true,
@@ -237,7 +237,7 @@ export default class MapPage extends Component {
     const from = vc.years[0];
     const to = vc.years[1];
     const label = from === to ? String(from) : `${from}–${to}`;
-    return [{ name: "map", href: "/map" }, { name: label }];
+    return [{ name: "map", href: "/tags" }, { name: label }];
   }
 
   async _onTimelineRangeChange({ from, to, isFullExtent }) {
@@ -342,9 +342,20 @@ export default class MapPage extends Component {
     if (this._geojson) {
       L.geoJSON(this._geojson, {
         style: (feature) => {
-          const rawName = feature.properties?.name || "";
-          const name = rawName.toLowerCase();
-          const tag = countryTagMap[name];
+          const props = feature.properties || {};
+          const rawName = props.name || "";
+          const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
+            .filter(Boolean)
+            .map(n => n.toLowerCase());
+
+          let tag = null;
+          for (const n of names) {
+            if (countryTagMap[n]) {
+              tag = countryTagMap[n];
+              break;
+            }
+          }
+          
           const highlighted = !!tag;
           const countryColor = getCountryColor(rawName);
 
@@ -357,8 +368,18 @@ export default class MapPage extends Component {
           };
         },
         onEachFeature: (feature, layer) => {
-          const name = (feature.properties?.name || "").toLowerCase();
-          const tag = countryTagMap[name];
+          const props = feature.properties || {};
+          const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
+            .filter(Boolean)
+            .map(n => n.toLowerCase());
+
+          let tag = null;
+          for (const n of names) {
+            if (countryTagMap[n]) {
+              tag = countryTagMap[n];
+              break;
+            }
+          }
           if (!tag) return;
 
           const yearsHtml =
