@@ -49,21 +49,9 @@ export class ViewContext {
       this.tag = query.tag;
     }
 
-    // 3. Extract years from pathname (/map/:year) or query (?timeline=)
-    if (pathname.startsWith('/map/')) {
-      const parts = pathname.split('/');
-      if (parts[2]) {
-        const yearParts = decodeURIComponent(parts[2]).split('-');
-        if (yearParts.length === 2) {
-          const start = parseInt(yearParts[0], 10);
-          const end = parseInt(yearParts[1], 10);
-          if (!isNaN(start) && !isNaN(end)) this.years = [start, end];
-        } else {
-          const year = parseInt(yearParts[0], 10);
-          if (!isNaN(year)) this.years = [year, year];
-        }
-      }
-    } else if (query.timeline) {
+    // 3. Extract years from query (?timeline=). The /tags modules (map/atlas)
+    //    and the home/graph views all carry the year range this way.
+    if (query.timeline) {
       const parts = query.timeline.split('-');
       if (parts.length === 2) {
         const start = parseInt(parts[0], 10);
@@ -118,23 +106,14 @@ export class ViewContext {
     let path = '/';
     const params = new URLSearchParams();
 
-    // Map view
-    if (this.path.startsWith('/map')) {
-      path = '/map';
-      if (this.years) {
-        const yearStr = this.years[0] === this.years[1] ? `${this.years[0]}` : `${this.years[0]}-${this.years[1]}`;
-        path = `/map/${yearStr}`;
-      }
-      return path; // Map doesn't use query params for tags/years usually
-    }
-
-    // Atlas view — keeps its path and carries the year range as ?timeline=.
-    if (this.path.startsWith('/atlas')) {
+    // Tags module view (tag cloud / map / atlas are all served at /tags).
+    // Carries only the timeline year range as a query param.
+    if (this.path === '/tags' || this.path === '/tags/') {
       if (this.years) {
         params.set('timeline', `${this.years[0]}-${this.years[1]}`);
       }
-      const atlasSearch = params.toString();
-      return atlasSearch ? `/atlas?${atlasSearch}` : '/atlas';
+      const tagsSearch = params.toString();
+      return tagsSearch ? `/tags?${tagsSearch}` : '/tags';
     }
 
     // Search view
@@ -158,7 +137,7 @@ export class ViewContext {
     }
 
     // Common filters
-    if (this.years && !this.path.startsWith('/map')) {
+    if (this.years) {
       params.set('timeline', `${this.years[0]}-${this.years[1]}`);
     }
 

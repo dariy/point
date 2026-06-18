@@ -306,6 +306,10 @@ func TestPagesHandler_GetTagsGraph_MediaURL(t *testing.T) {
 		t.Fatalf("text post creation failed: %v", err)
 	}
 
+	// Expose the tag graph publicly so the unauthenticated request is served.
+	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "cloud", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
+
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/api/pages/graph", nil)
 	rec := httptest.NewRecorder()
@@ -345,7 +349,8 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	defer h.close()
 
 	ctx := context.Background()
-	_ = h.settingsSvc.SetSetting(ctx, "map_mode", "all", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "map", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
 
 	// Create user
 	userID := insertUser(h.repo)

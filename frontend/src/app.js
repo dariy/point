@@ -260,6 +260,23 @@ async function bootstrap() {
 // public: true  →  accessible without authentication
 // (absent)      →  requires authentication (authGuard redirect)
 
+// Resolve the lazy module for the /tags route based on the configured tags
+// module and its visibility. Mirrors the backend gate in tagsModuleAccessible:
+// "none" (or admins-only for a logged-out visitor) sends the visitor home.
+function resolveTagsModule() {
+  const settings = store.get("settings") || {};
+  const module = settings.tags_module || "atlas";
+  const visibility = settings.tags_visibility || "hidden";
+  const isAdmin = !!store.get("user");
+
+  if (module === "none" || (visibility !== "all" && !isAdmin)) {
+    return import("./pages/public/RedirectHome.js");
+  }
+  if (module === "map") return import("./pages/public/MapPage.js");
+  if (module === "atlas") return import("./pages/public/AtlasPage.js");
+  return import("./pages/public/TagsPage.js");
+}
+
 const routes = [
   // First-run setup wizard (public — no auth required)
   {
@@ -292,26 +309,12 @@ const routes = [
     load: () => import("./pages/public/TagPage.js"),
     public: true,
   },
+  // The /tags page surfaces a single, admin-selected module: the tag-cloud
+  // graph, the map, or the atlas. Which one (if any) is governed by the
+  // `tags_module` / `tags_visibility` settings — see resolveTagsModule().
   {
     path: "/tags",
-    load: () => import("./pages/public/TagsPage.js"),
-    public: true,
-  },
-  {
-    path: "/map/:year",
-    load: () => import("./pages/public/MapPage.js"),
-    public: true,
-    key: "map",
-  },
-  {
-    path: "/map",
-    load: () => import("./pages/public/MapPage.js"),
-    public: true,
-    key: "map",
-  },
-  {
-    path: "/atlas",
-    load: () => import("./pages/public/AtlasPage.js"),
+    load: () => resolveTagsModule(),
     public: true,
   },
   {

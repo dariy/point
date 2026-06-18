@@ -278,8 +278,8 @@ class Router {
     // Same-route optimisation: reuse the existing page instance when navigating
     // between pages that share the same route pattern (e.g. post → post), or
     // distinct patterns that resolve to the same page via an explicit shared
-    // `key` (e.g. /map and /map/:year). Reuse calls onRouteUpdate so the page
-    // can refresh in place instead of remounting.
+    // `key`. Reuse calls onRouteUpdate so the page can refresh in place instead
+    // of remounting.
     const sameRoute =
       this._currentRoute === matchedRoute ||
       (this._currentRoute &&

@@ -218,7 +218,7 @@ export default class AtlasPage extends Component {
     const settings = store.get("settings") || {};
     this.mountChild(PublicHeader, "#header-mount", {
       settings,
-      currentPath: "/atlas",
+      currentPath: "/tags",
       timelineVisible: true,
     });
     this.mountChild(PublicFooter, "#footer-mount", { settings });
@@ -343,7 +343,7 @@ export default class AtlasPage extends Component {
     try {
       const data = await getTagsGraph();
       document.title = "Atlas";
-      setCanonical(`${window.location.origin}/atlas`);
+      setCanonical(`${window.location.origin}/tags`);
       this._buildIndexes(data);
       this.setState({ loading: false, data, error: null });
     } catch (err) {
