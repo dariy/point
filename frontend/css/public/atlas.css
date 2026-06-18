@@ -66,6 +66,12 @@
     box-shadow: 0 0 0 5px rgba(224, 92, 0, 0.28);
 }
 
+/* A place unconnected to the current selection fades back (mirrors /tags). */
+.leaflet-marker-icon.atlas-marker--dim {
+    opacity: 0.2;
+    transition: opacity 0.18s ease;
+}
+
 /* ── Cloud chips (satellite tags / posts) ──────────────────────────────────── */
 
 /* Leaflet sizes this wrapper to 0×0; the chip centres itself on the latlng. */
@@ -106,6 +112,29 @@
     color: #fff;
     background: var(--c);
     z-index: 1000;
+}
+
+/* Two-click selection (mirrors /tags): the first click on a chip highlights its
+   connections and dims the rest; a second click opens it. */
+.atlas-node--dim {
+    opacity: 0.16;
+}
+
+/* The selected chip stays filled (like hover) with a lift, even off-hover. */
+.atlas-node--sel {
+    color: #fff;
+    background: var(--c);
+    box-shadow:
+        0 0 0 3px rgba(0, 0, 0, 0.08),
+        0 2px 9px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+}
+
+/* A "second-wave" tag reached through a shared post: dashed ring, like the
+   /tags graph, to distinguish it from the directly-selected chip. */
+.atlas-node--related {
+    border-style: dashed;
+    box-shadow: 0 0 0 2px var(--c);
 }
 
 .atlas-node--tag {
@@ -175,10 +204,40 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
 }
 
-.atlas-legend__row {
+.atlas-legend__row,
+.atlas-toggle {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+/* Tag / Year / Post are interactive filters; Place is a static key entry. */
+.atlas-toggle {
+    width: 100%;
+    padding: 2px 4px;
+    margin: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        opacity 0.12s ease,
+        background 0.12s ease;
+}
+
+.atlas-toggle:hover {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
+}
+
+.atlas-toggle.is-off {
+    opacity: 0.4;
+}
+
+.atlas-toggle.is-off .atlas-legend__dot {
+    background: transparent;
 }
 
 .atlas-legend__dot {
@@ -186,6 +245,7 @@
     height: 10px;
     border-radius: 50%;
     border: 1.5px solid currentColor;
+    background: currentColor;
 }
 
 .atlas-legend__dot--geo {

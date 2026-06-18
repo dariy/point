@@ -122,9 +122,12 @@ export default class AtlasPage extends Component {
     this._themeListener = null;
     this._geojson = null; // cached countries.geojson
     this._activeTag = null;
+    this._activeAnchor = null; // latlng the current cloud is built around
     this._activeSetActive = null; // toggles the current selection's highlight
     this._activeKey = null;
-    this._cloud = null; // { anchorLatLng, sats: [{dx,dy,marker,line}] }
+    this._cloud = null; // { anchorLatLng, nodePos, sats, edges }
+    this._baseDimmables = []; // base-map places: { tagId, setDim } for focus dimming
+    this._hiddenTypes = new Set(); // node types filtered out via the legend
     this._reposition = () => this._repositionCloud();
 
     // Indexes derived from the graph payload (built once on load).
@@ -132,7 +135,9 @@ export default class AtlasPage extends Component {
     this._postsById = new Map();
     this._postsByTag = new Map(); // tagId -> Set(postId)
     this._tagsByPost = new Map(); // postId -> Set(tagId)
+    this._childrenByTag = new Map(); // tagId -> [childTagId] (hierarchy)
     this._membershipEdges = [];
+    this._hierarchyEdges = [];
   }
 
   render() {
@@ -169,11 +174,11 @@ export default class AtlasPage extends Component {
           <div class="atlas-map">
             <div id="atlas-map-el"></div>
             <div class="atlas-hint" id="atlas-hint">Click a place to reveal its tags &amp; posts</div>
-            <div class="atlas-legend" aria-hidden="true">
-              <span class="atlas-legend__row"><span class="atlas-legend__dot atlas-legend__dot--geo"></span>Place</span>
-              <span class="atlas-legend__row"><span class="atlas-legend__dot atlas-legend__dot--tag"></span>Tag</span>
-              <span class="atlas-legend__row"><span class="atlas-legend__dot atlas-legend__dot--year"></span>Year</span>
-              <span class="atlas-legend__row"><span class="atlas-legend__dot atlas-legend__dot--post"></span>Post</span>
+            <div class="atlas-legend" role="group" aria-label="Filter node types">
+              <span class="atlas-legend__row atlas-legend__row--static"><span class="atlas-legend__dot atlas-legend__dot--geo"></span>Place</span>
+              <button type="button" class="atlas-toggle" data-type="tag" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--tag"></span>Tag</button>
+              <button type="button" class="atlas-toggle" data-type="year" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--year"></span>Year</button>
+              <button type="button" class="atlas-toggle" data-type="post" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--post"></span>Post</button>
             </div>
           </div>
         </main>
@@ -197,7 +202,23 @@ export default class AtlasPage extends Component {
     }
     if (this.state.error || !this.state.data) return;
 
+    this._wireToggles();
     this._initMap();
+  }
+
+  /** Legend toggles hide/show a node type (tag/year/post) like the /tags page. */
+  _wireToggles() {
+    this.container.querySelectorAll(".atlas-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const type = btn.dataset.type;
+        const turnOff = btn.getAttribute("aria-pressed") === "true";
+        btn.setAttribute("aria-pressed", String(!turnOff));
+        btn.classList.toggle("is-off", turnOff);
+        if (turnOff) this._hiddenTypes.add(type);
+        else this._hiddenTypes.delete(type);
+        this._refreshCloud();
+      });
+    });
   }
 
   async _load() {
@@ -228,6 +249,13 @@ export default class AtlasPage extends Component {
       if (!this._tagsByPost.has(e.post)) this._tagsByPost.set(e.post, new Set());
       this._tagsByPost.get(e.post).add(e.tag);
     });
+
+    this._hierarchyEdges = data.hierarchyEdges || [];
+    this._hierarchyEdges.forEach((e) => {
+      if (!this._childrenByTag.has(e.parent))
+        this._childrenByTag.set(e.parent, []);
+      this._childrenByTag.get(e.parent).push(e.child);
+    });
   }
 
   // ── Map ────────────────────────────────────────────────────────────────────
@@ -245,6 +273,11 @@ export default class AtlasPage extends Component {
     }
     if (this._unmounted) return;
 
+    // zoomAnimation is disabled deliberately: with it on, Leaflet 1.9.4 animates
+    // the country GeoJSON (SVG overlay) with a transform that doesn't track the
+    // tile pane for this map's geometry, so the shapes visibly drift mid-zoom and
+    // only snap back on zoomend. Snapping the zoom keeps the overlay locked to the
+    // map. (The canvas renderer shares the same drift, so it's not an alternative.)
     this._map = L.map(mapEl, {
       minZoom: 2,
       maxBounds: [
@@ -252,6 +285,7 @@ export default class AtlasPage extends Component {
         [90, 180],
       ],
       maxBoundsViscosity: 1.0,
+      zoomAnimation: false,
     }).setView([20, 0], 2);
 
     this._tileLayer = L.tileLayer(isDarkTheme() ? TILE_DARK : TILE_LIGHT, {
@@ -351,6 +385,12 @@ export default class AtlasPage extends Component {
                 : baseStyle(feature),
             );
 
+          const setDim = (on) =>
+            layer.setStyle(
+              on ? { opacity: 0.12, fillOpacity: 0.03 } : baseStyle(feature),
+            );
+          this._baseDimmables.push({ tagId: tag.id, setDim });
+
           layer.on("click", (e) => {
             L.DomEvent.stop(e);
             this._select(
@@ -382,6 +422,10 @@ export default class AtlasPage extends Component {
       const setActive = (on) =>
         marker._icon?.classList.toggle("atlas-marker--active", on);
 
+      const setDim = (on) =>
+        marker._icon?.classList.toggle("atlas-marker--dim", on);
+      this._baseDimmables.push({ tagId: tag.id, setDim });
+
       marker.on("click", (e) => {
         L.DomEvent.stop(e); // don't let the map's click handler clear it
         this._select(tag, marker.getLatLng(), setActive, "m" + tag.id);
@@ -399,20 +443,37 @@ export default class AtlasPage extends Component {
   /**
    * Activate a place: highlight it, spawn its cloud. `setActive(bool)` toggles
    * the source's own highlight (marker class or polygon style); `key` is a
-   * stable id so clicking the active place again dismisses it.
+   * stable id identifying the place.
+   *
+   * Clicking a place follows the same two-click model as the cloud chips (and
+   * the /tags graph): the first click reveals the place's connections (its
+   * cloud, everything lit). If a chip is currently focused, the next click on
+   * the place collapses back to that overview; once the place itself is the
+   * selection, a further click opens its tag page. Empty-map clicks dismiss.
    */
   _select(tag, anchorLatLng, setActive, key) {
     if (this._activeKey === key) {
-      this._clearSelection();
+      if (this._cloud && this._cloud.focusKey !== null) {
+        this._cloud.focusKey = null;
+        this._applyCloudFocus();
+      } else {
+        navigate(`/tags/${tag.slug}`);
+      }
       return;
     }
     this._clearCloud();
     this._activeSetActive?.(false);
 
+    // Dim every place not connected to this selection, so the selected place and
+    // the places it shares posts with stand out (mirrors the /tags graph). Done
+    // before setActive so the active place keeps its own highlight on top.
+    this._applyBaseDim(this._buildSubgraph(tag).tagIds);
+
     setActive(true);
     this._activeSetActive = setActive;
     this._activeKey = key;
     this._activeTag = tag;
+    this._activeAnchor = anchorLatLng;
 
     this.$("#atlas-hint")?.classList.add("is-hidden");
 
@@ -424,61 +485,157 @@ export default class AtlasPage extends Component {
     }
   }
 
-  /** Slice the full graph down to one place: its posts and their co-tags. */
-  _buildSubgraph(geoTag) {
-    const postIds = this._postsByTag.get(geoTag.id) || new Set();
-    const tagIds = new Set();
-    postIds.forEach((pid) => {
-      (this._tagsByPost.get(pid) || []).forEach((tid) => {
-        if (tid !== geoTag.id) tagIds.add(tid);
-      });
-    });
-
-    const tags = [...tagIds].map((id) => this._tagsById.get(id)).filter(Boolean);
-    const posts = [...postIds]
-      .map((id) => this._postsById.get(id))
-      .filter(Boolean);
-    return { tags, posts };
+  /**
+   * Dim every base-map place whose tag isn't in `connectedTagIds`; pass null to
+   * restore them all. The selected place and the places it shares posts with stay
+   * at full strength, focusing the map on the active selection like /tags does.
+   */
+  _applyBaseDim(connectedTagIds) {
+    for (const d of this._baseDimmables) {
+      d.setDim(connectedTagIds ? !connectedTagIds.has(d.tagId) : false);
+    }
   }
 
+  /** Rebuild the active cloud in place (e.g. after a legend filter change). */
+  _refreshCloud() {
+    if (!this._activeTag || !this._activeAnchor) return;
+    this._clearCloud();
+    this._spawnCloud(this._activeTag, this._activeAnchor);
+  }
+
+  /**
+   * Slice the full graph down to one place and its whole sub-tree. Starting
+   * from the clicked tag we walk the hierarchy down (a country → its cities →
+   * any sub-places), gather every post tagged by any of them, then the co-tags
+   * those posts also carry. Returns the place-tag id set, post id set and the
+   * full included-tag id set so connections can be drawn between them.
+   */
+  _buildSubgraph(rootTag) {
+    const placeTagIds = new Set([rootTag.id]);
+    const queue = [rootTag.id];
+    while (queue.length) {
+      const cur = queue.shift();
+      (this._childrenByTag.get(cur) || []).forEach((c) => {
+        if (!placeTagIds.has(c)) {
+          placeTagIds.add(c);
+          queue.push(c);
+        }
+      });
+    }
+
+    const postIds = new Set();
+    placeTagIds.forEach((tid) => {
+      (this._postsByTag.get(tid) || []).forEach((p) => postIds.add(p));
+    });
+
+    const tagIds = new Set(placeTagIds);
+    postIds.forEach((pid) => {
+      (this._tagsByPost.get(pid) || []).forEach((t) => tagIds.add(t));
+    });
+
+    return { placeTagIds, postIds, tagIds };
+  }
+
+  /** Node-type bucket used for colouring + the legend filters. */
   _kindOf(tag) {
     if (tag.kind === "year") return "year";
     if (typeof tag.latitude === "number" && typeof tag.longitude === "number")
       return "geo";
-    if (tag.kind === "topic") return "topic";
-    return "tag";
+    return "tag"; // plain tags + topics (matches the /tags graph)
   }
 
+  /**
+   * Build the on-map cloud: chips for the place's sub-tags, co-tags and posts,
+   * wired together with their real hierarchy + membership edges. The clicked
+   * tag sits at the centre (the marker / polygon itself); everything else fans
+   * out on rings around it. Legend-hidden node types are dropped.
+   */
   _spawnCloud(tag, anchorLatLng) {
     const L = window.L;
-    const sub = this._buildSubgraph(tag);
+    const { postIds, tagIds } = this._buildSubgraph(tag);
+    const hidden = this._hiddenTypes;
+    const centerKey = "t" + tag.id;
 
-    // Co-tags first (inner rings), then posts (outer) — tags read closest to
-    // the place, posts further out.
-    const items = [
-      ...sub.tags.map((t) => ({
-        kind: this._kindOf(t),
+    // Satellite tag chips (everything except the centre). Place chips have no
+    // toggle — they're the structural backbone, always shown.
+    const tagSats = [];
+    tagIds.forEach((id) => {
+      if (id === tag.id) return;
+      const t = this._tagsById.get(id);
+      if (!t) return;
+      const kind = this._kindOf(t);
+      if (hidden.has(kind)) return;
+      tagSats.push({
+        key: "t" + id,
+        kind,
         label: t.name,
         href: `/tags/${t.slug}`,
         max: 26,
-      })),
-      ...sub.posts.map((p) => ({
-        kind: "post",
-        label: p.title || p.slug,
-        href: `/posts/${p.slug}`,
-        max: 24,
-      })),
-    ];
+      });
+    });
 
-    if (!items.length) return;
+    const postSats = [];
+    if (!hidden.has("post")) {
+      postIds.forEach((id) => {
+        const p = this._postsById.get(id);
+        if (!p) return;
+        postSats.push({
+          key: "p" + id,
+          kind: "post",
+          label: p.title || p.slug,
+          href: `/posts/${p.slug}`,
+          max: 24,
+        });
+      });
+    }
 
-    const placed = ringLayout(items.length);
+    // Order: places (inner, next to the centre) → other tags → posts (outer).
+    const places = tagSats.filter((n) => n.kind === "geo");
+    const otherTags = tagSats.filter((n) => n.kind !== "geo");
+    const ordered = [...places, ...otherTags, ...postSats];
+
+    const nodePos = new Map([[centerKey, { dx: 0, dy: 0 }]]);
+    const placed = ringLayout(ordered.length || 1);
+    ordered.forEach((n, i) => nodePos.set(n.key, placed[i]));
+
     const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
+    const llOf = (pos) =>
+      this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy]));
 
-    const sats = placed.map((pos, i) => {
-      const node = items[i];
-      const ll = this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy]));
+    // Edges first so they render beneath the chips. We also record adjacency so
+    // a chip click can light up its connections (see _expandCloudFocus).
+    const edges = [];
+    const cloudNeighbors = new Map();
+    const link = (a, b) => {
+      if (!cloudNeighbors.has(a)) cloudNeighbors.set(a, new Set());
+      cloudNeighbors.get(a).add(b);
+    };
+    const addEdge = (a, b, kind) => {
+      if (!nodePos.has(a) || !nodePos.has(b)) return;
+      link(a, b);
+      link(b, a);
+      const baseOpacity = kind === "hier" ? 0.65 : 0.45;
+      const style =
+        kind === "hier"
+          ? { color: "#1f9e8e", weight: 1.8, opacity: baseOpacity }
+          : { color: "#8a93a6", weight: 1.1, opacity: baseOpacity, dashArray: "3 4" };
+      const line = L.polyline([llOf(nodePos.get(a)), llOf(nodePos.get(b))], {
+        ...style,
+        className: "atlas-link",
+        interactive: false,
+      });
+      this._cloudLines.addLayer(line);
+      edges.push({ a, b, line, baseOpacity });
+    };
+    this._hierarchyEdges.forEach((e) =>
+      addEdge("t" + e.parent, "t" + e.child, "hier"),
+    );
+    this._membershipEdges.forEach((e) =>
+      addEdge("p" + e.post, "t" + e.tag, "memb"),
+    );
 
+    const sats = ordered.map((node, i) => {
+      const ll = llOf(nodePos.get(node.key));
       const icon = L.divIcon({
         className: "atlas-node-wrap",
         html: `<span class="atlas-node atlas-node--${node.kind}" style="animation-delay:${i * 16}ms" title="${escapeHtml(node.label)}">${escapeHtml(truncate(node.label, node.max))}</span>`,
@@ -487,33 +644,103 @@ export default class AtlasPage extends Component {
       const marker = L.marker(ll, { icon, keyboard: false, riseOnHover: true });
       marker.on("click", (e) => {
         L.DomEvent.stop(e);
-        navigate(node.href);
+        this._focusCloudNode(node.key, node.href);
       });
       this._cloudMarkers.addLayer(marker);
-
-      const line = L.polyline([anchorLatLng, ll], {
-        color: "#8a93a6",
-        weight: 1.4,
-        opacity: 0.55,
-        className: "atlas-link",
-        interactive: false,
-      });
-      this._cloudLines.addLayer(line);
-
-      return { dx: pos.dx, dy: pos.dy, marker, line };
+      return { key: node.key, marker };
     });
 
-    this._cloud = { anchorLatLng, sats };
+    this._cloud = {
+      anchorLatLng,
+      nodePos,
+      sats,
+      edges,
+      cloudNeighbors,
+      focusKey: null,
+    };
+  }
+
+  /**
+   * Chip click — two-click model matching the /tags graph: the first click on a
+   * chip highlights its connections (dimming the rest), a second click on the
+   * same chip opens it. Clicking a different chip moves the highlight.
+   */
+  _focusCloudNode(key, href) {
+    if (!this._cloud) return;
+    if (this._cloud.focusKey === key) {
+      navigate(href);
+      return;
+    }
+    this._cloud.focusKey = key;
+    this._applyCloudFocus();
+  }
+
+  /**
+   * The highlighted set for a focused chip. A post lights its direct tags; a tag
+   * lights its neighbours and then a second hop through each adjacent post to the
+   * other tags sharing it (those get a distinct dashed ring) — the same "two
+   * joints through a shared post" reveal the /tags graph uses.
+   */
+  _expandCloudFocus(seedKey) {
+    const nb = this._cloud.cloudNeighbors;
+    const focus = new Set([seedKey]);
+    const related = new Set();
+    const seedIsTag = seedKey[0] === "t";
+    const neighbors = nb.get(seedKey);
+    if (neighbors) {
+      for (const n of neighbors) {
+        focus.add(n);
+        if (!seedIsTag || n[0] !== "p") continue;
+        const postNbrs = nb.get(n);
+        if (!postNbrs) continue;
+        for (const t of postNbrs) {
+          if (t === seedKey) continue;
+          focus.add(t);
+          related.add(t);
+        }
+      }
+    }
+    return { focus, related };
+  }
+
+  /** Apply the current cloud focus (or clear it) to chip + connector styling. */
+  _applyCloudFocus() {
+    if (!this._cloud) return;
+    const { sats, edges, focusKey } = this._cloud;
+    const data = focusKey ? this._expandCloudFocus(focusKey) : null;
+    const focus = data && data.focus;
+    const related = data && data.related;
+
+    for (const s of sats) {
+      const el = s.marker._icon?.firstElementChild;
+      if (!el) continue;
+      const inFocus = !focus || focus.has(s.key);
+      el.classList.toggle("atlas-node--dim", !inFocus);
+      el.classList.toggle("atlas-node--sel", focusKey === s.key);
+      el.classList.toggle(
+        "atlas-node--related",
+        !!(related && related.has(s.key) && focusKey !== s.key),
+      );
+    }
+    for (const e of edges) {
+      const lit = !focus || (focus.has(e.a) && focus.has(e.b));
+      e.line.setStyle({ opacity: lit ? e.baseOpacity : e.baseOpacity * 0.12 });
+    }
   }
 
   _repositionCloud() {
     if (!this._cloud || !this._map) return;
-    const anchorPt = this._map.latLngToContainerPoint(this._cloud.anchorLatLng);
-    this._cloud.sats.forEach((s) => {
-      const ll = this._map.containerPointToLatLng(anchorPt.add([s.dx, s.dy]));
-      s.marker.setLatLng(ll);
-      s.line.setLatLngs([this._cloud.anchorLatLng, ll]);
-    });
+    const { anchorLatLng, nodePos, sats, edges } = this._cloud;
+    const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
+    // Pass the offset as an [x, y] array — Leaflet's Point.add() doesn't
+    // understand a {dx, dy} object and would yield NaN coordinates, flinging
+    // the whole cloud across the map on the first zoom.
+    const llOf = (key) => {
+      const pos = nodePos.get(key);
+      return this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy]));
+    };
+    sats.forEach((s) => s.marker.setLatLng(llOf(s.key)));
+    edges.forEach((e) => e.line.setLatLngs([llOf(e.a), llOf(e.b)]));
   }
 
   _clearCloud() {
@@ -524,10 +751,12 @@ export default class AtlasPage extends Component {
 
   _clearSelection() {
     this._clearCloud();
+    this._applyBaseDim(null);
     this._activeSetActive?.(false);
     this._activeSetActive = null;
     this._activeKey = null;
     this._activeTag = null;
+    this._activeAnchor = null;
     this.$("#atlas-hint")?.classList.remove("is-hidden");
   }
 
