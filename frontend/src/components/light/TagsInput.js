@@ -136,6 +136,14 @@ export class TagsInput extends Component {
           const val = input.value.trim().replace(/,$/, '');
           if (val) this._addTag(val);
         }
+      } else if (e.key === 'Tab') {
+        if (isBoxVisible && items.length > 0) {
+          e.preventDefault();
+          const indexToSelect = this.state.selectedIndex >= 0 ? this.state.selectedIndex : 0;
+          if (items[indexToSelect]) {
+            items[indexToSelect].dispatchEvent(new MouseEvent('mousedown'));
+          }
+        }
       } else if (e.key === 'Backspace' && !input.value && this.state.tags.length) {
         const tags = this.state.tags.slice(0, -1);
         this.setState({ tags });
@@ -264,7 +272,7 @@ export class TagsInput extends Component {
           <div class="parent-suggestions tags-suggestions"></div>
         </div>
       </div>
-      <div class="actions" style="display:flex; justify-content: flex-end; gap: var(--spacing-sm); margin-top: var(--spacing-sm);">
+      <div class="popover-actions" style="display:flex; justify-content: flex-end; gap: var(--spacing-sm); margin-top: var(--spacing-sm);">
         <button type="button" class="btn btn-secondary btn-cancel">Cancel</button>
         <button type="button" class="btn btn-primary btn-create">Create</button>
       </div>
