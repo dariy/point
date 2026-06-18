@@ -479,8 +479,19 @@ export default class AtlasPage extends Component {
 
     if (this._geojson) {
       const baseStyle = (feature) => {
-        const rawName = feature.properties?.name || "";
-        const tag = geoTagByName[rawName.toLowerCase()];
+        const props = feature.properties || {};
+        const rawName = props.name || "";
+        const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
+          .filter(Boolean)
+          .map(n => n.toLowerCase());
+
+        let tag = null;
+        for (const n of names) {
+          if (geoTagByName[n]) {
+            tag = geoTagByName[n];
+            break;
+          }
+        }
         const fill = getCountryColor(rawName);
         return tag
           ? {
@@ -502,8 +513,18 @@ export default class AtlasPage extends Component {
       L.geoJSON(this._geojson, {
         style: baseStyle,
         onEachFeature: (feature, layer) => {
-          const rawName = feature.properties?.name || "";
-          const tag = geoTagByName[rawName.toLowerCase()];
+          const props = feature.properties || {};
+          const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
+            .filter(Boolean)
+            .map(n => n.toLowerCase());
+
+          let tag = null;
+          for (const n of names) {
+            if (geoTagByName[n]) {
+              tag = geoTagByName[n];
+              break;
+            }
+          }
           if (!tag) return;
           shapeTagIds.add(tag.id);
           bounds.push([tag.latitude, tag.longitude]);

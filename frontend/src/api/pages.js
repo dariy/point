@@ -73,8 +73,8 @@ export function getTagsPage() {
  *   membershipEdges: Array<{post:number,tag:number}>
  * }>}
  */
-export function getTagsGraph() {
-  return api.get('/api/pages/graph');
+export function getTagsGraph(params = {}) {
+  return api.get('/api/pages/graph', params);
 }
 
 /**

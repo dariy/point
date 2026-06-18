@@ -124,6 +124,14 @@
     display: block;
 }
 
+.tags-suggestions.drop-up {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: var(--spacing-xs);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+}
+
 .suggestion-item {
     padding: var(--spacing-sm) var(--spacing-md);
     cursor: pointer;
@@ -132,7 +140,8 @@
     transition: background-color var(--transition-fast);
 }
 
-.suggestion-item:hover {
+.suggestion-item:hover,
+.suggestion-item.selected {
     background-color: var(--surface-hover);
     color: var(--color-primary);
 }
@@ -141,6 +150,27 @@
     text-decoration: none;
     color: inherit;
     display: inline-block;
+}
+
+.tag-create-popover {
+    padding: var(--spacing-sm);
+    cursor: default;
+}
+
+.tag-create-popover .field {
+    margin-bottom: var(--spacing-sm);
+}
+
+.tag-create-popover .parent-field-wrapper {
+    position: relative;
+}
+
+.tag-create-popover .parent-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 10;
 }
 
 .tag-count-link:hover .tag-count {
