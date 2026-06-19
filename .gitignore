@@ -34,3 +34,4 @@ frontend/css/common/theme.css
 /frontend/index.html
 # br doctor per-run artifacts
 .doctor/
+*.bak
