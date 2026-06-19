@@ -336,8 +336,10 @@ func TestPagesHandler_GetTagsGraph_MediaURL(t *testing.T) {
 	for _, p := range resp.Posts {
 		byID[p.ID] = p.MediaURL
 	}
-	if got := byID[imgPost.ID]; got != "/photo.jpg" {
-		t.Errorf("image post media_url = %q, want /photo.jpg", got)
+	// The graph rewrites image previews to the small square thumbnail variant so
+	// the atlas cloud loads 128px chips instead of full-sized originals.
+	if got := byID[imgPost.ID]; got != "/photo.jpg?thumb=128" {
+		t.Errorf("image post media_url = %q, want /photo.jpg?thumb=128", got)
 	}
 	if got, ok := byID[textPost.ID]; got != "" {
 		t.Errorf("text post should have no media_url, got %q (present=%v)", got, ok)

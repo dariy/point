@@ -384,7 +384,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
 	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo, svcs.Media), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
@@ -892,11 +892,13 @@ var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 //   - Files not found in the media table return 404.
 //
 // Variant selection:
-//   - ?thumb serves the thumbnail (media/thumbnails/…) when one exists.
+//   - ?thumb=<size> serves an on-demand square thumbnail (e.g. the atlas
+//     cloud's 128px chips), generated and cached lazily from the original.
+//   - ?thumb (no value) serves the stored thumbnail (media/thumbnails/…) when one exists.
 //   - No query param serves the original (media/originals/…).
 //
 // Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository) echo.HandlerFunc {
+func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository, mediaSvc *services.MediaService) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -960,22 +962,36 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 		c.Response().Header().Set("Cache-Control", "no-cache")
 
 		// Determine which file to serve.
-		_, wantThumb := c.Request().URL.Query()["thumb"]
+		thumbVals, wantThumb := c.Request().URL.Query()["thumb"]
 		if wantThumb {
-			if !media.ThumbnailPath.Valid {
-				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail available")
-			}
-			thumbFile := filepath.Clean(filepath.Join(storagePath, "media", media.ThumbnailPath.String))
+			// `?thumb=<size>` requests an on-demand square thumbnail; a bare
+			// `?thumb` serves the stored thumbnail variant. An unsupported size is
+			// rejected, but a generation failure (e.g. an undecodable image) falls
+			// through to the original below so the image still renders.
+			if sizeStr := thumbVals[0]; sizeStr != "" {
+				n, convErr := strconv.Atoi(sizeStr)
+				if convErr != nil || !services.AllowedSquareThumbSize(n) {
+					return echo.NewHTTPError(http.StatusBadRequest, "invalid thumbnail size")
+				}
+				if thumbFile, genErr := mediaSvc.SquareThumbnail(ctx, media, n); genErr == nil {
+					return c.File(thumbFile)
+				}
+			} else {
+				if !media.ThumbnailPath.Valid {
+					return echo.NewHTTPError(http.StatusNotFound, "no thumbnail available")
+				}
+				thumbFile := filepath.Clean(filepath.Join(storagePath, "media", media.ThumbnailPath.String))
 
-			// Security: ensure the resolved file is within the media storage directory.
-			if !strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
-				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
-			}
+				// Security: ensure the resolved file is within the media storage directory.
+				if !strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
+					return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
+				}
 
-			if _, err := os.Stat(thumbFile); err != nil {
-				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
+				if _, err := os.Stat(thumbFile); err != nil {
+					return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
+				}
+				return c.File(thumbFile)
 			}
-			return c.File(thumbFile)
 		}
 
 		// Serve original — try exact path first, then checksum-glob fallback.

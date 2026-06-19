@@ -1,10 +1,24 @@
 /* ===========================
    Immersive Layout (Full Screen Post)
    =========================== */
+/* Lock the document so the immersive overlay can never scroll. The base
+   .site-wrapper carries min-height:100vh; on mobile 100vh (large viewport)
+   exceeds 100dvh (visible viewport), forcing the wrapper taller than the
+   screen and letting the whole page scroll. Cap it to the visible viewport
+   and pin html/body to kill any residual scroll. */
+html:has(.immersive-layout),
+.immersive-layout {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
 .immersive-layout .site-wrapper {
     display: block;
     height: 100vh;
     height: 100dvh;
+    min-height: 0;
     overflow: hidden;
 }
 

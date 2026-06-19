@@ -703,9 +703,11 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 			"title": p.Title,
 		}
 		// A single preview URL (thumbnail, else first image/video in content) so
-		// image posts can render a thumbnail chip in the atlas cloud.
+		// image posts can render a thumbnail chip in the atlas cloud. Rewrite it
+		// to the small square thumbnail variant — the cloud shows tiny chips, so
+		// serving full-sized originals here is the source of the page's load.
 		if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
-			node["media_url"] = *mediaURL
+			node["media_url"] = atlasThumbURL(*mediaURL)
 		}
 		posts = append(posts, node)
 	}
@@ -716,6 +718,21 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 		"hierarchyEdges":  hierarchyEdges,
 		"membershipEdges": membershipEdges,
 	})
+}
+
+// atlasThumbURL rewrites a preview media URL to request the small square
+// thumbnail the atlas cloud chips display. Local media paths get a `?thumb=N`
+// query (replacing any existing thumb marker, e.g. a post whose thumbnail_path
+// already carries `?thumb`); external URLs are returned unchanged since the
+// server can't resize media it doesn't host.
+func atlasThumbURL(u string) string {
+	if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+		return u
+	}
+	if i := strings.IndexByte(u, '?'); i >= 0 {
+		u = u[:i]
+	}
+	return fmt.Sprintf("%s?thumb=%d", u, services.AtlasThumbSize)
 }
 
 // GetMapPage returns all tags that have coordinates, categorised by type
