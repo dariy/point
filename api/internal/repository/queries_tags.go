@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"point-api/internal/models"
 )
@@ -272,40 +273,51 @@ func (r *sqliteRepository) GetTagsByPostIDs(ctx context.Context, postIDs []int64
 		return result, nil
 	}
 
-	args := make([]interface{}, len(postIDs))
-	placeholders := ""
-	for i, id := range postIDs {
-		args[i] = id
-		if i > 0 {
-			placeholders += ","
+	// Chunk the IN(...) list: a single statement with one bound variable per
+	// post ID overflows SQLite's variable limit (~32766) once a site has tens of
+	// thousands of published posts, which previously made the tags/atlas graph
+	// fail with "too many SQL variables". 5000/chunk stays comfortably under it.
+	const chunk = 5000
+	for start := 0; start < len(postIDs); start += chunk {
+		end := start + chunk
+		if end > len(postIDs) {
+			end = len(postIDs)
 		}
-		placeholders += "?"
-	}
+		batch := postIDs[start:end]
 
-	q := `
+		args := make([]interface{}, len(batch))
+		for i, id := range batch {
+			args[i] = id
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
+
+		q := `
 SELECT pt.post_id, t.id, t.name, t.slug, t.kind, t.latitude, t.longitude
 FROM post_tags pt
 JOIN tags t ON t.id = pt.tag_id
 WHERE pt.post_id IN (` + placeholders + `)
 ORDER BY t.name ASC`
 
-	rows, err := r.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	for rows.Next() {
-		var postID int64
-		var tag PostTagInfo
-		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.Kind, &tag.Latitude, &tag.Longitude); err != nil {
+		rows, err := r.db.QueryContext(ctx, q, args...)
+		if err != nil {
 			return nil, err
 		}
-		result[postID] = append(result[postID], tag)
+		for rows.Next() {
+			var postID int64
+			var tag PostTagInfo
+			if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.Kind, &tag.Latitude, &tag.Longitude); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			result[postID] = append(result[postID], tag)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		_ = rows.Close()
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // GetChildrenOfTag returns direct children of parentID, ordered by edge sort_order ASC, name ASC.

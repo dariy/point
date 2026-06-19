@@ -774,6 +774,18 @@ func main() {
 			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
 			 VALUES ('tags_visibility', 'hidden', 'string', CURRENT_TIMESTAMP)`,
 		},
+		{
+			// post_tags PRIMARY KEY (post_id, tag_id) only indexes the leading
+			// column; lookups/joins by tag_id (hot-tag listings, counts) scanned
+			// the PK without this. tag_relationships similarly lacks a child_id
+			// index for child→parent (ancestor) traversal.
+			"create_post_tags_tag_id_index",
+			`CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id ON post_tags(tag_id)`,
+		},
+		{
+			"create_tag_relationships_child_id_index",
+			`CREATE INDEX IF NOT EXISTS idx_tag_relationships_child_id ON tag_relationships(child_id)`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
