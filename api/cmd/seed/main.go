@@ -67,7 +67,7 @@ func main() {
 
 	db, err := sql.Open("sqlite", *dbPath)
 	must(err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	db.SetMaxOpenConns(1)
 	for _, p := range []string{
 		"PRAGMA busy_timeout=10000", "PRAGMA journal_mode=WAL",
