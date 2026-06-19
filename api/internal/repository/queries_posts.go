@@ -8,14 +8,22 @@ import (
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/utils"
 )
 
-// ListPosts returns all posts, with optional filters.
+// ListPosts returns all posts, with optional filters. Callers that only render
+// list/grid cards leave IncludeContent false so the (potentially large) content
+// body is not read; the derived media_url column covers the card preview. The
+// offline snapshot sets IncludeContent=true to get full bodies.
 func (r *sqliteRepository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
-	const q = `
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
+	contentCol := "'' AS content"
+	if arg.IncludeContent {
+		contentCol = "p.content"
+	}
+	q := fmt.Sprintf(`
+SELECT p.id, p.title, p.slug, %s, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -41,7 +49,7 @@ WHERE
         )
     ) END)
 ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?`
+LIMIT ? OFFSET ?`, contentCol)
 
 	rows, err := r.db.QueryContext(ctx, q,
 		arg.IncludePages,
@@ -61,7 +69,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
-			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
@@ -106,6 +114,89 @@ WHERE
 	return count, err
 }
 
+// SetPostMediaURL stores the denormalized list-preview URL for a post. An empty
+// string is stored (not NULL) when the post has no media, so backfill treats it
+// as "already computed".
+func (r *sqliteRepository) SetPostMediaURL(ctx context.Context, postID int64, mediaURL string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE posts SET media_url = ? WHERE id = ?`, mediaURL, postID)
+	return err
+}
+
+// BackfillPostMediaURLs computes media_url for any rows where it is still NULL
+// (existing posts predating the column). Runs once at startup after the column
+// migration; subsequent writes keep it in sync via SetPostMediaURL.
+func (r *sqliteRepository) BackfillPostMediaURLs(ctx context.Context) error {
+	// Legacy/minimal schemas may predate thumbnail_path; select a literal in that
+	// case so the backfill still runs (deriving media_url from content alone).
+	thumbExpr := "thumbnail_path"
+	if !r.postsHasColumn(ctx, "thumbnail_path") {
+		thumbExpr = "'' AS thumbnail_path"
+	}
+	rows, err := r.db.QueryContext(ctx,
+		fmt.Sprintf(`SELECT id, %s, content FROM posts WHERE media_url IS NULL`, thumbExpr))
+	if err != nil {
+		return err
+	}
+	type pending struct {
+		id      int64
+		thumb   sql.NullString
+		content string
+	}
+	var todo []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.id, &p.thumb, &p.content); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		todo = append(todo, p)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	_ = rows.Close()
+
+	for _, p := range todo {
+		var tp string
+		if p.thumb.Valid {
+			tp = p.thumb.String
+		}
+		if _, err := r.db.ExecContext(ctx,
+			`UPDATE posts SET media_url = ? WHERE id = ?`,
+			utils.DeriveMediaURL(tp, p.content), p.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// postsHasColumn reports whether the posts table has the named column.
+func (r *sqliteRepository) postsHasColumn(ctx context.Context, col string) bool {
+	rows, err := r.db.QueryContext(ctx, `PRAGMA table_info(posts)`)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			ctype   string
+			notnull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == col {
+			return true
+		}
+	}
+	return false
+}
+
 // ListPostsInYearRange returns posts that carry a year tag (kind='year') whose
 // parsed year (CAST(slug AS INTEGER)) falls in [fromYear, toYear].
 func (r *sqliteRepository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
@@ -124,9 +215,9 @@ _hide(id) AS (
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
 )
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+SELECT p.id, p.title, p.slug, '' AS content, p.excerpt, p.formatter, p.status, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE p.id IN (SELECT post_id FROM _yposts)
     AND p.deleted_at IS NULL
@@ -160,7 +251,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
-			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
@@ -218,9 +309,9 @@ WITH RECURSIVE ehp(id) AS (
     UNION
     SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
 )
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
+SELECT p.id, p.title, p.slug, '' AS content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
 FROM posts p
 WHERE
     p.deleted_at IS NULL
@@ -295,7 +386,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
-			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err

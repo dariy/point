@@ -189,7 +189,7 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 		if publicOnly && !IsPostVisibleToPublic(postTagsMap[p.ID], effectiveHiddenPosts) {
 			continue
 		}
-		resp := postToResponse(p, postTagsMap[p.ID], excludeTagIDs)
+		resp := postToListResponse(p, postTagsMap[p.ID], excludeTagIDs)
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}
@@ -203,10 +203,6 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 	if pages == 0 {
 		pages = 1
 	}
-
-	// Fetch hierarchical tags for nav and cloud with min_tag_posts_to_show filter.
-	cloud, _ := h.tagService.GetTagCloud(ctx, 20, publicOnly, minPosts)
-	navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
 
 	// Public settings subset
 	publicSettings := make(map[string]string)
@@ -224,9 +220,17 @@ func (h *PagesHandler) GetHomePage(c echo.Context) error {
 			"total":    total,
 			"pages":    pages,
 		},
-		"tag_cloud": cloud,
-		"menu":      navTags,
-		"settings":  publicSettings,
+		"settings": publicSettings,
+	}
+
+	// tag_cloud and menu are page-independent; compute and send them only on the
+	// first, unfiltered page. The client retains the last-seen values across
+	// pagination and prev/next preloads, so later pages skip this work entirely.
+	if page == 1 && !hasYearFilter {
+		cloud, _ := h.tagService.GetTagCloud(ctx, 20, publicOnly, minPosts)
+		navTags, _ := h.tagService.GetHierarchicalNavTags(ctx, nil, publicOnly, minPosts)
+		resp["tag_cloud"] = cloud
+		resp["menu"] = navTags
 	}
 
 	if publicOnly && !hasYearFilter {
@@ -419,7 +423,7 @@ func (h *PagesHandler) GetTagPage(c echo.Context) error {
 		if publicOnly && !IsPostVisibleToPublic(tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs) {
 			continue
 		}
-		resp := postToResponse(p, tagPostTagsMap[p.ID], excludeTagIDs)
+		resp := postToListResponse(p, tagPostTagsMap[p.ID], excludeTagIDs)
 		if !publicOnly {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, tagPostTagsMap[p.ID], effectiveHiddenPostsTagIDs)
 		}

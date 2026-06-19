@@ -90,6 +90,9 @@ export default class HomePage extends Component {
     await fadeOut;
     if (this._unmounted) return;
     if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
+    // tag_cloud is page-independent and only sent on page 1; cache it so it
+    // persists across pagination, swipes, and direct loads of later pages.
+    if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
     this.state.data = data;
     this.state.error = null;
     this._loadedVc = vc;
@@ -252,7 +255,7 @@ export default class HomePage extends Component {
       return;
     }
 
-    const tagCloud = this.state.data.tag_cloud || [];
+    const tagCloud = this.state.data.tag_cloud || store.get('tagCloud') || [];
     if (!!settings.show_tag_cloud && tagCloud.length) {
       this.mountChild(ExploreBlock, '#tag-cloud-mount', { tags: tagCloud });
     }
@@ -573,6 +576,9 @@ export default class HomePage extends Component {
       const data = await getHomePage(this._buildParams(vc));
       // Merge settings from page response into store.
       if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
+      // tag_cloud is page-independent and only sent on page 1; cache it so it
+      // persists across pagination, swipes, and direct loads of later pages.
+      if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
 
       // Check for hash to set initial slide index (e.g. #2 -> index 1)
       let startIndex = 0;

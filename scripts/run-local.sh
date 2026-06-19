@@ -82,6 +82,9 @@ export PORT=$PORT
 export HOST=${HOST:-127.0.0.1}
 export APP_VERSION=$DEV_VERSION
 
+echo "DATABASE_URL: ", $DATABASE_URL
+echo "STORAGE_PATH: ", $STORAGE_PATH
+
 echo "==> Starting Point on http://localhost:$PORT"
 echo "Press Ctrl+C to stop"
 

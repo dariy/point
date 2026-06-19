@@ -171,6 +171,7 @@ type mockRepository struct {
 	MockGetYearTagsByLocationTagIDs     func(ctx context.Context, locTagIDs []int64) (map[int64][]repository.PostTagInfo, error)
 	MockGetExistingInstagramIDs         func(ctx context.Context, ids []string) ([]string, error)
 	MockSetPostInstagramID              func(ctx context.Context, postID int64, instagramID string) error
+	MockSetPostMediaURL                 func(ctx context.Context, postID int64, mediaURL string) error
 }
 
 // Ensure mockRepository implements repository.Repository
@@ -1251,5 +1252,16 @@ func (m *mockRepository) SetPostInstagramID(ctx context.Context, postID int64, i
 	if m.MockSetPostInstagramID != nil {
 		return m.MockSetPostInstagramID(ctx, postID, instagramID)
 	}
+	return nil
+}
+
+func (m *mockRepository) SetPostMediaURL(ctx context.Context, postID int64, mediaURL string) error {
+	if m.MockSetPostMediaURL != nil {
+		return m.MockSetPostMediaURL(ctx, postID, mediaURL)
+	}
+	return nil
+}
+
+func (m *mockRepository) BackfillPostMediaURLs(ctx context.Context) error {
 	return nil
 }

@@ -1,81 +1,100 @@
-<mxfile>
-  <diagram id="autolayout" name="Page-1">
-    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="Public Features">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800">
       <root>
-        <mxCell id="0"/>
-        <mxCell id="1" parent="0"/>
-        <mxCell id="group_0" value="Content Discovery" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#6c8ebf;fontColor=#6c8ebf;verticalAlign=top;fontStyle=2;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="6" y="96" width="718" height="108" as="geometry"/>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Root Node -->
+        <mxCell id="root_node" value="Public&amp;#xa;Frontend" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="50" width="120" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="group_1" value="Offline &amp; PWA" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#d79b00;fontColor=#d79b00;verticalAlign=top;fontStyle=2;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="736" y="96" width="448" height="108" as="geometry"/>
+
+        <!-- Content Discovery Group -->
+        <mxCell id="group_discovery" value="Content Discovery" style="swimlane;startSize=30;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="200" width="200" height="350" as="geometry" />
         </mxCell>
-        <mxCell id="group_2" value="Syndication &amp; SEO" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#9673a6;fontColor=#9673a6;verticalAlign=top;fontStyle=2;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="1186" y="96" width="308" height="108" as="geometry"/>
+        <mxCell id="grid" value="Responsive post grid" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_discovery">
+          <mxGeometry x="20" y="40" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="group_3" value="Themes &amp; Customization" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#d6b656;fontColor=#d6b656;verticalAlign=top;fontStyle=2;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="1506" y="96" width="168" height="108" as="geometry"/>
+        <mxCell id="tags" value="Tag cloud &amp;amp; archives" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_discovery">
+          <mxGeometry x="20" y="100" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="group_4" value="Viewing Experience" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#82b366;fontColor=#82b366;verticalAlign=top;fontStyle=2;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="1676" y="96" width="308" height="108" as="geometry"/>
+        <mxCell id="search" value="Full-text search" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_discovery">
+          <mxGeometry x="20" y="160" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="root" value="Public&amp;#xa;Frontend" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="1210" y="0" width="120" height="80" as="geometry"/>
+        <mxCell id="timeline" value="Interactive timeline" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_discovery">
+          <mxGeometry x="20" y="220" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="grid" value="Responsive post grid" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="group_0">
-          <mxGeometry x="24" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="map" value="Map view" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_discovery">
+          <mxGeometry x="20" y="280" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="tags" value="Tag cloud &amp; archives" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="group_0">
-          <mxGeometry x="164" y="24" width="120" height="60" as="geometry"/>
+
+        <!-- Viewing Experience Group -->
+        <mxCell id="group_viewing" value="Viewing Experience" style="swimlane;startSize=30;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="200" width="200" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="search" value="Full-text search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="group_0">
-          <mxGeometry x="304" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="immersive" value="Immersive viewer" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_viewing">
+          <mxGeometry x="20" y="40" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="timeline" value="Interactive timeline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="group_0">
-          <mxGeometry x="444" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="lightbox" value="Media lightbox" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_viewing">
+          <mxGeometry x="20" y="100" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="map" value="Map view" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="group_0">
-          <mxGeometry x="574" y="24" width="120" height="60" as="geometry"/>
+
+        <!-- Offline & PWA Group -->
+        <mxCell id="group_pwa" value="Offline &amp;amp; PWA" style="swimlane;startSize=30;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="550" y="200" width="200" height="230" as="geometry" />
         </mxCell>
-        <mxCell id="immersive" value="Immersive viewer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="group_4">
-          <mxGeometry x="24" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="sw" value="Service Worker caching" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_pwa">
+          <mxGeometry x="20" y="40" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="lightbox" value="Media lightbox" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="group_4">
-          <mxGeometry x="164" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="offline" value="Offline fallback" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_pwa">
+          <mxGeometry x="20" y="100" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="sw" value="Service Worker caching" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="group_1">
-          <mxGeometry x="24" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="share" value="Web Share Target" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_pwa">
+          <mxGeometry x="20" y="160" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="offline" value="Offline fallback" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="group_1">
-          <mxGeometry x="164" y="24" width="120" height="60" as="geometry"/>
+
+        <!-- Syndication & SEO Group -->
+        <mxCell id="group_seo" value="Syndication &amp;amp; SEO" style="swimlane;startSize=30;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="200" width="200" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="share" value="Web Share Target" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="group_1">
-          <mxGeometry x="304" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="rss" value="RSS 2.0 feed" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_seo">
+          <mxGeometry x="20" y="40" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="rss" value="RSS 2.0 feed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="group_2">
-          <mxGeometry x="24" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="sitemap" value="XML sitemap" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_seo">
+          <mxGeometry x="20" y="100" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="sitemap" value="XML sitemap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="group_2">
-          <mxGeometry x="164" y="24" width="120" height="60" as="geometry"/>
+
+        <!-- Themes & Customization Group -->
+        <mxCell id="group_themes" value="Themes" style="swimlane;startSize=30;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="400" width="200" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="themes" value="Light / dark / auto modes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="group_3">
-          <mxGeometry x="24" y="24" width="120" height="60" as="geometry"/>
+        <mxCell id="themes" value="Light/dark/auto modes" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_themes">
+          <mxGeometry x="20" y="40" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="e0" value="" style="html=1;rounded=0;" edge="1" parent="1" source="root" target="grid">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="970" y="30"/><mxPoint x="90" y="30"/><mxPoint x="90" y="30"/><mxPoint x="90" y="30"/><mxPoint x="90" y="100"/></Array></mxGeometry>
+        <mxCell id="toggle" value="Theme toggle" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="group_themes">
+          <mxGeometry x="20" y="100" width="160" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="e1" value="" style="html=1;rounded=0;" edge="1" parent="1" source="root" target="immersive">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1460" y="30"/><mxPoint x="1760" y="30"/><mxPoint x="1760" y="30"/><mxPoint x="1760" y="30"/><mxPoint x="1760" y="100"/></Array></mxGeometry>
+
+        <!-- Edges from Root to Groups -->
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="root_node" target="group_discovery">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e2" value="" style="html=1;rounded=0;" edge="1" parent="1" source="root" target="sw">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1090" y="50"/><mxPoint x="820" y="50"/><mxPoint x="820" y="50"/><mxPoint x="820" y="50"/><mxPoint x="820" y="100"/></Array></mxGeometry>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="root_node" target="group_viewing">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e3" value="" style="html=1;rounded=0;" edge="1" parent="1" source="root" target="rss">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1270" y="80"/><mxPoint x="1270" y="100"/></Array></mxGeometry>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="root_node" target="group_themes">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e4" value="" style="html=1;rounded=0;" edge="1" parent="1" source="root" target="themes">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1420" y="50"/><mxPoint x="1590" y="50"/><mxPoint x="1590" y="50"/><mxPoint x="1590" y="50"/><mxPoint x="1590" y="100"/></Array></mxGeometry>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="root_node" target="group_pwa">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="root_node" target="group_seo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
       </root>
     </mxGraphModel>
   </diagram>
