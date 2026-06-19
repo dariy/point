@@ -1,0 +1,365 @@
+/* ===========================
+   Immersive Sheet Overlay (swipe-up details)
+   Selected via the immersive_overlay_mode = "sheet" setting.
+   =========================== */
+
+/* In sheet mode the photo is the whole chrome — the fixed site header and
+   footer are replaced by the swipe-up sheet, so hide them. */
+.immersive-overlay-sheet.immersive-layout .site-header-group,
+.immersive-overlay-sheet.immersive-layout .site-footer {
+    display: none;
+}
+
+/* The photo carousel rides up with the sheet; the transform is applied inline
+   by JS, so give it a transform origin and let it move freely. */
+.immersive-sheet-mode .immersive-visuals {
+    will-change: transform;
+}
+
+/* ── Close cross (desktop / non-touch) ────────────────────────────────────────
+   Sheet mode hides the site header, so the only way to dismiss on a device
+   without swipe is this cross. Touch devices swipe down to dismiss instead, so
+   it's hidden there. Higher specificity (and z-index) keeps it above the sheet
+   regardless of bundle order vs. lightbox.css. */
+.immersive-overlay-sheet .lightbox-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    line-height: 1;
+    border-radius: 50%;
+    background: var(--color-black-alpha-40);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 55;
+    transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
+}
+
+.immersive-overlay-sheet .lightbox-close:hover {
+    background: var(--color-black-alpha-60);
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .immersive-overlay-sheet .lightbox-close {
+        display: none;
+    }
+}
+
+/* Fade the cross out with the rest of the chrome when the UI auto-hides. */
+.immersive-overlay-sheet.ui-hidden .lightbox-close {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-20px);
+}
+
+/* ── Swipe-up hint (closed state) ─────────────────────────────────────────── */
+.immersive-sheet-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0) + var(--spacing-lg));
+    transform: translateX(-50%);
+    z-index: 45;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border: none;
+    border-radius: var(--border-radius-full, 999px);
+    background: var(--color-black-alpha-40);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.immersive-sheet-hint-chevron {
+    display: inline-flex;
+    transform: rotate(180deg); /* point the chevron up */
+    animation: immersiveSheetHintBob 1.8s ease-in-out infinite;
+}
+
+@keyframes immersiveSheetHintBob {
+    0%, 100% { transform: rotate(180deg) translateY(0); }
+    50% { transform: rotate(180deg) translateY(2px); }
+}
+
+/* Hide the closed-state affordances once the sheet is open or the UI auto-hides. */
+.immersive-sheet-mode.sheet-open .immersive-sheet-hint,
+body.ui-hidden .immersive-sheet-hint {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-10px);
+}
+
+.immersive-sheet-mode.sheet-open .immersive-sheet-hint {
+    transform: translateX(-50%) translateY(10px);
+}
+
+/* ── The sheet itself ─────────────────────────────────────────────────────── */
+.immersive-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 100vh;
+    top: 100dvh;
+    z-index: 50;
+    max-height: 100vh;
+    max-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-card, var(--bg-primary));
+    color: var(--text-primary);
+    border-top-left-radius: var(--border-radius-xl);
+    border-top-right-radius: var(--border-radius-xl);
+    box-shadow: 0 -8px 32px var(--color-black-alpha-30);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    will-change: transform;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+[data-theme="dark"] .immersive-sheet {
+    background: var(--color-rgb-30-30-30-alpha-85, rgba(30, 30, 30, 0.92));
+    border: var(--border-width) solid var(--color-white-alpha-10);
+}
+
+.immersive-sheet-grip {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 0.3rem;
+    margin: var(--spacing-sm) auto var(--spacing-xs);
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--border-primary);
+    cursor: pointer;
+}
+
+.immersive-sheet-scroll {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Cap the content to the same width the footer uses on other pages and
+       centre it, so the sheet reads consistently on wide screens. */
+    width: 100%;
+    max-width: var(--content-max-width);
+    margin-inline: auto;
+    box-sizing: border-box;
+    padding: var(--spacing-md) var(--spacing-xl) var(--spacing-xl);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) transparent;
+}
+
+/* ── Two-column body (info + EXIF) ────────────────────────────────────────── */
+.immersive-sheet-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-xl);
+    align-items: start;
+}
+
+.immersive-sheet-body.has-exif {
+    grid-template-columns: minmax(0, 1fr) minmax(8rem, max-content);
+}
+
+@media (max-width: 480px) {
+    .immersive-sheet-body.has-exif {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--spacing-lg);
+    }
+}
+
+.immersive-sheet-main {
+    min-width: 0;
+}
+
+/* ── Sheet content — breadcrumb doubles as the title ──────────────────────── */
+.immersive-sheet-crumbs {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-crumbs a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.immersive-sheet-crumbs a:hover {
+    color: var(--color-primary);
+}
+
+.immersive-sheet-crumb-sep {
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-crumb-current {
+    font-size: var(--font-size-2xl, 1.6rem);
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+.immersive-sheet-meta {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-sheet-excerpt {
+    margin: 0 0 var(--spacing-lg);
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.immersive-sheet-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+}
+
+/* ── Inline EXIF (second column) ──────────────────────────────────────────── */
+.immersive-sheet-exif {
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius);
+    background: var(--bg-tertiary);
+    align-self: start;
+}
+
+.immersive-sheet-exif.hidden {
+    display: none;
+}
+
+.immersive-sheet-exif-title {
+    font-size: var(--font-size-xs, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.immersive-sheet-exif-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    padding: 2px 0;
+}
+
+.immersive-sheet-exif-key {
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-exif-val {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Actions — uniform, aligned buttons ───────────────────────────────────── */
+.immersive-sheet-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+}
+
+.immersive-sheet-action {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    height: 2.5rem;
+    padding: 0 var(--spacing-md);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.immersive-sheet-action:hover {
+    background: var(--surface-hover, var(--bg-tertiary));
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow-md);
+}
+
+.immersive-sheet-action svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.immersive-sheet-footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-md);
+    border-top: var(--border-width) solid var(--border-primary);
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+.immersive-sheet-postnav-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.immersive-sheet-postnav {
+    flex: 1 1 0;
+    min-width: 0;
+    color: var(--color-primary);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.immersive-sheet-postnav.right {
+    text-align: right;
+}
+
+.immersive-sheet-postnav:hover {
+    text-decoration: underline;
+}
+
+.immersive-sheet-footer-bottom {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+}
+
+.immersive-sheet-copyright {
+    margin: 0;
+    flex: 1 1 auto;
+}
+
+.immersive-sheet-copyright a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.immersive-sheet-copyright a:hover {
+    text-decoration: underline;
+}
+
+.immersive-sheet-footer-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+}

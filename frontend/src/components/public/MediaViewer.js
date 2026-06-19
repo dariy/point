@@ -91,8 +91,19 @@ export class MediaViewer extends Component {
           <div class="immersive-nav-panel immersive-nav-next" aria-label="Next"><div class="immersive-nav-gradient"></div></div>
           <div class="carousel-indicators">${dots}</div>
         ` : postNav}
+        ${this._renderExtras()}
       </div>`;
   }
+
+  /**
+   * Hook for subclasses to inject extra markup inside the viewer wrapper
+   * (e.g. the immersive sheet overlay). Returns '' by default.
+   */
+  _renderExtras() { return ''; }
+
+  /** Hook: whether to create the floating EXIF flyout control. Subclasses that
+   *  surface EXIF elsewhere (inline) override this to skip it. */
+  _useFloatingExif() { return true; }
 
   _renderItem(item) {
     if (item.type === 'html') {
@@ -145,7 +156,7 @@ export class MediaViewer extends Component {
     // re-points to the active slide via _updateExif() on every step.
     const settings = store.get('settings') || {};
     this._exifMeta = null;
-    if (exifVisible(settings, store.get('user')) && media.length) {
+    if (this._useFloatingExif() && exifVisible(settings, store.get('user')) && media.length) {
       const exifMap = buildExifMap(media);
       const meta = items.map((it) =>
         it.type === 'image' && it.url ? metadataForSrc(exifMap, it.url) : null,
@@ -216,7 +227,7 @@ export class MediaViewer extends Component {
             onClose?.();
             return;
         }
-        if (e.target.closest('a, button, .immersive-nav-panel, input, .post-info-card')) return;
+        if (e.target.closest('a, button, .immersive-nav-panel, input, .post-info-card, .immersive-sheet')) return;
         document.body.classList.contains('ui-hidden') ? this._showUI() : this._hideUI();
     });
 
@@ -234,18 +245,13 @@ export class MediaViewer extends Component {
       (slides[this._index] || visuals).classList.add('immersive-fade-in');
     }
 
-    // Gestures
+    // Gestures. The swipe handlers route through methods so subclasses (e.g.
+    // the immersive sheet) can override vertical-swipe behaviour while keeping
+    // the rest of the gesture machinery intact.
     this._gesture = new GestureController(wrapper, {
-      onSwipeMove: (dx, dy) => this._updateVisuals(this._calcSwipeX(dx), dy),
-      onSwipeCancel: () => this._zoomState.scale > 1 ? this._constrainZoom(true) : this._resetVisuals(),
-      onSwipeCommit: (dir) => {
-        if (dir === 'down') return onClose?.();
-        if (dir === 'up') return this._resetVisuals();
-        if ((dir === 'left' && this._isBlocked('fwd')) || (dir === 'right' && this._isBlocked('back'))) {
-          return this._resetVisuals();
-        }
-        this._commitHorizontal(dir === 'left' ? 'fwd' : 'back');
-      },
+      onSwipeMove: (dx, dy) => this._onSwipeMove(dx, dy),
+      onSwipeCancel: () => this._onSwipeCancel(),
+      onSwipeCommit: (dir) => this._onSwipeCommit(dir),
       onPanMove: (dx, dy) => {
         this._zoomState.x += dx;
         this._zoomState.y += dy;
@@ -269,7 +275,7 @@ export class MediaViewer extends Component {
       onTap: (x, y) => {
         lastTapTime = Date.now();
         const tapped = document.elementFromPoint(x, y);
-        if (tapped?.closest('a, button, .immersive-nav-panel, input, .post-info-card')) return;
+        if (tapped?.closest('a, button, .immersive-nav-panel, input, .post-info-card, .immersive-sheet')) return;
         document.body.classList.contains('ui-hidden') ? this._showUI() : this._hideUI();
       },
       onDoubleTap: (x, y) => {
@@ -528,6 +534,26 @@ export class MediaViewer extends Component {
     el.style.transform = `translateX(${dir === 'fwd' ? W : -W}px)`;
     el.style.opacity = '0';
     setTimeout(() => this._clearPeek(), 300);
+  }
+
+  /** Real-time drag feedback. Overridable for alternate vertical gestures. */
+  _onSwipeMove(dx, dy) {
+    this._updateVisuals(this._calcSwipeX(dx), dy);
+  }
+
+  /** Drag released without committing — settle back to rest. */
+  _onSwipeCancel() {
+    this._zoomState.scale > 1 ? this._constrainZoom(true) : this._resetVisuals();
+  }
+
+  /** Drag committed past threshold in `dir` ('left'|'right'|'up'|'down'). */
+  _onSwipeCommit(dir) {
+    if (dir === 'down') return this.props.onClose?.();
+    if (dir === 'up') return this._resetVisuals();
+    if ((dir === 'left' && this._isBlocked('fwd')) || (dir === 'right' && this._isBlocked('back'))) {
+      return this._resetVisuals();
+    }
+    this._commitHorizontal(dir === 'left' ? 'fwd' : 'back');
   }
 
   _calcSwipeX(dx) {

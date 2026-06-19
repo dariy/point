@@ -211,7 +211,7 @@ export default class HomePage extends Component {
     if (immersive) {
       document.body.classList.add('immersive-layout');
     } else {
-      document.body.classList.remove('immersive-layout', 'ui-hidden');
+      document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
     }
 
     this._gesture?.destroy();

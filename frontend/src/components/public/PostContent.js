@@ -12,7 +12,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import {
   buildTagIndex,
@@ -23,6 +23,7 @@ import { store } from "../../store.js";
 import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { MediaViewer } from "./MediaViewer.js";
+import { ImmersiveSheetViewer } from "./ImmersiveSheetViewer.js";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
 import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.js";
 
@@ -98,15 +99,41 @@ export class PostContent extends Component {
     const immersive = forceImmersive || shouldUseImmersive(post);
     if (immersive) {
       document.body.classList.add("immersive-layout");
+      const settings = store.get("settings") || {};
+      const sheetMode = settings.immersive_overlay_mode === "sheet";
+      document.body.classList.toggle("immersive-overlay-sheet", sheetMode);
+      const ViewerClass = sheetMode ? ImmersiveSheetViewer : MediaViewer;
       const items = mediaFromHtml(post.content_html || "");
-      this.mountChild(MediaViewer, '#media-viewer-mount', {
+      this.mountChild(ViewerClass, '#media-viewer-mount', {
         items,
         media: post.media || [],
         startIndex: this.props.startIndex || 0,
-        showShare: true,
+        showShare: !sheetMode, // sheet mode carries its own share affordances
+        // Sheet mode hides the site header, so a desktop/non-touch visitor has
+        // no swipe to dismiss with — give them the close cross back (hidden on
+        // touch via CSS, where swipe-down handles it).
+        showClose: sheetMode,
         navPrev: prevPost,
         navNext: nextPost,
+        // Extra context the sheet overlay renders (ignored by classic MediaViewer)
+        post,
+        editUrl: `/light/posts/${post.id}/edit`,
+        onToggleImmersive: this.props.onToggleImmersive,
         onClose: async () => {
+          // A post opened from the Atlas returns there — closing reselects its
+          // place and highlights the post chip — instead of landing on the
+          // post's page in the home feed. The Atlas leaves a context marker on
+          // open; we hand it back as the return state keyed to the current post.
+          let atlasCtx = null;
+          try { atlasCtx = JSON.parse(sessionStorage.getItem("atlasOpenContext") || "null"); } catch { /* ignore */ }
+          if (atlasCtx) {
+            try {
+              sessionStorage.removeItem("atlasOpenContext");
+              sessionStorage.setItem("atlasReturn", JSON.stringify({ ...atlasCtx, postSlug: post.slug }));
+            } catch { /* ignore */ }
+            navigate("/tags");
+            return;
+          }
           try {
             const params = tagSlug ? { tag: tagSlug } : {};
             const data = await getPostPageLocation(post.slug, params);
@@ -121,7 +148,7 @@ export class PostContent extends Component {
         }
       });
     } else {
-      document.body.classList.remove("immersive-layout", "ui-hidden");
+      document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
       const bodyEl = this.$(".post-content");
       if (bodyEl) {
         this._enhanceLinks(bodyEl);

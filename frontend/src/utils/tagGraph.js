@@ -28,6 +28,8 @@
  *   g.destroy();                  // stop the sim + remove listeners
  */
 
+import { tagKind } from './tags.js';
+
 // Deterministic PRNG so the initial layout is stable across reloads.
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -109,9 +111,7 @@ export class TagGraph {
   // ── Graph construction ─────────────────────────────────────────────────────
 
   _classifyTag(t) {
-    if (t.kind === 'year') return 'year';
-    if (typeof t.latitude === 'number' && typeof t.longitude === 'number') return 'geo';
-    return 'tag';
+    return tagKind(t); // year / geo / tag — shared with the pills + Atlas
   }
 
   _buildGraph(data) {

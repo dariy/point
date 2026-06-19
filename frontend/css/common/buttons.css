@@ -81,6 +81,23 @@
     scale: 0.96;
 }
 
+/* Per-type tag pill accent. renderTagLink() (utils/tags.js) tags every pill
+   with a tag-kind-* class from tagKind(); each maps to a shared --tag-type-*
+   token, exposed to the pill styles as --tag-accent. Plain tags fall back to
+   the brand colour, so nothing changes for them. */
+.tag-link {
+    --tag-accent: var(--tag-type-tag);
+}
+.tag-link.tag-kind-year {
+    --tag-accent: var(--tag-type-year);
+}
+.tag-link.tag-kind-geo {
+    --tag-accent: var(--tag-type-geo);
+}
+.tag-link.tag-kind-topic {
+    --tag-accent: var(--tag-type-topic);
+}
+
 .btn {
     display: inline-flex;
     align-items: center;

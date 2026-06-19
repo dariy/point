@@ -250,10 +250,18 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 }
 
 // PostTagInfo is a lightweight tag descriptor for embedding in post list responses.
+//
+// Kind / Latitude / Longitude let the frontend colour tag pills by type (the
+// same year / place / topic / plain classification the Atlas and tags graph
+// use). They are only populated by GetTagsByPostIDs; other producers leave them
+// at their zero values, which serialize as the default ("tag") colour.
 type PostTagInfo struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	ID        int64           `json:"id"`
+	Name      string          `json:"name"`
+	Slug      string          `json:"slug"`
+	Kind      string          `json:"kind"`
+	Latitude  sql.NullFloat64 `json:"-"`
+	Longitude sql.NullFloat64 `json:"-"`
 }
 
 // GetTagsByPostIDs bulk-fetches tags for a list of post IDs.
@@ -275,7 +283,7 @@ func (r *sqliteRepository) GetTagsByPostIDs(ctx context.Context, postIDs []int64
 	}
 
 	q := `
-SELECT pt.post_id, t.id, t.name, t.slug
+SELECT pt.post_id, t.id, t.name, t.slug, t.kind, t.latitude, t.longitude
 FROM post_tags pt
 JOIN tags t ON t.id = pt.tag_id
 WHERE pt.post_id IN (` + placeholders + `)
@@ -292,7 +300,7 @@ ORDER BY t.name ASC`
 	for rows.Next() {
 		var postID int64
 		var tag PostTagInfo
-		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
+		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.Kind, &tag.Latitude, &tag.Longitude); err != nil {
 			return nil, err
 		}
 		result[postID] = append(result[postID], tag)

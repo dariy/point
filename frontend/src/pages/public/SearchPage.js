@@ -71,7 +71,7 @@ export default class SearchPage extends Component {
   }
 
   afterRender() {
-    document.body.classList.remove('immersive-layout', 'ui-hidden');
+    document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
     const settings = store.get('settings') || {};
     const rootMenu = store.get('navTags') || [];
     const q = this.props.query?.q || '';

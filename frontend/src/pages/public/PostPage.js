@@ -25,6 +25,11 @@ export default class PostPage extends Component {
   }
   beforeUnmount() {
     clearTimeout(this._spinnerTimer);
+    // Leaving the post route (other than via the viewer's close, which has
+    // already consumed it) abandons any Atlas-return flow, so drop its marker.
+    // Post→post navigation reuses this page via onRouteUpdate and never reaches
+    // here, so the marker survives swiping between posts.
+    try { sessionStorage.removeItem('atlasOpenContext'); } catch { /* ignore */ }
     if (this._keyListener) document.removeEventListener('keydown', this._keyListener);
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
@@ -118,6 +123,7 @@ export default class PostPage extends Component {
       nextPost: nav?.next || null,
       forceImmersive: immersive,
       startIndex: this.state.startIndex,
+      onToggleImmersive: () => this.setState({ forceImmersive: !immersive }),
       onEnterImmersive: (idx = 0) => {
         const hash = idx === 0 ? "" : `#${idx + 1}`;
         window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
@@ -253,6 +259,7 @@ export default class PostPage extends Component {
         nextPost: nav?.next || null,
         forceImmersive: immersive,
         startIndex,
+        onToggleImmersive: () => this.setState({ forceImmersive: !immersive }),
         onEnterImmersive,
       });
       this._contentChild.mount();

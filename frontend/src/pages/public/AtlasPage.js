@@ -27,6 +27,7 @@ import {
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.js";
+import { tagKind } from "../../utils/tags.js";
 
 const LEAFLET_JS = "/assets/vendor/leaflet/leaflet.js";
 const LEAFLET_CSS = "/assets/vendor/leaflet/leaflet.css";
@@ -142,6 +143,7 @@ export default class AtlasPage extends Component {
     this._activeKey = null;
     this._cloud = null; // { anchorLatLng, nodePos, sats, edges }
     this._baseDimmables = []; // base-map places: { tagId, setDim } for focus dimming
+    this._placeActivators = new Map(); // tagId -> { latLng, setActive, key } for programmatic selection
     this._hiddenTypes = new Set(); // node types filtered out via the legend
     this._reposition = () => this._repositionCloud();
 
@@ -213,7 +215,7 @@ export default class AtlasPage extends Component {
   }
 
   afterRender() {
-    document.body.classList.remove("immersive-layout", "ui-hidden");
+    document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
 
     const settings = store.get("settings") || {};
     this.mountChild(PublicHeader, "#header-mount", {
@@ -541,6 +543,14 @@ export default class AtlasPage extends Component {
               on ? { opacity: 0.12, fillOpacity: 0.03 } : baseStyle(feature),
             );
           this._baseDimmables.push({ tagId: tag.id, setDim });
+          // Centroid anchor for programmatic reselection (a click uses e.latlng;
+          // returning from a post has no click point, so fall back to the tag's
+          // own coordinates).
+          this._placeActivators.set(tag.id, {
+            latLng: L.latLng(tag.latitude, tag.longitude),
+            setActive,
+            key: "c" + tag.id,
+          });
 
           layer.on("click", (e) => {
             L.DomEvent.stop(e);
@@ -574,6 +584,11 @@ export default class AtlasPage extends Component {
       const setDim = (on) =>
         marker._icon?.classList.toggle("atlas-marker--dim", on);
       this._baseDimmables.push({ tagId: tag.id, setDim });
+      this._placeActivators.set(tag.id, {
+        latLng: marker.getLatLng(),
+        setActive,
+        key: "m" + tag.id,
+      });
 
       marker.on("click", (e) => {
         L.DomEvent.stop(e); // don't let the map's click handler clear it
@@ -588,6 +603,10 @@ export default class AtlasPage extends Component {
 
     // Honour any year range carried in the URL now that the places exist.
     this._applyYearScope();
+
+    // If we arrived here by closing a post that was opened from the Atlas,
+    // reselect its place and highlight the post chip.
+    this._restoreFromPost();
   }
 
   // ── Selection → on-map cloud ────────────────────────────────────────────────
@@ -705,10 +724,7 @@ export default class AtlasPage extends Component {
 
   /** Node-type bucket used for colouring + the legend filters. */
   _kindOf(tag) {
-    if (tag.kind === "year") return "year";
-    if (typeof tag.latitude === "number" && typeof tag.longitude === "number")
-      return "geo";
-    return "tag"; // plain tags + topics (matches the /tags graph)
+    return tagKind(tag); // year / geo / tag — shared with the pills + tags graph
   }
 
   /**
@@ -880,11 +896,95 @@ export default class AtlasPage extends Component {
   _focusCloudNode(key, href) {
     if (!this._cloud) return;
     if (this._cloud.focusKey === key) {
+      // Opening a post: leave a marker so closing it returns to the Atlas with
+      // this place reselected and the post chip highlighted (consumed in
+      // PostContent.onClose → handed back via `atlasReturn`).
+      if (key[0] === "p" && this._activeTag) {
+        try {
+          sessionStorage.setItem(
+            "atlasOpenContext",
+            JSON.stringify({ placeTagId: this._activeTag.id }),
+          );
+        } catch { /* ignore */ }
+      }
       navigate(href);
       return;
     }
     this._cloud.focusKey = key;
     this._applyCloudFocus();
+  }
+
+  /** Activate a place by its tag id (programmatic equivalent of a map click). */
+  _selectPlaceById(tagId) {
+    const a = this._placeActivators.get(tagId);
+    const tag = this._tagsById.get(tagId);
+    if (!a || !tag) return false;
+    this._select(tag, a.latLng, a.setActive, a.key);
+    return true;
+  }
+
+  /**
+   * Pick a place to reopen for a post on return: prefer the place that was
+   * active when the post was opened (if its sub-tree still holds the post),
+   * else the first geo-tag the post carries, else any place whose sub-tree
+   * contains it (covers a post hung off a city under a drawn country).
+   */
+  _pickPlaceForPost(post, preferredId) {
+    if (preferredId != null && this._placeActivators.has(preferredId)) {
+      const tag = this._tagsById.get(preferredId);
+      if (tag && this._buildSubgraph(tag).postIds.has(post.id)) return preferredId;
+    }
+    const tagIds = this._tagsByPost.get(post.id);
+    if (tagIds) {
+      for (const tid of tagIds) {
+        const t = this._tagsById.get(tid);
+        if (t && this._kindOf(t) === "geo" && this._placeActivators.has(tid)) return tid;
+      }
+    }
+    for (const tid of this._placeActivators.keys()) {
+      const t = this._tagsById.get(tid);
+      if (t && this._buildSubgraph(t).postIds.has(post.id)) return tid;
+    }
+    return null;
+  }
+
+  /**
+   * Consume an `atlasReturn` handoff (left by closing a post opened here):
+   * reselect the post's place and focus its chip in the freshly-spawned cloud.
+   */
+  _restoreFromPost() {
+    let ctx = null;
+    try {
+      const raw = sessionStorage.getItem("atlasReturn");
+      if (!raw) return;
+      sessionStorage.removeItem("atlasReturn");
+      ctx = JSON.parse(raw);
+    } catch { return; }
+    if (!ctx || !ctx.postSlug) return;
+
+    let post = null;
+    for (const p of this._postsById.values()) {
+      if (p.slug === ctx.postSlug) { post = p; break; }
+    }
+    if (!post) return;
+
+    const placeId = this._pickPlaceForPost(post, ctx.placeTagId);
+    if (placeId == null || !this._selectPlaceById(placeId)) return;
+
+    const postKey = "p" + post.id;
+    if (this._cloud && this._cloud.nodePos.has(postKey)) {
+      this._cloud.focusKey = postKey;
+      this._applyCloudFocus();
+      this._panToCloudNode(postKey);
+    }
+  }
+
+  /** Nudge the map so a cloud chip (or the anchor) sits comfortably in view. */
+  _panToCloudNode(key) {
+    if (!this._cloud || typeof this._map.panInside !== "function") return;
+    const sat = this._cloud.sats.find((s) => s.key === key);
+    const ll = sat ? sat.marker.getLatLng() : this._cloud.anchorLatLng;
+    if (ll) this._map.panInside(ll, { padding: [120, 120] });
   }
 
   /**

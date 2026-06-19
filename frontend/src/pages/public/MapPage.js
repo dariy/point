@@ -167,7 +167,7 @@ export default class MapPage extends Component {
   }
 
   afterRender() {
-    document.body.classList.remove("immersive-layout", "ui-hidden");
+    document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
 
     const vc = ViewContext.current();
     const initialRange = vc.years ? { from: vc.years[0], to: vc.years[1] } : null;

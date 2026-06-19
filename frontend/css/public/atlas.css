@@ -24,12 +24,13 @@
 }
 
 .atlas-map {
-    /* Cloud palette (kept local so it works without the .tag-graph host). */
-    --atlas-tag: var(--color-primary, #e05c00);
-    --atlas-year: #d39327;
-    --atlas-geo: #1f9e8e;
-    --atlas-topic: #8a5cd6;
-    --atlas-post: #5b6678;
+    /* Cloud palette — the shared tag-type accents (tokens.css), kept aliased so
+       the existing --atlas-* references keep working. */
+    --atlas-tag: var(--tag-type-tag);
+    --atlas-year: var(--tag-type-year);
+    --atlas-geo: var(--tag-type-geo);
+    --atlas-topic: var(--tag-type-topic);
+    --atlas-post: var(--tag-type-post);
 
     flex: 1;
     position: relative;
@@ -331,10 +332,10 @@
 
 /* The legend custom props live on .atlas-map; mirror them here for the dots. */
 .atlas-legend {
-    --atlas-tag: var(--color-primary, #e05c00);
-    --atlas-year: #d39327;
-    --atlas-geo: #1f9e8e;
-    --atlas-post: #5b6678;
+    --atlas-tag: var(--tag-type-tag);
+    --atlas-year: var(--tag-type-year);
+    --atlas-geo: var(--tag-type-geo);
+    --atlas-post: var(--tag-type-post);
 }
 
 @keyframes atlas-pop {

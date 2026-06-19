@@ -91,10 +91,18 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		if excludeIDs != nil && excludeIDs[t.ID] {
 			continue
 		}
-		tagObjs = append(tagObjs, map[string]interface{}{
+		tagObj := map[string]interface{}{
 			"name": t.Name,
 			"slug": t.Slug,
-		})
+			"kind": t.Kind,
+		}
+		// Geo coords (when set) let the frontend classify a tag as a "place" and
+		// colour its pill accordingly, matching the Atlas / tags graph.
+		if t.Latitude.Valid && t.Longitude.Valid {
+			tagObj["latitude"] = t.Latitude.Float64
+			tagObj["longitude"] = t.Longitude.Float64
+		}
+		tagObjs = append(tagObjs, tagObj)
 	}
 
 	return map[string]interface{}{

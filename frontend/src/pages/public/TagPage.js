@@ -242,7 +242,7 @@ export default class TagPage extends Component {
       </div>`;
   }
   afterRender() {
-    document.body.classList.remove("immersive-layout", "ui-hidden");
+    document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
     this._gesture?.destroy();
     this._trackpad?.destroy();
     const settings = store.get("settings") || {};

@@ -33,6 +33,7 @@ const SETTING_GROUPS = [
       "min_tag_posts_to_show",
       "default_theme",
       "immersive_nav_direction",
+      "immersive_overlay_mode",
       "show_view_counts",
       "use_thumbnails",
       "show_tag_cloud",
@@ -173,6 +174,13 @@ export default class SettingsPage extends Component {
           <select name="${key}" id="${key}" class="form-select">
             <option value="chronological"${!isFeed ? " selected" : ""}>Chronological (◁ older, ▷ newer)</option>
             <option value="feed"${isFeed ? " selected" : ""}>Feed order (◁ newer, ▷ older)</option>
+          </select>`;
+      } else if (key === "immersive_overlay_mode") {
+        const v = value || "classic";
+        input = `
+          <select name="${key}" id="${key}" class="form-select">
+            <option value="classic"${v === "classic" ? " selected" : ""}>Classic (header + footer chrome)</option>
+            <option value="sheet"${v === "sheet" ? " selected" : ""}>Sheet (swipe up for details)</option>
           </select>`;
       } else if (key === "exif_visibility") {
         const v = value || "hide";
