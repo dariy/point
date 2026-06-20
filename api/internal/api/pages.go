@@ -670,58 +670,209 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 		})
 	}
 
-	// Post nodes + membership edges.
-	postNodes, err := h.repo.ListPostNodesForGraph(ctx, publicOnly)
+	resp := map[string]interface{}{
+		"tags":           tags,
+		"hierarchyEdges": hierarchyEdges,
+	}
+
+	// The "cloud" force-graph (TagsPage) renders every post as a shadow node, so
+	// it needs the full post + membership-edge set. The Atlas no longer does — it
+	// lazily fetches each place's recent posts on tap via GetTagCloud — and opts
+	// out with ?posts=0 to avoid shipping the whole post set up front.
+	if c.QueryParam("posts") != "0" {
+		postNodes, err := h.repo.ListPostNodesForGraph(ctx, publicOnly)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		postIDs := make([]int64, len(postNodes))
+		for i, p := range postNodes {
+			postIDs[i] = p.ID
+		}
+		tagsByPost, err := h.tagService.GetTagsByPostIDs(ctx, postIDs)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+
+		posts := make([]map[string]interface{}, 0, len(postNodes))
+		membershipEdges := make([]map[string]interface{}, 0)
+		for _, p := range postNodes {
+			edges := 0
+			for _, pt := range tagsByPost[p.ID] {
+				if publicOnly && excludeTagIDs[pt.ID] {
+					continue
+				}
+				membershipEdges = append(membershipEdges, map[string]interface{}{
+					"post": p.ID,
+					"tag":  pt.ID,
+				})
+				edges++
+			}
+			// Drop posts that connect to no visible tag (orphans under hidden tags).
+			if edges == 0 {
+				continue
+			}
+			node := map[string]interface{}{
+				"id":    p.ID,
+				"slug":  p.Slug,
+				"title": p.Title,
+			}
+			if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
+				node["media_url"] = atlasThumbURL(*mediaURL)
+			}
+			posts = append(posts, node)
+		}
+		resp["posts"] = posts
+		resp["membershipEdges"] = membershipEdges
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+// atlasCloudLimit caps both the recent posts and the popular related tags the
+// Atlas cloud loads for a tapped place.
+const atlasCloudLimit = 10
+
+// GetTagCloud returns the on-tap cloud for a single place (a geo-tag) on the
+// Atlas: the place's sub-tree's most recent posts (≤atlasCloudLimit) and most
+// popular co-occurring tags (≤atlasCloudLimit), plus the membership/hierarchy
+// edges connecting that subset, so the frontend can render the cloud without
+// loading the whole graph. Accepts optional year_from/year_to to scope posts to
+// a timeline range. Visibility mirrors GetTagsGraph.
+func (h *PagesHandler) GetTagCloud(c echo.Context) error {
+	ctx := c.Request().Context()
+	user := c.Get("user")
+	publicOnly := user == nil
+
+	tagID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid tag id")
+	}
+
+	allSettings, _ := h.settingsService.GetAllSettings(ctx)
+	if !tagsModuleAccessible(allSettings, []string{"cloud", "atlas"}, publicOnly) {
+		return echo.NewHTTPError(http.StatusNotFound, "tags not found")
+	}
+
+	g, err := h.tagService.GetTagSnapshot(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	postIDs := make([]int64, len(postNodes))
-	for i, p := range postNodes {
-		postIDs[i] = p.ID
+	if _, ok := g.ByID[tagID]; !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "tag not found")
 	}
-	tagsByPost, err := h.tagService.GetTagsByPostIDs(ctx, postIDs)
+
+	minPosts := getMinTagPostsSetting(allSettings)
+	excluded := func(id int64) bool {
+		if !publicOnly {
+			return false
+		}
+		if g.EffectiveHidden[id] {
+			return true
+		}
+		return minPosts > 0 && g.CountsPublic[id] < minPosts
+	}
+	if excluded(tagID) {
+		return echo.NewHTTPError(http.StatusNotFound, "tag not found")
+	}
+
+	// The place and its whole sub-tree (country → cities → …) feed the slice.
+	subtree := append([]int64{tagID}, g.GetDescendantIDs(tagID)...)
+
+	// Recent posts: published-only for anonymous viewers, everything for admins
+	// (includeDrafts mirrors ListPostNodesForGraph's all-non-deleted behaviour).
+	var postModels []models.Post
+	fromStr, toStr := c.QueryParam("year_from"), c.QueryParam("year_to")
+	if fromStr != "" && toStr != "" {
+		from, errF := strconv.Atoi(fromStr)
+		to, errT := strconv.Atoi(toStr)
+		if errF == nil && errT == nil && from <= to {
+			postModels, err = h.repo.GetPostsByTagIDsInYearRange(ctx, subtree, from, to, publicOnly, !publicOnly, false, atlasCloudLimit, 0)
+		} else {
+			postModels, err = h.repo.GetPostsByTagIDs(ctx, subtree, publicOnly, !publicOnly, false, atlasCloudLimit, 0)
+		}
+	} else {
+		postModels, err = h.repo.GetPostsByTagIDs(ctx, subtree, publicOnly, !publicOnly, false, atlasCloudLimit, 0)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	posts := make([]map[string]interface{}, 0, len(postNodes))
-	membershipEdges := make([]map[string]interface{}, 0)
-	for _, p := range postNodes {
-		edges := 0
-		for _, pt := range tagsByPost[p.ID] {
-			if publicOnly && excludeTagIDs[pt.ID] {
-				continue
-			}
-			membershipEdges = append(membershipEdges, map[string]interface{}{
-				"post": p.ID,
-				"tag":  pt.ID,
-			})
-			edges++
-		}
-		// Drop posts that connect to no visible tag (orphans under hidden tags).
-		if edges == 0 {
-			continue
-		}
-		node := map[string]interface{}{
-			"id":    p.ID,
-			"slug":  p.Slug,
-			"title": p.Title,
-		}
-		// A single preview URL (thumbnail, else first image/video in content) so
-		// image posts can render a thumbnail chip in the atlas cloud. Rewrite it
-		// to the small square thumbnail variant — the cloud shows tiny chips, so
-		// serving full-sized originals here is the source of the page's load.
+	posts := make([]map[string]interface{}, 0, len(postModels))
+	postIDs := make([]int64, 0, len(postModels))
+	for _, p := range postModels {
+		postIDs = append(postIDs, p.ID)
+		node := map[string]interface{}{"id": p.ID, "slug": p.Slug, "title": p.Title}
 		if mediaURL := extractMediaURL(p.ThumbnailPath, p.Content); mediaURL != nil {
 			node["media_url"] = atlasThumbURL(*mediaURL)
 		}
 		posts = append(posts, node)
 	}
 
+	// Popular related tags. Over-fetch for anonymous viewers so dropping
+	// effective-hidden / below-min tags still leaves a full set of visible ones.
+	fetch := int64(atlasCloudLimit)
+	if publicOnly {
+		fetch = atlasCloudLimit * 4
+	}
+	coTags, err := h.repo.GetTopCoOccurringTagsForTagIDs(ctx, subtree, tagID, publicOnly, fetch)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	tags := make([]map[string]interface{}, 0, atlasCloudLimit)
+	tagSet := map[int64]bool{tagID: true} // centre is always part of the wired set
+	for _, t := range coTags {
+		if len(tags) >= atlasCloudLimit {
+			break
+		}
+		if excluded(t.ID) {
+			continue
+		}
+		node := map[string]interface{}{"id": t.ID, "name": t.Name, "slug": t.Slug, "kind": t.Kind}
+		if t.Latitude.Valid && t.Longitude.Valid {
+			node["latitude"] = t.Latitude.Float64
+			node["longitude"] = t.Longitude.Float64
+		}
+		tags = append(tags, node)
+		tagSet[t.ID] = true
+	}
+
+	// Membership edges: each returned post → the returned tags it carries (plus
+	// the centre). Derived from the loaded posts only, so the cloud is wired
+	// entirely from this payload.
+	membershipEdges := make([]map[string]interface{}, 0)
+	if len(postIDs) > 0 {
+		tagsByPost, err := h.tagService.GetTagsByPostIDs(ctx, postIDs)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		for _, pid := range postIDs {
+			for _, pt := range tagsByPost[pid] {
+				if !tagSet[pt.ID] {
+					continue
+				}
+				membershipEdges = append(membershipEdges, map[string]interface{}{"post": pid, "tag": pt.ID})
+			}
+		}
+	}
+
+	// Hierarchy edges among the returned tag set (e.g. centre country → a city
+	// chip), so the cloud draws their parent/child links.
+	rels, err := h.tagService.GetAllTagRelationships(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	hierarchyEdges := make([]map[string]interface{}, 0)
+	for _, rel := range rels {
+		if tagSet[rel.ParentID] && tagSet[rel.ChildID] {
+			hierarchyEdges = append(hierarchyEdges, map[string]interface{}{"parent": rel.ParentID, "child": rel.ChildID})
+		}
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"tags":            tags,
 		"posts":           posts,
-		"hierarchyEdges":  hierarchyEdges,
 		"membershipEdges": membershipEdges,
+		"hierarchyEdges":  hierarchyEdges,
 	})
 }
 

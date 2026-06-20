@@ -67,11 +67,11 @@ type mockRepository struct {
 	MockListSettings              func(ctx context.Context) ([]models.BlogSetting, error)
 	MockListTags                  func(ctx context.Context, includeEmptyFilter interface{}) ([]models.Tag, error)
 	MockListTrashedPosts          func(ctx context.Context, arg models.ListTrashedPostsParams) ([]models.Post, error)
-	MockMergePostTags         func(ctx context.Context, arg models.MergePostTagsParams) error
-	MockMergeTagChildren      func(ctx context.Context, arg models.MergeTagChildrenParams) error
-	MockMergeTagParents       func(ctx context.Context, arg models.MergeTagParentsParams) error
-	MockMergeTags             func(ctx context.Context, winnerID, loserID int64) error
-	MockPublishPost           func(ctx context.Context, id int64) (models.Post, error)
+	MockMergePostTags             func(ctx context.Context, arg models.MergePostTagsParams) error
+	MockMergeTagChildren          func(ctx context.Context, arg models.MergeTagChildrenParams) error
+	MockMergeTagParents           func(ctx context.Context, arg models.MergeTagParentsParams) error
+	MockMergeTags                 func(ctx context.Context, winnerID, loserID int64) error
+	MockPublishPost               func(ctx context.Context, id int64) (models.Post, error)
 	MockRemoveTagFromPost         func(ctx context.Context, arg models.RemoveTagFromPostParams) error
 	MockRemoveTagRelationship     func(ctx context.Context, arg models.RemoveTagRelationshipParams) error
 	MockRestorePost               func(ctx context.Context, arg models.RestorePostParams) error
@@ -102,8 +102,8 @@ type mockRepository struct {
 	MockGetWebAuthnCredentialByCredentialID func(ctx context.Context, credID []byte) (*repository.WebAuthnCredential, error)
 	MockDeleteWebAuthnCredentialByUserID    func(ctx context.Context, userID int64) error
 	MockUpdateWebAuthnCredential            func(ctx context.Context, credID []byte, signCount uint32, backupState bool) error
-	MockGetPublishedPostsForFeed         func(ctx context.Context, limit int) ([]models.Post, error)
-	MockGetPublishedPostsForSitemap      func(ctx context.Context) ([]struct {
+	MockGetPublishedPostsForFeed            func(ctx context.Context, limit int) ([]models.Post, error)
+	MockGetPublishedPostsForSitemap         func(ctx context.Context) ([]struct {
 		Slug      string
 		UpdatedAt time.Time
 	}, error)
@@ -111,7 +111,7 @@ type mockRepository struct {
 		ID   int64
 		Slug string
 	}, error)
-	MockUpsertTagLocation          func(ctx context.Context, tagID int64, lat, lon float64) error
+	MockUpsertTagLocation               func(ctx context.Context, tagID int64, lat, lon float64) error
 	MockGetTagLocationsByTagIDs         func(ctx context.Context, tagIDs []int64) (map[int64]models.TagLocation, error)
 	MockDeleteTagLocation               func(ctx context.Context, tagID int64) error
 	MockListOrphanedMedia               func(ctx context.Context, limit, offset int64) ([]models.Medium, error)
@@ -1137,6 +1137,10 @@ func (m *mockRepository) GetCoOccurringTags(ctx context.Context, tagID int64, pu
 		return m.MockGetCoOccurringTags(ctx, tagID, publicOnly)
 	}
 	return nil, fmt.Errorf("GetCoOccurringTags not implemented")
+}
+
+func (m *mockRepository) GetTopCoOccurringTagsForTagIDs(ctx context.Context, tagIDs []int64, rootID int64, publicOnly bool, limit int64) ([]repository.PostTagInfo, error) {
+	return nil, fmt.Errorf("GetTopCoOccurringTagsForTagIDs not implemented")
 }
 
 func (m *mockRepository) GetAllTagRelationships(ctx context.Context) ([]repository.TagRelationship, error) {

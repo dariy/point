@@ -63,18 +63,41 @@ export function getTagsPage() {
 }
 
 /**
- * Tags graph data: tag nodes, post ("shadow") nodes, and the two edge sets
- * (parent/child hierarchy + post→tag membership) for the /tags force graph.
+ * Tags graph data: tag nodes + parent/child hierarchy edges, plus post ("shadow")
+ * nodes and post→tag membership edges for the /tags force-graph (cloud) view.
  *
+ * Pass `{ posts: 0 }` to omit posts + membership edges — the Atlas does this and
+ * lazily fetches each place's recent posts on tap via getTagCloud, so the whole
+ * post set never loads up front.
+ *
+ * @param {{ posts?: 0 }} [params]
  * @returns {Promise<{
  *   tags: Array<{id:number,name:string,slug:string,kind:string,latitude?:number,longitude?:number,post_count:number}>,
- *   posts: Array<{id:number,slug:string,title:string,media_url?:string}>,
  *   hierarchyEdges: Array<{parent:number,child:number}>,
- *   membershipEdges: Array<{post:number,tag:number}>
+ *   posts?: Array<{id:number,slug:string,title:string,media_url?:string}>,
+ *   membershipEdges?: Array<{post:number,tag:number}>
  * }>}
  */
 export function getTagsGraph(params = {}) {
   return api.get('/api/pages/graph', params);
+}
+
+/**
+ * The Atlas cloud for a single place: its sub-tree's 10 most recent posts and 10
+ * most popular co-occurring tags, plus the membership/hierarchy edges wiring that
+ * subset together. Optionally scoped to a timeline year range.
+ *
+ * @param {number} tagId
+ * @param {{ year_from?: number, year_to?: number }} [params]
+ * @returns {Promise<{
+ *   tags: Array<{id:number,name:string,slug:string,kind:string,latitude?:number,longitude?:number}>,
+ *   posts: Array<{id:number,slug:string,title:string,media_url?:string}>,
+ *   membershipEdges: Array<{post:number,tag:number}>,
+ *   hierarchyEdges: Array<{parent:number,child:number}>
+ * }>}
+ */
+export function getTagCloud(tagId, params = {}) {
+  return api.get(`/api/pages/graph/tag/${tagId}`, params);
 }
 
 /**

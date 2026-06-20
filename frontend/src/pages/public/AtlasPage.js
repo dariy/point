@@ -17,7 +17,7 @@ import { Component } from "../../components/Component.js";
 import { PublicHeader } from "../../components/public/PublicHeader.js";
 import { PublicFooter } from "../../components/public/PublicFooter.js";
 import { Timeline } from "../../components/public/Timeline.js";
-import { getTagsGraph } from "../../api/pages.js";
+import { getTagsGraph, getTagCloud } from "../../api/pages.js";
 import { store } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import {
@@ -90,18 +90,6 @@ function truncate(s, n) {
 }
 
 /**
- * Year span [lo, hi] covered by a year-tag slug, mirroring the timeline's
- * parser: "2024" → [2024, 2024]; "2020s" (decade) → [2020, 2029]. Returns null
- * for anything that isn't a year/decade slug.
- */
-function parseYearSpan(slug) {
-  const m = /^(\d{4})(s?)$/.exec(slug || "");
-  if (!m) return null;
-  const y = parseInt(m[1], 10);
-  return m[2] ? [y, y + 9] : [y, y];
-}
-
-/**
  * Place `count` chips on concentric rings around the origin (pixel space).
  * Inner rings fill first; arc spacing keeps pills from colliding.
  */
@@ -142,27 +130,19 @@ export default class AtlasPage extends Component {
     this._activeSetActive = null; // toggles the current selection's highlight
     this._activeKey = null;
     this._cloud = null; // { anchorLatLng, nodePos, sats, edges }
-    this._baseDimmables = []; // base-map places: { tagId, setDim } for focus dimming
+    this._cloudData = null; // last-fetched per-place payload backing the open cloud
+    this._cloudReq = 0; // monotonic token guarding against out-of-order cloud fetches
+    this._cloudCache = new Map(); // "tagId|yearKey" -> fetched cloud payload
     this._placeActivators = new Map(); // tagId -> { latLng, setActive, key } for programmatic selection
     this._hiddenTypes = new Set(); // node types filtered out via the legend
     this._reposition = () => this._repositionCloud();
 
-    // Timeline year filtering (mirrors /map). `_activePostIds` is the set of
-    // posts inside the selected year range (null = no filter); `_yearDimmed` is
-    // the set of place-tags that hold no in-range post, dimmed on the base map.
     this._timeline = null;
-    this._activePostIds = null;
-    this._yearDimmed = null;
-    this._yearSpansByPost = new Map(); // postId -> [[lo, hi], …] from year-tags
 
-    // Indexes derived from the graph payload (built once on load).
+    // The only index needed up front: tag id -> tag node (markers + selection).
+    // Posts and co-tags are no longer loaded globally — each place fetches its
+    // own recent posts + popular tags on tap (see _loadAndSpawnCloud).
     this._tagsById = new Map();
-    this._postsById = new Map();
-    this._postsByTag = new Map(); // tagId -> Set(postId)
-    this._tagsByPost = new Map(); // postId -> Set(tagId)
-    this._childrenByTag = new Map(); // tagId -> [childTagId] (hierarchy)
-    this._membershipEdges = [];
-    this._hierarchyEdges = [];
   }
 
   render() {
@@ -280,50 +260,15 @@ export default class AtlasPage extends Component {
   }
 
   /**
-   * Recompute the active post set + base-map dimming for the current year scope
-   * and refresh any open cloud. With no filter both fall back to null (every
-   * post in play, nothing dimmed by date).
+   * Apply the current timeline year scope. Posts are fetched per-place and
+   * year-scoped server-side, so a scope change just re-fetches the open place's
+   * cloud (its cache key embeds the year range); with no place selected there is
+   * nothing to do.
    */
   _applyYearScope() {
-    const vc = ViewContext.current();
-    this._activePostIds = vc.years
-      ? this._postsInRange(vc.years[0], vc.years[1])
-      : null;
-    this._yearDimmed = vc.years ? this._buildYearDimmed() : null;
-
-    // An open cloud is sliced from `_activePostIds`, so rebuild it under the new scope.
     if (this._activeTag && this._activeAnchor) {
-      this._clearCloud();
-      this._spawnCloud(this._activeTag, this._activeAnchor);
+      this._loadAndSpawnCloud(this._activeTag, this._activeAnchor);
     }
-    this._refreshBaseDim();
-  }
-
-  /** Posts carrying a year-tag whose span intersects [from, to]. */
-  _postsInRange(from, to) {
-    const out = new Set();
-    for (const [postId, spans] of this._yearSpansByPost) {
-      for (const [lo, hi] of spans) {
-        if (lo <= to && hi >= from) {
-          out.add(postId);
-          break;
-        }
-      }
-    }
-    return out;
-  }
-
-  /** Place-tags whose sub-tree holds no in-range post (dimmed under a filter). */
-  _buildYearDimmed() {
-    const dimmed = new Set();
-    for (const d of this._baseDimmables) {
-      const tag = this._tagsById.get(d.tagId);
-      if (!tag) continue;
-      // _buildSubgraph already honours `_activePostIds`, so an empty post set
-      // means this place contributes nothing inside the selected years.
-      if (this._buildSubgraph(tag).postIds.size === 0) dimmed.add(d.tagId);
-    }
-    return dimmed;
   }
 
   /** Legend toggles hide/show a node type (tag/year/post) like the /tags page. */
@@ -343,7 +288,9 @@ export default class AtlasPage extends Component {
 
   async _load() {
     try {
-      const data = await getTagsGraph();
+      // posts=0: the Atlas only needs markers + hierarchy up front; each place's
+      // posts are fetched lazily on tap (getTagCloud), so skip the full post set.
+      const data = await getTagsGraph({ posts: 0 });
       document.title = "Atlas";
       setCanonical(`${window.location.origin}/tags`);
       this._buildIndexes(data);
@@ -357,37 +304,9 @@ export default class AtlasPage extends Component {
     }
   }
 
-  /** Build the lookup tables the sub-graph slicing needs. */
+  /** Index the tag (marker) nodes; the graph payload no longer carries posts. */
   _buildIndexes(data) {
     (data.tags || []).forEach((t) => this._tagsById.set(t.id, t));
-    (data.posts || []).forEach((p) => this._postsById.set(p.id, p));
-
-    this._membershipEdges = data.membershipEdges || [];
-    this._membershipEdges.forEach((e) => {
-      if (!this._postsByTag.has(e.tag)) this._postsByTag.set(e.tag, new Set());
-      this._postsByTag.get(e.tag).add(e.post);
-      if (!this._tagsByPost.has(e.post)) this._tagsByPost.set(e.post, new Set());
-      this._tagsByPost.get(e.post).add(e.tag);
-
-      // Record each post's date span(s) from the year-tags it carries, so the
-      // timeline can filter posts client-side without re-fetching the graph.
-      const t = this._tagsById.get(e.tag);
-      if (t && t.kind === "year") {
-        const span = parseYearSpan(t.slug);
-        if (span) {
-          if (!this._yearSpansByPost.has(e.post))
-            this._yearSpansByPost.set(e.post, []);
-          this._yearSpansByPost.get(e.post).push(span);
-        }
-      }
-    });
-
-    this._hierarchyEdges = data.hierarchyEdges || [];
-    this._hierarchyEdges.forEach((e) => {
-      if (!this._childrenByTag.has(e.parent))
-        this._childrenByTag.set(e.parent, []);
-      this._childrenByTag.get(e.parent).push(e.child);
-    });
   }
 
   // ── Map ────────────────────────────────────────────────────────────────────
@@ -538,11 +457,6 @@ export default class AtlasPage extends Component {
                 : baseStyle(feature),
             );
 
-          const setDim = (on) =>
-            layer.setStyle(
-              on ? { opacity: 0.12, fillOpacity: 0.03 } : baseStyle(feature),
-            );
-          this._baseDimmables.push({ tagId: tag.id, setDim });
           // Centroid anchor for programmatic reselection (a click uses e.latlng;
           // returning from a post has no click point, so fall back to the tag's
           // own coordinates).
@@ -581,9 +495,6 @@ export default class AtlasPage extends Component {
       const setActive = (on) =>
         marker._icon?.classList.toggle("atlas-marker--active", on);
 
-      const setDim = (on) =>
-        marker._icon?.classList.toggle("atlas-marker--dim", on);
-      this._baseDimmables.push({ tagId: tag.id, setDim });
       this._placeActivators.set(tag.id, {
         latLng: marker.getLatLng(),
         setActive,
@@ -623,13 +534,16 @@ export default class AtlasPage extends Component {
    * itself never navigates; only its centre title chip opens the tag page
    * (see the centre marker handler in _spawnCloud). Empty-map clicks dismiss.
    */
-  _select(tag, anchorLatLng, setActive, key) {
+  _select(tag, anchorLatLng, setActive, key, opts = {}) {
     if (this._activeKey === key) {
-      // Re-clicking the active place recentres its cloud on the new click point
-      // (redraw from the new centre) instead of opening its tag page.
+      // Re-clicking the active place recentres its already-loaded cloud on the
+      // new click point (redraw from the new centre) instead of opening its tag
+      // page or re-fetching.
       this._activeAnchor = anchorLatLng;
-      this._clearCloud();
-      this._spawnCloud(tag, anchorLatLng);
+      if (this._cloudData) {
+        this._clearCloud();
+        this._spawnCloud(tag, anchorLatLng, this._cloudData);
+      }
       if (typeof this._map.panInside === "function") {
         this._map.panInside(anchorLatLng, { padding: [220, 220] });
       }
@@ -642,84 +556,78 @@ export default class AtlasPage extends Component {
     this._activeTag = tag;
     this._activeAnchor = anchorLatLng;
 
-    // Dim every place not connected to this selection, so the selected place and
-    // the places it shares posts with stand out (mirrors the /tags graph). Done
-    // before setActive so the active place keeps its own highlight on top.
-    this._refreshBaseDim();
-
     setActive(true);
     this._activeSetActive = setActive;
 
     this.$("#atlas-hint")?.classList.add("is-hidden");
 
-    this._spawnCloud(tag, anchorLatLng);
+    const spawned = this._loadAndSpawnCloud(tag, anchorLatLng, opts);
 
     // Nudge the place into view if its cloud would spill off an edge.
     if (typeof this._map.panInside === "function") {
       this._map.panInside(anchorLatLng, { padding: [220, 220] });
     }
+    return spawned;
   }
 
   /**
-   * Reconcile base-map place dimming with both filters that can hide a place:
-   * an active selection dims everything not connected to it; failing that, a
-   * year filter dims places with no in-range post. With neither, all places sit
-   * at full strength. The selection takes precedence so its focus reads clearly.
+   * Fetch the place's cloud payload (10 recent posts + 10 popular co-tags,
+   * year-scoped to the active timeline range) and spawn it. Results are cached
+   * per place+year, and a monotonic request token drops the response if the user
+   * has since selected a different place. `opts.focusPostSlug` focuses a post
+   * chip once the cloud is built (used when returning from an opened post).
    */
-  _refreshBaseDim() {
-    const connected = this._activeTag
-      ? this._buildSubgraph(this._activeTag).tagIds
-      : null;
-    for (const d of this._baseDimmables) {
-      let dim = false;
-      if (connected) dim = !connected.has(d.tagId);
-      else if (this._yearDimmed) dim = this._yearDimmed.has(d.tagId);
-      d.setDim(dim);
+  async _loadAndSpawnCloud(tag, anchorLatLng, opts = {}) {
+    const vc = ViewContext.current();
+    const yearParams = vc.years ? { year_from: vc.years[0], year_to: vc.years[1] } : {};
+    const cacheKey = tag.id + "|" + (vc.years ? vc.years.join("-") : "");
+
+    const spawnFrom = (data) => {
+      // Ignore a stale response: the user moved on to another place meanwhile.
+      if (this._unmounted || this._activeTag !== tag || this._activeKey == null) return;
+      this._cloudData = data;
+      this._clearCloud();
+      this._spawnCloud(tag, anchorLatLng, data);
+      if (opts.focusPostSlug) this._focusPostBySlug(opts.focusPostSlug);
+    };
+
+    const cached = this._cloudCache.get(cacheKey);
+    if (cached) {
+      spawnFrom(cached);
+      return;
     }
+
+    const token = ++this._cloudReq;
+    try {
+      const data = await getTagCloud(tag.id, yearParams);
+      this._cloudCache.set(cacheKey, data);
+      if (token !== this._cloudReq) return; // superseded by a newer selection
+      spawnFrom(data);
+    } catch {
+      if (token === this._cloudReq && this._activeTag === tag) {
+        this._clearCloud();
+        this._cloudData = null;
+      }
+    }
+  }
+
+  /** Focus a post chip in the open cloud by its slug, if it's among the loaded posts. */
+  _focusPostBySlug(slug) {
+    if (!this._cloud || !this._cloudData) return;
+    const post = (this._cloudData.posts || []).find((p) => p.slug === slug);
+    if (!post) return;
+    const key = "p" + post.id;
+    if (!this._cloud.nodePos.has(key)) return;
+    this._cloud.focusKey = key;
+    this._applyCloudFocus();
+    this._panToCloudNode(key);
   }
 
   /** Rebuild the active cloud in place (e.g. after a legend filter change). */
   _refreshCloud() {
-    if (!this._activeTag || !this._activeAnchor) return;
+    if (!this._activeTag || !this._activeAnchor || !this._cloudData) return;
     this._clearCloud();
-    this._spawnCloud(this._activeTag, this._activeAnchor);
-  }
-
-  /**
-   * Slice the full graph down to one place and its whole sub-tree. Starting
-   * from the clicked tag we walk the hierarchy down (a country → its cities →
-   * any sub-places), gather every post tagged by any of them, then the co-tags
-   * those posts also carry. Returns the place-tag id set, post id set and the
-   * full included-tag id set so connections can be drawn between them.
-   */
-  _buildSubgraph(rootTag) {
-    const placeTagIds = new Set([rootTag.id]);
-    const queue = [rootTag.id];
-    while (queue.length) {
-      const cur = queue.shift();
-      (this._childrenByTag.get(cur) || []).forEach((c) => {
-        if (!placeTagIds.has(c)) {
-          placeTagIds.add(c);
-          queue.push(c);
-        }
-      });
-    }
-
-    // When a year filter is active only in-range posts feed the slice; co-tags
-    // are then derived from those posts, so the whole cloud narrows to the years.
-    const postIds = new Set();
-    placeTagIds.forEach((tid) => {
-      (this._postsByTag.get(tid) || []).forEach((p) => {
-        if (!this._activePostIds || this._activePostIds.has(p)) postIds.add(p);
-      });
-    });
-
-    const tagIds = new Set(placeTagIds);
-    postIds.forEach((pid) => {
-      (this._tagsByPost.get(pid) || []).forEach((t) => tagIds.add(t));
-    });
-
-    return { placeTagIds, postIds, tagIds };
+    this._spawnCloud(this._activeTag, this._activeAnchor, this._cloudData);
   }
 
   /** Node-type bucket used for colouring + the legend filters. */
@@ -728,29 +636,28 @@ export default class AtlasPage extends Component {
   }
 
   /**
-   * Build the on-map cloud: chips for the place's sub-tags, co-tags and posts,
-   * wired together with their real hierarchy + membership edges. The clicked
-   * tag sits at the centre (the marker / polygon itself); everything else fans
-   * out on rings around it. Legend-hidden node types are dropped.
+   * Build the on-map cloud from a place's fetched payload (`cloudData`): chips
+   * for its ≤10 popular co-tags and ≤10 recent posts, wired together with the
+   * membership + hierarchy edges that payload carries. The clicked tag sits at
+   * the centre (the marker / polygon itself); everything else fans out on rings
+   * around it. Legend-hidden node types are dropped.
    */
-  _spawnCloud(tag, anchorLatLng) {
+  _spawnCloud(tag, anchorLatLng, cloudData) {
     const L = window.L;
-    const { postIds, tagIds } = this._buildSubgraph(tag);
+    if (!cloudData) return;
     const hidden = this._hiddenTypes;
     const centerKey = "t" + tag.id;
 
-    // Satellite tag chips (everything except the centre). The "Place" toggle
-    // hides geo chips here (via _hiddenTypes) while leaving the map markers —
-    // and the selected place's own centre chip — untouched.
+    // Satellite tag chips (the popular co-tags; the centre is excluded by the
+    // backend). The "Place" toggle hides geo chips here (via _hiddenTypes) while
+    // leaving the map markers — and the selected place's own centre chip — untouched.
     const tagSats = [];
-    tagIds.forEach((id) => {
-      if (id === tag.id) return;
-      const t = this._tagsById.get(id);
-      if (!t) return;
+    (cloudData.tags || []).forEach((t) => {
+      if (t.id === tag.id) return;
       const kind = this._kindOf(t);
       if (hidden.has(kind)) return;
       tagSats.push({
-        key: "t" + id,
+        key: "t" + t.id,
         kind,
         label: t.name,
         href: `/tags/${t.slug}`,
@@ -762,11 +669,9 @@ export default class AtlasPage extends Component {
     if (!hidden.has("post")) {
       const useThumbnails =
         (store.get("settings") || {}).use_thumbnails !== false;
-      postIds.forEach((id) => {
-        const p = this._postsById.get(id);
-        if (!p) return;
+      (cloudData.posts || []).forEach((p) => {
         postSats.push({
-          key: "p" + id,
+          key: "p" + p.id,
           kind: "post",
           label: p.title || p.slug,
           href: `/posts/${p.slug}`,
@@ -815,10 +720,10 @@ export default class AtlasPage extends Component {
       this._cloudLines.addLayer(line);
       edges.push({ a, b, line, baseOpacity });
     };
-    this._hierarchyEdges.forEach((e) =>
+    (cloudData.hierarchyEdges || []).forEach((e) =>
       addEdge("t" + e.parent, "t" + e.child, "hier"),
     );
-    this._membershipEdges.forEach((e) =>
+    (cloudData.membershipEdges || []).forEach((e) =>
       addEdge("p" + e.post, "t" + e.tag, "memb"),
     );
 
@@ -914,43 +819,23 @@ export default class AtlasPage extends Component {
     this._applyCloudFocus();
   }
 
-  /** Activate a place by its tag id (programmatic equivalent of a map click). */
-  _selectPlaceById(tagId) {
+  /**
+   * Activate a place by its tag id (programmatic equivalent of a map click).
+   * `opts` is forwarded to _select (e.g. focusPostSlug for post returns).
+   */
+  _selectPlaceById(tagId, opts = {}) {
     const a = this._placeActivators.get(tagId);
     const tag = this._tagsById.get(tagId);
     if (!a || !tag) return false;
-    this._select(tag, a.latLng, a.setActive, a.key);
+    this._select(tag, a.latLng, a.setActive, a.key, opts);
     return true;
   }
 
   /**
-   * Pick a place to reopen for a post on return: prefer the place that was
-   * active when the post was opened (if its sub-tree still holds the post),
-   * else the first geo-tag the post carries, else any place whose sub-tree
-   * contains it (covers a post hung off a city under a drawn country).
-   */
-  _pickPlaceForPost(post, preferredId) {
-    if (preferredId != null && this._placeActivators.has(preferredId)) {
-      const tag = this._tagsById.get(preferredId);
-      if (tag && this._buildSubgraph(tag).postIds.has(post.id)) return preferredId;
-    }
-    const tagIds = this._tagsByPost.get(post.id);
-    if (tagIds) {
-      for (const tid of tagIds) {
-        const t = this._tagsById.get(tid);
-        if (t && this._kindOf(t) === "geo" && this._placeActivators.has(tid)) return tid;
-      }
-    }
-    for (const tid of this._placeActivators.keys()) {
-      const t = this._tagsById.get(tid);
-      if (t && this._buildSubgraph(t).postIds.has(post.id)) return tid;
-    }
-    return null;
-  }
-
-  /**
    * Consume an `atlasReturn` handoff (left by closing a post opened here):
-   * reselect the post's place and focus its chip in the freshly-spawned cloud.
+   * reselect the place that was active when the post opened (carried as
+   * `placeTagId`) and focus the post's chip once its cloud loads. Without global
+   * post data there's no fallback — if the place is gone, we simply don't restore.
    */
   _restoreFromPost() {
     let ctx = null;
@@ -960,23 +845,9 @@ export default class AtlasPage extends Component {
       sessionStorage.removeItem("atlasReturn");
       ctx = JSON.parse(raw);
     } catch { return; }
-    if (!ctx || !ctx.postSlug) return;
+    if (!ctx || !ctx.postSlug || ctx.placeTagId == null) return;
 
-    let post = null;
-    for (const p of this._postsById.values()) {
-      if (p.slug === ctx.postSlug) { post = p; break; }
-    }
-    if (!post) return;
-
-    const placeId = this._pickPlaceForPost(post, ctx.placeTagId);
-    if (placeId == null || !this._selectPlaceById(placeId)) return;
-
-    const postKey = "p" + post.id;
-    if (this._cloud && this._cloud.nodePos.has(postKey)) {
-      this._cloud.focusKey = postKey;
-      this._applyCloudFocus();
-      this._panToCloudNode(postKey);
-    }
+    this._selectPlaceById(ctx.placeTagId, { focusPostSlug: ctx.postSlug });
   }
 
   /** Nudge the map so a cloud chip (or the anchor) sits comfortably in view. */
@@ -1092,13 +963,13 @@ export default class AtlasPage extends Component {
 
   _clearSelection() {
     this._clearCloud();
+    this._cloudData = null;
+    this._cloudReq++; // invalidate any in-flight cloud fetch for the cleared place
     this._activeSetActive?.(false);
     this._activeSetActive = null;
     this._activeKey = null;
     this._activeTag = null;
     this._activeAnchor = null;
-    // No selection now, so dimming falls back to whatever the year filter wants.
-    this._refreshBaseDim();
     this.$("#atlas-hint")?.classList.remove("is-hidden");
   }
 

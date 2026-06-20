@@ -373,6 +373,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/graph", pagesHandler.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/graph/tag/:id", pagesHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
@@ -979,7 +980,10 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 			// `?thumb=<size>` requests an on-demand square thumbnail; a bare
 			// `?thumb` serves the stored thumbnail variant. An unsupported size is
 			// rejected, but a generation failure (e.g. an undecodable image) falls
-			// through to the original below so the image still renders.
+			// through to the original below so the image still renders. A bare
+			// `?thumb` whose stored thumbnail is absent (no path, outside the media
+			// dir, or file missing) likewise falls through to the original rather
+			// than 404ing, so the image still renders.
 			if sizeStr := thumbVals[0]; sizeStr != "" {
 				n, convErr := strconv.Atoi(sizeStr)
 				if convErr != nil || !services.AllowedSquareThumbSize(n) {
@@ -988,21 +992,16 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 				if thumbFile, genErr := mediaSvc.SquareThumbnail(ctx, media, n); genErr == nil {
 					return c.File(thumbFile)
 				}
-			} else {
-				if !media.ThumbnailPath.Valid {
-					return echo.NewHTTPError(http.StatusNotFound, "no thumbnail available")
-				}
+			} else if media.ThumbnailPath.Valid {
 				thumbFile := filepath.Clean(filepath.Join(storagePath, "media", media.ThumbnailPath.String))
 
-				// Security: ensure the resolved file is within the media storage directory.
-				if !strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
-					return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
+				// Security: ensure the resolved file is within the media storage
+				// directory before serving it; otherwise fall through to the original.
+				if strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
+					if _, err := os.Stat(thumbFile); err == nil {
+						return c.File(thumbFile)
+					}
 				}
-
-				if _, err := os.Stat(thumbFile); err != nil {
-					return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
-				}
-				return c.File(thumbFile)
 			}
 		}
 

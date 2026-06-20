@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -270,53 +271,121 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	}
 }
 
-// TestPagesHandler_GetTagsGraph_MediaURL verifies the graph payload carries a
-// preview media_url for image posts (so the atlas cloud can show a thumbnail)
-// and omits it for text-only posts.
-func TestPagesHandler_GetTagsGraph_MediaURL(t *testing.T) {
+// TestPagesHandler_GetTagsGraph_Posts verifies the cloud force-graph still gets
+// posts (with a rewritten thumbnail media_url) by default, while ?posts=0 — the
+// Atlas's lightweight request — omits posts and membership edges entirely.
+func TestPagesHandler_GetTagsGraph_Posts(t *testing.T) {
+	ph, h := setupPagesHandler(t)
+	defer h.close()
+
+	ctx := context.Background()
+	userID := insertUser(h.repo)
+	tag, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Tag1", Slug: "tag-1"})
+	if err != nil {
+		t.Fatalf("tag creation failed: %v", err)
+	}
+	imgPost, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Image Post", Status: "published", AuthorID: userID,
+		ThumbnailPath: "/media/originals/photo.jpg", Tags: []string{tag.Name},
+	})
+	if err != nil {
+		t.Fatalf("post creation failed: %v", err)
+	}
+
+	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "cloud", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
+
+	e := echo.New()
+
+	// Default: the cloud view gets posts, with image previews rewritten to the
+	// small square thumbnail variant.
+	req := httptest.NewRequest(http.MethodGet, "/api/pages/graph", nil)
+	rec := httptest.NewRecorder()
+	if err := ph.GetTagsGraph(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetTagsGraph failed: %v", err)
+	}
+	var full struct {
+		Posts []struct {
+			ID       int64  `json:"id"`
+			MediaURL string `json:"media_url"`
+		} `json:"posts"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &full); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if len(full.Posts) != 1 || full.Posts[0].ID != imgPost.ID {
+		t.Fatalf("expected 1 post (the image post), got %+v", full.Posts)
+	}
+	if full.Posts[0].MediaURL != "/photo.jpg?thumb=128" {
+		t.Errorf("image post media_url = %q, want /photo.jpg?thumb=128", full.Posts[0].MediaURL)
+	}
+
+	// ?posts=0: the Atlas's lightweight request omits posts + membership edges.
+	req = httptest.NewRequest(http.MethodGet, "/api/pages/graph?posts=0", nil)
+	rec = httptest.NewRecorder()
+	if err := ph.GetTagsGraph(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("GetTagsGraph(posts=0) failed: %v", err)
+	}
+	var lite map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &lite); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if _, ok := lite["posts"]; ok {
+		t.Errorf("posts=0 payload should not carry posts")
+	}
+	if _, ok := lite["membershipEdges"]; ok {
+		t.Errorf("posts=0 payload should not carry membershipEdges")
+	}
+	if _, ok := lite["tags"]; !ok {
+		t.Errorf("posts=0 payload should still carry tags")
+	}
+}
+
+// TestPagesHandler_GetTagCloud verifies the per-place cloud caps posts at 10
+// (newest first), rewrites image previews to the small thumbnail variant, and
+// surfaces a popular co-occurring tag.
+func TestPagesHandler_GetTagCloud(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()
 
 	ctx := context.Background()
 	userID := insertUser(h.repo)
 
-	tag, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Tag1", Slug: "tag-1"})
+	place, err := h.tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Berlin", Slug: "berlin"})
 	if err != nil {
 		t.Fatalf("tag creation failed: %v", err)
 	}
 
-	// An image post (explicit thumbnail) and a text-only post, both tagged.
-	imgPost, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
-		Title:         "Image Post",
-		Status:        "published",
-		AuthorID:      userID,
+	// An image post co-tagged with "food", plus 11 more text posts on the place —
+	// 12 in total, so the 10-cap drops the oldest two.
+	if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Photo", Status: "published", AuthorID: userID,
 		ThumbnailPath: "/media/originals/photo.jpg",
-		Tags:          []string{tag.Name},
-	})
-	if err != nil {
+		Tags:          []string{place.Name, "food"},
+	}); err != nil {
 		t.Fatalf("image post creation failed: %v", err)
 	}
-	textPost, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
-		Title:    "Text Post",
-		Status:   "published",
-		AuthorID: userID,
-		Tags:     []string{tag.Name},
-	})
-	if err != nil {
-		t.Fatalf("text post creation failed: %v", err)
+	for i := 0; i < 11; i++ {
+		if _, _, err := h.postSvc.CreatePost(ctx, services.CreatePostParams{
+			Title: fmt.Sprintf("Post %d", i), Status: "published", AuthorID: userID,
+			Tags: []string{place.Name},
+		}); err != nil {
+			t.Fatalf("post %d creation failed: %v", i, err)
+		}
 	}
 
-	// Expose the tag graph publicly so the unauthenticated request is served.
-	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "cloud", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "atlas", "string")
 	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/pages/graph", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/pages/graph/tag/"+strconv.FormatInt(place.ID, 10), nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(strconv.FormatInt(place.ID, 10))
 
-	if err := ph.GetTagsGraph(c); err != nil {
-		t.Fatalf("GetTagsGraph failed: %v", err)
+	if err := ph.GetTagCloud(c); err != nil {
+		t.Fatalf("GetTagCloud failed: %v", err)
 	}
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
@@ -324,25 +393,26 @@ func TestPagesHandler_GetTagsGraph_MediaURL(t *testing.T) {
 
 	var resp struct {
 		Posts []struct {
-			ID       int64  `json:"id"`
+			Title    string `json:"title"`
 			MediaURL string `json:"media_url"`
 		} `json:"posts"`
+		Tags []struct {
+			Slug string `json:"slug"`
+		} `json:"tags"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	byID := map[int64]string{}
-	for _, p := range resp.Posts {
-		byID[p.ID] = p.MediaURL
+	if len(resp.Posts) != 10 {
+		t.Errorf("expected 10 posts (capped), got %d", len(resp.Posts))
 	}
-	// The graph rewrites image previews to the small square thumbnail variant so
-	// the atlas cloud loads 128px chips instead of full-sized originals.
-	if got := byID[imgPost.ID]; got != "/photo.jpg?thumb=128" {
-		t.Errorf("image post media_url = %q, want /photo.jpg?thumb=128", got)
+	if len(resp.Tags) == 0 || resp.Tags[0].Slug != "food" {
+		t.Errorf("expected 'food' as a popular related tag, got %+v", resp.Tags)
 	}
-	if got, ok := byID[textPost.ID]; got != "" {
-		t.Errorf("text post should have no media_url, got %q (present=%v)", got, ok)
+	// The image post is newest, so it leads the list with a rewritten thumbnail.
+	if len(resp.Posts) > 0 && resp.Posts[0].MediaURL != "/photo.jpg?thumb=128" {
+		t.Errorf("newest post media_url = %q, want /photo.jpg?thumb=128", resp.Posts[0].MediaURL)
 	}
 }
 

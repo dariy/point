@@ -96,6 +96,7 @@ type Repository interface {
 	GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error)
 	GetTagDescendants(ctx context.Context, tagID int64) ([]models.Tag, error)
 	GetCoOccurringTags(ctx context.Context, tagID int64, publicOnly bool) ([]models.Tag, error)
+	GetTopCoOccurringTagsForTagIDs(ctx context.Context, tagIDs []int64, rootID int64, publicOnly bool, limit int64) ([]PostTagInfo, error)
 	GetAllTagRelationships(ctx context.Context) ([]TagRelationship, error)
 	ClearTagParents(ctx context.Context, childID int64) error
 	ClearTagChildren(ctx context.Context, parentID int64) error

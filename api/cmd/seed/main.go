@@ -206,6 +206,15 @@ func buildBank(rng *rand.Rand) []bankImg {
 		if err := os.Link(*srcImage, abs); err != nil && !os.IsExist(err) {
 			log.Fatalf("hardlink %s: %v", abs, err)
 		}
+		// Also materialize the stored thumbnail. The bare `?thumb` media route
+		// (used by the admin post list) serves media/thumbnails/<rel> with no
+		// fallback to the original, so a missing file 404s. Hardlink the same
+		// source so the thumbnail path resolves.
+		thumbAbs := filepath.Join(*storage, "media", "thumbnails", rel)
+		must(os.MkdirAll(filepath.Dir(thumbAbs), 0o755))
+		if err := os.Link(*srcImage, thumbAbs); err != nil && !os.IsExist(err) {
+			log.Fatalf("hardlink %s: %v", thumbAbs, err)
+		}
 		bank = append(bank, bankImg{
 			orig:  "originals/" + rel,
 			thumb: "thumbnails/" + rel,
@@ -247,7 +256,12 @@ func seedPostsMediaTags(db *sql.DB, rng *rand.Rand, authorID int64, bank []bankI
 				if k == 0 {
 					first = img
 				}
-				fmt.Fprintf(&b, "![](%s)\n", img.orig)
+				// Store the bare public media path (/YYYY/MM/name) on its own line,
+				// matching how real posts are saved: normalizeContent strips ![](…)
+				// to bare paths, and preprocessContent re-expands them to <img> at
+				// render time. The leading "originals/" DB prefix must be dropped so
+				// serveSimplifiedMedia resolves the URL.
+				fmt.Fprintf(&b, "/%s\n", strings.TrimPrefix(img.orig, "originals/"))
 				mediaSeq++
 				ck := sha256.Sum256([]byte(fmt.Sprintf("stress:%d", mediaSeq)))
 				media = append(media, []any{
