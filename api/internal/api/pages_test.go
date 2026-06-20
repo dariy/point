@@ -414,6 +414,26 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 	if len(resp.Posts) > 0 && resp.Posts[0].MediaURL != "/photo.jpg?thumb=128" {
 		t.Errorf("newest post media_url = %q, want /photo.jpg?thumb=128", resp.Posts[0].MediaURL)
 	}
+
+	// atlas_post_limit overrides the default cap: raise it past the 12 posts and
+	// the cloud returns all of them.
+	_ = h.settingsSvc.SetSetting(ctx, "atlas_post_limit", "12", "integer")
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req, rec2)
+	c2.SetParamNames("id")
+	c2.SetParamValues(strconv.FormatInt(place.ID, 10))
+	if err := ph.GetTagCloud(c2); err != nil {
+		t.Fatalf("GetTagCloud (custom limit) failed: %v", err)
+	}
+	var resp2 struct {
+		Posts []json.RawMessage `json:"posts"`
+	}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("unmarshal (custom limit) failed: %v", err)
+	}
+	if len(resp2.Posts) != 12 {
+		t.Errorf("with atlas_post_limit=12, expected 12 posts, got %d", len(resp2.Posts))
+	}
 }
 
 func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {

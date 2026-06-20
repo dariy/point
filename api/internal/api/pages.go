@@ -728,9 +728,24 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// atlasCloudLimit caps both the recent posts and the popular related tags the
-// Atlas cloud loads for a tapped place.
+// atlasCloudLimit caps the popular related tags the Atlas cloud loads for a
+// tapped place. The recent-posts cap is configurable via the atlas_post_limit
+// setting (see getAtlasPostLimitSetting); this remains the default for both.
 const atlasCloudLimit = 10
+
+// getAtlasPostLimitSetting reads the atlas_post_limit setting — how many recent
+// posts the Atlas cloud loads for a tapped place — defaulting to atlasCloudLimit
+// when unset. Clamped to [1, 100] to keep the per-tap query bounded.
+func getAtlasPostLimitSetting(settings map[string]string) int64 {
+	v, err := strconv.ParseInt(getSettingOr(settings, "atlas_post_limit", strconv.Itoa(atlasCloudLimit)), 10, 64)
+	if err != nil || v < 1 {
+		return atlasCloudLimit
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
+}
 
 // GetTagCloud returns the on-tap cloud for a single place (a geo-tag) on the
 // Atlas: the place's sub-tree's most recent posts (≤atlasCloudLimit) and most
@@ -762,6 +777,7 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	}
 
 	minPosts := getMinTagPostsSetting(allSettings)
+	postLimit := getAtlasPostLimitSetting(allSettings)
 	excluded := func(id int64) bool {
 		if !publicOnly {
 			return false
@@ -786,12 +802,12 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 		from, errF := strconv.Atoi(fromStr)
 		to, errT := strconv.Atoi(toStr)
 		if errF == nil && errT == nil && from <= to {
-			postModels, err = h.repo.GetPostsByTagIDsInYearRange(ctx, subtree, from, to, publicOnly, !publicOnly, false, atlasCloudLimit, 0)
+			postModels, err = h.repo.GetPostsByTagIDsInYearRange(ctx, subtree, from, to, publicOnly, !publicOnly, false, postLimit, 0)
 		} else {
-			postModels, err = h.repo.GetPostsByTagIDs(ctx, subtree, publicOnly, !publicOnly, false, atlasCloudLimit, 0)
+			postModels, err = h.repo.GetPostsByTagIDs(ctx, subtree, publicOnly, !publicOnly, false, postLimit, 0)
 		}
 	} else {
-		postModels, err = h.repo.GetPostsByTagIDs(ctx, subtree, publicOnly, !publicOnly, false, atlasCloudLimit, 0)
+		postModels, err = h.repo.GetPostsByTagIDs(ctx, subtree, publicOnly, !publicOnly, false, postLimit, 0)
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

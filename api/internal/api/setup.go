@@ -100,6 +100,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"show_tag_cloud", "true", "boolean"},
 		{"tags_module", "atlas", "string"},
 		{"tags_visibility", "hidden", "string"},
+		{"atlas_post_limit", "10", "integer"},
 		{"enable_backup", "false", "boolean"},
 	}
 

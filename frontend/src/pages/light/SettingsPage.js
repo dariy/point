@@ -41,6 +41,7 @@ const SETTING_GROUPS = [
       "exif_visibility",
       "tags_module",
       "tags_visibility",
+      "atlas_post_limit",
       "timeline_mode",
     ],
   },
@@ -68,6 +69,7 @@ const SETTING_GROUPS = [
 const LABEL_OVERRIDES = {
   tags_module: "Show tags",
   tags_visibility: "Tags visible to",
+  atlas_post_limit: "Atlas posts to fetch",
 };
 
 const NUMERIC_KEYS = new Set([
@@ -76,6 +78,7 @@ const NUMERIC_KEYS = new Set([
   "storage_quota_mb",
   "session_ttl_days",
   "cleanup_interval_days",
+  "atlas_post_limit",
 ]);
 
 export default class SettingsPage extends Component {
