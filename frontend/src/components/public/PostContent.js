@@ -98,18 +98,14 @@ export class PostContent extends Component {
     const immersive = forceImmersive || shouldUseImmersive(post);
     if (immersive) {
       document.body.classList.add("immersive-layout");
-      const settings = store.get("settings") || {};
       // sheetMode is now handled by the plugin.
       const items = mediaFromHtml(post.content_html || "");
       const viewerProps = {
         items,
         media: post.media || [],
         startIndex: this.props.startIndex || 0,
-        showShare: !sheetMode, // sheet mode carries its own share affordances
-        // Sheet mode hides the site header, so a desktop/non-touch visitor has
-        // no swipe to dismiss with — give them the close cross back (hidden on
-        // touch via CSS, where swipe-down handles it).
-        showClose: sheetMode,
+        showShare: true,
+        showClose: false,
         navPrev: prevPost,
         navNext: nextPost,
         // Extra context the sheet overlay renders (ignored by classic MediaViewer)
