@@ -15,7 +15,7 @@ must 404, and their API routes must 404. Server is the source of truth.
 |---|---|---|
 | 1 — Backend foundation | `point-plugin-system-tdgw.1` | ✅ Done |
 | 2 — Frontend foundation | `point-plugin-system-tdgw.2` | ✅ Done |
-| 3 — Admin Plugins page | `point-plugin-system-tdgw.3` | ⏳ Blocked on Phase 2 |
+| 3 — Admin Plugins page | `point-plugin-system-tdgw.3` | ✅ Done |
 | 4 — Extract plugins (.4–.12) | `point-plugin-system-tdgw.4`…`.12` | ⏳ Blocked |
 | 5 — Hardening | `point-plugin-system-tdgw.13` | ⏳ Blocked |
 
@@ -197,6 +197,67 @@ Branch `plugins`.
 - **`build-css.sh`** already emits `css/p/<id>.css` from plugin CSS partials;
   Phase 5 wires loading those alongside the chunk and derives the SW precache list
   from the manifest.
+
+## Phase 3 — Admin Plugins page ✅
+
+Shipped on branch `plugins`. The admin can now toggle each plugin on/off; the
+toggle drives the enabled-only manifest on the next page load (verified live).
+
+### What was built
+
+- **`api/internal/api/plugins.go`** (new admin-only handler):
+  - `GET /api/plugins` — `ListPlugins` returns the **full** catalog (enabled *and*
+    disabled) in registry order: `{id, type, slot?, routes?, enabled, default_enabled}`.
+  - `PATCH /api/plugins/:id` — `TogglePlugin` sets `plugin.<id>.enabled` via
+    `SettingsService.SetSetting`; unknown ids 404 (never persist outside the
+    registry); returns the updated view.
+  - Wired in `api/cmd/api/main.go` as `pluginsGroup` behind `AuthMiddleware`
+    (same gate as `/api/settings`), placed right after the Settings routes.
+- **`frontend/src/api/plugins.js`** — `getPlugins()` / `setPluginEnabled(id, enabled)`.
+- **`frontend/src/pages/light/PluginsPage.js`** — lists plugins grouped by type
+  (route / slot / enhancer / service) with a `setting-pill` toggle per plugin,
+  type+slot+routes metadata, and a "Settings" deep-link where an existing admin
+  page configures the plugin. Optimistic toggle with revert-on-error + toast.
+- **Route** `/light/plugins` in `app.js`; **nav** entry in `LightSidebar.js`
+  (Manage group); new `PLUGINS_SVG` puzzle icon in `utils/icons.js`.
+- **`frontend/css/light/plugins.css`** (new), wired into `scripts/build-css.sh`
+  after `themes.css`.
+
+### Key decisions (and the reasoning)
+
+1. **The admin endpoint MAY reveal disabled plugins** — it is the one surface
+   that does. This does not violate the hard constraint: that constraint governs
+   the *client-facing manifest* (`window.__PLUGINS__`) and chunk/route 404s, all
+   of which remain enabled-only and server-driven. `/api/plugins` sits behind the
+   same `AuthMiddleware` as `/api/settings`, so only authenticated admins see it.
+2. **The plugin→settings-page mapping lives in the frontend** (`SETTINGS_PATHS`
+   in `PluginsPage.js`), not the backend. The `plugins` package stays decoupled
+   from admin route layout; the backend only emits plugin metadata + state.
+3. **Toggle stores the string `"true"`/`"false"`** (value_type `"string"`),
+   matching `plugins.IsEnabled`'s `v == "true"` check and the Phase 1 seed format.
+4. **Settings link shown only where a real config page exists.** Structural slots
+   (header/footer/breadcrumbs) and `offline-sync` get a toggle but no link.
+
+### Verification
+
+- `go vet ./...` + full backend suite pass, incl. new `internal/api/plugins_test.go`
+  (full-catalog list with mixed state, disable→enable persistence, unknown-id 404).
+- `eslint frontend/src` clean; `node --test frontend/test/*.test.js` — 96 pass.
+- `build-css.sh` / `build-js.sh` succeed (plugin manifest still `{}` — no chunks
+  built this phase, as expected).
+- **Live** (`./point` on a throwaway DB): authed `GET /api/plugins` → 20 plugins
+  with correct shape; `PATCH .../timeline {enabled:false}` → 200, persists across
+  requests; unknown id → 404; unauthenticated → 401. Disabling `timeline` removed
+  it from the served public `window.__PLUGINS__` — the hard constraint holds
+  end-to-end through the admin toggle.
+
+### Carry-forward notes for later phases
+
+- **Phase 4** extraction: as each plugin gets a built chunk, its `hasSlot` flips
+  and the Plugins page toggle then also controls whether the chunk is served.
+  No Plugins-page changes needed.
+- A disabled-plugin toast tells the admin to reload the public site; there is no
+  live push. Fine for an admin tool. Revisit only if a live preview is wanted.
 
 ## Open items / risks (tracked for Phase 5)
 

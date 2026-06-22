@@ -1,0 +1,86 @@
+/* Plugins admin page — catalog of toggleable feature plugins.
+   Reuses .setting-pill (settings.css) for the on/off control. */
+
+.plugins-group {
+    margin-bottom: var(--space-xl);
+}
+
+.plugins-group-header {
+    margin-bottom: var(--space-md);
+}
+
+.plugins-group-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    margin: 0;
+}
+
+.plugins-group-hint {
+    margin: var(--space-2xs) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.plugins-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.plugin-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+}
+
+.plugin-card.is-enabled {
+    border-left: 3px solid var(--color-primary);
+}
+
+.plugin-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    min-width: 0;
+}
+
+.plugin-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.plugin-meta {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    font-family: var(--font-mono, monospace);
+    overflow-wrap: anywhere;
+}
+
+.plugin-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    flex-shrink: 0;
+}
+
+.plugin-settings-link {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.plugin-settings-link:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
+}
+
+.page-intro {
+    margin: 0 0 var(--space-lg);
+    color: var(--text-secondary);
+    max-width: 60ch;
+}

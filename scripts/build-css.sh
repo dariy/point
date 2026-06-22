@@ -41,6 +41,7 @@ cat "$CSS_DIR"/common/tokens.css \
     "$CSS_DIR"/light/settings.css \
     "$CSS_DIR"/light/menu.css \
     "$CSS_DIR"/light/themes.css \
+    "$CSS_DIR"/light/plugins.css \
     "$CSS_DIR"/light/exif.css \
     "$CSS_DIR"/light/responsive.css \
     "$CSS_DIR"/common/lightbox.css \

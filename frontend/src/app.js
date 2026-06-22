@@ -381,6 +381,7 @@ const routes = [
   },
   { path: "/light/menu", load: () => import("./pages/light/MenuPage.js") },
   { path: "/light/themes", load: () => import("./pages/light/ThemesPage.js") },
+  { path: "/light/plugins", load: () => import("./pages/light/PluginsPage.js") },
   {
     path: "/light/settings",
     load: () => import("./pages/light/SettingsPage.js"),

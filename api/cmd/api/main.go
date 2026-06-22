@@ -133,6 +133,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings)
+	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
 	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
@@ -339,6 +340,14 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsGroup.GET("/:key", settingsHandler.GetSettingByKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+
+	// ── Plugins Routes (admin-only) ──────────────────────────────────────────────
+	// Lists the full catalog (enabled + disabled) and toggles enabled state.
+	// Admin-only, so these may reveal disabled plugins — unlike the enabled-only
+	// client manifest.
+	pluginsGroup := e.Group("/api/plugins")
+	pluginsGroup.GET("", pluginsHandler.ListPlugins, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pluginsGroup.PATCH("/:id", pluginsHandler.TogglePlugin, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Instagram Routes ──────────────────────────────────────────────────────
 	igGroup := e.Group("/api/instagram", api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
