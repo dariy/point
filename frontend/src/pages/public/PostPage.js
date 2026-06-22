@@ -6,8 +6,7 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { PublicHeader } from '../../components/public/PublicHeader.js';
-import { PublicFooter } from '../../components/public/PublicFooter.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
@@ -94,7 +93,7 @@ export default class PostPage extends Component {
     // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
     // but keep the custom menu visible since it contains explicit navigation links.
     const isCustomMenu = settings.nav_menu_mode === 'custom';
-    this._headerChild = this.mountChild(PublicHeader, '#header-mount', {
+    pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       navTags: (!post || (immersive && !isCustomMenu)) ? [] : navTags,
       breadcrumb,
@@ -106,12 +105,22 @@ export default class PostPage extends Component {
         const next = !immersive;
         this.setState({ forceImmersive: next });
       },
+    }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._headerChild = comps[0];
+        this._children.push(comps[0]);
+      }
     });
 
     // Immersive footer shows post tags + post-to-post navigation; normal footer shows pagination slot
     const immersiveTags = immersive ? (post?.tags || []) : [];
     const immersiveNav = immersive ? { prev: nav?.prev || null, next: nav?.next || null } : null;
-    this._footerChild = this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags, immersiveNav });
+    pluginHost.fill('footer', this.$('#footer-mount'), { settings, immersiveTags, immersiveNav }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._footerChild = comps[0];
+        this._children.push(comps[0]);
+      }
+    });
 
     if (!post) return;
 

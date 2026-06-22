@@ -6,7 +6,7 @@
  *   immersiveTags {object[]}  When non-empty, renders as immersive tag bar instead of pagination slot
  */
 
-import { Component } from "../Component.js";
+import { Component } from "../../components/Component.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import {
   renderTagLink,

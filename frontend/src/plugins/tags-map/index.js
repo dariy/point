@@ -9,8 +9,7 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { PublicHeader } from "../../components/public/PublicHeader.js";
-import { PublicFooter } from "../../components/public/PublicFooter.js";
+
 import { pluginHost } from "../../core/pluginHost.js";
 import { getMapPage } from "../../api/pages.js";
 import { store } from "../../store.js";
@@ -150,14 +149,21 @@ export default class MapPage extends Component {
     const settings = store.get("settings") || {};
     const canShowTimeline = pluginHost.hasSlot("timeline");
     this._canShowTimeline = canShowTimeline;
-    this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
+    pluginHost.fill("header", this.$("#header-mount"), {
       settings,
       currentPath: "/tags",
       breadcrumb: this._buildBreadcrumb(),
       total: this.state.tags?.length || 0,
       timelineVisible: true,
+    }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._headerChild = comps[0];
+        this._children.push(comps[0]);
+      }
     });
-    this.mountChild(PublicFooter, "#footer-mount", { settings });
+    pluginHost.fill("footer", this.$("#footer-mount"), { settings }).then(comps => {
+      if (comps[0] && !this._unmounted) this._children.push(comps[0]);
+    });
 
     if (canShowTimeline) {
       pluginHost.fill("timeline", this.$("#timeline-mount"), {

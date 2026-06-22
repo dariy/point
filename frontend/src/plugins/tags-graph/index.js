@@ -14,8 +14,7 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { PublicHeader } from '../../components/public/PublicHeader.js';
-import { PublicFooter } from '../../components/public/PublicFooter.js';
+
 import { getTagsGraph } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
@@ -108,7 +107,9 @@ export default class TagsPage extends Component {
   afterRender() {
     const settings = store.get('settings') || {};
     this._updateBreadcrumb(null);
-    this.mountChild(PublicFooter, '#footer-mount', { settings });
+    pluginHost.fill('footer', this.$('#footer-mount'), { settings }).then(comps => {
+      if (comps[0] && !this._unmounted) this._children.push(comps[0]);
+    });
 
     if (this.state.loading) {
       this._load();
@@ -235,12 +236,21 @@ export default class TagsPage extends Component {
          </div>`
       : '';
 
-    this.mountChild(PublicHeader, '#header-mount', {
+    if (this._headerChild) {
+      this._headerChild.unmount();
+      this._children = this._children.filter(c => c !== this._headerChild);
+    }
+    pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       navTags,
       currentPath: '/tags',
       breadcrumb,
       slot: filterSlot,
+    }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._headerChild = comps[0];
+        this._children.push(comps[0]);
+      }
     });
   }
 

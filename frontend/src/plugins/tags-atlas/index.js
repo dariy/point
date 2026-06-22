@@ -14,8 +14,7 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { PublicHeader } from "../../components/public/PublicHeader.js";
-import { PublicFooter } from "../../components/public/PublicFooter.js";
+
 import { pluginHost } from "../../core/pluginHost.js";
 import { getTagsGraph, getTagCloud } from "../../api/pages.js";
 import { store } from "../../store.js";
@@ -173,12 +172,16 @@ export default class AtlasPage extends Component {
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
 
     const settings = store.get("settings") || {};
-    this.mountChild(PublicHeader, "#header-mount", {
+    pluginHost.fill("header", this.$("#header-mount"), {
       settings,
       currentPath: "/tags",
       timelineVisible: true,
+    }).then(comps => {
+      if (comps[0] && !this._unmounted) this._children.push(comps[0]);
     });
-    this.mountChild(PublicFooter, "#footer-mount", { settings });
+    pluginHost.fill("footer", this.$("#footer-mount"), { settings }).then(comps => {
+      if (comps[0] && !this._unmounted) this._children.push(comps[0]);
+    });
 
     // Timeline year filter — same visibility gating as /map: shown to everyone
     // in "all" mode, and to signed-in users when it's "hidden" from the public.

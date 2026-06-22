@@ -12,8 +12,7 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { PublicHeader } from "../../components/public/PublicHeader.js";
-import { PublicFooter } from "../../components/public/PublicFooter.js";
+
 import { PostGrid } from "../../components/public/PostGrid.js";
 import { PostCard } from "../../components/public/PostCard.js";
 import {
@@ -340,7 +339,7 @@ export default class TagPage extends Component {
         ? [...breadcrumb, { name: post.title, slug: null }]
         : breadcrumb;
 
-      this.mountChild(PublicHeader, "#header-mount", {
+      pluginHost.fill("header", this.$("#header-mount"), {
         settings,
         navTags: immersive && !isCustomMenu ? [] : navTags,
         currentTagSlug: slug,
@@ -349,14 +348,18 @@ export default class TagPage extends Component {
         editUrl: post ? `/light/posts/${post.id}/edit` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline,
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
 
-      this.mountChild(PublicFooter, "#footer-mount", {
+      pluginHost.fill("footer", this.$("#footer-mount"), {
         settings,
         immersiveTags: immersive ? post.tags || [] : [],
         immersiveNav: immersive ? { prev: prevPost, next: nextPost } : null,
         tagSlug: immersive ? slug : null,
         exifMedia: immersive ? post.media || [] : [],
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
 
       this.mountChild(PostContent, "#content-mount", {
@@ -380,7 +383,7 @@ export default class TagPage extends Component {
       });
     } else {
       // ── Grid view ───────────────────────────────────────────────────────────
-      this.mountChild(PublicHeader, "#header-mount", {
+      pluginHost.fill("header", this.$("#header-mount"), {
         settings,
         navTags: this._isPostView() ? [] : navTags,
         currentTagSlug: slug,
@@ -389,8 +392,12 @@ export default class TagPage extends Component {
         editUrl: tag ? `/light/tags/${tag.slug}` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline,
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
-      this.mountChild(PublicFooter, "#footer-mount", { settings });
+      pluginHost.fill("footer", this.$("#footer-mount"), { settings }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
+      });
 
       if (this.state.loading || !data) return;
 

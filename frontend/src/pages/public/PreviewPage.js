@@ -6,10 +6,9 @@
  *
  * Renders the post in preview mode with a notice banner.
  */
-
+import { pluginHost } from '../../core/pluginHost.js';
 import { Component } from '../../components/Component.js';
-import { PublicHeader } from '../../components/public/PublicHeader.js';
-import { PublicFooter } from '../../components/public/PublicFooter.js';
+
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { api } from '../../api/client.js';
 import { store } from '../../store.js';
@@ -64,8 +63,16 @@ export default class PreviewPage extends Component {
   afterRender() {
     const settings = store.get('settings') || {};
     const navTags = store.get('navTags') || [];
-    this.mountChild(PublicHeader, '#header-mount', { settings, navTags, currentPath: '' });
-    this.mountChild(PublicFooter, '#footer-mount', { settings });
+    pluginHost.fill('header', this.$('#header-mount'), { settings, navTags, currentPath: '' }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._children.push(comps[0]);
+      }
+    });
+    pluginHost.fill('footer', this.$('#footer-mount'), { settings }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._children.push(comps[0]);
+      }
+    });
 
     if (this.state.post) {
       const immersive = this.state.forceImmersive || shouldUseImmersive(this.state.post);

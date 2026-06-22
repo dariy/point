@@ -8,8 +8,7 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { PublicHeader } from '../../components/public/PublicHeader.js';
-import { PublicFooter } from '../../components/public/PublicFooter.js';
+
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { PostCard } from '../../components/public/PostCard.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
@@ -225,17 +224,27 @@ export default class HomePage extends Component {
     // but keep the custom menu visible since it contains explicit navigation links.
     const isCustomMenu = settings.nav_menu_mode === 'custom';
     const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
-    this.mountChild(PublicHeader, '#header-mount', {
+    pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       currentPath: '/',
       navTags: (immersive && !isCustomMenu) ? [] : navTags,
       editUrl: (isStaticHomePage && post) ? `/light/posts/${post.id}/edit` : null,
       total,
       timelineVisible: this._canShowTimeline,
+    }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._headerChild = comps[0];
+        this._children.push(comps[0]);
+      }
     });
 
     const immersiveTags = (isStaticHomePage && immersive) ? (post.tags || []) : [];
-    this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags });
+    pluginHost.fill('footer', this.$('#footer-mount'), { settings, immersiveTags }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._footerChild = comps[0];
+        this._children.push(comps[0]);
+      }
+    });
 
     if (this.state.loading || !this.state.data) return;
 

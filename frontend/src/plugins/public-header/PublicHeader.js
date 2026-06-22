@@ -16,7 +16,7 @@
  *                               own full-width row on mobile), e.g. a page control.
  */
 
-import { Component } from '../Component.js';
+import { Component } from '../../components/Component.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';

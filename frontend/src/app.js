@@ -23,7 +23,6 @@ import { pluginHost } from "./core/pluginHost.js";
 import { ToastContainer } from "./components/shared/Toast.js";
 import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
 import { initNotificationLog } from "./utils/notificationLog.js";
-import { syncQueue } from "./utils/sync.js";
 
 // ── Theming Foundation ────────────────────────────────────────────────────
 import "./utils/PointBus.js";
@@ -154,24 +153,21 @@ store.subscribe("theme", (theme) => {
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 
 async function bootstrap() {
-  // 0. Register service worker (PWA shell cache + Web Share Target).
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch((err) => {
-      console.warn("[SW] Registration failed:", err);
-    });
+  // 0. Init offline sync plugin if enabled
+  const offlineEntry = pluginHost._byId.get("offline-sync");
+  if (offlineEntry && offlineEntry.entry) {
+    try {
+      const mod = await pluginHost.loadEntry(offlineEntry);
+      if (mod && mod.mount) await mod.mount(store);
+    } catch { /* ignore */ }
+  } else if (!pluginHost.size || pluginHost.isEnabled("offline-sync")) {
+    try {
+      const mod = await import("./plugins/offline-sync/index.js");
+      if (mod && mod.mount) await mod.mount(store);
+    } catch { /* ignore */ }
   }
 
-  // 0.1 Handle offline Treated as unauthenticated if network fails
-  try {
-    const lastSync = await (
-      await import("./utils/offlineStore.js")
-    ).getMeta("last_sync");
-    if (lastSync) {
-      store.set("offline_status", { available: true, last_sync: lastSync });
-    }
-  } catch {
-    /* ignore */
-  }
+
 
   // 1. Fetch public settings (best-effort — fall back to last cached values).
   let settings = {};
@@ -239,9 +235,6 @@ async function bootstrap() {
 
 
 
-  // 7. Sync queue when online
-  window.addEventListener("online", syncQueue);
-  if (navigator.onLine) syncQueue();
 }
 
 // ── Route table ───────────────────────────────────────────────────────────
@@ -341,11 +334,6 @@ const routes = [
   },
 
   // Admin (Light) — protected
-  { path: "/light", load: () => import("./pages/light/DashboardPage.js") },
-  {
-    path: "/light/posts",
-    load: () => import("./pages/light/PostsListPage.js"),
-  },
   {
     path: "/light/posts/new",
     load: () => import("./pages/light/PostEditPage.js"),
@@ -354,7 +342,6 @@ const routes = [
     path: "/light/posts/:id/edit",
     load: () => import("./pages/light/PostEditPage.js"),
   },
-  { path: "/light/media", load: () => import("./pages/light/MediaPage.js") },
   {
     path: "/light/tags",
     load: () => import("./pages/light/TagsManagerPage.js"),

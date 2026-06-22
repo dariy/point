@@ -86,7 +86,7 @@ var Registry = []Descriptor{
 	{ID: "passkeys", Type: TypeService, Routes: []string{"/api/auth/webauthn"}, DefaultEnabled: true},
 	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: true},
 	{ID: "backups", Type: TypeService, DefaultEnabled: true},
-	{ID: "offline-sync", Type: TypeService, DefaultEnabled: true},
+	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: true},
 }
 
 // byID indexes Registry for O(1) lookups.
