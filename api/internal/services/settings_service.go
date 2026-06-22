@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 
 	"point-api/internal/config"
 	"point-api/internal/models"
@@ -15,7 +16,9 @@ import (
 )
 
 type SettingsService struct {
-	repo repository.Repository
+	repo  repository.Repository
+	mu    sync.RWMutex
+	cache map[string]string
 }
 
 func NewSettingsService(repo repository.Repository) *SettingsService {
@@ -23,6 +26,17 @@ func NewSettingsService(repo repository.Repository) *SettingsService {
 }
 
 func (s *SettingsService) GetSetting(ctx context.Context, key string, defaultValue string) (string, error) {
+	s.mu.RLock()
+	if s.cache != nil {
+		if val, ok := s.cache[key]; ok {
+			s.mu.RUnlock()
+			return val, nil
+		}
+		s.mu.RUnlock()
+		return defaultValue, nil
+	}
+	s.mu.RUnlock()
+
 	setting, err := s.repo.GetSetting(ctx, key)
 	if err != nil {
 		return defaultValue, nil
@@ -39,6 +53,13 @@ func (s *SettingsService) SetSetting(ctx context.Context, key string, value stri
 		Value:     sql.NullString{String: value, Valid: true},
 		ValueType: valueType,
 	})
+	if err == nil {
+		s.mu.Lock()
+		if s.cache != nil {
+			s.cache[key] = value
+		}
+		s.mu.Unlock()
+	}
 	return err
 }
 
@@ -59,17 +80,36 @@ func (s *SettingsService) GetConfigSetting(ctx context.Context, key string, envV
 }
 
 func (s *SettingsService) GetAllSettings(ctx context.Context) (map[string]string, error) {
+	s.mu.RLock()
+	if s.cache != nil {
+		res := make(map[string]string, len(s.cache))
+		for k, v := range s.cache {
+			res[k] = v
+		}
+		s.mu.RUnlock()
+		return res, nil
+	}
+	s.mu.RUnlock()
+
 	settings, err := s.repo.ListSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[string]string)
-	for _, s := range settings {
-		if s.Value.Valid {
-			result[s.Key] = s.Value.String
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cache = make(map[string]string)
+	for _, setting := range settings {
+		if setting.Value.Valid {
+			s.cache[setting.Key] = setting.Value.String
 		}
 	}
-	return result, nil
+
+	res := make(map[string]string, len(s.cache))
+	for k, v := range s.cache {
+		res[k] = v
+	}
+	return res, nil
 }
 
 func (s *SettingsService) GetSecret(ctx context.Context, key string) (string, error) {

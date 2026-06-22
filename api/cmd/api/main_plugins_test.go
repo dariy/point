@@ -28,6 +28,12 @@ func writePluginFrontend(t *testing.T, pluginID string) (string, string) {
 	if err := os.WriteFile(filepath.Join(pDir, chunk), []byte("export const x=1;"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A shared code-split chunk (not a manifest entry): emitted by the bundler
+	// when common code is imported by multiple plugin entries. It must be served
+	// ungated so enabled plugins can resolve their imports.
+	if err := os.WriteFile(filepath.Join(pDir, "chunk-5HARED01.js"), []byte("export const s=1;"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(jsDir, "app.js"), []byte("export const app=1;"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -82,12 +88,22 @@ func TestPluginChunkGating(t *testing.T) {
 		t.Errorf("traversal should not serve app.js via gated handler (got %d)", code)
 	}
 
-	// Disable the plugin → its chunk now 404s.
+	// Shared (non-entry) chunks are served ungated — a plugin entry imports them.
+	if code := get("/assets/js/p/chunk-5HARED01.js"); code != http.StatusOK {
+		t.Errorf("shared chunk should serve 200, got %d", code)
+	}
+
+	// Disable the plugin → its entry chunk now 404s.
 	if err := svcs.Settings.SetSetting(context.Background(), plugins.EnabledKey(id), "false", "boolean"); err != nil {
 		t.Fatal(err)
 	}
 	if code := get("/assets/js/p/" + chunk); code != http.StatusNotFound {
 		t.Errorf("disabled plugin chunk should 404, got %d", code)
+	}
+
+	// ...but shared chunks remain reachable regardless of any plugin's state.
+	if code := get("/assets/js/p/chunk-5HARED01.js"); code != http.StatusOK {
+		t.Errorf("shared chunk should still serve 200 when a plugin is disabled, got %d", code)
 	}
 }
 

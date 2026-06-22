@@ -130,13 +130,14 @@ type ManifestEntry struct {
 	Slot   string   `json:"slot,omitempty"`
 	Routes []string `json:"routes,omitempty"`
 	Entry  string   `json:"entry,omitempty"`
+	Css    string   `json:"css,omitempty"`
 }
 
 // BuildManifest returns the enabled-only manifest. chunks maps a plugin id to
 // its hashed chunk filename (from the build's plugin-manifest.json); when a
 // plugin has no built chunk yet (Phase 1) its Entry is left empty. Disabled
 // plugins are omitted entirely.
-func BuildManifest(settings map[string]string, chunks map[string]string) []ManifestEntry {
+func BuildManifest(settings map[string]string, chunks map[string]string, cssMap map[string]bool) []ManifestEntry {
 	out := make([]ManifestEntry, 0, len(Registry))
 	for _, d := range Registry {
 		if !IsEnabled(d.ID, settings) {
@@ -147,6 +148,9 @@ func BuildManifest(settings map[string]string, chunks map[string]string) []Manif
 			if chunk, ok := chunks[d.ID]; ok && chunk != "" {
 				e.Entry = "/assets/js/p/" + chunk
 			}
+		}
+		if cssMap != nil && cssMap[d.ID] {
+			e.Css = "/assets/css/p/" + d.ID + ".css"
 		}
 		out = append(out, e)
 	}
@@ -176,6 +180,22 @@ func LoadChunkMap(path string) map[string]string {
 	var m map[string]string
 	if err := json.Unmarshal(b, &m); err != nil {
 		return map[string]string{}
+	}
+	return m
+}
+
+// LoadCssMap reads the plugin CSS output directory to map plugin ids that have CSS.
+func LoadCssMap(dir string) map[string]bool {
+	m := make(map[string]bool)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return m
+	}
+	for _, e := range entries {
+		if !e.IsDir() && len(e.Name()) > 4 && e.Name()[len(e.Name())-4:] == ".css" {
+			id := e.Name()[:len(e.Name())-4]
+			m[id] = true
+		}
 	}
 	return m
 }

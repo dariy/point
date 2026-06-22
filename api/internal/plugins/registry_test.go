@@ -42,7 +42,7 @@ func TestBuildManifest_OmitsDisabledAndResolvesChunks(t *testing.T) {
 		"immersive": "immersive-ABC123.js",
 		"timeline":  "timeline-XYZ789.js",
 	}
-	manifest := BuildManifest(settings, chunks)
+	manifest := BuildManifest(settings, chunks, nil)
 
 	for _, e := range manifest {
 		if e.ID == "timeline" {
@@ -67,7 +67,7 @@ func TestBuildManifest_OmitsDisabledAndResolvesChunks(t *testing.T) {
 func TestBuildManifest_EmptyChunkMapLeavesEntryEmpty(t *testing.T) {
 	// Phase 1 state: no chunks built, every Entry empty, but all enabled plugins
 	// still present in the manifest.
-	manifest := BuildManifest(map[string]string{}, map[string]string{})
+	manifest := BuildManifest(map[string]string{}, map[string]string{}, nil)
 	if len(manifest) != len(Registry) {
 		t.Fatalf("expected %d entries (all enabled), got %d", len(Registry), len(manifest))
 	}
@@ -85,7 +85,7 @@ func TestBuildManifest_NeverLeaksDisabledOrDefaults(t *testing.T) {
 	for _, d := range Registry {
 		settings[EnabledKey(d.ID)] = "false"
 	}
-	manifest := BuildManifest(settings, map[string]string{})
+	manifest := BuildManifest(settings, map[string]string{}, nil)
 	if len(manifest) != 0 {
 		t.Fatalf("expected empty manifest, got %d entries", len(manifest))
 	}
@@ -94,7 +94,7 @@ func TestBuildManifest_NeverLeaksDisabledOrDefaults(t *testing.T) {
 		t.Errorf("expected [] manifest JSON, got %s", s)
 	}
 	for _, d := range Registry {
-		b, _ := json.Marshal(BuildManifest(settings, map[string]string{}))
+		b, _ := json.Marshal(BuildManifest(settings, map[string]string{}, nil))
 		if strings.Contains(string(b), d.ID) {
 			t.Errorf("disabled plugin %q leaked into manifest JSON", d.ID)
 		}
@@ -102,7 +102,7 @@ func TestBuildManifest_NeverLeaksDisabledOrDefaults(t *testing.T) {
 }
 
 func TestBuildManifest_JSONHasNoDefaultEnabledField(t *testing.T) {
-	b, _ := json.Marshal(BuildManifest(map[string]string{}, map[string]string{}))
+	b, _ := json.Marshal(BuildManifest(map[string]string{}, map[string]string{}, nil))
 	if strings.Contains(strings.ToLower(string(b)), "default") {
 		t.Errorf("manifest JSON must not expose DefaultEnabled: %s", b)
 	}

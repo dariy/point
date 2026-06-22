@@ -46,12 +46,12 @@ func init() {
 // because enabled-state can change at runtime; chunks is the static build map.
 // json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
 // embed inline. Disabled plugins are absent from the result entirely.
-func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string) (string, string) {
+func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
 	all, err := settings.GetAllSettings(ctx)
 	if err != nil {
 		all = map[string]string{}
 	}
-	b, err := json.Marshal(plugins.BuildManifest(all, chunks))
+	b, err := json.Marshal(plugins.BuildManifest(all, chunks, cssMap))
 	if err != nil {
 		b = []byte("[]")
 	}
@@ -415,17 +415,18 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
-	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
-	// Auth-gated: unauthenticated clients see 404 for non-public media.
-	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo, svcs.Media), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
 	// Static build map (plugin id → hashed chunk filename). Empty in Phase 1
 	// (no per-plugin chunks built yet), which makes every /assets/js/p/* request
 	// 404 and every manifest Entry empty — the intended foundation state.
 	chunkMap := plugins.LoadChunkMap(filepath.Join(frontendDir, "js", "plugin-manifest.json"))
+	cssMap := plugins.LoadCssMap(filepath.Join(frontendDir, "css", "p"))
+
+	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
+	// Auth-gated: unauthenticated clients see 404 for non-public media.
+	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo, svcs.Media, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	if fi, err := os.Stat(frontendDir); err == nil && fi.IsDir() {
 		cssDir := filepath.Join(frontendDir, "css")
 		imagesDir := filepath.Join(frontendDir, "images")
@@ -445,16 +446,19 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 				if name == "." || name == "/" || name == "" {
 					return echo.NewHTTPError(http.StatusNotFound, "not found")
 				}
-				id, ok := plugins.PluginForChunk(chunkMap, name)
-				if !ok {
-					return echo.NewHTTPError(http.StatusNotFound, "not found")
-				}
-				all, err := svcs.Settings.GetAllSettings(c.Request().Context())
-				if err != nil {
-					return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
-				}
-				if !plugins.IsEnabled(id, all) {
-					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				// Named entry chunks (a plugin id in plugin-manifest.json) are
+				// gated: a disabled plugin's entry 404s even if its filename is
+				// guessed. Shared code-split chunks (chunk-*.js) are not entries —
+				// they carry common code imported by multiple plugin entries and
+				// must be served so enabled plugins can resolve their imports.
+				if id, ok := plugins.PluginForChunk(chunkMap, name); ok {
+					all, err := svcs.Settings.GetAllSettings(c.Request().Context())
+					if err != nil {
+						return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
+					}
+					if !plugins.IsEnabled(id, all) {
+						return echo.NewHTTPError(http.StatusNotFound, "not found")
+					}
 				}
 				return c.File(filepath.Join(pluginChunkDir, name))
 			})
@@ -533,7 +537,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
-						script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap)
+						script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
 						sb.WriteString(script)
 						sb.WriteString("\n</head>")
 						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
@@ -549,7 +553,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			// Generic SPA route: serve index.html with the enabled-only plugin
 			// manifest injected so the client bootstrap always sees __PLUGINS__.
 			if b, err := os.ReadFile(indexHTML); err == nil {
-				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap)
+				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
 				htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
 				
 				csp := c.Response().Header().Get("Content-Security-Policy")
@@ -990,7 +994,7 @@ var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 //   - No query param serves the original (media/originals/…).
 //
 // Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository, mediaSvc *services.MediaService) echo.HandlerFunc {
+func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository, mediaSvc *services.MediaService, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -1001,6 +1005,16 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 		monthInt, monthErr := strconv.Atoi(month)
 		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
 			if _, err := os.Stat(indexHTML); err == nil {
+				if b, err := os.ReadFile(indexHTML); err == nil {
+					script, hash := pluginManifestScript(c.Request().Context(), settings, chunks, cssMap)
+					htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
+					
+					csp := c.Response().Header().Get("Content-Security-Policy")
+					csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+					c.Response().Header().Set("Content-Security-Policy", csp)
+					
+					return c.HTML(http.StatusOK, htmlStr)
+				}
 				return c.File(indexHTML)
 			}
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{

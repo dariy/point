@@ -86,12 +86,18 @@ class PluginHost {
     return this.slotEntries(slot).length > 0;
   }
 
-  /** Lazily import a plugin chunk, memoising the module promise per URL. */
-  _import(entry) {
-    if (!this._loaded.has(entry)) {
-      this._loaded.set(entry, import(/* @vite-ignore */ entry));
+  /** Lazily import a plugin chunk and its CSS, memoising the module promise per URL. */
+  _import(e) {
+    if (!this._loaded.has(e.entry)) {
+      if (e.css && typeof document !== "undefined" && !document.querySelector(`link[href="${e.css}"]`)) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = e.css;
+        document.head.appendChild(link);
+      }
+      this._loaded.set(e.entry, import(/* @vite-ignore */ e.entry));
     }
-    return this._loaded.get(entry);
+    return this._loaded.get(e.entry);
   }
 
   /**
@@ -104,7 +110,7 @@ class PluginHost {
     const out = [];
     for (const e of this.slotEntries(slot)) {
       try {
-        const mod = await this._import(e.entry);
+        const mod = await this._import(e);
         const mount = mod.mount || mod.default;
         if (typeof mount === "function") {
           out.push(await mount(el, { ...ctx, plugin: e }));
@@ -128,12 +134,12 @@ class PluginHost {
     if (!entries.length) return null;
     const e = choose ? choose(entries) : entries[0];
     if (!e || !e.entry) return null;
-    return this._import(e.entry);
+    return this._import(e);
   }
 
   /** Import a route plugin's chunk module (`{ default: PageClass }`). */
   loadEntry(entry) {
-    return this._import(entry.entry);
+    return this._import(entry);
   }
 
   /**
