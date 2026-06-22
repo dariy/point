@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"log"
@@ -18,6 +19,7 @@ import (
 
 	"point-api/internal/api"
 	"point-api/internal/config"
+	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
@@ -37,6 +39,23 @@ func init() {
 // resolveJSDir returns the directory to serve under /assets/js.
 // It prefers the pre-built bundle directory (frontend/js/) over the raw
 // source directory (frontend/src/), enabling zero-config dev/prod switching.
+// pluginManifestScript renders the enabled-only plugin manifest as an inline
+// <script> assigning window.__PLUGINS__. The manifest is computed per request
+// because enabled-state can change at runtime; chunks is the static build map.
+// json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
+// embed inline. Disabled plugins are absent from the result entirely.
+func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string) string {
+	all, err := settings.GetAllSettings(ctx)
+	if err != nil {
+		all = map[string]string{}
+	}
+	b, err := json.Marshal(plugins.BuildManifest(all, chunks))
+	if err != nil {
+		b = []byte("[]")
+	}
+	return "\n  <script>window.__PLUGINS__=" + string(b) + ";</script>"
+}
+
 func resolveJSDir(frontendDir string) string {
 	jsDir := filepath.Join(frontendDir, "js")
 	if _, err := os.Stat(jsDir); err == nil {
@@ -389,6 +408,10 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
+	// Static build map (plugin id → hashed chunk filename). Empty in Phase 1
+	// (no per-plugin chunks built yet), which makes every /assets/js/p/* request
+	// 404 and every manifest Entry empty — the intended foundation state.
+	chunkMap := plugins.LoadChunkMap(filepath.Join(frontendDir, "js", "plugin-manifest.json"))
 	if fi, err := os.Stat(frontendDir); err == nil && fi.IsDir() {
 		cssDir := filepath.Join(frontendDir, "css")
 		imagesDir := filepath.Join(frontendDir, "images")
@@ -398,6 +421,29 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			e.Static("/assets/css", cssDir)
 		}
 		if jsDir := resolveJSDir(frontendDir); jsDir != "" {
+			// Gated plugin-chunk handler: serves /assets/js/p/* only for ENABLED
+			// plugins, so disabled code 404s even if a filename is guessed.
+			// Registered before the broad /assets/js static route so the more
+			// specific prefix wins. Chunks live under <jsDir>/p/.
+			pluginChunkDir := filepath.Join(jsDir, "p")
+			e.GET("/assets/js/p/*", func(c echo.Context) error {
+				name := filepath.Base(filepath.Clean("/" + c.Param("*")))
+				if name == "." || name == "/" || name == "" {
+					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				}
+				id, ok := plugins.PluginForChunk(chunkMap, name)
+				if !ok {
+					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				}
+				all, err := svcs.Settings.GetAllSettings(c.Request().Context())
+				if err != nil {
+					return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
+				}
+				if !plugins.IsEnabled(id, all) {
+					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				}
+				return c.File(filepath.Join(pluginChunkDir, name))
+			})
 			e.Static("/assets/js", jsDir)
 		}
 		if fi, err := os.Stat(imagesDir); err == nil && fi.IsDir() {
@@ -473,11 +519,19 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
+						sb.WriteString(pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap))
 						sb.WriteString("\n</head>")
 						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
 						return c.HTML(http.StatusOK, htmlStr)
 					}
 				}
+			}
+			// Generic SPA route: serve index.html with the enabled-only plugin
+			// manifest injected so the client bootstrap always sees __PLUGINS__.
+			if b, err := os.ReadFile(indexHTML); err == nil {
+				script := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap)
+				htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
+				return c.HTML(http.StatusOK, htmlStr)
 			}
 			return c.File(indexHTML)
 		}
