@@ -22,7 +22,7 @@ import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
-import { APP_LOGO_SVG, MAP_SVG, GLOBE_SVG, TAGS_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
+import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { hideFlyout } from '../../utils/tags.js';
 
@@ -30,11 +30,7 @@ export class PublicHeader extends Component {
   render() {
     const {
       settings = {},
-      currentPath = '/',
-      navTags = [],
       breadcrumb = [],
-      total = 0,
-      timelineVisible = false,
       editUrl = null,
       showShare = false,
       immersive = false,
@@ -44,8 +40,6 @@ export class PublicHeader extends Component {
 
     const user = store.get('user');
     const blogSettings = store.get('settings') || {};
-    const isCustomMenu = blogSettings.nav_menu_mode === 'custom';
-    const title    = escapeHtml(settings.blog_title || 'Photo Blog');
     const subtitle = escapeHtml(settings.blog_subtitle || '');
 
     const shareButtonHtml = showShare
@@ -162,7 +156,7 @@ export class PublicHeader extends Component {
 
 
   afterRender() {
-    const { navTags = [], onToggleImmersive } = this.props;
+    const { onToggleImmersive } = this.props;
 
     this.container.querySelectorAll('.immersive-toggle-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {

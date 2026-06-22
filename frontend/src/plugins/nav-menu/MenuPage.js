@@ -9,7 +9,7 @@
 
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
-import { getAdminNavMenu, updateAdminNavMenu, getNavMenu } from './api.js';
+import { getAdminNavMenu, updateAdminNavMenu } from './api.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
