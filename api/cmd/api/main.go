@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -44,7 +46,7 @@ func init() {
 // because enabled-state can change at runtime; chunks is the static build map.
 // json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
 // embed inline. Disabled plugins are absent from the result entirely.
-func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string) string {
+func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string) (string, string) {
 	all, err := settings.GetAllSettings(ctx)
 	if err != nil {
 		all = map[string]string{}
@@ -53,7 +55,10 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 	if err != nil {
 		b = []byte("[]")
 	}
-	return "\n  <script>window.__PLUGINS__=" + string(b) + ";</script>"
+	scriptContent := "window.__PLUGINS__=" + string(b) + ";"
+	hash := sha256.Sum256([]byte(scriptContent))
+	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
+	return "\n  <script>" + scriptContent + "</script>", hashBase64
 }
 
 func resolveJSDir(frontendDir string) string {
@@ -528,9 +533,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
-						sb.WriteString(pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap))
+						script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap)
+						sb.WriteString(script)
 						sb.WriteString("\n</head>")
 						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
+						
+						csp := c.Response().Header().Get("Content-Security-Policy")
+						csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+						c.Response().Header().Set("Content-Security-Policy", csp)
+
 						return c.HTML(http.StatusOK, htmlStr)
 					}
 				}
@@ -538,8 +549,13 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			// Generic SPA route: serve index.html with the enabled-only plugin
 			// manifest injected so the client bootstrap always sees __PLUGINS__.
 			if b, err := os.ReadFile(indexHTML); err == nil {
-				script := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap)
+				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap)
 				htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
+				
+				csp := c.Response().Header().Get("Content-Security-Policy")
+				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+				c.Response().Header().Set("Content-Security-Policy", csp)
+				
 				return c.HTML(http.StatusOK, htmlStr)
 			}
 			return c.File(indexHTML)
