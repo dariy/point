@@ -20,7 +20,7 @@ import { getTagsGraph } from '../../api/pages.js';
 import { store } from '../../store.js';
 import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';
-import { TagGraph } from '../../utils/tagGraph.js';
+import { TagGraph } from "./tagGraph.js";
 import { Timeline } from '../../components/public/Timeline.js';
 import { ViewContext } from '../../utils/viewContext.js';
 

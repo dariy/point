@@ -300,9 +300,7 @@ async function resolveTagsModule() {
   );
   if (claimed) return claimed;
 
-  if (module === "map") return import("./pages/public/MapPage.js");
-  if (module === "atlas") return import("./pages/public/AtlasPage.js");
-  return import("./pages/public/TagsPage.js");
+  return import("./pages/public/RedirectHome.js");
 }
 
 const routes = [

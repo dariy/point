@@ -19,7 +19,7 @@ const manifest = {};
 
 for (const [outFile, info] of Object.entries(meta.outputs || {})) {
   const entry = info.entryPoint;
-  if (!entry) continue; // shared chunk, not an addressable plugin entry
+  if (!entry || !entry.startsWith("frontend/src/plugins/")) continue;
   // entry: frontend/src/plugins/<id>/index.js  →  id = <id>
   const id = basename(dirname(entry));
   manifest[id] = basename(outFile);

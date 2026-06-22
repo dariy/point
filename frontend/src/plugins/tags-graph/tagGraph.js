@@ -28,7 +28,7 @@
  *   g.destroy();                  // stop the sim + remove listeners
  */
 
-import { tagKind } from './tags.js';
+import { tagKind } from '../../utils/tags.js';
 
 // Deterministic PRNG so the initial layout is stable across reloads.
 function mulberry32(seed) {
