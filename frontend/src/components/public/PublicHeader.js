@@ -24,7 +24,7 @@ import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
 import { APP_LOGO_SVG, MAP_SVG, GLOBE_SVG, TAGS_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, LOCK_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG, ARTICLE_SVG } from '../../utils/icons.js';
 import { ViewContext } from '../../utils/viewContext.js';
-import { showCrumbDropdown, hideFlyout, tagHref } from '../../utils/tags.js';
+import { hideFlyout } from '../../utils/tags.js';
 
 export class PublicHeader extends Component {
   render() {
@@ -64,141 +64,7 @@ export class PublicHeader extends Component {
 
     const vc = ViewContext.current();
 
-    // ── Build unified breadcrumb ──────────────────────────────────────────────
-    //
-    // Structure: site▾ / [tag crumbs▾] / [year facet] / ["query" facet]   N posts
-    //
-    // The existing `breadcrumb` prop carries the tag-ancestry path (from page
-    // components).  We prepend the root "site" crumb and append any active
-    // facet crumbs derived from ViewContext.
-
-    const hasTagCrumbs = breadcrumb.length > 0;
-
-    // Year facet crumb
-    let yearLabel = null;
-    if (vc.years && !timelineVisible) {
-      yearLabel = vc.years[0] === vc.years[1]
-        ? String(vc.years[0])
-        : `${vc.years[0]}–${vc.years[1]}`; // en-dash
-    }
-
-    // Query facet crumb
-    const queryLabel = vc.query ? `“${vc.query}”` : null; // "query"
-
-    // Aria-live announcement (mirrors FilterChipsRow behaviour)
-    const ariaLabels = [];
-    if (vc.tag) ariaLabels.push(vc.tag);
-    if (vc.years && !timelineVisible) ariaLabels.push(`from ${vc.years[0]} to ${vc.years[1]}`);
-    if (vc.query) ariaLabels.push(`search for ${vc.query}`);
-    const ariaLiveText = ariaLabels.length
-      ? `Showing ${ariaLabels.join(', ')} — ${total} post${total !== 1 ? 's' : ''}`
-      : '';
-
-    // Popover items: "site" + tag crumbs + facets (for fold-current fallback)
-    const allCrumbsForPopover = [
-      { name: settings.blog_title || 'Photo Blog', href: '/' },
-      ...breadcrumb.map(c => ({
-        name: c.name,
-        href: c.href || (c.slug ? `/tags/${c.slug}` : '/'),
-        is_hidden: c.is_hidden,
-      })),
-      ...(yearLabel ? [{ name: yearLabel, href: null }] : []),
-      ...(queryLabel ? [{ name: queryLabel, href: null }] : []),
-    ];
-
-    const popoverItemsHtml = allCrumbsForPopover.map((c, i) => {
-      const isLast = i === allCrumbsForPopover.length - 1;
-      const lockIcon = c.is_hidden ? LOCK_SVG : '';
-      if (isLast || !c.href) {
-        return `<span class="popover-item is-current">${lockIcon}${escapeHtml(c.name)}</span>`;
-      }
-      return `<a href="${escapeHtml(c.href)}" class="popover-item">${lockIcon}${escapeHtml(c.name)}</a>`;
-    }).join('');
-
-    // ── Render crumb items ────────────────────────────────────────────────────
-
-    // Root "site" crumb — always a link to /, has ▾ caret for root-tags dropdown
-    const siteHasChildren = navTags.length > 0;
-    const siteHasFollowingCrumbs = hasTagCrumbs || yearLabel || queryLabel;
-    const siteClass = siteHasFollowingCrumbs ? 'breadcrumb-link' : 'breadcrumb-current';
-    const siteCrumbHtml = `<span class="crumb-pair" id="site-crumb-pair">
-      <a href="/" class="${siteClass} crumb-site${siteHasChildren ? ' has-dropdown' : ''}" data-crumb="site"
-         aria-label="${title}"${siteHasChildren ? ' aria-haspopup="true"' : ''}>${title}</a>
-      ${siteHasFollowingCrumbs ? '<span class="breadcrumb-separator" aria-hidden="true"></span>' : ''}
-    </span>`;
-
-    // Tag ancestry crumbs from `breadcrumb` prop
-    const tagCrumbsHtml = breadcrumb.map((crumb, i) => {
-      const isLast = i === breadcrumb.length - 1;
-      const lockIcon = crumb.is_hidden ? LOCK_SVG : '';
-      const tooltipAttr = crumb.tooltip ? ` title="${escapeHtml(crumb.tooltip)}"` : '';
-
-      if (isLast) {
-        // Current tag — rendered as breadcrumb-current; may have children dropdown
-        const hasChildren = this._crumbHasChildren(crumb, navTags);
-        const href = crumb.href
-          ? escapeHtml(crumb.href)
-          : crumb.slug
-            ? `/tags/${escapeHtml(crumb.slug)}`
-            : null;
-        // If there are facet crumbs after this, it's a non-final crumb visually
-        const hasFacets = yearLabel || queryLabel;
-        if (hasFacets) {
-          // Render as a foldable crumb-pair (not the terminal breadcrumb-current)
-          if (href) {
-            return `<span class="crumb-pair">
-              <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-                 data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
-              <span class="breadcrumb-separator" aria-hidden="true"></span>
-            </span>`;
-          }
-          return `<span class="crumb-pair">
-            <span class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>
-            <span class="breadcrumb-separator" aria-hidden="true"></span>
-          </span>`;
-        }
-        // Terminal: breadcrumb-current
-        if (href) {
-          return `<a href="${href}" class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-             data-crumb-slug="${escapeHtml(crumb.slug)}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>`;
-        }
-        return `<span class="breadcrumb-current${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"${tooltipAttr}>${lockIcon}${escapeHtml(crumb.name)}</span>`;
-      }
-
-      // Non-last tag crumb — foldable crumb-pair with optional dropdown
-      const href = crumb.href || (crumb.slug ? `/tags/${escapeHtml(crumb.slug)}` : '/');
-      const hasChildren = this._crumbHasChildren(crumb, navTags);
-      return `<span class="crumb-pair">
-        <a href="${href}" class="breadcrumb-link${crumb.is_hidden ? ' is-hidden' : ''}${hasChildren ? ' has-dropdown' : ''}"
-           data-crumb-slug="${escapeHtml(crumb.slug || '')}"${tooltipAttr}${hasChildren ? ' aria-haspopup="true"' : ''}>${lockIcon}${escapeHtml(crumb.name)}</a>
-        <span class="breadcrumb-separator" aria-hidden="true"></span>
-      </span>`;
-    }).join('');
-
-    // Facet crumbs: year and query (no dropdown; removed by clicking an earlier crumb)
-    let facetCrumbsHtml = '';
-    if (yearLabel) {
-      const isTerminal = !queryLabel;
-      if (isTerminal) {
-        facetCrumbsHtml += `<span class="breadcrumb-current breadcrumb-facet breadcrumb-year">${escapeHtml(yearLabel)}</span>`;
-      } else {
-        facetCrumbsHtml += `<span class="crumb-pair crumb-facet-pair">
-          <span class="breadcrumb-link breadcrumb-facet breadcrumb-year">${escapeHtml(yearLabel)}</span>
-          <span class="breadcrumb-separator" aria-hidden="true"></span>
-        </span>`;
-      }
-    }
-    if (queryLabel) {
-      facetCrumbsHtml += `<span class="breadcrumb-current breadcrumb-facet breadcrumb-query">${escapeHtml(queryLabel)}</span>`;
-    }
-
-    const crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb">
-      ${ariaLiveText ? `<span class="sr-only" aria-live="polite">${escapeHtml(ariaLiveText)}</span>` : ''}
-      ${siteCrumbHtml}
-      ${tagCrumbsHtml}
-      ${facetCrumbsHtml}
-      <div class="crumb-popover" id="crumb-popover">${popoverItemsHtml}</div>
-    </nav>`;
+    const crumbHtml = `<nav class="site-breadcrumb" aria-label="Breadcrumb"></nav>`;
 
     // ICON BUTTON GUIDANCE
     // All icon-only buttons in the header use the `header-action-btn` class.
@@ -294,42 +160,6 @@ export class PublicHeader extends Component {
       </div>`;
   }
 
-  /**
-   * Check if a crumb item has children in the navTags tree.
-   * Used to decide whether to render a ▾ caret.
-   */
-  _crumbHasChildren(crumb, navTags) {
-    if (!crumb.slug) return false;
-    // Search the navTags tree for a tag with this slug that has children
-    const find = (tags) => {
-      for (const t of tags) {
-        if (t.slug === crumb.slug) return !!(t.children && t.children.length);
-        if (t.children && t.children.length) {
-          const found = find(t.children);
-          if (found !== null) return found;
-        }
-      }
-      return null;
-    };
-    return find(navTags) === true;
-  }
-
-  /**
-   * Get children of a tag slug from the navTags tree.
-   */
-  _getTagChildren(slug, navTags) {
-    const find = (tags) => {
-      for (const t of tags) {
-        if (t.slug === slug) return t.children || [];
-        if (t.children && t.children.length) {
-          const found = find(t.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-    return find(navTags) || [];
-  }
 
   afterRender() {
     const { navTags = [], onToggleImmersive } = this.props;
@@ -360,7 +190,7 @@ export class PublicHeader extends Component {
     // (Phase 4) the host fills their regions here. No-op until a chunk claims the
     // slot, so behavior is unchanged.
     if (pluginHost.hasSlot('breadcrumbs')) {
-      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props });
+      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props, group: this._group });
     }
     if (pluginHost.hasSlot('nav-menu')) {
       pluginHost.fill('nav-menu', this.$('.site-nav'), { ...this.props });
@@ -372,76 +202,7 @@ export class PublicHeader extends Component {
       store.set('theme', current === 'dark' ? 'light' : 'dark');
     });
 
-    // ── Crumb dropdowns ───────────────────────────────────────────────────────
-    // Desktop (hover-capable): open on hover, click navigates to the crumb's page.
-    // Touch / no-hover: keep tap-to-open.
-    const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-    let hoverTimer = null;
-    const attachCrumbDropdown = (el, items) => {
-      if (!items.length) return;
-      if (canHover) {
-        el.addEventListener('mouseenter', () => {
-          clearTimeout(hoverTimer);
-          hoverTimer = setTimeout(
-            () => showCrumbDropdown(el, items, navigate, this._group),
-            180,
-          );
-        });
-        el.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
-        el.addEventListener('click', () => { clearTimeout(hoverTimer); hideFlyout(); });
-      } else {
-        el.addEventListener('click', (e) => {
-          if (el.classList.contains('is-flyout-open')) {
-            const href = el.getAttribute('href');
-            if (href) {
-              hideFlyout();
-              navigate(href);
-              e.preventDefault();
-              return;
-            }
-          }
-          e.preventDefault();
-          showCrumbDropdown(el, items, navigate, this._group);
-        });
-      }
-    };
 
-    // "site" crumb → root navTags dropdown
-    const siteCrumb = this.$('.crumb-site');
-    const siteTitleLink = this.$('.site-title-link');
-    if (navTags.length) {
-      const rootItems = navTags.map(t => ({
-        name: t.name,
-        slug: t.slug,
-        count: t.post_count,
-        href: t.url || (t.slug ? `/tags/${t.slug}` : null),
-      }));
-      if (siteCrumb) attachCrumbDropdown(siteCrumb, rootItems);
-      if (siteTitleLink) attachCrumbDropdown(siteTitleLink, rootItems);
-    }
-
-    // Tag crumbs with children → sub-tags dropdown.
-    // Children of a crumb drill down with a path that includes the crumb and
-    // everything before it, so the navigated branch keeps accumulating.
-    const breadcrumbSlugs = (this.props.breadcrumb || [])
-      .map(b => b.slug)
-      .filter(Boolean);
-    this.container.querySelectorAll('.breadcrumb-link[data-crumb-slug], .breadcrumb-current[data-crumb-slug]').forEach(el => {
-      if (!el.classList.contains('has-dropdown')) return;
-      const slug = el.dataset.crumbSlug;
-      if (!slug) return;
-      const children = this._getTagChildren(slug, navTags);
-      if (!children.length) return;
-      const idx = breadcrumbSlugs.indexOf(slug);
-      const childPath = idx >= 0 ? breadcrumbSlugs.slice(0, idx + 1) : [slug];
-      const childItems = children.map(c => ({
-        name: c.name,
-        slug: c.slug,
-        count: c.post_count,
-        href: c.url || tagHref(c.slug, childPath),
-      }));
-      attachCrumbDropdown(el, childItems);
-    });
 
     // Header search (expandable)
     const searchForm = this.$('#header-search');
@@ -538,31 +299,6 @@ export class PublicHeader extends Component {
       });
     }
 
-    // Crumb popover (fold-current step): clicking the last .breadcrumb-current
-    // when everything is folded shows a popover with all crumbs.
-    const crumbCurrentEls = [...this.container.querySelectorAll('.breadcrumb-current')];
-    const lastCrumbCurrent = crumbCurrentEls[crumbCurrentEls.length - 1] || null;
-    const crumbPopover = this.$('#crumb-popover');
-    if (lastCrumbCurrent && crumbPopover) {
-      lastCrumbCurrent.addEventListener('click', (e) => {
-        if (!this._group?.classList.contains('fold-current')) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const isOpen = crumbPopover.classList.contains('is-open');
-        if (!isOpen) {
-          const rect = lastCrumbCurrent.getBoundingClientRect();
-          crumbPopover.style.top  = `${rect.bottom + 4}px`;
-          crumbPopover.style.left = `${rect.left}px`;
-        }
-        crumbPopover.classList.toggle('is-open', !isOpen);
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!crumbPopover.contains(e.target) && e.target !== lastCrumbCurrent) {
-          crumbPopover.classList.remove('is-open');
-        }
-      });
-    }
 
     // ResizeObserver drives the progressive fold
     this._ro = new ResizeObserver(() => this._updateFold());
