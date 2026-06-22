@@ -62,7 +62,7 @@ describe('AtlasPage lazy cloud loading', () => {
       removeEventListener() {},
       matchMedia: () => ({ matches: false }),
     };
-    const mod = await import('../src/pages/public/AtlasPage.js');
+    const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
     ({ store } = await import('../src/store.js'));
   });
