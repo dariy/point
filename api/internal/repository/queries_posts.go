@@ -32,9 +32,10 @@ func buildPostsQuery(
 
 	where = append(where, "p.deleted_at IS NULL")
 
-	if pType == "page" {
+	switch pType {
+	case "page":
 		where = append(where, "p.type = 'page'")
-	} else if pType == "post" {
+	case "post":
 		where = append(where, "p.type != 'page'")
 	}
 
