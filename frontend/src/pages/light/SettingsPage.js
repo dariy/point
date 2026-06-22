@@ -14,6 +14,7 @@ import {
 } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import { pluginHost } from "../../core/pluginHost.js";
 
 const SETTING_GROUPS = [
   {
@@ -57,10 +58,12 @@ const SETTING_GROUPS = [
   {
     title: "AI Integration",
     keys: ["enable_gemini", "gemini_model", "gemini_api_key"],
+    plugin: "ai-analysis",
   },
   {
     title: "Instagram",
     keys: ["enable_instagram", "instagram_client_id", "instagram_client_secret"],
+    plugin: "instagram",
   },
 ];
 
@@ -117,7 +120,10 @@ export default class SettingsPage extends Component {
 
     return `
         <form id="settings-form" class="settings-grid">
-          ${SETTING_GROUPS.map((group) => this._renderGroup(group, settings, posts)).join("")}
+          ${SETTING_GROUPS
+            .filter((g) => !g.plugin || pluginHost.isEnabled(g.plugin))
+            .map((group) => this._renderGroup(group, settings, posts))
+            .join("")}
         </form>`;
   }
 

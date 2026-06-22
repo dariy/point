@@ -38,6 +38,7 @@ import { escapeHtml } from "../../utils/helpers.js";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.js";
 import { RESTORE_SVG, X_SVG, WARNING_SVG } from "../../utils/icons.js";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import { pluginHost } from "../../core/pluginHost.js";
 
 export default class SystemPage extends Component {
   constructor(container, props = {}) {
@@ -115,7 +116,7 @@ export default class SystemPage extends Component {
     );
     const syncSection = this._renderSyncSection(queue);
     const diskSection = diskInfo ? this._renderDiskSection(diskInfo) : "";
-    const igImportSection = igConnected
+    const igImportSection = (pluginHost.isEnabled("instagram") && igConnected)
       ? this._renderInstagramImportSection(igImportStatus, igImporting)
       : "";
 
@@ -145,6 +146,7 @@ export default class SystemPage extends Component {
         ${syncSection}
         ${igImportSection}
 
+        ${pluginHost.isEnabled("backups") ? `
         <section class="card system-full-width">
           <div class="card-header">
             <h2>Backups</h2>
@@ -188,6 +190,7 @@ export default class SystemPage extends Component {
             </div>
           </div>
         </section>
+        ` : ''}
 
         <section class="card system-full-width">
           <div class="card-header"><h2>Database Migrations</h2></div>

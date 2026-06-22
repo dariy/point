@@ -17,6 +17,7 @@ import {
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { formatDateShort } from '../../utils/formatters.js';
+import { pluginHost } from '../../core/pluginHost.js';
 
 export default class SecurityPage extends Component {
   constructor(container, props = {}) {
@@ -99,6 +100,7 @@ export default class SecurityPage extends Component {
           </div>
         </section>
 
+        ${pluginHost.isEnabled('passkeys') ? `
         <section class="card">
           <div class="card-header"><h2>Passkeys (WebAuthn)</h2></div>
           <div class="card-body">
@@ -117,6 +119,7 @@ export default class SecurityPage extends Component {
             `}
           </div>
         </section>
+        ` : ''}
 
         <section class="card security-full-width">
           <div class="card-header">
@@ -152,6 +155,7 @@ export default class SecurityPage extends Component {
           </div>
         </section>
 
+        ${pluginHost.isEnabled('api-keys') ? `
         <section class="card security-full-width">
           <div class="card-header">
             <h2>API Keys</h2>
@@ -161,6 +165,7 @@ export default class SecurityPage extends Component {
             ${apiKeyList}
           </div>
         </section>
+        ` : ''}
       </div>`;
   }
 
