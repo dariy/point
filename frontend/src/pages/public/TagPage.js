@@ -34,7 +34,7 @@ import {
   GestureController,
   TrackpadDetector,
   rubberBand,
-} from "../../utils/gestures.js";
+} from "../../plugins/immersive/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { computePerPage, cachedPerPage } from "../../utils/gridFit.js";
 

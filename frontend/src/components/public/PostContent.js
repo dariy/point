@@ -23,8 +23,6 @@ import { store } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
-import { MediaViewer } from "./MediaViewer.js";
-import { ImmersiveSheetViewer } from "./ImmersiveSheetViewer.js";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
 import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.js";
 
@@ -101,8 +99,7 @@ export class PostContent extends Component {
     if (immersive) {
       document.body.classList.add("immersive-layout");
       const settings = store.get("settings") || {};
-      const sheetMode = settings.immersive_overlay_mode === "sheet";
-      document.body.classList.toggle("immersive-overlay-sheet", sheetMode);
+      // sheetMode is now handled by the plugin.
       const items = mediaFromHtml(post.content_html || "");
       const viewerProps = {
         items,
@@ -151,10 +148,7 @@ export class PostContent extends Component {
       // post-viewer slot (immersive). When the immersive plugin chunk claims it
       // the host mounts the viewer; otherwise the core viewer renders directly.
       if (pluginHost.hasSlot('post-viewer')) {
-        pluginHost.fill('post-viewer', this.$('#media-viewer-mount'), { ...viewerProps, sheetMode });
-      } else {
-        const ViewerClass = sheetMode ? ImmersiveSheetViewer : MediaViewer;
-        this.mountChild(ViewerClass, '#media-viewer-mount', viewerProps);
+        pluginHost.fill('post-viewer', this.$('#media-viewer-mount'), viewerProps);
       }
     } else {
       document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");

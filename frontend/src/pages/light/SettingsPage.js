@@ -33,7 +33,7 @@ const SETTING_GROUPS = [
       "min_tag_posts_to_show",
       "default_theme",
       "immersive_nav_direction",
-      "immersive_overlay_mode",
+      "plugin.immersive.mode",
       "show_view_counts",
       "use_thumbnails",
       "show_tag_cloud",
@@ -177,7 +177,7 @@ export default class SettingsPage extends Component {
             <option value="chronological"${!isFeed ? " selected" : ""}>Chronological (◁ older, ▷ newer)</option>
             <option value="feed"${isFeed ? " selected" : ""}>Feed order (◁ newer, ▷ older)</option>
           </select>`;
-      } else if (key === "immersive_overlay_mode") {
+      } else if (key === "plugin.immersive.mode") {
         const v = value || "classic";
         input = `
           <select name="${key}" id="${key}" class="form-select">

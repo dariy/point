@@ -15,7 +15,7 @@ describe("GestureController", () => {
     if (typeof globalThis.window === "undefined") {
       globalThis.window = { innerWidth: 1000 };
     }
-    const mod = await import("../src/utils/gestures.js");
+    const mod = await import("../src/plugins/immersive/gestures.js");
     GestureController = mod.GestureController;
   });
 
