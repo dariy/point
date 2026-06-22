@@ -19,6 +19,7 @@ import { getPublicSettings } from "./api/settings.js";
 import { getNavMenu } from "./api/pages.js";
 import { getVersion } from "./api/system.js";
 import { normalizeSettings } from "./utils/helpers.js";
+import { pluginHost } from "./core/pluginHost.js";
 import { ToastContainer } from "./components/shared/Toast.js";
 import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
 import { initNotificationLog } from "./utils/notificationLog.js";
@@ -37,6 +38,11 @@ if (typeof customElements !== "undefined") {
 
 // Initialise theme immediately to prevent FOUC
 parseTheme();
+
+// Initialise the plugin host from the server-injected, enabled-only manifest
+// (window.__PLUGINS__). Done at module load so the route table and shell slots
+// can consult it synchronously. Inert when no manifest is present.
+pluginHost.init();
 
 // ── Login overlay ─────────────────────────────────────────────────────────
 
@@ -260,10 +266,16 @@ async function bootstrap() {
 // public: true  →  accessible without authentication
 // (absent)      →  requires authentication (authGuard redirect)
 
-// Resolve the lazy module for the /tags route based on the configured tags
-// module and its visibility. Mirrors the backend gate in tagsModuleAccessible:
-// "none" (or admins-only for a logged-out visitor) sends the visitor home.
-function resolveTagsModule() {
+// Resolve the lazy module for the /tags route. `/tags` is a single-claim slot
+// (`tags-route`): the enabled tag-visualization plugin selected by `tags_module`
+// owns it. Mirrors the backend gate in tagsModuleAccessible: "none" (or
+// admins-only for a logged-out visitor) sends the visitor home; a plugin the
+// admin has disabled is likewise treated as absent.
+//
+// Until Phase 4 extracts the tag-viz pages into plugin chunks, the claimant has
+// no built `entry`, so we fall back to the core page modules — behavior is
+// identical to before the plugin system.
+async function resolveTagsModule() {
   const settings = store.get("settings") || {};
   const module = settings.tags_module || "atlas";
   const visibility = settings.tags_visibility || "hidden";
@@ -272,6 +284,22 @@ function resolveTagsModule() {
   if (module === "none" || (visibility !== "all" && !isAdmin)) {
     return import("./pages/public/RedirectHome.js");
   }
+
+  const pluginId =
+    module === "map" ? "tags-map" : module === "atlas" ? "tags-atlas" : "tags-graph";
+
+  // When a manifest is present and the selected tag-viz plugin is disabled,
+  // there is no claimant — send the visitor home (matches a 404'd chunk).
+  if (pluginHost.size > 0 && !pluginHost.isEnabled(pluginId)) {
+    return import("./pages/public/RedirectHome.js");
+  }
+
+  // Prefer the plugin chunk once it exists; otherwise the core module.
+  const claimed = await pluginHost.claimRoute("tags-route", (entries) =>
+    entries.find((e) => e.id === pluginId),
+  );
+  if (claimed) return claimed;
+
   if (module === "map") return import("./pages/public/MapPage.js");
   if (module === "atlas") return import("./pages/public/AtlasPage.js");
   return import("./pages/public/TagsPage.js");
@@ -367,6 +395,22 @@ const routes = [
   },
   { path: "/light/system", load: () => import("./pages/light/SystemPage.js") },
 ];
+
+// Merge manifest-provided plugin routes into the static table. Each route plugin
+// (with a built chunk) contributes its declared paths, loaded from its chunk.
+// The single-claim `tags-route` is handled by resolveTagsModule and excluded by
+// pluginHost.routes(). No-op until Phase 4 ships route-plugin chunks; a plugin
+// route never overrides a core path of the same pattern.
+for (const entry of pluginHost.routes()) {
+  for (const path of entry.routes) {
+    if (routes.some((r) => r.path === path)) continue;
+    routes.push({
+      path,
+      load: () => pluginHost.loadEntry(entry),
+      public: !path.startsWith("/light"),
+    });
+  }
+}
 
 // ── Run ───────────────────────────────────────────────────────────────────
 

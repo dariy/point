@@ -18,6 +18,7 @@
 
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml, navigate, sharePost } from '../../utils/helpers.js';
 import { listPosts } from '../../api/posts.js';
 import { listTags } from '../../api/tags.js';
@@ -391,6 +392,17 @@ export class PublicHeader extends Component {
 
     this._group = this.$('.site-header-group');
     this._inner = this.$('.site-header-inner');
+
+    // Shell slots inside the header. The breadcrumbs and nav-menu are rendered
+    // inline by core today; once those features are extracted into plugin chunks
+    // (Phase 4) the host fills their regions here. No-op until a chunk claims the
+    // slot, so behavior is unchanged.
+    if (pluginHost.hasSlot('breadcrumbs')) {
+      pluginHost.fill('breadcrumbs', this.$('.site-breadcrumb'), { ...this.props });
+    }
+    if (pluginHost.hasSlot('nav-menu')) {
+      pluginHost.fill('nav-menu', this.$('.site-nav'), { ...this.props });
+    }
 
     // Theme toggle in the burger menu (the primary toggle now lives in the footer)
     this.$('#burger-theme-toggle')?.addEventListener('click', () => {

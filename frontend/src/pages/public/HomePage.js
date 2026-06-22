@@ -17,6 +17,7 @@ import { ExploreBlock } from '../../components/public/ExploreBlock.js';
 import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { store } from '../../store.js';
 import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
@@ -255,13 +256,27 @@ export default class HomePage extends Component {
       return;
     }
 
+    // home-explore slot (tag cloud). When a plugin chunk claims it the host
+    // fills the mount; otherwise the core ExploreBlock renders directly.
     const tagCloud = this.state.data.tag_cloud || store.get('tagCloud') || [];
-    if (!!settings.show_tag_cloud && tagCloud.length) {
+    if (pluginHost.hasSlot('home-explore')) {
+      pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
+    } else if (!!settings.show_tag_cloud && tagCloud.length) {
       this.mountChild(ExploreBlock, '#tag-cloud-mount', { tags: tagCloud });
     }
 
+    // timeline slot.
     this._canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
-    if (this._canShowTimeline) {
+    if (pluginHost.hasSlot('timeline')) {
+      const vc = ViewContext.current();
+      pluginHost.fill('timeline', this.$('#timeline-mount'), {
+        mode: 'filter',
+        canShow: this._canShowTimeline,
+        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
+        onRangeChange: (range) => this._onTimelineRangeChange(range),
+        total,
+      });
+    } else if (this._canShowTimeline) {
       const vc = ViewContext.current();
       this._timeline = this.mountChild(Timeline, '#timeline-mount', {
         mode: 'filter',

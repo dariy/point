@@ -14,7 +14,7 @@ must 404, and their API routes must 404. Server is the source of truth.
 | Phase | Issue | Status |
 |---|---|---|
 | 1 — Backend foundation | `point-plugin-system-tdgw.1` | ✅ Done |
-| 2 — Frontend foundation | `point-plugin-system-tdgw.2` | ⏳ Not started (unblocked) |
+| 2 — Frontend foundation | `point-plugin-system-tdgw.2` | ✅ Done |
 | 3 — Admin Plugins page | `point-plugin-system-tdgw.3` | ⏳ Blocked on Phase 2 |
 | 4 — Extract plugins (.4–.12) | `point-plugin-system-tdgw.4`…`.12` | ⏳ Blocked |
 | 5 — Hardening | `point-plugin-system-tdgw.13` | ⏳ Blocked |
@@ -101,6 +101,102 @@ from served HTML).
 - **`run-local.sh` mutates `frontend/index.html`** (dev build). The manifest is
   injected at serve time, not into the file, so it survives the dev rewrite —
   but Phase 2's build changes must keep a `</head>` present in `index.html`.
+
+## Phase 2 — Frontend foundation ✅
+
+Shipped with **all plugins enabled and no chunks built → zero behavior change.**
+Branch `plugins`.
+
+### What was built
+
+- **`frontend/src/core/pluginHost.js`** (new, the frontend half of the system):
+  - `init(manifest)` reads the enabled-only `window.__PLUGINS__` (defaults to it).
+  - `isEnabled(id)`, `size`, `slotEntries(slot)`, `hasSlot(slot)` — a slot is only
+    *claimed* once a plugin has a built `entry` (chunk URL); enabled-but-not-yet-
+    extracted plugins do **not** claim, so the shell keeps rendering them.
+  - `fill(slot, el, ctx)` lazily `import()`s each claiming chunk and calls its
+    `mount`/default export; one broken plugin is logged and skipped.
+  - `claimRoute(slot, choose)` resolves the single module owning a single-claim
+    route slot (`tags-route`); returns null when no claimant has a chunk.
+  - `routes()` lists manifest route plugins (with chunks) to merge, excluding the
+    single-claim `tags-route`. `loadEntry(e)` imports a route plugin's chunk.
+  - Singleton `pluginHost`, memoising each chunk import.
+- **`frontend/src/app.js`**: `pluginHost.init()` at module load;
+  `resolveTagsModule()` rewritten as the `tags-route` claimant (manifest-driven,
+  falls back to core `Atlas/Map/Tags` pages until Phase 4 builds chunks);
+  manifest route-merge loop appended after the static route table.
+- **Shell slot insertion points** (guarded `hasSlot` → `fill`, else core render):
+  `HomePage.js` (`home-explore` tag cloud, `timeline`), `PostContent.js`
+  (`post-viewer` immersive viewer), `PublicHeader.js` (`breadcrumbs`, `nav-menu`).
+- **Build pipeline**:
+  - `scripts/build-js.sh` keeps the single-file core `app.js` (unchanged
+    contract) **and** builds `frontend/src/plugins/<id>/index.js` entries with
+    `--splitting --format=esm`, hashed under `frontend/js/p/<id>-<hash>.js`.
+  - `scripts/build-plugin-manifest.mjs` turns the esbuild metafile into
+    `frontend/js/plugin-manifest.json` (`{id: "<id>-hash.js"}`), the map the Go
+    server reads (`plugins.LoadChunkMap`).
+  - No plugin entries yet → manifest is `{}` (was absent before; now always
+    present). `scripts/build-css.sh` mirrors with per-plugin CSS chunks under
+    `frontend/css/p/<id>.css` (no-op until plugins ship CSS; wired in Phase 5).
+
+### Key decisions (and the reasoning)
+
+1. **Core `app.js` stays a single bundle (no `--splitting` on the core entry).**
+   Splitting the core would emit many runtime chunks the PWA service-worker shell
+   cache doesn't precache (offline regression) for **zero** payload win in Phase 2
+   — the shrink comes in Phase 4 when feature code *moves out* of the core graph
+   into plugin entries, not from splitting the same code. So only the plugin pass
+   uses `--splitting`. Revisit core splitting + SW cache-from-manifest in Phase 5.
+2. **A plugin claims a slot only when it has a built chunk (`entry` non-empty).**
+   In Phase 2 every manifest entry has an empty `entry` (Phase 1 ships an empty
+   chunk map), so `hasSlot` is uniformly false and the shell renders every feature
+   directly — byte-for-behavior identical to today. Phase 4 flips each slot by
+   shipping the chunk; the `hasSlot` guard switches the branch automatically.
+3. **`pluginHost` is inert without a manifest.** `size === 0` (absent/empty
+   `window.__PLUGINS__`, e.g. unit tests) means slots stay unfilled, routes empty,
+   and the `tags-route` enablement gate is skipped — callers fall back to current
+   behavior. The hard constraint is enforced server-side (chunks/routes 404); the
+   frontend gate is a UX nicety, so failing open here is safe.
+4. **Two esbuild passes, not one.** `index.html` references `/assets/js/app.js`
+   by a fixed (unhashed) name, while plugin chunks must be content-hashed — a
+   single invocation can't apply two `--entry-names` policies. The cost is that
+   code shared between core and plugins is duplicated across the two split graphs;
+   plugins are leaf features, so this is acceptable.
+5. **`tags-route` keeps reading `tags_module`/`tags_visibility`.** That route-gate
+   policy is unchanged; the plugin layer only (a) maps the chosen module to a
+   plugin id, (b) treats an admin-disabled tag-viz plugin as "none" when a
+   manifest is present, and (c) prefers the plugin chunk once built. With all
+   plugins enabled and no chunks, every path resolves to the same core module.
+
+### Verification
+
+- `node --test frontend/test/*.test.js` — 96 pass, incl. new
+  `frontend/test/pluginHost.test.js` (manifest read, slot-claim only with chunk,
+  `routes()` excludes `tags-route`, `claimRoute`/`fill` import via data: URLs,
+  inert empty manifest). `eslint frontend/src` clean. `go build ./...` +
+  `internal/plugins` / `cmd/api` tests pass (backend unchanged; now finds a real
+  `{}` manifest file).
+- Build smoke test with a throwaway `frontend/src/plugins/demo-plugin/`: emits
+  `frontend/js/p/demo-plugin-<hash>.js`, `plugin-manifest.json` →
+  `{"demo-plugin": "demo-plugin-<hash>.js"}`, and `css/p/demo-plugin.css`.
+- Live (`./point` on :8001): served HTML injects the enabled-only
+  `window.__PLUGINS__` (entries with no `entry` URL), `/assets/js/app.js` → 200,
+  `/assets/js/p/<unknown>.js` → 404.
+
+### Carry-forward notes for later phases
+
+- **Phase 3** (admin Plugins page): toggling `plugin.<id>.enabled` changes the
+  injected manifest on next load; the frontend already reacts (disabled tag-viz →
+  home redirect, slot unfilled). No frontend host changes needed to *gate*; the
+  page just needs the list/toggle API.
+- **Phase 4** (extraction): create `frontend/src/plugins/<id>/index.js` exporting
+  `mount(el, ctx)` (slot/enhancer) or `{ default: PageClass }` (route). The build
+  then emits its chunk and `plugin-manifest.json` gains the id → `hasSlot` flips
+  the shell branch and removes the need for the direct core render. `EntryName` in
+  the Go `Registry` is the directory name under `src/plugins/`.
+- **`build-css.sh`** already emits `css/p/<id>.css` from plugin CSS partials;
+  Phase 5 wires loading those alongside the chunk and derives the SW precache list
+  from the manifest.
 
 ## Open items / risks (tracked for Phase 5)
 

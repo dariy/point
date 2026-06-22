@@ -88,3 +88,23 @@ cat "$CSS_DIR"/common/tokens.css \
     > "$CSS_DIR"/main.css
 
 echo "Built main.css ($(wc -c < "$CSS_DIR"/main.css) bytes)"
+
+# ── Per-plugin CSS chunks ───────────────────────────────────────────────────
+# Mirror the JS plugin pipeline: a plugin that owns CSS keeps its partials under
+# frontend/src/plugins/<id>/*.css; concatenate them into frontend/css/p/<id>.css
+# to be loaded alongside the plugin chunk (wired up with per-plugin CSS loading
+# in Phase 5). No-op until plugins ship CSS — keeps the "edit source CSS, never
+# generated" rule intact (sources live under src/plugins, output under css/p).
+PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
+PLUGIN_CSS_OUT="$CSS_DIR/p"
+if [ -d "$PLUGIN_SRC" ]; then
+  for dir in "$PLUGIN_SRC"/*/; do
+    id="$(basename "$dir")"
+    # shellcheck disable=SC2086
+    set -- "$dir"*.css
+    [ -e "$1" ] || continue
+    mkdir -p "$PLUGIN_CSS_OUT"
+    cat "$@" > "$PLUGIN_CSS_OUT/$id.css"
+    echo "Built css/p/$id.css ($(wc -c < "$PLUGIN_CSS_OUT/$id.css") bytes)"
+  done
+fi
