@@ -14,7 +14,6 @@ import { PostGrid } from '../../components/public/PostGrid.js';
 import { PostCard } from '../../components/public/PostCard.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
 import { ExploreBlock } from '../../components/public/ExploreBlock.js';
-import { Timeline } from '../../components/public/Timeline.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { pluginHost } from '../../core/pluginHost.js';
@@ -266,8 +265,8 @@ export default class HomePage extends Component {
     }
 
     // timeline slot.
-    this._canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
-    if (pluginHost.hasSlot('timeline')) {
+    this._canShowTimeline = pluginHost.hasSlot('timeline');
+    if (this._canShowTimeline) {
       const vc = ViewContext.current();
       pluginHost.fill('timeline', this.$('#timeline-mount'), {
         mode: 'filter',
@@ -275,14 +274,11 @@ export default class HomePage extends Component {
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
         total,
-      });
-    } else if (this._canShowTimeline) {
-      const vc = ViewContext.current();
-      this._timeline = this.mountChild(Timeline, '#timeline-mount', {
-        mode: 'filter',
-        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range) => this._onTimelineRangeChange(range),
-        total,
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) {
+          this._timeline = comps[0];
+          this._children.push(comps[0]);
+        }
       });
     }
 

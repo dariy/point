@@ -11,7 +11,7 @@
 import { Component } from "../../components/Component.js";
 import { PublicHeader } from "../../components/public/PublicHeader.js";
 import { PublicFooter } from "../../components/public/PublicFooter.js";
-import { Timeline } from "../../components/public/Timeline.js";
+import { pluginHost } from "../../core/pluginHost.js";
 import { getMapPage } from "../../api/pages.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
@@ -148,9 +148,7 @@ export default class MapPage extends Component {
     const initialRange = vc.years ? { from: vc.years[0], to: vc.years[1] } : null;
 
     const settings = store.get("settings") || {};
-    const canShowTimeline =
-      settings.timeline_mode === "all" ||
-      (store.get("user") && settings.timeline_mode === "hidden");
+    const canShowTimeline = pluginHost.hasSlot("timeline");
     this._canShowTimeline = canShowTimeline;
     this._headerChild = this.mountChild(PublicHeader, "#header-mount", {
       settings,
@@ -162,10 +160,15 @@ export default class MapPage extends Component {
     this.mountChild(PublicFooter, "#footer-mount", { settings });
 
     if (canShowTimeline) {
-      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
+      pluginHost.fill("timeline", this.$("#timeline-mount"), {
         mode: "filter",
         initialRange,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+      }).then((comps) => {
+        if (comps[0] && !this._unmounted) {
+          this._timeline = comps[0];
+          this._children.push(comps[0]);
+        }
       });
     }
 

@@ -1,4 +1,4 @@
-import { Component } from "../Component.js";
+import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
 import { GestureController } from "../../utils/gestures.js";
 import { renderTagLink } from "../../utils/tags.js";
@@ -1568,4 +1568,8 @@ export class Timeline extends Component {
 
     mount.innerHTML = html;
   }
+}
+
+export function mount(el, ctx) {
+  return new Timeline(el, ctx);
 }

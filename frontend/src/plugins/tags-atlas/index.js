@@ -16,7 +16,7 @@
 import { Component } from "../../components/Component.js";
 import { PublicHeader } from "../../components/public/PublicHeader.js";
 import { PublicFooter } from "../../components/public/PublicFooter.js";
-import { Timeline } from "../../components/public/Timeline.js";
+import { pluginHost } from "../../core/pluginHost.js";
 import { getTagsGraph, getTagCloud } from "../../api/pages.js";
 import { store } from "../../store.js";
 import { ViewContext } from "../../utils/viewContext.js";
@@ -182,15 +182,18 @@ export default class AtlasPage extends Component {
 
     // Timeline year filter — same visibility gating as /map: shown to everyone
     // in "all" mode, and to signed-in users when it's "hidden" from the public.
-    const canShowTimeline =
-      settings.timeline_mode === "all" ||
-      (store.get("user") && settings.timeline_mode === "hidden");
+    const canShowTimeline = pluginHost.hasSlot("timeline");
     if (canShowTimeline) {
       const vc = ViewContext.current();
-      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
+      pluginHost.fill("timeline", this.$("#timeline-mount"), {
         mode: "filter",
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
+      }).then((comps) => {
+        if (comps[0] && !this._unmounted) {
+          this._timeline = comps[0];
+          this._children.push(comps[0]);
+        }
       });
     }
 

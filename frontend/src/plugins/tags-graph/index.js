@@ -21,7 +21,7 @@ import { store } from '../../store.js';
 import { escapeHtml, navigate, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { SEARCH_SVG } from '../../utils/icons.js';
 import { TagGraph } from "./tagGraph.js";
-import { Timeline } from '../../components/public/Timeline.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
 
 export default class TagsPage extends Component {
@@ -115,14 +115,19 @@ export default class TagsPage extends Component {
       return;
     }
 
-    this._canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    this._canShowTimeline = pluginHost.hasSlot('timeline');
     if (this._canShowTimeline) {
       const vc = ViewContext.current();
-      this._timeline = this.mountChild(Timeline, '#timeline-mount', {
+      pluginHost.fill('timeline', this.$('#timeline-mount'), {
         mode: 'filter',
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
         total: this.state.total,
+      }).then((comps) => {
+        if (comps[0] && !this._unmounted) {
+          this._timeline = comps[0];
+          this._children.push(comps[0]);
+        }
       });
     }
 

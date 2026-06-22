@@ -20,8 +20,8 @@ import {
   PostContent,
   shouldUseImmersive,
 } from "../../components/public/PostContent.js";
-import { Timeline } from "../../components/public/Timeline.js";
 import { Pagination } from "../../components/shared/Pagination.js";
+import { pluginHost } from "../../core/pluginHost.js";
 import { getTagPage } from "../../api/pages.js";
 import { getPostBySlug } from "../../api/posts.js";
 import { store } from "../../store.js";
@@ -255,23 +255,27 @@ export default class TagPage extends Component {
     const slug = this.props.params?.slug || "";
     const { data, post } = this.state;
 
-    const canShowTimeline =
-      settings.timeline_mode === "all" ||
-      (store.get("user") && settings.timeline_mode === "hidden");
+    const canShowTimeline = pluginHost.hasSlot("timeline");
     this._canShowTimeline = canShowTimeline;
     if (
       canShowTimeline &&
       !this._isPostView() &&
       !this.state.loading &&
-      !this.state.error
+      !this.state.error &&
+      pluginHost.hasSlot("timeline")
     ) {
       const vc = ViewContext.current();
       const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
-      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
+      pluginHost.fill("timeline", this.$("#timeline-mount"), {
         mode: "filter",
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
         total,
+      }).then((comps) => {
+        if (comps[0] && !this._unmounted) {
+          this._timeline = comps[0];
+          this._children.push(comps[0]);
+        }
       });
     }
 

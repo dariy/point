@@ -42,7 +42,6 @@ const SETTING_GROUPS = [
       "tags_module",
       "tags_visibility",
       "atlas_post_limit",
-      "timeline_mode",
     ],
   },
   {
@@ -192,14 +191,6 @@ export default class SettingsPage extends Component {
             <option value="hide"${v === "hide" ? " selected" : ""}>Hide</option>
             <option value="admin"${v === "admin" ? " selected" : ""}>Admins only</option>
             <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
-          </select>`;
-      } else if (key === "timeline_mode") {
-        const v = value || "off";
-        input = `
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="off"${v === "off" ? " selected" : ""}>Off</option>
-            <option value="hidden"${v === "hidden" ? " selected" : ""}>Hidden (Admins only)</option>
-            <option value="all"${v === "all" ? " selected" : ""}>All (Everyone)</option>
           </select>`;
       } else if (key === "tags_module") {
         // Single selector for the /tags page module. "None" hides the /tags

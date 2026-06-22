@@ -36,7 +36,6 @@ var publicSettingKeys = map[string]bool{
 	"show_tag_cloud":          true,
 	"tags_module":             true,
 	"tags_visibility":         true,
-	"timeline_mode":           true,
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
 	"immersive_overlay_mode":  true,
