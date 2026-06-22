@@ -197,6 +197,7 @@ export default class HomePage extends Component {
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
+            ${isStaticHomePage ? '' : '<div id="pagination-mount"></div>'}
           </div>
         </main>
         <div id="footer-mount"></div>

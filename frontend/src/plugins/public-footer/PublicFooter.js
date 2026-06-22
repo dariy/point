@@ -32,7 +32,7 @@ export class PublicFooter extends Component {
       ? `/posts/${escapeHtml(settings.about_post_id)}`
       : "/light";
 
-    let centerSlot;
+    let centerSlot = "";
     if (immersiveTags.length) {
       const navTags = store.get("navTags") || [];
       const tagIndex = navTags.length ? buildTagIndex(navTags) : null;
@@ -43,8 +43,6 @@ export class PublicFooter extends Component {
       });
       const tagLinks = visibleTags.map((t) => renderTagLink(t)).join("");
       centerSlot = `<div class="immersive-tags">${tagLinks}</div>`;
-    } else {
-      centerSlot = `<div id="pagination-mount"></div>`;
     }
 
     // About (author link in .footer-copyright), Map and All tags (header
