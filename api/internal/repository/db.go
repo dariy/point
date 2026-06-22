@@ -138,6 +138,14 @@ func NewRepository(dbURL string) (Repository, error) {
 		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
 	}
 
+	// Optimize read performance
+	if _, err := db.Exec("PRAGMA mmap_size = 30000000000;"); err != nil {
+		return nil, fmt.Errorf("failed to set mmap_size: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA cache_size = -200000;"); err != nil {
+		return nil, fmt.Errorf("failed to set cache_size: %w", err)
+	}
+
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
