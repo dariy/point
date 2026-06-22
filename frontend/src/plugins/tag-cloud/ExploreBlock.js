@@ -6,7 +6,7 @@
  *   tags  {Array<{ id, name, slug, count }>}
  */
 
-import { Component } from "../Component.js";
+import { Component } from "../../components/Component.js";
 import { escapeHtml } from "../../utils/helpers.js";
 import { store } from "../../store.js";
 import { buildTagIndex, setupTagFlyout } from "../../utils/tags.js";

@@ -36,7 +36,7 @@ const SETTING_GROUPS = [
       "plugin.immersive.mode",
       "show_view_counts",
       "use_thumbnails",
-      "show_tag_cloud",
+
       "show_immersive_excerpt",
       "exif_visibility",
       "tags_module",

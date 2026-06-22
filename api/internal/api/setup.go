@@ -98,7 +98,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"active_css_theme", "default", "string"},
 		{"use_thumbnails", "true", "boolean"},
 		{"show_view_counts", "false", "boolean"},
-		{"show_tag_cloud", "true", "boolean"},
+
 		{"tags_module", "atlas", "string"},
 		{"tags_visibility", "hidden", "string"},
 		{"atlas_post_limit", "10", "integer"},

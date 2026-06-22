@@ -13,7 +13,7 @@ import { PublicFooter } from '../../components/public/PublicFooter.js';
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { PostCard } from '../../components/public/PostCard.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
-import { ExploreBlock } from '../../components/public/ExploreBlock.js';
+
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
 import { pluginHost } from '../../core/pluginHost.js';
@@ -255,14 +255,9 @@ export default class HomePage extends Component {
       return;
     }
 
-    // home-explore slot (tag cloud). When a plugin chunk claims it the host
-    // fills the mount; otherwise the core ExploreBlock renders directly.
+    // home-explore slot (tag cloud).
     const tagCloud = this.state.data.tag_cloud || store.get('tagCloud') || [];
-    if (pluginHost.hasSlot('home-explore')) {
-      pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
-    } else if (!!settings.show_tag_cloud && tagCloud.length) {
-      this.mountChild(ExploreBlock, '#tag-cloud-mount', { tags: tagCloud });
-    }
+    pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
 
     // timeline slot.
     this._canShowTimeline = pluginHost.hasSlot('timeline');

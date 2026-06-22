@@ -33,7 +33,7 @@ var publicSettingKeys = map[string]bool{
 	"about_post_id":           true,
 	"home_page_post_id":       true,
 	"multi_user_mode":         true,
-	"show_tag_cloud":          true,
+
 	"tags_module":             true,
 	"tags_visibility":         true,
 	"enable_backup":           true,

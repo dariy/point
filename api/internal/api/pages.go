@@ -51,7 +51,7 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_immersive_excerpt": true,
 	"plugin.immersive.mode": true,
 	"min_tag_posts_to_show":  true,
-	"show_tag_cloud":         true,
+
 	"tags_module":            true,
 	"tags_visibility":        true,
 }
