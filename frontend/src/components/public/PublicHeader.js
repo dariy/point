@@ -39,7 +39,6 @@ export class PublicHeader extends Component {
     } = this.props;
 
     const user = store.get('user');
-    const blogSettings = store.get('settings') || {};
     const subtitle = escapeHtml(settings.blog_subtitle || '');
 
     const shareButtonHtml = showShare
