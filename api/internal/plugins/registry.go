@@ -66,7 +66,7 @@ var Registry = []Descriptor{
 	// ── Shell slots ──────────────────────────────────────────────────────────
 	{ID: "timeline", Type: TypeSlot, Slot: "timeline", EntryName: "timeline", DefaultEnabled: true},
 	{ID: "tag-cloud", Type: TypeSlot, Slot: "home-explore", EntryName: "tag-cloud", DefaultEnabled: true},
-	{ID: "nav-menu", Type: TypeSlot, Slot: "nav-menu", EntryName: "nav-menu", DefaultEnabled: true},
+	{ID: "nav-menu", Type: TypeSlot, Slot: "nav-menu", Routes: []string{"/light/menu", "/api/nav-menu", "/api/pages/nav"}, EntryName: "nav-menu", DefaultEnabled: true},
 	{ID: "breadcrumbs", Type: TypeSlot, Slot: "breadcrumbs", EntryName: "breadcrumbs", DefaultEnabled: true},
 	{ID: "public-header", Type: TypeSlot, Slot: "header", EntryName: "public-header", DefaultEnabled: true},
 	{ID: "public-footer", Type: TypeSlot, Slot: "footer", EntryName: "public-footer", DefaultEnabled: true},

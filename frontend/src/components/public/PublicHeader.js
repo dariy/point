@@ -217,41 +217,11 @@ export class PublicHeader extends Component {
          </a>`
       : '';
 
-    // A single nav entry surfaces whichever tags module the admin selected
-    // (tag cloud / map / atlas). Hidden entirely when disabled, or when it is
-    // admins-only and the visitor is logged out. See resolveTagsModule() / the
-    // backend tagsModuleAccessible gate.
-    const tagsModule = settings.tags_module || 'atlas';
-    const tagsVisibility = settings.tags_visibility || 'hidden';
-    const tagsVisible = tagsModule !== 'none' && (tagsVisibility === 'all' || !!user);
-    const tagsMeta = {
-      cloud: { icon: TAGS_SVG, label: 'All tags' },
-      map: { icon: MAP_SVG, label: 'Map' },
-      atlas: { icon: GLOBE_SVG, label: 'Atlas' },
-    }[tagsModule] || { icon: TAGS_SVG, label: 'All tags' };
 
-    const tagsButtonHtml = tagsVisible
-      ? `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"
-                   aria-label="${tagsMeta.label}" title="${tagsMeta.label}">
-                  ${tagsMeta.icon}
-                </a>`
-      : '';
 
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
 
-    const burgerTagLinksHtml = navTags.length
-      ? navTags.map(t => {
-          const href = t.url ? escapeHtml(t.url) : `/tags/${escapeHtml(t.slug)}`;
-          let html = `<a href="${href}" class="burger-link burger-tag-link">${escapeHtml(t.name)}</a>`;
-          if (isCustomMenu && t.children && t.children.length) {
-              t.children.forEach(c => {
-                  const cHref = c.url ? escapeHtml(c.url) : `/tags/${escapeHtml(c.slug)}`;
-                  html += `<a href="${cHref}" class="burger-link burger-sub-link">${escapeHtml(c.name)}</a>`;
-              });
-          }
-          return html;
-        }).join('')
-      : '';
+
 
     return `
       <div class="site-header-group">
@@ -289,9 +259,7 @@ export class PublicHeader extends Component {
             </form>
 
             <!-- Normal nav items (hidden when fold-nav active) -->
-            <div class="site-nav-items">
-              ${tagsButtonHtml}
-            </div>
+            <div class="site-nav-items"></div>
 
             <!-- Burger (shown when fold-nav active) -->
             <div class="nav-burger" id="nav-burger">
@@ -304,15 +272,9 @@ export class PublicHeader extends Component {
                   <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
                 </form>
 
-                <div class="burger-tags-slot" id="burger-tags-slot">
-                  ${burgerTagLinksHtml}
-                </div>
+                <div class="burger-tags-slot" id="burger-tags-slot"></div>
 
-                <div class="burger-sitemap">
-                  ${tagsVisible ? `<a href="/tags" class="burger-link">${tagsMeta.label}</a>` : ''}
-                  <a href="/light" class="burger-link">About</a>
-                  ${user ? `<a href="/light" class="burger-link">Admin</a>` : ''}
-                </div>
+                <div class="burger-sitemap"></div>
 
                 <div class="burger-actions">
                   <button class="theme-toggle" id="burger-theme-toggle" type="button" aria-label="Toggle theme">

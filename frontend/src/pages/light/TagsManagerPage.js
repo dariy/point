@@ -12,7 +12,7 @@ import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/Ad
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
 import { listTags, createTag, patchTag, setTagParents, setTagChildren, deleteTag, recalculateCounts, geocodeTag, moveTag, mergeTags } from '../../api/tags.js';
 import { parseMapsCoords } from '../../api/util.js';
-import { getNavMenu } from '../../api/pages.js';
+
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { EDIT_SVG, X_SVG, REFRESH_SVG, MAP_SVG, LIST_SVG, TREE_SVG, CHEVRON_SVG, CHEVRON_RIGHT_SVG, PLUS_SVG } from '../../utils/icons.js';
@@ -1666,10 +1666,7 @@ export default class TagsManagerPage extends Component {
   }
 
   async _refreshNavTags() {
-    try {
-      const fresh = await getNavMenu();
-      store.set('navTags', fresh.menu || []);
-    } catch { /* ignore */ }
+    document.dispatchEvent(new CustomEvent('nav-changed'));
   }
 }
 

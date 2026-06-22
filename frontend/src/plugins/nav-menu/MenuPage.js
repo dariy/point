@@ -9,7 +9,7 @@
 
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
-import { getAdminNavMenu, updateAdminNavMenu, getNavMenu } from '../../api/pages.js';
+import { getAdminNavMenu, updateAdminNavMenu, getNavMenu } from './api.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.js';
@@ -329,9 +329,7 @@ export default class MenuPage extends Component {
         items: apiItems,
       });
       
-      // Refresh global nav tags
-      const fresh = await getNavMenu();
-      store.set('navTags', fresh.menu || []);
+      document.dispatchEvent(new CustomEvent('nav-changed'));
 
       store.set('toast', { message: 'Menu saved.', type: 'success' });
       this.setState({ saving: false });
