@@ -495,6 +495,8 @@ export default class TagPage extends Component {
       },
       onSwipeCancel: () => this._resetGridSwipe(),
       onSwipeCommit: (dir) => {
+        // Only horizontal swipes paginate; a vertical swipe is a page scroll.
+        if (dir !== "left" && dir !== "right") return;
         const d = dir === "left" ? "next" : "prev";
         if ((d === "next" && atEnd()) || (d === "prev" && atStart())) {
           this._resetGridSwipe();

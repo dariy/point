@@ -47,10 +47,12 @@ export class GestureController {
    * @param {number}   [opts.edgeIgnorePx=30]
    * @param {number}   [opts.doubleTapMs=300]
    * @param {number}   [opts.tapMovePx=8]
-   * @param {number}   [opts.directionRatio=1.3]  horizontal motion must exceed
-   *   vertical by this factor to commit to a horizontal swipe; otherwise the
-   *   gesture is treated as vertical. Keeps a near-vertical drag with a slight
-   *   sideways lean from flipping the page.
+   * @param {number}   [opts.directionRatio=1.3]  dominance factor that splits a
+   *   drag into one of three classes: "mostly horizontal" (absDx ≥ absDy×ratio),
+   *   "mostly vertical" (absDy ≥ absDx×ratio), or "mostly diagonal" (neither axis
+   *   dominates). A horizontal class commits to a swipe/pan; a vertical class
+   *   commits to a vertical swipe; a diagonal class is ignored so an ambiguous,
+   *   slanted drag never flips the page or fires a vertical action.
    */
   constructor(element, opts = {}) {
     this._el = element;
@@ -185,7 +187,9 @@ export class GestureController {
       const moved = Math.max(absDx, absDy);
       if (moved < this._opts.commitThresholdPx) return;
 
-      if (absDx >= absDy * this._opts.directionRatio) {
+      const ratio = this._opts.directionRatio;
+      if (absDx >= absDy * ratio) {
+        // Mostly horizontal
         // Edge protection: ignore swipes starting in system back-gesture zones
         if (
           this._startX < this._opts.edgeIgnorePx ||
@@ -195,8 +199,14 @@ export class GestureController {
           return;
         }
         this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_H;
-      } else {
+      } else if (absDy >= absDx * ratio) {
+        // Mostly vertical
         this._state = STATE.SWIPING_V;
+      } else {
+        // Mostly diagonal — too ambiguous to act on. Bail out and let the
+        // browser handle native scrolling without firing any swipe action.
+        this._state = STATE.IDLE;
+        return;
       }
     }
     if (this._state === STATE.SWIPING_H || this._state === STATE.SWIPING_V) {

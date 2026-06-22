@@ -7,8 +7,17 @@
 
 .posts-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--posts-grid-grid-template-columns), 1fr));
+    /* min(col, 100%) so a single column never exceeds the track on narrow
+       (portrait) viewports — prevents the grid from forcing horizontal overflow. */
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--posts-grid-grid-template-columns), 100%), 1fr));
     gap: var(--spacing-xl);
+}
+
+/* Grid items must be allowed to shrink below their intrinsic content width.
+   Without min-width:0 the default min-width:auto lets a non-wrapping child
+   (the horizontally-scrolling tag strip) stretch the card past the viewport. */
+.post-card-slot {
+    min-width: 0;
 }
 
 /* ===========================
@@ -423,7 +432,16 @@
 .grid-preview-placeholder {
     position: absolute;
     top: 0;
+    bottom: 0;
     width: 100%;
+    /* Constrain to the live mount height and clip the overflow. The ghost grid
+       renders at its natural height (outside the grid-expand flex that compacts
+       the real grid), so without this its full height inflates the page's
+       scroll height — leaving dead space below the footer. Anchor the height
+       off the container edges (top:0; bottom:0) rather than height:100%:
+       percentage height on an absolutely-positioned box doesn't resolve
+       reliably on iOS WebKit, so it would fall back to the natural height. */
+    overflow: hidden;
     pointer-events: none;
     z-index: 10;
 }
