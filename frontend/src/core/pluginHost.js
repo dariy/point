@@ -25,7 +25,16 @@
  * claims return null — so callers can fall back to their existing behavior. A
  * plugin only "claims" a slot once it has a built chunk (`entry` is non-empty),
  * so adding a slot hook is a no-op until the corresponding chunk ships.
+ *
+ * Debug build only: this host logs the manifest, every chunk import, slot
+ * mount/unmount and route claim through `debugLog` (a no-op in the release
+ * build — see utils/debug.js). Toggle it with the FRONTEND_DEBUG env on the
+ * backend, which decides whether the debug or release bundle is served.
  */
+
+import { debugLog, DEBUG } from "../utils/debug.js";
+
+const log = debugLog("PluginHost");
 
 class PluginHost {
   constructor() {
@@ -58,6 +67,18 @@ class PluginHost {
         arr.push(e);
         this._bySlot.set(e.slot, arr);
       }
+    }
+    if (DEBUG) {
+      log(`init — ${this._manifest.length} enabled plugin(s)`);
+      log.table(
+        this._manifest.map((e) => ({
+          id: e.id,
+          type: e.type,
+          slot: e.slot || "",
+          routes: Array.isArray(e.routes) ? e.routes.join(",") : "",
+          chunk: e.entry || "(none — rendered by shell)",
+        })),
+      );
     }
     return this;
   }
@@ -94,8 +115,17 @@ class PluginHost {
         link.rel = "stylesheet";
         link.href = e.css;
         document.head.appendChild(link);
+        if (DEBUG) log(`load css '${e.id}' →`, e.css);
       }
-      this._loaded.set(e.entry, import(/* @vite-ignore */ e.entry));
+      if (DEBUG) log(`import chunk '${e.id}' →`, e.entry);
+      let p = import(/* @vite-ignore */ e.entry);
+      if (DEBUG) {
+        p = p.catch((err) => {
+          log.error(`chunk '${e.id}' failed to load:`, err);
+          throw err;
+        });
+      }
+      this._loaded.set(e.entry, p);
     }
     return this._loaded.get(e.entry);
   }
@@ -107,19 +137,47 @@ class PluginHost {
    * skipped — one broken plugin never blocks the rest of the page.
    */
   async fill(slot, el, ctx = {}) {
+    const entries = this.slotEntries(slot);
+    if (DEBUG && entries.length) log(`fill slot '${slot}' — ${entries.length} plugin(s):`, entries.map((e) => e.id).join(", "));
     const out = [];
-    for (const e of this.slotEntries(slot)) {
+    for (const e of entries) {
       try {
         const mod = await this._import(e);
         const mount = mod.mount || mod.default;
         if (typeof mount === "function") {
-          out.push(await mount(el, { ...ctx, plugin: e }));
+          const result = await mount(el, { ...ctx, plugin: e });
+          if (DEBUG) {
+            log(`mounted '${e.id}' into slot '${slot}'`);
+            this._traceUnmount(result, e.id, slot);
+          }
+          out.push(result);
+        } else if (DEBUG) {
+          log.warn(`slot '${slot}' plugin '${e.id}' chunk exports no mount() — skipped`);
         }
       } catch (err) {
         console.error(`[PluginHost] slot '${slot}' plugin '${e.id}' failed:`, err);
       }
     }
     return out;
+  }
+
+  /**
+   * Debug build only: wrap a mounted component's `unmount`/`destroy` so teardown
+   * shows up in the console. Pages call these at the call site (e.g.
+   * `comp.unmount()`), so the host can't see them otherwise. No-op when DEBUG is
+   * false — the whole method is dead code that minification drops.
+   */
+  _traceUnmount(result, id, slot) {
+    if (!result || typeof result !== "object") return;
+    for (const method of ["unmount", "destroy"]) {
+      const fn = result[method];
+      if (typeof fn !== "function") continue;
+      const orig = fn.bind(result);
+      result[method] = (...args) => {
+        log(`${method} '${id}' from slot '${slot}'`);
+        return orig(...args);
+      };
+    }
   }
 
   /**
@@ -134,6 +192,7 @@ class PluginHost {
     if (!entries.length) return null;
     const e = choose ? choose(entries) : entries[0];
     if (!e || !e.entry) return null;
+    if (DEBUG) log(`claimRoute '${slot}' → '${e.id}'`);
     return this._import(e);
   }
 
@@ -148,9 +207,11 @@ class PluginHost {
    * plugins that have a built chunk.
    */
   routes() {
-    return this._manifest.filter(
+    const out = this._manifest.filter(
       (e) => e.type === "route" && e.entry && e.slot !== "tags-route" && Array.isArray(e.routes) && e.routes.length,
     );
+    if (DEBUG && out.length) log("dynamic routes:", out.flatMap((e) => e.routes).join(", "));
+    return out;
   }
 }
 

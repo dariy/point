@@ -61,7 +61,16 @@ func pluginManifestScript(ctx context.Context, settings *services.SettingsServic
 	return "\n  <script>" + scriptContent + "</script>", hashBase64
 }
 
-func resolveJSDir(frontendDir string) string {
+func resolveJSDir(frontendDir string, debug bool) string {
+	// When FRONTEND_DEBUG is on, prefer the debug bundle (frontend/js-debug) if
+	// it was built — it carries plugin/console debug logging. Falls through to
+	// the normal resolution otherwise, so a missing debug bundle is harmless.
+	if debug {
+		debugDir := filepath.Join(frontendDir, "js-debug")
+		if fi, err := os.Stat(debugDir); err == nil && fi.IsDir() {
+			return debugDir
+		}
+	}
 	jsDir := filepath.Join(frontendDir, "js")
 	if _, err := os.Stat(jsDir); err == nil {
 		return jsDir
@@ -417,10 +426,19 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 
 	// ── Frontend SPA + static assets ──────────────────────────────────────────
 	frontendDir := cfg.FrontendDir
+	// Resolve the JS bundle directory once: the release bundle (frontend/js), or
+	// the debug bundle (frontend/js-debug) when FRONTEND_DEBUG is set and built.
+	// The chunk map MUST come from the same directory we serve so plugin chunk
+	// hashes match the bundle the browser loads.
+	jsDir := resolveJSDir(frontendDir, cfg.FrontendDebug)
+	manifestDir := jsDir
+	if manifestDir == "" {
+		manifestDir = filepath.Join(frontendDir, "js")
+	}
 	// Static build map (plugin id → hashed chunk filename). Empty in Phase 1
 	// (no per-plugin chunks built yet), which makes every /assets/js/p/* request
 	// 404 and every manifest Entry empty — the intended foundation state.
-	chunkMap := plugins.LoadChunkMap(filepath.Join(frontendDir, "js", "plugin-manifest.json"))
+	chunkMap := plugins.LoadChunkMap(filepath.Join(manifestDir, "plugin-manifest.json"))
 	cssMap := plugins.LoadCssMap(filepath.Join(frontendDir, "css", "p"))
 
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
@@ -435,7 +453,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		if fi, err := os.Stat(cssDir); err == nil && fi.IsDir() {
 			e.Static("/assets/css", cssDir)
 		}
-		if jsDir := resolveJSDir(frontendDir); jsDir != "" {
+		if jsDir != "" {
 			// Gated plugin-chunk handler: serves /assets/js/p/* only for ENABLED
 			// plugins, so disabled code 404s even if a filename is guessed.
 			// Registered before the broad /assets/js static route so the more

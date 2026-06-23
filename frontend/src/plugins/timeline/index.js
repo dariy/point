@@ -1571,5 +1571,7 @@ export class Timeline extends Component {
 }
 
 export function mount(el, ctx) {
-  return new Timeline(el, ctx);
+  const comp = new Timeline(el, ctx);
+  comp.mount();
+  return comp;
 }

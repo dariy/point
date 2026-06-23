@@ -61,6 +61,9 @@ export default [
         JSON: "readonly",
         Math: "readonly",
         Date: "readonly",
+        // Build-time constant injected by esbuild --define (see scripts/build-js.sh).
+        // `false` in the release bundle, `true` in the debug bundle.
+        __DEBUG__: "readonly",
       },
     },
     rules: {

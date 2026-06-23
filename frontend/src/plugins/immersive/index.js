@@ -10,5 +10,7 @@ export function mount(el, ctx) {
   document.body.classList.toggle("immersive-overlay-sheet", sheetMode);
   
   const ViewerClass = sheetMode ? ImmersiveSheetViewer : MediaViewer;
-  return new ViewerClass(el, { ...ctx, sheetMode });
+  const comp = new ViewerClass(el, { ...ctx, sheetMode });
+  comp.mount();
+  return comp;
 }

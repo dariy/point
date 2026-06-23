@@ -1,41 +1,32 @@
 #!/bin/bash
 # Bundles and minifies JS with esbuild.
 #
-# Two outputs:
-#   1. Core bundle  → frontend/js/app.js (single file, loaded by index.html).
-#   2. Plugin chunks → frontend/js/p/<id>-<hash>.js, one per plugin entry at
-#      frontend/src/plugins/<id>/index.js, code-split so plugins share common
-#      chunks. The id→chunk map is written to frontend/js/plugin-manifest.json,
-#      which the Go server reads to resolve each enabled plugin to its chunk URL
-#      and to authorize the gated /assets/js/p/* handler.
+# Produces TWO complete bundle sets so the backend can serve either without a
+# rebuild (selected by the FRONTEND_DEBUG env — see api/cmd/api/main.go):
 #
-# Until plugins are extracted (Phase 4) there are no plugin entries, so the
-# manifest is "{}" and every manifest Entry stays empty — no behavior change.
+#   frontend/js/        release build — minified, __DEBUG__=false. Debug logging
+#                       (utils/debug.js) collapses to no-ops and is stripped.
+#   frontend/js-debug/  debug build   — unminified, __DEBUG__=true. Plugin
+#                       mount/unmount, the manifest and chunk loads are logged
+#                       to the console (see core/pluginHost.js).
+#
+# Each set contains its own core bundle (app.js), plugin chunks (p/<id>-<hash>.js)
+# and plugin-manifest.json. `__DEBUG__` is a compile-time constant: there is no
+# runtime flag, so a visitor can never enable debug logging — the operator picks
+# the build via the backend env.
+#
+# Set BUILD_DEBUG_FRONTEND=0 to skip the debug set (e.g. lean production images).
 #
 # Run from the repository root or its directory.
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-JS_DIR="$ROOT_DIR/frontend/js"
+APP_ENTRY="$ROOT_DIR/frontend/src/app.js"
 PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
-PLUGIN_OUT="$JS_DIR/p"
-MANIFEST="$JS_DIR/plugin-manifest.json"
 
-mkdir -p "$JS_DIR"
-
-# ── 1. Core bundle (single file, unchanged contract) ────────────────────────
-npx --yes esbuild "$ROOT_DIR/frontend/src/app.js" \
-    --bundle \
-    --minify \
-    --format=esm \
-    "--external:/assets/vendor/*" \
-    --outfile="$JS_DIR/app.js"
-
-echo "Built frontend/js/app.js ($(wc -c < "$JS_DIR/app.js") bytes)"
-
-# ── 2. Plugin chunks + manifest ─────────────────────────────────────────────
-# Collect "<id>=<entry>" args for every frontend/src/plugins/<id>/index.js.
+# Collect "<id>=<entry>" args for every frontend/src/plugins/<id>/index.js once;
+# both bundle sets share the same plugin entries.
 PLUGIN_ARGS=()
 if [ -d "$PLUGIN_SRC" ]; then
   for dir in "$PLUGIN_SRC"/*/; do
@@ -46,22 +37,58 @@ if [ -d "$PLUGIN_SRC" ]; then
   done
 fi
 
-if [ ${#PLUGIN_ARGS[@]} -gt 0 ]; then
-  rm -rf "$PLUGIN_OUT"
-  mkdir -p "$PLUGIN_OUT"
-  npx --yes esbuild "${PLUGIN_ARGS[@]}" \
+# build_set <out-js-dir> <__DEBUG__ value> <extra esbuild flags...>
+build_set() {
+  local js_dir="$1"; shift
+  local debug_val="$1"; shift
+  local extra=("$@")
+
+  local plugin_out="$js_dir/p"
+  local manifest="$js_dir/plugin-manifest.json"
+  local meta="$js_dir/plugin-meta.json"
+
+  mkdir -p "$js_dir"
+
+  # ── Core bundle (single file, unchanged contract) ─────────────────────────
+  npx --yes esbuild "$APP_ENTRY" \
       --bundle \
-      --minify \
-      --splitting \
       --format=esm \
+      "--define:__DEBUG__=${debug_val}" \
       "--external:/assets/vendor/*" \
-      --entry-names="[name]-[hash]" \
-      --chunk-names="chunk-[hash]" \
-      --metafile="$JS_DIR/plugin-meta.json" \
-      --outdir="$PLUGIN_OUT"
-  node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$JS_DIR/plugin-meta.json" "$MANIFEST"
-  echo "Built ${#PLUGIN_ARGS[@]} plugin chunk(s) → frontend/js/p/ (see plugin-manifest.json)"
+      "${extra[@]}" \
+      --outfile="$js_dir/app.js"
+  echo "Built $js_dir/app.js ($(wc -c < "$js_dir/app.js") bytes, __DEBUG__=${debug_val})"
+
+  # ── Plugin chunks + manifest ──────────────────────────────────────────────
+  if [ ${#PLUGIN_ARGS[@]} -gt 0 ]; then
+    rm -rf "$plugin_out"
+    mkdir -p "$plugin_out"
+    npx --yes esbuild "${PLUGIN_ARGS[@]}" \
+        --bundle \
+        --splitting \
+        --format=esm \
+        "--define:__DEBUG__=${debug_val}" \
+        "--external:/assets/vendor/*" \
+        --entry-names="[name]-[hash]" \
+        --chunk-names="chunk-[hash]" \
+        --metafile="$meta" \
+        "${extra[@]}" \
+        --outdir="$plugin_out"
+    node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$meta" "$manifest"
+    echo "Built ${#PLUGIN_ARGS[@]} plugin chunk(s) → $plugin_out (see $manifest)"
+  else
+    echo '{}' > "$manifest"
+    echo "No plugin entries — wrote empty $manifest"
+  fi
+}
+
+# Release set — minified, debug logging stripped.
+build_set "$ROOT_DIR/frontend/js" "false" --minify
+
+# Debug set — unminified for readable stack traces, debug logging active.
+if [ "${BUILD_DEBUG_FRONTEND:-1}" != "0" ]; then
+  build_set "$ROOT_DIR/frontend/js-debug" "true"
 else
-  echo '{}' > "$MANIFEST"
-  echo "No plugin entries — wrote empty frontend/js/plugin-manifest.json"
+  rm -rf "$ROOT_DIR/frontend/js-debug"
+  echo "BUILD_DEBUG_FRONTEND=0 — skipped debug bundle (frontend/js-debug)"
 fi

@@ -28,6 +28,10 @@ type Config struct {
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
+	// FrontendDebug serves the debug frontend bundle (frontend/js-debug, with
+	// plugin/console debug logging) instead of the minified release bundle when
+	// that bundle exists. Off by default so production serves the release build.
+	FrontendDebug bool `mapstructure:"FRONTEND_DEBUG"`
 	ThemesPath               string `mapstructure:"THEMES_PATH"`
 	UserThemesPath           string `mapstructure:"USER_THEMES_PATH"`
 	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
@@ -59,6 +63,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
 	v.SetDefault("STORAGE_PATH", "./data")
 	v.SetDefault("FRONTEND_DIR", "../frontend")
+	v.SetDefault("FRONTEND_DEBUG", false)
 	v.SetDefault("THEMES_PATH", "")
 	v.SetDefault("USER_THEMES_PATH", "")
 	v.SetDefault("APP_VERSION", "")
