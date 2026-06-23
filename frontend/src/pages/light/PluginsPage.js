@@ -42,7 +42,14 @@ const SETTINGS_PATHS = {
   backups: "/light/system",
 };
 
+// Display-name overrides for ids that don't humanize cleanly (acronyms etc.).
+const PLUGIN_DISPLAY_NAMES = {
+  rss: "RSS",
+  "ai-analysis": "AI Analysis",
+};
+
 function humanize(id) {
+  if (PLUGIN_DISPLAY_NAMES[id]) return PLUGIN_DISPLAY_NAMES[id];
   return id
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))

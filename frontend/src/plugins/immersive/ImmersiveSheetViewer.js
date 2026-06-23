@@ -22,6 +22,7 @@
 import { MediaViewer } from './MediaViewer.js';
 import { escapeHtml, sharePost, linkify } from '../../utils/helpers.js';
 import { store } from '../../store.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { renderTagLink, buildTagIndex, setupTagFlyout } from '../../utils/tags.js';
 import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.js';
@@ -142,7 +143,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       : '';
 
     // RSS + theme toggle live bottom-right, mirroring the footer on other pages.
-    const rssBtn = settings.enable_rss !== false
+    const rssBtn = pluginHost.isEnabled("rss")
       ? `<a class="footer-action-btn" href="/feed.xml" target="_blank" rel="noopener" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
       : '';
     const themeBtn = `<button class="footer-action-btn theme-toggle immersive-sheet-theme" type="button" aria-label="Toggle theme">

@@ -87,6 +87,7 @@ var Registry = []Descriptor{
 	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: true},
 	{ID: "backups", Type: TypeService, DefaultEnabled: true},
 	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: true},
+	{ID: "rss", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
 }
 
 // byID indexes Registry for O(1) lookups.

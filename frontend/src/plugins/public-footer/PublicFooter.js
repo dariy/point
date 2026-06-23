@@ -19,6 +19,7 @@ import {
   MOON_SVG,
 } from "../../utils/icons.js";
 import { store } from "../../store.js";
+import { pluginHost } from "../../core/pluginHost.js";
 import { ViewContext } from "../../utils/viewContext.js";
 
 export class PublicFooter extends Component {
@@ -49,10 +50,9 @@ export class PublicFooter extends Component {
     // buttons) already have canonical entry points elsewhere, so the footer
     // actions only carry what isn't reachable from the chrome: RSS and the
     // theme toggle (moved here from the header).
-    const rssButton =
-      settings.enable_rss !== false
-        ? `<a href="/feed.xml" target="_blank" rel="noopener" class="footer-action-btn" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
-        : "";
+    const rssButton = pluginHost.isEnabled("rss")
+      ? `<a href="/feed.xml" target="_blank" rel="noopener" class="footer-action-btn" title="RSS feed" aria-label="RSS feed">${RSS_SVG}</a>`
+      : "";
 
     const themeToggle = `<button class="footer-action-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
                 <span class="icon-sun">${SUN_SVG}</span>
