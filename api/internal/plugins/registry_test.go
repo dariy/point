@@ -156,10 +156,12 @@ func TestRegistry_UniqueIDs(t *testing.T) {
 		}
 		seen[d.ID] = true
 	}
-	// Every plugin defaults enabled except the alternative immersive viewer,
-	// which ships off so the default public viewer stays Standard.
+	// Every plugin defaults enabled except: the alternative immersive viewer,
+	// which ships off so the default public viewer stays Standard; and the MCP
+	// server, a powerful remote-control surface admins must opt into.
+	defaultOff := map[string]bool{"immersive-sheet": true, "mcp": true}
 	for _, d := range Registry {
-		if !d.DefaultEnabled && d.ID != "immersive-sheet" {
+		if !d.DefaultEnabled && !defaultOff[d.ID] {
 			t.Errorf("plugin %q unexpectedly defaults disabled", d.ID)
 		}
 	}

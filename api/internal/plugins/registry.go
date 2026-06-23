@@ -101,6 +101,10 @@ var Registry = []Descriptor{
 	{ID: "backups", Type: TypeService, DefaultEnabled: true},
 	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: true},
 	{ID: "rss", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
+	// In-process MCP (Model Context Protocol) server: exposes the blog to AI
+	// clients at /mcp. Off by default — it is a powerful remote-control surface
+	// that admins opt into from the Plugins page.
+	{ID: "mcp", Type: TypeService, Routes: []string{"/mcp"}, DefaultEnabled: false},
 }
 
 // byID indexes Registry for O(1) lookups.

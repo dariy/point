@@ -31,11 +31,11 @@ type Config struct {
 	// FrontendDebug serves the debug frontend bundle (frontend/js-debug, with
 	// plugin/console debug logging) instead of the minified release bundle when
 	// that bundle exists. Off by default so production serves the release build.
-	FrontendDebug bool `mapstructure:"FRONTEND_DEBUG"`
-	ThemesPath               string `mapstructure:"THEMES_PATH"`
-	UserThemesPath           string `mapstructure:"USER_THEMES_PATH"`
-	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
-	PhotoLibraryPath         string `mapstructure:"PHOTO_LIBRARY_PATH"`
+	FrontendDebug    bool   `mapstructure:"FRONTEND_DEBUG"`
+	ThemesPath       string `mapstructure:"THEMES_PATH"`
+	UserThemesPath   string `mapstructure:"USER_THEMES_PATH"`
+	GeminiAPIKey     string `mapstructure:"GEMINI_API_KEY"`
+	PhotoLibraryPath string `mapstructure:"PHOTO_LIBRARY_PATH"`
 
 	// SMTP for password reset emails
 	SMTPHost     string `mapstructure:"SMTP_HOST"`
@@ -44,6 +44,11 @@ type Config struct {
 	SMTPPassword string `mapstructure:"SMTP_PASSWORD"`
 	SMTPFrom     string `mapstructure:"SMTP_FROM"`
 	AppURL       string `mapstructure:"APP_URL"`
+
+	// MCP server (the "mcp" plugin, served at /mcp).
+	MCPBaseURL    string `mapstructure:"MCP_BASE_URL"`    // public HTTPS base URL for OAuth discovery; falls back to APP_URL
+	MCPPassword   string `mapstructure:"MCP_PASSWORD"`    // password for the OAuth login page
+	MCPAuthTokens string `mapstructure:"MCP_AUTH_TOKENS"` // comma-separated static bearer tokens (optional)
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -80,6 +85,9 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("SMTP_PASSWORD", "")
 	v.SetDefault("SMTP_FROM", "")
 	v.SetDefault("APP_URL", "")
+	v.SetDefault("MCP_BASE_URL", "")
+	v.SetDefault("MCP_PASSWORD", "")
+	v.SetDefault("MCP_AUTH_TOKENS", "")
 
 	err = v.ReadInConfig()
 	if err != nil {
@@ -133,4 +141,3 @@ func LoadConfig(path string) (config Config, err error) {
 
 	return
 }
-

@@ -21,6 +21,7 @@ import (
 
 	"point-api/internal/api"
 	"point-api/internal/config"
+	"point-api/internal/mcp"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
@@ -406,6 +407,43 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	systemGroup.GET("/photo-library/file", systemHandler.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
+	// ── MCP plugin (/mcp) ──────────────────────────────────────────────────────
+	// In-process Model Context Protocol server. Gated by the "mcp" plugin; serves
+	// the streamable endpoint plus OAuth 2.1 discovery. Reuses the REST handlers
+	// for all data access (see RegisterMCP / mcpServiceClient).
+	mcpBaseURL := cfg.MCPBaseURL
+	if mcpBaseURL == "" {
+		mcpBaseURL = cfg.AppURL
+	}
+	var mcpOwnerID int64
+	if owner, err := repo.GetFirstUser(context.Background()); err == nil {
+		mcpOwnerID = owner.ID
+	}
+	var mcpStaticTokens []string
+	for _, t := range strings.Split(cfg.MCPAuthTokens, ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			mcpStaticTokens = append(mcpStaticTokens, t)
+		}
+	}
+	mcp.Register(e, mcp.Deps{
+		Echo:            e,
+		Post:            postHandler,
+		Tag:             tagHandler,
+		Media:           mediaHandler,
+		Theme:           themeHandler,
+		Settings:        settingsHandler,
+		System:          systemHandler,
+		Auth:            svcs.Auth,
+		ApiKey:          svcs.ApiKey,
+		SettingsService: svcs.Settings,
+		OwnerUserID:     mcpOwnerID,
+		BaseURL:         mcpBaseURL,
+		OAuthPassword:   cfg.MCPPassword,
+		StaticTokens:    mcpStaticTokens,
+		Version:         cfg.AppVersion,
+		UploadRoot:      cfg.PhotoLibraryPath,
+	})
+
 	// ── Nav Menu Routes (admin) ────────────────────────────────────────────────
 	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
 	e.PUT("/api/nav-menu", navMenuHandler.UpdateAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
@@ -564,7 +602,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 						sb.WriteString(script)
 						sb.WriteString("\n</head>")
 						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
-						
+
 						csp := c.Response().Header().Get("Content-Security-Policy")
 						csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
 						c.Response().Header().Set("Content-Security-Policy", csp)
@@ -578,11 +616,11 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 			if b, err := os.ReadFile(indexHTML); err == nil {
 				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
 				htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
-				
+
 				csp := c.Response().Header().Get("Content-Security-Policy")
 				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
 				c.Response().Header().Set("Content-Security-Policy", csp)
-				
+
 				return c.HTML(http.StatusOK, htmlStr)
 			}
 			return c.File(indexHTML)
@@ -1031,11 +1069,11 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 				if b, err := os.ReadFile(indexHTML); err == nil {
 					script, hash := pluginManifestScript(c.Request().Context(), settings, chunks, cssMap)
 					htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
-					
+
 					csp := c.Response().Header().Get("Content-Security-Policy")
 					csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
 					c.Response().Header().Set("Content-Security-Policy", csp)
-					
+
 					return c.HTML(http.StatusOK, htmlStr)
 				}
 				return c.File(indexHTML)
