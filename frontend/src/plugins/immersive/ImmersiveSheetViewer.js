@@ -36,6 +36,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this._sheetOpen = false;     // current snap state
     this._sheetHeight = 0;       // px the stage travels when fully open
     this._currentOffset = 0;     // px currently translated
+    this._imageGap = 0;          // empty letterbox px below the photo
     this._sheetDrag = false;     // true when the active vertical drag drives the sheet
   }
 
@@ -232,6 +233,19 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (!sheet) return;
     const h = sheet.getBoundingClientRect().height;
     this._sheetHeight = Math.min(h, window.innerHeight);
+    this._measureImageGap();
+  }
+
+  /** Empty space between the bottom of the displayed photo and the bottom of
+   *  the viewport. The sheet rises into this gap first, so the photo only has
+   *  to move once the sheet reaches its border. Only meaningful with the photo
+   *  at rest, so callers must measure while the sheet is fully closed. */
+  _measureImageGap() {
+    const active = this.$('.carousel-slide.active') || this.$('.immersive-visuals');
+    const img = active?.querySelector('img, video');
+    if (!img) { this._imageGap = 0; return; }
+    const rect = img.getBoundingClientRect();
+    this._imageGap = Math.max(0, window.innerHeight - rect.bottom);
   }
 
   // ── Vertical gesture → sheet ───────────────────────────────────────────────
@@ -296,7 +310,11 @@ export class ImmersiveSheetViewer extends MediaViewer {
     const t = animate ? SHEET_ANIM : 'none';
     const visuals = this.$('.immersive-visuals');
     const sheet = this.$('.immersive-sheet');
-    if (visuals) { visuals.style.transition = t; visuals.style.transform = `translateY(${-px}px)`; }
+    // The sheet always tracks the full offset, but the photo stays put until the
+    // sheet has climbed through the empty space below it and reached its border;
+    // only the overshoot beyond that gap pushes the photo up.
+    const imgPx = Math.max(0, px - this._imageGap);
+    if (visuals) { visuals.style.transition = t; visuals.style.transform = `translateY(${-imgPx}px)`; }
     if (sheet) { sheet.style.transition = t; sheet.style.transform = `translateY(${-px}px)`; }
   }
 
@@ -328,6 +346,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _finalizeSwap(newIndex) {
     super._finalizeSwap(newIndex);
     this._updateSheetExif();
+    // A new slide can have a different aspect ratio (and thus a different
+    // letterbox gap); re-measure while the photo is still at rest.
+    if (!this._sheetOpen) this._measureImageGap();
   }
 
   _updateSheetExif() {
