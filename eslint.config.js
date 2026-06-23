@@ -6,6 +6,7 @@ export default [
       sourceType: "module",
       globals: {
         // Browser globals
+        globalThis: "readonly",
         window: "readonly",
         document: "readonly",
         navigator: "readonly",

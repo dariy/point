@@ -461,6 +461,18 @@
 #grid-mount.grid-swiping {
     will-change: transform, opacity;
 }
+
+/* Promote the grid to its own compositor layer ahead of any swipe (added in JS
+   during idle, after render — see _promoteGridAhead). Doing the one-off raster
+   of the image-heavy grid up front means the first drag frame is a cheap GPU
+   transform instead of stalling on layer creation, which is what made the grid
+   lag behind the finger at touch-down. translateZ(0) forces the raster now
+   rather than merely hinting at it; the drag's inline translateX overrides it
+   and the layer persists via will-change. */
+#grid-mount.grid-promoted {
+    transform: translateZ(0);
+    will-change: transform;
+}
 .placeholder-grid .post-card-slot {
     background: var(--surface-card);
     border-radius: var(--border-radius-xl);

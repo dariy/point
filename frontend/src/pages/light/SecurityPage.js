@@ -217,8 +217,8 @@ export default class SecurityPage extends Component {
     try {
       const [sessions, passkeyStatus, apiKeys] = await Promise.all([
         getSessions(),
-        this.state.passkeySupported ? getPasskeyStatus() : Promise.resolve(null),
-        getApiKeys()
+        this.state.passkeySupported ? getPasskeyStatus().catch(() => null) : Promise.resolve(null),
+        getApiKeys().catch(() => ({}))
       ]);
       this.setState({
         loading: false,

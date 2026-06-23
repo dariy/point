@@ -461,7 +461,7 @@ export default class SystemPage extends Component {
         diskInfo,
         igStatus,
       ] = await Promise.all([
-        listBackups(),
+        listBackups().catch(() => []),
         getMigrations(),
         getOfflineStats(),
         getMeta("last_sync"),
