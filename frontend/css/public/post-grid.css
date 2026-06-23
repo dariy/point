@@ -433,7 +433,13 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 100%;
+    /* Overlay the live grid's content box exactly: inset by the container
+       padding so width matches #grid-mount (not the viewport-wide padding box).
+       Without this the ghost is wider than the grid and anchored left, so a
+       "prev" drag lands its right edge flush against the grid (no gap) while a
+       "next" drag shows one — the swipe gap was asymmetric. */
+    left: var(--spacing-md);
+    right: var(--spacing-md);
     /* Constrain to the live mount height and clip the overflow. The ghost grid
        renders at its natural height (outside the grid-expand flex that compacts
        the real grid), so without this its full height inflates the page's
@@ -444,6 +450,16 @@
     overflow: hidden;
     pointer-events: none;
     z-index: 10;
+    /* Keep the sliding neighbour on its own compositor layer so each drag frame
+       is a GPU transform, not a main-thread repaint of the image-heavy grid. */
+    will-change: transform, opacity;
+}
+
+/* While a page swipe is in progress, promote the outgoing grid to its own
+   compositor layer too, so it tracks the finger without repaint jank. Applied
+   only during the drag (toggled in JS) to avoid a permanent layer cost. */
+#grid-mount.grid-swiping {
+    will-change: transform, opacity;
 }
 .placeholder-grid .post-card-slot {
     background: var(--surface-card);

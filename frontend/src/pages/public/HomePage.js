@@ -306,6 +306,7 @@ export default class HomePage extends Component {
       gridMount.style.transform = '';
       gridMount.style.opacity = '';
       gridMount.style.transition = '';
+      gridMount.classList.remove('grid-swiping');
     }
 
     this._postChildren.push(
@@ -355,6 +356,9 @@ export default class HomePage extends Component {
     const atStart = () => pagination.page <= 1;
 
     this._gesture = new GestureController(this.$('.site-main'), {
+      // Engage the drag a touch sooner than the immersive default so the grid
+      // starts tracking the finger promptly instead of feeling laggy.
+      commitThresholdPx: 8,
       onSwipeMove: (dx, dy) => {
         if (Math.abs(dx) <= Math.abs(dy)) return;
         const dir = dx < 0 ? 'next' : 'prev';
@@ -362,6 +366,10 @@ export default class HomePage extends Component {
         const tx = blocked ? rubberBand(dx) : dx;
         const ratio = Math.abs(tx) / vw();
 
+        // Promote the moving grids to their own compositor layers for the
+        // duration of the drag so each touchmove is a cheap GPU transform
+        // rather than a full main-thread repaint of the image-heavy grid.
+        gridMount.classList.add('grid-swiping');
         gridMount.style.transition = 'none';
         gridMount.style.transform = `translateX(${tx}px)`;
 
@@ -377,7 +385,13 @@ export default class HomePage extends Component {
 
         this._clearOtherPeek(dir);
         if (ghost) {
-          const offset = dir === 'next' ? vw() : -vw();
+          // One symmetric stride (grid width + the inter-column gap) drives the
+          // neighbour in from either edge, so the gap between the outgoing and
+          // incoming grids is identical in both directions. (Previously the
+          // ghost was viewport-wide while the grid was inset by the container
+          // padding, so a "prev" drag landed the ghost flush with no gap.)
+          const stride = this._swipeStride();
+          const offset = dir === 'next' ? stride : -stride;
           ghost.style.transition = 'none';
           ghost.style.transform = `translateX(${offset + tx}px)`;
           ghost.style.opacity = String(Math.min(1, ratio));
@@ -417,6 +431,25 @@ export default class HomePage extends Component {
   }
 
   /**
+   * The off-screen slide distance for a page swipe: the live grid's width plus
+   * the inter-column gap. Driving every neighbour position (rest, drag, reset,
+   * commit) from this single value keeps the gap between the outgoing and
+   * incoming grids symmetric in both directions and independent of the viewport
+   * width vs. the padded container width.
+   */
+  _swipeStride() {
+    const gm = this.$('#grid-mount');
+    const w = gm?.offsetWidth || window.innerWidth || 500;
+    const grid = gm?.querySelector('.posts-grid');
+    let gap = 0;
+    if (grid) {
+      const cg = parseFloat(window.getComputedStyle(grid).columnGap);
+      if (!Number.isNaN(cg)) gap = cg;
+    }
+    return w + gap;
+  }
+
+  /**
    * Preload the previous/next page and render its grid into an off-screen ghost
    * element, so a swipe reveals the real next page (not a skeleton) and a
    * committed swipe hands off to it seamlessly. Mirrors MediaViewer's
@@ -443,9 +476,11 @@ export default class HomePage extends Component {
       el.className = 'grid-preview-placeholder';
       el.dataset.edge = dir;
       el.innerHTML = this._buildGridHtml(data.posts || []);
-      el.style.transform = `translateX(${dir === 'next' ? '100%' : '-100%'})`;
-      el.style.opacity = '0';
       container.appendChild(el);
+      // Rest off-screen at one full stride so the first drag frame doesn't jump.
+      const stride = this._swipeStride();
+      el.style.transform = `translateX(${dir === 'next' ? stride : -stride}px)`;
+      el.style.opacity = '0';
       this._pageGhosts[dir] = { page, el };
     };
     await Promise.all([build('prev'), build('next')]);
@@ -486,8 +521,9 @@ export default class HomePage extends Component {
   _clearOtherPeek(dir) {
     const g = this._peekGhost;
     if (g && g.dataset.edge !== dir) {
+      const stride = this._swipeStride();
       g.style.transition = 'none';
-      g.style.transform = `translateX(${g.dataset.edge === 'next' ? '100%' : '-100%'})`;
+      g.style.transform = `translateX(${g.dataset.edge === 'next' ? stride : -stride}px)`;
       g.style.opacity = '0';
       this._peekGhost = null;
     }
@@ -500,12 +536,13 @@ export default class HomePage extends Component {
       gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
       gridMount.style.transform = '';
       gridMount.style.opacity = '1';
+      gridMount.classList.remove('grid-swiping');
     }
     const g = this._peekGhost;
     if (g) {
-      const w = window.innerWidth || 500;
+      const stride = this._swipeStride();
       g.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-      g.style.transform = `translateX(${g.dataset.edge === 'next' ? w : -w}px)`;
+      g.style.transform = `translateX(${g.dataset.edge === 'next' ? stride : -stride}px)`;
       g.style.opacity = '0';
       this._peekGhost = null;
     }
@@ -530,12 +567,12 @@ export default class HomePage extends Component {
     }
 
     const gridMount = this.$('#grid-mount');
-    const w = window.innerWidth || 500;
+    const stride = this._swipeStride();
     const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
 
     if (gridMount) {
       gridMount.style.transition = T;
-      gridMount.style.transform = `translateX(${dir === 'next' ? -w : w}px)`;
+      gridMount.style.transform = `translateX(${dir === 'next' ? -stride : stride}px)`;
       gridMount.style.opacity = '0';
     }
     ghost.style.transition = T;
