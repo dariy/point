@@ -24,7 +24,7 @@ import { Component } from '../../components/Component.js';
 import { escapeHtml, safeUrl, sharePost, navigate } from '../../utils/helpers.js';
 import { SHARE_SVG, X_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
-import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
+import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { hideFlyout } from '../../utils/tags.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { getPostBySlug, getPostNavigation } from '../../api/posts.js';

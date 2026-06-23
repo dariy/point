@@ -141,10 +141,11 @@ export class PostContent extends Component {
         }
       };
 
-      // post-viewer slot (immersive). When the immersive plugin chunk claims it
-      // the host mounts the viewer; otherwise the core viewer renders directly.
+      // post-viewer slot (immersive). The Standard and Sheet immersive plugins
+      // are alternatives for this exclusive slot, so mount only one (the first
+      // enabled, registry order — Standard wins when both are on).
       if (pluginHost.hasSlot('post-viewer')) {
-        pluginHost.fill('post-viewer', this.$('#media-viewer-mount'), viewerProps);
+        pluginHost.fillOne('post-viewer', this.$('#media-viewer-mount'), viewerProps);
       }
     } else {
       document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");

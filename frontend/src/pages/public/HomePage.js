@@ -18,7 +18,7 @@ import { getHomePage } from '../../api/pages.js';
 import { pluginHost } from '../../core/pluginHost.js';
 import { store } from '../../store.js';
 import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
-import { GestureController, TrackpadDetector, rubberBand } from '../../plugins/immersive/gestures.js';
+import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { computePerPage, cachedPerPage } from '../../utils/gridFit.js';
 

@@ -362,6 +362,10 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	// client manifest.
 	pluginsGroup := e.Group("/api/plugins")
 	pluginsGroup.GET("", pluginsHandler.ListPlugins, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	// Preset routes are registered before /:id so the static "presets" segment wins.
+	pluginsGroup.GET("/presets", pluginsHandler.GetPresets, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pluginsGroup.PUT("/presets/:id", pluginsHandler.UpdatePreset, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pluginsGroup.POST("/presets/:id/apply", pluginsHandler.ApplyPreset, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pluginsGroup.PATCH("/:id", pluginsHandler.TogglePlugin, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
 	// ── Instagram Routes ──────────────────────────────────────────────────────

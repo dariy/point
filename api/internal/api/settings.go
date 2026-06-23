@@ -38,7 +38,6 @@ var publicSettingKeys = map[string]bool{
 	"tags_visibility":         true,
 	"enable_backup":           true,
 	"immersive_nav_direction": true,
-	"plugin.immersive.mode": true,
 	"exif_visibility":         true,
 	"nav_menu_mode":           true,
 }

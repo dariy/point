@@ -68,8 +68,14 @@ func TestBuildManifest_EmptyChunkMapLeavesEntryEmpty(t *testing.T) {
 	// Phase 1 state: no chunks built, every Entry empty, but all enabled plugins
 	// still present in the manifest.
 	manifest := BuildManifest(map[string]string{}, map[string]string{}, nil)
-	if len(manifest) != len(Registry) {
-		t.Fatalf("expected %d entries (all enabled), got %d", len(Registry), len(manifest))
+	wantEnabled := 0
+	for _, d := range Registry {
+		if d.DefaultEnabled {
+			wantEnabled++
+		}
+	}
+	if len(manifest) != wantEnabled {
+		t.Fatalf("expected %d entries (default-enabled), got %d", wantEnabled, len(manifest))
 	}
 	for _, e := range manifest {
 		if e.Entry != "" {
@@ -142,15 +148,89 @@ func TestLoadChunkMap(t *testing.T) {
 	}
 }
 
-func TestRegistry_UniqueIDsAndAllDefaultEnabled(t *testing.T) {
+func TestRegistry_UniqueIDs(t *testing.T) {
 	seen := map[string]bool{}
 	for _, d := range Registry {
 		if seen[d.ID] {
 			t.Errorf("duplicate plugin id %q", d.ID)
 		}
 		seen[d.ID] = true
-		if !d.DefaultEnabled {
-			t.Errorf("Phase 1 ships all plugins enabled; %q is not DefaultEnabled", d.ID)
+	}
+	// Every plugin defaults enabled except the alternative immersive viewer,
+	// which ships off so the default public viewer stays Standard.
+	for _, d := range Registry {
+		if !d.DefaultEnabled && d.ID != "immersive-sheet" {
+			t.Errorf("plugin %q unexpectedly defaults disabled", d.ID)
+		}
+	}
+}
+
+func TestAreaPlugins_AndEnabledInArea(t *testing.T) {
+	members := AreaPlugins("immersive")
+	if len(members) != 2 {
+		t.Fatalf("immersive area should have 2 members, got %d", len(members))
+	}
+	if AreaPlugins("") != nil {
+		t.Errorf("empty area should match nothing")
+	}
+
+	// Defaults: only Standard immersive is enabled.
+	enabled := EnabledInArea("immersive", map[string]string{})
+	if len(enabled) != 1 || enabled[0] != "immersive" {
+		t.Errorf("default enabled immersive = %v, want [immersive]", enabled)
+	}
+
+	// Both on.
+	enabled = EnabledInArea("immersive", map[string]string{EnabledKey("immersive-sheet"): "true"})
+	if len(enabled) != 2 {
+		t.Errorf("both immersive plugins should be enabled, got %v", enabled)
+	}
+}
+
+func TestIsLockedOff(t *testing.T) {
+	// Single-member core area: the sole plugin is always locked.
+	if !IsLockedOff("media-library", map[string]string{}) {
+		t.Errorf("media-library should be locked off (sole core plugin)")
+	}
+	// Non-core plugin is never locked.
+	if IsLockedOff("timeline", map[string]string{}) {
+		t.Errorf("non-core plugin must never be locked")
+	}
+	// Immersive (Standard) is the only enabled member by default → locked.
+	if !IsLockedOff("immersive", map[string]string{}) {
+		t.Errorf("immersive should be locked when it is the only enabled viewer")
+	}
+	// With Sheet also enabled, neither is locked.
+	both := map[string]string{EnabledKey("immersive-sheet"): "true"}
+	if IsLockedOff("immersive", both) || IsLockedOff("immersive-sheet", both) {
+		t.Errorf("with both viewers enabled, neither should be locked")
+	}
+	// A disabled plugin is never "locked off".
+	if IsLockedOff("immersive-sheet", map[string]string{}) {
+		t.Errorf("disabled plugin must not be reported locked")
+	}
+}
+
+func TestDefaultPresets(t *testing.T) {
+	presets := DefaultPresets()
+	for _, id := range []string{"minimalistic", "standalone", "fully-featured"} {
+		if _, ok := presets[id]; !ok {
+			t.Errorf("missing default preset %q", id)
+		}
+	}
+	if len(presets["fully-featured"]) != len(Registry) {
+		t.Errorf("fully-featured should include every plugin")
+	}
+	// Minimalistic enables only the sheet viewer among non-core public plugins.
+	if got := presets["minimalistic"]; len(got) != 1 || got[0] != "immersive-sheet" {
+		t.Errorf("minimalistic = %v, want [immersive-sheet]", got)
+	}
+	// Standalone excludes the advanced services and the sheet viewer.
+	for _, excluded := range []string{"ai-analysis", "instagram", "immersive-sheet"} {
+		for _, id := range presets["standalone"] {
+			if id == excluded {
+				t.Errorf("standalone must exclude %q", excluded)
+			}
 		}
 	}
 }

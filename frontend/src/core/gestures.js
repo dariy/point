@@ -42,6 +42,9 @@ export class GestureController {
    * @param {Function} [opts.onTap]          (x, y)
    * @param {Function} [opts.onDoubleTap]    (x, y)
    * @param {Function} [opts.onTwoFingerTap] (x, y)
+   * @param {string}   [opts.ignoreSelector]  CSS selector; touches starting on a
+   *   matching element (or its ancestor) are ignored so the consumer can cede
+   *   that region to a nested gesture handler.
    * @param {number}   [opts.swipeThresholdPx=50]
    * @param {number}   [opts.commitThresholdPx=12]  movement before state commits
    * @param {number}   [opts.edgeIgnorePx=30]
@@ -130,10 +133,13 @@ export class GestureController {
 
   _onStart(e) {
     if (e.touches.length === 1) {
-      // Ignore touches starting in a scrollable tags bar
+      // Ignore touches starting in a scrollable tags bar, or in any region the
+      // consumer opts out of via `ignoreSelector` (e.g. a swipe-to-reveal row
+      // that owns its own horizontal gesture and must not also close a drawer).
       if (
         e.target.closest(".tag-strip-scroll") ||
-        e.target.closest(".post-card-tags")
+        e.target.closest(".post-card-tags") ||
+        (this._opts.ignoreSelector && e.target.closest(this._opts.ignoreSelector))
       ) {
         this._state = STATE.IDLE;
         return;

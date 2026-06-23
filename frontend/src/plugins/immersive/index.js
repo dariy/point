@@ -1,16 +1,11 @@
 import { MediaViewer } from './MediaViewer.js';
-import { ImmersiveSheetViewer } from './ImmersiveSheetViewer.js';
-import { store } from '../../store.js';
 
+// Standard immersive viewer (header + footer chrome). The Sheet viewer is a
+// separate plugin (immersive-sheet); whichever is enabled claims the
+// post-viewer slot, so the choice is made by enabling/disabling plugins.
 export function mount(el, ctx) {
-  const settings = store.get("settings") || {};
-  const mode = settings["plugin.immersive.mode"] || "classic";
-  const sheetMode = mode === "sheet";
-  
-  document.body.classList.toggle("immersive-overlay-sheet", sheetMode);
-  
-  const ViewerClass = sheetMode ? ImmersiveSheetViewer : MediaViewer;
-  const comp = new ViewerClass(el, { ...ctx, sheetMode });
+  document.body.classList.remove("immersive-overlay-sheet");
+  const comp = new MediaViewer(el, { ...ctx, sheetMode: false });
   comp.mount();
   return comp;
 }

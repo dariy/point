@@ -52,6 +52,13 @@ type Descriptor struct {
 	// DefaultEnabled is the enabled state for fresh installs and whenever the
 	// plugin.<id>.enabled setting is absent.
 	DefaultEnabled bool
+	// Area groups plugins that are alternatives for the same responsibility
+	// (e.g. the two immersive viewers). Plugins with no shared area leave it "".
+	Area string
+	// Core marks a plugin whose Area must always have at least one enabled
+	// member: the last enabled plugin in a core area cannot be disabled. An area
+	// with a single core plugin therefore stays permanently enabled.
+	Core bool
 }
 
 // Registry is the static, authoritative catalog of all plugins. Phase 1 ships
@@ -72,13 +79,19 @@ var Registry = []Descriptor{
 	{ID: "public-footer", Type: TypeSlot, Slot: "footer", EntryName: "public-footer", DefaultEnabled: true},
 
 	// ── Content enhancers ────────────────────────────────────────────────────
-	{ID: "immersive", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true},
+	// The immersive viewers are alternatives for the post-viewer slot (core
+	// area "immersive"): Standard is the default; Sheet ships disabled. Enabling
+	// Sheet and disabling Standard switches the public viewer; at least one of
+	// the pair must stay enabled.
+	{ID: "immersive", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
+	{ID: "immersive-sheet", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
 	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
 
 	// ── Admin routes ─────────────────────────────────────────────────────────
-	{ID: "media-library", Type: TypeRoute, Routes: []string{"/light/media"}, EntryName: "media-library", DefaultEnabled: true},
-	{ID: "admin-posts-list", Type: TypeRoute, Routes: []string{"/light/posts"}, EntryName: "admin-posts-list", DefaultEnabled: true},
-	{ID: "admin-home", Type: TypeRoute, Routes: []string{"/light"}, EntryName: "admin-home", DefaultEnabled: true},
+	// Each admin route is its own single-plugin core area: it cannot be disabled.
+	{ID: "media-library", Type: TypeRoute, Routes: []string{"/light/media"}, EntryName: "media-library", DefaultEnabled: true, Area: "media-library", Core: true},
+	{ID: "admin-posts-list", Type: TypeRoute, Routes: []string{"/light/posts"}, EntryName: "admin-posts-list", DefaultEnabled: true, Area: "admin-posts-list", Core: true},
+	{ID: "admin-home", Type: TypeRoute, Routes: []string{"/light"}, EntryName: "admin-home", DefaultEnabled: true, Area: "admin-home", Core: true},
 
 	// ── Backend-gated services ───────────────────────────────────────────────
 	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: true},
@@ -120,6 +133,77 @@ func IsEnabled(id string, settings map[string]string) bool {
 		return v == "true"
 	}
 	return d.DefaultEnabled
+}
+
+// AreaPlugins returns the descriptors that share an area, in registry order. An
+// empty area string matches nothing (plugins without an area are not grouped).
+func AreaPlugins(area string) []Descriptor {
+	if area == "" {
+		return nil
+	}
+	var out []Descriptor
+	for _, d := range Registry {
+		if d.Area == area {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// EnabledInArea returns the enabled plugin ids in an area, in registry order.
+func EnabledInArea(area string, settings map[string]string) []string {
+	var out []string
+	for _, d := range AreaPlugins(area) {
+		if IsEnabled(d.ID, settings) {
+			out = append(out, d.ID)
+		}
+	}
+	return out
+}
+
+// IsLockedOff reports whether plugin id may NOT be disabled: it is the sole
+// enabled member of a core area, so disabling it would leave that area empty.
+// A non-core plugin, or one with an enabled sibling, is never locked off.
+func IsLockedOff(id string, settings map[string]string) bool {
+	d, ok := byID[id]
+	if !ok || !d.Core || !IsEnabled(id, settings) {
+		return false
+	}
+	enabled := EnabledInArea(d.Area, settings)
+	return len(enabled) == 1 && enabled[0] == id
+}
+
+// DefaultPresets returns the seed preset definitions: a preset id mapped to the
+// plugin ids it enables. Core-area plugins are kept enabled by the apply logic
+// regardless of membership, so presets only need to enumerate the rest.
+func DefaultPresets() map[string][]string {
+	all := make([]string, 0, len(Registry))
+	for _, d := range Registry {
+		all = append(all, d.ID)
+	}
+	return map[string][]string{
+		// Bare guest experience: only the sheet viewer (core admin areas stay on).
+		"minimalistic": {"immersive-sheet"},
+		// Self-hosted blog without the advanced/integration services.
+		"standalone": filterOut(all, "ai-analysis", "instagram", "immersive-sheet"),
+		// Everything available.
+		"fully-featured": all,
+	}
+}
+
+// filterOut returns ids with the given values removed.
+func filterOut(ids []string, drop ...string) []string {
+	skip := make(map[string]bool, len(drop))
+	for _, d := range drop {
+		skip[d] = true
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if !skip[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // ManifestEntry is one enabled plugin as delivered to the client. It carries

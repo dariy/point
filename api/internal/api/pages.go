@@ -49,7 +49,6 @@ var pagePublicSettingKeys = map[string]bool{
 	"about_post_id":          true,
 	"home_page_post_id":      true,
 	"show_immersive_excerpt": true,
-	"plugin.immersive.mode": true,
 	"min_tag_posts_to_show":  true,
 
 	"tags_module":            true,

@@ -162,6 +162,36 @@ class PluginHost {
   }
 
   /**
+   * Fill a slot with a single plugin: mount only the first enabled claimant that
+   * has a built chunk (registry/manifest order). Used for exclusive slots where
+   * multiple plugins are alternatives — e.g. `post-viewer`, claimed by either the
+   * Standard or Sheet immersive plugin. Returns the mount result, or null when no
+   * claimant has a chunk. A failing plugin is logged and yields null.
+   */
+  async fillOne(slot, el, ctx = {}) {
+    const entries = this.slotEntries(slot);
+    if (!entries.length) return null;
+    const e = entries[0];
+    if (DEBUG) log(`fillOne slot '${slot}' → '${e.id}'`);
+    try {
+      const mod = await this._import(e);
+      const mount = mod.mount || mod.default;
+      if (typeof mount === "function") {
+        const result = await mount(el, { ...ctx, plugin: e });
+        if (DEBUG) {
+          log(`mounted '${e.id}' into slot '${slot}'`);
+          this._traceUnmount(result, e.id, slot);
+        }
+        return result;
+      }
+      if (DEBUG) log.warn(`slot '${slot}' plugin '${e.id}' chunk exports no mount() — skipped`);
+    } catch (err) {
+      console.error(`[PluginHost] slot '${slot}' plugin '${e.id}' failed:`, err);
+    }
+    return null;
+  }
+
+  /**
    * Debug build only: wrap a mounted component's `unmount`/`destroy` so teardown
    * shows up in the console. Pages call these at the call site (e.g.
    * `comp.unmount()`), so the host can't see them otherwise. No-op when DEBUG is

@@ -1,6 +1,6 @@
 import { Component } from "../../components/Component.js";
 import { getTimeline, getTimelineLocations } from "../../api/timeline.js";
-import { GestureController } from "../immersive/gestures.js";
+import { GestureController } from "../../core/gestures.js";
 import { renderTagLink } from "../../utils/tags.js";
 
 const EDGE_PAD = 48;

@@ -36,6 +36,35 @@ type pluginView struct {
 	Routes         []string     `json:"routes,omitempty"`
 	Enabled        bool         `json:"enabled"`
 	DefaultEnabled bool         `json:"default_enabled"`
+	Area           string       `json:"area,omitempty"`
+	Core           bool         `json:"core,omitempty"`
+	// Locked is true when the plugin may not be disabled because it is the sole
+	// enabled member of a core area. The frontend renders its toggle read-only.
+	Locked bool `json:"locked,omitempty"`
+}
+
+// viewFor builds a pluginView from a descriptor and the resolved settings map.
+func viewFor(d plugins.Descriptor, settings map[string]string) pluginView {
+	return pluginView{
+		ID:             d.ID,
+		Type:           d.Type,
+		Slot:           d.Slot,
+		Routes:         d.Routes,
+		Enabled:        plugins.IsEnabled(d.ID, settings),
+		DefaultEnabled: d.DefaultEnabled,
+		Area:           d.Area,
+		Core:           d.Core,
+		Locked:         plugins.IsLockedOff(d.ID, settings),
+	}
+}
+
+// listViews returns the full catalog as views, in registry order.
+func listViews(settings map[string]string) []pluginView {
+	out := make([]pluginView, 0, len(plugins.Registry))
+	for _, d := range plugins.Registry {
+		out = append(out, viewFor(d, settings))
+	}
+	return out
 }
 
 // togglePluginRequest is the body for enabling/disabling a plugin.
@@ -50,19 +79,7 @@ func (h *PluginsHandler) ListPlugins(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	out := make([]pluginView, 0, len(plugins.Registry))
-	for _, d := range plugins.Registry {
-		out = append(out, pluginView{
-			ID:             d.ID,
-			Type:           d.Type,
-			Slot:           d.Slot,
-			Routes:         d.Routes,
-			Enabled:        plugins.IsEnabled(d.ID, all),
-			DefaultEnabled: d.DefaultEnabled,
-		})
-	}
-	return c.JSON(http.StatusOK, out)
+	return c.JSON(http.StatusOK, listViews(all))
 }
 
 // TogglePlugin sets the enabled state for the plugin identified by :id. Unknown
@@ -82,16 +99,24 @@ func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
-	if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(id), strconv.FormatBool(req.Enabled), "string"); err != nil {
+	all, err := h.settingsService.GetAllSettings(ctx)
+	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, pluginView{
-		ID:             d.ID,
-		Type:           d.Type,
-		Slot:           d.Slot,
-		Routes:         d.Routes,
-		Enabled:        req.Enabled,
-		DefaultEnabled: d.DefaultEnabled,
-	})
+	// Refuse to empty a core area: the sole enabled plugin there can't go off.
+	if !req.Enabled && plugins.IsLockedOff(id, all) {
+		return echo.NewHTTPError(http.StatusConflict, "at least one plugin must stay enabled in this area")
+	}
+
+	if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(id), strconv.FormatBool(req.Enabled), "string"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	// An individual toggle diverges from any preset.
+	if err := h.settingsService.SetSetting(ctx, activePresetKey, presetCustom, "string"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	all[plugins.EnabledKey(id)] = strconv.FormatBool(req.Enabled)
+	return c.JSON(http.StatusOK, viewFor(d, all))
 }
