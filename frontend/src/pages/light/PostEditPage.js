@@ -221,6 +221,7 @@ export default class PostEditPage extends Component {
     const excerptSummary = excerpt.trim() ? escapeHtml(this._truncate(excerpt.trim())) : "auto";
     const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
     const cssSummary = (p.css || "").trim() ? "custom" : "none";
+    const cssEnabled = pluginHost.isEnabled("custom-css");
 
     return `
             <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}${this.state.showLivePreview ? " has-live-preview" : ""}">
@@ -335,6 +336,7 @@ export default class PostEditPage extends Component {
                     </div>
                   </details>
 
+                  ${cssEnabled ? `
                   <details class="details-group" data-group="css">
                     <summary class="details-group-summary-row">
                       <span class="details-group-title">Custom CSS</span>
@@ -345,7 +347,7 @@ export default class PostEditPage extends Component {
                         <div id="css-editor-mount"></div>
                       </div>
                     </div>
-                  </details>
+                  </details>` : ''}
 
                   ${(pluginHost.isEnabled("instagram") && igStatus?.enabled) ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
                 </div>
@@ -532,12 +534,15 @@ export default class PostEditPage extends Component {
     });
     this._tags = toTagNames(this.state.post?.tags);
 
-    this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
-      id: "css-editor",
-      value: this.state.post?.css || "",
-      isMaximized: this.state.maximizedField === "css",
-      onChange: () => this._onInput(),
-    });
+    // The Custom CSS field is only rendered when the custom-css plugin is on.
+    if (pluginHost.isEnabled("custom-css")) {
+      this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
+        id: "css-editor",
+        value: this.state.post?.css || "",
+        isMaximized: this.state.maximizedField === "css",
+        onChange: () => this._onInput(),
+      });
+    }
 
     if (this.state.editorMode === "text") {
       this._markdownEditorRef = this.mountChild(MarkdownEditor, "#content-editor-mount", {

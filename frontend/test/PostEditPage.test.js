@@ -44,7 +44,8 @@ describe('PostEditPage', () => {
         dispatchEvent: () => {},
         __PLUGINS__: [
           {id: 'instagram', type: 'service'},
-          {id: 'ai-analysis', type: 'service'}
+          {id: 'ai-analysis', type: 'service'},
+          {id: 'custom-css', type: 'enhancer'}
         ]
     };
 

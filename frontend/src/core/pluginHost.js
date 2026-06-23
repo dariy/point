@@ -215,5 +215,18 @@ class PluginHost {
   }
 }
 
-/** Shared singleton — initialised once at bootstrap from window.__PLUGINS__. */
-export const pluginHost = new PluginHost();
+/**
+ * Shared singleton — initialised once at bootstrap from window.__PLUGINS__.
+ *
+ * Anchored on `globalThis` because the core bundle (`app.js`) and the plugin
+ * chunks are built in two separate esbuild passes (see scripts/build-js.sh),
+ * so a plain module constant would yield one host per bundle graph. The core
+ * calls `init()` on its copy at bootstrap; a plugin chunk importing its own,
+ * never-initialised copy would see an empty manifest (every `hasSlot`/`fill`
+ * a no-op) — e.g. the public-header plugin could never fill the breadcrumbs
+ * slot, and the tags route plugins could never fill header/footer/timeline.
+ * The shared global guarantees the plugin chunks see the host the core inited.
+ */
+export const pluginHost =
+  globalThis.__pointPluginHost ||
+  (globalThis.__pointPluginHost = new PluginHost());

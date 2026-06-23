@@ -135,10 +135,14 @@ export default class ThemesPage extends Component {
 
   async _load() {
     try {
+      // The custom-css endpoint is gated by the custom-css plugin (404s when
+      // disabled). Only fetch it when the plugin is enabled, otherwise its
+      // rejection would fail the whole page load.
+      const cssEnabled = pluginHost.isEnabled("custom-css");
       const [themes, activeTheme, customCSS] = await Promise.all([
         getThemes(),
         getActiveTheme(),
-        getCustomCSS(),
+        cssEnabled ? getCustomCSS() : Promise.resolve({ css: "" }),
       ]);
       this.setState({
         loading: false,
