@@ -105,7 +105,7 @@ export class PostContent extends Component {
         media: post.media || [],
         startIndex: this.props.startIndex || 0,
         showShare: true,
-        showClose: false,
+        showClose: true,
         navPrev: prevPost,
         navNext: nextPost,
         // Extra context the sheet overlay renders (ignored by classic MediaViewer)

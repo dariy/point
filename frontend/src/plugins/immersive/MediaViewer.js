@@ -22,7 +22,7 @@
 
 import { Component } from '../../components/Component.js';
 import { escapeHtml, safeUrl, sharePost, navigate } from '../../utils/helpers.js';
-import { SHARE_SVG } from '../../utils/icons.js';
+import { SHARE_SVG, X_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
 import { GestureController, TrackpadDetector, rubberBand } from './gestures.js';
 import { hideFlyout } from '../../utils/tags.js';
@@ -69,7 +69,7 @@ export class MediaViewer extends Component {
               data-index="${i}" aria-label="Media ${i + 1} of ${items.length}"></button>
     `).join('');
 
-    const closeBtn = showClose ? `<button class="lightbox-close" aria-label="Close">×</button>` : '';
+    const closeBtn = showClose ? `<button class="lightbox-close" aria-label="Close">${X_SVG}</button>` : '';
     const shareBtn = showShare ? `
       <button class="header-action-btn share-btn carousel-share-btn" type="button" aria-label="Share">
         ${SHARE_SVG}
@@ -241,6 +241,21 @@ export class MediaViewer extends Component {
     // photo is already settled in place and a fade would re-blink it.
     if (_suppressNextFadeIn) {
       _suppressNextFadeIn = false;
+      const ghost = document.getElementById('seamless-ghost');
+      if (ghost) {
+        const newActiveSlide = slides[this._index];
+        if (newActiveSlide) {
+          ghost.className = newActiveSlide.className;
+          ghost.removeAttribute('id');
+          ghost.removeAttribute('data-edge');
+          ghost.dataset.index = newActiveSlide.dataset.index;
+          ghost.style.cssText = '';
+          newActiveSlide.replaceWith(ghost);
+          slides[this._index] = ghost;
+        } else {
+          ghost.remove();
+        }
+      }
     } else {
       (slides[this._index] || visuals).classList.add('immersive-fade-in');
     }
@@ -410,6 +425,13 @@ export class MediaViewer extends Component {
 
     if (seamless && this._ghost[dir]) {
       _suppressNextFadeIn = true;
+      const ghost = this._ghost[dir];
+      ghost.id = 'seamless-ghost';
+      document.body.appendChild(ghost);
+      setTimeout(() => {
+        const g = document.getElementById('seamless-ghost');
+        if (g && g.parentElement === document.body) g.remove();
+      }, 2000);
       go();
     } else {
       this.$('.immersive-visuals')?.classList.add('immersive-fade-out');

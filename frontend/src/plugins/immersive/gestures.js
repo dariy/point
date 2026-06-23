@@ -84,16 +84,26 @@ export class GestureController {
 
     // Double-tap tracking
     this._lastTapTime = 0;
+    this._swallowClick = false;
 
     this._onStart = this._onStart.bind(this);
     this._onMove = this._onMove.bind(this);
     this._onEnd = this._onEnd.bind(this);
     this._onCancel = this._onCancel.bind(this);
+    this._onClick = this._onClick.bind(this);
 
     element.addEventListener("touchstart", this._onStart, { passive: true });
     element.addEventListener("touchmove", this._onMove, { passive: false });
     element.addEventListener("touchend", this._onEnd, { passive: true });
     element.addEventListener("touchcancel", this._onCancel, { passive: true });
+    element.addEventListener("click", this._onClick, true);
+  }
+
+  _onClick(e) {
+    if (this._swallowClick) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
   }
 
   /** Call this whenever the consumer's zoom state changes. */
@@ -243,11 +253,15 @@ export class GestureController {
     }
 
     if (state === STATE.PANNING) {
+      this._swallowClick = true;
+      setTimeout(() => { this._swallowClick = false; }, 400);
       this._emit("onSwipeCancel");
       return;
     }
 
     if (state === STATE.SWIPING_H || state === STATE.SWIPING_V) {
+      this._swallowClick = true;
+      setTimeout(() => { this._swallowClick = false; }, 400);
       const t = e.changedTouches[0];
       const dx = t.clientX - this._startX;
       const dy = t.clientY - this._startY;
@@ -303,6 +317,7 @@ export class GestureController {
     this._el.removeEventListener("touchmove", this._onMove);
     this._el.removeEventListener("touchend", this._onEnd);
     this._el.removeEventListener("touchcancel", this._onCancel);
+    this._el.removeEventListener("click", this._onClick, true);
   }
 }
 
