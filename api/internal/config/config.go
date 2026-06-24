@@ -45,10 +45,8 @@ type Config struct {
 	SMTPFrom     string `mapstructure:"SMTP_FROM"`
 	AppURL       string `mapstructure:"APP_URL"`
 
-	// MCP server (the "mcp" plugin, served at /mcp).
-	MCPBaseURL    string `mapstructure:"MCP_BASE_URL"`    // public HTTPS base URL for OAuth discovery; falls back to APP_URL
-	MCPPassword   string `mapstructure:"MCP_PASSWORD"`    // password for the OAuth login page
-	MCPAuthTokens string `mapstructure:"MCP_AUTH_TOKENS"` // comma-separated static bearer tokens (optional)
+	// MCP server (the "mcp" plugin, served at /mcp). OAuth login uses the admin password.
+	MCPBaseURL string `mapstructure:"MCP_BASE_URL"` // public HTTPS base URL for OAuth discovery; falls back to APP_URL
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -86,8 +84,6 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("SMTP_FROM", "")
 	v.SetDefault("APP_URL", "")
 	v.SetDefault("MCP_BASE_URL", "")
-	v.SetDefault("MCP_PASSWORD", "")
-	v.SetDefault("MCP_AUTH_TOKENS", "")
 
 	err = v.ReadInConfig()
 	if err != nil {

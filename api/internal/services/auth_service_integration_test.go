@@ -202,7 +202,7 @@ func TestAuthService_ChangePassword(t *testing.T) {
 	})
 
 	newPassword := "newpassword"
-	err := service.ChangePassword(ctx, user.ID, oldPassword, newPassword)
+	err := service.ChangePassword(ctx, user.ID, 0, oldPassword, newPassword)
 	if err != nil {
 		t.Errorf("ChangePassword failed: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestAuthService_ChangePassword(t *testing.T) {
 	}
 
 	// Test wrong current password
-	err = service.ChangePassword(ctx, user.ID, "wrongpassword", "anotherpassword")
+	err = service.ChangePassword(ctx, user.ID, 0, "wrongpassword", "anotherpassword")
 	if err == nil || err.Error() != "current password incorrect" {
 		t.Errorf("expected error 'current password incorrect', got: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestAuthService_ChangePassword_Error(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com',?,'U')`, hash)
 
 	// Wrong old password → should fail verification.
-	err := svc.ChangePassword(ctx, 1, "wrongpass", "newpass")
+	err := svc.ChangePassword(ctx, 1, 0, "wrongpass", "newpass")
 	if err == nil {
 		t.Error("ChangePassword with wrong old password: expected error")
 	}
@@ -260,7 +260,7 @@ func TestAuthService_ChangePassword_LongPassword(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO users (id,username,email,password_hash,display_name) VALUES (1,'u','u@t.com',?,'U')`, hash)
 
 	// Argon2id supports long passwords (unlike bcrypt's 72 byte limit)
-	err := svc.ChangePassword(ctx, 1, "correct", strings.Repeat("x", 100))
+	err := svc.ChangePassword(ctx, 1, 0, "correct", strings.Repeat("x", 100))
 	if err != nil {
 		t.Errorf("ChangePassword long password failed: %v", err)
 	}
@@ -395,6 +395,77 @@ func TestAuthService_PasswordReset(t *testing.T) {
 	// New password works
 	if _, err := svc.Authenticate(ctx, "reset-user", "newpassword"); err != nil {
 		t.Fatalf("Authenticate with new password failed: %v", err)
+	}
+}
+
+// Issuing a new reset token must invalidate any prior outstanding one.
+func TestAuthService_CreatePasswordResetToken_InvalidatesPrior(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	hash, _ := HashPassword("oldpass")
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "rotate-user", Email: "rotate@test.com", PasswordHash: hash, DisplayName: "Rotate",
+	})
+
+	first, err := svc.CreatePasswordResetToken(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("first token: %v", err)
+	}
+	second, err := svc.CreatePasswordResetToken(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("second token: %v", err)
+	}
+
+	if _, err := svc.ValidatePasswordResetToken(ctx, first); err == nil {
+		t.Error("prior reset token should be invalidated by issuing a new one")
+	}
+	if _, err := svc.ValidatePasswordResetToken(ctx, second); err != nil {
+		t.Errorf("newest reset token should be valid: %v", err)
+	}
+}
+
+// Changing the password must terminate the user's other sessions, keeping the
+// current one; a reset must terminate all sessions.
+func TestAuthService_PasswordChange_TerminatesOtherSessions(t *testing.T) {
+	svc, repo := setupAuthService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	hash, _ := HashPassword("oldpass")
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "multi-session", Email: "multi@test.com", PasswordHash: hash, DisplayName: "Multi",
+	})
+
+	exp := time.Now().Add(time.Hour)
+	keep, err := svc.CreateSession(ctx, user.ID, "1.1.1.1", "ua", exp, "tok-keep")
+	if err != nil {
+		t.Fatalf("session 1: %v", err)
+	}
+	if _, err := svc.CreateSession(ctx, user.ID, "2.2.2.2", "ua", exp, "tok-other"); err != nil {
+		t.Fatalf("session 2: %v", err)
+	}
+
+	if err := svc.ChangePassword(ctx, user.ID, keep.ID, "oldpass", "brandnewpass"); err != nil {
+		t.Fatalf("ChangePassword: %v", err)
+	}
+
+	sessions, err := svc.ListSessions(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != keep.ID {
+		t.Fatalf("expected only the current session to survive, got %d sessions", len(sessions))
+	}
+
+	// A reset wipes every session (no current session to keep).
+	token, _ := svc.CreatePasswordResetToken(ctx, user.ID)
+	if err := svc.ResetPassword(ctx, token, "afterreset12345"); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	if sessions, _ := svc.ListSessions(ctx, user.ID); len(sessions) != 0 {
+		t.Fatalf("expected all sessions cleared after reset, got %d", len(sessions))
 	}
 }
 

@@ -28,6 +28,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 )
 
 // Version is set at build time via -ldflags="-X main.Version=..."
@@ -205,11 +206,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		},
 	}))
 	e.Use(middleware.Recover())
+	// Wildcard origin for the public read API. AllowCredentials is deliberately
+	// omitted: browsers reject `Access-Control-Allow-Origin: *` together with
+	// credentials, and the admin SPA is same-origin (served by this server), so
+	// cookie auth never needs a cross-origin credentialed CORS grant. Bearer
+	// (API-key) auth is unaffected.
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"*"},
-		AllowCredentials: true,
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"*"},
 	}))
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
@@ -259,16 +264,28 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e.POST("/api/setup", setupHandler.Setup)
 
 	// ── Auth Routes ────────────────────────────────────────────────────────────
+	// Brute-force throttle for credential endpoints, keyed by client IP (the
+	// default identifier). One shared store → the bucket is spent across all of
+	// login/forgot/reset/passkey, so an attacker can't fan out across them.
+	// ~10 burst, refilling 1 every 6s (≈10/min sustained).
+	authLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(6 * time.Second),
+			Burst:     10,
+			ExpiresIn: 10 * time.Minute,
+		}),
+	})
+
 	authGroup := e.Group("/api/auth")
-	authGroup.POST("/login", authHandler.Login)
+	authGroup.POST("/login", authHandler.Login, authLimiter)
 	authGroup.POST("/logout", authHandler.Logout)
 	authGroup.GET("/me", authHandler.Me, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	authGroup.POST("/change-password", authHandler.ChangePassword, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
-	authGroup.POST("/forgot-password", authHandler.ForgotPassword)
-	authGroup.POST("/reset-password", authHandler.ResetPassword)
+	authGroup.POST("/forgot-password", authHandler.ForgotPassword, authLimiter)
+	authGroup.POST("/reset-password", authHandler.ResetPassword, authLimiter)
 
 	// API Key Management
 	authGroup.GET("/api-keys", apiKeyHandler.ListKeys, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
@@ -280,8 +297,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	webauthnGroup := e.Group("/api/auth/webauthn", api.RequirePlugin(svcs.Settings, "passkeys"))
 	webauthnGroup.POST("/register/begin", webAuthnHandler.BeginRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	webauthnGroup.POST("/register/finish", webAuthnHandler.FinishRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
-	webauthnGroup.POST("/login/begin", webAuthnHandler.BeginLogin)
-	webauthnGroup.POST("/login/finish", webAuthnHandler.FinishLogin)
+	webauthnGroup.POST("/login/begin", webAuthnHandler.BeginLogin, authLimiter)
+	webauthnGroup.POST("/login/finish", webAuthnHandler.FinishLogin, authLimiter)
 	webauthnGroup.GET("/status", webAuthnHandler.GetStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	webauthnGroup.DELETE("/credential", webAuthnHandler.DeleteCredential, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 
@@ -419,12 +436,6 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	if owner, err := repo.GetFirstUser(context.Background()); err == nil {
 		mcpOwnerID = owner.ID
 	}
-	var mcpStaticTokens []string
-	for _, t := range strings.Split(cfg.MCPAuthTokens, ",") {
-		if t = strings.TrimSpace(t); t != "" {
-			mcpStaticTokens = append(mcpStaticTokens, t)
-		}
-	}
 	mcp.Register(e, mcp.Deps{
 		Echo:            e,
 		Post:            postHandler,
@@ -438,8 +449,6 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		SettingsService: svcs.Settings,
 		OwnerUserID:     mcpOwnerID,
 		BaseURL:         mcpBaseURL,
-		OAuthPassword:   cfg.MCPPassword,
-		StaticTokens:    mcpStaticTokens,
 		Version:         cfg.AppVersion,
 		UploadRoot:      cfg.PhotoLibraryPath,
 	})

@@ -1,9 +1,9 @@
 package oauth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -19,11 +18,13 @@ import (
 )
 
 type Config struct {
-	BaseURL         string
-	Password        string
-	StaticTokens    []string
-	AccessTokenTTL  time.Duration // default: 1 hour
-	RefreshTokenTTL time.Duration // 0 = never expires
+	BaseURL string
+	// ValidatePassword checks the password submitted on the OAuth login page.
+	// It validates against point's admin credential (see wiring in mcp.Register),
+	// so there is one password for the whole site. Nil disables interactive login.
+	ValidatePassword func(ctx context.Context, password string) bool
+	AccessTokenTTL   time.Duration // default: 1 hour
+	RefreshTokenTTL  time.Duration // 0 = never expires
 }
 
 type clientRecord struct {
@@ -54,14 +55,8 @@ type Provider struct {
 	tokens  map[string]*tokenRecord
 }
 
-// New creates a Provider. Missing BaseURL/Password are read from MCP_BASE_URL/MCP_PASSWORD.
+// New creates a Provider and starts a background sweep of expired codes/tokens.
 func New(cfg Config) *Provider {
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = os.Getenv("MCP_BASE_URL")
-	}
-	if cfg.Password == "" {
-		cfg.Password = os.Getenv("MCP_PASSWORD")
-	}
 	if cfg.AccessTokenTTL == 0 {
 		cfg.AccessTokenTTL = time.Hour
 	}
@@ -71,10 +66,29 @@ func New(cfg Config) *Provider {
 		codes:   make(map[string]*codeRecord),
 		tokens:  make(map[string]*tokenRecord),
 	}
-	for _, t := range cfg.StaticTokens {
-		p.tokens[t] = &tokenRecord{ClientID: "static"} // zero ExpiresAt = never expires
-	}
+	go p.janitor()
 	return p
+}
+
+// janitor evicts expired authorization codes and access tokens every 10 minutes
+// so the in-memory maps don't grow without bound on a long-running server.
+// (Expired access tokens are otherwise never removed, only rejected on use.)
+func (p *Provider) janitor() {
+	for range time.Tick(10 * time.Minute) {
+		now := time.Now()
+		p.mu.Lock()
+		for k, c := range p.codes {
+			if now.After(c.ExpiresAt) {
+				delete(p.codes, k)
+			}
+		}
+		for k, t := range p.tokens {
+			if !t.ExpiresAt.IsZero() && now.After(t.ExpiresAt) {
+				delete(p.tokens, k)
+			}
+		}
+		p.mu.Unlock()
+	}
 }
 
 // Register mounts all OAuth 2.1 and discovery endpoints onto mux.
@@ -125,7 +139,7 @@ func (p *Provider) tokenError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("WWW-Authenticate", `Bearer realm="MCP", error="invalid_token"`)
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"error":"invalid_token"}`))
+	_, _ = w.Write([]byte(`{"error":"invalid_token"}`))
 }
 
 func (p *Provider) handleProtectedResource(w http.ResponseWriter, r *http.Request) {
@@ -229,14 +243,14 @@ func (p *Provider) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fail closed: an empty configured password disables interactive OAuth login
-	// entirely (never matches), rather than accepting an empty submission. Use a
-	// constant-time comparison to avoid leaking the password via timing.
+	// Fail closed: a nil validator disables interactive OAuth login entirely
+	// rather than accepting any submission. The validator checks against point's
+	// admin password (constant-time Argon2id verify in the auth service).
 	submitted := r.FormValue("submitted_password")
-	if p.cfg.Password == "" || subtle.ConstantTimeCompare([]byte(submitted), []byte(p.cfg.Password)) != 1 {
+	if p.cfg.ValidatePassword == nil || !p.cfg.ValidatePassword(r.Context(), submitted) {
 		msg := "Wrong password. Try again."
-		if p.cfg.Password == "" {
-			msg = "OAuth login is disabled: set MCP_PASSWORD to enable it."
+		if p.cfg.ValidatePassword == nil {
+			msg = "OAuth login is disabled."
 		}
 		renderLogin(w, loginData{
 			ClientID:            clientID,
@@ -372,7 +386,7 @@ func (p *Provider) refreshExpiry() time.Time {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func randHex(n int) string {
@@ -438,5 +452,5 @@ button:hover{background:#d4b87a}
 
 func renderLogin(w http.ResponseWriter, data loginData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	loginTmpl.Execute(w, data)
+	_ = loginTmpl.Execute(w, data)
 }

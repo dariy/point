@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"point-api/internal/api"
 	"point-api/internal/mcp/oauth"
@@ -12,7 +13,9 @@ import (
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/time/rate"
 )
 
 // Deps is everything Register needs to mount the MCP server. The REST handlers
@@ -35,11 +38,9 @@ type Deps struct {
 	// carry no point identity, so writes are attributed to the blog owner.
 	OwnerUserID int64
 
-	BaseURL       string   // public HTTPS base URL for OAuth discovery metadata
-	OAuthPassword string   // password for the OAuth login page
-	StaticTokens  []string // optional static bearer tokens for programmatic clients
-	Version       string
-	UploadRoot    string // sandbox for point_upload_media; empty disables path uploads
+	BaseURL    string // public HTTPS base URL for OAuth discovery metadata
+	Version    string
+	UploadRoot string // sandbox for point_upload_media; empty disables path uploads
 }
 
 type principalKey struct{}
@@ -49,20 +50,34 @@ type principalKey struct{}
 // disabled. The endpoint accepts point's API-key/session auth or an OAuth bearer.
 func Register(e *echo.Echo, d Deps) {
 	provider := oauth.New(oauth.Config{
-		BaseURL:      d.BaseURL,
-		Password:     d.OAuthPassword,
-		StaticTokens: d.StaticTokens,
+		BaseURL: d.BaseURL,
+		// OAuth login validates against point's admin password: empty username
+		// resolves to the first/owner user, the same identity OAuth tokens act as.
+		ValidatePassword: func(ctx context.Context, pw string) bool {
+			_, err := d.Auth.AuthenticatePassword(ctx, "", []byte(pw))
+			return err == nil
+		},
 	})
 	oauthMux := http.NewServeMux()
 	provider.Register(oauthMux)
 	oauthH := echo.WrapHandler(oauthMux)
 	gate := api.RequirePlugin(d.SettingsService, "mcp")
 
+	// Throttle the interactive password POST (the brute-force surface), keyed by
+	// client IP: ~10 burst, refilling 1 every 6s.
+	oauthLoginLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(6 * time.Second),
+			Burst:     10,
+			ExpiresIn: 10 * time.Minute,
+		}),
+	})
+
 	e.GET("/.well-known/oauth-protected-resource", oauthH, gate)
 	e.GET("/.well-known/oauth-authorization-server", oauthH, gate)
 	e.POST("/oauth/register", oauthH, gate)
 	e.GET("/oauth/authorize", oauthH, gate)
-	e.POST("/oauth/authorize", oauthH, gate)
+	e.POST("/oauth/authorize", oauthH, gate, oauthLoginLimiter)
 	e.POST("/oauth/token", oauthH, gate)
 
 	// One server is built per session; strip request-context cancellation (the

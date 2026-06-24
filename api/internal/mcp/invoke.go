@@ -111,7 +111,7 @@ func (in *invoker) uploadFile(filePath string) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
