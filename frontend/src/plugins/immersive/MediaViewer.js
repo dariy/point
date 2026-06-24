@@ -21,9 +21,10 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { escapeHtml, safeUrl, sharePost, navigate } from '../../utils/helpers.js';
-import { SHARE_SVG, X_SVG } from '../../utils/icons.js';
+import { escapeHtml, safeUrl, navigate } from '../../utils/helpers.js';
+import { X_SVG } from '../../utils/icons.js';
 import { store } from '../../store.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { hideFlyout } from '../../utils/tags.js';
 import { ViewContext } from '../../utils/viewContext.js';
@@ -55,7 +56,7 @@ export class MediaViewer extends Component {
   }
 
   render() {
-    const { items = [], showClose = false, showShare = true, navPrev, navNext } = this.props;
+    const { items = [], showClose = false, navPrev, navNext } = this.props;
     if (!items.length) return '';
 
     const slides = items.map((item, i) => `
@@ -70,10 +71,6 @@ export class MediaViewer extends Component {
     `).join('');
 
     const closeBtn = showClose ? `<button class="lightbox-close" aria-label="Close">${X_SVG}</button>` : '';
-    const shareBtn = showShare ? `
-      <button class="header-action-btn share-btn carousel-share-btn" type="button" aria-label="Share">
-        ${SHARE_SVG}
-      </button>` : '';
 
     // If single item, show post nav arrows if provided
     const showPostNav = items.length === 1 && (navPrev || navNext);
@@ -85,7 +82,6 @@ export class MediaViewer extends Component {
           ${slides}
         </div>
         ${closeBtn}
-        ${shareBtn}
         ${items.length > 1 ? `
           <div class="immersive-nav-panel immersive-nav-prev" aria-label="Previous"><div class="immersive-nav-gradient"></div></div>
           <div class="immersive-nav-panel immersive-nav-next" aria-label="Next"><div class="immersive-nav-gradient"></div></div>
@@ -131,6 +127,12 @@ export class MediaViewer extends Component {
 
   afterRender() {
     this._initInteractivity();
+    // The floating share button is its own plugin (immersive-share); it injects
+    // the button into the wrapper when enabled. showShare:false (e.g. a viewer
+    // with no post) opts out, matching the old inline behaviour.
+    if (this.props.showShare !== false) {
+      pluginHost.fill('immersive-share', this.$('.media-viewer-wrapper'), {});
+    }
   }
 
   beforeUnmount() {
@@ -229,12 +231,6 @@ export class MediaViewer extends Component {
         }
         if (e.target.closest('a, button, .immersive-nav-panel, input, .post-info-card, .immersive-sheet')) return;
         document.body.classList.contains('ui-hidden') ? this._showUI() : this._hideUI();
-    });
-
-    // Share
-    this._on(this.$('.carousel-share-btn'), 'click', (e) => {
-      e.stopPropagation();
-      sharePost({ title: document.title, url: window.location.href });
     });
 
     // Fade in — unless we arrived via a seamless cross-post drag, where the

@@ -87,6 +87,10 @@ var Registry = []Descriptor{
 	{ID: "immersive-sheet", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
 	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
 
+	// Floating share button injected into the MediaViewer (immersive viewer +
+	// lightbox) via the `immersive-share` sub-slot. Toggle off to drop the button.
+	{ID: "immersive-share", Type: TypeSlot, Slot: "immersive-share", EntryName: "immersive-share", DefaultEnabled: true},
+
 	// ── Admin routes ─────────────────────────────────────────────────────────
 	// Each admin route is its own single-plugin core area: it cannot be disabled.
 	{ID: "media-library", Type: TypeRoute, Routes: []string{"/light/media"}, EntryName: "media-library", DefaultEnabled: true, Area: "media-library", Core: true},
