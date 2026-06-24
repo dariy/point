@@ -149,23 +149,11 @@ body.ui-hidden .immersive-sheet-hint {
     scrollbar-color: var(--color-primary) transparent;
 }
 
-/* ── Two-column body (info + EXIF) ────────────────────────────────────────── */
-.immersive-sheet-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--spacing-xl);
-    align-items: start;
-}
-
-.immersive-sheet-body.has-exif {
-    grid-template-columns: minmax(0, 1fr) minmax(8rem, max-content);
-}
-
-@media (max-width: 480px) {
-    .immersive-sheet-body.has-exif {
-        grid-template-columns: minmax(0, 1fr);
-        gap: var(--spacing-lg);
-    }
+/* ── Body — camera data floats, the rest wraps around it ──────────────────── */
+.immersive-sheet-body::after {
+    content: "";
+    display: block;
+    clear: both;
 }
 
 .immersive-sheet-main {
@@ -224,10 +212,20 @@ body.ui-hidden .immersive-sheet-hint {
 
 /* ── Inline EXIF (second column) ──────────────────────────────────────────── */
 .immersive-sheet-exif {
+    float: right;
+    max-width: min(50%, 18rem);
+    margin: 0 0 var(--spacing-md) var(--spacing-lg);
     padding: var(--spacing-md);
     border-radius: var(--border-radius);
     background: var(--bg-tertiary);
-    align-self: start;
+}
+
+@media (max-width: 480px) {
+    .immersive-sheet-exif {
+        float: none;
+        max-width: none;
+        margin: 0 0 var(--spacing-lg);
+    }
 }
 
 .immersive-sheet-exif.hidden {

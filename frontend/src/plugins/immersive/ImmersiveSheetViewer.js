@@ -84,6 +84,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
         <button class="immersive-sheet-grip" type="button" aria-label="Collapse details"></button>
         <div class="immersive-sheet-scroll">
           <div class="immersive-sheet-body">
+            <aside class="immersive-sheet-exif hidden" aria-label="Camera data"></aside>
             <div class="immersive-sheet-main">
               ${breadcrumb}
               ${viewsLine}
@@ -91,7 +92,6 @@ export class ImmersiveSheetViewer extends MediaViewer {
               ${tagsHtml}
               ${this._renderActions()}
             </div>
-            <aside class="immersive-sheet-exif hidden" aria-label="Camera data"></aside>
           </div>
           ${this._renderFooter(navPrev, navNext)}
         </div>
