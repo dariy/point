@@ -53,6 +53,7 @@ var pagePublicSettingKeys = map[string]bool{
 
 	"tags_module":            true,
 	"tags_visibility":        true,
+	"timeline_mode":          true,
 }
 
 // GetHomePage returns all data needed to render the public homepage.

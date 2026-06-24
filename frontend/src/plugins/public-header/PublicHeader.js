@@ -77,7 +77,6 @@ export class PublicHeader extends Component {
       : '';
 
 
-
     const searchPlaceholder = vc.tag ? `Search ${escapeHtml(vc.tag)}...` : "Search...";
 
 
