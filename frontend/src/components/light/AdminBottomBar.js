@@ -1,7 +1,7 @@
 import { Component } from '../Component.js';
 import {
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, PLUS_SVG, MENU_SVG,
-  TAGS_SVG, CHART_SVG, MENU_SVG as NAV_MENU_SVG, THEMES_SVG, PLUGINS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
+  TAGS_SVG, MENU_SVG as NAV_MENU_SVG, THEMES_SVG, PLUGINS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
   SUN_SVG, MOON_SVG, EXTERNAL_LINK_SVG, LOGOUT_SVG, X_SVG
 } from '../../utils/icons.js';
 import { escapeHtml } from '../../utils/helpers.js';
@@ -42,7 +42,6 @@ export class AdminBottomBar extends Component {
           </div>
           <div class="more-sheet-grid">
             ${this._renderMoreItem('/light/tags', TAGS_SVG, 'Tags')}
-            ${this._renderMoreItem('/light/analytics', CHART_SVG, 'Analytics')}
             ${this._renderMoreItem('/light/menu', NAV_MENU_SVG, 'Menu')}
             ${this._renderMoreItem('/light/themes', THEMES_SVG, 'Themes')}
             ${this._renderMoreItem('/light/plugins', PLUGINS_SVG, 'Plugins')}

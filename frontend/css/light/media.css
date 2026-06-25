@@ -10,6 +10,61 @@
     width: 100%;
 }
 
+/* Fixed-viewport gallery (opt-in via MediaPage). Desktop/tablet only — mobile
+   keeps natural document flow. The grid uses the full available width (no
+   content max-width) and height; only #mb-media-area scrolls so pagination
+   stays visible without scrolling. */
+@media (min-width: 48em) {
+    .media-page-main {
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+
+    .media-page-main .light-content {
+        max-width: none;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    .media-page-main #media-browser-mount,
+    .media-page-main .media-browser {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .media-page-main .media-layout {
+        flex: 1;
+        min-height: 0;
+        align-items: stretch;
+    }
+
+    .media-page-main .media-folder-tree {
+        overflow-y: auto;
+    }
+
+    .media-page-main .media-content {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .media-page-main #mb-media-area {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+    }
+
+    .media-page-main #mb-pagination-mount {
+        flex-shrink: 0;
+        padding-top: var(--spacing-md);
+    }
+}
+
 /* ===========================
    Folder Tree
    =========================== */

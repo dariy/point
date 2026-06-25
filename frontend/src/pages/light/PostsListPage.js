@@ -377,6 +377,10 @@ export default class PostsListPage extends Component {
       currentPath: "/light/posts",
     });
 
+    // Opt into the fixed-viewport layout (layout.css .posts-list-main): the list
+    // fills the window and pagination stays pinned to the bottom edge.
+    this.$(".light-main")?.classList.add("posts-list-main");
+
     try {
       sessionStorage.setItem('point:admin:posts-list-url', window.location.pathname + window.location.search);
     } catch { /* ignore */ }

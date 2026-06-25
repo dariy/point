@@ -363,10 +363,6 @@ const routes = [
     load: () => import("./pages/light/SettingsPage.js"),
   },
   {
-    path: "/light/analytics",
-    load: () => import("./pages/light/AnalyticsPage.js"),
-  },
-  {
     path: "/light/security",
     load: () => import("./pages/light/SecurityPage.js"),
   },
@@ -380,6 +376,9 @@ const routes = [
 // route never overrides a core path of the same pattern.
 for (const entry of pluginHost.routes()) {
   for (const path of entry.routes) {
+    // A plugin's `routes` mixes frontend paths and server API prefixes; only the
+    // SPA (frontend) paths belong in the client router.
+    if (path.startsWith("/api/")) continue;
     if (routes.some((r) => r.path === path)) continue;
     routes.push({
       path,

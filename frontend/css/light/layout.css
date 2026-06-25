@@ -375,7 +375,8 @@ body {
     min-height: 0;
 }
 
-.posts-list-main .light-content .table-container {
+.posts-list-main .light-content .table-container,
+.posts-list-main .light-content .posts-card-list {
     flex: 1;
     overflow-y: auto;
     min-height: 0;

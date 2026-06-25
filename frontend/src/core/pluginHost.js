@@ -237,8 +237,12 @@ class PluginHost {
    * plugins that have a built chunk.
    */
   routes() {
+    // A plugin contributes admin routes when it has a built chunk and declares
+    // any `/light/` path — including slot plugins like nav-menu that also own an
+    // admin page. The tags-route single-claim slot is handled separately.
     const out = this._manifest.filter(
-      (e) => e.type === "route" && e.entry && e.slot !== "tags-route" && Array.isArray(e.routes) && e.routes.length,
+      (e) => e.entry && e.slot !== "tags-route" && Array.isArray(e.routes) &&
+        e.routes.some((p) => p.startsWith("/light")),
     );
     if (DEBUG && out.length) log("dynamic routes:", out.flatMap((e) => e.routes).join(", "));
     return out;
