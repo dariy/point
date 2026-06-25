@@ -68,7 +68,14 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      if (response.status === 401 && !path.includes('/api/auth/login')) {
+      // /api/auth/me and /api/auth/login expect 401 for guests/bad creds —
+      // those are probes/forms, not a session that just expired, so they must
+      // not trigger the global login overlay.
+      if (
+        response.status === 401 &&
+        !path.includes('/api/auth/login') &&
+        !path.includes('/api/auth/me')
+      ) {
         window.dispatchEvent(new CustomEvent('api:unauthorized'));
       }
       const message =
