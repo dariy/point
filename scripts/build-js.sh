@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Bundles and minifies JS with esbuild.
 #
 # Produces TWO complete bundle sets so the backend can serve either without a
@@ -18,7 +18,7 @@
 # Set BUILD_DEBUG_FRONTEND=0 to skip the debug set (e.g. lean production images).
 #
 # Run from the repository root or its directory.
-set -eo pipefail
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -27,25 +27,30 @@ PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
 
 # Collect "<id>=<entry>" args for every frontend/src/plugins/<id>/index.js once;
 # both bundle sets share the same plugin entries.
-PLUGIN_ARGS=()
+# ponytail: space-separated string + word-splitting instead of a bash array so
+# this runs under POSIX sh. Plugin ids/paths never contain spaces.
+PLUGIN_ARGS=""
+PLUGIN_COUNT=0
 if [ -d "$PLUGIN_SRC" ]; then
   for dir in "$PLUGIN_SRC"/*/; do
     entry="${dir}index.js"
     [ -f "$entry" ] || continue
     id="$(basename "$dir")"
-    PLUGIN_ARGS+=("${id}=${entry}")
+    PLUGIN_ARGS="$PLUGIN_ARGS ${id}=${entry}"
+    PLUGIN_COUNT=$((PLUGIN_COUNT + 1))
   done
 fi
 
 # build_set <out-js-dir> <__DEBUG__ value> <extra esbuild flags...>
+# Extra esbuild flags are kept in the positional params ("$@") after the shift.
 build_set() {
-  local js_dir="$1"; shift
-  local debug_val="$1"; shift
-  local extra=("$@")
+  js_dir="$1"; shift
+  debug_val="$1"; shift
+  # remaining "$@" = extra esbuild flags (e.g. --minify)
 
-  local plugin_out="$js_dir/p"
-  local manifest="$js_dir/plugin-manifest.json"
-  local meta="$js_dir/plugin-meta.json"
+  plugin_out="$js_dir/p"
+  manifest="$js_dir/plugin-manifest.json"
+  meta="$js_dir/plugin-meta.json"
 
   mkdir -p "$js_dir"
 
@@ -55,15 +60,16 @@ build_set() {
       --format=esm \
       "--define:__DEBUG__=${debug_val}" \
       "--external:/assets/vendor/*" \
-      "${extra[@]}" \
+      "$@" \
       --outfile="$js_dir/app.js"
   echo "Built $js_dir/app.js ($(wc -c < "$js_dir/app.js") bytes, __DEBUG__=${debug_val})"
 
   # ── Plugin chunks + manifest ──────────────────────────────────────────────
-  if [ ${#PLUGIN_ARGS[@]} -gt 0 ]; then
+  if [ "$PLUGIN_COUNT" -gt 0 ]; then
     rm -rf "$plugin_out"
     mkdir -p "$plugin_out"
-    npx --yes esbuild "${PLUGIN_ARGS[@]}" \
+    # shellcheck disable=SC2086  # PLUGIN_ARGS is an intentional word-split list
+    npx --yes esbuild $PLUGIN_ARGS \
         --bundle \
         --splitting \
         --format=esm \
@@ -72,10 +78,10 @@ build_set() {
         --entry-names="[name]-[hash]" \
         --chunk-names="chunk-[hash]" \
         --metafile="$meta" \
-        "${extra[@]}" \
+        "$@" \
         --outdir="$plugin_out"
     node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$meta" "$manifest"
-    echo "Built ${#PLUGIN_ARGS[@]} plugin chunk(s) → $plugin_out (see $manifest)"
+    echo "Built ${PLUGIN_COUNT} plugin chunk(s) → $plugin_out (see $manifest)"
   else
     echo '{}' > "$manifest"
     echo "No plugin entries — wrote empty $manifest"
