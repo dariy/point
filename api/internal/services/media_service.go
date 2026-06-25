@@ -753,6 +753,77 @@ func (s *MediaService) RenameMedia(ctx context.Context, id int64, newFilename st
 	return updated, nil
 }
 
+// AtlasThumbSize is the edge length (px) of the square thumbnail the atlas
+// cloud requests for image-post chips. It must be a member of the allowed set
+// below so SquareThumbnail will generate it.
+const AtlasThumbSize = 128
+
+// allowedSquareThumbSizes whitelists the square-thumbnail edge sizes the media
+// endpoint will generate on demand. Restricting to a fixed set keeps the
+// on-disk cache bounded and prevents a cache-busting flood via arbitrary
+// ?thumb=<n> values.
+var allowedSquareThumbSizes = map[int]bool{AtlasThumbSize: true}
+
+// AllowedSquareThumbSize reports whether an on-demand square thumbnail of the
+// given edge size may be generated.
+func AllowedSquareThumbSize(size int) bool {
+	return allowedSquareThumbSizes[size]
+}
+
+// SquareThumbnail returns the absolute path to a cached square JPEG thumbnail of
+// the given edge size for an image media item, generating it lazily on first
+// request. Variants live under media/thumbnails/sq<size>/YYYY/MM/, mirroring the
+// original's date path, so no DB column or migration is needed. A cached file is
+// regenerated if the original has since changed.
+func (s *MediaService) SquareThumbnail(ctx context.Context, media models.Medium, size int) (string, error) {
+	if !AllowedSquareThumbSize(size) {
+		return "", fmt.Errorf("unsupported thumbnail size %d", size)
+	}
+	if !strings.EqualFold(media.FileType, "image") {
+		return "", ErrNotAnImage
+	}
+
+	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+
+	origFull := filepath.Clean(filepath.Join(mediaBase, media.OriginalPath))
+	if !strings.HasPrefix(origFull, mediaBase+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid media path")
+	}
+
+	relUnder := strings.TrimPrefix(media.OriginalPath, "originals/")
+	baseName := strings.TrimSuffix(filepath.Base(relUnder), filepath.Ext(relUnder)) + ".jpg"
+	thumbRel := filepath.Join("thumbnails", fmt.Sprintf("sq%d", size), filepath.Dir(relUnder), baseName)
+	thumbFull := filepath.Clean(filepath.Join(mediaBase, thumbRel))
+	if !strings.HasPrefix(thumbFull, mediaBase+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid thumbnail path")
+	}
+
+	// Reuse the cached thumbnail unless the original is newer (e.g. replaced).
+	if ti, err := os.Stat(thumbFull); err == nil {
+		if oi, err := os.Stat(origFull); err == nil && !oi.ModTime().After(ti.ModTime()) {
+			return thumbFull, nil
+		}
+	}
+
+	data, err := os.ReadFile(origFull)
+	if err != nil {
+		return "", err
+	}
+	src, err := safeImagingDecode(bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+
+	thumb := imaging.Fill(src, size, size, imaging.Center, imaging.Lanczos)
+	if err := os.MkdirAll(filepath.Dir(thumbFull), 0755); err != nil {
+		return "", err
+	}
+	if err := imaging.Save(thumb, thumbFull, imaging.JPEGQuality(s.jpegQuality(ctx))); err != nil {
+		return "", err
+	}
+	return thumbFull, nil
+}
+
 // RebuildThumbnails regenerates thumbnails for all image media.
 // If onlyMissing is true, skips images that already have a thumbnail.
 func (s *MediaService) RebuildThumbnails(ctx context.Context, onlyMissing bool) (map[string]int, error) {

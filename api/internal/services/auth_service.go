@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"point-api/internal/models"
@@ -18,6 +19,11 @@ import (
 type AuthService struct {
 	repo repository.Repository
 }
+
+// dummyPasswordHash is a valid Argon2id hash. When a user lookup misses we still
+// run a verify against it so the response time doesn't reveal whether the
+// username exists (timing-based user enumeration).
+var dummyPasswordHash, _ = HashPassword("0000000000000000000000000000000000000000000000000000000000000000")
 
 func NewAuthService(repo repository.Repository) *AuthService {
 	return &AuthService{repo: repo}
@@ -54,6 +60,9 @@ func (s *AuthService) Authenticate(ctx context.Context, username, password strin
 	}
 
 	if err != nil {
+		// Equalize timing with the found-user path to avoid leaking which
+		// usernames exist; the result is discarded.
+		_ = VerifyPassword(password, dummyPasswordHash)
 		return models.User{}, errors.New("invalid username or password")
 	}
 
@@ -141,9 +150,19 @@ type resetTokenPayload struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
+// resetPtrKey is the per-user slot holding the current reset token's hash, so a
+// newly issued token invalidates any previous outstanding one for that user.
+func resetPtrKey(userID int64) string { return "pw_reset_uid:" + strconv.FormatInt(userID, 10) }
+
 // CreatePasswordResetToken generates a one-time reset token valid for 1 hour.
 // The token is stored hashed in blog_secrets. Returns the raw token for emailing.
+// Any previously issued, still-valid token for the same user is invalidated.
 func (s *AuthService) CreatePasswordResetToken(ctx context.Context, userID int64) (string, error) {
+	// Invalidate a prior outstanding token for this user, if any.
+	if prev, err := s.repo.GetSecret(ctx, resetPtrKey(userID)); err == nil && prev.Value.Valid {
+		_ = s.repo.DeleteSecret(ctx, "pw_reset:"+prev.Value.String)
+	}
+
 	token := generateSecureToken()
 	tokenHash := HashToken(token)
 
@@ -159,6 +178,10 @@ func (s *AuthService) CreatePasswordResetToken(ctx context.Context, userID int64
 	if err != nil {
 		return "", fmt.Errorf("store reset token: %w", err)
 	}
+	_ = s.repo.UpsertSecret(ctx, models.UpsertSecretParams{
+		Key:   resetPtrKey(userID),
+		Value: sql.NullString{String: tokenHash, Valid: true},
+	})
 	return token, nil
 }
 
@@ -205,6 +228,11 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword stri
 	}
 
 	_ = s.repo.DeleteSecret(ctx, "pw_reset:"+tokenHash)
+	_ = s.repo.DeleteSecret(ctx, resetPtrKey(userID))
+
+	// A reset is a recovery action: kill every existing session so a previously
+	// compromised session can't survive the password change (ID 0 matches none).
+	_ = s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: 0})
 	return nil
 }
 
@@ -212,7 +240,10 @@ func (s *AuthService) GetUserByID(ctx context.Context, userID int64) (models.Use
 	return s.repo.GetUser(ctx, userID)
 }
 
-func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
+// ChangePassword updates the password and terminates all of the user's other
+// sessions (keeping currentSessionID), so a stale or stolen session elsewhere is
+// invalidated. Pass currentSessionID 0 to terminate every session.
+func (s *AuthService) ChangePassword(ctx context.Context, userID, currentSessionID int64, currentPassword, newPassword string) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
 		return err
@@ -227,8 +258,13 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentP
 		return err
 	}
 
-	return s.repo.UpdateUserPassword(ctx, models.UpdateUserPasswordParams{
+	if err := s.repo.UpdateUserPassword(ctx, models.UpdateUserPasswordParams{
 		PasswordHash: hashed,
 		ID:           userID,
-	})
+	}); err != nil {
+		return err
+	}
+
+	_ = s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: currentSessionID})
+	return nil
 }

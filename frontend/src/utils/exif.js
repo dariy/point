@@ -82,6 +82,16 @@ export function hasExif(metadata) {
   return _curatedRows(metadata).length > 0;
 }
 
+/**
+ * The curated, formatted EXIF rows ([{label, value}]) for a metadata object,
+ * honouring the public allowlist (GPS and other sensitive tags excluded).
+ * Exposed for consumers that render EXIF inline rather than via the flyout
+ * control (e.g. the immersive sheet overlay).
+ */
+export function curatedExifRows(metadata) {
+  return _curatedRows(metadata);
+}
+
 /** Build a Map of public media path → metadata from a post's media array. */
 export function buildExifMap(media = []) {
   const map = new Map();

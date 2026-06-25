@@ -8,28 +8,57 @@ import (
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/utils"
 )
 
-// ListPosts returns all posts, with optional filters.
-func (r *sqliteRepository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
-	const q = `
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
-       p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
-FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    -- Pages (type=page) are kept out of public listings; admin views pass
-    -- includePages=true to manage them alongside posts.
-    AND (CASE WHEN ? THEN 1=1 ELSE p.type != 'page' END)
-    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
-    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
-    END)
-    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
+// ListPosts returns all posts, with optional filters. Callers that only render
+// list/grid cards leave IncludeContent false so the (potentially large) content
+// body is not read; the derived media_url column covers the card preview. The
+// offline snapshot sets IncludeContent=true to get full bodies.
+
+func buildPostsQuery(
+	selectClause string,
+	orderByClause string,
+	limitOffsetClause string,
+	pType string, // "all", "page", "post"
+	statusFilter bool, status string,
+	featuredFilter bool,
+	includeDrafts bool, includeHidden bool,
+	tag string, search string,
+	fromYear, toYear int,
+) (string, []interface{}) {
+	var where []string
+	var args []interface{}
+
+	where = append(where, "p.deleted_at IS NULL")
+
+	switch pType {
+	case "page":
+		where = append(where, "p.type = 'page'")
+	case "post":
+		where = append(where, "p.type != 'page'")
+	}
+
+	if statusFilter {
+		where = append(where, "LOWER(p.status) = LOWER(?)")
+		args = append(args, status)
+	}
+
+	if featuredFilter {
+		where = append(where, "p.is_featured = 1")
+	}
+
+	if includeDrafts {
+		// no status restriction
+	} else if includeHidden {
+		where = append(where, "LOWER(p.status) IN ('published', 'hidden')")
+	} else {
+		where = append(where, "LOWER(p.status) = 'published'")
+	}
+
+	bypassEHP := includeDrafts || includeHidden
+	if !bypassEHP {
+		where = append(where, `p.id NOT IN (
         SELECT pt.post_id FROM post_tags pt
         WHERE pt.tag_id IN (
             WITH RECURSIVE h(id) AS (
@@ -39,21 +68,94 @@ WHERE
             )
             SELECT id FROM h
         )
-    ) END)
-ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?`
+    )`)
+	}
 
-	rows, err := r.db.QueryContext(ctx, q,
-		arg.IncludePages,
-		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
-		arg.IncludeDrafts, arg.IncludeHidden,
-		arg.Limit, arg.Offset)
+	if tag != "" {
+		where = append(where, `p.id IN (
+            SELECT pt.post_id FROM post_tags pt
+            WHERE pt.tag_id IN (
+                WITH RECURSIVE tree(id) AS (
+                    SELECT id FROM tags WHERE slug = LOWER(?)
+                    UNION
+                    SELECT tr.child_id FROM tag_relationships tr JOIN tree ON tr.parent_id = tree.id
+                )
+                SELECT id FROM tree
+            )
+        )`)
+		args = append(args, tag)
+	}
+
+	if search != "" {
+		where = append(where, `(
+        LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
+        OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
+        OR LOWER(p.content) LIKE '%' || LOWER(?) || '%'
+        OR EXISTS (
+            SELECT 1 FROM post_tags pt
+            JOIN tags t ON t.id = pt.tag_id
+            WHERE pt.post_id = p.id
+              AND (LOWER(t.name) LIKE '%' || LOWER(?) || '%'
+                   OR LOWER(t.slug) LIKE '%' || LOWER(?) || '%')
+        )
+    )`)
+		args = append(args, search, search, search, search, search)
+	}
+
+	if fromYear > 0 && toYear > 0 {
+		where = append(where, `p.id IN (
+        SELECT DISTINCT pt.post_id FROM post_tags pt
+        WHERE pt.tag_id IN (
+            SELECT id FROM tags
+            WHERE kind = 'year' AND CAST(slug AS INTEGER) BETWEEN ? AND ?
+        )
+    )`)
+		args = append(args, fromYear, toYear)
+	}
+
+	q := selectClause + "\nWHERE " + strings.Join(where, "\n    AND ")
+	if orderByClause != "" {
+		q += "\n" + orderByClause
+	}
+	if limitOffsetClause != "" {
+		q += "\n" + limitOffsetClause
+	}
+
+	return q, args
+}
+
+// ListPosts returns all posts, with optional filters. Callers that only render
+// list/grid cards leave IncludeContent false so the (potentially large) content
+// body is not read; the derived media_url column covers the card preview. The
+// offline snapshot sets IncludeContent=true to get full bodies.
+func (r *sqliteRepository) ListPosts(ctx context.Context, arg models.ListPostsParams) ([]models.Post, error) {
+	contentCol := "'' AS content"
+	if arg.IncludeContent {
+		contentCol = "p.content"
+	}
+	selectClause := fmt.Sprintf(`SELECT p.id, p.title, p.slug, %s, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
+       p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+FROM posts p`, contentCol)
+	
+	pType := "post"
+	if arg.IncludePages {
+		pType = "all"
+	}
+	
+	statusBool, _ := arg.StatusFilter.(bool)
+	featuredBool, _ := arg.FeaturedFilter.(bool)
+	draftsBool, _ := arg.IncludeDrafts.(bool)
+	hiddenBool, _ := arg.IncludeHidden.(bool)
+
+	q, args := buildPostsQuery(selectClause, "ORDER BY p.published_at DESC, p.created_at DESC", "LIMIT ? OFFSET ?", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", 0, 0)
+	args = append(args, arg.Limit, arg.Offset)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
+	defer func() { _ = rows.Close() }()
 
 	var items []models.Post
 	for rows.Next() {
@@ -61,7 +163,43 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
-			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
+			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+func (r *sqliteRepository) ListPostsByViews(ctx context.Context, arg models.ListPostsByViewsParams) ([]models.Post, error) {
+	selectClause := `SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
+       p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+FROM posts p`
+	
+	statusBool, _ := arg.StatusFilter.(bool)
+	featuredBool, _ := arg.FeaturedFilter.(bool)
+	draftsBool, _ := arg.IncludeDrafts.(bool)
+	hiddenBool, _ := arg.IncludeHidden.(bool)
+
+	q, args := buildPostsQuery(selectClause, "ORDER BY p.view_count DESC, p.published_at DESC", "LIMIT ? OFFSET ?", "post", statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", 0, 0)
+	args = append(args, arg.Limit, arg.Offset)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var items []models.Post
+	for rows.Next() {
+		var i models.Post
+		if err := rows.Scan(
+			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
@@ -73,82 +211,127 @@ LIMIT ? OFFSET ?`
 
 // CountPosts counts posts with optional filters.
 func (r *sqliteRepository) CountPosts(ctx context.Context, arg models.CountPostsParams) (int64, error) {
-	const q = `
-SELECT COUNT(*) FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND (CASE WHEN ? THEN 1=1 ELSE p.type != 'page' END)
-    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
-    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
-    END)
-    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt
-        WHERE pt.tag_id IN (
-            WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE hides_posts = 1
-                UNION
-                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-            )
-            SELECT id FROM h
-        )
-    ) END)`
+	pType := "post"
+	if arg.IncludePages {
+		pType = "all"
+	}
+	statusBool, _ := arg.StatusFilter.(bool)
+	featuredBool, _ := arg.FeaturedFilter.(bool)
+	draftsBool, _ := arg.IncludeDrafts.(bool)
+	hiddenBool, _ := arg.IncludeHidden.(bool)
 
+	q, args := buildPostsQuery("SELECT COUNT(*) FROM posts p", "", "", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", 0, 0)
+	
 	var count int64
-	err := r.db.QueryRowContext(ctx, q,
-		arg.IncludePages,
-		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
-		arg.IncludeDrafts, arg.IncludeHidden,
-	).Scan(&count)
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count, err
 }
+
+// SetPostMediaURL stores the denormalized list-preview URL for a post. An empty
+// string is stored (not NULL) when the post has no media, so backfill treats it
+// as "already computed".
+func (r *sqliteRepository) SetPostMediaURL(ctx context.Context, postID int64, mediaURL string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE posts SET media_url = ? WHERE id = ?`, mediaURL, postID)
+	return err
+}
+
+// BackfillPostMediaURLs computes media_url for any rows where it is still NULL
+// (existing posts predating the column). Runs once at startup after the column
+// migration; subsequent writes keep it in sync via SetPostMediaURL.
+func (r *sqliteRepository) BackfillPostMediaURLs(ctx context.Context) error {
+	// Legacy/minimal schemas may predate thumbnail_path; select a literal in that
+	// case so the backfill still runs (deriving media_url from content alone).
+	thumbExpr := "thumbnail_path"
+	if !r.postsHasColumn(ctx, "thumbnail_path") {
+		thumbExpr = "'' AS thumbnail_path"
+	}
+	rows, err := r.db.QueryContext(ctx,
+		fmt.Sprintf(`SELECT id, %s, content FROM posts WHERE media_url IS NULL`, thumbExpr))
+	if err != nil {
+		return err
+	}
+	type pending struct {
+		id      int64
+		thumb   sql.NullString
+		content string
+	}
+	var todo []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.id, &p.thumb, &p.content); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		todo = append(todo, p)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	_ = rows.Close()
+
+	for _, p := range todo {
+		var tp string
+		if p.thumb.Valid {
+			tp = p.thumb.String
+		}
+		if _, err := r.db.ExecContext(ctx,
+			`UPDATE posts SET media_url = ? WHERE id = ?`,
+			utils.DeriveMediaURL(tp, p.content), p.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// postsHasColumn reports whether the posts table has the named column.
+func (r *sqliteRepository) postsHasColumn(ctx context.Context, col string) bool {
+	rows, err := r.db.QueryContext(ctx, `PRAGMA table_info(posts)`)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			ctype   string
+			notnull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == col {
+			return true
+		}
+	}
+	return false
+}
+
 
 // ListPostsInYearRange returns posts that carry a year tag (kind='year') whose
 // parsed year (CAST(slug AS INTEGER)) falls in [fromYear, toYear].
 func (r *sqliteRepository) ListPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.ListPostsParams) ([]models.Post, error) {
-	const q = `
-WITH _ytags AS (
-    SELECT id FROM tags
-    WHERE kind = 'year'
-    AND CAST(slug AS INTEGER) BETWEEN ? AND ?
-),
-_yposts AS (
-    SELECT DISTINCT pt.post_id FROM post_tags pt
-    WHERE pt.tag_id IN (SELECT id FROM _ytags)
-),
-_hide(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
-)
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.is_featured,
+	selectClause := `SELECT p.id, p.title, p.slug, '' AS content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
-FROM posts p
-WHERE p.id IN (SELECT post_id FROM _yposts)
-    AND p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
-    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
-    END)
-    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _hide)
-    ) END)
-ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?`
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+FROM posts p`
+	
+	pType := "post"
+	if arg.IncludePages {
+		pType = "all"
+	}
+	statusBool, _ := arg.StatusFilter.(bool)
+	featuredBool, _ := arg.FeaturedFilter.(bool)
+	draftsBool, _ := arg.IncludeDrafts.(bool)
+	hiddenBool, _ := arg.IncludeHidden.(bool)
 
-	rows, err := r.db.QueryContext(ctx, q,
-		fromYear, toYear,
-		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
-		arg.IncludeDrafts, arg.IncludeHidden,
-		arg.Limit, arg.Offset)
+	q, args := buildPostsQuery(selectClause, "ORDER BY p.published_at DESC, p.created_at DESC", "LIMIT ? OFFSET ?", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", fromYear, toYear)
+	args = append(args, arg.Limit, arg.Offset)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +342,8 @@ LIMIT ? OFFSET ?`
 		var i models.Post
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
-			&i.Status, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
-			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
@@ -172,122 +355,41 @@ LIMIT ? OFFSET ?`
 
 // CountPostsInYearRange counts posts matching the year range and standard filters.
 func (r *sqliteRepository) CountPostsInYearRange(ctx context.Context, fromYear, toYear int, arg models.CountPostsParams) (int64, error) {
-	const q = `
-WITH _ytags AS (
-    SELECT id FROM tags
-    WHERE kind = 'year'
-    AND CAST(slug AS INTEGER) BETWEEN ? AND ?
-),
-_yposts AS (
-    SELECT DISTINCT pt.post_id FROM post_tags pt
-    WHERE pt.tag_id IN (SELECT id FROM _ytags)
-),
-_hide(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN _hide ON tr.parent_id = _hide.id
-)
-SELECT COUNT(*) FROM posts p
-WHERE p.id IN (SELECT post_id FROM _yposts)
-    AND p.deleted_at IS NULL
-    AND p.type != 'page'
-    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
-    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
-    END)
-    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt WHERE pt.tag_id IN (SELECT id FROM _hide)
-    ) END)`
+	pType := "post"
+	if arg.IncludePages {
+		pType = "all"
+	}
+	statusBool, _ := arg.StatusFilter.(bool)
+	featuredBool, _ := arg.FeaturedFilter.(bool)
+	draftsBool, _ := arg.IncludeDrafts.(bool)
+	hiddenBool, _ := arg.IncludeHidden.(bool)
 
+	q, args := buildPostsQuery("SELECT COUNT(*) FROM posts p", "", "", pType, statusBool, arg.Status, featuredBool, draftsBool, hiddenBool, "", "", fromYear, toYear)
+	
 	var count int64
-	err := r.db.QueryRowContext(ctx, q,
-		fromYear, toYear,
-		arg.StatusFilter, arg.Status, arg.FeaturedFilter, arg.IncludeDrafts, arg.IncludeHidden,
-		arg.IncludeDrafts, arg.IncludeHidden,
-	).Scan(&count)
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count, err
 }
 
 func (r *sqliteRepository) ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error) {
-	const q = `
-WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
-)
-SELECT p.id, p.title, p.slug, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
+	selectClause := `SELECT p.id, p.title, p.slug, '' AS content, p.excerpt, p.formatter, p.status, p.type, p.is_featured,
        p.view_count, p.published_at, p.created_at, p.updated_at, p.author_id,
-       p.thumbnail_path, p.meta_description, p.preview_token, p.preview_expires_at, p.css
-FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    -- Pages (type=page) are excluded from normal listings (feed, search, tag);
-    -- onlyPages=true flips this to return pages exclusively (admin "Page" filter).
-    AND (CASE WHEN ? THEN p.type = 'page' ELSE p.type != 'page' END)
-    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
-    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
-    END)
+       p.thumbnail_path, p.media_url, p.meta_description, p.preview_token, p.preview_expires_at, p.css
+FROM posts p`
+	
+	pType := "post"
+	if onlyPages {
+		pType = "page"
+	}
 
-    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt
-        WHERE pt.tag_id IN (
-            WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE hides_posts = 1
-                UNION
-                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-            )
-            SELECT id FROM h
-        )
-    ) END)
-    AND (
-        CASE WHEN ? = '' THEN 1=1 ELSE
-            p.id IN (
-                SELECT pt.post_id FROM post_tags pt
-                WHERE pt.tag_id IN (
-                    WITH RECURSIVE tree(id) AS (
-                        SELECT id FROM tags WHERE slug = LOWER(?)
-                        UNION
-                        SELECT tr.child_id FROM tag_relationships tr JOIN tree ON tr.parent_id = tree.id
-                    )
-                    SELECT id FROM tree
-                )
-            )
-        END
-    )
-    AND (
-        LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
-        OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
-        OR LOWER(p.content) LIKE '%' || LOWER(?) || '%'
-        OR EXISTS (
-            SELECT 1 FROM post_tags pt
-            JOIN tags t ON t.id = pt.tag_id
-            WHERE pt.post_id = p.id
-              AND (LOWER(t.name) LIKE '%' || LOWER(?) || '%'
-                   OR LOWER(t.slug) LIKE '%' || LOWER(?) || '%')
-        )
-    )
-ORDER BY p.published_at DESC, p.created_at DESC
-LIMIT ? OFFSET ?`
+	q, args := buildPostsQuery(selectClause, "ORDER BY p.published_at DESC, p.created_at DESC", "LIMIT ? OFFSET ?", pType, statusFilter, status, featuredFilter, includeDrafts, includeHidden, tag, search, 0, 0)
+	args = append(args, limit, offset)
 
-	rows, err := r.db.QueryContext(ctx, q,
-		onlyPages,
-		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
-		tag, tag,
-		search, search, search, search, search,
-		limit, offset)
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
+	defer func() { _ = rows.Close() }()
 
 	var items []models.Post
 	for rows.Next() {
@@ -295,7 +397,7 @@ LIMIT ? OFFSET ?`
 		if err := rows.Scan(
 			&i.ID, &i.Title, &i.Slug, &i.Content, &i.Excerpt, &i.Formatter,
 			&i.Status, &i.Type, &i.IsFeatured, &i.ViewCount, &i.PublishedAt,
-			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath,
+			&i.CreatedAt, &i.UpdatedAt, &i.AuthorID, &i.ThumbnailPath, &i.MediaURL,
 			&i.MetaDescription, &i.PreviewToken, &i.PreviewExpiresAt, &i.Css,
 		); err != nil {
 			return nil, err
@@ -308,70 +410,15 @@ LIMIT ? OFFSET ?`
 // CountPostsWithSearch counts posts matched by the extended search (title, slug,
 // content, tag name, tag slug).
 func (r *sqliteRepository) CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error) {
-	const q = `
-WITH RECURSIVE ehp(id) AS (
-    SELECT id FROM tags WHERE hides_posts = 1
-    UNION
-    SELECT tr.child_id FROM tag_relationships tr JOIN ehp ON tr.parent_id = ehp.id
-)
-SELECT COUNT(*) FROM posts p
-WHERE
-    p.deleted_at IS NULL
-    AND (CASE WHEN ? THEN p.type = 'page' ELSE p.type != 'page' END)
-    AND (CASE WHEN ? THEN LOWER(p.status) = LOWER(?) ELSE 1=1 END)
-    AND (CASE WHEN ? THEN p.is_featured = 1 ELSE 1=1 END)
-    AND (CASE
-        WHEN ? THEN 1=1
-        WHEN ? THEN LOWER(p.status) IN ('published', 'hidden')
-        ELSE LOWER(p.status) = 'published'
-    END)
+	pType := "post"
+	if onlyPages {
+		pType = "page"
+	}
 
-    AND (CASE WHEN ? THEN 1=1 WHEN ? THEN 1=1 ELSE p.id NOT IN (
-        SELECT pt.post_id FROM post_tags pt
-        WHERE pt.tag_id IN (
-            WITH RECURSIVE h(id) AS (
-                SELECT id FROM tags WHERE hides_posts = 1
-                UNION
-                SELECT tr.child_id FROM tag_relationships tr JOIN h ON tr.parent_id = h.id
-            )
-            SELECT id FROM h
-        )
-    ) END)
-    AND (
-        CASE WHEN ? = '' THEN 1=1 ELSE
-            p.id IN (
-                SELECT pt.post_id FROM post_tags pt
-                WHERE pt.tag_id IN (
-                    WITH RECURSIVE tree(id) AS (
-                        SELECT id FROM tags WHERE slug = LOWER(?)
-                        UNION
-                        SELECT tr.child_id FROM tag_relationships tr JOIN tree ON tr.parent_id = tree.id
-                    )
-                    SELECT id FROM tree
-                )
-            )
-        END
-    )
-    AND (
-        LOWER(p.title)   LIKE '%' || LOWER(?) || '%'
-        OR LOWER(p.slug)    LIKE '%' || LOWER(?) || '%'
-        OR LOWER(p.content) LIKE '%' || LOWER(?) || '%'
-        OR EXISTS (
-            SELECT 1 FROM post_tags pt
-            JOIN tags t ON t.id = pt.tag_id
-            WHERE pt.post_id = p.id
-              AND (LOWER(t.name) LIKE '%' || LOWER(?) || '%'
-                   OR LOWER(t.slug) LIKE '%' || LOWER(?) || '%')
-        )
-    )`
+	q, args := buildPostsQuery("SELECT COUNT(*) FROM posts p", "", "", pType, statusFilter, status, featuredFilter, includeDrafts, includeHidden, tag, search, 0, 0)
 
 	var count int64
-	err := r.db.QueryRowContext(ctx, q,
-		onlyPages,
-		statusFilter, status, featuredFilter, includeDrafts, includeHidden, includeDrafts, includeHidden,
-		tag, tag,
-		search, search, search, search, search,
-	).Scan(&count)
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count, err
 }
 

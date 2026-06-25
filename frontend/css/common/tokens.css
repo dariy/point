@@ -21,6 +21,15 @@
     --color-scheduled: #7c3aed;
     --color-scheduled-light: #ede9fe;
 
+    /* Tag type accents — one source of truth for colouring tags by kind
+       (year / place / topic / plain), shared by the tag pills, the Atlas cloud
+       and the tags graph. Classification lives in tagKind() (utils/tags.js). */
+    --tag-type-tag: var(--color-primary);
+    --tag-type-year: #d39327;
+    --tag-type-geo: #1f9e8e;
+    --tag-type-topic: #8a5cd6;
+    --tag-type-post: #5b6678;
+
     /* Extended Palette */
     --color-purple-500: #8b5cf6;
     --color-purple-50: #f5f3ff;

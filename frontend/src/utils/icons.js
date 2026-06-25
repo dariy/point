@@ -170,6 +170,12 @@ export const THEMES_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill=
   <circle cx="16.5" cy="10.5" r="1.5" fill="currentColor"/>
 </svg>`;
 
+export const PLUGINS_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M14 4a2 2 0 1 0-4 0v2H7a1 1 0 0 0-1 1v3H4a2 2 0 1 0 0 4h2v3a1 1 0 0 0 1 1h3v2a2 2 0 1 0 4 0v-2h3a1 1 0 0 0 1-1v-3a2 2 0 1 0 0-4V7a1 1 0 0 0-1-1h-3V4z"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 export const RESTORE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <polyline points="1 4 1 10 7 10" stroke="currentColor" stroke-width="2"

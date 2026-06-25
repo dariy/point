@@ -1,31 +1,48 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, before, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-// A tiny graph: two places (berlin geo-tag, paris geo-tag), year-tags 2020 and
-// the 2010s decade, plus posts wired to them. Mirrors the /api/pages/graph shape.
+// The graph payload now ships only markers + hierarchy — posts and co-tags are
+// fetched per place on tap (see getTagCloud / _loadAndSpawnCloud).
 const GRAPH = {
   tags: [
     { id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4 },
     { id: 2, name: 'Paris', slug: 'paris', kind: 'place', latitude: 48.8, longitude: 2.3 },
-    { id: 3, name: '2020', slug: '2020', kind: 'year' },
-    { id: 4, name: '2010s', slug: '2010s', kind: 'year' },
-    { id: 5, name: 'food', slug: 'food', kind: 'topic' },
-  ],
-  posts: [
-    { id: 10, slug: 'p10', title: 'Berlin 2020' },
-    { id: 11, slug: 'p11', title: 'Berlin 2015' },
-    { id: 12, slug: 'p12', title: 'Paris undated' },
   ],
   hierarchyEdges: [],
-  membershipEdges: [
-    { post: 10, tag: 1 }, { post: 10, tag: 3 }, { post: 10, tag: 5 }, // Berlin, 2020, food
-    { post: 11, tag: 1 }, { post: 11, tag: 4 },                       // Berlin, 2010s
-    { post: 12, tag: 2 },                                             // Paris, no year
-  ],
 };
 
-describe('AtlasPage year filtering', () => {
+// A per-place cloud payload as GetTagCloud returns it: ≤10 recent posts, ≤10
+// popular co-tags, and the edges wiring that subset together.
+const CLOUD = {
+  tags: [{ id: 5, name: 'food', slug: 'food', kind: 'topic' }],
+  posts: [
+    { id: 10, slug: 'p10', title: 'Berlin 2020', media_url: '/a.jpg?thumb=128' },
+    { id: 11, slug: 'p11', title: 'Berlin 2015' },
+  ],
+  membershipEdges: [
+    { post: 10, tag: 5 },
+  ],
+  hierarchyEdges: [],
+};
+
+/** Stub global.fetch to return `payload` for every request; returns the URL log. */
+function fakeFetch(payload) {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => payload,
+    };
+  };
+  return calls;
+}
+
+describe('AtlasPage lazy cloud loading', () => {
   let AtlasPage;
+  let store;
 
   before(async () => {
     global.document = {
@@ -45,8 +62,14 @@ describe('AtlasPage year filtering', () => {
       removeEventListener() {},
       matchMedia: () => ({ matches: false }),
     };
-    const mod = await import('../src/pages/public/AtlasPage.js');
+    const mod = await import('../src/plugins/tags-atlas/index.js');
     AtlasPage = mod.default;
+    ({ store } = await import('../src/store.js'));
+  });
+
+  afterEach(() => {
+    store.set('route', { pathname: '/atlas', query: {} });
+    delete global.fetch;
   });
 
   function loaded() {
@@ -55,48 +78,74 @@ describe('AtlasPage year filtering', () => {
     return page;
   }
 
-  test('parses year and decade spans from year-tags', () => {
+  /** Put a place into the "actively selected" state so spawnFrom's guard passes. */
+  function activate(page, tagId) {
+    const tag = page._tagsById.get(tagId);
+    page._activeTag = tag;
+    page._activeKey = 'm' + tagId;
+    return tag;
+  }
+
+  test('_buildIndexes indexes only tag (marker) nodes', () => {
     const page = loaded();
-    assert.deepEqual(page._yearSpansByPost.get(10), [[2020, 2020]]);
-    assert.deepEqual(page._yearSpansByPost.get(11), [[2010, 2019]]);
-    assert.equal(page._yearSpansByPost.has(12), false, 'undated post has no span');
+    assert.equal(page._tagsById.size, 2);
+    assert.equal(page._tagsById.get(1).slug, 'berlin');
+    // The old global post indexes are gone.
+    assert.equal(page._postsById, undefined);
+    assert.equal(page._tagsByPost, undefined);
   });
 
-  test('_postsInRange matches intersecting spans only', () => {
+  test('_loadAndSpawnCloud fetches the place cloud, spawns from it, and caches', async () => {
     const page = loaded();
-    assert.deepEqual([...page._postsInRange(2020, 2020)].sort(), [10]);
-    assert.deepEqual([...page._postsInRange(2010, 2019)].sort(), [11]);
-    assert.deepEqual([...page._postsInRange(2010, 2025)].sort(), [10, 11]);
-    assert.deepEqual([...page._postsInRange(1999, 1999)].sort(), [], 'no overlap');
+    const berlin = activate(page, 1);
+    let captured = null;
+    page._spawnCloud = (_t, _a, data) => { captured = data; };
+    const calls = fakeFetch(CLOUD);
+
+    await page._loadAndSpawnCloud(berlin, { lat: 52.5, lng: 13.4 });
+
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].includes('/api/pages/graph/tag/1'), 'requests the place endpoint');
+    assert.deepEqual(captured, CLOUD, 'cloud built from the fetched payload');
+    assert.deepEqual(page._cloudData, CLOUD);
+    assert.ok(page._cloudCache.has('1|'), 'cached under place|<no-year>');
+
+    // Re-selecting the same place + scope serves from cache — no second request.
+    await page._loadAndSpawnCloud(berlin, { lat: 52.5, lng: 13.4 });
+    assert.equal(calls.length, 1, 'second select is served from cache');
   });
 
-  test('_buildSubgraph narrows posts and co-tags to the active set', () => {
+  test('forwards the active timeline range and caches per year scope', async () => {
+    store.set('route', { pathname: '/atlas', query: { timeline: '2020-2021' } });
     const page = loaded();
-    const berlin = page._tagsById.get(1);
+    const berlin = activate(page, 1);
+    page._spawnCloud = () => {};
+    const calls = fakeFetch(CLOUD);
 
-    // No filter: both Berlin posts and their co-tags (food) are in play.
-    let sub = page._buildSubgraph(berlin);
-    assert.deepEqual([...sub.postIds].sort(), [10, 11]);
-    assert.ok(sub.tagIds.has(5), 'food co-tag present without filter');
+    await page._loadAndSpawnCloud(berlin, { lat: 52.5, lng: 13.4 });
 
-    // Filter to 2020: only post 10 survives, dragging food but not the 2010s decade tag.
-    page._activePostIds = page._postsInRange(2020, 2020);
-    sub = page._buildSubgraph(berlin);
-    assert.deepEqual([...sub.postIds], [10]);
-    assert.ok(sub.tagIds.has(5), 'food still reachable via post 10');
-    assert.ok(!sub.tagIds.has(4), '2010s decade tag dropped under the 2020 filter');
+    assert.ok(calls[0].includes('year_from=2020'), 'year_from forwarded');
+    assert.ok(calls[0].includes('year_to=2021'), 'year_to forwarded');
+    assert.ok(page._cloudCache.has('1|2020-2021'), 'cache key embeds the year scope');
   });
 
-  test('_buildYearDimmed flags places with no in-range posts', () => {
+  test('drops a stale cloud response when the selection changes mid-flight', async () => {
     const page = loaded();
-    // Register the two places as base-map dimmables (as _drawLayers would).
-    page._baseDimmables = [
-      { tagId: 1, setDim() {} },
-      { tagId: 2, setDim() {} },
-    ];
-    page._activePostIds = page._postsInRange(2020, 2020);
-    const dimmed = page._buildYearDimmed();
-    assert.ok(!dimmed.has(1), 'Berlin has a 2020 post — not dimmed');
-    assert.ok(dimmed.has(2), 'Paris has no dated post — dimmed under the filter');
+    const berlin = activate(page, 1);
+    let spawned = false;
+    page._spawnCloud = () => { spawned = true; };
+
+    let release;
+    global.fetch = async () => {
+      await new Promise((r) => { release = r; });
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => CLOUD };
+    };
+
+    const pending = page._loadAndSpawnCloud(berlin, { lat: 52.5, lng: 13.4 });
+    page._cloudReq++; // a newer selection supersedes this in-flight fetch
+    release();
+    await pending;
+
+    assert.equal(spawned, false, 'superseded response is ignored');
   });
 });

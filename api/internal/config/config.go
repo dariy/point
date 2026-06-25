@@ -28,10 +28,14 @@ type Config struct {
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
-	ThemesPath               string `mapstructure:"THEMES_PATH"`
-	UserThemesPath           string `mapstructure:"USER_THEMES_PATH"`
-	GeminiAPIKey             string `mapstructure:"GEMINI_API_KEY"`
-	PhotoLibraryPath         string `mapstructure:"PHOTO_LIBRARY_PATH"`
+	// FrontendDebug serves the debug frontend bundle (frontend/js-debug, with
+	// plugin/console debug logging) instead of the minified release bundle when
+	// that bundle exists. Off by default so production serves the release build.
+	FrontendDebug    bool   `mapstructure:"FRONTEND_DEBUG"`
+	ThemesPath       string `mapstructure:"THEMES_PATH"`
+	UserThemesPath   string `mapstructure:"USER_THEMES_PATH"`
+	GeminiAPIKey     string `mapstructure:"GEMINI_API_KEY"`
+	PhotoLibraryPath string `mapstructure:"PHOTO_LIBRARY_PATH"`
 
 	// SMTP for password reset emails
 	SMTPHost     string `mapstructure:"SMTP_HOST"`
@@ -40,6 +44,9 @@ type Config struct {
 	SMTPPassword string `mapstructure:"SMTP_PASSWORD"`
 	SMTPFrom     string `mapstructure:"SMTP_FROM"`
 	AppURL       string `mapstructure:"APP_URL"`
+
+	// MCP server (the "mcp" plugin, served at /mcp). OAuth login uses the admin password.
+	MCPBaseURL string `mapstructure:"MCP_BASE_URL"` // public HTTPS base URL for OAuth discovery; falls back to APP_URL
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -59,6 +66,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
 	v.SetDefault("STORAGE_PATH", "./data")
 	v.SetDefault("FRONTEND_DIR", "../frontend")
+	v.SetDefault("FRONTEND_DEBUG", false)
 	v.SetDefault("THEMES_PATH", "")
 	v.SetDefault("USER_THEMES_PATH", "")
 	v.SetDefault("APP_VERSION", "")
@@ -75,6 +83,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("SMTP_PASSWORD", "")
 	v.SetDefault("SMTP_FROM", "")
 	v.SetDefault("APP_URL", "")
+	v.SetDefault("MCP_BASE_URL", "")
 
 	err = v.ReadInConfig()
 	if err != nil {
@@ -128,4 +137,3 @@ func LoadConfig(path string) (config Config, err error) {
 
 	return
 }
-

@@ -10,10 +10,11 @@
 import { Component } from '../Component.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
+import { DEBUG } from '../../utils/debug.js';
 import {
   APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG,
   DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
-  THEMES_SVG, MENU_SVG, CHART_SVG, PLUS_SVG, CHEVRON_SVG,
+  THEMES_SVG, MENU_SVG, CHART_SVG, PLUS_SVG, CHEVRON_SVG, PLUGINS_SVG,
 } from '../../utils/icons.js';
 
 const WRITE_ITEMS = [
@@ -27,6 +28,7 @@ const MANAGE_ITEMS = [
   { href: '/light/analytics', label: 'Analytics', icon: CHART_SVG     },
   { href: '/light/menu',     label: 'Menu',      icon: MENU_SVG      },
   { href: '/light/themes',   label: 'Themes',    icon: THEMES_SVG    },
+  { href: '/light/plugins',  label: 'Plugins',   icon: PLUGINS_SVG   },
   { href: '/light/settings', label: 'Settings',  icon: SETTINGS_SVG  },
   { href: '/light/security', label: 'Security',  icon: SECURITY_SVG  },
   { href: '/light/system',   label: 'System',    icon: SYSTEM_SVG    },
@@ -104,7 +106,7 @@ export class LightSidebar extends Component {
         </nav>
 
         <div class="sidebar-footer">
-          <div class="sidebar-version" aria-label="Version">${escapeHtml(version)}</div>
+          <div class="sidebar-version" aria-label="Version">${escapeHtml(version)}<span class="sidebar-build sidebar-build-${DEBUG ? 'debug' : 'release'}" title="Frontend bundle">${DEBUG ? 'debug' : 'release'}</span></div>
           <div class="sidebar-footer-actions">
             <div class="user-info">
               <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${LOGOUT_SVG}</button>

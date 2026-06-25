@@ -134,6 +134,46 @@ func TestExtractMediaURL(t *testing.T) {
 	}
 }
 
+func TestPostToListResponseDropsContentAndCSS(t *testing.T) {
+	p := models.Post{
+		ID:      1,
+		Title:   "Listed",
+		Slug:    "listed",
+		Content: "# heavy body\n\n![x](/media/originals/a.jpg)",
+		Css:     ".x{color:red}",
+		Status:  "published",
+	}
+	resp := postToListResponse(p, nil, nil)
+	if _, ok := resp["content"]; ok {
+		t.Error("list response should not include content")
+	}
+	if _, ok := resp["css"]; ok {
+		t.Error("list response should not include css")
+	}
+	// media_url is still derived (from content here, since no stored MediaURL).
+	if resp["media_url"] == nil {
+		t.Error("expected media_url to be present in list response")
+	}
+}
+
+func TestPostMediaURLPrefersStoredColumn(t *testing.T) {
+	// Stored media_url wins, even when content/thumbnail would derive something else.
+	p := models.Post{
+		MediaURL:      sql.NullString{String: "/stored.jpg", Valid: true},
+		ThumbnailPath: sql.NullString{String: "/thumb.jpg", Valid: true},
+		Content:       "![x](/from-content.jpg)",
+	}
+	if got := postMediaURL(p); got == nil || *got != "/stored.jpg" {
+		t.Errorf("expected stored /stored.jpg, got %v", got)
+	}
+
+	// Empty stored value falls back to deriving from thumbnail/content.
+	p.MediaURL = sql.NullString{String: "", Valid: true}
+	if got := postMediaURL(p); got == nil || *got != "/thumb.jpg" {
+		t.Errorf("expected derived /thumb.jpg, got %v", got)
+	}
+}
+
 func TestInjectPostHiddenFields(t *testing.T) {
 	resp := map[string]interface{}{
 		"tags": []map[string]interface{}{{"name": "foo"}},

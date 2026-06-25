@@ -777,3 +777,58 @@ func TestUpdateMediaVisibilityForPaths_HiddenAndDuplicate(t *testing.T) {
 		t.Fatalf("UpdateMediaVisibilityForPaths with hidden tag: %v", err)
 	}
 }
+
+func TestSquareThumbnail(t *testing.T) {
+	svc, _ := setupMediaService(t)
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 600, 400))
+	_ = jpeg.Encode(&buf, img, nil)
+	m, err := svc.UploadFile(ctx, UploadFileParams{
+		Content:  buf.Bytes(),
+		Filename: "square.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFile failed: %v", err)
+	}
+
+	// Unsupported sizes are refused so the on-disk cache stays bounded.
+	if _, err := svc.SquareThumbnail(ctx, m, 999); err == nil {
+		t.Fatal("expected error for unsupported size 999")
+	}
+
+	path, err := svc.SquareThumbnail(ctx, m, AtlasThumbSize)
+	if err != nil {
+		t.Fatalf("SquareThumbnail failed: %v", err)
+	}
+	if !strings.Contains(filepath.ToSlash(path), "thumbnails/sq128/") {
+		t.Errorf("thumbnail path = %q, want it under thumbnails/sq128/", path)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open thumbnail: %v", err)
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	_ = f.Close()
+	if err != nil {
+		t.Fatalf("decode thumbnail: %v", err)
+	}
+	if cfg.Width != AtlasThumbSize || cfg.Height != AtlasThumbSize {
+		t.Errorf("thumbnail = %dx%d, want %dx%d square", cfg.Width, cfg.Height, AtlasThumbSize, AtlasThumbSize)
+	}
+
+	// A second call reuses the cached file (same resolved path).
+	path2, err := svc.SquareThumbnail(ctx, m, AtlasThumbSize)
+	if err != nil || path2 != path {
+		t.Errorf("cached call = %q, %v; want %q, nil", path2, err, path)
+	}
+
+	// Non-image media has no square thumbnail.
+	txt, _ := svc.UploadFile(ctx, UploadFileParams{Content: []byte("x"), Filename: "n.txt", MimeType: "text/plain"})
+	if _, err := svc.SquareThumbnail(ctx, txt, AtlasThumbSize); !errors.Is(err, ErrNotAnImage) {
+		t.Errorf("non-image SquareThumbnail err = %v, want ErrNotAnImage", err)
+	}
+}

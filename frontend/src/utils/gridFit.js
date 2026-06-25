@@ -12,6 +12,9 @@
  */
 
 const MAX_PER_PAGE = 60;
+// Mobile and tablet viewports (iPad landscape is 1024px) get a fixed page size;
+// only wider desktop layouts fan out into enough columns to be worth measuring.
+const TABLET_MAX_WIDTH = 1024;
 let _cache = 0;
 
 /**
@@ -47,6 +50,16 @@ function columnsForWidth(width, colW, gap) {
  */
 export function computePerPage(minPerPage, gridEl = null) {
   const floor = Math.max(1, minPerPage || 1);
+
+  // On mobile and tablets the grid is one or few columns, so filling the
+  // viewport buys nothing. Lock the page size to the floor once and skip all
+  // measurement — no per-card geometry reads, no re-fit on resize. Only
+  // desktop widths recalculate.
+  if (window.innerWidth <= TABLET_MAX_WIDTH) {
+    _cache = floor;
+    return floor;
+  }
+
   let cols;
   let rowH;
   let gap;

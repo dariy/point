@@ -24,6 +24,7 @@ api/cmd/api/cache/
 
 # Frontend generated files
 frontend/js/
+frontend/js-debug/
 frontend/css/main.css
 frontend/css/light.css
 frontend/css/common/theme.css
@@ -34,3 +35,4 @@ frontend/css/common/theme.css
 /frontend/index.html
 # br doctor per-run artifacts
 .doctor/
+*.bak

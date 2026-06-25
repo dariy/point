@@ -3,50 +3,37 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"regexp"
 	"strings"
 
 	"point-api/internal/models"
 	"point-api/internal/repository"
-)
-
-var (
-	// videoTagRe extracts src from <video>/<source> tags.
-	// [^>]* (zero-or-more) matches even when src is the first attribute.
-	videoTagRe = regexp.MustCompile(`(?i)<(?:video|source)[^>]*\ssrc="([^"]+)"`)
-
-	// markdownImageRe matches standard markdown image syntax ![alt](url).
-	markdownImageRe = regexp.MustCompile(`!\[.*\]\(([^)]+)\)`)
-
-	// bareMediaRe matches a line containing only a media file path or URL.
-	bareMediaRe = regexp.MustCompile(`(?im)^[ \t]*((?:https?://|/)\S+\.(?:mp4|webm|mov|ogv|m4v|avi|mkv|mp3|m4a|ogg|wav|flac|aac|opus|jpg|jpeg|png|gif|webp|svg))[ \t]*$`)
+	"point-api/internal/utils"
 )
 
 // extractMediaURL returns a single preview URL for list responses:
 // thumbnail path if set, else first markdown image URL, else first video/audio src from a <video>/<source>
 // tag in the content, else first bare media path found in the content.
 func extractMediaURL(thumbPath sql.NullString, content string) *string {
-	var rawURL string
-	if thumbPath.Valid && thumbPath.String != "" {
-		rawURL = thumbPath.String
-	} else if m := markdownImageRe.FindStringSubmatch(content); m != nil {
-		rawURL = m[1]
-	} else if m := videoTagRe.FindStringSubmatch(content); m != nil {
-		rawURL = m[1]
-	} else if m := bareMediaRe.FindStringSubmatch(content); m != nil {
-		rawURL = m[1]
-	} else {
-		return nil
+	var tp string
+	if thumbPath.Valid {
+		tp = thumbPath.String
 	}
+	if u := utils.DeriveMediaURL(tp, content); u != "" {
+		return &u
+	}
+	return nil
+}
 
-	// Normalize: strip /media/originals/ or originals/ to return the simplified path
-	normalized := rawURL
-	normalized = strings.TrimPrefix(normalized, "/media/originals/")
-	normalized = strings.TrimPrefix(normalized, "originals/")
-	if !strings.HasPrefix(normalized, "http") && !strings.HasPrefix(normalized, "/") {
-		normalized = "/" + normalized
+// postMediaURL prefers the denormalized posts.media_url column (populated at
+// write time and used by lite list queries that no longer SELECT content),
+// falling back to deriving it from thumbnail/content for paths that still load
+// the full row (single-post views, offline snapshot, views-sorted lists).
+func postMediaURL(p models.Post) *string {
+	if p.MediaURL.Valid && p.MediaURL.String != "" {
+		s := p.MediaURL.String
+		return &s
 	}
-	return &normalized
+	return extractMediaURL(p.ThumbnailPath, p.Content)
 }
 
 func nullString(s sql.NullString) *string {
@@ -91,10 +78,18 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		if excludeIDs != nil && excludeIDs[t.ID] {
 			continue
 		}
-		tagObjs = append(tagObjs, map[string]interface{}{
+		tagObj := map[string]interface{}{
 			"name": t.Name,
 			"slug": t.Slug,
-		})
+			"kind": t.Kind,
+		}
+		// Geo coords (when set) let the frontend classify a tag as a "place" and
+		// colour its pill accordingly, matching the Atlas / tags graph.
+		if t.Latitude.Valid && t.Longitude.Valid {
+			tagObj["latitude"] = t.Latitude.Float64
+			tagObj["longitude"] = t.Longitude.Float64
+		}
+		tagObjs = append(tagObjs, tagObj)
 	}
 
 	return map[string]interface{}{
@@ -114,10 +109,21 @@ func postToResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map
 		"scheduled_at":     nullTime(p.ScheduledAt),
 		"created_at":       p.CreatedAt,
 		"updated_at":       p.UpdatedAt,
-		"media_url":        extractMediaURL(p.ThumbnailPath, p.Content),
+		"media_url":        postMediaURL(p),
 		"meta_description": nullString(p.MetaDescription),
 		"tags":             tagObjs,
 	}
+}
+
+// postToListResponse builds a slimmed-down post payload for list/grid views
+// (homepage, tag archives, feed). It drops the full `content` body and `css`,
+// which list cards never render — they only need title/excerpt/media_url/tags.
+// Single-post and custom-home-page rendering keep using postToResponse.
+func postToListResponse(p models.Post, tags []repository.PostTagInfo, excludeIDs map[int64]bool) map[string]interface{} {
+	resp := postToResponse(p, tags, excludeIDs)
+	delete(resp, "content")
+	delete(resp, "css")
+	return resp
 }
 
 // tagToPostTagInfo converts a models.Tag to a lightweight PostTagInfo for ancestor expansion.

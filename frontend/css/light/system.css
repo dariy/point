@@ -38,6 +38,110 @@
     color: var(--text-secondary);
 }
 
+/* ===========================
+   Backups list — swipe-to-reveal rows
+   Two lines per item (name, then date · size) inside the narrow plugin-settings
+   drawer. Action buttons sit behind the row and are uncovered by swiping the row
+   left (touch) or hovering it (pointer). One row open at a time.
+   =========================== */
+:root {
+    --backup-action-w: 2.75rem;
+    --backup-actions-w: calc(var(--backup-action-w) * 2);
+}
+
+.backup-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.backup-empty {
+    padding: var(--spacing-md);
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    text-align: center;
+}
+
+.backup-swipe-item {
+    position: relative;
+    overflow: hidden;
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    background: var(--surface-input);
+}
+
+/* Actions parked on the right, revealed as the content slides over them */
+.backup-swipe-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    display: flex;
+    align-items: stretch;
+}
+
+.backup-swipe-actions .btn {
+    width: var(--backup-action-w);
+    height: 100%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    color: white;
+    background: var(--color-primary);
+}
+
+.backup-swipe-actions .btn-danger {
+    background: var(--color-danger);
+}
+
+.backup-swipe-actions .btn svg {
+    width: var(--svg-width-alt2);
+    height: var(--svg-height-alt2);
+}
+
+/* The sliding face. Opaque so it fully hides the actions when closed. */
+.backup-swipe-content {
+    position: relative;
+    z-index: 1;
+    background: var(--surface-card);
+    padding: var(--spacing-sm) var(--spacing-md);
+    transform: translateX(0);
+    transition: transform var(--transition-fast, 0.2s ease-out);
+    touch-action: pan-y;
+    cursor: default;
+}
+
+.backup-name {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    word-break: break-all;
+    line-height: 1.3;
+}
+
+.backup-sub {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: 2px;
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Pointer devices have no swipe; reveal the actions on hover instead. */
+@media (hover: hover) {
+    .backup-swipe-item:hover .backup-swipe-content {
+        transform: translateX(calc(-1 * var(--backup-actions-w)));
+    }
+}
+
 /* Backup Management Styles */
 .backups-list,
 .migrations-list {

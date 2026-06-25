@@ -1601,6 +1601,10 @@ type ListPostsParams struct {
 	// IncludePages, when true, keeps type=page rows in results (admin views).
 	// Consumed by the hand-written sqliteRepository.ListPosts override.
 	IncludePages bool `json:"include_pages"`
+	// IncludeContent, when true, selects the full content body. List/grid views
+	// leave it false (they use media_url); the offline snapshot sets it true.
+	// Consumed by the hand-written sqliteRepository.ListPosts override.
+	IncludeContent bool `json:"include_content"`
 }
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {

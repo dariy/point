@@ -33,21 +33,23 @@ func TestTimelineHandler_Gating(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		mode       string
+		enabled    bool
 		isUser     bool
 		wantStatus int
 	}{
-		{"off for guest", "off", false, http.StatusNotFound},
-		{"off for admin", "off", true, http.StatusNotFound},
-		{"hidden for guest", "hidden", false, http.StatusNotFound},
-		{"hidden for admin", "hidden", true, http.StatusOK},
-		{"all for guest", "all", false, http.StatusOK},
-		{"all for admin", "all", true, http.StatusOK},
+		{"disabled for guest", false, false, http.StatusNotFound},
+		{"disabled for admin", false, true, http.StatusNotFound},
+		{"enabled for guest", true, false, http.StatusOK},
+		{"enabled for admin", true, true, http.StatusOK},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = settingsSvc.SetSetting(ctx, "timeline_mode", tt.mode, "string")
+			if tt.enabled {
+				_ = settingsSvc.SetSetting(ctx, "plugin.timeline.enabled", "true", "string")
+			} else {
+				_ = settingsSvc.SetSetting(ctx, "plugin.timeline.enabled", "false", "string")
+			}
 
 			// Need some data so it doesn't 404 on "empty timeline"
 			// Actually h.GetTimeline returns 404 if len(pills) == 0.
@@ -86,7 +88,7 @@ func TestTimelineHandler_Payload(t *testing.T) {
 	e := echo.New()
 	ctx := context.Background()
 
-	_ = settingsSvc.SetSetting(ctx, "timeline_mode", "all", "string")
+	_ = settingsSvc.SetSetting(ctx, "plugin.timeline.enabled", "true", "string")
 
 	// Seed data
 	_, _ = repo.DB().Exec(`INSERT OR IGNORE INTO tags (name, slug, kind) VALUES ('2024', '2024', 'year')`)

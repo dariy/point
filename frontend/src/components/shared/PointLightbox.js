@@ -1,5 +1,5 @@
 import { BaseWebComponent } from '../BaseWebComponent.js';
-import { GestureController } from '../../utils/gestures.js';
+import { GestureController } from '../../core/gestures.js';
 
 /**
  * Proof-of-Concept component for Lightbox using Shadow DOM and Passive Gestures.

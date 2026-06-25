@@ -212,7 +212,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 
 	postResponses := make([]map[string]interface{}, len(posts))
 	for i, p := range posts {
-		resp := postToResponse(p, postTagsMap[p.ID], excludeTagIDs)
+		resp := postToListResponse(p, postTagsMap[p.ID], excludeTagIDs)
 		if isAdmin {
 			injectPostHiddenFieldsFromInfo(resp, p.Status, postTagsMap[p.ID], effectiveHiddenPosts)
 		}

@@ -16,13 +16,13 @@ import { store } from "./store.js";
 import { router } from "./router.js";
 import { getMe } from "./api/auth.js";
 import { getPublicSettings } from "./api/settings.js";
-import { getNavMenu } from "./api/pages.js";
+
 import { getVersion } from "./api/system.js";
 import { normalizeSettings } from "./utils/helpers.js";
+import { pluginHost } from "./core/pluginHost.js";
 import { ToastContainer } from "./components/shared/Toast.js";
 import { NotificationLogButton } from "./components/shared/NotificationLogButton.js";
 import { initNotificationLog } from "./utils/notificationLog.js";
-import { syncQueue } from "./utils/sync.js";
 
 // ── Theming Foundation ────────────────────────────────────────────────────
 import "./utils/PointBus.js";
@@ -37,6 +37,11 @@ if (typeof customElements !== "undefined") {
 
 // Initialise theme immediately to prevent FOUC
 parseTheme();
+
+// Initialise the plugin host from the server-injected, enabled-only manifest
+// (window.__PLUGINS__). Done at module load so the route table and shell slots
+// can consult it synchronously. Inert when no manifest is present.
+pluginHost.init();
 
 // ── Login overlay ─────────────────────────────────────────────────────────
 
@@ -148,24 +153,21 @@ store.subscribe("theme", (theme) => {
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 
 async function bootstrap() {
-  // 0. Register service worker (PWA shell cache + Web Share Target).
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch((err) => {
-      console.warn("[SW] Registration failed:", err);
-    });
+  // 0. Init offline sync plugin if enabled
+  const offlineEntry = pluginHost._byId.get("offline-sync");
+  if (offlineEntry && offlineEntry.entry) {
+    try {
+      const mod = await pluginHost.loadEntry(offlineEntry);
+      if (mod && mod.mount) await mod.mount(store);
+    } catch { /* ignore */ }
+  } else if (!pluginHost.size || pluginHost.isEnabled("offline-sync")) {
+    try {
+      const mod = await import("./plugins/offline-sync/index.js");
+      if (mod && mod.mount) await mod.mount(store);
+    } catch { /* ignore */ }
   }
 
-  // 0.1 Handle offline Treated as unauthenticated if network fails
-  try {
-    const lastSync = await (
-      await import("./utils/offlineStore.js")
-    ).getMeta("last_sync");
-    if (lastSync) {
-      store.set("offline_status", { available: true, last_sync: lastSync });
-    }
-  } catch {
-    /* ignore */
-  }
+
 
   // 1. Fetch public settings (best-effort — fall back to last cached values).
   let settings = {};
@@ -207,13 +209,7 @@ async function bootstrap() {
       // but the API is more reliable for the actual running binary.
     });
 
-  // 3.5 Load auth-scoped nav tag hierarchy so all pages have it from first render.
-  try {
-    const navData = await getNavMenu();
-    store.set("navTags", navData.menu || []);
-  } catch {
-    /* ignore — pages fall back to store or empty */
-  }
+
 
   // 4. Mount toast container and initialise the notification log.
   const toastsEl = document.getElementById("toasts");
@@ -237,19 +233,8 @@ async function bootstrap() {
     loginPath: "/light/login",
   });
 
-  // 6.5 Refresh auth-scoped nav tags on login/logout.
-  store.subscribe("user", async () => {
-    try {
-      const navData = await getNavMenu();
-      store.set("navTags", navData.menu || []);
-    } catch {
-      /* ignore */
-    }
-  });
 
-  // 7. Sync queue when online
-  window.addEventListener("online", syncQueue);
-  if (navigator.onLine) syncQueue();
+
 }
 
 // ── Route table ───────────────────────────────────────────────────────────
@@ -260,10 +245,16 @@ async function bootstrap() {
 // public: true  →  accessible without authentication
 // (absent)      →  requires authentication (authGuard redirect)
 
-// Resolve the lazy module for the /tags route based on the configured tags
-// module and its visibility. Mirrors the backend gate in tagsModuleAccessible:
-// "none" (or admins-only for a logged-out visitor) sends the visitor home.
-function resolveTagsModule() {
+// Resolve the lazy module for the /tags route. `/tags` is a single-claim slot
+// (`tags-route`): the enabled tag-visualization plugin selected by `tags_module`
+// owns it. Mirrors the backend gate in tagsModuleAccessible: "none" (or
+// admins-only for a logged-out visitor) sends the visitor home; a plugin the
+// admin has disabled is likewise treated as absent.
+//
+// Until Phase 4 extracts the tag-viz pages into plugin chunks, the claimant has
+// no built `entry`, so we fall back to the core page modules — behavior is
+// identical to before the plugin system.
+async function resolveTagsModule() {
   const settings = store.get("settings") || {};
   const module = settings.tags_module || "atlas";
   const visibility = settings.tags_visibility || "hidden";
@@ -272,9 +263,23 @@ function resolveTagsModule() {
   if (module === "none" || (visibility !== "all" && !isAdmin)) {
     return import("./pages/public/RedirectHome.js");
   }
-  if (module === "map") return import("./pages/public/MapPage.js");
-  if (module === "atlas") return import("./pages/public/AtlasPage.js");
-  return import("./pages/public/TagsPage.js");
+
+  const pluginId =
+    module === "map" ? "tags-map" : module === "atlas" ? "tags-atlas" : "tags-graph";
+
+  // When a manifest is present and the selected tag-viz plugin is disabled,
+  // there is no claimant — send the visitor home (matches a 404'd chunk).
+  if (pluginHost.size > 0 && !pluginHost.isEnabled(pluginId)) {
+    return import("./pages/public/RedirectHome.js");
+  }
+
+  // Prefer the plugin chunk once it exists; otherwise the core module.
+  const claimed = await pluginHost.claimRoute("tags-route", (entries) =>
+    entries.find((e) => e.id === pluginId),
+  );
+  if (claimed) return claimed;
+
+  return import("./pages/public/RedirectHome.js");
 }
 
 const routes = [
@@ -329,11 +334,6 @@ const routes = [
   },
 
   // Admin (Light) — protected
-  { path: "/light", load: () => import("./pages/light/DashboardPage.js") },
-  {
-    path: "/light/posts",
-    load: () => import("./pages/light/PostsListPage.js"),
-  },
   {
     path: "/light/posts/new",
     load: () => import("./pages/light/PostEditPage.js"),
@@ -342,7 +342,6 @@ const routes = [
     path: "/light/posts/:id/edit",
     load: () => import("./pages/light/PostEditPage.js"),
   },
-  { path: "/light/media", load: () => import("./pages/light/MediaPage.js") },
   {
     path: "/light/tags",
     load: () => import("./pages/light/TagsManagerPage.js"),
@@ -351,8 +350,9 @@ const routes = [
     path: "/light/tags/:slug",
     load: () => import("./pages/light/TagsManagerPage.js"),
   },
-  { path: "/light/menu", load: () => import("./pages/light/MenuPage.js") },
+
   { path: "/light/themes", load: () => import("./pages/light/ThemesPage.js") },
+  { path: "/light/plugins", load: () => import("./pages/light/PluginsPage.js") },
   {
     path: "/light/settings",
     load: () => import("./pages/light/SettingsPage.js"),
@@ -367,6 +367,22 @@ const routes = [
   },
   { path: "/light/system", load: () => import("./pages/light/SystemPage.js") },
 ];
+
+// Merge manifest-provided plugin routes into the static table. Each route plugin
+// (with a built chunk) contributes its declared paths, loaded from its chunk.
+// The single-claim `tags-route` is handled by resolveTagsModule and excluded by
+// pluginHost.routes(). No-op until Phase 4 ships route-plugin chunks; a plugin
+// route never overrides a core path of the same pattern.
+for (const entry of pluginHost.routes()) {
+  for (const path of entry.routes) {
+    if (routes.some((r) => r.path === path)) continue;
+    routes.push({
+      path,
+      load: () => pluginHost.loadEntry(entry),
+      public: !path.startsWith("/light"),
+    });
+  }
+}
 
 // ── Run ───────────────────────────────────────────────────────────────────
 

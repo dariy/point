@@ -32,6 +32,51 @@ func TestPostService_GetPostByID(t *testing.T) {
 	}
 }
 
+func TestPostService_CreateAndUpdateStoreMediaURL(t *testing.T) {
+	svc, repo := setupPostService(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertTestUser(t, svc)
+	post, _, err := svc.CreatePost(ctx, CreatePostParams{
+		Title:    "WithMedia",
+		Slug:     "with-media",
+		AuthorID: 1,
+		Status:   "published",
+		Content:  "Intro\n\n![pic](/media/originals/cover.jpg)",
+	})
+	if err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+	if !post.MediaURL.Valid || post.MediaURL.String != "/cover.jpg" {
+		t.Errorf("expected returned media_url /cover.jpg, got %#v", post.MediaURL)
+	}
+
+	var stored string
+	if err := repo.DB().QueryRow(`SELECT media_url FROM posts WHERE id=?`, post.ID).Scan(&stored); err != nil {
+		t.Fatalf("read media_url: %v", err)
+	}
+	if stored != "/cover.jpg" {
+		t.Errorf("expected stored media_url /cover.jpg, got %q", stored)
+	}
+
+	// Removing the media on update clears the stored media_url.
+	updated, _, err := svc.UpdatePost(ctx, UpdatePostParams{
+		ID:       post.ID,
+		Title:    "WithMedia",
+		Slug:     "with-media",
+		AuthorID: 1,
+		Status:   "published",
+		Content:  "No media now, just text",
+	})
+	if err != nil {
+		t.Fatalf("UpdatePost failed: %v", err)
+	}
+	if updated.MediaURL.String != "" {
+		t.Errorf("expected media_url cleared after removing media, got %q", updated.MediaURL.String)
+	}
+}
+
 func TestPostService_GetPostBySlug(t *testing.T) {
 	svc, repo := setupPostService(t)
 	defer func() { _ = repo.Close() }()

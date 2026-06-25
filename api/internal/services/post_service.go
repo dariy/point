@@ -425,6 +425,13 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		return models.Post{}, strippedProps, err
 	}
 
+	// Store the derived list-preview URL so list/grid queries need not read the
+	// full content body. Kept in sync here and in UpdatePost.
+	mediaURL := utils.DeriveMediaURL(post.ThumbnailPath.String, post.Content)
+	if err := s.repo.SetPostMediaURL(ctx, post.ID, mediaURL); err == nil {
+		post.MediaURL = sql.NullString{String: mediaURL, Valid: true}
+	}
+
 	// Handle tags
 	for _, tagName := range p.Tags {
 		// This is a bit inefficient, but standard logic: find or create tag
@@ -545,6 +552,12 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 	})
 	if err != nil {
 		return models.Post{}, strippedProps, err
+	}
+
+	// Keep the denormalized list-preview URL in sync with the new content/thumbnail.
+	mediaURL := utils.DeriveMediaURL(post.ThumbnailPath.String, post.Content)
+	if err := s.repo.SetPostMediaURL(ctx, post.ID, mediaURL); err == nil {
+		post.MediaURL = sql.NullString{String: mediaURL, Valid: true}
 	}
 
 	// Replace tags

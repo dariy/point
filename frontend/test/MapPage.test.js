@@ -62,7 +62,7 @@ describe('MapPage', () => {
     const storeMod = await import('../src/store.js');
     global.store = storeMod.store;
 
-    const mod = await import('../src/pages/public/MapPage.js');
+    const mod = await import('../src/plugins/tags-map/index.js');
     MapPage = mod.default;
   });
 

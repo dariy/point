@@ -12,16 +12,15 @@
  */
 
 import { Component } from "../../components/Component.js";
-import { PublicHeader } from "../../components/public/PublicHeader.js";
-import { PublicFooter } from "../../components/public/PublicFooter.js";
+
 import { PostGrid } from "../../components/public/PostGrid.js";
 import { PostCard } from "../../components/public/PostCard.js";
 import {
   PostContent,
   shouldUseImmersive,
 } from "../../components/public/PostContent.js";
-import { Timeline } from "../../components/public/Timeline.js";
 import { Pagination } from "../../components/shared/Pagination.js";
+import { pluginHost } from "../../core/pluginHost.js";
 import { getTagPage } from "../../api/pages.js";
 import { getPostBySlug } from "../../api/posts.js";
 import { store } from "../../store.js";
@@ -34,7 +33,7 @@ import {
   GestureController,
   TrackpadDetector,
   rubberBand,
-} from "../../utils/gestures.js";
+} from "../../core/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
 import { computePerPage, cachedPerPage } from "../../utils/gridFit.js";
 
@@ -236,13 +235,14 @@ export default class TagPage extends Component {
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
+            <div id="pagination-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
       </div>`;
   }
   afterRender() {
-    document.body.classList.remove("immersive-layout", "ui-hidden");
+    document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
     this._gesture?.destroy();
     this._trackpad?.destroy();
     const settings = store.get("settings") || {};
@@ -255,23 +255,27 @@ export default class TagPage extends Component {
     const slug = this.props.params?.slug || "";
     const { data, post } = this.state;
 
-    const canShowTimeline =
-      settings.timeline_mode === "all" ||
-      (store.get("user") && settings.timeline_mode === "hidden");
+    const canShowTimeline = pluginHost.hasSlot("timeline");
     this._canShowTimeline = canShowTimeline;
     if (
       canShowTimeline &&
       !this._isPostView() &&
       !this.state.loading &&
-      !this.state.error
+      !this.state.error &&
+      pluginHost.hasSlot("timeline")
     ) {
       const vc = ViewContext.current();
       const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
-      this._timeline = this.mountChild(Timeline, "#timeline-mount", {
+      pluginHost.fill("timeline", this.$("#timeline-mount"), {
         mode: "filter",
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
         total,
+      }).then((comps) => {
+        if (comps[0] && !this._unmounted) {
+          this._timeline = comps[0];
+          this._children.push(comps[0]);
+        }
       });
     }
 
@@ -336,7 +340,7 @@ export default class TagPage extends Component {
         ? [...breadcrumb, { name: post.title, slug: null }]
         : breadcrumb;
 
-      this.mountChild(PublicHeader, "#header-mount", {
+      pluginHost.fill("header", this.$("#header-mount"), {
         settings,
         navTags: immersive && !isCustomMenu ? [] : navTags,
         currentTagSlug: slug,
@@ -345,14 +349,18 @@ export default class TagPage extends Component {
         editUrl: post ? `/light/posts/${post.id}/edit` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline,
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
 
-      this.mountChild(PublicFooter, "#footer-mount", {
+      pluginHost.fill("footer", this.$("#footer-mount"), {
         settings,
         immersiveTags: immersive ? post.tags || [] : [],
         immersiveNav: immersive ? { prev: prevPost, next: nextPost } : null,
         tagSlug: immersive ? slug : null,
         exifMedia: immersive ? post.media || [] : [],
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
 
       this.mountChild(PostContent, "#content-mount", {
@@ -376,7 +384,7 @@ export default class TagPage extends Component {
       });
     } else {
       // ── Grid view ───────────────────────────────────────────────────────────
-      this.mountChild(PublicHeader, "#header-mount", {
+      pluginHost.fill("header", this.$("#header-mount"), {
         settings,
         navTags: this._isPostView() ? [] : navTags,
         currentTagSlug: slug,
@@ -385,8 +393,12 @@ export default class TagPage extends Component {
         editUrl: tag ? `/light/tags/${tag.slug}` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline,
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
-      this.mountChild(PublicFooter, "#footer-mount", { settings });
+      pluginHost.fill("footer", this.$("#footer-mount"), { settings }).then(comps => {
+        if (comps[0] && !this._unmounted) this._children.push(comps[0]);
+      });
 
       if (this.state.loading || !data) return;
 
@@ -495,6 +507,8 @@ export default class TagPage extends Component {
       },
       onSwipeCancel: () => this._resetGridSwipe(),
       onSwipeCommit: (dir) => {
+        // Only horizontal swipes paginate; a vertical swipe is a page scroll.
+        if (dir !== "left" && dir !== "right") return;
         const d = dir === "left" ? "next" : "prev";
         if ((d === "next" && atEnd()) || (d === "prev" && atStart())) {
           this._resetGridSwipe();

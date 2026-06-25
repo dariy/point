@@ -393,11 +393,25 @@ export function setupTagStrip(container, tagIndex, navigateFn, hostEl = null) {
   return () => cleanups.forEach(fn => fn());
 }
 
+/**
+ * Classify a tag into a colour bucket — the single source of truth shared by
+ * the tag pills, the Atlas cloud and the tags graph. Mirrors the original
+ * AtlasPage._kindOf / tagGraph._classifyTag logic so every surface agrees.
+ *
+ * Buckets: 'year' (a year/decade tag), 'geo' (carries lat/long), else 'tag'.
+ */
+export function tagKind(tag) {
+  if (!tag || typeof tag === 'string') return 'tag';
+  if (tag.kind === 'year') return 'year';
+  if (typeof tag.latitude === 'number' && typeof tag.longitude === 'number') return 'geo';
+  return 'tag';
+}
+
 export function renderTagLink(tag, { active = false, extra = '', prefix = '', suffix = '' } = {}) {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
   const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tags/${slug}`;
-  const classes = ['tag-link', active ? 'active' : '', extra].filter(Boolean).join(' ');
+  const classes = ['tag-link', `tag-kind-${tagKind(tag)}`, active ? 'active' : '', extra].filter(Boolean).join(' ');
   const isExternal = /^https?:\/\//.test(href);
   const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
   return `<a href="${escapeHtml(href)}" class="${classes}"${externalAttrs}>${prefix}${escapeHtml(name)}${suffix}</a>`;

@@ -1,5 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { pluginHost } from '../src/core/pluginHost.js';
 
 describe('PostEditPage', () => {
   let PostEditPage;
@@ -38,9 +39,17 @@ describe('PostEditPage', () => {
         history: { replaceState: () => {} },
         matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
         addEventListener: () => {},
+        addEventListener: () => {},
         removeEventListener: () => {},
-        dispatchEvent: () => {}
+        dispatchEvent: () => {},
+        __PLUGINS__: [
+          {id: 'instagram', type: 'service'},
+          {id: 'ai-analysis', type: 'service'},
+          {id: 'custom-css', type: 'enhancer'}
+        ]
     };
+
+    pluginHost.init(global.window.__PLUGINS__);
 
     global.localStorage = {
       getItem: () => null,

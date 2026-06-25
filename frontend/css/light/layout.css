@@ -240,6 +240,30 @@ body {
     font-family: var(--font-mono);
 }
 
+.sidebar-build {
+    display: inline-block;
+    margin-left: var(--spacing-xs);
+    padding: 0 0.4em;
+    border-radius: var(--radius-sm, 3px);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    vertical-align: baseline;
+}
+
+.sidebar-build-release {
+    /* Quiet — the expected state; kept subtle so it doesn't draw the eye. */
+    opacity: 0.6;
+}
+
+.sidebar-build-debug {
+    /* Loud — debug bundle is shipping debug logging; make it unmistakable. */
+    color: #fff;
+    background: var(--color-warning, #d9822b);
+    opacity: 1;
+    font-weight: 600;
+}
+
 .sidebar-footer-actions {
     display: flex;
     align-items: center;

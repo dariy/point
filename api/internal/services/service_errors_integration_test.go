@@ -210,7 +210,7 @@ func TestServiceDBErrors2(t *testing.T) {
 	}
 
 	// AuthService errors.
-	if err := authSvc.ChangePassword(ctx, 1, "pass123", "new"); err == nil {
+	if err := authSvc.ChangePassword(ctx, 1, 0, "pass123", "new"); err == nil {
 		t.Error("ChangePassword (DB closed): expected error")
 	}
 

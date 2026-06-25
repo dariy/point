@@ -1,19 +1,18 @@
 /**
  * SettingsPage — admin configuration form.
  *
- * Fetches all settings and renders them in a grouped form.
+ * Fetches all settings and renders them in a grouped form. Plugin-specific
+ * settings (AI, Instagram, immersive, tags) live in their per-plugin drawer on
+ * /light/plugins — this page holds only the general blog/display/storage config.
  */
 
 import { Component } from "../../components/Component.js";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.js";
 import { listPosts } from "../../api/posts.js";
-import { getInstagramStatus } from "../../api/instagram.js";
 import { store } from "../../store.js";
-import {
-  escapeHtml,
-} from "../../utils/helpers.js";
+import { escapeHtml } from "../../utils/helpers.js";
 import { CHECK_SVG } from "../../utils/icons.js";
-import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
+import { renderFields, collectUpdates } from "../../components/light/settingsFields.js";
 
 const SETTING_GROUPS = [
   {
@@ -30,17 +29,10 @@ const SETTING_GROUPS = [
     title: "Display",
     keys: [
       "posts_per_page",
-      "min_tag_posts_to_show",
       "default_theme",
-      "immersive_nav_direction",
       "show_view_counts",
       "use_thumbnails",
-      "show_tag_cloud",
-      "show_immersive_excerpt",
       "exif_visibility",
-      "tags_module",
-      "tags_visibility",
-      "timeline_mode",
     ],
   },
   {
@@ -53,29 +45,7 @@ const SETTING_GROUPS = [
       "require_registration_code",
     ],
   },
-  {
-    title: "AI Integration",
-    keys: ["enable_gemini", "gemini_model", "gemini_api_key"],
-  },
-  {
-    title: "Instagram",
-    keys: ["enable_instagram", "instagram_client_id", "instagram_client_secret"],
-  },
 ];
-
-// Friendlier labels for keys whose snake_case name reads poorly.
-const LABEL_OVERRIDES = {
-  tags_module: "Show tags",
-  tags_visibility: "Tags visible to",
-};
-
-const NUMERIC_KEYS = new Set([
-  "posts_per_page",
-  "min_tag_posts_to_show",
-  "storage_quota_mb",
-  "session_ttl_days",
-  "cleanup_interval_days",
-]);
 
 export default class SettingsPage extends Component {
   constructor(container, props = {}) {
@@ -86,7 +56,6 @@ export default class SettingsPage extends Component {
       settings: {},
       posts: [],
       error: null,
-      igStatus: null,
     };
   }
 
@@ -119,201 +88,17 @@ export default class SettingsPage extends Component {
   }
 
   _renderGroup(group, settings, posts) {
-    if (group.title === "Instagram") {
-      return this._renderInstagramGroup(group, settings);
-    }
-
-    const inputs = [];
-    const toggles = [];
-
-    for (const key of group.keys) {
-      if (key === "gemini_prompt_tags" || key === "gemini_prompt_excerpt")
-        continue;
-      const value = settings[key] ?? "";
-      const label =
-        LABEL_OVERRIDES[key] ||
-        key
-          .split("_")
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(" ");
-
-      let input = "";
-      let isToggle = false;
-
-      if (key === "about_post_id" || key === "home_page_post_id") {
-        const options = posts
-          .filter((p) => p.type === "page")
-          .map((p) => {
-            const slug = escapeHtml(p.slug);
-            const title = escapeHtml(p.title || p.slug);
-            const selected = p.slug === value ? " selected" : "";
-            return `<option value="${slug}"${selected}>${title}</option>`;
-          })
-          .join("");
-        const previewLink = value
-          ? `<a href="/posts/${escapeHtml(String(value))}" target="_blank" class="settings-preview-link">Preview ↗</a>`
-          : "";
-        input = `<div class="settings-input-with-preview">
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="">— None —</option>
-            ${options}
-          </select>
-          ${previewLink}
-        </div>`;
-      } else if (key === "default_theme") {
-        input = `
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="light"${value === "light" ? " selected" : ""}>Light</option>
-            <option value="dark"${value === "dark" ? " selected" : ""}>Dark</option>
-            <option value="auto"${value === "auto" ? " selected" : ""}>Auto (System)</option>
-          </select>`;
-      } else if (key === "immersive_nav_direction") {
-        const isFeed = value === "feed";
-        input = `
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="chronological"${!isFeed ? " selected" : ""}>Chronological (◁ older, ▷ newer)</option>
-            <option value="feed"${isFeed ? " selected" : ""}>Feed order (◁ newer, ▷ older)</option>
-          </select>`;
-      } else if (key === "exif_visibility") {
-        const v = value || "hide";
-        input = `
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="hide"${v === "hide" ? " selected" : ""}>Hide</option>
-            <option value="admin"${v === "admin" ? " selected" : ""}>Admins only</option>
-            <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
-          </select>`;
-      } else if (key === "timeline_mode") {
-        const v = value || "off";
-        input = `
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="off"${v === "off" ? " selected" : ""}>Off</option>
-            <option value="hidden"${v === "hidden" ? " selected" : ""}>Hidden (Admins only)</option>
-            <option value="all"${v === "all" ? " selected" : ""}>All (Everyone)</option>
-          </select>`;
-      } else if (key === "tags_module") {
-        // Single selector for the /tags page module. "None" hides the /tags
-        // entry entirely and redirects /tags → home.
-        const v = value || "atlas";
-        input = `
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="none"${v === "none" ? " selected" : ""}>None (hidden)</option>
-            <option value="cloud"${v === "cloud" ? " selected" : ""}>Tag cloud</option>
-            <option value="map"${v === "map" ? " selected" : ""}>Map</option>
-            <option value="atlas"${v === "atlas" ? " selected" : ""}>Atlas</option>
-          </select>`;
-      } else if (key === "tags_visibility") {
-        const v = value || "hidden";
-        input = `
-          <select name="${key}" id="${key}" class="form-select">
-            <option value="hidden"${v === "hidden" ? " selected" : ""}>Admins only</option>
-            <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
-          </select>`;
-      } else if (
-        NUMERIC_KEYS.has(key) ||
-        key.includes("per_page") ||
-        key.includes("quota") ||
-        key.includes("interval") ||
-        key.includes("posts_to_show")
-      ) {
-        input = `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
-      } else if (
-        key.includes("enable") ||
-        key.includes("show") ||
-        key.includes("use") ||
-        key === "multi_user_mode" ||
-        key === "require_registration_code"
-      ) {
-        isToggle = true;
-        const checked =
-          value === "true" || value === "1" || value === true || value === 1;
-        input = `
-          <label class="setting-pill">
-            <input type="checkbox" name="${key}" id="${key}" class="setting-pill-input" ${checked ? "checked" : ""}>
-            <span class="setting-pill-label">${label}</span>
-          </label>`;
-      } else if (key === "gemini_api_key" || key === "instagram_client_secret") {
-        input = `<input type="password" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}" autocomplete="new-password">`;
-      } else {
-        input = `<input type="text" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
-      }
-
-      if (isToggle) {
-        toggles.push(input);
-      } else {
-        inputs.push(`
-          <div class="form-group">
-            <label class="form-label" for="${key}">${label}</label>
-            ${input}
-          </div>`);
-      }
-    }
-
-    const toggleSection = toggles.length
-      ? `<div class="settings-toggles">${toggles.join("")}</div>`
+    const { inputs, toggles } = renderFields(group.keys, settings, { posts });
+    const toggleSection = toggles
+      ? `<div class="settings-toggles">${toggles}</div>`
       : "";
 
     return `
       <section class="settings-group" id="group-${group.title.toLowerCase().replace(/\s+/g, "-")}">
         <h2 class="settings-group-title">${group.title}</h2>
         <div class="settings-group-body">
-          ${inputs.join("")}
+          ${inputs}
           ${toggleSection}
-        </div>
-      </section>`;
-  }
-
-  _renderInstagramGroup(group, settings) {
-    const { igStatus } = this.state;
-    const isEnabled =
-      settings.enable_instagram === "true" || settings.enable_instagram === "1" || settings.enable_instagram === true || settings.enable_instagram === 1;
-
-    const fields = group.keys
-      .map((key) => {
-        const value = settings[key] ?? "";
-        const label = key
-          .split("_")
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(" ");
-
-        if (key === "enable_instagram") {
-          return `
-          <label class="setting-pill">
-            <input type="checkbox" name="${key}" id="${key}" class="setting-pill-input" ${isEnabled ? "checked" : ""}>
-            <span class="setting-pill-label">${label}</span>
-          </label>`;
-        }
-        return `
-        <div class="form-group">
-          <label class="form-label" for="${key}">${label}</label>
-          <input type="${key.includes("secret") ? "password" : "text"}" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">
-        </div>`;
-      })
-      .join("");
-
-    let connectionSection = "";
-    if (isEnabled && igStatus) {
-      if (igStatus.connected) {
-        connectionSection = `
-          <div class="ig-connection-status connected">
-            <p>Connected as <strong>@${escapeHtml(igStatus.username)}</strong></p>
-            <button type="button" class="btn btn-sm btn-danger" id="ig-disconnect-btn">Disconnect Instagram</button>
-          </div>`;
-      } else {
-        const authUrl = `/api/instagram/auth?state=${encodeURIComponent(location.origin + "/light/settings")}`;
-        connectionSection = `
-          <div class="ig-connection-status disconnected">
-            <p>Instagram is enabled but not connected.</p>
-            <a href="${authUrl}" class="btn btn-sm btn-primary">Connect Instagram</a>
-          </div>`;
-      }
-    }
-
-    return `
-      <section class="settings-group" id="instagram">
-        <h2 class="settings-group-title">Instagram</h2>
-        <div class="settings-group-body">
-          ${fields}
-          ${connectionSection}
         </div>
       </section>`;
   }
@@ -329,21 +114,6 @@ export default class SettingsPage extends Component {
     form?.addEventListener("submit", (e) => {
       e.preventDefault();
       this._save();
-    });
-
-    this.container.querySelector("#ig-disconnect-btn")?.addEventListener("click", async () => {
-      this._showConfirm("Disconnect Instagram", "Disconnect Instagram? You will need to re-authenticate to post to Instagram.", "Disconnect", "danger", async () => {
-        try {
-          const { disconnectInstagram } = await import('../../api/instagram.js');
-          await disconnectInstagram();
-          this._load(); // Refresh settings and status
-        } catch (err) {
-          store.set("toast", {
-            message: err.message || "Failed to disconnect.",
-            type: "error",
-          });
-        }
-      });
     });
 
     // Auto-scroll to group if hash is present
@@ -367,16 +137,14 @@ export default class SettingsPage extends Component {
   async _load() {
     try {
       const { getAllSettings } = await import('../../api/settings.js');
-      const [settings, postsResp, igStatus] = await Promise.all([
+      const [settings, postsResp] = await Promise.all([
         getAllSettings(),
         listPosts({ type: "page", per_page: 500 }),
-        getInstagramStatus().catch(() => null),
       ]);
       this.setState({
         loading: false,
         settings,
         posts: postsResp.posts || [],
-        igStatus,
       });
     } catch (err) {
       console.error("[SettingsPage] load error:", err);
@@ -389,26 +157,8 @@ export default class SettingsPage extends Component {
     if (!form) return;
 
     this.setState({ saving: true });
-    const fd = new FormData(form);
-    const updates = {};
-
-    // Standard FormData doesn't include unchecked checkboxes.
-    // We must manually add all checkbox keys from our schema.
-    for (const group of SETTING_GROUPS) {
-      for (const key of group.keys) {
-        if (
-          key.includes("enable") ||
-          key.includes("show") ||
-          key.includes("use") ||
-          key === "multi_user_mode" ||
-          key === "require_registration_code"
-        ) {
-          updates[key] = fd.has(key) ? "true" : "false";
-        } else if (fd.has(key)) {
-          updates[key] = fd.get(key);
-        }
-      }
-    }
+    const keys = SETTING_GROUPS.flatMap((g) => g.keys);
+    const updates = collectUpdates(form, keys);
 
     try {
       const { updateSettings } = await import('../../api/settings.js');
@@ -418,7 +168,7 @@ export default class SettingsPage extends Component {
       const currentSettings = store.get("settings") || {};
       const { normalizeSettings } = await import('../../utils/helpers.js');
       store.set("settings", { ...currentSettings, ...normalizeSettings(updates) });
-      this.setState({ saving: false, settings: updates });
+      this.setState({ saving: false, settings: { ...this.state.settings, ...updates } });
     } catch (err) {
       console.error("[SettingsPage] save error:", err);
       store.set("toast", {
@@ -427,19 +177,5 @@ export default class SettingsPage extends Component {
       });
       this.setState({ saving: false });
     }
-  }
-
-  _showConfirm(title, message, confirmText, variant, onConfirm) {
-    const mount = document.createElement('div');
-    document.body.appendChild(mount);
-    const dialog = new ConfirmDialog(mount, {
-      title,
-      message,
-      confirmText,
-      variant,
-      onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
-      onCancel:  () => { dialog.unmount(); mount.remove(); },
-    });
-    dialog.mount();
   }
 }

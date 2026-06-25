@@ -79,6 +79,7 @@ type Post struct {
 	UpdatedAt            time.Time      `json:"updated_at"`
 	AuthorID             int64          `json:"author_id"`
 	ThumbnailPath        sql.NullString `json:"thumbnail_path"`
+	MediaURL             sql.NullString `json:"media_url"`
 	MetaDescription      sql.NullString `json:"meta_description"`
 	PreviewToken         sql.NullString `json:"preview_token"`
 	PreviewExpiresAt     sql.NullTime   `json:"preview_expires_at"`

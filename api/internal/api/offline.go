@@ -58,10 +58,11 @@ func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
 
 	// 1. All published posts and pages
 	allPosts, err := h.repo.ListPosts(ctx, models.ListPostsParams{
-		Limit:         10000,
-		Offset:        0,
-		IncludeHidden: true, // Includes 'published' and 'hidden'
-		IncludeDrafts: false,
+		Limit:          10000,
+		Offset:         0,
+		IncludeHidden:  true, // Includes 'published' and 'hidden'
+		IncludeDrafts:  false,
+		IncludeContent: true, // Offline reading needs the full body, not just media_url
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

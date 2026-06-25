@@ -7,7 +7,7 @@
  *  3. Offline API and Image serving.
  */
 
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v8";
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 // Assets to cache on install (SPA shell).
@@ -192,10 +192,22 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname === "/sw.js" || url.pathname === "/manifest.webmanifest")
     return;
 
-  // 5b. theme.css changes at runtime when user activates a theme; always fetch from network.
+  // 5b. theme.css changes at runtime when user activates a theme; always fetch
+  // from network. Every branch must resolve to a real Response — a bare
+  // caches.match() can resolve to undefined (cache miss), and respondWith(undefined)
+  // throws "Failed to convert value to 'Response'".
   if (url.pathname === "/assets/css/common/theme.css") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/assets/css/common/theme.css")),
+      fetch(request)
+        .catch(() => caches.match("/assets/css/common/theme.css"))
+        .then(
+          (r) =>
+            r ||
+            new Response("", {
+              status: 200,
+              headers: { "Content-Type": "text/css" },
+            }),
+        ),
     );
     return;
   }
@@ -213,21 +225,27 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 6. Navigation requests (HTML): cache-first (SPA shell).
+  // 6. Navigation requests (HTML): network-first (SPA shell).
+  //
+  // The shell is NOT a static asset: the server injects a per-build, enabled-only
+  // plugin manifest (window.__PLUGINS__) carrying content-hashed chunk URLs, and a
+  // matching per-request CSP script-src hash. A cache-first shell goes stale after
+  // any rebuild — it references chunk filenames that now 404 (so slots like the
+  // immersive post-viewer never mount) and can pair an old inline manifest with a
+  // CSP that no longer allows it. So we always prefer the network and fall back to
+  // the cached shell only when offline.
   if (request.mode === "navigate") {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        // For SPA, any navigation request that doesn't match a specific file
-        // should serve the root '/'.
-        const cached = await cache.match("/");
-        if (cached) return cached;
-
         try {
           const response = await fetch(request);
           if (response.status === 200)
             cache.put("/", response.clone()).catch(() => {});
           return response;
         } catch {
+          // Offline: any navigation falls back to the cached SPA shell.
+          const cached = await cache.match("/");
+          if (cached) return cached;
           return new Response(
             '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>' +
               '<body style="font-family:sans-serif;padding:2rem">' +
