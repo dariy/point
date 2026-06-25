@@ -11,11 +11,34 @@
  * on screen, callers re-measure it for an exact column/row count.
  */
 
+import { pluginHost } from '../core/pluginHost.js';
+
 const MAX_PER_PAGE = 60;
 // Mobile and tablet viewports (iPad landscape is 1024px) get a fixed page size;
 // only wider desktop layouts fan out into enough columns to be worth measuring.
 const TABLET_MAX_WIDTH = 1024;
+// Pagination + footer sit below the grid; if cards fill the whole viewport they
+// get shoved off-screen. Reserve their band so the last row leaves them visible.
+// The footer is a plugin slot and can be disabled, so only reserve it when the
+// slot is active; the fallback covers the window before it's laid out (its
+// fill() is async). ponytail: real heights win once measured.
+const FOOTER_FALLBACK = 96;
 let _cache = 0;
+
+// Height of the pagination + footer band that must stay visible under the grid.
+function belowGridReserve(gridEl) {
+  const doc = (gridEl && gridEl.ownerDocument) || document;
+  const measure = (sel) => {
+    const el = doc.querySelector(sel);
+    return el ? el.getBoundingClientRect().height : 0;
+  };
+  // Pagination is mounted synchronously (only when pages > 1), so its measured
+  // height is reliable here. Footer is an async plugin slot — fall back until laid out.
+  const footer = pluginHost.hasSlot('footer')
+    ? Math.max(FOOTER_FALLBACK, measure('#footer-mount'))
+    : 0;
+  return measure('#pagination-mount') + footer;
+}
 
 /**
  * Resolve a CSS length expression (possibly nested var(), rem, calc, …) to
@@ -64,20 +87,25 @@ export function computePerPage(minPerPage, gridEl = null) {
   let rowH;
   let gap;
   let top;
+  let reserve = pluginHost.hasSlot('footer') ? FOOTER_FALLBACK : 0;
 
   if (gridEl && gridEl.isConnected) {
     const cs = window.getComputedStyle(gridEl);
     cols = cs.gridTemplateColumns.split(/\s+/).filter(Boolean).length || 1;
     gap = parseFloat(cs.rowGap) || parseFloat(cs.gap) || 0;
-    // A real card is the most faithful row height; the featured card spans a
-    // full row and is taller, so prefer a regular one. Fall back to the token.
-    const card =
-      gridEl.querySelector('.post-card-slot:not(.featured-post) .post-card') ||
-      gridEl.querySelector('.post-card');
-    rowH = card
-      ? card.getBoundingClientRect().height
-      : tokenPx('var(--post-cardhas-image-min-height)', gridEl);
+    // Row height = the tallest regular (non-featured) slot. The grid stretches
+    // every card in a row to the tallest, so a single short text card would
+    // under-measure the row and over-request posts (footer off-screen); the
+    // featured hero spans a full row and is ~2x taller, so it would do the
+    // opposite. Taking the max of the regular slots is stable regardless of how
+    // many posts are currently rendered or where the hero sits — no feedback
+    // loop. Falls back to the token when only the hero is present.
+    const slots = [...gridEl.querySelectorAll('.post-card-slot:not(.featured-post)')];
+    rowH =
+      slots.reduce((m, s) => Math.max(m, s.getBoundingClientRect().height), 0) ||
+      tokenPx('var(--post-cardhas-image-min-height)', gridEl);
     top = gridEl.getBoundingClientRect().top;
+    reserve = belowGridReserve(gridEl);
   } else {
     const colW = tokenPx('var(--posts-grid-grid-template-columns)');
     const maxW = tokenPx('var(--content-max-width)');
@@ -96,9 +124,14 @@ export function computePerPage(minPerPage, gridEl = null) {
     return floor;
   }
 
-  const avail = Math.max(rowH, window.innerHeight - top);
-  const rows = Math.max(1, Math.round((avail + gap) / (rowH + gap)));
-  const value = Math.min(MAX_PER_PAGE, Math.max(floor, cols * rows));
+  const avail = Math.max(rowH, window.innerHeight - top - reserve);
+  // Floor (not round): a partial row would spill over the reserved footer band.
+  const rows = Math.max(1, Math.floor((avail + gap) / (rowH + gap)));
+  // Fit the viewport exactly so pagination + footer stay on-screen. We do NOT
+  // floor at posts_per_page here: on narrow desktop widths (few columns) the
+  // setting can exceed what fits and would push the footer off-screen. The
+  // `floor` is only the fallback when geometry is unmeasurable (above).
+  const value = Math.min(MAX_PER_PAGE, cols * rows);
   _cache = value;
   return value;
 }
