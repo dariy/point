@@ -28,6 +28,7 @@ frontend/js-debug/
 frontend/css/main.css
 frontend/css/light.css
 frontend/css/common/theme.css
+frontend/css/p/
 
 # bv (beads viewer) local config and caches
 .bv/
