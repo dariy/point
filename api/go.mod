@@ -20,7 +20,7 @@ require (
 	golang.org/x/crypto v0.53.0
 	golang.org/x/term v0.44.0
 	golang.org/x/time v0.15.0
-	google.golang.org/api v0.285.0
+	google.golang.org/api v0.286.0
 	google.golang.org/genai v1.62.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.52.0
