@@ -11,6 +11,7 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .light-sidebar.is-collapsed {
@@ -365,6 +366,7 @@ body {
 /* Posts list: fixed-viewport layout — table scrolls, pagination stays visible */
 .posts-list-main {
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
 }
 
