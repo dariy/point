@@ -57,6 +57,30 @@ func newTestScheduler(store *settingsStore, igHandler http.Handler) *SchedulerSe
 	}
 }
 
+func TestScheduler_settingInt(t *testing.T) {
+	repo := &mockRepository{
+		MockGetSetting: func(_ context.Context, key string) (models.BlogSetting, error) {
+			vals := map[string]string{"good": "5", "bad": "notanumber"}
+			if v, ok := vals[key]; ok {
+				return models.BlogSetting{Key: key, Value: sql.NullString{String: v, Valid: true}}, nil
+			}
+			return models.BlogSetting{}, nil // unset → empty value
+		},
+	}
+	s := &SchedulerService{settingsService: NewSettingsService(repo)}
+	ctx := context.Background()
+
+	if got := s.settingInt(ctx, "good", 7); got != 5 {
+		t.Errorf("valid setting: got %d, want 5", got)
+	}
+	if got := s.settingInt(ctx, "bad", 7); got != 7 {
+		t.Errorf("unparseable setting: got %d, want default 7", got)
+	}
+	if got := s.settingInt(ctx, "missing", 7); got != 7 {
+		t.Errorf("unset setting: got %d, want default 7", got)
+	}
+}
+
 func TestScheduler_RefreshInstagramToken_NotConnected(t *testing.T) {
 	store := newSettingsStore(map[string]string{}) // no token_expires_at
 	sched := newTestScheduler(store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

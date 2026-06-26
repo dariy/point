@@ -36,6 +36,12 @@ func countBackups(t *testing.T, dataPath string) int {
 func TestRotateBackups(t *testing.T) {
 	dp := t.TempDir()
 	s := NewSystemService(nil, dp)
+
+	// No backups dir yet → nothing to do.
+	if n, err := s.RotateBackups(3); err != nil || n != 0 {
+		t.Fatalf("missing dir: got (%d,%v), want (0,nil)", n, err)
+	}
+
 	now := time.Now()
 	for i := 0; i < 5; i++ {
 		writeBackup(t, dp, fmt.Sprintf("backup_%d.tar.gz", i), now.Add(-time.Duration(i)*time.Hour))
