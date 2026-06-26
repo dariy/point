@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -75,6 +76,90 @@ func (s *SystemService) CreateBackup(ctx context.Context) (string, int64, error)
 	}
 
 	return backupName, info.Size(), nil
+}
+
+// RotateBackups keeps only the `keep` most recent .tar.gz backups, deleting the
+// older ones so the backups directory can't grow without bound. keep <= 0
+// disables rotation (keep everything). Returns how many files were deleted.
+func (s *SystemService) RotateBackups(keep int) (int, error) {
+	if keep <= 0 {
+		return 0, nil
+	}
+	backupDir := filepath.Join(s.dataPath, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	type backupFile struct {
+		name string
+		mod  time.Time
+	}
+	var files []backupFile
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, backupFile{e.Name(), info.ModTime()})
+	}
+	if len(files) <= keep {
+		return 0, nil
+	}
+	// Newest first; everything past `keep` is stale.
+	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
+	deleted := 0
+	for _, f := range files[keep:] {
+		if err := os.Remove(filepath.Join(backupDir, f.name)); err == nil {
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
+// lastBackupTime returns the modtime of the most recent .tar.gz backup, or the
+// zero time when there are none.
+func (s *SystemService) lastBackupTime() time.Time {
+	backupDir := filepath.Join(s.dataPath, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return time.Time{}
+	}
+	var newest time.Time
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(newest) {
+			newest = info.ModTime()
+		}
+	}
+	return newest
+}
+
+// BackupDue reports whether a scheduled backup should run now given the
+// configured cadence in days. Daily (intervalDays <= 1) is always due. A 12h
+// slack absorbs the fixed daily run time so an "every N days" cadence doesn't
+// drift to N+1. ponytail: "monthly" is modelled as 30 days, not calendar months.
+func (s *SystemService) BackupDue(intervalDays int) bool {
+	if intervalDays <= 1 {
+		return true
+	}
+	last := s.lastBackupTime()
+	if last.IsZero() {
+		return true
+	}
+	threshold := time.Duration(intervalDays)*24*time.Hour - 12*time.Hour
+	return time.Since(last) >= threshold
 }
 
 // largestBackupSize returns the size in bytes of the largest .tar.gz in backupDir, or 0 if there are none.

@@ -8,18 +8,17 @@
  */
 
 import { Component } from '../../components/Component.js';
-import { PublicHeader } from '../../components/public/PublicHeader.js';
-import { PublicFooter } from '../../components/public/PublicFooter.js';
+
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { PostCard } from '../../components/public/PostCard.js';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.js';
-import { ExploreBlock } from '../../components/public/ExploreBlock.js';
-import { Timeline } from '../../components/public/Timeline.js';
+
 import { Pagination } from '../../components/shared/Pagination.js';
 import { getHomePage } from '../../api/pages.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { store } from '../../store.js';
 import { escapeHtml, normalizeSettings } from '../../utils/helpers.js';
-import { GestureController, TrackpadDetector, rubberBand } from '../../utils/gestures.js';
+import { GestureController, TrackpadDetector, rubberBand } from '../../core/gestures.js';
 import { ViewContext } from '../../utils/viewContext.js';
 import { computePerPage, cachedPerPage } from '../../utils/gridFit.js';
 
@@ -90,6 +89,9 @@ export default class HomePage extends Component {
     await fadeOut;
     if (this._unmounted) return;
     if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
+    // tag_cloud is page-independent and only sent on page 1; cache it so it
+    // persists across pagination, swipes, and direct loads of later pages.
+    if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
     this.state.data = data;
     this.state.error = null;
     this._loadedVc = vc;
@@ -195,6 +197,7 @@ export default class HomePage extends Component {
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
+            ${isStaticHomePage ? '' : '<div id="pagination-mount"></div>'}
           </div>
         </main>
         <div id="footer-mount"></div>
@@ -211,28 +214,37 @@ export default class HomePage extends Component {
     if (immersive) {
       document.body.classList.add('immersive-layout');
     } else {
-      document.body.classList.remove('immersive-layout', 'ui-hidden');
+      document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
     }
 
-    this._gesture?.destroy();
-    this._trackpad?.destroy();
+    this._teardownGestures();
     const navTags = store.get('navTags') || [];
 
     // In immersive mode suppress the tag filter bar (post tags go in the footer instead),
     // but keep the custom menu visible since it contains explicit navigation links.
     const isCustomMenu = settings.nav_menu_mode === 'custom';
     const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
-    this.mountChild(PublicHeader, '#header-mount', {
+    pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       currentPath: '/',
       navTags: (immersive && !isCustomMenu) ? [] : navTags,
       editUrl: (isStaticHomePage && post) ? `/light/posts/${post.id}/edit` : null,
       total,
       timelineVisible: this._canShowTimeline,
+    }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._headerChild = comps[0];
+        this._children.push(comps[0]);
+      }
     });
 
     const immersiveTags = (isStaticHomePage && immersive) ? (post.tags || []) : [];
-    this.mountChild(PublicFooter, '#footer-mount', { settings, immersiveTags });
+    pluginHost.fill('footer', this.$('#footer-mount'), { settings, immersiveTags }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._footerChild = comps[0];
+        this._children.push(comps[0]);
+      }
+    });
 
     if (this.state.loading || !this.state.data) return;
 
@@ -252,19 +264,25 @@ export default class HomePage extends Component {
       return;
     }
 
-    const tagCloud = this.state.data.tag_cloud || [];
-    if (!!settings.show_tag_cloud && tagCloud.length) {
-      this.mountChild(ExploreBlock, '#tag-cloud-mount', { tags: tagCloud });
-    }
+    // home-explore slot (tag cloud).
+    const tagCloud = this.state.data.tag_cloud || store.get('tagCloud') || [];
+    pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
 
-    this._canShowTimeline = settings.timeline_mode === 'all' || (store.get('user') && settings.timeline_mode === 'hidden');
+    // timeline slot.
+    this._canShowTimeline = pluginHost.hasSlot('timeline');
     if (this._canShowTimeline) {
       const vc = ViewContext.current();
-      this._timeline = this.mountChild(Timeline, '#timeline-mount', {
+      pluginHost.fill('timeline', this.$('#timeline-mount'), {
         mode: 'filter',
+        canShow: this._canShowTimeline,
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
         onRangeChange: (range) => this._onTimelineRangeChange(range),
         total,
+      }).then(comps => {
+        if (comps[0] && !this._unmounted) {
+          this._timeline = comps[0];
+          this._children.push(comps[0]);
+        }
       });
     }
 
@@ -287,6 +305,7 @@ export default class HomePage extends Component {
       gridMount.style.transform = '';
       gridMount.style.opacity = '';
       gridMount.style.transition = '';
+      gridMount.classList.remove('grid-swiping');
     }
 
     this._postChildren.push(
@@ -310,6 +329,7 @@ export default class HomePage extends Component {
 
     this._setupGestures(pagination);
     this._preloadAdjacentGrids(pagination);
+    this._promoteGridAhead();
 
     // After the real grid has laid out, fit per_page to the viewport.
     requestAnimationFrame(() => this._reconcilePerPage());
@@ -322,9 +342,19 @@ export default class HomePage extends Component {
       if (i !== -1) this._children.splice(i, 1);
     }
     this._postChildren = [];
+    this._teardownGestures();
+    this._clearPageGhosts();
+  }
+
+  /** Tear down the swipe gesture controllers and the touch-down layer hooks. */
+  _teardownGestures() {
     this._gesture?.destroy();
     this._trackpad?.destroy();
-    this._clearPageGhosts();
+    if (this._gestureEl) {
+      this._gestureEl.removeEventListener('touchstart', this._onTouchPromote);
+      this._gestureEl = null;
+    }
+    this._stride = null;
   }
 
   _setupGestures(pagination) {
@@ -336,6 +366,9 @@ export default class HomePage extends Component {
     const atStart = () => pagination.page <= 1;
 
     this._gesture = new GestureController(this.$('.site-main'), {
+      // Engage the drag a touch sooner than the immersive default so the grid
+      // starts tracking the finger promptly instead of feeling laggy.
+      commitThresholdPx: 8,
       onSwipeMove: (dx, dy) => {
         if (Math.abs(dx) <= Math.abs(dy)) return;
         const dir = dx < 0 ? 'next' : 'prev';
@@ -358,7 +391,15 @@ export default class HomePage extends Component {
 
         this._clearOtherPeek(dir);
         if (ghost) {
-          const offset = dir === 'next' ? vw() : -vw();
+          // One symmetric stride (grid width + the inter-column gap) drives the
+          // neighbour in from either edge, so the gap between the outgoing and
+          // incoming grids is identical in both directions. (Previously the
+          // ghost was viewport-wide while the grid was inset by the container
+          // padding, so a "prev" drag landed the ghost flush with no gap.)
+          // Use the value cached at touch-down — never measure layout here, or
+          // the per-frame offsetWidth read thrashes against the transform write.
+          const stride = this._cachedStride();
+          const offset = dir === 'next' ? stride : -stride;
           ghost.style.transition = 'none';
           ghost.style.transform = `translateX(${offset + tx}px)`;
           ghost.style.opacity = String(Math.min(1, ratio));
@@ -368,6 +409,8 @@ export default class HomePage extends Component {
       },
       onSwipeCancel: () => this._resetGridSwipe(),
       onSwipeCommit: (dir) => {
+        // Only horizontal swipes paginate; a vertical swipe is a page scroll.
+        if (dir !== 'left' && dir !== 'right') return;
         const d = dir === 'left' ? 'next' : 'prev';
         if ((d === 'next' && atEnd()) || (d === 'prev' && atStart())) {
           this._resetGridSwipe();
@@ -386,6 +429,34 @@ export default class HomePage extends Component {
         }
       },
     });
+
+    // The grid's compositor layer is created ahead of time by _promoteGridAhead
+    // (during idle, after render), so the costly one-off rasterization of the
+    // image-heavy grid is already done before a finger ever lands. Promoting it
+    // lazily — even on touchstart — left the first few drag frames blocked on
+    // that raster, so the grid ignored the finger and then snapped to it.
+    // Touchstart now only caches the slide stride so onSwipeMove never measures
+    // layout mid-drag.
+    const siteMain = this.$('.site-main');
+    this._onTouchPromote = () => {
+      this._stride = this._swipeStride();
+    };
+    siteMain.addEventListener('touchstart', this._onTouchPromote, { passive: true });
+    this._gestureEl = siteMain;
+  }
+
+  /**
+   * Promote #grid-mount to its own compositor layer ahead of any interaction,
+   * during idle time after the grid has rendered. Creating the layer (and its
+   * one-off rasterization of the image-heavy grid) up front means the first
+   * drag frame is just a cheap GPU transform — there's no raster stall at
+   * touch-down that makes the grid lag behind the finger. translateZ(0) (via
+   * the class) forces the raster now rather than merely hinting at it.
+   */
+  _promoteGridAhead() {
+    const promote = () => this.$('#grid-mount')?.classList.add('grid-promoted');
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(promote);
+    else requestAnimationFrame(promote);
   }
 
   // ── Adjacent-page preloading + swipe peek ──────────────────────────────────
@@ -393,6 +464,35 @@ export default class HomePage extends Component {
   /** The preloaded ghost grid element for a drag direction, if ready. */
   _pageGhost(dir) {
     return this._pageGhosts?.[dir]?.el || null;
+  }
+
+  /**
+   * The off-screen slide distance for a page swipe: the live grid's width plus
+   * the inter-column gap. Driving every neighbour position (rest, drag, reset,
+   * commit) from this single value keeps the gap between the outgoing and
+   * incoming grids symmetric in both directions and independent of the viewport
+   * width vs. the padded container width.
+   */
+  _swipeStride() {
+    const gm = this.$('#grid-mount');
+    const w = gm?.offsetWidth || window.innerWidth || 500;
+    const grid = gm?.querySelector('.posts-grid');
+    let gap = 0;
+    if (grid) {
+      const cg = parseFloat(window.getComputedStyle(grid).columnGap);
+      if (!Number.isNaN(cg)) gap = cg;
+    }
+    return w + gap;
+  }
+
+  /**
+   * The slide stride cached at touch-down (see _setupGestures). The stride is
+   * constant for the duration of a drag, so reading it from the cache avoids a
+   * layout-forcing measurement on every touchmove frame; fall back to a fresh
+   * measure if a code path runs without a preceding touchstart.
+   */
+  _cachedStride() {
+    return this._stride || (this._stride = this._swipeStride());
   }
 
   /**
@@ -422,12 +522,48 @@ export default class HomePage extends Component {
       el.className = 'grid-preview-placeholder';
       el.dataset.edge = dir;
       el.innerHTML = this._buildGridHtml(data.posts || []);
-      el.style.transform = `translateX(${dir === 'next' ? '100%' : '-100%'})`;
-      el.style.opacity = '0';
       container.appendChild(el);
+      // Warm the neighbour cards' media now, while the ghost is parked
+      // off-screen. The cards paint media as CSS background-image, which the
+      // browser won't fetch or decode until the element is actually painted —
+      // so without this the first drag frame (when the ghost fades in) pays the
+      // whole grid's fetch+decode+paint cost at once, which is the start-of-drag
+      // hitch. Decoding ahead of time lets that first frame just composite an
+      // already-rasterized layer.
+      this._warmGridMedia(data.posts || []);
+      // Rest off-screen at one full stride so the first drag frame doesn't jump.
+      const stride = this._swipeStride();
+      el.style.transform = `translateX(${dir === 'next' ? stride : -stride}px)`;
+      el.style.opacity = '0';
       this._pageGhosts[dir] = { page, el };
     };
     await Promise.all([build('prev'), build('next')]);
+  }
+
+  /**
+   * Pre-fetch and pre-decode the neighbour cards' background-image media so the
+   * first frame of a swipe composites an already-rasterized ghost instead of
+   * triggering a grid-wide fetch+decode+paint burst. Videos paint via <video>
+   * (not background-image) and are skipped here. Runs at idle so it never
+   * competes with the live grid's own first paint.
+   */
+  _warmGridMedia(posts) {
+    const VIDEO_RE = /\.(?:mp4|webm|mov|ogv|m4v|avi|mkv)$/i;
+    const urls = posts
+      .map((p) => p && p.media_url)
+      .filter((u) => u && !VIDEO_RE.test(u));
+    if (!urls.length) return;
+    const warm = () => {
+      for (const url of urls) {
+        if (this._warmedMedia?.has(url)) continue;
+        (this._warmedMedia ||= new Set()).add(url);
+        const im = new Image();
+        im.src = url;
+        im.decode?.().catch(() => {});
+      }
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(warm);
+    else setTimeout(warm, 0);
   }
 
   /** Build static grid markup (real cards, no listeners) for a ghost preview. */
@@ -465,8 +601,9 @@ export default class HomePage extends Component {
   _clearOtherPeek(dir) {
     const g = this._peekGhost;
     if (g && g.dataset.edge !== dir) {
+      const stride = this._cachedStride();
       g.style.transition = 'none';
-      g.style.transform = `translateX(${g.dataset.edge === 'next' ? '100%' : '-100%'})`;
+      g.style.transform = `translateX(${g.dataset.edge === 'next' ? stride : -stride}px)`;
       g.style.opacity = '0';
       this._peekGhost = null;
     }
@@ -479,12 +616,13 @@ export default class HomePage extends Component {
       gridMount.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
       gridMount.style.transform = '';
       gridMount.style.opacity = '1';
+      gridMount.classList.remove('grid-swiping');
     }
     const g = this._peekGhost;
     if (g) {
-      const w = window.innerWidth || 500;
+      const stride = this._cachedStride();
       g.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-      g.style.transform = `translateX(${g.dataset.edge === 'next' ? w : -w}px)`;
+      g.style.transform = `translateX(${g.dataset.edge === 'next' ? stride : -stride}px)`;
       g.style.opacity = '0';
       this._peekGhost = null;
     }
@@ -509,12 +647,12 @@ export default class HomePage extends Component {
     }
 
     const gridMount = this.$('#grid-mount');
-    const w = window.innerWidth || 500;
+    const stride = this._cachedStride();
     const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
 
     if (gridMount) {
       gridMount.style.transition = T;
-      gridMount.style.transform = `translateX(${dir === 'next' ? -w : w}px)`;
+      gridMount.style.transform = `translateX(${dir === 'next' ? -stride : stride}px)`;
       gridMount.style.opacity = '0';
     }
     ghost.style.transition = T;
@@ -546,8 +684,7 @@ export default class HomePage extends Component {
   }
 
   beforeUnmount() {
-    this._gesture?.destroy();
-    this._trackpad?.destroy();
+    this._teardownGestures();
     this._clearPageGhosts();
     this._committedGhost?.remove();
     this._committedGhost = null;
@@ -573,6 +710,9 @@ export default class HomePage extends Component {
       const data = await getHomePage(this._buildParams(vc));
       // Merge settings from page response into store.
       if (data.settings) store.set('settings', { ...store.get('settings'), ...normalizeSettings(data.settings) });
+      // tag_cloud is page-independent and only sent on page 1; cache it so it
+      // persists across pagination, swipes, and direct loads of later pages.
+      if (data.tag_cloud) store.set('tagCloud', data.tag_cloud);
 
       // Check for hash to set initial slide index (e.g. #2 -> index 1)
       let startIndex = 0;

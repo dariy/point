@@ -36,7 +36,7 @@ func TestResolveJSDir_BundlePreferredOverSrc(t *testing.T) {
 	root := t.TempDir()
 	dirs := mkdirs(t, root, "js", "src")
 
-	got := resolveJSDir(root)
+	got := resolveJSDir(root, false)
 	if got != dirs["js"] {
 		t.Errorf("expected js/ bundle dir %q, got %q", dirs["js"], got)
 	}
@@ -46,7 +46,7 @@ func TestResolveJSDir_FallsBackToSrc(t *testing.T) {
 	root := t.TempDir()
 	dirs := mkdirs(t, root, "src")
 
-	got := resolveJSDir(root)
+	got := resolveJSDir(root, false)
 	if got != dirs["src"] {
 		t.Errorf("expected src/ fallback %q, got %q", dirs["src"], got)
 	}
@@ -56,7 +56,7 @@ func TestResolveJSDir_NeitherExists(t *testing.T) {
 	root := t.TempDir()
 	// no js/ or src/ created
 
-	got := resolveJSDir(root)
+	got := resolveJSDir(root, false)
 	if got != "" {
 		t.Errorf("expected empty string when neither dir exists, got %q", got)
 	}
@@ -66,16 +66,47 @@ func TestResolveJSDir_OnlyBundleExists(t *testing.T) {
 	root := t.TempDir()
 	dirs := mkdirs(t, root, "js")
 
-	got := resolveJSDir(root)
+	got := resolveJSDir(root, false)
 	if got != dirs["js"] {
 		t.Errorf("expected js/ dir %q, got %q", dirs["js"], got)
 	}
 }
 
 func TestResolveJSDir_NonexistentFrontendDir(t *testing.T) {
-	got := resolveJSDir("/tmp/does-not-exist-point-test")
+	got := resolveJSDir("/tmp/does-not-exist-point-test", false)
 	if got != "" {
 		t.Errorf("expected empty string for missing frontend dir, got %q", got)
+	}
+}
+
+func TestResolveJSDir_DebugPreferredWhenBuilt(t *testing.T) {
+	root := t.TempDir()
+	dirs := mkdirs(t, root, "js", "js-debug")
+
+	got := resolveJSDir(root, true)
+	if got != dirs["js-debug"] {
+		t.Errorf("expected js-debug/ when debug on, got %q", got)
+	}
+}
+
+func TestResolveJSDir_DebugFallsBackToReleaseWhenNotBuilt(t *testing.T) {
+	root := t.TempDir()
+	dirs := mkdirs(t, root, "js")
+	// no js-debug/ built — debug mode must fall back to the release bundle.
+
+	got := resolveJSDir(root, true)
+	if got != dirs["js"] {
+		t.Errorf("expected js/ fallback when js-debug missing, got %q", got)
+	}
+}
+
+func TestResolveJSDir_DebugOffIgnoresDebugBundle(t *testing.T) {
+	root := t.TempDir()
+	dirs := mkdirs(t, root, "js", "js-debug")
+
+	got := resolveJSDir(root, false)
+	if got != dirs["js"] {
+		t.Errorf("expected js/ when debug off even if js-debug exists, got %q", got)
 	}
 }
 

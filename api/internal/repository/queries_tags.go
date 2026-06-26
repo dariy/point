@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"point-api/internal/models"
 )
@@ -109,6 +110,68 @@ ORDER BY COUNT(*) DESC, t.name ASC`, statusClause)
 			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
 			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
 			&t.PostCount, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+// GetTopCoOccurringTagsForTagIDs returns the tags that appear most often on the
+// same posts as any tag in tagIDs (a place and its sub-tree), ranked by
+// co-occurrence count descending and capped at limit. It is the sub-tree-aware,
+// limited sibling of GetCoOccurringTags used to build the Atlas cloud's "most
+// popular related tags" without loading every membership edge. The seed tags
+// themselves, system tags (slug "_…") and empty tags are excluded; descendants of
+// the seed set (e.g. a country's cities) remain, since they co-occur on the posts.
+func (r *sqliteRepository) GetTopCoOccurringTagsForTagIDs(ctx context.Context, tagIDs []int64, rootID int64, publicOnly bool, limit int64) ([]PostTagInfo, error) {
+	if len(tagIDs) == 0 {
+		return nil, nil
+	}
+
+	statusClause := ""
+	if publicOnly {
+		statusClause = "AND p.status = 'published'"
+	}
+	seedStatusClause := ""
+	if publicOnly {
+		seedStatusClause = "AND p2.status = 'published'"
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(tagIDs)), ",")
+	args := make([]interface{}, 0, len(tagIDs)+2)
+	for _, id := range tagIDs {
+		args = append(args, id)
+	}
+	args = append(args, rootID, limit)
+
+	q := fmt.Sprintf(`
+SELECT t.id, t.name, t.slug, t.kind, t.latitude, t.longitude
+FROM tags t
+JOIN post_tags pt ON t.id = pt.tag_id
+JOIN posts p ON pt.post_id = p.id
+WHERE p.deleted_at IS NULL %s
+AND pt.post_id IN (
+    SELECT pt2.post_id FROM post_tags pt2
+    JOIN posts p2 ON pt2.post_id = p2.id
+    WHERE pt2.tag_id IN (%s) AND p2.deleted_at IS NULL %s
+)
+AND t.id != ?
+AND t.slug NOT LIKE '\_%%' ESCAPE '\'
+AND t.post_count > 0
+GROUP BY t.id
+ORDER BY COUNT(*) DESC, t.name ASC
+LIMIT ?`, statusClause, placeholders, seedStatusClause)
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var tags []PostTagInfo
+	for rows.Next() {
+		var t PostTagInfo
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Kind, &t.Latitude, &t.Longitude); err != nil {
 			return nil, err
 		}
 		tags = append(tags, t)
@@ -250,10 +313,18 @@ FROM tags WHERE lower(name) IN (` + placeholders + `)`
 }
 
 // PostTagInfo is a lightweight tag descriptor for embedding in post list responses.
+//
+// Kind / Latitude / Longitude let the frontend colour tag pills by type (the
+// same year / place / topic / plain classification the Atlas and tags graph
+// use). They are only populated by GetTagsByPostIDs; other producers leave them
+// at their zero values, which serialize as the default ("tag") colour.
 type PostTagInfo struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	ID        int64           `json:"id"`
+	Name      string          `json:"name"`
+	Slug      string          `json:"slug"`
+	Kind      string          `json:"kind"`
+	Latitude  sql.NullFloat64 `json:"-"`
+	Longitude sql.NullFloat64 `json:"-"`
 }
 
 // GetTagsByPostIDs bulk-fetches tags for a list of post IDs.
@@ -264,40 +335,51 @@ func (r *sqliteRepository) GetTagsByPostIDs(ctx context.Context, postIDs []int64
 		return result, nil
 	}
 
-	args := make([]interface{}, len(postIDs))
-	placeholders := ""
-	for i, id := range postIDs {
-		args[i] = id
-		if i > 0 {
-			placeholders += ","
+	// Chunk the IN(...) list: a single statement with one bound variable per
+	// post ID overflows SQLite's variable limit (~32766) once a site has tens of
+	// thousands of published posts, which previously made the tags/atlas graph
+	// fail with "too many SQL variables". 5000/chunk stays comfortably under it.
+	const chunk = 5000
+	for start := 0; start < len(postIDs); start += chunk {
+		end := start + chunk
+		if end > len(postIDs) {
+			end = len(postIDs)
 		}
-		placeholders += "?"
-	}
+		batch := postIDs[start:end]
 
-	q := `
-SELECT pt.post_id, t.id, t.name, t.slug
+		args := make([]interface{}, len(batch))
+		for i, id := range batch {
+			args[i] = id
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
+
+		q := `
+SELECT pt.post_id, t.id, t.name, t.slug, t.kind, t.latitude, t.longitude
 FROM post_tags pt
 JOIN tags t ON t.id = pt.tag_id
 WHERE pt.post_id IN (` + placeholders + `)
 ORDER BY t.name ASC`
 
-	rows, err := r.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	for rows.Next() {
-		var postID int64
-		var tag PostTagInfo
-		if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug); err != nil {
+		rows, err := r.db.QueryContext(ctx, q, args...)
+		if err != nil {
 			return nil, err
 		}
-		result[postID] = append(result[postID], tag)
+		for rows.Next() {
+			var postID int64
+			var tag PostTagInfo
+			if err := rows.Scan(&postID, &tag.ID, &tag.Name, &tag.Slug, &tag.Kind, &tag.Latitude, &tag.Longitude); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			result[postID] = append(result[postID], tag)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		_ = rows.Close()
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // GetChildrenOfTag returns direct children of parentID, ordered by edge sort_order ASC, name ASC.
@@ -336,27 +418,27 @@ func (r *sqliteRepository) UpdateEdgeSortOrder(ctx context.Context, parentID, ch
 
 // scanTags is a helper that executes a query and scans the result rows into []models.Tag.
 func (r *sqliteRepository) scanTags(ctx context.Context, q string, args ...interface{}) ([]models.Tag, error) {
-        rows, err := r.db.QueryContext(ctx, q, args...)
-        if err != nil {
-                return nil, err
-        }
-        defer func() {
-                _ = rows.Close()
-        }()
-        var items []models.Tag
-        for rows.Next() {
-                var t models.Tag
-                if err := rows.Scan(
-                        &t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
-                        &t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
-                        &t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
-                        &t.PostCount, &t.CreatedAt,
-                ); err != nil {
-                        return nil, err
-                }
-                items = append(items, t)
-        }
-        return items, rows.Err()
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	var items []models.Tag
+	for rows.Next() {
+		var t models.Tag
+		if err := rows.Scan(
+			&t.ID, &t.Name, &t.Slug, &t.Description, &t.Kind,
+			&t.Hidden, &t.HidesPosts, &t.NavOrder, &t.InBreadcrumbs,
+			&t.ShowRelated, &t.InAncestorFlyout, &t.Latitude, &t.Longitude,
+			&t.PostCount, &t.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, t)
+	}
+	return items, rows.Err()
 }
 
 // SearchTags returns tags whose name matches the query.

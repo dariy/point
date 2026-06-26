@@ -221,31 +221,31 @@
 }
 
 .post-tags .tag-link:hover {
-    background-color: var(--color-primary);
+    background-color: var(--tag-accent);
     color: white;
-    border-color: var(--color-primary);
+    border-color: var(--tag-accent);
 }
 
 [data-theme="light"] .post-tags .tag-link {
     background: var(--color-white-alpha-85);
     color: var(--text-primary);
-    border: var(--border-width) solid var(--color-black-alpha-10);
+    border: var(--border-width) solid color-mix(in srgb, var(--tag-accent) 35%, var(--color-black-alpha-10));
 }
 
 [data-theme="light"] .post-tags .tag-link:hover {
-    background: var(--color-primary);
+    background: var(--tag-accent);
     color: white;
-    border-color: var(--color-primary);
+    border-color: var(--tag-accent);
 }
 
 [data-theme="dark"] .post-tags .tag-link {
     background: var(--color-black-alpha-75);
     color: var(--color-white-alpha-95);
-    border: var(--border-width) solid var(--color-white-alpha-20);
+    border: var(--border-width) solid color-mix(in srgb, var(--tag-accent) 40%, var(--color-white-alpha-20));
 }
 
 [data-theme="dark"] .post-tags .tag-link:hover {
-    background: var(--color-primary);
+    background: var(--tag-accent);
     color: white;
     border-color: var(--color-primary);
 }

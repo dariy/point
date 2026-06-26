@@ -1,10 +1,24 @@
 /* ===========================
    Immersive Layout (Full Screen Post)
    =========================== */
+/* Lock the document so the immersive overlay can never scroll. The base
+   .site-wrapper carries min-height:100vh; on mobile 100vh (large viewport)
+   exceeds 100dvh (visible viewport), forcing the wrapper taller than the
+   screen and letting the whole page scroll. Cap it to the visible viewport
+   and pin html/body to kill any residual scroll. */
+html:has(.immersive-layout),
+.immersive-layout {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
 .immersive-layout .site-wrapper {
     display: block;
     height: 100vh;
     height: 100dvh;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -594,6 +608,8 @@ video.immersive-bg-image {
   background: var(--color-black-alpha-40);
   border-radius: 50%;
   color: white;
+  border: none;
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -601,6 +617,9 @@ video.immersive-bg-image {
 }
 .carousel-share-btn:hover {
   background: var(--color-black-alpha-60);
+  color: white;
+  border: none;
+  box-shadow: none;
 }
 .ui-hidden .carousel-share-btn {
   opacity: 0;
@@ -610,6 +629,47 @@ video.immersive-bg-image {
 @media (min-width: 768px) {
   .carousel-share-btn {
     top: var(--spacing-xl);
+    right: calc(var(--spacing-xl) + var(--header-action-btn-width, 40px) + var(--spacing-md, 16px));
+  }
+}
+
+.immersive-layout .lightbox-close {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .immersive-layout .lightbox-close {
+    display: flex;
+    position: absolute;
+    top: var(--spacing-xl);
     right: var(--spacing-xl);
+    z-index: 60;
+    width: var(--header-action-btn-width, 40px);
+    height: var(--header-action-btn-height, 40px);
+    background: var(--color-black-alpha-40);
+    border-radius: 50%;
+    color: white;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    font-size: 24px;
+    padding: 0;
+    line-height: 1;
+    transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s;
+  }
+  
+  .immersive-layout .lightbox-close:hover {
+    background: var(--color-black-alpha-60);
+  }
+
+  .ui-hidden .lightbox-close {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-20px);
+  }
+
+  .immersive-layout .lightbox-close svg {
+    width: var(--svg-width, 24px);
+    height: var(--svg-height, 24px);
   }
 }

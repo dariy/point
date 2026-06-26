@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"database/sql"
+	"image"
+	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,9 +13,23 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"point-api/internal/config"
 	"point-api/internal/models"
 	"point-api/internal/repository"
+	"point-api/internal/services"
 )
+
+// testMediaSvc builds a MediaService backed by the test repo and temp storage,
+// enough for the media-serving handler (incl. on-demand square thumbnails).
+func testMediaSvc(t *testing.T, repo repository.Repository, storagePath string) *services.MediaService {
+	t.Helper()
+	return services.NewMediaService(
+		repo,
+		&config.Config{StoragePath: storagePath},
+		services.NewSettingsService(repo),
+		services.NewTagService(repo),
+	)
+}
 
 func newMediaRepo(t *testing.T) (repository.Repository, string) {
 	t.Helper()
@@ -66,7 +82,7 @@ func makeMediaFile(t *testing.T, storagePath, year, month, filename string) stri
 
 func serveMediaRequest(t *testing.T, storagePath, indexHTML string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, indexHTML, repo)
+	handler := serveSimplifiedMedia(storagePath, indexHTML, repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	rec := httptest.NewRecorder()
@@ -194,7 +210,7 @@ func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 
 func serveThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename string) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo)
+	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb", nil)
 	rec := httptest.NewRecorder()
@@ -268,6 +284,65 @@ func TestServeSimplifiedMedia_ThumbServed(t *testing.T) {
 	rec := serveThumbRequest(t, storage, repo, "2024", "01", "photo.jpg")
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200 serving thumbnail, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// serveSizedThumbRequest issues an authenticated GET for ?thumb=<size>.
+func serveSizedThumbRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, size string) *httptest.ResponseRecorder {
+	t.Helper()
+	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), services.NewSettingsService(repo), nil, nil)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename+"?thumb="+size, nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("year", "month", "filename")
+	c.SetParamValues(year, month, filename)
+	c.Set("user", struct{ ID int64 }{ID: 1})
+	if err := handler(c); err != nil {
+		if he, ok := err.(*echo.HTTPError); ok {
+			rec.Code = he.Code
+		}
+	}
+	return rec
+}
+
+func TestServeSimplifiedMedia_SquareThumbGenerated(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "square.jpg")
+	if _, err := repo.DB().Exec(`UPDATE media SET file_type='image' WHERE original_path=?`, "originals/2024/01/square.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	// A real, decodable JPEG so the square thumbnail can be generated on demand.
+	dir := filepath.Join(storage, "media", "originals", "2024", "01")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(dir, "square.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := jpeg.Encode(f, image.NewRGBA(image.Rect(0, 0, 300, 200)), nil); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	rec := serveSizedThumbRequest(t, storage, repo, "2024", "01", "square.jpg", "128")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for ?thumb=128, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// The generated thumbnail is cached under thumbnails/sq128/.
+	cached := filepath.Join(storage, "media", "thumbnails", "sq128", "2024", "01", "square.jpg")
+	if _, err := os.Stat(cached); err != nil {
+		t.Errorf("expected cached thumbnail at %s: %v", cached, err)
+	}
+}
+
+func TestServeSimplifiedMedia_SquareThumbBadSize(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "square.jpg")
+	rec := serveSizedThumbRequest(t, storage, repo, "2024", "01", "square.jpg", "999")
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for unsupported ?thumb=999, got %d", rec.Code)
 	}
 }
 

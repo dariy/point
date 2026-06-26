@@ -6,10 +6,12 @@ export default [
       sourceType: "module",
       globals: {
         // Browser globals
+        globalThis: "readonly",
         window: "readonly",
         document: "readonly",
         navigator: "readonly",
         localStorage: "readonly",
+        sessionStorage: "readonly",
         location: "readonly",
         fetch: "readonly",
         URL: "readonly",
@@ -60,6 +62,9 @@ export default [
         JSON: "readonly",
         Math: "readonly",
         Date: "readonly",
+        // Build-time constant injected by esbuild --define (see scripts/build-js.sh).
+        // `false` in the release bundle, `true` in the debug bundle.
+        __DEBUG__: "readonly",
       },
     },
     rules: {

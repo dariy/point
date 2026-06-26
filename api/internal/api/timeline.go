@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"point-api/internal/plugins"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
@@ -21,20 +22,10 @@ func NewTimelineHandler(timelineService *services.TimelineService, settingsServi
 	}
 }
 
-// timelineModeGate enforces timeline_mode access rules.
-// Returns non-nil error if the request should be blocked.
-func (h *TimelineHandler) timelineModeGate(c echo.Context) error {
+// timelineGate enforces plugin enabled state.
+func (h *TimelineHandler) timelineGate(c echo.Context) error {
 	settings, _ := h.settingsService.GetAllSettings(c.Request().Context())
-	mode := settings["timeline_mode"]
-	if mode == "" {
-		mode = "off"
-	}
-	user := c.Get("user")
-	publicOnly := user == nil
-	if publicOnly && mode != "all" {
-		return echo.NewHTTPError(http.StatusNotFound, "timeline not found")
-	}
-	if !publicOnly && mode == "off" {
+	if !plugins.IsEnabled("timeline", settings) {
 		return echo.NewHTTPError(http.StatusNotFound, "timeline not found")
 	}
 	return nil
@@ -42,7 +33,7 @@ func (h *TimelineHandler) timelineModeGate(c echo.Context) error {
 
 // GetTimeline handles GET /api/timeline?context=<slug?>
 func (h *TimelineHandler) GetTimeline(c echo.Context) error {
-	if err := h.timelineModeGate(c); err != nil {
+	if err := h.timelineGate(c); err != nil {
 		return err
 	}
 	context := c.QueryParam("context")
@@ -58,7 +49,7 @@ func (h *TimelineHandler) GetTimeline(c echo.Context) error {
 
 // GetTimelineLocations handles GET /api/timeline/locations?tag=<slug>&context=<slug?>&limit=10
 func (h *TimelineHandler) GetTimelineLocations(c echo.Context) error {
-	if err := h.timelineModeGate(c); err != nil {
+	if err := h.timelineGate(c); err != nil {
 		return err
 	}
 	tag := c.QueryParam("tag")

@@ -5,10 +5,9 @@
  *
  * Props (from router): { query: { q, page } }
  */
-
+import { pluginHost } from '../../core/pluginHost.js';
 import { Component } from '../../components/Component.js';
-import { PublicHeader } from '../../components/public/PublicHeader.js';
-import { PublicFooter } from '../../components/public/PublicFooter.js';
+
 import { PostGrid } from '../../components/public/PostGrid.js';
 import { Pagination } from '../../components/shared/Pagination.js';
 import { listPosts } from '../../api/posts.js';
@@ -71,7 +70,7 @@ export default class SearchPage extends Component {
   }
 
   afterRender() {
-    document.body.classList.remove('immersive-layout', 'ui-hidden');
+    document.body.classList.remove('immersive-layout', 'ui-hidden', 'immersive-overlay-sheet');
     const settings = store.get('settings') || {};
     const rootMenu = store.get('navTags') || [];
     const q = this.props.query?.q || '';
@@ -90,15 +89,23 @@ export default class SearchPage extends Component {
       }
     }
 
-    this.mountChild(PublicHeader, '#header-mount', {
+    pluginHost.fill('header', this.$('#header-mount'), {
       settings,
       navTags: rootMenu,
       currentPath: '/search',
       breadcrumb,
       total: this.state.data?.total || 0,
       timelineVisible: false,
+    }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._children.push(comps[0]);
+      }
     });
-    this.mountChild(PublicFooter, '#footer-mount', { settings });
+    pluginHost.fill('footer', this.$('#footer-mount'), { settings }).then(comps => {
+      if (comps[0] && !this._unmounted) {
+        this._children.push(comps[0]);
+      }
+    });
 
     if (this.state.tags.length > 0) {
       this._renderTagResults();

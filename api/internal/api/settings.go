@@ -22,6 +22,7 @@ func NewSettingsHandler(settingsService *services.SettingsService) *SettingsHand
 var publicSettingKeys = map[string]bool{
 	"blog_title":              true,
 	"blog_subtitle":           true,
+	"logo_url":                true,
 	"author_name":             true,
 	"posts_per_page":          true,
 	"default_language":        true,
@@ -33,7 +34,7 @@ var publicSettingKeys = map[string]bool{
 	"about_post_id":           true,
 	"home_page_post_id":       true,
 	"multi_user_mode":         true,
-	"show_tag_cloud":          true,
+
 	"tags_module":             true,
 	"tags_visibility":         true,
 	"timeline_mode":           true,

@@ -46,6 +46,16 @@ export const LOGOUT_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill=
     stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+export const LOGIN_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="10,17 15,12 10,7" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="15" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 export const FOLDER_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
@@ -168,6 +178,12 @@ export const THEMES_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill=
   <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor"/>
   <circle cx="12" cy="7.5" r="1.5" fill="currentColor"/>
   <circle cx="16.5" cy="10.5" r="1.5" fill="currentColor"/>
+</svg>`;
+
+export const PLUGINS_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M14 4a2 2 0 1 0-4 0v2H7a1 1 0 0 0-1 1v3H4a2 2 0 1 0 0 4h2v3a1 1 0 0 0 1 1h3v2a2 2 0 1 0 4 0v-2h3a1 1 0 0 0 1-1v-3a2 2 0 1 0 0-4V7a1 1 0 0 0-1-1h-3V4z"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 export const RESTORE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -305,6 +321,26 @@ export const PLAY_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="n
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <polygon points="5,3 19,12 5,21" fill="currentColor" stroke="currentColor"
     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+export const PAUSE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+  <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+</svg>`;
+
+export const MINUS_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const SHUFFLE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polyline points="16 3 21 3 21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="4" y1="20" x2="21" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="21 16 21 21 16 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="15" y1="15" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="4" y1="4" x2="9" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 export const LIST_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"

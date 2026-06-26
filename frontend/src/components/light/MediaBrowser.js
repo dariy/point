@@ -1087,11 +1087,36 @@ export class MediaBrowser extends Component {
     }
   }
 
+  // How many items fully fit the visible grid area, so ultrawide / tall
+  // viewports fill the space instead of stopping at a fixed cap.
+  //
+  // Measured from the *rendered* grid (real item height + real area height with
+  // the paginator present) rather than estimated — item height varies with
+  // filename wrapping and action-row wrapping, so estimation overshoots.
+  // _load applies a starting guess, then corrects once after render via this.
+  // ponytail: no ResizeObserver; a resize is picked up on the next load.
+  _gridCapacity() {
+    const BASE = 24;
+    const MAX = 120; // backend has no clamp; don't fetch unbounded
+    const area = this.$("#mb-media-area");
+    const grid = this.$(".media-grid");
+    const item = grid?.firstElementChild;
+    if (!area || !item || !area.clientHeight) return null; // nothing to measure yet
+
+    const cs = getComputedStyle(grid);
+    const cols = Math.max(1, cs.gridTemplateColumns.split(/\s+/).filter(Boolean).length);
+    const gap = parseFloat(cs.rowGap) || 16;
+    const rows = Math.max(1, Math.floor((area.clientHeight + gap) / (item.offsetHeight + gap)));
+    return Math.min(MAX, Math.max(BASE, cols * rows));
+  }
+
   async _load(overrides = {}) {
     this.setState({ loading: true, error: null });
+    const perPage = this._measuredPerPage ?? 24;
+    this._lastPerPage = perPage;
     const params = {
       page: overrides.page ?? 1,
-      per_page: 24,
+      per_page: perPage,
     };
     if (this.state.typeFilter) params.file_type = this.state.typeFilter;
     if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
@@ -1109,6 +1134,19 @@ export class MediaBrowser extends Component {
         media.forEach((m) => {
           if ((m.file_type || "").toLowerCase() === "image" && m.path) {
             this._loadReferringPosts(m.id, m.path);
+          }
+        });
+      }
+
+      // Measure the rendered grid and refetch once if the page doesn't match
+      // the visible capacity. `corrected` caps this at a single refetch so a
+      // scrollbar appearing/disappearing can't oscillate the column count.
+      if (!overrides.corrected) {
+        requestAnimationFrame(() => {
+          const cap = this._gridCapacity();
+          if (cap && cap !== this._lastPerPage) {
+            this._measuredPerPage = cap;
+            this._load({ page: data.page, corrected: true });
           }
         });
       }

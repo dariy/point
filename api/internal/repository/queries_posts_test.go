@@ -41,6 +41,46 @@ func TestListPublishedPostStubs(t *testing.T) {
 	}
 }
 
+func TestRepository_ListPostsLiteOmitsContent(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() {
+		_ = repo.Close()
+	}()
+	ctx := context.Background()
+
+	_, pid := insertUserAndPost(t, repo, "lite-post", "published")
+	if _, err := repo.DB().Exec(`UPDATE posts SET content=? WHERE id=?`, "full body text", pid); err != nil {
+		t.Fatalf("set content: %v", err)
+	}
+	if err := repo.SetPostMediaURL(ctx, pid, "/cover.jpg"); err != nil {
+		t.Fatalf("SetPostMediaURL: %v", err)
+	}
+
+	// Lite (default): content is not selected; media_url is.
+	lite, err := repo.ListPosts(ctx, models.ListPostsParams{Limit: 10})
+	if err != nil {
+		t.Fatalf("ListPosts lite: %v", err)
+	}
+	if len(lite) != 1 {
+		t.Fatalf("expected 1 post, got %d", len(lite))
+	}
+	if lite[0].Content != "" {
+		t.Errorf("expected empty content in lite mode, got %q", lite[0].Content)
+	}
+	if !lite[0].MediaURL.Valid || lite[0].MediaURL.String != "/cover.jpg" {
+		t.Errorf("expected media_url /cover.jpg, got %#v", lite[0].MediaURL)
+	}
+
+	// IncludeContent: full body returned (offline snapshot path).
+	full, err := repo.ListPosts(ctx, models.ListPostsParams{Limit: 10, IncludeContent: true})
+	if err != nil {
+		t.Fatalf("ListPosts full: %v", err)
+	}
+	if len(full) != 1 || full[0].Content != "full body text" {
+		t.Errorf("expected full content, got %q", full[0].Content)
+	}
+}
+
 func TestRepository_ListPostsWithSearch(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() {

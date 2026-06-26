@@ -1,0 +1,282 @@
+/* Plugins admin page — catalog of toggleable feature plugins.
+   Plugin groups use the shared .card pattern (cards.css) with collapsible
+   bodies; rows reuse .setting-pill (settings.css) for the on/off control. */
+
+/* ── Presets ─────────────────────────────────────────────────────────────── */
+.plugin-presets-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    cursor: default; /* presets header isn't collapsible */
+}
+
+.preset-pill-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.preset-pill {
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.preset-pill:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+.preset-pill.is-active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
+
+.preset-status {
+    margin: var(--spacing-md) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.preset-edit-hint {
+    margin: var(--spacing-xs) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+/* ── Group cards ─────────────────────────────────────────────────────────── */
+.plugins-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+}
+
+.plugins-group-heading {
+    min-width: 0;
+}
+
+.plugins-group-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    margin: 0;
+}
+
+.plugins-group-hint {
+    margin: var(--spacing-xs) 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.plugins-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+/* ── Plugin rows ─────────────────────────────────────────────────────────── */
+.plugin-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--surface-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius);
+}
+
+.plugin-card.is-enabled {
+    border-left: 3px solid var(--color-primary);
+}
+
+.plugin-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    min-width: 0;
+}
+
+.plugin-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.plugin-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.plugin-meta-text {
+    font-family: var(--font-mono, monospace);
+    overflow-wrap: anywhere;
+}
+
+.plugin-badge {
+    display: inline-block;
+    padding: 0 var(--spacing-xs);
+    border-radius: var(--border-radius-sm);
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.plugin-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    flex-shrink: 0;
+}
+
+.plugin-settings-link {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    /* Works as both <a> (page link) and <button> (opens the settings drawer). */
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.plugin-settings-link:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
+}
+
+/* Locked core plugin: read-only "Required" indicator instead of a toggle. */
+.plugin-pill-locked {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--setting-pill-label-padding-y) var(--setting-pill-label-padding-x);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--setting-pill-label-border-radius, var(--border-radius));
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: not-allowed;
+}
+
+.plugin-lock {
+    font-size: var(--font-size-sm);
+    line-height: 1;
+}
+
+.page-intro {
+    margin: 0 0 var(--spacing-lg);
+    color: var(--text-secondary);
+    max-width: 60ch;
+}
+
+/* ── Per-plugin settings drawer ──────────────────────────────────────────── */
+.plugin-settings-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background-color: var(--color-black-alpha-50);
+}
+
+.plugin-settings-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 10001;
+    height: 100vh;
+    width: 480px;
+    max-width: 92vw;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-card);
+    border-left: var(--border-width) solid var(--border-primary);
+    box-shadow: 0 var(--modal-box-shadow-1) var(--modal-box-shadow-2) var(--color-black-alpha-30);
+    transform: translateX(100%);
+    transition: transform var(--transition-base, 0.25s ease-out);
+}
+
+.plugin-settings-drawer.is-open {
+    transform: translateX(0);
+}
+
+.plugin-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    border-bottom: var(--border-width) solid var(--border-primary);
+    flex-shrink: 0;
+}
+
+.plugin-settings-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+}
+
+.plugin-settings-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xs);
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--border-radius);
+}
+
+.plugin-settings-close:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+}
+
+.plugin-settings-body {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.plugin-settings-form,
+.plugin-settings-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Rich sections reuse the .card pattern; flatten the nesting inside the drawer. */
+.plugin-settings-sections .card {
+    margin: 0;
+}
+
+.plugin-settings-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-lg);
+    border-top: var(--border-width) solid var(--border-primary);
+    flex-shrink: 0;
+}

@@ -7,12 +7,9 @@
 import { Component } from '../../components/Component.js';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.js';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog.js';
-import { PromptDialog } from '../../components/shared/PromptDialog.js';
 import {
   getSessions, deleteSession, deleteAllOtherSessions,
-  changePassword,
-  getPasskeyStatus, registerPasskey, deletePasskey,
-  getApiKeys, createApiKey, deleteApiKey
+  changePassword
 } from '../../api/auth.js';
 import { store } from '../../store.js';
 import { escapeHtml } from '../../utils/helpers.js';
@@ -24,12 +21,8 @@ export default class SecurityPage extends Component {
     this.state = {
       loading: true,
       sessions: [],
-      apiKeys: [],
       error: null,
       changingPassword: false,
-      passkeySupported: typeof window.PublicKeyCredential !== 'undefined',
-      passkeyStatus: null,
-      passkeyWorking: false,
     };
   }
 
@@ -41,42 +34,10 @@ export default class SecurityPage extends Component {
   }
 
   _renderContent() {
-    const {
-      loading, error, sessions, changingPassword,
-      passkeySupported, passkeyStatus, passkeyWorking,
-      apiKeys
-    } = this.state;
+    const { loading, error, sessions, changingPassword } = this.state;
 
     if (loading) return '<div class="loading-spinner" aria-label="Loading security info…"></div>';
     if (error) return `<p class="error-state" role="alert">${escapeHtml(error)}</p>`;
-
-    const apiKeyList = !apiKeys.length
-        ? `<p class="empty-state">No API keys found.</p>`
-        : `
-          <div class="table-container">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Key Prefix</th>
-                  <th>Created</th>
-                  <th class="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${apiKeys.map(k => `
-                  <tr>
-                    <td><strong>${escapeHtml(k.name)}</strong></td>
-                    <td><code class="font-mono">${escapeHtml(k.prefix)}\u2026</code></td>
-                    <td>${escapeHtml(formatDateShort(k.created_at))}</td>
-                    <td class="text-right">
-                      <button class="btn btn-sm btn-danger delete-api-key-btn" data-id="${k.id}" title="Delete">Delete</button>
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>`;
 
     return `
       <div class="security-grid">
@@ -96,25 +57,6 @@ export default class SecurityPage extends Component {
                 ${changingPassword ? 'Updating…' : 'Update Password'}
               </button>
             </form>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header"><h2>Passkeys (WebAuthn)</h2></div>
-          <div class="card-body">
-            ${!passkeySupported ? '<p class="text-muted">Passkeys are not supported by this browser.</p>' : `
-              ${!passkeyStatus?.configured ? `
-                <p class="text-muted">Passkeys are not configured on this server.</p>
-              ` : passkeyStatus?.registered ? `
-                <div class="passkey-status success">
-                  <p>Passkey is registered.</p>
-                  <button id="delete-passkey-btn" class="btn btn-sm btn-danger" ${passkeyWorking ? 'disabled' : ''}>Remove Passkey</button>
-                </div>
-              ` : `
-                <p>Register a passkey for faster, more secure login.</p>
-                <button id="register-passkey-btn" class="btn btn-primary" ${passkeyWorking ? 'disabled' : ''}>Register Passkey</button>
-              `}
-            `}
           </div>
         </section>
 
@@ -151,16 +93,6 @@ export default class SecurityPage extends Component {
             </div>
           </div>
         </section>
-
-        <section class="card security-full-width">
-          <div class="card-header">
-            <h2>API Keys</h2>
-            <button id="create-api-key-btn" class="btn btn-sm btn-primary">Create New API Key</button>
-          </div>
-          <div class="card-body">
-            ${apiKeyList}
-          </div>
-        </section>
       </div>`;
   }
 
@@ -187,16 +119,6 @@ export default class SecurityPage extends Component {
         this._handleDeleteSession(btn.dataset.id);
       });
     });
-
-    this.container.querySelector('#register-passkey-btn')?.addEventListener('click', () => this._handleRegisterPasskey());
-    this.container.querySelector('#delete-passkey-btn')?.addEventListener('click', () => this._handleDeletePasskey());
-
-    this.container.querySelector('#create-api-key-btn')?.addEventListener('click', () => this._handleCreateApiKey());
-    this.container.querySelectorAll('.delete-api-key-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this._handleDeleteApiKey(btn.dataset.id);
-      });
-    });
   }
 
   beforeUnmount() {
@@ -210,16 +132,10 @@ export default class SecurityPage extends Component {
 
   async _load() {
     try {
-      const [sessions, passkeyStatus, apiKeys] = await Promise.all([
-        getSessions(),
-        this.state.passkeySupported ? getPasskeyStatus() : Promise.resolve(null),
-        getApiKeys()
-      ]);
+      const sessions = await getSessions();
       this.setState({
         loading: false,
         sessions: sessions.sessions || [],
-        passkeyStatus,
-        apiKeys: apiKeys.keys || [],
         error: null
       });
     } catch (err) {
@@ -266,63 +182,6 @@ export default class SecurityPage extends Component {
     }
   }
 
-  async _handleRegisterPasskey() {
-    this.setState({ passkeyWorking: true });
-    try {
-      await registerPasskey();
-      store.set('toast', { message: 'Passkey registered.', type: 'success' });
-      this._load();
-    } catch (err) {
-      if (err.name !== 'NotAllowedError') {
-        store.set('toast', { message: err.message || 'Failed to register passkey.', type: 'error' });
-      }
-    } finally {
-      this.setState({ passkeyWorking: false });
-    }
-  }
-
-  async _handleDeletePasskey() {
-    this._showConfirm('Remove Passkey', 'Remove passkey? You will need to use your password to login.', 'Remove', 'danger', async () => {
-      this.setState({ passkeyWorking: true });
-      try {
-        await deletePasskey();
-        store.set('toast', { message: 'Passkey removed.', type: 'success' });
-        this._load();
-      } catch (err) {
-        store.set('toast', { message: err.message || 'Failed to remove passkey.', type: 'error' });
-      } finally {
-        this.setState({ passkeyWorking: false });
-      }
-    });
-  }
-
-  async _handleCreateApiKey() {
-    this._showPrompt('Create API Key', 'Enter a name for the new API key:', '', 'Create', async (name) => {
-      if (!name) return;
-
-      try {
-        const result = await createApiKey(name);
-        this._showConfirm('API Key Created', `Please copy your API key now. It will not be shown again:\n\n${result.key}`, 'Copy to Clipboard', 'primary', () => {
-          navigator.clipboard.writeText(result.key);
-        });
-        this._load();
-      } catch (err) {
-        store.set('toast', { message: err.message || 'Failed to create API key.', type: 'error' });
-      }
-    });
-  }
-
-  async _handleDeleteApiKey(id) {
-    this._showConfirm('Delete API Key', 'Permanently delete this API key? Applications using it will lose access.', 'Delete', 'danger', async () => {
-      try {
-        await deleteApiKey(id);
-        this._load();
-      } catch (err) {
-        store.set('toast', { message: err.message || 'Failed to delete API key.', type: 'error' });
-      }
-    });
-  }
-
   _showConfirm(title, message, confirmText, variant, onConfirm) {
     const mount = document.createElement('div');
     document.body.appendChild(mount);
@@ -333,20 +192,6 @@ export default class SecurityPage extends Component {
       variant,
       onConfirm: () => { dialog.unmount(); mount.remove(); onConfirm(); },
       onCancel:  () => { dialog.unmount(); mount.remove(); },
-    });
-    dialog.mount();
-  }
-
-  _showPrompt(title, message, defaultValue, confirmText, onConfirm) {
-    const mount = document.createElement('div');
-    document.body.appendChild(mount);
-    const dialog = new PromptDialog(mount, {
-      title,
-      message,
-      defaultValue,
-      confirmText,
-      onConfirm: (val) => { dialog.unmount(); mount.remove(); onConfirm(val); },
-      onCancel: () => { dialog.unmount(); mount.remove(); }
     });
     dialog.mount();
   }

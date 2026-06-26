@@ -1,10 +1,11 @@
 package api
 
 import (
-	"net/http"
 	"log/slog"
+	"net/http"
 
 	"point-api/internal/models"
+	"point-api/internal/plugins"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
@@ -115,6 +116,25 @@ func SessionOnlyMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusForbidden, "this action requires a session cookie (API keys not allowed)")
 		}
 		return next(c)
+	}
+}
+
+// RequirePlugin returns middleware that 404s when the named plugin is disabled,
+// keeping disabled backend capabilities indistinguishable from non-existent
+// routes. It wraps no routes in Phase 1; per-plugin route groups adopt it during
+// extraction (Phase 4).
+func RequirePlugin(settingsService *services.SettingsService, id string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			all, err := settingsService.GetAllSettings(c.Request().Context())
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
+			}
+			if !plugins.IsEnabled(id, all) {
+				return echo.NewHTTPError(http.StatusNotFound, "not found")
+			}
+			return next(c)
+		}
 	}
 }
 

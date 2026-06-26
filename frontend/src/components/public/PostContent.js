@@ -12,7 +12,7 @@
  */
 
 import { Component } from "../Component.js";
-import { escapeHtml } from "../../utils/helpers.js";
+import { escapeHtml, navigate } from "../../utils/helpers.js";
 import { formatDate } from "../../utils/formatters.js";
 import {
   buildTagIndex,
@@ -20,9 +20,9 @@ import {
   setupTagStrip,
 } from "../../utils/tags.js";
 import { store } from "../../store.js";
+import { pluginHost } from "../../core/pluginHost.js";
 import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
-import { MediaViewer } from "./MediaViewer.js";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
 import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.js";
 
@@ -98,15 +98,35 @@ export class PostContent extends Component {
     const immersive = forceImmersive || shouldUseImmersive(post);
     if (immersive) {
       document.body.classList.add("immersive-layout");
+      // sheetMode is now handled by the plugin.
       const items = mediaFromHtml(post.content_html || "");
-      this.mountChild(MediaViewer, '#media-viewer-mount', {
+      const viewerProps = {
         items,
         media: post.media || [],
         startIndex: this.props.startIndex || 0,
         showShare: true,
+        showClose: true,
         navPrev: prevPost,
         navNext: nextPost,
+        // Extra context the sheet overlay renders (ignored by classic MediaViewer)
+        post,
+        editUrl: `/light/posts/${post.id}/edit`,
+        onToggleImmersive: this.props.onToggleImmersive,
         onClose: async () => {
+          // A post opened from the Atlas returns there — closing reselects its
+          // place and highlights the post chip — instead of landing on the
+          // post's page in the home feed. The Atlas leaves a context marker on
+          // open; we hand it back as the return state keyed to the current post.
+          let atlasCtx = null;
+          try { atlasCtx = JSON.parse(sessionStorage.getItem("atlasOpenContext") || "null"); } catch { /* ignore */ }
+          if (atlasCtx) {
+            try {
+              sessionStorage.removeItem("atlasOpenContext");
+              sessionStorage.setItem("atlasReturn", JSON.stringify({ ...atlasCtx, postSlug: post.slug }));
+            } catch { /* ignore */ }
+            navigate("/tags");
+            return;
+          }
           try {
             const params = tagSlug ? { tag: tagSlug } : {};
             const data = await getPostPageLocation(post.slug, params);
@@ -119,9 +139,19 @@ export class PostContent extends Component {
           const hash = index === 0 ? "" : `#${index + 1}`;
           window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
         }
-      });
+      };
+
+      // post-viewer slot (immersive). The Standard and Sheet immersive plugins
+      // are alternatives for this exclusive slot, so mount only one (the first
+      // enabled, registry order — Standard wins when both are on).
+      if (pluginHost.hasSlot('post-viewer')) {
+        // Capture the mounted viewer so it's torn down on the next render/unmount
+        // — otherwise the old MediaViewer (and any slot plugins it owns, e.g. the
+        // slideshow's timers + document listeners) leak across post navigation.
+        this._viewer = pluginHost.fillOne('post-viewer', this.$('#media-viewer-mount'), viewerProps);
+      }
     } else {
-      document.body.classList.remove("immersive-layout", "ui-hidden");
+      document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
       const bodyEl = this.$(".post-content");
       if (bodyEl) {
         this._enhanceLinks(bodyEl);
@@ -246,7 +276,22 @@ export class PostContent extends Component {
     return `<nav class="post-navigation" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
   }
 
+  // Runs before every re-render (including the first) — tear down the previous
+  // immersive viewer before its mount node is replaced.
+  beforeRender() {
+    this._teardownViewer();
+  }
+
   beforeUnmount() {
     this._cleanupStrip?.();
+    this._teardownViewer();
+  }
+
+  // fillOne() is async, so the handle is a promise resolving to the viewer
+  // component (or null). Unmount it once resolved.
+  _teardownViewer() {
+    const v = this._viewer;
+    this._viewer = null;
+    if (v) Promise.resolve(v).then((comp) => comp?.unmount?.());
   }
 }

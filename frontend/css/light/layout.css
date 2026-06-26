@@ -11,6 +11,7 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .light-sidebar.is-collapsed {
@@ -240,6 +241,30 @@ body {
     font-family: var(--font-mono);
 }
 
+.sidebar-build {
+    display: inline-block;
+    margin-left: var(--spacing-xs);
+    padding: 0 0.4em;
+    border-radius: var(--radius-sm, 3px);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    vertical-align: baseline;
+}
+
+.sidebar-build-release {
+    /* Quiet — the expected state; kept subtle so it doesn't draw the eye. */
+    opacity: 0.6;
+}
+
+.sidebar-build-debug {
+    /* Loud — debug bundle is shipping debug logging; make it unmistakable. */
+    color: #fff;
+    background: var(--color-warning, #d9822b);
+    opacity: 1;
+    font-weight: 600;
+}
+
 .sidebar-footer-actions {
     display: flex;
     align-items: center;
@@ -341,6 +366,7 @@ body {
 /* Posts list: fixed-viewport layout — table scrolls, pagination stays visible */
 .posts-list-main {
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
 }
 
@@ -351,7 +377,8 @@ body {
     min-height: 0;
 }
 
-.posts-list-main .light-content .table-container {
+.posts-list-main .light-content .table-container,
+.posts-list-main .light-content .posts-card-list {
     flex: 1;
     overflow-y: auto;
     min-height: 0;

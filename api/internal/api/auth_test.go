@@ -103,7 +103,7 @@ func TestAuthHandler_Me(t *testing.T) {
 		_ = repo.Close()
 	}()
 	authService := services.NewAuthService(repo)
-	handler := NewAuthHandler(authService, nil, repo)
+	handler := NewAuthHandler(authService, &config.Config{}, repo)
 	e := echo.New()
 
 	// Test authenticated

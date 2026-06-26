@@ -20,6 +20,36 @@ export function escapeHtml(value) {
 }
 
 /**
+ * Escape text for HTML and turn bare URLs into clickable anchors (new tab).
+ * Used for plain-text fields such as a post excerpt that may carry links —
+ * e.g. Instagram URLs — which should render as links rather than raw text.
+ *
+ * @param {string} text
+ * @returns {string} HTML-safe string with <a> tags for any URLs found
+ */
+export function linkify(text) {
+  const str = String(text ?? '');
+  const urlRe = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+  // Trailing punctuation shouldn't be swallowed into the link.
+  const trim = /[.,;:!?)\]'"]+$/;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = urlRe.exec(str)) !== null) {
+    out += escapeHtml(str.slice(last, m.index));
+    let raw = m[0];
+    let tail = '';
+    const t = trim.exec(raw);
+    if (t) { tail = raw.slice(t.index); raw = raw.slice(0, t.index); }
+    const href = raw.startsWith('http') ? raw : `https://${raw}`;
+    out += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(raw)}</a>${escapeHtml(tail)}`;
+    last = m.index + m[0].length;
+  }
+  out += escapeHtml(str.slice(last));
+  return out;
+}
+
+/**
  * Return a safe URL string. Only allows relative paths and https:// URLs.
  * Returns '#' for anything else, preventing javascript: protocol injection.
  *

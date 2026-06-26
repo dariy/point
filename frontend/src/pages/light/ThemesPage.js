@@ -12,6 +12,7 @@ import { escapeHtml } from "../../utils/helpers.js";
 import { STAR_SVG } from "../../utils/icons.js";
 import { setupTextareaMaximizer } from "../../utils/textareaMaximizer.js";
 import { CssEditor } from "../../components/light/CssEditor.js";
+import { pluginHost } from "../../core/pluginHost.js";
 
 export default class ThemesPage extends Component {
   constructor(container, props = {}) {
@@ -46,6 +47,7 @@ export default class ThemesPage extends Component {
           ${themes.map((theme) => this._renderThemeCard(theme, activeTheme, saving)).join("")}
         </div>
         
+        ${pluginHost.isEnabled("custom-css") ? `
         <section class="custom-css-section card">
           <div class="card-header">
             <h2>Custom CSS</h2>
@@ -57,7 +59,8 @@ export default class ThemesPage extends Component {
             <p class="form-hint">Applied globally to the public site.</p>
             <div id="css-editor-mount"></div>
           </div>
-        </section>`;
+        </section>
+        ` : ''}`;
   }
 
   _renderThemeCard(theme, activeTheme, saving) {
@@ -102,21 +105,23 @@ export default class ThemesPage extends Component {
       btn.addEventListener("click", () => this._handleSetActive(btn.dataset.name));
     });
 
-    this.mountChild(CssEditor, "#css-editor-mount", {
-      value: this.state.customCSS,
-      isMaximized: this.state.isMaximized,
-      onChange: (val) => {
-        this.state.customCSS = val;
-      },
-    });
+    if (pluginHost.isEnabled("custom-css")) {
+      this.mountChild(CssEditor, "#css-editor-mount", {
+        value: this.state.customCSS,
+        isMaximized: this.state.isMaximized,
+        onChange: (val) => {
+          this.state.customCSS = val;
+        },
+      });
 
-    this.container.querySelector("#save-css-btn")?.addEventListener("click", () => this._handleSaveCSS());
+      this.container.querySelector("#save-css-btn")?.addEventListener("click", () => this._handleSaveCSS());
 
-    this.container.addEventListener("textarea:maximize", (e) => {
-      this.state.isMaximized = e.detail.isMaximized;
-    });
+      this.container.addEventListener("textarea:maximize", (e) => {
+        this.state.isMaximized = e.detail.isMaximized;
+      });
 
-    this.container.addEventListener("textarea:save", () => this._handleSaveCSS());
+      this.container.addEventListener("textarea:save", () => this._handleSaveCSS());
+    }
   }
 
   beforeUnmount() {
@@ -130,10 +135,14 @@ export default class ThemesPage extends Component {
 
   async _load() {
     try {
+      // The custom-css endpoint is gated by the custom-css plugin (404s when
+      // disabled). Only fetch it when the plugin is enabled, otherwise its
+      // rejection would fail the whole page load.
+      const cssEnabled = pluginHost.isEnabled("custom-css");
       const [themes, activeTheme, customCSS] = await Promise.all([
         getThemes(),
         getActiveTheme(),
-        getCustomCSS(),
+        cssEnabled ? getCustomCSS() : Promise.resolve({ css: "" }),
       ]);
       this.setState({
         loading: false,

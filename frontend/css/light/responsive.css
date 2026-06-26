@@ -43,6 +43,76 @@
         display: block;
     }
 
+    /* ── Swipe-to-reveal actions on post cards (matches Tags Manager) ── */
+    /* The list clips the off-screen action panels; the card slides over them. */
+    .posts-card-list {
+        overflow-x: hidden;
+    }
+
+    .post-card {
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform;
+    }
+
+    .post-card .post-card-swipe-actions {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        transform: translateX(100%);
+        display: flex;
+        align-items: stretch;
+        gap: var(--spacing-sm);
+        padding: 0 var(--spacing-md);
+        background: var(--surface-card);
+        border-left: var(--border-width) solid var(--border-primary);
+    }
+
+    /* Action buttons fill the full row height, icon stacked above the label */
+    .post-card .post-card-swipe-actions > .btn {
+        height: auto;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+    }
+
+    /* ── Bulk toolbar: two rows, icon-only action buttons ── */
+    /* Reserve the toolbar's two-row height on the filters block so the overlay
+       fits and the layout height is identical in both states (no jump). */
+    .posts-toolbar .filters {
+        min-height: var(--size-6);
+    }
+
+    .bulk-toolbar {
+        flex-wrap: wrap;
+        align-content: center;
+    }
+
+    .bulk-toolbar .select-all-label {
+        flex-basis: 100%;
+    }
+
+    .bulk-actions {
+        display: flex;
+        flex-basis: 100%;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .bulk-actions #bulk-count {
+        margin-right: auto;       /* count left, controls pushed right */
+    }
+
+    .bulk-toolbar .btn-label {
+        display: none;            /* Apply / Move to Trash become icon-only */
+    }
+
+    .post-card.post-card--revealed {
+        background-color: var(--surface-hover);
+    }
+
     .stats-grid {
         grid-template-columns: 1fr 1fr;
     }

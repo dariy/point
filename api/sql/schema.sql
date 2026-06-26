@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS posts (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     thumbnail_path VARCHAR(500),
+    -- Denormalized preview URL for list/grid views, derived from thumbnail_path
+    -- or the first media in content at write time, so list queries need not load
+    -- the full content body. Kept in sync by PostService.Create/UpdatePost.
+    media_url VARCHAR(500),
     meta_description VARCHAR(300),
     preview_token VARCHAR(64) UNIQUE,
     preview_expires_at DATETIME,

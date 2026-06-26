@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html"
 	"log"
@@ -18,11 +21,14 @@ import (
 
 	"point-api/internal/api"
 	"point-api/internal/config"
+	"point-api/internal/mcp"
+	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 )
 
 // Version is set at build time via -ldflags="-X main.Version=..."
@@ -37,7 +43,36 @@ func init() {
 // resolveJSDir returns the directory to serve under /assets/js.
 // It prefers the pre-built bundle directory (frontend/js/) over the raw
 // source directory (frontend/src/), enabling zero-config dev/prod switching.
-func resolveJSDir(frontendDir string) string {
+// pluginManifestScript renders the enabled-only plugin manifest as an inline
+// <script> assigning window.__PLUGINS__. The manifest is computed per request
+// because enabled-state can change at runtime; chunks is the static build map.
+// json.Marshal HTML-escapes <, > and & by default, so the payload is safe to
+// embed inline. Disabled plugins are absent from the result entirely.
+func pluginManifestScript(ctx context.Context, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) (string, string) {
+	all, err := settings.GetAllSettings(ctx)
+	if err != nil {
+		all = map[string]string{}
+	}
+	b, err := json.Marshal(plugins.BuildManifest(all, chunks, cssMap))
+	if err != nil {
+		b = []byte("[]")
+	}
+	scriptContent := "window.__PLUGINS__=" + string(b) + ";"
+	hash := sha256.Sum256([]byte(scriptContent))
+	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
+	return "\n  <script>" + scriptContent + "</script>", hashBase64
+}
+
+func resolveJSDir(frontendDir string, debug bool) string {
+	// When FRONTEND_DEBUG is on, prefer the debug bundle (frontend/js-debug) if
+	// it was built — it carries plugin/console debug logging. Falls through to
+	// the normal resolution otherwise, so a missing debug bundle is harmless.
+	if debug {
+		debugDir := filepath.Join(frontendDir, "js-debug")
+		if fi, err := os.Stat(debugDir); err == nil && fi.IsDir() {
+			return debugDir
+		}
+	}
 	jsDir := filepath.Join(frontendDir, "js")
 	if _, err := os.Stat(jsDir); err == nil {
 		return jsDir
@@ -114,6 +149,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	postHandler := api.NewPostHandler(svcs.Post, svcs.Settings, svcs.Media, svcs.Tag)
 	mediaHandler := api.NewMediaHandler(svcs.Media, svcs.Settings)
 	settingsHandler := api.NewSettingsHandler(svcs.Settings)
+	pluginsHandler := api.NewPluginsHandler(svcs.Settings)
 	themeHandler := api.NewThemeHandler(svcs.Theme)
 	systemHandler := api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, cfg.StoragePath, cfg.AppVersion)
 	feedsHandler := api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache)
@@ -170,11 +206,15 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		},
 	}))
 	e.Use(middleware.Recover())
+	// Wildcard origin for the public read API. AllowCredentials is deliberately
+	// omitted: browsers reject `Access-Control-Allow-Origin: *` together with
+	// credentials, and the admin SPA is same-origin (served by this server), so
+	// cookie auth never needs a cross-origin credentialed CORS grant. Bearer
+	// (API-key) auth is unaffected.
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"*"},
-		AllowCredentials: true,
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"*"},
 	}))
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
@@ -213,8 +253,9 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	})
 
 	// ── Feed routes (crawlers & feed readers) ──────────────────────────────────
-	e.GET("/feed.xml", feedsHandler.RSSFeed)
-	e.GET("/feed", feedsHandler.RSSFeed) // alias used by the public footer link
+	rssGate := api.RequirePlugin(svcs.Settings, "rss")
+	e.GET("/feed.xml", feedsHandler.RSSFeed, rssGate)
+	e.GET("/feed", feedsHandler.RSSFeed, rssGate) // alias used by the public footer link
 	e.GET("/sitemap.xml", feedsHandler.Sitemap)
 	e.GET("/robots.txt", feedsHandler.RobotsTxt)
 
@@ -223,29 +264,41 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	e.POST("/api/setup", setupHandler.Setup)
 
 	// ── Auth Routes ────────────────────────────────────────────────────────────
+	// Brute-force throttle for credential endpoints, keyed by client IP (the
+	// default identifier). One shared store → the bucket is spent across all of
+	// login/forgot/reset/passkey, so an attacker can't fan out across them.
+	// ~10 burst, refilling 1 every 6s (≈10/min sustained).
+	authLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Every(6 * time.Second),
+			Burst:     10,
+			ExpiresIn: 10 * time.Minute,
+		}),
+	})
+
 	authGroup := e.Group("/api/auth")
-	authGroup.POST("/login", authHandler.Login)
+	authGroup.POST("/login", authHandler.Login, authLimiter)
 	authGroup.POST("/logout", authHandler.Logout)
 	authGroup.GET("/me", authHandler.Me, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	authGroup.POST("/change-password", authHandler.ChangePassword, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.GET("/sessions", authHandler.ListSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.DELETE("/sessions/:id", authHandler.DeleteSession, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	authGroup.DELETE("/sessions", authHandler.DeleteOtherSessions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
-	authGroup.POST("/forgot-password", authHandler.ForgotPassword)
-	authGroup.POST("/reset-password", authHandler.ResetPassword)
+	authGroup.POST("/forgot-password", authHandler.ForgotPassword, authLimiter)
+	authGroup.POST("/reset-password", authHandler.ResetPassword, authLimiter)
 
 	// API Key Management
-	authGroup.GET("/api-keys", apiKeyHandler.ListKeys, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
-	authGroup.POST("/api-keys", apiKeyHandler.CreateKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
-	authGroup.POST("/api-keys/:id/revoke", apiKeyHandler.RevokeKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
-	authGroup.DELETE("/api-keys/:id", apiKeyHandler.DeleteKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
+	authGroup.GET("/api-keys", apiKeyHandler.ListKeys, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
+	authGroup.POST("/api-keys", apiKeyHandler.CreateKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
+	authGroup.POST("/api-keys/:id/revoke", apiKeyHandler.RevokeKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
+	authGroup.DELETE("/api-keys/:id", apiKeyHandler.DeleteKey, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "api-keys"))
 
 	// ── WebAuthn / Passkey Routes ──────────────────────────────────────────────
-	webauthnGroup := e.Group("/api/auth/webauthn")
+	webauthnGroup := e.Group("/api/auth/webauthn", api.RequirePlugin(svcs.Settings, "passkeys"))
 	webauthnGroup.POST("/register/begin", webAuthnHandler.BeginRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 	webauthnGroup.POST("/register/finish", webAuthnHandler.FinishRegistration, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
-	webauthnGroup.POST("/login/begin", webAuthnHandler.BeginLogin)
-	webauthnGroup.POST("/login/finish", webAuthnHandler.FinishLogin)
+	webauthnGroup.POST("/login/begin", webAuthnHandler.BeginLogin, authLimiter)
+	webauthnGroup.POST("/login/finish", webAuthnHandler.FinishLogin, authLimiter)
 	webauthnGroup.GET("/status", webAuthnHandler.GetStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	webauthnGroup.DELETE("/credential", webAuthnHandler.DeleteCredential, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware)
 
@@ -296,8 +349,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	mediaGroup.GET("/folders", mediaHandler.GetMediaFolders, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/upload", mediaHandler.UploadFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/upload/multiple", mediaHandler.UploadMultiple, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	mediaGroup.POST("/analyze-path", mediaHandler.AnalyzeImageByPath, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/analyze", mediaHandler.AnalyzeImage, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "ai-analysis"))
+	mediaGroup.POST("/analyze-path", mediaHandler.AnalyzeImageByPath, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "ai-analysis"))
 	mediaGroup.GET("/stats", mediaHandler.GetStorageStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.GET("/orphaned", mediaHandler.ListOrphanedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.DELETE("/orphaned", mediaHandler.DeleteOrphanedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -307,7 +360,7 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	mediaGroup.PUT("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PATCH("/:id", mediaHandler.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/:id/rename", mediaHandler.RenameMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/analyze", mediaHandler.AnalyzeImageByID, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "ai-analysis"))
 	mediaGroup.POST("/:id/reextract", mediaHandler.ReextractEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PUT("/:id/exif", mediaHandler.UpdateEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/:id/revert-exif", mediaHandler.RevertEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -321,8 +374,20 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	settingsGroup.PUT("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	settingsGroup.PATCH("", settingsHandler.UpdateSettings, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
+	// ── Plugins Routes (admin-only) ──────────────────────────────────────────────
+	// Lists the full catalog (enabled + disabled) and toggles enabled state.
+	// Admin-only, so these may reveal disabled plugins — unlike the enabled-only
+	// client manifest.
+	pluginsGroup := e.Group("/api/plugins")
+	pluginsGroup.GET("", pluginsHandler.ListPlugins, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	// Preset routes are registered before /:id so the static "presets" segment wins.
+	pluginsGroup.GET("/presets", pluginsHandler.GetPresets, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pluginsGroup.PUT("/presets/:id", pluginsHandler.UpdatePreset, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pluginsGroup.POST("/presets/:id/apply", pluginsHandler.ApplyPreset, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pluginsGroup.PATCH("/:id", pluginsHandler.TogglePlugin, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+
 	// ── Instagram Routes ──────────────────────────────────────────────────────
-	igGroup := e.Group("/api/instagram", api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	igGroup := e.Group("/api/instagram", api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "instagram"))
 	igGroup.GET("/connect", instagramHandler.Connect)
 	igGroup.GET("/callback", instagramHandler.Callback)
 	igGroup.POST("/disconnect", instagramHandler.Disconnect)
@@ -335,8 +400,8 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	themesGroup.GET("", themeHandler.ListThemes)
 	themesGroup.GET("/active", themeHandler.GetActiveTheme)
 	themesGroup.PUT("/active", themeHandler.SetActiveTheme, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	themesGroup.GET("/custom-css", themeHandler.GetCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	themesGroup.PUT("/custom-css", themeHandler.UpdateCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	themesGroup.GET("/custom-css", themeHandler.GetCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
+	themesGroup.PUT("/custom-css", themeHandler.UpdateCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
 
 	// ── System Routes ──────────────────────────────────────────────────────────
 	systemGroup := e.Group("/api/system")
@@ -347,10 +412,10 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	systemGroup.POST("/cache/clear", systemHandler.ClearCache, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/map/update-coords", systemHandler.UpdateMapCoords, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/media/recalculate-visibility", systemHandler.RecalculateMediaVisibility, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/backup", systemHandler.CreateBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.GET("/backups", systemHandler.ListBackups, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.POST("/backups/:filename/restore", systemHandler.RestoreBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.DELETE("/backups/:filename", systemHandler.DeleteBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.GET("/offline/stats", systemHandler.GetOfflineStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/offline/snapshot", systemHandler.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/media/scan", systemHandler.ScanMediaImport, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -359,9 +424,38 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	systemGroup.GET("/photo-library/file", systemHandler.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/version", systemHandler.GetVersion, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 
+	// ── MCP plugin (/mcp) ──────────────────────────────────────────────────────
+	// In-process Model Context Protocol server. Gated by the "mcp" plugin; serves
+	// the streamable endpoint plus OAuth 2.1 discovery. Reuses the REST handlers
+	// for all data access (see RegisterMCP / mcpServiceClient).
+	mcpBaseURL := cfg.MCPBaseURL
+	if mcpBaseURL == "" {
+		mcpBaseURL = cfg.AppURL
+	}
+	var mcpOwnerID int64
+	if owner, err := repo.GetFirstUser(context.Background()); err == nil {
+		mcpOwnerID = owner.ID
+	}
+	mcp.Register(e, mcp.Deps{
+		Echo:            e,
+		Post:            postHandler,
+		Tag:             tagHandler,
+		Media:           mediaHandler,
+		Theme:           themeHandler,
+		Settings:        settingsHandler,
+		System:          systemHandler,
+		Auth:            svcs.Auth,
+		ApiKey:          svcs.ApiKey,
+		SettingsService: svcs.Settings,
+		OwnerUserID:     mcpOwnerID,
+		BaseURL:         mcpBaseURL,
+		Version:         cfg.AppVersion,
+		UploadRoot:      cfg.PhotoLibraryPath,
+	})
+
 	// ── Nav Menu Routes (admin) ────────────────────────────────────────────────
-	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
-	e.PUT("/api/nav-menu", navMenuHandler.UpdateAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
+	e.PUT("/api/nav-menu", navMenuHandler.UpdateAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
 
 	// ── Utility Routes ─────────────────────────────────────────────────────────
 	utilGroup := e.Group("/api/util")
@@ -373,21 +467,36 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 	pagesGroup.GET("/tags/:slug", pagesHandler.GetTagPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/tags", pagesHandler.GetTagsPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/graph", pagesHandler.GetTagsGraph, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/graph/tag/:id", pagesHandler.GetTagCloud, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	pagesGroup.GET("/map", pagesHandler.GetMapPage, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
+	pagesGroup.GET("/nav", pagesHandler.GetNavMenu, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
 
 	// ── Timeline Routes ────────────────────────────────────────────────────────
 	timelineGroup := e.Group("/api/timeline")
 	timelineGroup.GET("", timelineHandler.GetTimeline, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	timelineGroup.GET("/locations", timelineHandler.GetTimelineLocations, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 
+	// ── Frontend SPA + static assets ──────────────────────────────────────────
+	frontendDir := cfg.FrontendDir
+	// Resolve the JS bundle directory once: the release bundle (frontend/js), or
+	// the debug bundle (frontend/js-debug) when FRONTEND_DEBUG is set and built.
+	// The chunk map MUST come from the same directory we serve so plugin chunk
+	// hashes match the bundle the browser loads.
+	jsDir := resolveJSDir(frontendDir, cfg.FrontendDebug)
+	manifestDir := jsDir
+	if manifestDir == "" {
+		manifestDir = filepath.Join(frontendDir, "js")
+	}
+	// Static build map (plugin id → hashed chunk filename). Empty in Phase 1
+	// (no per-plugin chunks built yet), which makes every /assets/js/p/* request
+	// 404 and every manifest Entry empty — the intended foundation state.
+	chunkMap := plugins.LoadChunkMap(filepath.Join(manifestDir, "plugin-manifest.json"))
+	cssMap := plugins.LoadCssMap(filepath.Join(frontendDir, "css", "p"))
+
 	// ── Media file serving: /YYYY/MM/filename[?thumb] ─────────────────────────
 	// Auth-gated: unauthenticated clients see 404 for non-public media.
 	// Registered after /api routes to avoid collisions (e.g. /api/settings/public).
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
-
-	// ── Frontend SPA + static assets ──────────────────────────────────────────
-	frontendDir := cfg.FrontendDir
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, indexHTML, repo, svcs.Media, svcs.Settings, chunkMap, cssMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey))
 	if fi, err := os.Stat(frontendDir); err == nil && fi.IsDir() {
 		cssDir := filepath.Join(frontendDir, "css")
 		imagesDir := filepath.Join(frontendDir, "images")
@@ -396,7 +505,33 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		if fi, err := os.Stat(cssDir); err == nil && fi.IsDir() {
 			e.Static("/assets/css", cssDir)
 		}
-		if jsDir := resolveJSDir(frontendDir); jsDir != "" {
+		if jsDir != "" {
+			// Gated plugin-chunk handler: serves /assets/js/p/* only for ENABLED
+			// plugins, so disabled code 404s even if a filename is guessed.
+			// Registered before the broad /assets/js static route so the more
+			// specific prefix wins. Chunks live under <jsDir>/p/.
+			pluginChunkDir := filepath.Join(jsDir, "p")
+			e.GET("/assets/js/p/*", func(c echo.Context) error {
+				name := filepath.Base(filepath.Clean("/" + c.Param("*")))
+				if name == "." || name == "/" || name == "" {
+					return echo.NewHTTPError(http.StatusNotFound, "not found")
+				}
+				// Named entry chunks (a plugin id in plugin-manifest.json) are
+				// gated: a disabled plugin's entry 404s even if its filename is
+				// guessed. Shared code-split chunks (chunk-*.js) are not entries —
+				// they carry common code imported by multiple plugin entries and
+				// must be served so enabled plugins can resolve their imports.
+				if id, ok := plugins.PluginForChunk(chunkMap, name); ok {
+					all, err := svcs.Settings.GetAllSettings(c.Request().Context())
+					if err != nil {
+						return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
+					}
+					if !plugins.IsEnabled(id, all) {
+						return echo.NewHTTPError(http.StatusNotFound, "not found")
+					}
+				}
+				return c.File(filepath.Join(pluginChunkDir, name))
+			})
 			e.Static("/assets/js", jsDir)
 		}
 		if fi, err := os.Stat(imagesDir); err == nil && fi.IsDir() {
@@ -472,11 +607,30 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
 						}
 
+						script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
+						sb.WriteString(script)
 						sb.WriteString("\n</head>")
 						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
+
+						csp := c.Response().Header().Get("Content-Security-Policy")
+						csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+						c.Response().Header().Set("Content-Security-Policy", csp)
+
 						return c.HTML(http.StatusOK, htmlStr)
 					}
 				}
+			}
+			// Generic SPA route: serve index.html with the enabled-only plugin
+			// manifest injected so the client bootstrap always sees __PLUGINS__.
+			if b, err := os.ReadFile(indexHTML); err == nil {
+				script, hash := pluginManifestScript(c.Request().Context(), svcs.Settings, chunkMap, cssMap)
+				htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
+
+				csp := c.Response().Header().Get("Content-Security-Policy")
+				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+				c.Response().Header().Set("Content-Security-Policy", csp)
+
+				return c.HTML(http.StatusOK, htmlStr)
 			}
 			return c.File(indexHTML)
 		}
@@ -774,6 +928,18 @@ func main() {
 			`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
 			 VALUES ('tags_visibility', 'hidden', 'string', CURRENT_TIMESTAMP)`,
 		},
+		{
+			// post_tags PRIMARY KEY (post_id, tag_id) only indexes the leading
+			// column; lookups/joins by tag_id (hot-tag listings, counts) scanned
+			// the PK without this. tag_relationships similarly lacks a child_id
+			// index for child→parent (ancestor) traversal.
+			"create_post_tags_tag_id_index",
+			`CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id ON post_tags(tag_id)`,
+		},
+		{
+			"create_tag_relationships_child_id_index",
+			`CREATE INDEX IF NOT EXISTS idx_tag_relationships_child_id ON tag_relationships(child_id)`,
+		},
 	}
 	for _, m := range migrations {
 		if err := repo.ApplyMigration(ctx, m.name, m.sql); err != nil {
@@ -892,11 +1058,13 @@ var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 //   - Files not found in the media table return 404.
 //
 // Variant selection:
-//   - ?thumb serves the thumbnail (media/thumbnails/…) when one exists.
+//   - ?thumb=<size> serves an on-demand square thumbnail (e.g. the atlas
+//     cloud's 128px chips), generated and cached lazily from the original.
+//   - ?thumb (no value) serves the stored thumbnail (media/thumbnails/…) when one exists.
 //   - No query param serves the original (media/originals/…).
 //
 // Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository) echo.HandlerFunc {
+func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Repository, mediaSvc *services.MediaService, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -907,6 +1075,16 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 		monthInt, monthErr := strconv.Atoi(month)
 		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
 			if _, err := os.Stat(indexHTML); err == nil {
+				if b, err := os.ReadFile(indexHTML); err == nil {
+					script, hash := pluginManifestScript(c.Request().Context(), settings, chunks, cssMap)
+					htmlStr := strings.Replace(string(b), "</head>", script+"\n</head>", 1)
+
+					csp := c.Response().Header().Get("Content-Security-Policy")
+					csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+					c.Response().Header().Set("Content-Security-Policy", csp)
+
+					return c.HTML(http.StatusOK, htmlStr)
+				}
 				return c.File(indexHTML)
 			}
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{
@@ -960,22 +1138,34 @@ func serveSimplifiedMedia(storagePath, indexHTML string, repo repository.Reposit
 		c.Response().Header().Set("Cache-Control", "no-cache")
 
 		// Determine which file to serve.
-		_, wantThumb := c.Request().URL.Query()["thumb"]
+		thumbVals, wantThumb := c.Request().URL.Query()["thumb"]
 		if wantThumb {
-			if !media.ThumbnailPath.Valid {
-				return echo.NewHTTPError(http.StatusNotFound, "no thumbnail available")
-			}
-			thumbFile := filepath.Clean(filepath.Join(storagePath, "media", media.ThumbnailPath.String))
+			// `?thumb=<size>` requests an on-demand square thumbnail; a bare
+			// `?thumb` serves the stored thumbnail variant. An unsupported size is
+			// rejected, but a generation failure (e.g. an undecodable image) falls
+			// through to the original below so the image still renders. A bare
+			// `?thumb` whose stored thumbnail is absent (no path, outside the media
+			// dir, or file missing) likewise falls through to the original rather
+			// than 404ing, so the image still renders.
+			if sizeStr := thumbVals[0]; sizeStr != "" {
+				n, convErr := strconv.Atoi(sizeStr)
+				if convErr != nil || !services.AllowedSquareThumbSize(n) {
+					return echo.NewHTTPError(http.StatusBadRequest, "invalid thumbnail size")
+				}
+				if thumbFile, genErr := mediaSvc.SquareThumbnail(ctx, media, n); genErr == nil {
+					return c.File(thumbFile)
+				}
+			} else if media.ThumbnailPath.Valid {
+				thumbFile := filepath.Clean(filepath.Join(storagePath, "media", media.ThumbnailPath.String))
 
-			// Security: ensure the resolved file is within the media storage directory.
-			if !strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
-				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
+				// Security: ensure the resolved file is within the media storage
+				// directory before serving it; otherwise fall through to the original.
+				if strings.HasPrefix(thumbFile, filepath.Join(storagePath, "media")) {
+					if _, err := os.Stat(thumbFile); err == nil {
+						return c.File(thumbFile)
+					}
+				}
 			}
-
-			if _, err := os.Stat(thumbFile); err != nil {
-				return echo.NewHTTPError(http.StatusNotFound, "thumbnail file missing")
-			}
-			return c.File(thumbFile)
 		}
 
 		// Serve original — try exact path first, then checksum-glob fallback.

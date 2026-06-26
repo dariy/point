@@ -33,15 +33,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -ldflags="-s -w" \
     -o migrate-paths ./cmd/migrate-paths
 
-# Bundle and minify frontend JS
+# Bundle and minify frontend JS (release build — __DEBUG__=false strips the
+# debug logging in utils/debug.js). The debug bundle (frontend/js-debug) is a
+# dev convenience produced by scripts/build-js.sh and is not shipped here.
+COPY scripts/ ./scripts/
 COPY frontend/ ./frontend/
-RUN npx --yes esbuild@0.28.0 frontend/src/app.js \
-    --bundle --minify --format=esm \
-    "--external:/assets/vendor/*" \
-    --outfile=frontend/js/app.js
+RUN sh ./scripts/build-js.sh
 
 # Bundle CSS modules into main.css (public) and light.css (admin)
-COPY scripts/build-css.sh ./scripts/
 RUN sh ./scripts/build-css.sh
 
 # Runtime stage

@@ -1,8 +1,8 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 
-describe('PublicHeader unified breadcrumb', () => {
-  let PublicHeader;
+describe('Breadcrumbs plugin', () => {
+  let BreadcrumbsComponent;
   let store;
   let container;
 
@@ -46,8 +46,8 @@ describe('PublicHeader unified breadcrumb', () => {
     const storeMod = await import('../src/store.js');
     store = storeMod.store;
 
-    const mod = await import('../src/components/public/PublicHeader.js');
-    PublicHeader = mod.PublicHeader;
+    const mod = await import('../src/plugins/breadcrumbs/Breadcrumbs.js');
+    BreadcrumbsComponent = mod.Breadcrumbs;
 
     container = {
       querySelector: () => null,
@@ -61,7 +61,7 @@ describe('PublicHeader unified breadcrumb', () => {
   // Helper: render the header with given props and a given route
   function renderWith(routeOverride, propsOverride = {}) {
     store.set('route', routeOverride);
-    const header = new PublicHeader(container, {
+    const header = new BreadcrumbsComponent(container, {
       settings: { blog_title: 'Test Blog' },
       navTags: [],
       breadcrumb: [],

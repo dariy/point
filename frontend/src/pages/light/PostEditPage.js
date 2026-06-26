@@ -28,6 +28,7 @@ import { ConfirmDialog } from "../../components/shared/ConfirmDialog.js";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
+import { pluginHost } from "../../core/pluginHost.js";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG } from "../../utils/icons.js";
 import { VisualEditor } from "../../components/light/VisualEditor.js";
 
@@ -151,7 +152,7 @@ export default class PostEditPage extends Component {
             <button class="menu-item" type="button" data-action="unpublish">Unpublish</button>
           `}
           <hr>
-          <button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${SPARKLE_SVG} Analyze media</button>
+          ${pluginHost.isEnabled("ai-analysis") ? `<button class="menu-item" type="button" data-action="analyze" id="analyze-btn">${SPARKLE_SVG} Analyze media</button>` : ''}
           <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${LINK_SVG} Preview link</button>
           ${this._isWide() ? `<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
           ${!isNew ? `<button class="menu-item" type="button" data-action="view-on-site">${EXTERNAL_LINK_SVG} View on site</button>` : ''}
@@ -202,7 +203,7 @@ export default class PostEditPage extends Component {
       .map(s => `<option value="${s}"${status === s ? " selected" : ""}>${escapeHtml(s.charAt(0).toUpperCase() + s.slice(1))}</option>`)
       .join("");
 
-    const aiBtn = (field) => `<button class="field-ai-btn" data-field="${field}" type="button" title="Fill with AI" ${anyActionInProgress ? "disabled" : ""} aria-label="AI fill ${field}">${SPARKLE_SVG}</button>`;
+    const aiBtn = (field) => pluginHost.isEnabled("ai-analysis") ? `<button class="field-ai-btn" data-field="${field}" type="button" title="Fill with AI" ${anyActionInProgress ? "disabled" : ""} aria-label="AI fill ${field}">${SPARKLE_SVG}</button>` : '';
 
     const modeToggle = `
       <div class="editor-mode-toggle">
@@ -220,6 +221,7 @@ export default class PostEditPage extends Component {
     const excerptSummary = excerpt.trim() ? escapeHtml(this._truncate(excerpt.trim())) : "auto";
     const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
     const cssSummary = (p.css || "").trim() ? "custom" : "none";
+    const cssEnabled = pluginHost.isEnabled("custom-css");
 
     return `
             <div class="editor-layout${this.state.detailsOpen ? " is-details-open" : ""}${this.state.showLivePreview ? " has-live-preview" : ""}">
@@ -334,6 +336,7 @@ export default class PostEditPage extends Component {
                     </div>
                   </details>
 
+                  ${cssEnabled ? `
                   <details class="details-group" data-group="css">
                     <summary class="details-group-summary-row">
                       <span class="details-group-title">Custom CSS</span>
@@ -344,9 +347,9 @@ export default class PostEditPage extends Component {
                         <div id="css-editor-mount"></div>
                       </div>
                     </div>
-                  </details>
+                  </details>` : ''}
 
-                  ${igStatus?.enabled ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
+                  ${(pluginHost.isEnabled("instagram") && igStatus?.enabled) ? this._renderInstagramSection(p, igStatus, publishingToInstagram, anyActionInProgress, isNew) : ""}
                 </div>
               </aside>
             </div>`;
@@ -531,12 +534,15 @@ export default class PostEditPage extends Component {
     });
     this._tags = toTagNames(this.state.post?.tags);
 
-    this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
-      id: "css-editor",
-      value: this.state.post?.css || "",
-      isMaximized: this.state.maximizedField === "css",
-      onChange: () => this._onInput(),
-    });
+    // The Custom CSS field is only rendered when the custom-css plugin is on.
+    if (pluginHost.isEnabled("custom-css")) {
+      this._cssEditorRef = this.mountChild(CssEditor, "#css-editor-mount", {
+        id: "css-editor",
+        value: this.state.post?.css || "",
+        isMaximized: this.state.maximizedField === "css",
+        onChange: () => this._onInput(),
+      });
+    }
 
     if (this.state.editorMode === "text") {
       this._markdownEditorRef = this.mountChild(MarkdownEditor, "#content-editor-mount", {

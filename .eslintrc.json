@@ -9,6 +9,7 @@
     "sourceType": "module"
   },
   "globals": {
+    "globalThis": "readonly",
     "window": "readonly",
     "document": "readonly",
     "navigator": "readonly",
@@ -47,7 +48,8 @@
     "customElements": "readonly",
     "HTMLElement": "readonly",
     "ResizeObserver": "readonly",
-    "performance": "readonly"
+    "performance": "readonly",
+    "__DEBUG__": "readonly"
   },
   "rules": {
     "constructor-super": "error",

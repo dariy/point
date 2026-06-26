@@ -118,6 +118,8 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 		Expires:  time.Now().Add(-1 * time.Hour).UTC().Round(0),
 		HttpOnly: true,
 		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.cfg.AppEnv == "production",
 	}
 	c.SetCookie(newCookie)
 
@@ -154,6 +156,7 @@ type ChangePasswordRequest struct {
 
 func (h *AuthHandler) ChangePassword(c echo.Context) error {
 	userID := extractUserID(c.Get("user"))
+	sessionID := extractSessionID(c.Get("user"))
 
 	var req ChangePasswordRequest
 	if err := c.Bind(&req); err != nil {
@@ -164,7 +167,7 @@ func (h *AuthHandler) ChangePassword(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "new password is required")
 	}
 
-	if err := h.authService.ChangePassword(c.Request().Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+	if err := h.authService.ChangePassword(c.Request().Context(), userID, sessionID, req.CurrentPassword, req.NewPassword); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 

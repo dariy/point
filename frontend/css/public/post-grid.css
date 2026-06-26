@@ -7,8 +7,17 @@
 
 .posts-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--posts-grid-grid-template-columns), 1fr));
+    /* min(col, 100%) so a single column never exceeds the track on narrow
+       (portrait) viewports — prevents the grid from forcing horizontal overflow. */
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--posts-grid-grid-template-columns), 100%), 1fr));
     gap: var(--spacing-xl);
+}
+
+/* Grid items must be allowed to shrink below their intrinsic content width.
+   Without min-width:0 the default min-width:auto lets a non-wrapping child
+   (the horizontally-scrolling tag strip) stretch the card past the viewport. */
+.post-card-slot {
+    min-width: 0;
 }
 
 /* ===========================
@@ -423,9 +432,46 @@
 .grid-preview-placeholder {
     position: absolute;
     top: 0;
-    width: 100%;
+    bottom: 0;
+    /* Overlay the live grid's content box exactly: inset by the container
+       padding so width matches #grid-mount (not the viewport-wide padding box).
+       Without this the ghost is wider than the grid and anchored left, so a
+       "prev" drag lands its right edge flush against the grid (no gap) while a
+       "next" drag shows one — the swipe gap was asymmetric. */
+    left: var(--spacing-md);
+    right: var(--spacing-md);
+    /* Constrain to the live mount height and clip the overflow. The ghost grid
+       renders at its natural height (outside the grid-expand flex that compacts
+       the real grid), so without this its full height inflates the page's
+       scroll height — leaving dead space below the footer. Anchor the height
+       off the container edges (top:0; bottom:0) rather than height:100%:
+       percentage height on an absolutely-positioned box doesn't resolve
+       reliably on iOS WebKit, so it would fall back to the natural height. */
+    overflow: hidden;
     pointer-events: none;
     z-index: 10;
+    /* Keep the sliding neighbour on its own compositor layer so each drag frame
+       is a GPU transform, not a main-thread repaint of the image-heavy grid. */
+    will-change: transform, opacity;
+}
+
+/* While a page swipe is in progress, promote the outgoing grid to its own
+   compositor layer too, so it tracks the finger without repaint jank. Applied
+   only during the drag (toggled in JS) to avoid a permanent layer cost. */
+#grid-mount.grid-swiping {
+    will-change: transform, opacity;
+}
+
+/* Promote the grid to its own compositor layer ahead of any swipe (added in JS
+   during idle, after render — see _promoteGridAhead). Doing the one-off raster
+   of the image-heavy grid up front means the first drag frame is a cheap GPU
+   transform instead of stalling on layer creation, which is what made the grid
+   lag behind the finger at touch-down. translateZ(0) forces the raster now
+   rather than merely hinting at it; the drag's inline translateX overrides it
+   and the layer persists via will-change. */
+#grid-mount.grid-promoted {
+    transform: translateZ(0);
+    will-change: transform;
 }
 .placeholder-grid .post-card-slot {
     background: var(--surface-card);

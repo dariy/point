@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"point-api/internal/models"
+	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
@@ -97,10 +98,22 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"active_css_theme", "default", "string"},
 		{"use_thumbnails", "true", "boolean"},
 		{"show_view_counts", "false", "boolean"},
-		{"show_tag_cloud", "true", "boolean"},
+
 		{"tags_module", "atlas", "string"},
 		{"tags_visibility", "hidden", "string"},
+		{"atlas_post_limit", "10", "integer"},
 		{"enable_backup", "false", "boolean"},
+	}
+
+	// Seed per-plugin enabled state (plugin.<id>.enabled). Existing installs lack
+	// these keys and fall back to each descriptor's DefaultEnabled at read time,
+	// so seeding only fixes the value for fresh installs.
+	for _, d := range plugins.Registry {
+		seedSettings = append(seedSettings, struct {
+			key   string
+			value string
+			vType string
+		}{plugins.EnabledKey(d.ID), plugins.SeedValue(d), "boolean"})
 	}
 
 	for _, s := range seedSettings {

@@ -47,6 +47,15 @@ body {
     display: flex;
     flex-direction: column;
     position: relative;
+    /* Clip the off-screen swipe-preview ghost grids (translateX ±100%, and the
+       neighbour grid's full height) so they don't inflate the page's scroll
+       width or height — dead space right of, and below, the footer. Plain
+       overflow:hidden (not overflow:clip + overflow-clip-margin): clip and
+       clip-margin are unreliable on iOS WebKit, where the block-axis clip
+       leaked and left a screen of dead space under the footer. The only cost is
+       a few px of hover-lift clipped on the top card row on desktop; touch has
+       no hover lift. */
+    overflow: hidden;
 }
 
 /* Home page: expand post cards to fill viewport when content is short */
