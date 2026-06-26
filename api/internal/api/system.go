@@ -202,10 +202,20 @@ func (h *SystemHandler) GetLogs(c echo.Context) error {
 }
 
 func (h *SystemHandler) CreateBackup(c echo.Context) error {
-	backupName, size, err := h.systemService.CreateBackup(c.Request().Context())
+	ctx := c.Request().Context()
+	backupName, size, err := h.systemService.CreateBackup(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
+	// Enforce retention so manual backups also can't overflow the drive.
+	keep := 7
+	if v, _ := h.settingsService.GetSetting(ctx, "backup_keep", ""); v != "" {
+		if n, e := strconv.Atoi(v); e == nil {
+			keep = n
+		}
+	}
+	_, _ = h.systemService.RotateBackups(keep)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status":   "success",

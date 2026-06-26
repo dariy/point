@@ -11,6 +11,8 @@ const MANIFEST = [
   { id: "tags-atlas", type: "route", slot: "tags-route", routes: ["/tags"] }, // no chunk
   { id: "tags-map", type: "route", slot: "tags-route", routes: ["/tags"], entry: "/assets/js/p/tags-map-xyz.js" },
   { id: "media-library", type: "route", routes: ["/light/media"], entry: "/assets/js/p/media-1.js" },
+  // Slot plugin that also owns an admin route (and some API prefixes).
+  { id: "nav-menu", type: "slot", slot: "nav-menu", routes: ["/light/menu", "/api/nav-menu"], entry: "/assets/js/p/nav-menu-x.js" },
   { id: "instagram", type: "service", routes: ["/api/instagram"] },
 ];
 
@@ -33,9 +35,10 @@ describe("PluginHost", () => {
     assert.strictEqual(pluginHost.slotEntries("home-explore").length, 1);
   });
 
-  test("routes() lists route plugins with chunks, excluding tags-route", () => {
+  test("routes() lists plugins with chunks that own a /light route, excluding tags-route", () => {
     const ids = pluginHost.routes().map((e) => e.id);
-    assert.deepStrictEqual(ids, ["media-library"]);
+    // media-library (route) and nav-menu (slot plugin owning /light/menu) both qualify.
+    assert.deepStrictEqual(ids, ["media-library", "nav-menu"]);
     // tags-map has a chunk but is single-claim (tags-route) → excluded.
     assert.ok(!ids.includes("tags-map"));
     // tags-atlas/instagram have no chunk → excluded.

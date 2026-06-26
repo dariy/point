@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -61,15 +62,36 @@ func (s *SchedulerService) Start(ctx context.Context) {
 	// Daily task: Instagram token refresh (at 4 AM)
 	go s.runDaily(ctx, "instagram token refresh", 4, s.refreshInstagramTokenIfNeeded)
 
-	// Daily task: Backups (at 3 AM)
+	// Daily task: Backups (checked at 3 AM). The cadence (backup_interval_days)
+	// and retention (backup_keep) are admin settings; the check runs daily but
+	// only creates a backup when one is due, then prunes old ones.
 	go s.runDaily(ctx, "daily backup", 3, func(ctx context.Context) error {
 		enabled, _ := s.settingsService.GetSetting(ctx, "enable_backup", "true")
 		if enabled != "true" {
 			return nil
 		}
-		_, _, err := s.systemService.CreateBackup(ctx)
+		if !s.systemService.BackupDue(s.settingInt(ctx, "backup_interval_days", 1)) {
+			return nil
+		}
+		if _, _, err := s.systemService.CreateBackup(ctx); err != nil {
+			return err
+		}
+		_, err := s.systemService.RotateBackups(s.settingInt(ctx, "backup_keep", 7))
 		return err
 	})
+}
+
+// settingInt reads an integer setting, falling back to def when unset or unparseable.
+func (s *SchedulerService) settingInt(ctx context.Context, key string, def int) int {
+	v, _ := s.settingsService.GetSetting(ctx, key, "")
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 func (s *SchedulerService) runHourly(ctx context.Context, name string, task func(context.Context) error) {

@@ -22,6 +22,10 @@ export default class MediaPage extends Component {
       currentPath: '/light/media',
     });
 
+    // Fixed-viewport layout (media.css .media-page-main): the gallery fills the
+    // available width/height, its grid scrolls, and pagination stays pinned.
+    this.$('.light-main')?.classList.add('media-page-main');
+
     this.mountChild(MediaBrowser, '#media-browser-mount', { pickerMode: false });
   }
 

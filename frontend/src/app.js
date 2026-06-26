@@ -199,15 +199,20 @@ async function bootstrap() {
   }
   store.set("user", user);
 
-  // 3.1 Fetch version info (non-blocking)
-  getVersion()
-    .then((ver) => {
-      store.set("version", ver.current);
-    })
-    .catch(() => {
-      // If it fails, we can try to fall back to the stamped version in index.html if we want,
-      // but the API is more reliable for the actual running binary.
-    });
+  // 3.1 Fetch version info (non-blocking). Admin-only: /api/system/version
+  // returns 401 for guests, and that 401 would otherwise resolve after the
+  // router has registered its api:unauthorized listener and pop the login
+  // overlay on the public site. Only the admin sidebar consumes it.
+  if (user) {
+    getVersion()
+      .then((ver) => {
+        store.set("version", ver.current);
+      })
+      .catch(() => {
+        // If it fails, we can try to fall back to the stamped version in index.html if we want,
+        // but the API is more reliable for the actual running binary.
+      });
+  }
 
 
 
@@ -358,10 +363,6 @@ const routes = [
     load: () => import("./pages/light/SettingsPage.js"),
   },
   {
-    path: "/light/analytics",
-    load: () => import("./pages/light/AnalyticsPage.js"),
-  },
-  {
     path: "/light/security",
     load: () => import("./pages/light/SecurityPage.js"),
   },
@@ -375,6 +376,9 @@ const routes = [
 // route never overrides a core path of the same pattern.
 for (const entry of pluginHost.routes()) {
   for (const path of entry.routes) {
+    // A plugin's `routes` mixes frontend paths and server API prefixes; only the
+    // SPA (frontend) paths belong in the client router.
+    if (path.startsWith("/api/")) continue;
     if (routes.some((r) => r.path === path)) continue;
     routes.push({
       path,

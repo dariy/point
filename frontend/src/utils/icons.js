@@ -313,6 +313,26 @@ export const PLAY_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="n
     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+export const PAUSE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+  <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+</svg>`;
+
+export const MINUS_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+export const SHUFFLE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <polyline points="16 3 21 3 21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="4" y1="20" x2="21" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="21 16 21 21 16 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="15" y1="15" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="4" y1="4" x2="9" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 export const LIST_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <line x1="8" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
