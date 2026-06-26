@@ -91,6 +91,10 @@ var Registry = []Descriptor{
 	// lightbox) via the `immersive-share` sub-slot. Toggle off to drop the button.
 	{ID: "immersive-share", Type: TypeSlot, Slot: "immersive-share", EntryName: "immersive-share", DefaultEnabled: true},
 
+	// Auto-advancing slideshow injected into the MediaViewer via the `slideshow`
+	// sub-slot. Top-right toggle + bottom control bar; toggle off to drop it.
+	{ID: "slideshow", Type: TypeSlot, Slot: "slideshow", EntryName: "slideshow", DefaultEnabled: true},
+
 	// ── Admin routes ─────────────────────────────────────────────────────────
 	// Each admin route is its own single-plugin core area: it cannot be disabled.
 	{ID: "media-library", Type: TypeRoute, Routes: []string{"/light/media"}, EntryName: "media-library", DefaultEnabled: true, Area: "media-library", Core: true},

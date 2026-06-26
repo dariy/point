@@ -1080,12 +1080,14 @@ textarea.is-maximized,
 
     .editor-layout.has-live-preview .editor-live-preview {
         display: block;
+        /* Take all remaining width and the full available height — there's ample
+           room on ultrawide, so the Details panel sits alongside without
+           shrinking the preview below a comfortable size (admin-ux C5 / lkb3). */
         flex: 1;
         min-width: 0;
-        max-width: 56.25rem;
         position: sticky;
         top: var(--spacing-md);
-        max-height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
+        height: calc(100vh - var(--header-height) - var(--spacing-xl) * 2);
         overflow-y: auto;
         border: var(--border-width) solid var(--border-primary);
         border-radius: var(--border-radius);

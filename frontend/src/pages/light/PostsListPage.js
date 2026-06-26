@@ -17,6 +17,7 @@ import {
   permanentlyDeletePost,
   updatePostTags,
   setPostStatus,
+  generatePreviewLink,
 } from "../../api/posts.js";
 import { store } from "../../store.js";
 import { escapeHtml, navigate, debounce } from "../../utils/helpers.js";
@@ -24,6 +25,9 @@ import { formatDateShort } from "../../utils/formatters.js";
 import {
   EDIT_SVG,
   X_SVG,
+  LINK_SVG,
+  CHECK_SVG,
+  TRASH_SVG,
   EXTERNAL_LINK_SVG,
   PLAY_SVG,
   MUSIC_SVG,
@@ -138,10 +142,7 @@ export default class PostsListPage extends Component {
     const chipsHtml = tagChips.join("");
 
     return `
-      <div class="post-card" data-post-id="${escapeHtml(String(p.id))}">
-        <div class="post-card-check-wrap">
-          <input type="checkbox" class="select-row-cb post-card-check" data-id="${escapeHtml(String(p.id))}" ${isChecked ? "checked" : ""}>
-        </div>
+      <div class="post-card${isChecked ? " is-selected" : ""}" data-post-id="${escapeHtml(String(p.id))}" data-status="${escapeHtml(effStatus(p))}" data-slug="${escapeHtml(p.slug || "")}">
         <div class="post-card-thumb">${thumbInner}</div>
         <div class="post-card-body">
           <div class="post-card-top">
@@ -149,7 +150,12 @@ export default class PostsListPage extends Component {
             <select class="status-select badge-${escapeHtml(effStatus(p))} status-change-btn" name="status" data-id="${escapeHtml(String(p.id))}">${cardStatusOptions}</select>
           </div>
           ${chipsHtml ? `<div class="post-card-chips">${chipsHtml}</div>` : ""}
-          <div class="post-card-meta">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</div>
+        </div>
+        <div class="post-card-swipe-actions">
+          <button class="btn btn-sm swipe-publish-btn" data-id="${escapeHtml(String(p.id))}">${CHECK_SVG}<span>Publish</span></button>
+          <button class="btn btn-sm swipe-preview-btn" data-id="${escapeHtml(String(p.id))}">${LINK_SVG}<span>Link</span></button>
+          <a class="btn btn-sm" href="/posts/${escapeHtml(p.slug)}" target="_blank" data-external>${EXTERNAL_LINK_SVG}<span>Open</span></a>
+          <button class="btn btn-sm btn-danger swipe-delete-btn" data-id="${escapeHtml(String(p.id))}" data-title="${escapeHtml(p.title)}">${X_SVG}<span>Delete</span></button>
         </div>
       </div>`;
   }
@@ -201,7 +207,7 @@ export default class PostsListPage extends Component {
       })
       .join("");
 
-    const colspan = selectMode && !isTrash ? 6 : 5;
+    const colspan = isTrash ? 5 : selectMode ? 5 : 4;
 
     const rows = loading
       ? `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`
@@ -311,7 +317,6 @@ export default class PostsListPage extends Component {
                     ${escapeHtml(p.title)}
                   </a>
                 </td>
-                <td class="updated-col" title="Last updated">${escapeHtml(formatDateShort(p.updated_at || p.created_at))}</td>
                 <td class="actions-col">
                   <div class="actions">
                     <a href="/light/posts/${escapeHtml(String(p.id))}/edit"
@@ -326,7 +331,7 @@ export default class PostsListPage extends Component {
                 </td>
               </tr>
               <tr data-post-id="${escapeHtml(String(p.id))}" class="post-row-tags">
-                <td colspan="4" class="tags-col">
+                <td colspan="3" class="tags-col">
                   <div id="tags-cell-${escapeHtml(String(p.id))}"></div>
                 </td>
               </tr>`;
@@ -334,6 +339,7 @@ export default class PostsListPage extends Component {
               .join("");
 
     return `
+            <div class="posts-toolbar">
             <div class="filters">
               <select id="status-filter" class="status-select badge-${escapeHtml(statusFilter || "draft")} filter-select">
                 ${statusOptions}
@@ -351,18 +357,21 @@ export default class PostsListPage extends Component {
                 ? `
             <div class="bulk-toolbar" id="bulk-toolbar">
               <label class="select-all-label"><input type="checkbox" id="select-all-cb"> Select all</label>
-              <span id="bulk-count">0 selected</span>
-              <select id="bulk-status-select">
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="hidden">Hidden</option>
-              </select>
-              <button id="bulk-apply-btn" class="btn btn-sm" disabled>Apply</button>
-              <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled>Move to Trash</button>
+              <div class="bulk-actions">
+                <span id="bulk-count">0 selected</span>
+                <select id="bulk-status-select">
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+                <button id="bulk-apply-btn" class="btn btn-sm" disabled title="Apply">${CHECK_SVG}<span class="btn-label">Apply</span></button>
+                <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled title="Move to Trash">${TRASH_SVG}<span class="btn-label">Move to Trash</span></button>
+              </div>
             </div>
             `
                 : ""
             }
+            </div>
             <div class="table-container">
               <table class="table">
                 <tbody id="posts-tbody">${rows}</tbody>
@@ -376,6 +385,10 @@ export default class PostsListPage extends Component {
     this._cleanupAdminLayout = setupAdminLayout(this, {
       currentPath: "/light/posts",
     });
+
+    // Opt into the fixed-viewport layout (layout.css .posts-list-main): the list
+    // fills the window and pagination stays pinned to the bottom edge.
+    this.$(".light-main")?.classList.add("posts-list-main");
 
     try {
       sessionStorage.setItem('point:admin:posts-list-url', window.location.pathname + window.location.search);
@@ -425,7 +438,7 @@ export default class PostsListPage extends Component {
       });
     }
 
-    // Tag filter
+    // Tag filter (always present; the bulk toolbar overlays it in select mode)
     if (!isTrash && !this.state.loading) {
       this.mountChild(TagsInput, "#tag-filter-mount", {
         tags: this.state.tagFilter ? [this.state.tagFilter] : [],
@@ -499,49 +512,32 @@ export default class PostsListPage extends Component {
       });
     });
 
-    // Swipe gestures for cards
+    // Swipe-to-reveal action drawer on cards (portrait mobile).
     if (!isTrash && !this.state.loading) {
-      this.container.querySelectorAll('.post-card').forEach(card => {
-        let startX = 0;
-        let startY = 0;
-        let deltaX = 0;
-        let deltaY = 0;
-        const id = parseInt(card.dataset.id, 10);
-        const status = card.dataset.status;
-
-        card.addEventListener('touchstart', (e) => {
-          startX = e.touches[0].clientX;
-          startY = e.touches[0].clientY;
-          deltaX = 0;
-          deltaY = 0;
-          card.style.transition = 'none';
-        }, { passive: true });
-
-        card.addEventListener('touchmove', (e) => {
-          deltaX = e.touches[0].clientX - startX;
-          deltaY = e.touches[0].clientY - startY;
-          if (Math.abs(deltaX) > Math.abs(deltaY)) {
-            card.style.transform = `translateX(${deltaX}px)`;
-            if (deltaX > 50) card.classList.add('swipe-right');
-            else if (deltaX < -50) card.classList.add('swipe-left');
-            else card.classList.remove('swipe-right', 'swipe-left');
-          }
-        }, { passive: true });
-
-        card.addEventListener('touchend', () => {
-          card.style.transition = 'transform 0.3s ease-out';
-          card.style.transform = '';
-          if (deltaX > 100) {
-            // Swipe Right: Toggle Publish
-            const nextStatus = status === 'published' ? 'draft' : 'published';
-            this._updatePostStatus(id, nextStatus);
-          } else if (deltaX < -100) {
-            // Swipe Left: Move to Trash
-            this._deletePost(id);
-          }
-          card.classList.remove('swipe-right', 'swipe-left');
+      // Drawer action buttons
+      this.container.querySelectorAll('.swipe-publish-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          this._cyclePostStatus(parseInt(btn.dataset.id, 10), 'published');
         });
       });
+      this.container.querySelectorAll('.swipe-preview-btn').forEach((btn) => {
+        btn.addEventListener('click', () => this._copyPreviewLink(parseInt(btn.dataset.id, 10)));
+      });
+      this.container.querySelectorAll('.swipe-delete-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = parseInt(btn.dataset.id, 10);
+          const title = btn.dataset.title;
+          this._showConfirm(
+            "Move to Trash",
+            `Move "${title}" to Trash? You can restore it later.`,
+            "Move to Trash",
+            "danger",
+            () => this._deletePost(id),
+          );
+        });
+      });
+
+      this._bindSwipeToReveal();
     }
 
     // Tag family popover for chips
@@ -606,30 +602,30 @@ export default class PostsListPage extends Component {
         if (e.target.closest("select, button, a, input")) return;
         if (isTrash) return;
         if (this.state.selectMode) {
-          const cb = card.querySelector(".select-row-cb");
-          if (cb) {
-            cb.checked = !cb.checked;
-            cb.dispatchEvent(new Event("change", { bubbles: true }));
-          }
+          this._toggleCardSelection(postId);
           return;
         }
         navigate(`/light/posts/${postId}/edit`);
       });
     });
+
+    // Everything is mounted now — size the page to fill the viewport.
+    this._fitToViewport();
+  }
+
+  // Swipe-right selection: toggle this card; leave select mode when nothing's left.
+  _toggleCardSelection(id) {
+    const selectedIds = new Set(this.state.selectedIds);
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    this.setState({ selectMode: selectedIds.size > 0, selectedIds });
   }
 
   _handleSelectAll(e) {
-    const isChecked = e.target.checked;
-    const { posts, selectedIds } = this.state;
-    this.container.querySelectorAll(".select-row-cb").forEach((cb) => {
-      cb.checked = isChecked;
-    });
-    if (isChecked) {
-      posts.forEach((p) => selectedIds.add(p.id));
-    } else {
-      selectedIds.clear();
-    }
-    this._updateBulkToolbar();
+    // Re-render so both table checkboxes and card backgrounds reflect the change.
+    const selectedIds = new Set();
+    if (e.target.checked) this.state.posts.forEach((p) => selectedIds.add(p.id));
+    this.setState({ selectMode: selectedIds.size > 0, selectedIds });
   }
 
   _handleSelectRow(e) {
@@ -638,6 +634,11 @@ export default class PostsListPage extends Component {
       this.state.selectedIds.add(id);
     } else {
       this.state.selectedIds.delete(id);
+    }
+    if (this.state.selectedIds.size === 0) {
+      // Last item deselected — drop select mode so the filters block returns.
+      this.setState({ selectMode: false });
+      return;
     }
     this._updateBulkToolbar();
   }
@@ -737,16 +738,11 @@ export default class PostsListPage extends Component {
 
   mount() {
     super.mount();
-    this._perPage = this._calcPerPage();
+    // Rough first guess; _fitToViewport corrects it once real rows are laid out.
+    this._perPage = this._perPage || 20;
     this._load();
 
-    this._onResize = debounce(() => {
-      const next = this._calcPerPage();
-      if (next !== this._perPage) {
-        this._perPage = next;
-        this._load({ page: 1 });
-      }
-    }, 200);
+    this._onResize = debounce(() => this._fitToViewport(), 200);
     window.addEventListener("resize", this._onResize);
   }
 
@@ -755,15 +751,37 @@ export default class PostsListPage extends Component {
     if (this._onResize) window.removeEventListener("resize", this._onResize);
   }
 
-  /** Measure how many table rows fit in the available container height. */
-  _calcPerPage() {
-    const container = this.container.querySelector(".table-container");
-    const probeRow = this.container.querySelector("tbody tr");
-    if (!container || !probeRow) return 20;
-    const bodyHeight = container.clientHeight;
-    // Each post item now takes two <tr> rows.
-    const rowHeight = (probeRow.offsetHeight || 44) * 2;
-    return Math.max(5, Math.floor(bodyHeight / rowHeight));
+  /**
+   * After a full render (rows + tag editors + pagination all mounted), measure
+   * the visible scroll container against its actual content and reload with the
+   * per_page that fills the space without overflowing. Self-correcting: derives
+   * the real per-item height from what's on screen, so it doesn't depend on
+   * guessing row heights before children mount.
+   */
+  _fitToViewport() {
+    if (this.state.loading) return;
+    const rows = this.state.posts.length;
+    if (!rows) return;
+
+    requestAnimationFrame(() => {
+      // Whichever list is actually visible (table on desktop, cards on mobile).
+      const table = this.container.querySelector(".table-container");
+      const cards = this.container.querySelector(".posts-card-list");
+      const container =
+        table && table.offsetParent !== null ? table : cards;
+      if (!container) return;
+
+      const rowHeight = container.scrollHeight / rows; // real per-item height
+      if (rowHeight < 1) return;
+      const fit = Math.max(5, Math.floor(container.clientHeight / rowHeight));
+
+      // Reload only when it changes what we'd fetch — and never re-request a
+      // size we've already asked for (guards the total < fit case from looping).
+      if (fit !== rows && fit !== this._perPage) {
+        this._perPage = fit;
+        this._load({ page: 1 });
+      }
+    });
   }
 
   /** Update the browser URL to reflect current filters without triggering a full navigation. */
@@ -792,7 +810,8 @@ export default class PostsListPage extends Component {
     // Show loading indicator in-place — no full re-render, no focus loss.
     // The strings are fully static (no user data), so innerHTML is safe here.
     const tbody = this.container.querySelector("#posts-tbody");
-    const colspan = this.state.selectMode ? 6 : 5;
+    const colspan =
+      this.state.statusFilter === "trash" ? 5 : this.state.selectMode ? 5 : 4;
     if (tbody) {
       tbody.innerHTML = `<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>`; // static, safe
     }
@@ -928,6 +947,152 @@ export default class PostsListPage extends Component {
         message: err.message || "Delete failed.",
         type: "error",
       });
+    }
+  }
+
+  // ── Swipe-to-reveal actions (portrait mobile) ────────────────────────────────
+  // Mirrors the Tags Manager: .post-card-swipe-actions sits off-screen right and
+  // the card slides left over it. Swipe left to open, right to close, tap
+  // elsewhere to dismiss.
+  _bindSwipeToReveal() {
+    this._swipeCleanup?.();              // tear down listeners from the previous render
+    this._swipeCleanup = null;
+    if (!window.matchMedia) return;      // SSR / test env guard
+    if (!window.matchMedia('(max-width: 48em)').matches) return; // cards only show here
+
+    const THRESHOLD_PX = 40;             // minimum drag to snap open/closed
+    const DAMPING = 0.55;                // rubber-band resistance past the edges
+    let openCard = null;
+    let actionsWidth = 0;
+    let startX = 0, startY = 0;
+    let dragging = false;                // committed to a horizontal drag
+    let decided = false;                 // direction locked
+    let dx = 0;
+    const abortControllers = [];
+
+    const closeOpen = () => {
+      if (!openCard) return;
+      openCard.style.transform = '';
+      openCard.classList.remove('post-card--revealed');
+      openCard = null;
+    };
+
+    this.container.querySelectorAll('.post-card').forEach(card => {
+      if (!card.querySelector('.post-card-swipe-actions')) return;
+      const ac = new AbortController();
+      abortControllers.push(ac);
+      const sig = { signal: ac.signal };
+
+      card.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return;
+        // Let buttons in the already-open drawer handle their own taps
+        if (card === openCard && e.target.closest('.post-card-swipe-actions')) return;
+        const t = e.touches[0];
+        startX = t.clientX;
+        startY = t.clientY;
+        dragging = false;
+        decided = false;
+        dx = 0;
+        const actions = card.querySelector('.post-card-swipe-actions');
+        actionsWidth = actions ? actions.offsetWidth : 0;
+        card.style.transition = 'none';
+      }, { ...sig, passive: true });
+
+      card.addEventListener('touchmove', e => {
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        const rawDx = t.clientX - startX;
+        const rawDy = t.clientY - startY;
+
+        if (!decided) {
+          const absDx = Math.abs(rawDx);
+          const absDy = Math.abs(rawDy);
+          if (Math.max(absDx, absDy) < 8) return;
+          decided = true;
+          dragging = absDx > absDy;       // horizontal wins?
+          if (!dragging) return;          // vertical — let the page scroll
+          if (openCard && openCard !== card) closeOpen();
+        }
+        if (!dragging) return;
+        e.preventDefault();
+
+        dx = rawDx;
+        const isOpen = card === openCard;
+        let translate = (isOpen ? -actionsWidth : 0) + dx;
+        // Rubber-band past both edges
+        if (translate > 0) {
+          translate *= (1 - DAMPING);
+        } else if (translate < -actionsWidth) {
+          const over = -actionsWidth - translate;
+          translate = -actionsWidth - over * (1 - DAMPING);
+        }
+        card.style.transform = `translateX(${translate}px)`;
+      }, { ...sig, passive: false });
+
+      card.addEventListener('touchend', () => {
+        card.style.transition = '';        // restore CSS transition for the snap
+        if (!dragging) {
+          if (openCard && openCard !== card) closeOpen();
+          return;
+        }
+        const isOpen = card === openCard;
+        if (isOpen) {
+          // Swipe right on an open card closes the drawer.
+          if (dx > THRESHOLD_PX) closeOpen();
+          else card.style.transform = `translateX(${-actionsWidth}px)`;
+        } else if (dx < -THRESHOLD_PX && actionsWidth > 0) {
+          // Swipe left reveals the action drawer.
+          closeOpen();
+          card.style.transform = `translateX(${-actionsWidth}px)`;
+          card.classList.add('post-card--revealed');
+          openCard = card;
+        } else if (dx > THRESHOLD_PX) {
+          // Swipe right toggles selection for bulk operations.
+          card.style.transform = '';
+          this._toggleCardSelection(parseInt(card.dataset.postId, 10));
+        } else {
+          card.style.transform = '';
+        }
+      }, { ...sig, passive: true });
+
+      card.addEventListener('touchcancel', () => {
+        card.style.transition = '';
+        card.style.transform = card === openCard ? `translateX(${-actionsWidth}px)` : '';
+      }, { ...sig, passive: true });
+    });
+
+    // Tap elsewhere closes the open drawer
+    const containerAc = new AbortController();
+    abortControllers.push(containerAc);
+    this.container.addEventListener('click', e => {
+      if (!openCard) return;
+      if (openCard.contains(e.target)) return;
+      closeOpen();
+    }, { signal: containerAc.signal });
+
+    this._swipeCleanup = () => {
+      abortControllers.forEach(ac => ac.abort());
+      closeOpen();
+    };
+  }
+
+  // Swipe-right status cycle: update then re-render so the badge/select reflect it.
+  async _cyclePostStatus(id, status) {
+    await this._updatePostStatus(id, status);
+    this.setState({});
+  }
+
+  async _copyPreviewLink(id) {
+    try {
+      const { preview_url } = await generatePreviewLink(id);
+      try {
+        await navigator.clipboard.writeText(preview_url);
+        store.set("toast", { message: "Preview link copied to clipboard.", type: "success" });
+      } catch {
+        store.set("toast", { message: preview_url, type: "info" });
+      }
+    } catch (err) {
+      store.set("toast", { message: err.message || "Could not generate preview link.", type: "error" });
     }
   }
 

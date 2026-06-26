@@ -127,12 +127,37 @@ export class MediaViewer extends Component {
 
   afterRender() {
     this._initInteractivity();
+    const wrapper = this.$('.media-viewer-wrapper');
     // The floating share button is its own plugin (immersive-share); it injects
     // the button into the wrapper when enabled. showShare:false (e.g. a viewer
     // with no post) opts out, matching the old inline behaviour.
     if (this.props.showShare !== false) {
-      pluginHost.fill('immersive-share', this.$('.media-viewer-wrapper'), {});
+      this._fillSlot('immersive-share', wrapper, {});
     }
+    // The slideshow plugin (auto-advancing viewer). It walks the whole
+    // collection — within a post, then across to the next post — so it's offered
+    // on every post viewer, including single-media posts (which just cross to the
+    // next post). Skipped only for the no-post lightbox (showShare:false). It
+    // drives the carousel through this small controller; no viewer internals are
+    // exposed beyond these four methods.
+    if (this.props.showShare !== false) {
+      this._fillSlot('slideshow', wrapper, {
+        count: (this.props.items || []).length,
+        index: () => this._index,
+        goTo: (i) => this._goTo(i),
+        activeVideo: () => this._slides?.[this._index]?.querySelector('video') || null,
+      });
+    }
+  }
+
+  /**
+   * Mount a slot plugin and remember its unmount handle so timers/listeners it
+   * registers (the slideshow keeps document-level ones) are torn down with the
+   * viewer — fill() results are otherwise discarded. Cleaned up in _cleanup().
+   */
+  _fillSlot(slot, wrapper, ctx) {
+    const p = pluginHost.fill(slot, wrapper, ctx);
+    (this._slotMounts ||= []).push(p);
   }
 
   beforeUnmount() {
@@ -215,6 +240,9 @@ export class MediaViewer extends Component {
       this._updateExif();
       onStep?.(this._index);
     };
+
+    // Expose carousel navigation to the slideshow slot plugin (controller hook).
+    this._goTo = goTo;
 
     // Nav panels
     this._on(this.$('.immersive-nav-prev'), 'click', (e) => this._panelClick(e, () => goTo(this._index - 1)));
@@ -678,6 +706,15 @@ export class MediaViewer extends Component {
   _cleanup() {
     this._listeners.forEach(([t, e, s, i]) => t.removeEventListener(e, s, i));
     this._listeners = []; this._gesture?.destroy(); this._trackpad?.destroy();
+    // Unmount slot plugins (share button, slideshow) so their listeners/timers
+    // don't survive the wrapper being replaced. fill() returns an array of mount
+    // results (one per claimant); each may expose unmount().
+    if (this._slotMounts) {
+      this._slotMounts.forEach((p) =>
+        Promise.resolve(p).then((res) => (res || []).forEach((r) => r?.unmount?.())),
+      );
+      this._slotMounts = [];
+    }
     // The EXIF control lives inside the re-rendered wrapper; drop our reference
     // so a stale control isn't reused after the next render.
     this._exifControl = null;

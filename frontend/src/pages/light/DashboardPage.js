@@ -146,22 +146,22 @@ export default class DashboardPage extends Component {
 
     return `
       <div class="stats-grid">
-        <div class="stat-card">
+        <a class="stat-card" href="/light/posts?status=published">
           <div class="stat-label">Published Posts</div>
           <div class="stat-value stat-primary">${escapeHtml(String(s.published_posts ?? 0))}</div>
-        </div>
-        <div class="stat-card">
+        </a>
+        <a class="stat-card" href="/light/posts">
           <div class="stat-label">Total Posts</div>
           <div class="stat-value">${escapeHtml(String(s.total_posts ?? 0))}</div>
-        </div>
-        <div class="stat-card">
+        </a>
+        <a class="stat-card" href="/light/tags">
           <div class="stat-label">Tags</div>
           <div class="stat-value">${escapeHtml(String(s.total_tags ?? 0))}</div>
-        </div>
-        <div class="stat-card">
+        </a>
+        <a class="stat-card" href="/light/media">
           <div class="stat-label">Media Files</div>
           <div class="stat-value">${escapeHtml(String(s.total_media ?? 0))}</div>
-        </div>
+        </a>
         ${analyticsCards}
       </div>
 
