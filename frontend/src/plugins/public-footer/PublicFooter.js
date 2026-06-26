@@ -17,6 +17,8 @@ import {
   RSS_SVG,
   SUN_SVG,
   MOON_SVG,
+  LOGIN_SVG,
+  LOGOUT_SVG,
 } from "../../utils/icons.js";
 import { store } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
@@ -59,6 +61,11 @@ export class PublicFooter extends Component {
                 <span class="icon-moon">${MOON_SVG}</span>
               </button>`;
 
+    // Log in link to the admin app, or log out when a user is signed in.
+    const authButton = store.get("user")
+      ? `<button class="footer-action-btn" id="footer-logout" type="button" title="Log out" aria-label="Log out">${LOGOUT_SVG}</button>`
+      : `<a href="/light" class="footer-action-btn" title="Log in" aria-label="Log in">${LOGIN_SVG}</a>`;
+
     return `
       <footer class="site-footer">
         <div class="footer-container">
@@ -75,6 +82,7 @@ export class PublicFooter extends Component {
               <div class="footer-actions">
                 ${rssButton}
                 ${themeToggle}
+                ${authButton}
               </div>
             </div>
           </div>
@@ -87,6 +95,16 @@ export class PublicFooter extends Component {
     this.$("#theme-toggle")?.addEventListener("click", () => {
       const current = store.get("theme") || "auto";
       store.set("theme", current === "dark" ? "light" : "dark");
+    });
+
+    this.$("#footer-logout")?.addEventListener("click", async () => {
+      try {
+        const { logout } = await import("../../api/auth.js");
+        await logout();
+      } catch {
+        /* ignore */
+      }
+      store.set("user", null);
     });
 
     const tagsEl = this.$(".immersive-tags");

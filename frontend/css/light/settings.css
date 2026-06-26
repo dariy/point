@@ -333,3 +333,22 @@
     font-family: inherit;
     font-size: inherit;
 }
+
+/* Logo picker field (blog logo setting) */
+.settings-logo-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm, 0.5rem);
+}
+
+.settings-logo-field .form-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-logo-preview {
+    width: 2rem;
+    height: 2rem;
+    object-fit: contain;
+    flex-shrink: 0;
+}
