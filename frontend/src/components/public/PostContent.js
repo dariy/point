@@ -145,7 +145,10 @@ export class PostContent extends Component {
       // are alternatives for this exclusive slot, so mount only one (the first
       // enabled, registry order — Standard wins when both are on).
       if (pluginHost.hasSlot('post-viewer')) {
-        pluginHost.fillOne('post-viewer', this.$('#media-viewer-mount'), viewerProps);
+        // Capture the mounted viewer so it's torn down on the next render/unmount
+        // — otherwise the old MediaViewer (and any slot plugins it owns, e.g. the
+        // slideshow's timers + document listeners) leak across post navigation.
+        this._viewer = pluginHost.fillOne('post-viewer', this.$('#media-viewer-mount'), viewerProps);
       }
     } else {
       document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
@@ -273,7 +276,22 @@ export class PostContent extends Component {
     return `<nav class="post-navigation" aria-label="Post navigation">${prevLink}${nextLink}</nav>`;
   }
 
+  // Runs before every re-render (including the first) — tear down the previous
+  // immersive viewer before its mount node is replaced.
+  beforeRender() {
+    this._teardownViewer();
+  }
+
   beforeUnmount() {
     this._cleanupStrip?.();
+    this._teardownViewer();
+  }
+
+  // fillOne() is async, so the handle is a promise resolving to the viewer
+  // component (or null). Unmount it once resolved.
+  _teardownViewer() {
+    const v = this._viewer;
+    this._viewer = null;
+    if (v) Promise.resolve(v).then((comp) => comp?.unmount?.());
   }
 }

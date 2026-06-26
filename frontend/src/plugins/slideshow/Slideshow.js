@@ -80,7 +80,9 @@ export class Slideshow {
   // ── Start / stop ──────────────────────────────────────────────────────────
   start() {
     running = true;
-    crossing = false;
+    // NB: don't reset `crossing` here. On a cross-post remount this start() races
+    // the old instance's unmount() (which reads `crossing`); clearing it would let
+    // that unmount mistake the auto-cross for a real close and stop the show.
     this._syncButton();
     this._buildBar();
     document.addEventListener('pointermove', this._onPointer, { passive: true });
@@ -126,6 +128,13 @@ export class Slideshow {
   // ── Advance loop ──────────────────────────────────────────────────────────
   _advance() {
     if (!running) return;
+    // Belt-and-suspenders: if this controller has been detached from the DOM
+    // (its viewer was replaced) but somehow wasn't unmounted, stop here instead
+    // of navigating a dead viewer. Prevents runaway timers from orphaned instances.
+    if (this.wrapper && !this.wrapper.isConnected) {
+      this._teardownRuntime();
+      return;
+    }
     const next = this._nextIndex();
     if (next >= this.ctx.count) {
       // End of this post's run → force the forward cross into the next post.
