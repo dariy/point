@@ -134,13 +134,15 @@ export class MediaViewer extends Component {
     if (this.props.showShare !== false) {
       this._fillSlot('immersive-share', wrapper, {});
     }
-    // The slideshow plugin (auto-advancing viewer). Only worthwhile for multi-
-    // item posts; it drives the carousel through this small controller — no
-    // viewer internals are exposed beyond these four methods.
-    const items = this.props.items || [];
-    if (items.length > 1) {
+    // The slideshow plugin (auto-advancing viewer). It walks the whole
+    // collection — within a post, then across to the next post — so it's offered
+    // on every post viewer, including single-media posts (which just cross to the
+    // next post). Skipped only for the no-post lightbox (showShare:false). It
+    // drives the carousel through this small controller; no viewer internals are
+    // exposed beyond these four methods.
+    if (this.props.showShare !== false) {
       this._fillSlot('slideshow', wrapper, {
-        count: items.length,
+        count: (this.props.items || []).length,
         index: () => this._index,
         goTo: (i) => this._goTo(i),
         activeVideo: () => this._slides?.[this._index]?.querySelector('video') || null,

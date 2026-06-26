@@ -39,7 +39,10 @@ export class Slideshow {
     this.shuffle = loadShuffle();
     this.order = this._shuffled();
 
-    this._onActivity = () => this._activity();
+    // Mouse movement only reshows the chrome; deliberate navigation (keyboard /
+    // touch) also resets the advance timer so a manual jump doesn't double-step.
+    this._onPointer = () => this._activity(false);
+    this._onNav = () => this._activity(true);
     this._onVisibility = () => this._visibility();
 
     this._buildButton();
@@ -80,9 +83,9 @@ export class Slideshow {
     crossing = false;
     this._syncButton();
     this._buildBar();
-    document.addEventListener('pointermove', this._onActivity, { passive: true });
-    document.addEventListener('touchstart', this._onActivity, { passive: true });
-    document.addEventListener('keydown', this._onActivity);
+    document.addEventListener('pointermove', this._onPointer, { passive: true });
+    document.addEventListener('touchstart', this._onNav, { passive: true });
+    document.addEventListener('keydown', this._onNav);
     document.addEventListener('visibilitychange', this._onVisibility);
     this._resetInactivity();
     this._arm();
@@ -102,9 +105,9 @@ export class Slideshow {
   _teardownRuntime() {
     this._disarm();
     clearTimeout(this._idleTimer);
-    document.removeEventListener('pointermove', this._onActivity);
-    document.removeEventListener('touchstart', this._onActivity);
-    document.removeEventListener('keydown', this._onActivity);
+    document.removeEventListener('pointermove', this._onPointer);
+    document.removeEventListener('touchstart', this._onNav);
+    document.removeEventListener('keydown', this._onNav);
     document.removeEventListener('visibilitychange', this._onVisibility);
   }
 
@@ -253,13 +256,15 @@ export class Slideshow {
   }
 
   // ── Auto-hide chrome + tab visibility ─────────────────────────────────────
-  // Any user activity reshows the chrome and resets the advance timer from the
-  // new slide (so a manual jump doesn't double-advance). The viewer owns arrow-
-  // key navigation; we only listen to reset, never to navigate.
-  _activity() {
+  // User activity reshows the chrome; deliberate nav (keyboard/touch) also
+  // resets the advance timer from the new slide so a manual jump doesn't
+  // double-advance. The viewer owns arrow-key navigation; we only listen.
+  _activity(resetAdvance) {
     this._showChrome();
     this._resetInactivity();
-    if (running) this._arm();
+    // Only deliberate navigation resets the advance timer — mouse movement must
+    // never delay the next slide (otherwise the show stalls while the pointer moves).
+    if (resetAdvance && running) this._arm();
   }
 
   _resetInactivity() {
