@@ -20,6 +20,7 @@ const SETTING_GROUPS = [
     keys: [
       "blog_title",
       "blog_subtitle",
+      "logo_url",
       "author_name",
       "about_post_id",
       "home_page_post_id",
@@ -116,6 +117,8 @@ export default class SettingsPage extends Component {
       this._save();
     });
 
+    this.container.querySelector(".settings-logo-pick")?.addEventListener("click", () => this._pickLogo());
+
     // Auto-scroll to group if hash is present
     if (location.hash) {
       const id = location.hash.slice(1);
@@ -127,6 +130,31 @@ export default class SettingsPage extends Component {
 
   beforeUnmount() {
     this._cleanupAdminLayout?.();
+    this._logoPicker?.destroy();
+    this._logoPicker = null;
+  }
+
+  async _pickLogo() {
+    if (!this._logoPicker) {
+      const { MediaPickerDialog } = await import("../../components/light/MediaPickerDialog.js");
+      this._logoPicker = new MediaPickerDialog({
+        onConfirm: (items) => {
+          const path = items[0]?.path;
+          if (!path) return;
+          const input = this.container.querySelector("#logo_url");
+          if (input) input.value = path;
+          let preview = this.container.querySelector(".settings-logo-preview");
+          if (!preview) {
+            preview = document.createElement("img");
+            preview.className = "settings-logo-preview";
+            preview.alt = "Logo preview";
+            input.parentElement.insertBefore(preview, input);
+          }
+          preview.src = path;
+        },
+      });
+    }
+    this._logoPicker.open();
   }
 
   mount() {

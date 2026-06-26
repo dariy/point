@@ -46,6 +46,16 @@ export const LOGOUT_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill=
     stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+export const LOGIN_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="10,17 15,12 10,7" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="15" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 export const FOLDER_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
   xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"

@@ -87,6 +87,17 @@ function inputHtml(key, value, { posts = [] }) {
         ${previewLink}
       </div>`;
   }
+  if (key === "logo_url") {
+    const v = escapeHtml(String(value || ""));
+    const preview = value
+      ? `<img class="settings-logo-preview" src="${v}" alt="Logo preview">`
+      : "";
+    return `<div class="settings-logo-field">
+        ${preview}
+        <input type="text" name="${key}" id="${key}" class="form-input" value="${v}" placeholder="/media/… or https://…">
+        <button type="button" class="btn btn-secondary settings-logo-pick">Choose…</button>
+      </div>`;
+  }
   if (key === "default_theme") {
     return `
       <select name="${key}" id="${key}" class="form-select">
