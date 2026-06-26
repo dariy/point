@@ -15,7 +15,8 @@
 # runtime flag, so a visitor can never enable debug logging — the operator picks
 # the build via the backend env.
 #
-# Set BUILD_DEBUG_FRONTEND=0 to skip the debug set (e.g. lean production images).
+# Set BUILD_DEBUG_FRONTEND=0 to skip the debug set (e.g. lean production images),
+# or BUILD_RELEASE_FRONTEND=0 to skip the release set (e.g. a debug-only run).
 #
 # Run from the repository root or its directory.
 set -e
@@ -89,7 +90,12 @@ build_set() {
 }
 
 # Release set — minified, debug logging stripped.
-build_set "$ROOT_DIR/frontend/js" "false" --minify
+# Set BUILD_RELEASE_FRONTEND=0 to skip it (e.g. a debug-only local run).
+if [ "${BUILD_RELEASE_FRONTEND:-1}" != "0" ]; then
+  build_set "$ROOT_DIR/frontend/js" "false" --minify
+else
+  echo "BUILD_RELEASE_FRONTEND=0 — skipped release bundle (frontend/js)"
+fi
 
 # Debug set — unminified for readable stack traces, debug logging active.
 if [ "${BUILD_DEBUG_FRONTEND:-1}" != "0" ]; then

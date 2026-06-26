@@ -9,6 +9,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOST=$LOCAL_RUN
 cd "$PROJECT_ROOT"
 
+# Debug switch: -d/--debug (or DEBUG=1) builds and serves only the debug
+# frontend; otherwise build and serve only the release frontend. Either way we
+# build a single set instead of both.
+DEBUG=${DEBUG:-0}
+case "${1:-}" in
+    -d|--debug) DEBUG=1 ;;
+esac
+
 # Cleanup function to be called on EXIT
 cleanup() {
     trap - EXIT INT TERM
@@ -36,8 +44,13 @@ fi
 echo "==> Building CSS..."
 ./scripts/build-css.sh
 
-echo "==> Building JS..."
-./scripts/build-js.sh
+if [ "$DEBUG" = "1" ]; then
+    echo "==> Building JS (debug only)..."
+    BUILD_RELEASE_FRONTEND=0 ./scripts/build-js.sh
+else
+    echo "==> Building JS (release only)..."
+    BUILD_DEBUG_FRONTEND=0 ./scripts/build-js.sh
+fi
 
 # Generate a temporary version string for this run
 DEV_VERSION="dev-$(date +%Y%m%d-%H%M%S)"
@@ -81,6 +94,7 @@ export FRONTEND_DIR=frontend
 export PORT=$PORT
 export HOST=${HOST:-127.0.0.1}
 export APP_VERSION=$DEV_VERSION
+export FRONTEND_DEBUG=$DEBUG
 
 echo "DATABASE_URL: ", $DATABASE_URL
 echo "STORAGE_PATH: ", $STORAGE_PATH
