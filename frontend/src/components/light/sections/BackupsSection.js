@@ -90,7 +90,6 @@ export class BackupsSection extends Component {
     return `
       <section class="card">
         <div class="card-header">
-          <h2>Backups</h2>
           <button id="create-backup-btn" class="btn btn-sm btn-primary" ${creatingBackup ? "disabled" : ""}>
             ${creatingBackup ? "Creating…" : "Create New Backup"}
           </button>
