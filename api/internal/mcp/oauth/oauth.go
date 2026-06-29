@@ -236,12 +236,34 @@ func (p *Provider) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	codeChallenge := r.FormValue("code_challenge")
 	ccMethod := r.FormValue("code_challenge_method")
 
-	// OAuth 2.1 §2.3.1: redirect_uri must exactly match a registered URI before
-	// we ever redirect to it, so an attacker cannot exfiltrate an auth code.
-	if !slices.Contains(client.RedirectURIs, redirectURI) {
+	// Normalize and canonicalize user input before validation/redirect decisions.
+	normalizedRedirectURI := strings.ReplaceAll(redirectURI, "\\", "/")
+	parsedRedirectURI, err := url.Parse(normalizedRedirectURI)
+	if err != nil {
 		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
 		return
 	}
+	canonicalRedirectURI := parsedRedirectURI.String()
+
+	// OAuth 2.1 §2.3.1: redirect_uri must exactly match a registered URI before
+	// we ever redirect to it, so an attacker cannot exfiltrate an auth code.
+	var matchedRedirectURI string
+	for _, registered := range client.RedirectURIs {
+		normalizedRegistered := strings.ReplaceAll(registered, "\\", "/")
+		parsedRegistered, err := url.Parse(normalizedRegistered)
+		if err != nil {
+			continue
+		}
+		if parsedRegistered.String() == canonicalRedirectURI {
+			matchedRedirectURI = parsedRegistered.String()
+			break
+		}
+	}
+	if matchedRedirectURI == "" {
+		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
+		return
+	}
+	redirectURI = matchedRedirectURI
 
 	// Fail closed: a nil validator disables interactive OAuth login entirely
 	// rather than accepting any submission. The validator checks against point's
