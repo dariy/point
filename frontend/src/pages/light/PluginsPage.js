@@ -67,6 +67,7 @@ const PLUGIN_SETTINGS = {
   "tags-map": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show"] },
   "tags-graph": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show"] },
   "tag-cloud": { keys: ["min_tag_posts_to_show"] },
+  "public-footer": { keys: ["footer_copyright"] },
   backups: { sections: ["backups"] },
   passkeys: { sections: ["passkeys"] },
   "api-keys": { sections: ["api-keys"] },

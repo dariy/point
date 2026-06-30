@@ -220,9 +220,10 @@ body.drag-active::after {
     padding-right: var(--editor-excerpt-padding-right);
 }
 
-/* Full-width editor page — override the global max-width */
-.editor-full-width {
-    max-width: var(--content-max-width);
+/* Full-width editor page — use the whole window, overriding .light-content's
+   global max-width (point-m403). */
+.light-content.editor-full-width {
+    max-width: none;
 }
 
 /* ===========================

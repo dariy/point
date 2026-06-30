@@ -143,6 +143,11 @@ function inputHtml(key, value, { posts = [] }) {
         <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
       </select>`;
   }
+  if (key === "footer_copyright") {
+    const v = escapeHtml(String(value || ""));
+    return `<textarea name="${key}" id="${key}" class="form-input" rows="2" placeholder="&copy; {{author_name}}, powered by {{engine}}">${v}</textarea>
+      <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Leave blank for the default.</small>`;
+  }
   if (isNumericKey(key)) {
     return `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
   }

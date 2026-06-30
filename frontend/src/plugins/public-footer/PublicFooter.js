@@ -19,6 +19,7 @@ import {
   MOON_SVG,
   LOGIN_SVG,
   LOGOUT_SVG,
+  DASHBOARD_SVG,
 } from "../../utils/icons.js";
 import { store } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
@@ -34,6 +35,22 @@ export class PublicFooter extends Component {
     const aboutHref = settings.about_post_id
       ? `/posts/${escapeHtml(settings.about_post_id)}`
       : "/light";
+
+    // Copyright line: admin-editable template with {{author_name}} / {{engine}}
+    // tokens (point-62zu). Literal text is escaped; only known tokens emit HTML.
+    const tokens = {
+      author_name: author ? `<a href="${aboutHref}">${author}</a>` : "",
+      engine: `<a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>`,
+    };
+    const template = (settings.footer_copyright || "").trim()
+      || (author ? "© {{author_name}}, powered by {{engine}}" : "© powered by {{engine}}");
+    const copyright = template.replace(
+      /\{\{(\w+)\}\}|([^{]+|\{)/g,
+      (m, token, literal) =>
+        token !== undefined
+          ? (token in tokens ? tokens[token] : escapeHtml(m))
+          : escapeHtml(literal),
+    );
 
     let centerSlot = "";
     if (immersiveTags.length) {
@@ -61,9 +78,12 @@ export class PublicFooter extends Component {
                 <span class="icon-moon">${MOON_SVG}</span>
               </button>`;
 
-    // Log in link to the admin app, or log out when a user is signed in.
+    // When signed in: keep the /light admin entrance link (one-tap to the
+    // panel) and add a log out button next to it. When signed out: a single
+    // log in link to the admin app.
     const authButton = store.get("user")
-      ? `<button class="footer-action-btn" id="footer-logout" type="button" title="Log out" aria-label="Log out">${LOGOUT_SVG}</button>`
+      ? `<a href="/light" class="footer-action-btn" title="Admin panel" aria-label="Admin panel">${DASHBOARD_SVG}</a>
+                <button class="footer-action-btn" id="footer-logout" type="button" title="Log out" aria-label="Log out">${LOGOUT_SVG}</button>`
       : `<a href="/light" class="footer-action-btn" title="Log in" aria-label="Log in">${LOGIN_SVG}</a>`;
 
     return `
@@ -71,9 +91,7 @@ export class PublicFooter extends Component {
         <div class="footer-container">
           <div class="footer-content">
             <div class="footer-left">
-              <p class="footer-copyright">
-                <a href="/light">&copy;</a>${author ? ` <a href="${aboutHref}">${author}</a>, powered by <a href="https://github.com/dariy/point" target="_blank" rel="noopener noreferrer">Point</a>` : ""}
-              </p>
+              <p class="footer-copyright">${copyright}</p>
             </div>
             <div class="footer-center">
               ${centerSlot}
@@ -105,6 +123,10 @@ export class PublicFooter extends Component {
         /* ignore */
       }
       store.set("user", null);
+      // Reload so admin-only affordances elsewhere on the page (edit buttons,
+      // EXIF, etc.) reflect the logged-out state — re-rendering the footer
+      // alone leaves stale admin UI on screen. (point-tj6k)
+      window.location.reload();
     });
 
     const tagsEl = this.$(".immersive-tags");

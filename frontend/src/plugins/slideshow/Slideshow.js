@@ -14,7 +14,7 @@
  * (resume) from a real close (stop).
  */
 
-import { PLAY_SVG, PAUSE_SVG, MINUS_SVG, PLUS_SVG, SHUFFLE_SVG } from '../../utils/icons.js';
+import { PLAY_SVG, PAUSE_SVG, MINUS_SVG, PLUS_SVG, SHUFFLE_SVG, REPEAT_SVG } from '../../utils/icons.js';
 
 const MIN_INTERVAL = 1;
 const MAX_INTERVAL = 30;
@@ -30,6 +30,8 @@ const clampInterval = (n) =>
 
 const loadInterval = () => clampInterval(parseInt(localStorage.getItem('slideshow.interval'), 10));
 const loadShuffle = () => localStorage.getItem('slideshow.shuffle') === 'true';
+// Loop defaults ON (the historical behaviour: the show wraps the feed forever).
+const loadLoop = () => localStorage.getItem('slideshow.loop') !== 'false';
 
 export class Slideshow {
   constructor(wrapper, ctx) {
@@ -37,6 +39,7 @@ export class Slideshow {
     this.ctx = ctx;
     this.interval = loadInterval();
     this.shuffle = loadShuffle();
+    this.loop = loadLoop();
     this.order = this._shuffled();
 
     // Mouse movement only reshows the chrome; deliberate navigation (keyboard /
@@ -142,9 +145,14 @@ export class Slideshow {
       this.ctx.goTo(this.ctx.count);
       // A real cross unmounts us within ~300ms (this timer is cleared in
       // _disarm). If we're still here after that — end of feed, where goTo just
-      // wrapped within the post — recover: reshuffle and keep the show going.
+      // wrapped within the post — recover: when looping, reshuffle and keep the
+      // show going; otherwise stop on the last slide.
       this._timer = setTimeout(() => {
         crossing = false;
+        if (!this.loop) {
+          this.stop();
+          return;
+        }
         this.order = this._shuffled();
         this._arm();
       }, 800);
@@ -228,6 +236,8 @@ export class Slideshow {
         <span class="slideshow-interval" aria-live="polite">${this.interval}s</span>
         <button type="button" class="slideshow-bar-btn" data-step="1" aria-label="Faster">${PLUS_SVG}</button>
       </div>
+      <button type="button" class="slideshow-bar-btn slideshow-loop${this.loop ? ' active' : ''}"
+              aria-label="Loop" aria-pressed="${this.loop}">${REPEAT_SVG}</button>
       <button type="button" class="slideshow-bar-btn slideshow-shuffle${this.shuffle ? ' active' : ''}"
               aria-label="Shuffle" aria-pressed="${this.shuffle}">${SHUFFLE_SVG}</button>`;
     // Keep taps on the bar from reaching the viewer's close/hide handler.
@@ -236,6 +246,8 @@ export class Slideshow {
       b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))),
     );
     this._intervalLabel = bar.querySelector('.slideshow-interval');
+    this._loopBtn = bar.querySelector('.slideshow-loop');
+    this._loopBtn.addEventListener('click', () => this._toggleLoop());
     this._shuffleBtn = bar.querySelector('.slideshow-shuffle');
     this._shuffleBtn.addEventListener('click', () => this._toggleShuffle());
     this.wrapper.appendChild(bar);
@@ -246,7 +258,15 @@ export class Slideshow {
     this._bar?.remove();
     this._bar = null;
     this._intervalLabel = null;
+    this._loopBtn = null;
     this._shuffleBtn = null;
+  }
+
+  _toggleLoop() {
+    this.loop = !this.loop;
+    localStorage.setItem('slideshow.loop', this.loop ? 'true' : 'false');
+    this._loopBtn?.classList.toggle('active', this.loop);
+    this._loopBtn?.setAttribute('aria-pressed', String(this.loop));
   }
 
   _changeInterval(delta) {
