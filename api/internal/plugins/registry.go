@@ -87,6 +87,11 @@ var Registry = []Descriptor{
 	{ID: "immersive-sheet", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
 	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
 
+	// Previous/next post links at the foot of the article (non-immersive view).
+	// No JS chunk — the post renderer gates the block on this plugin's enabled
+	// state, so toggling it off simply drops the navigation from article pages.
+	{ID: "post-navigation", Type: TypeEnhancer, DefaultEnabled: true},
+
 	// Floating share button injected into the MediaViewer (immersive viewer +
 	// lightbox) via the `immersive-share` sub-slot. Toggle off to drop the button.
 	{ID: "immersive-share", Type: TypeSlot, Slot: "immersive-share", EntryName: "immersive-share", DefaultEnabled: true},
