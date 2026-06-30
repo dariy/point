@@ -300,9 +300,12 @@ export class MediaViewer extends Component {
         const oldScale = this._zoomState.scale;
         const newScale = Math.max(0.5, Math.min(this._getMaxScale() * 2, oldScale * delta));
         if (newScale === oldScale) return;
-        const rect = wrapper.getBoundingClientRect();
-        const rx = cx - rect.left - rect.width / 2;
-        const ry = cy - rect.top - rect.height / 2;
+        // Focal point relative to the viewport centre. The slide fills the
+        // viewport with a centre transform-origin, so measure against the window
+        // rather than the wrapper (which is 0-height — the sized box is the
+        // absolutely-positioned .immersive-visuals).
+        const rx = cx - window.innerWidth / 2;
+        const ry = cy - window.innerHeight / 2;
         this._zoomState.x -= (rx - this._zoomState.x) * (newScale / oldScale - 1);
         this._zoomState.y -= (ry - this._zoomState.y) * (newScale / oldScale - 1);
         this._zoomState.scale = newScale;
@@ -321,10 +324,10 @@ export class MediaViewer extends Component {
         if (this._zoomState.scale > 1) return this._resetZoom();
         const max = this._getMaxScale();
         if (max <= 1) return;
-        const rect = wrapper.getBoundingClientRect();
+        const W = window.innerWidth, H = window.innerHeight;
         this._zoomState.scale = max;
-        this._zoomState.x = (rect.width / 2 - (x - rect.left)) * (max - 1);
-        this._zoomState.y = (rect.height / 2 - (y - rect.top)) * (max - 1);
+        this._zoomState.x = (W / 2 - x) * (max - 1);
+        this._zoomState.y = (H / 2 - y) * (max - 1);
         this._gesture.setZoomed(true);
         wrapper.classList.add('zoomed');
         this._updateVisuals();
@@ -613,6 +616,27 @@ export class MediaViewer extends Component {
     this._updateVisuals();
     this._gesture?.setZoomed(false);
     this.$('.media-viewer-wrapper').classList.remove('zoomed');
+  }
+
+  /**
+   * Settle a zoom gesture: drop back to 1× if pinched below threshold, otherwise
+   * clamp the pan so the scaled slide always covers the viewport (no empty
+   * gutters) and snap to the clamped position. The slide fills the viewport with
+   * a centre transform-origin, so the pan range is (scale-1)·half-viewport.
+   */
+  _constrainZoom(animate = false) {
+    const { scale } = this._zoomState;
+    if (scale <= 1) return this._resetZoom();
+    const maxX = ((scale - 1) * window.innerWidth) / 2;
+    const maxY = ((scale - 1) * window.innerHeight) / 2;
+    this._zoomState.x = Math.max(-maxX, Math.min(maxX, this._zoomState.x));
+    this._zoomState.y = Math.max(-maxY, Math.min(maxY, this._zoomState.y));
+    const target = this._activeEl();
+    if (!target) return;
+    const { x, y } = this._zoomState;
+    target.style.transition = animate ? 'transform 0.2s ease' : 'none';
+    target.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    target.style.opacity = '1';
   }
 
   _activeEl() {

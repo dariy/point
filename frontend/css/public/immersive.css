@@ -262,12 +262,16 @@ html:has(.immersive-layout),
 }
 
 /* Immersive Components */
-.immersive-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    background-color: var(--bg-primary);
-    touch-action: none; /* Prevent scroll bouncing on swipe */
+/* The viewer's gesture root. touch-action:none makes the browser cede the
+   two-finger pinch (and swipe) to the JS GestureController instead of running
+   native page-zoom — without it pinch-zoom is broken. These rules lived on
+   .immersive-wrapper, a class the markup no longer uses (renamed to
+   .media-viewer-wrapper), so they had silently stopped applying.
+   NB: deliberately no position/width/height — .immersive-visuals is
+   position:absolute;inset:0 and fills a sized ancestor; making the wrapper a
+   positioned height:100% containing block collapses the viewer to 0 height. */
+.media-viewer-wrapper {
+    touch-action: none; /* Prevent scroll bouncing on swipe; cede pinch to JS */
     overscroll-behavior: none; /* Prevent trackpad rubber-banding */
     user-select: none;
     -webkit-user-select: none;
@@ -286,11 +290,11 @@ html:has(.immersive-layout),
     will-change: transform, opacity;
 }
 
-.immersive-wrapper.zoomed .immersive-visuals {
+.media-viewer-wrapper.zoomed .immersive-visuals {
     cursor: grab;
 }
 
-.immersive-wrapper.zoomed .immersive-visuals:active {
+.media-viewer-wrapper.zoomed .immersive-visuals:active {
     cursor: grabbing;
 }
 
