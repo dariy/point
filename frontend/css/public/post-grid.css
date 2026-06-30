@@ -443,16 +443,26 @@
     /* Constrain to the live mount height and clip the overflow. The ghost grid
        renders at its natural height (outside the grid-expand flex that compacts
        the real grid), so without this its full height inflates the page's
-       scroll height — leaving dead space below the footer. Anchor the height
-       off the container edges (top:0; bottom:0) rather than height:100%:
-       percentage height on an absolutely-positioned box doesn't resolve
-       reliably on iOS WebKit, so it would fall back to the natural height. */
+       scroll height — leaving dead space below the footer. The exact live-grid
+       pixel height is pinned inline in JS (_preloadAdjacentGrids); bottom:0 is
+       the fallback before that lands. */
     overflow: hidden;
     pointer-events: none;
     z-index: 10;
+    /* Stretch the ghost's cards to fill the pinned height, matching the live
+       grid's grid-expand "justify to viewport" sizing — otherwise the incoming
+       page's cards render at their shorter natural height and visibly resize. */
+    display: flex;
+    flex-direction: column;
     /* Keep the sliding neighbour on its own compositor layer so each drag frame
        is a GPU transform, not a main-thread repaint of the image-heavy grid. */
     will-change: transform, opacity;
+}
+
+.grid-preview-placeholder .posts-grid {
+    flex: 1;
+    grid-auto-rows: minmax(min-content, 1fr);
+    align-content: stretch;
 }
 
 /* While a page swipe is in progress, promote the outgoing grid to its own

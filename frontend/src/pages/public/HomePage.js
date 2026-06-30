@@ -103,9 +103,13 @@ export default class HomePage extends Component {
     const newGrid = this.$('#grid-mount');
     if (seamless) {
       // The real grid is now mounted and centred directly under the committed
-      // ghost; drop the ghost to reveal it — identical pixels, so no blink.
-      this._committedGhost?.remove();
+      // ghost. Removing the ghost in this same frame revealed the grid before
+      // its card images had decoded/painted — a flash of blank cards, the
+      // "re-mount" blink on release. Hold the ghost two frames so the browser
+      // paints the identical real grid underneath first, then drop it.
+      const ghost = this._committedGhost;
       this._committedGhost = null;
+      requestAnimationFrame(() => requestAnimationFrame(() => ghost?.remove()));
     } else if (newGrid) {
       // Fade the freshly-mounted grid in. _mountPostContent() reset the mount's
       // inline styles, so we start from a clean opacity:0 and transition up.
@@ -503,8 +507,14 @@ export default class HomePage extends Component {
    */
   async _preloadAdjacentGrids(pagination) {
     this._pageGhosts = this._pageGhosts || { prev: null, next: null };
-    const container = this.$('#grid-mount')?.parentElement;
+    const liveGrid = this.$('#grid-mount');
+    const container = liveGrid?.parentElement;
     if (!container || !pagination || pagination.pages <= 1) return;
+    // The live grid stretches its cards to fill the viewport when content is
+    // short (grid-expand). The ghost sits outside that flex, so pin it to the
+    // live grid's height and let its grid stretch to match — otherwise the
+    // incoming page's cards render at their shorter natural size.
+    const gridHeight = liveGrid.offsetHeight;
     const version = (this._ghostVersion = (this._ghostVersion || 0) + 1);
     const vc = ViewContext.current();
 
@@ -521,6 +531,7 @@ export default class HomePage extends Component {
       const el = document.createElement('div');
       el.className = 'grid-preview-placeholder';
       el.dataset.edge = dir;
+      if (gridHeight) el.style.height = `${gridHeight}px`;
       el.innerHTML = this._buildGridHtml(data.posts || []);
       container.appendChild(el);
       // Warm the neighbour cards' media now, while the ghost is parked
