@@ -182,6 +182,9 @@ export class PostContent extends Component {
     const tags = renderTagStrip(post.tags, tagIndex);
     const isHidden = !!(post.is_hidden || post.is_hidden_by_tag);
     const postCss = post.css ? `<style id="post-css">${post.css}</style>` : "";
+    // Post navigation (prev/next) is its own toggleable plugin (point-8re1):
+    // when manifest-driven and disabled, drop the block from article pages.
+    const navEnabled = pluginHost.size === 0 || pluginHost.isEnabled("post-navigation");
     const date = post.published_at || post.created_at;
 
     return `
@@ -196,9 +199,9 @@ export class PostContent extends Component {
             <div class="post-content" itemprop="articleBody">${post.content_html || ""}</div>
           </div>
         </div>
-        ${this._renderNav(prevPost, nextPost)}
+        ${navEnabled ? this._renderNav(prevPost, nextPost) : ""}
       </article>
-      ${this._renderNormalPostArrows(prevPost, nextPost)}`;
+      ${navEnabled ? this._renderNormalPostArrows(prevPost, nextPost) : ""}`;
   }
 
   _renderNormalPostArrows(prevPost, nextPost) {
