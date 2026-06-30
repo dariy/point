@@ -131,7 +131,13 @@ export class PluginSettingsPanel extends Component {
 
   afterRender() {
     // Lock the page behind the drawer so swiping the panel doesn't scroll it.
-    this._prevBodyOverflow = document.body.style.overflow;
+    // Capture the pre-lock value only once: afterRender re-runs on every
+    // setState (e.g. the save spinner), and re-capturing here would record the
+    // already-locked "hidden" and restore *that* on close — leaving the admin
+    // page unscrollable until reload (point-ti5d).
+    if (this._prevBodyOverflow === undefined) {
+      this._prevBodyOverflow = document.body.style.overflow;
+    }
     document.body.style.overflow = "hidden";
 
     // Slide in on the next frame so the CSS transition runs from off-screen.
@@ -211,6 +217,7 @@ export class PluginSettingsPanel extends Component {
   beforeUnmount() {
     if (this._onKeydown) document.removeEventListener("keydown", this._onKeydown);
     document.body.style.overflow = this._prevBodyOverflow ?? "";
+    this._prevBodyOverflow = undefined;
     this._gestures?.destroy();
   }
 
