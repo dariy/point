@@ -1,0 +1,63 @@
+/* theme-title: "Base" */
+/* description: "A bare, neutral canvas — system fonts and grayscale chrome that stay out of the way so each post can be its own micro-site via per-post CSS." */
+/* preview-color: "#111111" */
+
+/*
+ * Base is intentionally opinion-free. It sets only the variables the app
+ * chrome needs (sidebar, surfaces, borders) in neutral grayscale and a system
+ * font stack, so post content inherits as little theme styling as possible and
+ * per-post CSS has a clean slate. Use it when a post should look like its own
+ * standalone page rather than part of a branded blog.
+ */
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f2f2f2;
+  --bg-elevated: #ffffff;
+  --surface-card: #ffffff;
+  --surface-input: #ffffff;
+  --surface-hover: #f2f2f2;
+  --text-primary: #111111;
+  --text-secondary: #444444;
+  --text-tertiary: #666666;
+  --text-muted: #999999;
+  --text-inverted: #ffffff;
+  --color-primary: #111111;
+  --color-primary-hover: #000000;
+  --border-primary: #e5e5e5;
+  --border-secondary: #cccccc;
+  --pt-colors-sidebar-bg: #111111;
+  --pt-colors-sidebar-text: #999999;
+  --pt-colors-sidebar-text-hover: #ffffff;
+  --pt-colors-sidebar-active-bg: #222222;
+  --pt-colors-sidebar-border: #333333;
+  --footer-link: #111111;
+  --font-family: system-ui, -apple-system, sans-serif;
+  --spacing-md: 1rem;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #111111;
+  --bg-secondary: #181818;
+  --bg-tertiary: #222222;
+  --bg-elevated: #181818;
+  --surface-card: #181818;
+  --surface-input: #181818;
+  --surface-hover: #222222;
+  --text-primary: #f2f2f2;
+  --text-secondary: #cccccc;
+  --text-tertiary: #999999;
+  --text-muted: #777777;
+  --text-inverted: #111111;
+  --color-primary: #f2f2f2;
+  --color-primary-hover: #ffffff;
+  --border-primary: #2a2a2a;
+  --border-secondary: #3a3a3a;
+  --pt-colors-sidebar-bg: #0a0a0a;
+  --pt-colors-sidebar-text: #999999;
+  --pt-colors-sidebar-text-hover: #ffffff;
+  --pt-colors-sidebar-active-bg: #222222;
+  --pt-colors-sidebar-border: #2a2a2a;
+  --footer-link: #f2f2f2;
+}
