@@ -250,37 +250,33 @@ async function bootstrap() {
 // public: true  →  accessible without authentication
 // (absent)      →  requires authentication (authGuard redirect)
 
-// Resolve the lazy module for the /tags route. `/tags` is a single-claim slot
-// (`tags-route`): the enabled tag-visualization plugin selected by `tags_module`
-// owns it. Mirrors the backend gate in tagsModuleAccessible: "none" (or
-// admins-only for a logged-out visitor) sends the visitor home; a plugin the
-// admin has disabled is likewise treated as absent.
-//
-// Until Phase 4 extracts the tag-viz pages into plugin chunks, the claimant has
-// no built `entry`, so we fall back to the core page modules — behavior is
-// identical to before the plugin system.
+// The tag-viz plugins that may own /tags, in the order the backend resolves
+// them (registry order). At most one is enabled — the exclusive "tags-viz" area.
+const TAGS_VIZ_PLUGINS = ["tags-atlas", "tags-map", "tags-graph"];
+
+// Resolve the lazy module for the /tags route. `/tags` is an exclusive slot
+// (`tags-route`): the single enabled tag-visualization plugin owns it — that
+// enabled plugin IS the selection (the old `tags_module` setting is gone).
+// Mirrors the backend gate in tagsModuleAccessible: no enabled viz (or
+// admins-only for a logged-out visitor) sends the visitor home.
 async function resolveTagsModule() {
   const settings = store.get("settings") || {};
-  const module = settings.tags_module || "atlas";
   const visibility = settings.tags_visibility || "hidden";
   const isAdmin = !!store.get("user");
 
-  if (module === "none" || (visibility !== "all" && !isAdmin)) {
+  // Active viz = the enabled tags-viz plugin. Before the manifest loads
+  // (size 0) fall back to the Atlas default so the route resolves.
+  const active =
+    pluginHost.size === 0
+      ? "tags-atlas"
+      : TAGS_VIZ_PLUGINS.find((id) => pluginHost.isEnabled(id)) || "";
+
+  if (!active || (visibility !== "all" && !isAdmin)) {
     return import("./pages/public/RedirectHome.js");
   }
 
-  const pluginId =
-    module === "map" ? "tags-map" : module === "atlas" ? "tags-atlas" : "tags-graph";
-
-  // When a manifest is present and the selected tag-viz plugin is disabled,
-  // there is no claimant — send the visitor home (matches a 404'd chunk).
-  if (pluginHost.size > 0 && !pluginHost.isEnabled(pluginId)) {
-    return import("./pages/public/RedirectHome.js");
-  }
-
-  // Prefer the plugin chunk once it exists; otherwise the core module.
   const claimed = await pluginHost.claimRoute("tags-route", (entries) =>
-    entries.find((e) => e.id === pluginId),
+    entries.find((e) => e.id === active),
   );
   if (claimed) return claimed;
 
@@ -319,9 +315,9 @@ const routes = [
     load: () => import("./pages/public/TagPage.js"),
     public: true,
   },
-  // The /tags page surfaces a single, admin-selected module: the tag-cloud
-  // graph, the map, or the atlas. Which one (if any) is governed by the
-  // `tags_module` / `tags_visibility` settings — see resolveTagsModule().
+  // The /tags page surfaces a single, admin-selected viz: the tag-cloud graph,
+  // the map, or the atlas. Which one (if any) is the enabled tags-viz plugin,
+  // gated by `tags_visibility` — see resolveTagsModule().
   {
     path: "/tags",
     load: () => resolveTagsModule(),

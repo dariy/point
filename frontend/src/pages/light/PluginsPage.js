@@ -63,9 +63,9 @@ const PLUGIN_SETTINGS = {
   },
   immersive: { keys: ["immersive_nav_direction", "show_immersive_excerpt"] },
   "immersive-sheet": { keys: ["immersive_nav_direction", "show_immersive_excerpt"] },
-  "tags-atlas": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show", "atlas_post_limit"] },
-  "tags-map": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show"] },
-  "tags-graph": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show"] },
+  "tags-atlas": { keys: ["tags_visibility", "min_tag_posts_to_show", "atlas_post_limit"] },
+  "tags-map": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
+  "tags-graph": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
   "tag-cloud": { keys: ["min_tag_posts_to_show"] },
   "public-footer": { keys: ["footer_copyright"] },
   backups: { sections: ["backups"] },
@@ -375,7 +375,14 @@ export default class PluginsPage extends Component {
     this.setState({ pending: { ...this.state.pending, [id]: true } });
     try {
       const updated = await setPluginEnabled(id, enabled);
-      const plugins = this.state.plugins.map((p) => (p.id === id ? { ...p, ...updated } : p));
+      let plugins = this.state.plugins.map((p) => (p.id === id ? { ...p, ...updated } : p));
+      // Exclusive area: enabling one member disables its peers server-side; mirror
+      // that here so the sibling toggles flip off without a reload.
+      if (enabled && updated.exclusive && updated.area) {
+        plugins = plugins.map((p) =>
+          p.id !== id && p.area === updated.area ? { ...p, enabled: false } : p,
+        );
+      }
       const pending = { ...this.state.pending };
       delete pending[id];
       // An individual toggle diverges from any preset (backend does the same).

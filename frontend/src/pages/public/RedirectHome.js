@@ -1,8 +1,8 @@
 /**
  * RedirectHome — tiny placeholder page that immediately bounces to "/".
  *
- * Used by the /tags route when the tags module is disabled (tags_module ===
- * "none") or restricted to admins for a logged-out visitor. Rendering nothing
+ * Used by the /tags route when no tags-viz plugin is enabled ("none") or the
+ * feature is restricted to admins for a logged-out visitor. Rendering nothing
  * and redirecting in afterRender() keeps the behaviour entirely client-side.
  */
 

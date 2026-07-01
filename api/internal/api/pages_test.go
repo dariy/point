@@ -292,7 +292,9 @@ func TestPagesHandler_GetTagsGraph_Posts(t *testing.T) {
 		t.Fatalf("post creation failed: %v", err)
 	}
 
-	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "cloud", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-map.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-graph.enabled", "true", "string")
 	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
 
 	e := echo.New()
@@ -374,7 +376,9 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 		}
 	}
 
-	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "atlas", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "true", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-map.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-graph.enabled", "false", "string")
 	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
 
 	e := echo.New()
@@ -441,7 +445,9 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	defer h.close()
 
 	ctx := context.Background()
-	_ = h.settingsSvc.SetSetting(ctx, "tags_module", "map", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-atlas.enabled", "false", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-map.enabled", "true", "string")
+	_ = h.settingsSvc.SetSetting(ctx, "plugin.tags-graph.enabled", "false", "string")
 	_ = h.settingsSvc.SetSetting(ctx, "tags_visibility", "all", "string")
 
 	// Create user

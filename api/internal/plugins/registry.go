@@ -59,16 +59,24 @@ type Descriptor struct {
 	// member: the last enabled plugin in a core area cannot be disabled. An area
 	// with a single core plugin therefore stays permanently enabled.
 	Core bool
+	// Exclusive marks an area where AT MOST one member is enabled (radio
+	// semantics; "none" allowed). Enabling a member disables its peers. Contrast
+	// Core, which requires at least one member. An area is Exclusive when its
+	// members declare it — do not combine Exclusive with Core.
+	Exclusive bool
 }
 
 // Registry is the static, authoritative catalog of all plugins. Phase 1 ships
 // with every plugin DefaultEnabled:true so behavior is identical to today; the
 // admin Plugins page (Phase 3) and per-plugin extraction (Phase 4) build on top.
 var Registry = []Descriptor{
-	// ── Tag visualizations: single-claim on the tags-route slot ──────────────
-	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true},
-	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: true},
-	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: true},
+	// ── Tag visualizations: exclusive claim on the tags-route slot ───────────
+	// At most one of the three may be enabled (Area "tags-viz", Exclusive) — the
+	// enabled one owns /tags; none enabled hides /tags. Atlas is the default; the
+	// others ship off. This replaces the old `tags_module` selector setting.
+	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true, Area: "tags-viz", Exclusive: true},
+	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: false, Area: "tags-viz", Exclusive: true},
+	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: false, Area: "tags-viz", Exclusive: true},
 
 	// ── Shell slots ──────────────────────────────────────────────────────────
 	{ID: "timeline", Type: TypeSlot, Slot: "timeline", EntryName: "timeline", DefaultEnabled: true},
@@ -188,6 +196,23 @@ func IsLockedOff(id string, settings map[string]string) bool {
 	}
 	enabled := EnabledInArea(d.Area, settings)
 	return len(enabled) == 1 && enabled[0] == id
+}
+
+// ExclusivePeers returns the other members of id's exclusive area, in registry
+// order (nil if id is not in an exclusive area). Enabling id must disable these
+// so at most one member of the area stays on.
+func ExclusivePeers(id string) []string {
+	d, ok := byID[id]
+	if !ok || !d.Exclusive || d.Area == "" {
+		return nil
+	}
+	var out []string
+	for _, m := range AreaPlugins(d.Area) {
+		if m.ID != id {
+			out = append(out, m.ID)
+		}
+	}
+	return out
 }
 
 // DefaultPresets returns the seed preset definitions: a preset id mapped to the

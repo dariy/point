@@ -13,7 +13,6 @@ import { escapeHtml } from "../../utils/helpers.js";
 
 // Friendlier labels for keys whose snake_case name reads poorly.
 export const LABEL_OVERRIDES = {
-  tags_module: "Show tags",
   tags_visibility: "Tags visible to",
   atlas_post_limit: "Atlas posts to fetch",
 };
@@ -121,18 +120,6 @@ function inputHtml(key, value, { posts = [] }) {
         <option value="hide"${v === "hide" ? " selected" : ""}>Hide</option>
         <option value="admin"${v === "admin" ? " selected" : ""}>Admins only</option>
         <option value="all"${v === "all" ? " selected" : ""}>Everyone</option>
-      </select>`;
-  }
-  if (key === "tags_module") {
-    // Single selector for the /tags page module. "None" hides the /tags entry
-    // entirely and redirects /tags → home.
-    const v = value || "atlas";
-    return `
-      <select name="${key}" id="${key}" class="form-select">
-        <option value="none"${v === "none" ? " selected" : ""}>None (hidden)</option>
-        <option value="cloud"${v === "cloud" ? " selected" : ""}>Tag cloud</option>
-        <option value="map"${v === "map" ? " selected" : ""}>Map</option>
-        <option value="atlas"${v === "atlas" ? " selected" : ""}>Atlas</option>
       </select>`;
   }
   if (key === "tags_visibility") {
