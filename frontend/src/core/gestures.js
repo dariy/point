@@ -216,8 +216,8 @@ export class GestureController {
         }
         this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_H;
       } else if (absDy >= absDx * ratio) {
-        // Mostly vertical
-        this._state = STATE.SWIPING_V;
+        // Mostly vertical — pans the zoomed image; only steps (close/reset) at fit.
+        this._state = this._zoomed ? STATE.PANNING : STATE.SWIPING_V;
       } else {
         // Mostly diagonal — too ambiguous to act on. Bail out and let the
         // browser handle native scrolling without firing any swipe action.

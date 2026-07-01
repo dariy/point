@@ -51,8 +51,10 @@ export class Slideshow {
     this._buildButton();
 
     // Cross-post continuation: a show that was running before the remount picks
-    // straight back up on this fresh instance.
-    if (running) this.start();
+    // straight back up on this fresh instance. It's a mid-show resume, not a
+    // user gesture, so the chrome stays hidden rather than flashing back for the
+    // idle grace on every auto-advanced slide.
+    if (running) this.start({ resumed: true });
   }
 
   // ── Top-right toggle button ───────────────────────────────────────────────
@@ -81,7 +83,7 @@ export class Slideshow {
   }
 
   // ── Start / stop ──────────────────────────────────────────────────────────
-  start() {
+  start({ resumed = false } = {}) {
     running = true;
     // NB: don't reset `crossing` here. On a cross-post remount this start() races
     // the old instance's unmount() (which reads `crossing`); clearing it would let
@@ -92,7 +94,9 @@ export class Slideshow {
     document.addEventListener('touchstart', this._onNav, { passive: true });
     document.addEventListener('keydown', this._onNav);
     document.addEventListener('visibilitychange', this._onVisibility);
-    this._resetInactivity();
+    // A fresh user gesture shows the chrome then fades it after the idle grace; a
+    // mid-show resume keeps it hidden so auto-advanced slides don't re-flash it.
+    resumed ? this._hideChrome() : this._resetInactivity();
     this._arm();
   }
 

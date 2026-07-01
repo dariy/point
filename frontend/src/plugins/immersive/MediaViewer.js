@@ -335,7 +335,8 @@ export class MediaViewer extends Component {
     });
 
     this._trackpad = new TrackpadDetector(wrapper, {
-      onHorizontal: (dir) => goTo(this._index + (dir === 'left' ? 1 : -1))
+      // Ignore horizontal scroll while zoomed — the pan owns it until reset to fit.
+      onHorizontal: (dir) => { if (this._zoomState.scale <= 1) goTo(this._index + (dir === 'left' ? 1 : -1)); }
     });
 
     // Keyboard
@@ -711,6 +712,9 @@ export class MediaViewer extends Component {
   }
 
   _panelClick(e, navFn) {
+    // While zoomed the edge panels don't navigate — an edge tap is part of
+    // inspecting the zoomed image, not a step. Reset to fit first (double-tap/Esc).
+    if (this._zoomState.scale > 1) { e.stopPropagation(); return; }
     const panel = e.currentTarget; panel.style.pointerEvents = 'none';
     const link = document.elementFromPoint(e.clientX, e.clientY)?.closest('a');
     panel.style.pointerEvents = '';
