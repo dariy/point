@@ -124,7 +124,7 @@ export class PluginSettingsPanel extends Component {
     const authUrl = `/api/instagram/auth?state=${encodeURIComponent(location.origin + "/light/plugins")}`;
     return `
       <div class="ig-connection-status disconnected">
-        <p>Instagram is enabled but not connected.</p>
+        <p>Cross-posting is on but Instagram isn't connected.</p>
         <a href="${authUrl}" class="btn btn-sm btn-primary">Connect Instagram</a>
       </div>`;
   }

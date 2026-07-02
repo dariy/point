@@ -56,7 +56,15 @@ const SETTINGS_PAGE_PATHS = {
 // and /light/security — see SECTIONS in PluginSettingsPanel). The tag-route trio
 // shares the /tags selector.
 const PLUGIN_SETTINGS = {
-  "ai-analysis": { keys: ["enable_gemini", "gemini_model", "gemini_api_key"] },
+  "ai-analysis": {
+    keys: [
+      "gemini_model",
+      "gemini_api_key",
+      "gemini_prompt_title",
+      "gemini_prompt_tags",
+      "gemini_prompt_excerpt",
+    ],
+  },
   instagram: {
     keys: ["enable_instagram", "instagram_client_id", "instagram_client_secret"],
     sections: ["instagram-import"],
@@ -74,18 +82,11 @@ const PLUGIN_SETTINGS = {
   "offline-sync": { sections: ["offline-data", "sync-queue"] },
 };
 
-// Display-name overrides for ids that don't humanize cleanly (acronyms etc.).
-const PLUGIN_DISPLAY_NAMES = {
-  rss: "RSS",
-  "ai-analysis": "AI Analysis",
-  immersive: "Immersive (Standard)",
-  "immersive-sheet": "Immersive (Sheet)",
-};
-
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 
-function humanize(id) {
-  if (PLUGIN_DISPLAY_NAMES[id]) return PLUGIN_DISPLAY_NAMES[id];
+// Display name: the registry's tuned `title` when set, else title-cased id.
+function humanize(id, title) {
+  if (title) return title;
   return id
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -203,7 +204,7 @@ export default class PluginsPage extends Component {
     return `
       <div class="plugin-card${plugin.enabled ? " is-enabled" : ""}" data-id="${escapeHtml(plugin.id)}">
         <div class="plugin-info">
-          <span class="plugin-name">${escapeHtml(humanize(plugin.id))}</span>
+          <span class="plugin-name">${escapeHtml(humanize(plugin.id, plugin.title))}</span>
           ${meta.length ? `<span class="plugin-meta">${meta.join(" · ")}</span>` : ""}
         </div>
         <div class="plugin-actions">
@@ -331,7 +332,7 @@ export default class PluginsPage extends Component {
       document.body.appendChild(mount);
       this._panel = new PluginSettingsPanel(mount, {
         pluginId: id,
-        title: humanize(id),
+        title: humanize(id, this.state.plugins.find((p) => p.id === id)?.title),
         keys: cfg.keys || null,
         sections: cfg.sections || null,
         settings,

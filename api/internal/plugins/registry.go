@@ -38,6 +38,10 @@ type Descriptor struct {
 	// ID is the stable plugin identifier, used in the plugin.<id>.enabled
 	// setting key and as the lookup key into the build's chunk map.
 	ID string
+	// Title is the human-facing display name shown on the admin Plugins page.
+	// Optional; when empty the frontend humanizes the ID. Set it for ids that
+	// don't title-case cleanly (acronyms like "mcp" → "MCP") or need tuning.
+	Title string
 	// Type categorizes how the plugin attaches (route/slot/enhancer/service).
 	Type Type
 	// Slot is the named shell region a slot/enhancer plugin fills (optional).
@@ -85,14 +89,18 @@ var Registry = []Descriptor{
 	{ID: "breadcrumbs", Type: TypeSlot, Slot: "breadcrumbs", EntryName: "breadcrumbs", DefaultEnabled: true},
 	{ID: "public-header", Type: TypeSlot, Slot: "header", EntryName: "public-header", DefaultEnabled: true},
 	{ID: "public-footer", Type: TypeSlot, Slot: "footer", EntryName: "public-footer", DefaultEnabled: true},
+	// Guest-facing distraction-free toggle on the post list: a floating button
+	// that hides all chrome (header, footer, timeline, tag cloud, pagination),
+	// leaving only the post grid. Pure slot plugin — button + a body class.
+	{ID: "distraction-free", Type: TypeSlot, Slot: "post-list-tools", EntryName: "distraction-free", DefaultEnabled: true},
 
 	// ── Content enhancers ────────────────────────────────────────────────────
 	// The immersive viewers are alternatives for the post-viewer slot (core
 	// area "immersive"): Standard is the default; Sheet ships disabled. Enabling
 	// Sheet and disabling Standard switches the public viewer; at least one of
 	// the pair must stay enabled.
-	{ID: "immersive", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
-	{ID: "immersive-sheet", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
+	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
+	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
 	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
 
 	// Previous/next post links at the foot of the article (non-immersive view).
@@ -116,16 +124,16 @@ var Registry = []Descriptor{
 
 	// ── Backend-gated services ───────────────────────────────────────────────
 	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: true},
-	{ID: "ai-analysis", Type: TypeService, DefaultEnabled: true},
+	{ID: "ai-analysis", Title: "AI Analysis", Type: TypeService, DefaultEnabled: true},
 	{ID: "passkeys", Type: TypeService, Routes: []string{"/api/auth/webauthn"}, DefaultEnabled: true},
 	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: true},
 	{ID: "backups", Type: TypeService, DefaultEnabled: true},
 	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: true},
-	{ID: "rss", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
+	{ID: "rss", Title: "RSS", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
 	// In-process MCP (Model Context Protocol) server: exposes the blog to AI
 	// clients at /mcp. Off by default — it is a powerful remote-control surface
 	// that admins opt into from the Plugins page.
-	{ID: "mcp", Type: TypeService, Routes: []string{"/mcp"}, DefaultEnabled: false},
+	{ID: "mcp", Title: "MCP", Type: TypeService, Routes: []string{"/mcp"}, DefaultEnabled: false},
 }
 
 // byID indexes Registry for O(1) lookups.

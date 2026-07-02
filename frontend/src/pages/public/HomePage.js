@@ -235,6 +235,8 @@ export default class HomePage extends Component {
       editUrl: (isStaticHomePage && post) ? `/light/posts/${post.id}/edit` : null,
       total,
       timelineVisible: this._canShowTimeline,
+      // Only the paginated grid view offers the distraction-free toggle.
+      distractionToggle: !isStaticHomePage && !immersive,
     }).then(comps => {
       if (comps[0] && !this._unmounted) {
         this._headerChild = comps[0];
@@ -358,6 +360,12 @@ export default class HomePage extends Component {
       this._gestureEl.removeEventListener('touchstart', this._onTouchPromote);
       this._gestureEl = null;
     }
+    if (this._onKeyNav) {
+      window.removeEventListener('keydown', this._onKeyNav);
+      this._onKeyNav = null;
+    }
+    for (const a of this._navArrows || []) a.remove();
+    this._navArrows = null;
     this._stride = null;
   }
 
@@ -447,6 +455,44 @@ export default class HomePage extends Component {
     };
     siteMain.addEventListener('touchstart', this._onTouchPromote, { passive: true });
     this._gestureEl = siteMain;
+
+    this._setupPageControls(pagination);
+  }
+
+  // Keyboard + mouse page navigation for the grid, complementing swipe/trackpad.
+  // Keyboard works in every mode (arrows + hjkl-style); the edge arrows are the
+  // mouse path for distraction-free mode, where the paginator is hidden (the DF
+  // plugin CSS reveals them on hover for fine pointers only — touch swipes).
+  _setupPageControls(pagination) {
+    const pages = pagination.pages || 1;
+    const goPrev = () => { if (pagination.page > 1) ViewContext.update({ page: pagination.page - 1 }); };
+    const goNext = () => { if (pagination.page < pages) ViewContext.update({ page: pagination.page + 1 }); };
+
+    this._onKeyNav = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      // Never hijack keys while the user is typing (search box, etc.).
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      // h/k = back, l/j = forward — arrow keys likewise. Up/Down are left to the
+      // browser so vertical scrolling still works.
+      if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'k') { e.preventDefault(); goPrev(); }
+      else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'j') { e.preventDefault(); goNext(); }
+    };
+    window.addEventListener('keydown', this._onKeyNav);
+
+    const CHEVRON = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    this._navArrows = [['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],
+                       ['next', goNext, 'Next page', 'M9 18l6-6-6-6']].map(([dir, go, label, d]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `df-nav-arrow df-nav-${dir}`;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = CHEVRON(d);
+      b.disabled = dir === 'prev' ? pagination.page <= 1 : pagination.page >= pages;
+      b.addEventListener('click', go);
+      document.body.appendChild(b);
+      return b;
+    });
   }
 
   /**

@@ -31,6 +31,7 @@ func NewPluginsHandler(settingsService *services.SettingsService) *PluginsHandle
 // is encoded here.
 type pluginView struct {
 	ID             string       `json:"id"`
+	Title          string       `json:"title,omitempty"`
 	Type           plugins.Type `json:"type"`
 	Slot           string       `json:"slot,omitempty"`
 	Routes         []string     `json:"routes,omitempty"`
@@ -48,6 +49,7 @@ type pluginView struct {
 func viewFor(d plugins.Descriptor, settings map[string]string) pluginView {
 	return pluginView{
 		ID:             d.ID,
+		Title:          d.Title,
 		Type:           d.Type,
 		Slot:           d.Slot,
 		Routes:         d.Routes,

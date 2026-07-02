@@ -15,6 +15,12 @@ import { escapeHtml } from "../../utils/helpers.js";
 export const LABEL_OVERRIDES = {
   tags_visibility: "Tags visible to",
   atlas_post_limit: "Atlas posts to fetch",
+  // Not a second "enable the plugin" switch — the plugin list owns that. This
+  // gates cross-posting on publish, so label it for what it does.
+  enable_instagram: "Cross-post new photos to Instagram",
+  gemini_prompt_title: "Title guidance",
+  gemini_prompt_tags: "Tags guidance",
+  gemini_prompt_excerpt: "Excerpt guidance",
 };
 
 // Keys rendered as <input type="number">.
@@ -134,6 +140,16 @@ function inputHtml(key, value, { posts = [] }) {
     const v = escapeHtml(String(value || ""));
     return `<textarea name="${key}" id="${key}" class="form-input" rows="2" placeholder="&copy; {{author_name}}, powered by {{engine}}">${v}</textarea>
       <small class="form-hint">Tokens: <code>{{author_name}}</code>, <code>{{engine}}</code>. Leave blank for the default.</small>`;
+  }
+  if (key.startsWith("gemini_prompt_")) {
+    // ponytail: placeholders mirror media_service.go's built-in defaults.
+    const defaults = {
+      gemini_prompt_title: "a concise, descriptive title",
+      gemini_prompt_tags: "relevant keyword tags",
+      gemini_prompt_excerpt: "a 1-2 sentence description",
+    };
+    return `<textarea name="${key}" id="${key}" class="form-input" rows="2" maxlength="200" placeholder="${escapeHtml(defaults[key] || "")}">${escapeHtml(String(value))}</textarea>
+      <small class="form-hint">Tells the AI what to produce for this field. Leave blank for the default.</small>`;
   }
   if (isNumericKey(key)) {
     return `<input type="number" name="${key}" id="${key}" class="form-input" value="${escapeHtml(String(value))}">`;
