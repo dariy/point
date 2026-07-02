@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -80,6 +81,17 @@ func NewPostService(repo repository.Repository, settingsService *SettingsService
 
 	// Links
 	policy.AllowAttrs("href", "title", "target", "rel").OnElements("a")
+
+	// Restrict URL schemes on all href/src attributes. Without this, bluemonday
+	// leaves requireParseableURLs false and passes javascript:/data:text/html
+	// through unsanitized — harmless under CSP in-browser, but dangerous in
+	// RSS/feed-reader/email contexts. data: is deliberately NOT allowed: no post
+	// content relies on data: images, and allowing it would re-open
+	// data:text/html on anchors. Relative URLs (bare media paths like
+	// /2026/02/photo.jpg) stay permitted via AllowStandardURLs.
+	policy.AllowStandardURLs()
+	policy.AllowURLSchemes("http", "https", "mailto")
+	policy.RequireNoFollowOnLinks(true)
 
 	// Media elements
 	policy.AllowElements("img", "video", "audio", "source", "figure", "figcaption")
@@ -194,7 +206,30 @@ var (
 	cssZIndexRe      = regexp.MustCompile(`(?i)\bz-index\s*:[^;}]*`)
 	cssDangerContent = regexp.MustCompile(`(?i)\bcontent\s*:[^;}]*`)
 	cssScriptRe      = regexp.MustCompile(`(?i)<\s*script`)
+
+	// Normalization regexes to defeat trivial denylist bypasses.
+	cssCommentRe     = regexp.MustCompile(`/\*[\s\S]*?\*/`)                   // url(/**/https://…) comment splitting
+	cssHexEscapeRe   = regexp.MustCompile(`\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?`) // \40 import → @import
+	cssOtherEscapeRe = regexp.MustCompile(`\\([^0-9a-fA-F\r\n])`)            // \@import → @import
 )
+
+// normalizeCSSForSanitizing strips CSS comments and decodes CSS escape
+// sequences so the denylist in SanitizePostCSS can't be evaded via
+// comment-splitting or escaped characters.
+// TODO(follow-up): replace the regex denylist with a real CSS parser; escape
+// decoding here is a stopgap, not a complete CSS tokenizer.
+func normalizeCSSForSanitizing(css string) string {
+	css = cssCommentRe.ReplaceAllString(css, "")
+	css = cssHexEscapeRe.ReplaceAllStringFunc(css, func(m string) string {
+		h := cssHexEscapeRe.FindStringSubmatch(m)[1]
+		n, err := strconv.ParseInt(h, 16, 32)
+		if err != nil || n == 0 || n > 0x10FFFF {
+			return ""
+		}
+		return string(rune(n))
+	})
+	return cssOtherEscapeRe.ReplaceAllString(css, "$1")
+}
 
 // SanitizePostCSS strips dangerous CSS declarations from per-post CSS blocks.
 // Returns the sanitized CSS and a list of property names that were removed.
@@ -219,7 +254,7 @@ func SanitizePostCSS(css string) (string, []string) {
 		{cssScriptRe, "<script>"},
 	}
 
-	result := css
+	result := normalizeCSSForSanitizing(css)
 	for _, r := range rules {
 		if r.re.MatchString(result) {
 			stripped = append(stripped, r.name)
