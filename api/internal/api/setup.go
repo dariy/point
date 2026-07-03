@@ -99,7 +99,6 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		{"use_thumbnails", "true", "boolean"},
 		{"show_view_counts", "false", "boolean"},
 
-		{"tags_module", "atlas", "string"},
 		{"tags_visibility", "hidden", "string"},
 		{"atlas_post_limit", "10", "integer"},
 		{"enable_backup", "false", "boolean"},

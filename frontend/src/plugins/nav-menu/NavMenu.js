@@ -1,4 +1,5 @@
 import { store } from '../../store.js';
+import { pluginHost } from '../../core/pluginHost.js';
 import { escapeHtml } from '../../utils/helpers.js';
 import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.js';
 
@@ -31,15 +32,17 @@ export class NavMenu {
     
     const isCustomMenu = settings.nav_menu_mode === 'custom';
 
-    // Tags Button Html
-    const tagsModule = settings.tags_module || 'atlas';
+    // Tags Button Html — the active viz is the enabled tags-viz plugin (at most
+    // one; the old `tags_module` selector is gone). None enabled → no tags link.
+    const activeTagsViz =
+      ['tags-atlas', 'tags-map', 'tags-graph'].find((id) => pluginHost.isEnabled(id)) || '';
     const tagsVisibility = settings.tags_visibility || 'hidden';
-    const tagsVisible = tagsModule !== 'none' && (tagsVisibility === 'all' || !!user);
+    const tagsVisible = !!activeTagsViz && (tagsVisibility === 'all' || !!user);
     const tagsMeta = {
-      cloud: { icon: TAGS_SVG, label: 'All tags' },
-      map: { icon: MAP_SVG, label: 'Map' },
-      atlas: { icon: GLOBE_SVG, label: 'Atlas' },
-    }[tagsModule] || { icon: TAGS_SVG, label: 'All tags' };
+      'tags-graph': { icon: TAGS_SVG, label: 'All tags' },
+      'tags-map': { icon: MAP_SVG, label: 'Map' },
+      'tags-atlas': { icon: GLOBE_SVG, label: 'Atlas' },
+    }[activeTagsViz] || { icon: TAGS_SVG, label: 'All tags' };
 
     this.navItemsEl.innerHTML = tagsVisible
       ? `<a href="/tags" class="header-action-btn${currentPath === '/tags' ? ' active' : ''}"

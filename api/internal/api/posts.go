@@ -379,8 +379,17 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "post not found")
 	}
 
-	perPageStr, _ := h.settingsService.GetSetting(ctx, "posts_per_page", "10")
-	perPage, _ := strconv.Atoi(perPageStr)
+	// Honor an explicit per_page (the grid's device-fit page size) so the
+	// computed page matches the actual grid the caller returns to; fall back to
+	// the site setting when absent.
+	perPage := 0
+	if pp, err := strconv.Atoi(c.QueryParam("per_page")); err == nil {
+		perPage = pp
+	}
+	if perPage < 1 {
+		perPageStr, _ := h.settingsService.GetSetting(ctx, "posts_per_page", "10")
+		perPage, _ = strconv.Atoi(perPageStr)
+	}
 	if perPage < 1 {
 		perPage = 10
 	}
@@ -928,7 +937,10 @@ func (h *PostHandler) GetPostNavigation(c echo.Context) error {
 	}
 
 	publicOnly := c.Get("user") == nil
-	prev, next, err := h.postService.GetPostNavigation(c.Request().Context(), id, publicOnly)
+	// Optional tag scope keeps immersive prev/next within a tag collection
+	// (spanning all its pages) instead of the global feed.
+	tag := c.QueryParam("tag")
+	prev, next, err := h.postService.GetPostNavigation(c.Request().Context(), id, publicOnly, tag)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "post not found")
 	}

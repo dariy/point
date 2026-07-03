@@ -196,26 +196,29 @@ export class MediaViewer extends Component {
       }
     }
 
+    // Returns true when the step crossed into another post (a navigation is
+    // underway), false when it stayed within this post — the slideshow uses this
+    // to tell a real cross from an end-of-feed wrap.
     const goTo = (i) => {
       const n = slides.length;
       if (!n) {
-        if (i < 0) this._navigatePost('back');
-        else if (i > 0) this._navigatePost('fwd');
-        return;
+        if (i < 0) return this._navigatePost('back');
+        if (i > 0) return this._navigatePost('fwd');
+        return false;
       }
-      
+
       const newIndex = ((i % n) + n) % n;
-      
+
       // Post crossing — also crosses for single-media posts (n === 1),
       // where stepping off either edge wraps back to the same slide.
       if (i < 0 && newIndex === n - 1) {
-        if (this._navigatePost('back')) return;
+        if (this._navigatePost('back')) return true;
       }
       if (i >= n && newIndex === 0) {
-        if (this._navigatePost('fwd')) return;
+        if (this._navigatePost('fwd')) return true;
       }
 
-      if (this._index === newIndex) return;
+      if (this._index === newIndex) return false;
 
       const oldSlide = slides[this._index];
       const newSlide = slides[newIndex];
@@ -239,6 +242,7 @@ export class MediaViewer extends Component {
       this._resetZoom();
       this._updateExif();
       onStep?.(this._index);
+      return false;
     };
 
     // Expose carousel navigation to the slideshow slot plugin (controller hook).
@@ -300,9 +304,12 @@ export class MediaViewer extends Component {
         const oldScale = this._zoomState.scale;
         const newScale = Math.max(0.5, Math.min(this._getMaxScale() * 2, oldScale * delta));
         if (newScale === oldScale) return;
-        const rect = wrapper.getBoundingClientRect();
-        const rx = cx - rect.left - rect.width / 2;
-        const ry = cy - rect.top - rect.height / 2;
+        // Focal point relative to the viewport centre. The slide fills the
+        // viewport with a centre transform-origin, so measure against the window
+        // rather than the wrapper (which is 0-height — the sized box is the
+        // absolutely-positioned .immersive-visuals).
+        const rx = cx - window.innerWidth / 2;
+        const ry = cy - window.innerHeight / 2;
         this._zoomState.x -= (rx - this._zoomState.x) * (newScale / oldScale - 1);
         this._zoomState.y -= (ry - this._zoomState.y) * (newScale / oldScale - 1);
         this._zoomState.scale = newScale;
@@ -321,10 +328,10 @@ export class MediaViewer extends Component {
         if (this._zoomState.scale > 1) return this._resetZoom();
         const max = this._getMaxScale();
         if (max <= 1) return;
-        const rect = wrapper.getBoundingClientRect();
+        const W = window.innerWidth, H = window.innerHeight;
         this._zoomState.scale = max;
-        this._zoomState.x = (rect.width / 2 - (x - rect.left)) * (max - 1);
-        this._zoomState.y = (rect.height / 2 - (y - rect.top)) * (max - 1);
+        this._zoomState.x = (W / 2 - x) * (max - 1);
+        this._zoomState.y = (H / 2 - y) * (max - 1);
         this._gesture.setZoomed(true);
         wrapper.classList.add('zoomed');
         this._updateVisuals();
@@ -332,7 +339,8 @@ export class MediaViewer extends Component {
     });
 
     this._trackpad = new TrackpadDetector(wrapper, {
-      onHorizontal: (dir) => goTo(this._index + (dir === 'left' ? 1 : -1))
+      // Ignore horizontal scroll while zoomed — the pan owns it until reset to fit.
+      onHorizontal: (dir) => { if (this._zoomState.scale <= 1) goTo(this._index + (dir === 'left' ? 1 : -1)); }
     });
 
     // Keyboard
@@ -615,6 +623,27 @@ export class MediaViewer extends Component {
     this.$('.media-viewer-wrapper').classList.remove('zoomed');
   }
 
+  /**
+   * Settle a zoom gesture: drop back to 1× if pinched below threshold, otherwise
+   * clamp the pan so the scaled slide always covers the viewport (no empty
+   * gutters) and snap to the clamped position. The slide fills the viewport with
+   * a centre transform-origin, so the pan range is (scale-1)·half-viewport.
+   */
+  _constrainZoom(animate = false) {
+    const { scale } = this._zoomState;
+    if (scale <= 1) return this._resetZoom();
+    const maxX = ((scale - 1) * window.innerWidth) / 2;
+    const maxY = ((scale - 1) * window.innerHeight) / 2;
+    this._zoomState.x = Math.max(-maxX, Math.min(maxX, this._zoomState.x));
+    this._zoomState.y = Math.max(-maxY, Math.min(maxY, this._zoomState.y));
+    const target = this._activeEl();
+    if (!target) return;
+    const { x, y } = this._zoomState;
+    target.style.transition = animate ? 'transform 0.2s ease' : 'none';
+    target.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    target.style.opacity = '1';
+  }
+
   _activeEl() {
     return this._slides?.[this._index] || this.$('.carousel-slide.active') || this.$('.immersive-visuals');
   }
@@ -687,6 +716,9 @@ export class MediaViewer extends Component {
   }
 
   _panelClick(e, navFn) {
+    // While zoomed the edge panels don't navigate — an edge tap is part of
+    // inspecting the zoomed image, not a step. Reset to fit first (double-tap/Esc).
+    if (this._zoomState.scale > 1) { e.stopPropagation(); return; }
     const panel = e.currentTarget; panel.style.pointerEvents = 'none';
     const link = document.elementFromPoint(e.clientX, e.clientY)?.closest('a');
     panel.style.pointerEvents = '';

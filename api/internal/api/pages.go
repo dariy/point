@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/plugins"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
@@ -51,7 +52,6 @@ var pagePublicSettingKeys = map[string]bool{
 	"show_immersive_excerpt": true,
 	"min_tag_posts_to_show":  true,
 
-	"tags_module":            true,
 	"tags_visibility":        true,
 	"timeline_mode":          true,
 }
@@ -603,7 +603,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
 
 	// The graph backs both the "tag cloud" and "atlas" modules served at /tags.
-	if !tagsModuleAccessible(allSettings, []string{"cloud", "atlas"}, publicOnly) {
+	if !tagsModuleAccessible(allSettings, []string{"tags-atlas", "tags-graph"}, publicOnly) {
 		return echo.NewHTTPError(http.StatusNotFound, "tags not found")
 	}
 
@@ -763,7 +763,7 @@ func (h *PagesHandler) GetTagCloud(c echo.Context) error {
 	}
 
 	allSettings, _ := h.settingsService.GetAllSettings(ctx)
-	if !tagsModuleAccessible(allSettings, []string{"cloud", "atlas"}, publicOnly) {
+	if !tagsModuleAccessible(allSettings, []string{"tags-atlas", "tags-graph"}, publicOnly) {
 		return echo.NewHTTPError(http.StatusNotFound, "tags not found")
 	}
 
@@ -920,7 +920,7 @@ func (h *PagesHandler) GetMapPage(c echo.Context) error {
 
 	mapSettings, _ := h.settingsService.GetAllSettings(ctx)
 
-	if !tagsModuleAccessible(mapSettings, []string{"map"}, publicOnly) {
+	if !tagsModuleAccessible(mapSettings, []string{"tags-map"}, publicOnly) {
 		return echo.NewHTTPError(http.StatusNotFound, "map not found")
 	}
 
@@ -1116,28 +1116,28 @@ func getMinTagPostsSetting(settings map[string]string) int64 {
 	return v
 }
 
-// Default values for the consolidated "show tags" setting. A single module
-// (tag cloud / map / atlas) is surfaced at /tags; tags_visibility controls
-// whether the public sees it or only logged-in admins.
-const (
-	defaultTagsModule     = "atlas"
-	defaultTagsVisibility = "hidden"
-)
+// defaultTagsVisibility gates who sees /tags: "hidden" = admins only.
+const defaultTagsVisibility = "hidden"
 
-// tagsModuleAccessible reports whether the currently-selected tags module may be
-// served for the given request. `want` lists the module values the calling
-// endpoint can render (e.g. the graph endpoint backs both "cloud" and "atlas").
+// tagsModuleAccessible reports whether the active tag-visualization plugin may be
+// served for the given request. Which viz is active is the sole enabled member
+// of the exclusive "tags-viz" area (tags-atlas/tags-map/tags-graph); `want` lists
+// the plugin ids the calling endpoint can render (the graph endpoint backs both
+// the atlas and graph plugins).
 //
-// Rules: "none" hides the feature from everyone. Otherwise admins always have
-// access, while the public sees it only when tags_visibility is "all".
+// Rules: no enabled viz hides the feature from everyone. Otherwise admins always
+// have access, while the public sees it only when tags_visibility is "all".
 func tagsModuleAccessible(settings map[string]string, want []string, publicOnly bool) bool {
-	module := getSettingOr(settings, "tags_module", defaultTagsModule)
-	if module == "none" {
+	active := ""
+	if ids := plugins.EnabledInArea("tags-viz", settings); len(ids) > 0 {
+		active = ids[0]
+	}
+	if active == "" {
 		return false
 	}
 	matched := false
 	for _, w := range want {
-		if w == module {
+		if w == active {
 			matched = true
 			break
 		}

@@ -152,6 +152,54 @@ func TestTogglePlugin_CoreAreaCannotBeEmptied(t *testing.T) {
 	}
 }
 
+func TestTogglePlugin_ExclusiveAreaKeepsAtMostOne(t *testing.T) {
+	h, svc, e := newPluginsHandler(t)
+	ctx := context.Background()
+
+	toggle := func(id, body string) int {
+		req := httptest.NewRequest(http.MethodPatch, "/api/plugins/"+id, strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(id)
+		if err := h.TogglePlugin(c); err != nil {
+			if he, ok := err.(*echo.HTTPError); ok {
+				return he.Code
+			}
+			return http.StatusInternalServerError
+		}
+		return rec.Code
+	}
+
+	// Atlas is the default-enabled tags viz. Enabling Map disables Atlas (radio).
+	if code := toggle("tags-map", `{"enabled":true}`); code != http.StatusOK {
+		t.Fatalf("enabling tags-map should 200, got %d", code)
+	}
+	all, _ := svc.GetAllSettings(ctx)
+	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 1 || got[0] != "tags-map" {
+		t.Fatalf("exclusive area should hold only tags-map, got %v", got)
+	}
+
+	// Switching to Graph likewise leaves it the sole enabled member.
+	if code := toggle("tags-graph", `{"enabled":true}`); code != http.StatusOK {
+		t.Fatalf("enabling tags-graph should 200, got %d", code)
+	}
+	all, _ = svc.GetAllSettings(ctx)
+	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 1 || got[0] != "tags-graph" {
+		t.Fatalf("exclusive area should hold only tags-graph, got %v", got)
+	}
+
+	// "None" is allowed: disabling the active viz empties the area (not locked).
+	if code := toggle("tags-graph", `{"enabled":false}`); code != http.StatusOK {
+		t.Fatalf("disabling the sole tags viz should 200 (none allowed), got %d", code)
+	}
+	all, _ = svc.GetAllSettings(ctx)
+	if got := plugins.EnabledInArea("tags-viz", all); len(got) != 0 {
+		t.Fatalf("exclusive area should be empty, got %v", got)
+	}
+}
+
 func TestApplyPreset_SetsStateAndKeepsCoreAreas(t *testing.T) {
 	h, svc, e := newPluginsHandler(t)
 	ctx := context.Background()

@@ -31,6 +31,7 @@ func NewPluginsHandler(settingsService *services.SettingsService) *PluginsHandle
 // is encoded here.
 type pluginView struct {
 	ID             string       `json:"id"`
+	Title          string       `json:"title,omitempty"`
 	Type           plugins.Type `json:"type"`
 	Slot           string       `json:"slot,omitempty"`
 	Routes         []string     `json:"routes,omitempty"`
@@ -38,6 +39,7 @@ type pluginView struct {
 	DefaultEnabled bool         `json:"default_enabled"`
 	Area           string       `json:"area,omitempty"`
 	Core           bool         `json:"core,omitempty"`
+	Exclusive      bool         `json:"exclusive,omitempty"`
 	// Locked is true when the plugin may not be disabled because it is the sole
 	// enabled member of a core area. The frontend renders its toggle read-only.
 	Locked bool `json:"locked,omitempty"`
@@ -47,6 +49,7 @@ type pluginView struct {
 func viewFor(d plugins.Descriptor, settings map[string]string) pluginView {
 	return pluginView{
 		ID:             d.ID,
+		Title:          d.Title,
 		Type:           d.Type,
 		Slot:           d.Slot,
 		Routes:         d.Routes,
@@ -54,6 +57,7 @@ func viewFor(d plugins.Descriptor, settings map[string]string) pluginView {
 		DefaultEnabled: d.DefaultEnabled,
 		Area:           d.Area,
 		Core:           d.Core,
+		Exclusive:      d.Exclusive,
 		Locked:         plugins.IsLockedOff(d.ID, settings),
 	}
 }
@@ -112,11 +116,24 @@ func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
 	if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(id), strconv.FormatBool(req.Enabled), "string"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	all[plugins.EnabledKey(id)] = strconv.FormatBool(req.Enabled)
+
+	// Exclusive area: enabling a member turns its peers off (radio semantics).
+	if req.Enabled {
+		for _, peer := range plugins.ExclusivePeers(id) {
+			if !plugins.IsEnabled(peer, all) {
+				continue
+			}
+			if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(peer), "false", "string"); err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			all[plugins.EnabledKey(peer)] = "false"
+		}
+	}
 	// An individual toggle diverges from any preset.
 	if err := h.settingsService.SetSetting(ctx, activePresetKey, presetCustom, "string"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	all[plugins.EnabledKey(id)] = strconv.FormatBool(req.Enabled)
 	return c.JSON(http.StatusOK, viewFor(d, all))
 }

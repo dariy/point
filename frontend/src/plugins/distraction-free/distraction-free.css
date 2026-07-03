@@ -1,0 +1,66 @@
+/* Distraction-free plugin — the toggle sits as the last icon in the header's
+   nav action row (see PublicHeader); clicking it adds `body.distraction-free`,
+   which hides all chrome and portals the button to document.body as a fixed
+   overlay. Auto-bundled to css/p/distraction-free.css by build-css.sh. */
+
+/* Hide all chrome. Ids match HomePage's mount points. */
+body.distraction-free #header-mount,
+body.distraction-free #footer-mount,
+body.distraction-free #tag-cloud-mount,
+body.distraction-free #timeline-mount,
+body.distraction-free #pagination-mount {
+  display: none !important;
+}
+
+/* Button portalled to document.body — fixed to the image grid's top-right
+   corner. In DF mode the header is hidden, so the grid sits at .site-main's top
+   padding (--spacing-lg) and its right edge is the centred .main-container
+   (max-width --content-max-width) minus its --spacing-md padding. Matching both
+   lands the toggle flush to the top-right image: same top gap always, snug to
+   the corner on narrow screens, on the grid's top border when wide. */
+body.distraction-free .distraction-toggle {
+  position: fixed;
+  top: var(--spacing-lg, 1.5rem);
+  right: calc(max(0px, (100vw - var(--content-max-width)) / 2) + var(--spacing-md, 1rem));
+  z-index: 200;
+  background: var(--color-accent, #4ea1ff);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Edge page-arrows (created by HomePage). Hidden everywhere by default; only in
+   DF mode, and only for a fine hover-capable pointer — touch users swipe, so
+   they never see them. Idle faint, lifting to full on hover; a disabled arrow at
+   a list end drops out entirely. Parked in the side gutter when the viewport is
+   wider than the content, tucked to the edge otherwise. */
+.df-nav-arrow { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  body.distraction-free .df-nav-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3rem;
+    height: 3rem;
+    z-index: 200;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-accent, #4ea1ff);
+    color: #fff;
+    cursor: pointer;
+    opacity: 0.25;
+    transition: opacity 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  body.distraction-free .df-nav-arrow:hover { opacity: 1; }
+  body.distraction-free .df-nav-arrow:disabled { display: none; }
+  body.distraction-free .df-nav-prev {
+    left: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
+  }
+  body.distraction-free .df-nav-next {
+    right: max(var(--spacing-md, 1rem), calc((100vw - var(--content-max-width)) / 2 - 3.5rem));
+  }
+}

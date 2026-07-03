@@ -65,7 +65,7 @@ func TestRepository_QueryErrors(t *testing.T) {
 	if _, err := repo.GetPublicTagsForSitemap(ctx); err == nil {
 		t.Error("GetPublicTagsForSitemap: expected error")
 	}
-	if _, _, err := repo.GetPostNavigation(ctx, 1, true); err == nil {
+	if _, _, err := repo.GetPostNavigation(ctx, 1, true, ""); err == nil {
 		t.Error("GetPostNavigation: expected error")
 	}
 	if _, err := repo.GetCoOccurringTags(ctx, 1, false); err == nil {
@@ -146,7 +146,7 @@ func TestRepository_BranchCoverage(t *testing.T) {
 	_, _ = repo.DB().Exec(`INSERT INTO tags (id,name,slug,post_count) VALUES (1,'T','t',1)`)
 	_, _ = repo.DB().Exec(`INSERT INTO post_tags (post_id,tag_id) VALUES (1,1)`)
 
-	if _, _, err := repo.GetPostNavigation(ctx, 1, false); err != nil {
+	if _, _, err := repo.GetPostNavigation(ctx, 1, false, ""); err != nil {
 		t.Fatalf("GetPostNavigation (not public): %v", err)
 	}
 	if _, err := repo.CountMediaFiltered(ctx, "image", "2024/01"); err != nil {

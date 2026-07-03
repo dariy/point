@@ -156,6 +156,27 @@ func (h *PluginsHandler) ApplyPreset(c echo.Context) error {
 		}
 	}
 
+	// Exclusive areas keep at most one member: if a preset enables several
+	// alternatives, keep the first (registry order) and drop the rest.
+	doneAreas := map[string]bool{}
+	for _, d := range plugins.Registry {
+		if !d.Exclusive || d.Area == "" || doneAreas[d.Area] {
+			continue
+		}
+		doneAreas[d.Area] = true
+		kept := false
+		for _, m := range plugins.AreaPlugins(d.Area) {
+			if !want[m.ID] {
+				continue
+			}
+			if kept {
+				want[m.ID] = false
+			} else {
+				kept = true
+			}
+		}
+	}
+
 	for _, d := range plugins.Registry {
 		if err := h.settingsService.SetSetting(ctx, plugins.EnabledKey(d.ID), strconv.FormatBool(want[d.ID]), "string"); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

@@ -22,7 +22,7 @@ import {
 import { Pagination } from "../../components/shared/Pagination.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getTagPage } from "../../api/pages.js";
-import { getPostBySlug } from "../../api/posts.js";
+import { getPostBySlug, getPostNavigation } from "../../api/posts.js";
 import { store } from "../../store.js";
 import {
   escapeHtml,
@@ -327,11 +327,18 @@ export default class TagPage extends Component {
 
     if (this._isPostView() && post) {
       // ── Post immersive view within tag context ──────────────────────────────
+      // Prev/next come from the tag-scoped navigation endpoint so the immersive
+      // carousel crosses page boundaries and spans the whole tag collection.
+      // Fall back to the loaded page's neighbours if the nav fetch is absent.
       const posts = data?.posts || [];
       const postIndex = posts.findIndex((p) => p.slug === post.slug);
-      const prevPost = postIndex > 0 ? posts[postIndex - 1] : null;
-      const nextPost =
-        postIndex !== -1 && postIndex < posts.length - 1
+      const nav = this.state.nav;
+      const prevPost = nav
+        ? nav.prev
+        : postIndex > 0 ? posts[postIndex - 1] : null;
+      const nextPost = nav
+        ? nav.next
+        : postIndex !== -1 && postIndex < posts.length - 1
           ? posts[postIndex + 1]
           : null;
 
@@ -729,6 +736,11 @@ export default class TagPage extends Component {
         document.title = `${post.title} — ${data.tag?.name || slug}`;
         setCanonical(`${window.location.origin}/posts/${post.slug}`);
 
+        // Tag-scoped prev/next spans the whole tag collection (all pages), not
+        // just the loaded grid page. Optional — fall back to no cross-post nav.
+        let nav = null;
+        try { nav = await getPostNavigation(post.id, slug); } catch { /* optional */ }
+
         // Check for hash to set initial slide index (e.g. #2 -> index 1)
         let startIndex = 0;
         let forceImmersive = false;
@@ -745,6 +757,7 @@ export default class TagPage extends Component {
           loading: false,
           data,
           post,
+          nav,
           error: null,
           startIndex,
           forceImmersive,

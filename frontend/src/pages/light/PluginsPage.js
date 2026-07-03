@@ -56,16 +56,24 @@ const SETTINGS_PAGE_PATHS = {
 // and /light/security — see SECTIONS in PluginSettingsPanel). The tag-route trio
 // shares the /tags selector.
 const PLUGIN_SETTINGS = {
-  "ai-analysis": { keys: ["enable_gemini", "gemini_model", "gemini_api_key"] },
+  "ai-analysis": {
+    keys: [
+      "gemini_model",
+      "gemini_api_key",
+      "gemini_prompt_title",
+      "gemini_prompt_tags",
+      "gemini_prompt_excerpt",
+    ],
+  },
   instagram: {
     keys: ["enable_instagram", "instagram_client_id", "instagram_client_secret"],
     sections: ["instagram-import"],
   },
   immersive: { keys: ["immersive_nav_direction", "show_immersive_excerpt"] },
   "immersive-sheet": { keys: ["immersive_nav_direction", "show_immersive_excerpt"] },
-  "tags-atlas": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show", "atlas_post_limit"] },
-  "tags-map": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show"] },
-  "tags-graph": { keys: ["tags_module", "tags_visibility", "min_tag_posts_to_show"] },
+  "tags-atlas": { keys: ["tags_visibility", "min_tag_posts_to_show", "atlas_post_limit"] },
+  "tags-map": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
+  "tags-graph": { keys: ["tags_visibility", "min_tag_posts_to_show"] },
   "tag-cloud": { keys: ["min_tag_posts_to_show"] },
   "public-footer": { keys: ["footer_copyright"] },
   backups: { sections: ["backups"] },
@@ -74,18 +82,11 @@ const PLUGIN_SETTINGS = {
   "offline-sync": { sections: ["offline-data", "sync-queue"] },
 };
 
-// Display-name overrides for ids that don't humanize cleanly (acronyms etc.).
-const PLUGIN_DISPLAY_NAMES = {
-  rss: "RSS",
-  "ai-analysis": "AI Analysis",
-  immersive: "Immersive (Standard)",
-  "immersive-sheet": "Immersive (Sheet)",
-};
-
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 
-function humanize(id) {
-  if (PLUGIN_DISPLAY_NAMES[id]) return PLUGIN_DISPLAY_NAMES[id];
+// Display name: the registry's tuned `title` when set, else title-cased id.
+function humanize(id, title) {
+  if (title) return title;
   return id
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -203,7 +204,7 @@ export default class PluginsPage extends Component {
     return `
       <div class="plugin-card${plugin.enabled ? " is-enabled" : ""}" data-id="${escapeHtml(plugin.id)}">
         <div class="plugin-info">
-          <span class="plugin-name">${escapeHtml(humanize(plugin.id))}</span>
+          <span class="plugin-name">${escapeHtml(humanize(plugin.id, plugin.title))}</span>
           ${meta.length ? `<span class="plugin-meta">${meta.join(" · ")}</span>` : ""}
         </div>
         <div class="plugin-actions">
@@ -331,7 +332,7 @@ export default class PluginsPage extends Component {
       document.body.appendChild(mount);
       this._panel = new PluginSettingsPanel(mount, {
         pluginId: id,
-        title: humanize(id),
+        title: humanize(id, this.state.plugins.find((p) => p.id === id)?.title),
         keys: cfg.keys || null,
         sections: cfg.sections || null,
         settings,
@@ -375,7 +376,14 @@ export default class PluginsPage extends Component {
     this.setState({ pending: { ...this.state.pending, [id]: true } });
     try {
       const updated = await setPluginEnabled(id, enabled);
-      const plugins = this.state.plugins.map((p) => (p.id === id ? { ...p, ...updated } : p));
+      let plugins = this.state.plugins.map((p) => (p.id === id ? { ...p, ...updated } : p));
+      // Exclusive area: enabling one member disables its peers server-side; mirror
+      // that here so the sibling toggles flip off without a reload.
+      if (enabled && updated.exclusive && updated.area) {
+        plugins = plugins.map((p) =>
+          p.id !== id && p.area === updated.area ? { ...p, enabled: false } : p,
+        );
+      }
       const pending = { ...this.state.pending };
       delete pending[id];
       // An individual toggle diverges from any preset (backend does the same).

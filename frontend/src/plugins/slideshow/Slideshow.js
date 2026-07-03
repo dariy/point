@@ -25,6 +25,21 @@ const IDLE_MS = 3000;
 let running = false;
 let crossing = false;
 
+// The slideshow only plays immersive posts. When it crosses into a non-immersive
+// one (no viewer mounts there), PostPage reads this to skip straight on.
+//
+// The run state lives on a body class rather than this module's `running` var
+// because the plugin ships as a dynamically-imported chunk with its own copy of
+// this module: PostPage (bundled into app.js) gets a *separate* `running`
+// binding that start() never touches. The DOM is the one thing both bundles
+// share, so that's where the cross-bundle signal goes.
+const RUNNING_CLASS = 'slideshow-running';
+const setRunning = (v) => {
+  running = v;
+  document.body.classList.toggle(RUNNING_CLASS, v);
+};
+export const isSlideshowRunning = () => document.body.classList.contains(RUNNING_CLASS);
+
 const clampInterval = (n) =>
   Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, Number.isFinite(n) ? n : DEFAULT_INTERVAL));
 
@@ -51,8 +66,10 @@ export class Slideshow {
     this._buildButton();
 
     // Cross-post continuation: a show that was running before the remount picks
-    // straight back up on this fresh instance.
-    if (running) this.start();
+    // straight back up on this fresh instance. It's a mid-show resume, not a
+    // user gesture, so the chrome stays hidden rather than flashing back for the
+    // idle grace on every auto-advanced slide.
+    if (running) this.start({ resumed: true });
   }
 
   // ── Top-right toggle button ───────────────────────────────────────────────
@@ -81,8 +98,8 @@ export class Slideshow {
   }
 
   // ── Start / stop ──────────────────────────────────────────────────────────
-  start() {
-    running = true;
+  start({ resumed = false } = {}) {
+    setRunning(true);
     // NB: don't reset `crossing` here. On a cross-post remount this start() races
     // the old instance's unmount() (which reads `crossing`); clearing it would let
     // that unmount mistake the auto-cross for a real close and stop the show.
@@ -92,12 +109,14 @@ export class Slideshow {
     document.addEventListener('touchstart', this._onNav, { passive: true });
     document.addEventListener('keydown', this._onNav);
     document.addEventListener('visibilitychange', this._onVisibility);
-    this._resetInactivity();
+    // A fresh user gesture shows the chrome then fades it after the idle grace; a
+    // mid-show resume keeps it hidden so auto-advanced slides don't re-flash it.
+    resumed ? this._hideChrome() : this._resetInactivity();
     this._arm();
   }
 
   stop() {
-    running = false;
+    setRunning(false);
     crossing = false;
     this._syncButton();
     this._removeBar();
@@ -125,7 +144,7 @@ export class Slideshow {
     // An auto-cross keeps the show alive for the remount; anything else
     // (Esc / close cross / leaving the page) is a real stop.
     if (crossing) crossing = false;
-    else running = false;
+    else setRunning(false);
   }
 
   // ── Advance loop ──────────────────────────────────────────────────────────
@@ -142,20 +161,19 @@ export class Slideshow {
     if (next >= this.ctx.count) {
       // End of this post's run → force the forward cross into the next post.
       crossing = true;
-      this.ctx.goTo(this.ctx.count);
-      // A real cross unmounts us within ~300ms (this timer is cleared in
-      // _disarm). If we're still here after that — end of feed, where goTo just
-      // wrapped within the post — recover: when looping, reshuffle and keep the
-      // show going; otherwise stop on the last slide.
-      this._timer = setTimeout(() => {
-        crossing = false;
-        if (!this.loop) {
-          this.stop();
-          return;
-        }
-        this.order = this._shuffled();
-        this._arm();
-      }, 800);
+      // A real cross starts a navigation and returns true: leave `crossing` set
+      // and wait to be unmounted on the remount (which may be several posts away
+      // when the show skips non-immersive ones). A false return means goTo only
+      // wrapped within this post (genuine end of feed): recover here — reshuffle
+      // and keep looping, or stop on the last slide.
+      if (this.ctx.goTo(this.ctx.count)) return;
+      crossing = false;
+      if (!this.loop) {
+        this.stop();
+        return;
+      }
+      this.order = this._shuffled();
+      this._arm();
       return;
     }
     this.ctx.goTo(next);

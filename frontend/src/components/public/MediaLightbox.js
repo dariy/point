@@ -7,7 +7,7 @@
  *   lb.open(images, startIndex);    // images: [{ src, alt }]
  */
 
-import { MediaViewer } from '../../plugins/immersive/MediaViewer.js';
+import { MediaViewer } from '../shared/MediaViewer.js';
 
 export class MediaLightbox {
   constructor() {

@@ -138,7 +138,7 @@ type mockRepository struct {
 	MockListPostsWithSearch             func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error)
 	MockCountPostsWithSearch            func(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error)
 	MockGetPostByPreviewToken           func(ctx context.Context, token string) (models.Post, error)
-	MockGetPostNavigation               func(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error)
+	MockGetPostNavigation               func(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error)
 	MockReplacePostContentPath          func(ctx context.Context, oldPath, newPath string) (int64, error)
 	MockUpdatePostThumbnailPath         func(ctx context.Context, oldPath, newPath string) (int64, error)
 	MockListPublishedPostStubs          func(ctx context.Context) ([]repository.PostStub, error)
@@ -1020,9 +1020,9 @@ func (m *mockRepository) GetPostByPreviewToken(ctx context.Context, token string
 	return models.Post{}, fmt.Errorf("GetPostByPreviewToken not implemented")
 }
 
-func (m *mockRepository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error) {
+func (m *mockRepository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error) {
 	if m.MockGetPostNavigation != nil {
-		return m.MockGetPostNavigation(ctx, postID, publicOnly)
+		return m.MockGetPostNavigation(ctx, postID, publicOnly, tag)
 	}
 	return nil, nil, fmt.Errorf("GetPostNavigation not implemented")
 }
