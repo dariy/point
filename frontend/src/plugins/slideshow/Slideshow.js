@@ -25,6 +25,10 @@ const IDLE_MS = 3000;
 let running = false;
 let crossing = false;
 
+// The slideshow only plays immersive posts. When it crosses into a non-immersive
+// one (no viewer mounts there), PostPage reads this to skip straight on.
+export const isSlideshowRunning = () => running;
+
 const clampInterval = (n) =>
   Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, Number.isFinite(n) ? n : DEFAULT_INTERVAL));
 
