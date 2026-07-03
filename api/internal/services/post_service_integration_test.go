@@ -298,7 +298,7 @@ func TestPostService_GetPostNavigation(t *testing.T) {
 	p2, _, _ := svc.CreatePost(ctx, CreatePostParams{Title: "Second", Slug: "second", AuthorID: 1, Status: "draft"})
 	_, _ = svc.PublishPost(ctx, p2.ID)
 
-	_, _, err := svc.GetPostNavigation(ctx, p1.ID, true)
+	_, _, err := svc.GetPostNavigation(ctx, p1.ID, true, "")
 	if err != nil {
 		t.Fatalf("GetPostNavigation failed: %v", err)
 	}

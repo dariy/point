@@ -22,6 +22,15 @@ function writePref(on) {
 export function mount(el) {
   if (!el) return null;
 
+  // A rapid re-render (e.g. the list's loading→data header swap) can mount a
+  // second df plugin before the first is torn down. In DF mode the button is
+  // portalled to <body>, so it escapes the header's container clear and lingers
+  // — the reported "extra exit button after the footer". This fresh mount is the
+  // live one; drop any stray portalled toggle a leaked instance left behind so
+  // only ever one button exists. (Off-mode buttons sit inside the header, not as
+  // a direct body child, so this only sweeps orphaned portalled ones.)
+  document.querySelectorAll('body > .distraction-toggle').forEach((b) => b.remove());
+
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'header-action-btn distraction-toggle';

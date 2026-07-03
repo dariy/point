@@ -71,7 +71,7 @@ type Repository interface {
 	ListPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool, limit, offset int64) ([]models.Post, error)
 	CountPostsWithSearch(ctx context.Context, statusFilter bool, status string, featuredFilter bool, includeDrafts bool, includeHidden bool, search string, tag string, onlyPages bool) (int64, error)
 	GetPostByPreviewToken(ctx context.Context, token string) (models.Post, error)
-	GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error)
+	GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *PostNavItem, err error)
 	ReplacePostContentPath(ctx context.Context, oldPath, newPath string) (int64, error)
 	UpdatePostThumbnailPath(ctx context.Context, oldPath, newPath string) (int64, error)
 	ListPublishedPostStubs(ctx context.Context) ([]PostStub, error)

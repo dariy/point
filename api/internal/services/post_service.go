@@ -807,8 +807,8 @@ func (s *PostService) GetPostByPreviewToken(ctx context.Context, token string) (
 
 // GetPostNavigation returns the previous and next published posts adjacent to
 // the given post, ordered by published_at.
-func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *repository.PostNavItem, err error) {
-	return s.repo.GetPostNavigation(ctx, postID, publicOnly)
+func (s *PostService) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *repository.PostNavItem, err error) {
+	return s.repo.GetPostNavigation(ctx, postID, publicOnly, tag)
 }
 
 func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Post, error) {

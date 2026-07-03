@@ -453,7 +453,7 @@ type PostNavItem struct {
 // GetPostNavigation returns the previous and next posts relative to
 // the given post's published_at timestamp. Either pointer may be nil when there
 // is no adjacent post.
-func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool) (prev, next *PostNavItem, err error) {
+func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, publicOnly bool, tag string) (prev, next *PostNavItem, err error) {
 	const qDate = `SELECT CAST(published_at AS TEXT) FROM posts WHERE id = ? LIMIT 1`
 	var publishedAt string
 	if err = r.db.QueryRowContext(ctx, qDate, postID).Scan(&publishedAt); err != nil {
@@ -465,21 +465,48 @@ func (r *sqliteRepository) GetPostNavigation(ctx context.Context, postID int64, 
 		statusFilter = "LOWER(status) IN ('published', 'hidden')"
 	}
 
+	// Optional tag scope: restrict adjacency to posts under the given tag (and
+	// its descendants), so navigation stays within a tag collection and spans
+	// every page of it — mirroring the tag feed's descendant-tree filter.
+	tagClause := ""
+	if tag != "" {
+		tagClause = `
+AND id IN (
+    SELECT pt.post_id FROM post_tags pt
+    WHERE pt.tag_id IN (
+        WITH RECURSIVE tree(id) AS (
+            SELECT id FROM tags WHERE slug = LOWER(?)
+            UNION
+            SELECT tr.child_id FROM tag_relationships tr JOIN tree ON tr.parent_id = tree.id
+        )
+        SELECT id FROM tree
+    )
+)`
+	}
+
 	qPrev := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE (%s) AND deleted_at IS NULL AND (published_at < ? OR (published_at = ? AND id < ?))
-ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter)
+WHERE (%s) AND deleted_at IS NULL AND type != 'page' AND (published_at < ? OR (published_at = ? AND id < ?))%s
+ORDER BY published_at DESC, id DESC LIMIT 1`, statusFilter, tagClause)
+	prevArgs := []interface{}{publishedAt, publishedAt, postID}
+	if tag != "" {
+		prevArgs = append(prevArgs, tag)
+	}
 	var p PostNavItem
-	if err2 := r.db.QueryRowContext(ctx, qPrev, publishedAt, publishedAt, postID).Scan(&p.ID, &p.Title, &p.Slug); err2 == nil {
+	if err2 := r.db.QueryRowContext(ctx, qPrev, prevArgs...).Scan(&p.ID, &p.Title, &p.Slug); err2 == nil {
 		prev = &p
 	}
 
 	qNext := fmt.Sprintf(`
 SELECT id, title, slug FROM posts
-WHERE (%s) AND deleted_at IS NULL AND (published_at > ? OR (published_at = ? AND id > ?))
-ORDER BY published_at ASC, id ASC LIMIT 1`, statusFilter)
+WHERE (%s) AND deleted_at IS NULL AND type != 'page' AND (published_at > ? OR (published_at = ? AND id > ?))%s
+ORDER BY published_at ASC, id ASC LIMIT 1`, statusFilter, tagClause)
+	nextArgs := []interface{}{publishedAt, publishedAt, postID}
+	if tag != "" {
+		nextArgs = append(nextArgs, tag)
+	}
 	var n PostNavItem
-	if err2 := r.db.QueryRowContext(ctx, qNext, publishedAt, publishedAt, postID).Scan(&n.ID, &n.Title, &n.Slug); err2 == nil {
+	if err2 := r.db.QueryRowContext(ctx, qNext, nextArgs...).Scan(&n.ID, &n.Title, &n.Slug); err2 == nil {
 		next = &n
 	}
 
@@ -562,11 +589,16 @@ type PostStub struct {
 // ListPublishedPostStubs returns id, slug, published_at for all published,
 // non-hidden posts, ordered newest first. Does not include content.
 func (r *sqliteRepository) ListPublishedPostStubs(ctx context.Context) ([]PostStub, error) {
+	// Only id + slug are consumed by the sole caller (GetPostPage); ordering is
+	// done in SQL. Selecting the timestamp columns and scanning them into
+	// time.Time fails under the sqlite driver, which hands back the stored
+	// "YYYY-MM-DD HH:MM:SS" values as strings — so we don't read them at all.
 	const q = `
-SELECT id, slug, published_at, created_at
+SELECT id, slug
 FROM posts
 WHERE LOWER(status) = 'published'
 AND deleted_at IS NULL
+AND type != 'page'
 AND id NOT IN (
     SELECT pt.post_id FROM post_tags pt
     WHERE pt.tag_id IN (
@@ -589,7 +621,7 @@ ORDER BY published_at DESC, created_at DESC`
 	var stubs []PostStub
 	for rows.Next() {
 		var s PostStub
-		if err := rows.Scan(&s.ID, &s.Slug, &s.PublishedAt, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Slug); err != nil {
 			return nil, err
 		}
 		stubs = append(stubs, s)
