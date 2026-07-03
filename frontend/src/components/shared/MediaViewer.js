@@ -196,26 +196,29 @@ export class MediaViewer extends Component {
       }
     }
 
+    // Returns true when the step crossed into another post (a navigation is
+    // underway), false when it stayed within this post — the slideshow uses this
+    // to tell a real cross from an end-of-feed wrap.
     const goTo = (i) => {
       const n = slides.length;
       if (!n) {
-        if (i < 0) this._navigatePost('back');
-        else if (i > 0) this._navigatePost('fwd');
-        return;
+        if (i < 0) return this._navigatePost('back');
+        if (i > 0) return this._navigatePost('fwd');
+        return false;
       }
-      
+
       const newIndex = ((i % n) + n) % n;
-      
+
       // Post crossing — also crosses for single-media posts (n === 1),
       // where stepping off either edge wraps back to the same slide.
       if (i < 0 && newIndex === n - 1) {
-        if (this._navigatePost('back')) return;
+        if (this._navigatePost('back')) return true;
       }
       if (i >= n && newIndex === 0) {
-        if (this._navigatePost('fwd')) return;
+        if (this._navigatePost('fwd')) return true;
       }
 
-      if (this._index === newIndex) return;
+      if (this._index === newIndex) return false;
 
       const oldSlide = slides[this._index];
       const newSlide = slides[newIndex];
@@ -239,6 +242,7 @@ export class MediaViewer extends Component {
       this._resetZoom();
       this._updateExif();
       onStep?.(this._index);
+      return false;
     };
 
     // Expose carousel navigation to the slideshow slot plugin (controller hook).
