@@ -25,7 +25,7 @@ var syntaxGuidelines = map[string]any{
 			"Text: br, h1-h6, p, span, em, strong, i, b, u, s, del, ins, mark",
 			"Lists/code: ul, ol, li, blockquote, code, pre, hr",
 			"Layout: header, section, div, article, aside, main, nav, figure, figcaption",
-			"Links: a (href, title, target, rel)",
+			"Links: a (href, title, target, rel) — only http, https, and mailto schemes plus relative paths survive; javascript:/data:/vbscript: are stripped and rel=nofollow is added",
 			"Images: img (src, alt, title, width, height, loading)",
 			"Video: video (src, controls, autoplay, muted, loop, playsinline, poster, preload, width, height)",
 			"Audio: audio (src, controls, autoplay, loop, preload), source (src, type)",

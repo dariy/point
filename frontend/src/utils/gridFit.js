@@ -74,11 +74,12 @@ function columnsForWidth(width, colW, gap) {
 export function computePerPage(minPerPage, gridEl = null) {
   const floor = Math.max(1, minPerPage || 1);
 
-  // On mobile and tablets the grid is one or few columns, so filling the
-  // viewport buys nothing. Lock the page size to the floor once and skip all
-  // measurement — no per-card geometry reads, no re-fit on resize. Only
-  // desktop widths recalculate.
-  if (window.innerWidth <= TABLET_MAX_WIDTH) {
+  // Landscape mobile/tablet: the grid fans into a few columns and a couple of
+  // rows already fill the viewport, so lock to the floor and skip measurement.
+  // Portrait phones/tablets fall through: a single column of full-height cards
+  // would push the footer far off-screen, so we fit rows to the viewport the
+  // same way desktop does (≈3 cards) to keep pagination + footer visible.
+  if (window.innerWidth <= TABLET_MAX_WIDTH && window.innerWidth >= window.innerHeight) {
     _cache = floor;
     return floor;
   }

@@ -151,7 +151,7 @@ func TestRepository_GetPostNavigation(t *testing.T) {
 	_ = repo.DB().QueryRow(`SELECT published_at FROM posts WHERE id=?`, pid2).Scan(&ts2)
 	t.Logf("pid1=%d ts1=%s, pid2=%d ts2=%s", pid1, ts1, pid2, ts2)
 
-	prev, next, err := repo.GetPostNavigation(ctx, pid2, true)
+	prev, next, err := repo.GetPostNavigation(ctx, pid2, true, "")
 	if err != nil {
 		t.Fatalf("GetPostNavigation failed: %v", err)
 	}

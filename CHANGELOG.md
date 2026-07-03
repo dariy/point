@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **HTML sanitizer URL schemes**: the post content sanitizer now restricts anchor/media URLs to `http`, `https`, and `mailto` (plus relative paths) and enables URL parsing. Previously `javascript:` and `data:text/html` URLs passed through unsanitized — masked by CSP in-browser but a risk in RSS/feed-reader/email contexts. `rel="nofollow"` is now added to links. `data:` is deliberately not allowed (no post content uses `data:` images).
+- **CSS sanitizer bypass hardening**: per-post CSS is now stripped of comments and CSS escape sequences (e.g. `\40 import`, `url(/**/https://…)`) are decoded before the denylist runs, closing trivial evasions of the `@import`/external-`url()`/`position`/`z-index`/`content` rules. Full CSS-parser rewrite tracked as follow-up.
+
 ### Fixed
 - **Database initialization**: Improved reliability of first-run schema setup by splitting SQL statements and using transactions, fixing an issue where tables could be missing on some environments (e.g. rootless Podman).
 

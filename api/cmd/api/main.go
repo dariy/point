@@ -929,6 +929,33 @@ func main() {
 			 VALUES ('tags_visibility', 'hidden', 'string', CURRENT_TIMESTAMP)`,
 		},
 		{
+			// Reconcile the deprecated `tags_module` selector into the exclusive
+			// tags-viz plugin toggles (point-lk2h): the enabled plugin now IS the
+			// selected viz. One statement per plugin so at most one ends up true.
+			"reconcile_tags_module_atlas",
+			`INSERT OR REPLACE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'plugin.tags-atlas.enabled',
+			        CASE WHEN value = 'atlas' THEN 'true' ELSE 'false' END,
+			        'string', CURRENT_TIMESTAMP
+			   FROM blog_settings WHERE key = 'tags_module'`,
+		},
+		{
+			"reconcile_tags_module_map",
+			`INSERT OR REPLACE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'plugin.tags-map.enabled',
+			        CASE WHEN value = 'map' THEN 'true' ELSE 'false' END,
+			        'string', CURRENT_TIMESTAMP
+			   FROM blog_settings WHERE key = 'tags_module'`,
+		},
+		{
+			"reconcile_tags_module_graph",
+			`INSERT OR REPLACE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'plugin.tags-graph.enabled',
+			        CASE WHEN value IN ('graph', 'cloud') THEN 'true' ELSE 'false' END,
+			        'string', CURRENT_TIMESTAMP
+			   FROM blog_settings WHERE key = 'tags_module'`,
+		},
+		{
 			// post_tags PRIMARY KEY (post_id, tag_id) only indexes the leading
 			// column; lookups/joins by tag_id (hot-tag listings, counts) scanned
 			// the PK without this. tag_relationships similarly lacks a child_id

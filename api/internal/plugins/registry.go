@@ -38,6 +38,10 @@ type Descriptor struct {
 	// ID is the stable plugin identifier, used in the plugin.<id>.enabled
 	// setting key and as the lookup key into the build's chunk map.
 	ID string
+	// Title is the human-facing display name shown on the admin Plugins page.
+	// Optional; when empty the frontend humanizes the ID. Set it for ids that
+	// don't title-case cleanly (acronyms like "mcp" → "MCP") or need tuning.
+	Title string
 	// Type categorizes how the plugin attaches (route/slot/enhancer/service).
 	Type Type
 	// Slot is the named shell region a slot/enhancer plugin fills (optional).
@@ -59,16 +63,24 @@ type Descriptor struct {
 	// member: the last enabled plugin in a core area cannot be disabled. An area
 	// with a single core plugin therefore stays permanently enabled.
 	Core bool
+	// Exclusive marks an area where AT MOST one member is enabled (radio
+	// semantics; "none" allowed). Enabling a member disables its peers. Contrast
+	// Core, which requires at least one member. An area is Exclusive when its
+	// members declare it — do not combine Exclusive with Core.
+	Exclusive bool
 }
 
 // Registry is the static, authoritative catalog of all plugins. Phase 1 ships
 // with every plugin DefaultEnabled:true so behavior is identical to today; the
 // admin Plugins page (Phase 3) and per-plugin extraction (Phase 4) build on top.
 var Registry = []Descriptor{
-	// ── Tag visualizations: single-claim on the tags-route slot ──────────────
-	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true},
-	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: true},
-	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: true},
+	// ── Tag visualizations: exclusive claim on the tags-route slot ───────────
+	// At most one of the three may be enabled (Area "tags-viz", Exclusive) — the
+	// enabled one owns /tags; none enabled hides /tags. Atlas is the default; the
+	// others ship off. This replaces the old `tags_module` selector setting.
+	{ID: "tags-atlas", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-atlas", DefaultEnabled: true, Area: "tags-viz", Exclusive: true},
+	{ID: "tags-map", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-map", DefaultEnabled: false, Area: "tags-viz", Exclusive: true},
+	{ID: "tags-graph", Type: TypeRoute, Slot: "tags-route", Routes: []string{"/tags"}, EntryName: "tags-graph", DefaultEnabled: false, Area: "tags-viz", Exclusive: true},
 
 	// ── Shell slots ──────────────────────────────────────────────────────────
 	{ID: "timeline", Type: TypeSlot, Slot: "timeline", EntryName: "timeline", DefaultEnabled: true},
@@ -77,14 +89,18 @@ var Registry = []Descriptor{
 	{ID: "breadcrumbs", Type: TypeSlot, Slot: "breadcrumbs", EntryName: "breadcrumbs", DefaultEnabled: true},
 	{ID: "public-header", Type: TypeSlot, Slot: "header", EntryName: "public-header", DefaultEnabled: true},
 	{ID: "public-footer", Type: TypeSlot, Slot: "footer", EntryName: "public-footer", DefaultEnabled: true},
+	// Guest-facing distraction-free toggle on the post list: a floating button
+	// that hides all chrome (header, footer, timeline, tag cloud, pagination),
+	// leaving only the post grid. Pure slot plugin — button + a body class.
+	{ID: "distraction-free", Type: TypeSlot, Slot: "post-list-tools", EntryName: "distraction-free", DefaultEnabled: true},
 
 	// ── Content enhancers ────────────────────────────────────────────────────
 	// The immersive viewers are alternatives for the post-viewer slot (core
 	// area "immersive"): Standard is the default; Sheet ships disabled. Enabling
 	// Sheet and disabling Standard switches the public viewer; at least one of
 	// the pair must stay enabled.
-	{ID: "immersive", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
-	{ID: "immersive-sheet", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
+	{ID: "immersive", Title: "Immersive (Standard)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive", DefaultEnabled: true, Area: "immersive", Core: true},
+	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
 	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
 
 	// Previous/next post links at the foot of the article (non-immersive view).
@@ -108,16 +124,16 @@ var Registry = []Descriptor{
 
 	// ── Backend-gated services ───────────────────────────────────────────────
 	{ID: "instagram", Type: TypeService, Routes: []string{"/api/instagram"}, DefaultEnabled: true},
-	{ID: "ai-analysis", Type: TypeService, DefaultEnabled: true},
+	{ID: "ai-analysis", Title: "AI Analysis", Type: TypeService, DefaultEnabled: true},
 	{ID: "passkeys", Type: TypeService, Routes: []string{"/api/auth/webauthn"}, DefaultEnabled: true},
 	{ID: "api-keys", Type: TypeService, Routes: []string{"/api/api-keys"}, DefaultEnabled: true},
 	{ID: "backups", Type: TypeService, DefaultEnabled: true},
 	{ID: "offline-sync", Type: TypeService, EntryName: "offline-sync", DefaultEnabled: true},
-	{ID: "rss", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
+	{ID: "rss", Title: "RSS", Type: TypeService, Routes: []string{"/feed.xml", "/feed"}, DefaultEnabled: true},
 	// In-process MCP (Model Context Protocol) server: exposes the blog to AI
 	// clients at /mcp. Off by default — it is a powerful remote-control surface
 	// that admins opt into from the Plugins page.
-	{ID: "mcp", Type: TypeService, Routes: []string{"/mcp"}, DefaultEnabled: false},
+	{ID: "mcp", Title: "MCP", Type: TypeService, Routes: []string{"/mcp"}, DefaultEnabled: false},
 }
 
 // byID indexes Registry for O(1) lookups.
@@ -188,6 +204,23 @@ func IsLockedOff(id string, settings map[string]string) bool {
 	}
 	enabled := EnabledInArea(d.Area, settings)
 	return len(enabled) == 1 && enabled[0] == id
+}
+
+// ExclusivePeers returns the other members of id's exclusive area, in registry
+// order (nil if id is not in an exclusive area). Enabling id must disable these
+// so at most one member of the area stays on.
+func ExclusivePeers(id string) []string {
+	d, ok := byID[id]
+	if !ok || !d.Exclusive || d.Area == "" {
+		return nil
+	}
+	var out []string
+	for _, m := range AreaPlugins(d.Area) {
+		if m.ID != id {
+			out = append(out, m.ID)
+		}
+	}
+	return out
 }
 
 // DefaultPresets returns the seed preset definitions: a preset id mapped to the

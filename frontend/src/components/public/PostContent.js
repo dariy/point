@@ -23,6 +23,7 @@ import { store } from "../../store.js";
 import { pluginHost } from "../../core/pluginHost.js";
 import { getPostPageLocation } from "../../api/posts.js";
 import { ViewContext } from "../../utils/viewContext.js";
+import { cachedPerPage } from "../../utils/gridFit.js";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.js";
 import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.js";
 
@@ -128,7 +129,14 @@ export class PostContent extends Component {
             return;
           }
           try {
+            // Use the grid's device-fit per_page so the returned page matches
+            // the collection the user came from (e.g. 4/page → post 7 is page 2),
+            // not the site default. The URL rarely carries per_page, so fall back
+            // to gridFit's cached value — the same one the grid fetched with.
+            const vc = ViewContext.current();
+            const minPerPage = (store.get("settings") || {}).posts_per_page || 10;
             const params = tagSlug ? { tag: tagSlug } : {};
+            params.per_page = vc.perPage || cachedPerPage(minPerPage);
             const data = await getPostPageLocation(post.slug, params);
             ViewContext.update({ page: data.page, postSlug: null });
           } catch {

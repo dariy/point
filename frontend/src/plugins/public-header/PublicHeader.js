@@ -191,6 +191,27 @@ export class PublicHeader extends Component {
       pluginHost.fill('nav-menu', this.$('.site-nav'), { ...this.props });
     }
 
+    // Distraction-free toggle: the post list asks for it (distractionToggle);
+    // mount it as the first icon in the nav action row. Its own mount keeps it
+    // out of the fold logic and lets the plugin CSS keep it visible when
+    // distraction-free hides the rest of the header.
+    if (this.props.distractionToggle && pluginHost.hasSlot('post-list-tools')) {
+      const nav = this.$('.site-nav');
+      if (nav) {
+        const holder = document.createElement('div');
+        holder.className = 'distraction-tool';
+        nav.appendChild(holder);
+        // Keep the mount so beforeUnmount can tear it down — the plugin sets
+        // global state (body.distraction-free class, button portalled to body)
+        // that survives our container clear and would otherwise lock the site
+        // in full-screen mode when navigating off the list.
+        pluginHost.fill('post-list-tools', holder, {}).then(comps => {
+          if (this._unmounted) comps[0]?.unmount?.();
+          else this._dfPlugin = comps[0];
+        });
+      }
+    }
+
     // Theme toggle in the burger menu (the primary toggle now lives in the footer)
     this.$('#burger-theme-toggle')?.addEventListener('click', () => {
       const current = store.get('theme') || 'auto';
@@ -503,5 +524,8 @@ export class PublicHeader extends Component {
   beforeUnmount() {
     this._ro?.disconnect();
     hideFlyout();
+    // Clears body.distraction-free and removes the button portalled to body.
+    this._dfPlugin?.unmount?.();
+    this._dfPlugin = null;
   }
 }

@@ -17,6 +17,10 @@ body {
 .site-wrapper {
     min-height: 100vh;
     min-height: 100dvh;
+    /* svh (smallest, toolbars-shown) last: on iOS Safari vh/dvh resolve taller
+       than the visible area, so the page scrolls a sliver past the footer into
+       dead space. svh never exceeds the guaranteed-visible height. */
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
 }

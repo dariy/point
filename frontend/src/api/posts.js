@@ -154,8 +154,9 @@ export function updatePostTags(id, tags) {
  * @param {number} id
  * @returns {Promise<{ prev: object|null, next: object|null }>}
  */
-export function getPostNavigation(id) {
-  return _cachedRead(`nav:${id}`, () => api.get(`/api/posts/${id}/navigation`));
+export function getPostNavigation(id, tag = '') {
+  const key = tag ? `nav:${id}:${tag}` : `nav:${id}`;
+  return _cachedRead(key, () => api.get(`/api/posts/${id}/navigation`, tag ? { tag } : undefined));
 }
 
 /**

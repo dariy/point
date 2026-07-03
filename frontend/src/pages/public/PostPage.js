@@ -12,6 +12,8 @@ import { getPostBySlug, getPostNavigation } from '../../api/posts.js';
 import { store } from '../../store.js';
 import { escapeHtml, setCanonical, removeCanonical } from '../../utils/helpers.js';
 import { formatDate } from '../../utils/formatters.js';
+import { ViewContext } from '../../utils/viewContext.js';
+import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.js';
 
 export default class PostPage extends Component {
   constructor(container, props = {}) {
@@ -79,6 +81,7 @@ export default class PostPage extends Component {
     const { post, nav } = this.state;
 
     const immersive = this.state.forceImmersive || shouldUseImmersive(post);
+    if (this._skipNonImmersiveDuringShow(post, nav, immersive)) return;
 
     // Breadcrumb: show post title in header branding area
     let postTooltip = '';
@@ -151,6 +154,22 @@ export default class PostPage extends Component {
   }
 
   /**
+   * The slideshow plays immersive posts only. When it crosses into a
+   * non-immersive post (which mounts no viewer, so the show would stall), keep
+   * moving in the show's forward direction — the same target MediaViewer would
+   * cross to (see _targetFor('fwd')): navNext under feed direction, else navPrev.
+   * Returns true when it navigated away, so the caller skips rendering this post.
+   */
+  _skipNonImmersiveDuringShow(post, nav, immersive) {
+    if (immersive || !isSlideshowRunning()) return false;
+    const settings = store.get('settings') || {};
+    const fwd = settings.immersive_nav_direction === 'feed' ? nav?.next : nav?.prev;
+    if (!fwd?.slug) return false; // end of the feed — let the show stop here
+    ViewContext.update({ postSlug: fwd.slug });
+    return true;
+  }
+
+  /**
    * Called by the router when navigating to another post (same route pattern).
    * Updates content in-place so header/footer don't blink.
    */
@@ -214,6 +233,7 @@ export default class PostPage extends Component {
     const settings = store.get('settings') || {};
     const navTags  = store.get('navTags') || [];
     const immersive = forceImmersive || shouldUseImmersive(post);
+    if (this._skipNonImmersiveDuringShow(post, nav, immersive)) return;
 
     const dateStr = formatDate(post.published_at || post.created_at);
     const viewStr = settings.show_view_counts && post.view_count != null
