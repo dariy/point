@@ -19,7 +19,7 @@
  * the classic MediaViewer is left untouched.
  */
 
-import { MediaViewer } from './MediaViewer.js';
+import { MediaViewer } from '../../components/shared/MediaViewer.js';
 import { escapeHtml, sharePost, linkify } from '../../utils/helpers.js';
 import { store } from '../../store.js';
 import { pluginHost } from '../../core/pluginHost.js';
