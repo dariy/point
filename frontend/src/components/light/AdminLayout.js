@@ -23,6 +23,7 @@ export function adminLayoutTemplate({
   actions = "",
   banner = "",
   content = "",
+  contentClass = "",
 }) {
   const offline = store.get("offline_status") || {};
   const autosave = store.get("autosave_status") || {};
@@ -42,7 +43,7 @@ export function adminLayoutTemplate({
           </div>
         </header>
         ${banner}
-        <main class="light-content">${content}</main>
+        <main class="light-content${contentClass ? ` ${contentClass}` : ""}">${content}</main>
       </div>
       <div id="bottom-bar-mount"></div>
       <div id="command-palette-mount"></div>
