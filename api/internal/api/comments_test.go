@@ -36,8 +36,19 @@ func TestCommentsProxy(t *testing.T) {
 	}
 
 	e := echo.New()
+	// Simulate main.go's global security-header middleware: these must NOT
+	// survive on proxied responses (they'd stack with remark42's own CSP and
+	// X-Frame-Options and block the widget iframe).
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Response().Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+			c.Response().Header().Set("X-Frame-Options", "DENY")
+			return next(c)
+		}
+	})
 	RegisterCommentsProxy(e, svc, target)
 
+	var lastResp http.Header
 	call := func(path string, hdr map[string]string) int {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		for k, v := range hdr {
@@ -45,6 +56,7 @@ func TestCommentsProxy(t *testing.T) {
 		}
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
+		lastResp = rec.Header()
 		return rec.Code
 	}
 
@@ -63,6 +75,10 @@ func TestCommentsProxy(t *testing.T) {
 	}
 	if gotPath != "/web/embed.mjs" {
 		t.Errorf("prefix not stripped: backend saw %q", gotPath)
+	}
+	if lastResp.Get("Content-Security-Policy") != "" || lastResp.Get("X-Frame-Options") != "" {
+		t.Errorf("Point security headers must be dropped on proxied responses, got CSP=%q XFO=%q",
+			lastResp.Get("Content-Security-Policy"), lastResp.Get("X-Frame-Options"))
 	}
 
 	// Basic auth is stripped (blocks brute-forcing remark42 admin basic auth

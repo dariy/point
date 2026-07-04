@@ -36,6 +36,19 @@ func RegisterCommentsProxy(e *echo.Echo, settingsService *services.SettingsServi
 			if auth := c.Request().Header.Get("Authorization"); len(auth) >= 5 && strings.EqualFold(auth[:5], "Basic") {
 				c.Request().Header.Del("Authorization")
 			}
+			// Point's global security headers (CSP frame-ancestors 'none',
+			// X-Frame-Options DENY, …) are pre-set on the response by earlier
+			// middleware and would stack with remark42's own — browsers enforce
+			// the stricter set, which blocks the widget iframe. remark42 manages
+			// per-path security headers itself (iframe pages get frame-ancestors
+			// *, its admin surface stays strict), so drop Point's here.
+			h := c.Response().Header()
+			for _, k := range []string{
+				"Content-Security-Policy", "X-Frame-Options", "X-XSS-Protection",
+				"X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy",
+			} {
+				h.Del(k)
+			}
 			return next(c)
 		}
 	})
