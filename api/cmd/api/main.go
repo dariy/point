@@ -10,6 +10,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -452,6 +453,12 @@ func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices)
 		Version:         cfg.AppVersion,
 		UploadRoot:      cfg.PhotoLibraryPath,
 	})
+
+	// ── Comments plugin (/comments → remark42 sidecar) ─────────────────────────
+	// Gated reverse proxy to the remark42 process started by entrypoint.sh on
+	// loopback; this is its only external access path (see api.RegisterCommentsProxy).
+	remark42URL, _ := url.Parse("http://127.0.0.1:8081")
+	api.RegisterCommentsProxy(e, svcs.Settings, remark42URL)
 
 	// ── Nav Menu Routes (admin) ────────────────────────────────────────────────
 	e.GET("/api/nav-menu", navMenuHandler.GetAdminNavMenu, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "nav-menu"))
