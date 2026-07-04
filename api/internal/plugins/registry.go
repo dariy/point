@@ -103,10 +103,12 @@ var Registry = []Descriptor{
 	{ID: "immersive-sheet", Title: "Immersive (Sheet)", Type: TypeEnhancer, Slot: "post-viewer", EntryName: "immersive-sheet", DefaultEnabled: false, Area: "immersive", Core: true},
 	{ID: "custom-css", Type: TypeEnhancer, EntryName: "custom-css", DefaultEnabled: true},
 
-	// Remark42 comments: widget embedded after post content, served by the
-	// remark42 sidecar through the gated /comments reverse proxy. Off by
-	// default — external-service opt-in, consistent with mcp.
-	{ID: "comments", Title: "Comments (Remark42)", Type: TypeEnhancer, Routes: []string{"/comments", "/light/comments"}, EntryName: "comments", DefaultEnabled: false},
+	// Remark42 comments: widget embedded after post content (post-comments
+	// slot), served by the remark42 sidecar through the gated /comments reverse
+	// proxy. Off by default — external-service opt-in, consistent with mcp.
+	// NOTE: /light/comments joins Routes with the admin moderation page
+	// (point-m3sv.5) — listing it earlier would register a dead SPA route.
+	{ID: "comments", Title: "Comments (Remark42)", Type: TypeEnhancer, Slot: "post-comments", Routes: []string{"/comments"}, EntryName: "comments", DefaultEnabled: false},
 
 	// Previous/next post links at the foot of the article (non-immersive view).
 	// No JS chunk — the post renderer gates the block on this plugin's enabled

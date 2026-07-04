@@ -167,6 +167,14 @@ export class PostContent extends Component {
         this._enhanceCodeBlocks(bodyEl);
       }
       this._setupTagStrip();
+
+      // Comments (remark42 plugin) — mounts below the article when enabled.
+      if (pluginHost.hasSlot('post-comments')) {
+        const holder = document.createElement('div');
+        holder.className = 'post-comments';
+        (this.$('article.post-single') || this.container).appendChild(holder);
+        this._comments = pluginHost.fill('post-comments', holder, { post });
+      }
     }
   }
 
@@ -291,11 +299,21 @@ export class PostContent extends Component {
   // immersive viewer before its mount node is replaced.
   beforeRender() {
     this._teardownViewer();
+    this._teardownComments();
   }
 
   beforeUnmount() {
     this._cleanupStrip?.();
     this._teardownViewer();
+    this._teardownComments();
+  }
+
+  // fill() is async — the handle is a promise resolving to the array of
+  // mounted comments components. Unmount them once resolved.
+  _teardownComments() {
+    const c = this._comments;
+    this._comments = null;
+    if (c) Promise.resolve(c).then((comps) => (comps || []).forEach((x) => x?.unmount?.()));
   }
 
   // fillOne() is async, so the handle is a promise resolving to the viewer
