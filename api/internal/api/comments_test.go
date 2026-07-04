@@ -43,6 +43,7 @@ func TestCommentsProxy(t *testing.T) {
 		return func(c echo.Context) error {
 			c.Response().Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 			c.Response().Header().Set("X-Frame-Options", "DENY")
+			c.Response().Header().Set("X-Content-Type-Options", "nosniff")
 			return next(c)
 		}
 	})
@@ -77,8 +78,12 @@ func TestCommentsProxy(t *testing.T) {
 		t.Errorf("prefix not stripped: backend saw %q", gotPath)
 	}
 	if lastResp.Get("Content-Security-Policy") != "" || lastResp.Get("X-Frame-Options") != "" {
-		t.Errorf("Point security headers must be dropped on proxied responses, got CSP=%q XFO=%q",
+		t.Errorf("Point's CSP/X-Frame-Options must be dropped on proxied responses, got CSP=%q XFO=%q",
 			lastResp.Get("Content-Security-Policy"), lastResp.Get("X-Frame-Options"))
+	}
+	if lastResp.Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("non-conflicting security headers must survive, X-Content-Type-Options=%q",
+			lastResp.Get("X-Content-Type-Options"))
 	}
 
 	// Basic auth is stripped (blocks brute-forcing remark42 admin basic auth
