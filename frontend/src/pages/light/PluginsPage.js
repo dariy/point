@@ -25,6 +25,7 @@ import { getInstagramStatus } from "../../api/instagram.js";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.js";
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/helpers.js";
+import { pluginHost } from "../../core/pluginHost.js";
 
 // Group headings keyed by Descriptor.Type, rendered in this order.
 const TYPE_GROUPS = [
@@ -388,6 +389,17 @@ export default class PluginsPage extends Component {
       delete pending[id];
       // An individual toggle diverges from any preset (backend does the same).
       this.setState({ plugins: this._withLocks(plugins), pending, activePreset: "custom" });
+      
+      // Mutate pluginHost directly so navigation menus can immediately appear/disappear without a hard refresh.
+      if (enabled) {
+        pluginHost._byId.set(id, updated);
+        if (!pluginHost._manifest.some(e => e.id === id)) pluginHost._manifest.push(updated);
+      } else {
+        pluginHost._byId.delete(id);
+        pluginHost._manifest = pluginHost._manifest.filter(e => e.id !== id);
+      }
+      store.set('plugin_toggled', Date.now());
+
       store.set("toast", {
         message: `${humanize(id)} ${enabled ? "enabled" : "disabled"}. Reload the public site to see the change.`,
         type: "success",

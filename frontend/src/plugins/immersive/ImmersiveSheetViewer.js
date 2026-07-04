@@ -92,6 +92,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
               ${tagsHtml}
               ${this._renderActions()}
             </div>
+            <div class="immersive-sheet-comments"></div>
           </div>
           ${this._renderFooter(navPrev, navNext)}
         </div>
@@ -187,6 +188,14 @@ export class ImmersiveSheetViewer extends MediaViewer {
         const slug = url.replace('/tags/', '');
         ViewContext.update({ tag: slug, postSlug: null, query: null });
       });
+    }
+
+    const commentsEl = this.$('.immersive-sheet-comments');
+    if (commentsEl && pluginHost.isEnabled("comments")) {
+      pluginHost.fill("post-comments", commentsEl, {
+        post: this.props.post,
+        url: window.location.href,
+      }).then(res => { this._sheetCommentsComps = res; });
     }
 
     this._wireSheetControls();
@@ -358,5 +367,9 @@ export class ImmersiveSheetViewer extends MediaViewer {
     if (this._onResize) { window.removeEventListener('resize', this._onResize); this._onResize = null; }
     this._sheetFlyoutCleanup?.();
     this._sheetFlyoutCleanup = null;
+    if (this._sheetCommentsComps) {
+      this._sheetCommentsComps.forEach(c => c?.unmount?.());
+      this._sheetCommentsComps = null;
+    }
   }
 }
