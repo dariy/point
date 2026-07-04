@@ -400,6 +400,8 @@ export default class TagPage extends Component {
         editUrl: tag ? `/light/tags/${tag.slug}` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline,
+        // Same distraction-free toggle the home grid offers.
+        distractionToggle: true,
       }).then(comps => {
         if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
