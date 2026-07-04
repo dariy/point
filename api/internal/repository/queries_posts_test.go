@@ -173,19 +173,13 @@ func TestRepository_GetPostNavigation_TagScoped(t *testing.T) {
 	}()
 	ctx := context.Background()
 
-	// insertUserAndPost is only safe once per test (its uid derivation goes stale
-	// on repeat calls), so seed the user + post A with it and add the rest raw.
 	uid, pidA := insertUserAndPost(t, repo, "p-a", "published")
-	res, _ := repo.DB().Exec(
-		`INSERT INTO posts (title, slug, content, author_id, status, published_at) VALUES
-			('B','p-b','C',?,'published','2024-03-01'),
-			('C','p-c','C',?,'published','2024-05-01')`, uid, uid)
-	_ = res
-	var pidB, pidC int64
-	_ = repo.DB().QueryRow(`SELECT id FROM posts WHERE slug='p-b'`).Scan(&pidB)
-	_ = repo.DB().QueryRow(`SELECT id FROM posts WHERE slug='p-c'`).Scan(&pidC)
+	_, pidB := insertUserAndPost(t, repo, "p-b", "published")
+	_, pidC := insertUserAndPost(t, repo, "p-c", "published")
 	// Chronology: A oldest, B middle, C newest.
 	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-01-01' WHERE id=?`, pidA)
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-03-01' WHERE id=?`, pidB)
+	_, _ = repo.DB().Exec(`UPDATE posts SET published_at='2024-05-01' WHERE id=?`, pidC)
 
 	// A page between A and C must never surface as a neighbour.
 	_, _ = repo.DB().Exec(
