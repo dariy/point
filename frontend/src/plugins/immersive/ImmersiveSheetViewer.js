@@ -200,8 +200,21 @@ export class ImmersiveSheetViewer extends MediaViewer {
 
     this._wireSheetControls();
 
-    this._onResize = () => { if (!this._sheetOpen) this._measureSheet(); };
+    this._onResize = () => { 
+      this._measureSheet(); 
+      if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
+    };
     window.addEventListener('resize', this._onResize);
+    
+    const sheetEl = this.$('.immersive-sheet');
+    if (sheetEl) {
+      this._sheetObserver = new ResizeObserver(() => {
+        this._measureSheet();
+        if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
+      });
+      this._sheetObserver.observe(sheetEl);
+    }
+    
     this._measureSheet();
   }
 
@@ -365,6 +378,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _cleanup() {
     super._cleanup();
     if (this._onResize) { window.removeEventListener('resize', this._onResize); this._onResize = null; }
+    if (this._sheetObserver) { this._sheetObserver.disconnect(); this._sheetObserver = null; }
     this._sheetFlyoutCleanup?.();
     this._sheetFlyoutCleanup = null;
     if (this._sheetCommentsComps) {
