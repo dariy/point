@@ -61,16 +61,7 @@ func TestCommentsProxy(t *testing.T) {
 		return rec.Code
 	}
 
-	// Disabled by default → 404, backend never reached.
-	if code := call("/comments/web/embed.mjs", nil); code != http.StatusNotFound || hits != 0 {
-		t.Errorf("disabled plugin: want 404 and no backend hit, got code=%d hits=%d", code, hits)
-	}
-
-	if err := svc.SetSetting(ctx, plugins.EnabledKey("comments"), "true", "boolean"); err != nil {
-		t.Fatal(err)
-	}
-
-	// Enabled → proxied with /comments prefix stripped.
+	// Enabled by default → proxied with /comments prefix stripped.
 	if code := call("/comments/web/embed.mjs", nil); code != http.StatusOK || hits != 1 {
 		t.Errorf("enabled plugin: want 200 and backend hit, got code=%d hits=%d", code, hits)
 	}
