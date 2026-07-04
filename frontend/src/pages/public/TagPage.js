@@ -593,19 +593,38 @@ export default class TagPage extends Component {
       else if (e.key === "-" || e.key === "_") { e.preventDefault(); this._zoomBy(1); }
     };
     window.addEventListener("keydown", this._onZoomKey);
-    // Trackpad pinch and ctrl+scroll both arrive as a wheel event with ctrlKey.
+    // Trackpad pinch on Chrome/Firefox/Edge arrives as a wheel event with ctrlKey.
     this._onZoomWheel = (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
       this._zoomBy(e.deltaY > 0 ? 1 : -1);
     };
+    // Desktop Safari does NOT send ctrl+wheel for a trackpad pinch — it fires its
+    // own gesturestart/change/end events with a cumulative `scale`. Handle those
+    // so Safari pinch works (and preventDefault stops Safari's own page zoom).
+    this._onGestureStart = (e) => { e.preventDefault(); this._gestureScale = 1; };
+    this._onGestureChange = (e) => {
+      e.preventDefault();
+      const rel = e.scale / (this._gestureScale || 1);
+      if (rel > 1.18) { this._zoomBy(-1); this._gestureScale = e.scale; }        // spread → fewer cols
+      else if (rel < 1 / 1.18) { this._zoomBy(1); this._gestureScale = e.scale; } // pinch → more cols
+    };
+    this._onGestureEnd = (e) => { e.preventDefault(); this._commitZoom(); };
     this._zoomWheelEl = this.$(".site-main");
     this._zoomWheelEl?.addEventListener("wheel", this._onZoomWheel, { passive: false });
+    this._zoomWheelEl?.addEventListener("gesturestart", this._onGestureStart, { passive: false });
+    this._zoomWheelEl?.addEventListener("gesturechange", this._onGestureChange, { passive: false });
+    this._zoomWheelEl?.addEventListener("gestureend", this._onGestureEnd, { passive: false });
   }
 
   _teardownZoomInputs() {
     if (this._onZoomKey) window.removeEventListener("keydown", this._onZoomKey);
-    if (this._onZoomWheel && this._zoomWheelEl) this._zoomWheelEl.removeEventListener("wheel", this._onZoomWheel);
+    if (this._zoomWheelEl) {
+      this._zoomWheelEl.removeEventListener("wheel", this._onZoomWheel);
+      this._zoomWheelEl.removeEventListener("gesturestart", this._onGestureStart);
+      this._zoomWheelEl.removeEventListener("gesturechange", this._onGestureChange);
+      this._zoomWheelEl.removeEventListener("gestureend", this._onGestureEnd);
+    }
     clearTimeout(this._zoomCommitTimer);
     this._onZoomKey = null;
     this._onZoomWheel = null;
