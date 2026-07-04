@@ -35,7 +35,7 @@ import {
   rubberBand,
 } from "../../core/gestures.js";
 import { ViewContext } from "../../utils/viewContext.js";
-import { computePerPage, cachedPerPage } from "../../utils/gridFit.js";
+import { computePerPage, cachedPerPage, stepZoom, applyZoomVar } from "../../utils/gridFit.js";
 
 export default class TagPage extends Component {
   constructor(container, props = {}) {
@@ -173,6 +173,7 @@ export default class TagPage extends Component {
     if (this._unmounted || this._isPostView()) return;
     const grid = this.$(".posts-grid");
     if (!grid) return;
+    applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
     // actual resize re-fits it to the new window.
@@ -245,6 +246,7 @@ export default class TagPage extends Component {
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._teardownZoomInputs();
     const settings = store.get("settings") || {};
     const rootMenu = store.get("navTags") || [];
     const isCustomMenu = settings.nav_menu_mode === "custom";
@@ -474,6 +476,7 @@ export default class TagPage extends Component {
     this._postChildren = [];
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._teardownZoomInputs();
     this._clearPageGhosts();
   }
 
@@ -486,6 +489,8 @@ export default class TagPage extends Component {
     const atStart = () => pagination.page <= 1;
 
     this._gesture = new GestureController(this.$(".site-main"), {
+      onPinchMove: (scaleDelta) => this._pinchStep(scaleDelta),
+      onPinchEnd: () => { this._pinchAccum = 1; },
       onSwipeMove: (dx, dy) => {
         if (Math.abs(dx) <= Math.abs(dy)) return;
         const dir = dx < 0 ? "next" : "prev";
@@ -536,6 +541,58 @@ export default class TagPage extends Component {
         }
       },
     });
+
+    this._setupZoomInputs();
+  }
+
+  // ── Pinch / wheel / keyboard zoom ──────────────────────────────────────────
+  // Pinch is handled by GestureController's onPinchMove; here we add the desktop
+  // paths: ctrl+wheel (trackpad pinch) and +/- keys. All funnel into _zoomBy.
+
+  /** Accumulate incremental pinch scale and step a column once it crosses ±18%. */
+  _pinchStep(scaleDelta) {
+    this._pinchAccum = (this._pinchAccum || 1) * scaleDelta;
+    if (this._pinchAccum > 1.18) { this._zoomBy(-1); this._pinchAccum = 1; }        // spread → bigger cards, fewer cols
+    else if (this._pinchAccum < 1 / 1.18) { this._zoomBy(1); this._pinchAccum = 1; } // pinch → smaller cards, more cols
+  }
+
+  /** Apply a ±1 column zoom step and re-fit per_page to the viewport. */
+  _zoomBy(delta) {
+    const grid = this.$(".posts-grid");
+    if (!grid) return;
+    stepZoom(grid, delta);
+    // CSS re-flows the live grid instantly; reconcile refits per_page (and page)
+    // so the next fetch fills the new column count. fromResize bypasses the URL
+    // per_page guard.
+    this._reconcilePerPage({ fromResize: true });
+  }
+
+  _setupZoomInputs() {
+    this._teardownZoomInputs();
+    this._onZoomKey = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === "+" || e.key === "=") { e.preventDefault(); this._zoomBy(-1); }
+      else if (e.key === "-" || e.key === "_") { e.preventDefault(); this._zoomBy(1); }
+    };
+    window.addEventListener("keydown", this._onZoomKey);
+    // Trackpad pinch and ctrl+scroll both arrive as a wheel event with ctrlKey.
+    this._onZoomWheel = (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      this._zoomBy(e.deltaY > 0 ? 1 : -1);
+    };
+    this._zoomWheelEl = this.$(".site-main");
+    this._zoomWheelEl?.addEventListener("wheel", this._onZoomWheel, { passive: false });
+  }
+
+  _teardownZoomInputs() {
+    if (this._onZoomKey) window.removeEventListener("keydown", this._onZoomKey);
+    if (this._onZoomWheel && this._zoomWheelEl) this._zoomWheelEl.removeEventListener("wheel", this._onZoomWheel);
+    this._onZoomKey = null;
+    this._onZoomWheel = null;
+    this._zoomWheelEl = null;
   }
 
   // ── Adjacent-page preloading + swipe peek ──────────────────────────────────
@@ -692,9 +749,14 @@ export default class TagPage extends Component {
   beforeUnmount() {
     this._gesture?.destroy();
     this._trackpad?.destroy();
+    this._teardownZoomInputs();
     this._clearPageGhosts();
     this._committedGhost?.remove();
     this._committedGhost = null;
+    // Drop the zoom class so grids on other pages (e.g. search) aren't squared;
+    // the preference lives in localStorage and re-applies on the next mount.
+    document.body.classList.remove("grid-zoom");
+    document.body.style.removeProperty("--posts-grid-cols");
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
     removeCanonical();
@@ -703,6 +765,7 @@ export default class TagPage extends Component {
   mount() {
     // Seed the per_page cache from the window size so the first fetch is sized
     // before the grid exists to be measured.
+    applyZoomVar(); // reflect a sticky zoom before the first grid paints
     if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
     this._resizeHandler = () => this._onResize();
     window.addEventListener("resize", this._resizeHandler);
