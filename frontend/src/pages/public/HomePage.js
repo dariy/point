@@ -304,6 +304,9 @@ export default class HomePage extends Component {
 
     this._postChildren = [];
 
+    // Fresh grid is mounting — release the swipe lock armed by _commitPageSwipe.
+    this._endPageNav();
+
     // A paginated swipe leaves an inline transform on the grid mount; clear it so
     // the refreshed grid isn't left offset.
     const gridMount = this.$('#grid-mount');
@@ -367,6 +370,7 @@ export default class HomePage extends Component {
     for (const a of this._navArrows || []) a.remove();
     this._navArrows = null;
     this._stride = null;
+    this._endPageNav();
   }
 
   _setupGestures(pagination) {
@@ -382,6 +386,9 @@ export default class HomePage extends Component {
       // starts tracking the finger promptly instead of feeling laggy.
       commitThresholdPx: 8,
       onSwipeMove: (dx, dy) => {
+        // A commit is already animating to the next page; ignore new drags until
+        // it settles so a second commit can't orphan the first's ghost overlay.
+        if (this._pageNavPending) return;
         if (Math.abs(dx) <= Math.abs(dy)) return;
         const dir = dx < 0 ? 'next' : 'prev';
         const blocked = (dir === 'next' && atEnd()) || (dir === 'prev' && atStart());
@@ -423,6 +430,7 @@ export default class HomePage extends Component {
       onSwipeCommit: (dir) => {
         // Only horizontal swipes paginate; a vertical swipe is a page scroll.
         if (dir !== 'left' && dir !== 'right') return;
+        if (this._pageNavPending) return;
         const d = dir === 'left' ? 'next' : 'prev';
         if ((d === 'next' && atEnd()) || (d === 'prev' && atStart())) {
           this._resetGridSwipe();
@@ -434,6 +442,7 @@ export default class HomePage extends Component {
 
     this._trackpad = new TrackpadDetector(this.$('.site-main'), {
       onHorizontal: (dir) => {
+        if (this._pageNavPending) return;
         if (dir === 'left' && pagination.page < pagination.pages) {
           ViewContext.update({ page: pagination.page + 1 });
         } else if (dir === 'right' && pagination.page > 1) {
@@ -691,9 +700,33 @@ export default class HomePage extends Component {
    * it — the new page's real grid mounts beneath the ghost and the ghost is
    * dropped, so the motion flows unbroken with no reload blink.
    */
+  /** Arm the swipe lock with a watchdog that self-clears if no mount follows. */
+  _beginPageNav() {
+    this._pageNavPending = true;
+    clearTimeout(this._pageNavWatchdog);
+    // Safety net: an aborted navigation (fetch error, same-page nav, unmount)
+    // never reaches _mountPostContent, so auto-release rather than freeze swipes
+    // forever. 3s comfortably outlasts the 280ms hand-off + a slow fetch.
+    this._pageNavWatchdog = setTimeout(() => {
+      this._pageNavPending = false;
+      this._resetGridSwipe();
+    }, 3000);
+  }
+
+  _endPageNav() {
+    this._pageNavPending = false;
+    clearTimeout(this._pageNavWatchdog);
+  }
+
   _commitPageSwipe(dir, pagination) {
     const ghost = this._pageGhost(dir);
     const targetPage = dir === 'next' ? pagination.page + 1 : pagination.page - 1;
+
+    // Lock out further swipes until the new grid mounts (or the watchdog fires).
+    // Without this, a second commit during the ~280ms hand-off overwrites
+    // _committedGhost and orphans the first ghost — a static overlay pinned over
+    // the page that never gets removed, which reads as the page "freezing".
+    this._beginPageNav();
 
     // No preloaded grid yet (slow network / just landed): fall back to the
     // plain crossfade by navigating straight away.
